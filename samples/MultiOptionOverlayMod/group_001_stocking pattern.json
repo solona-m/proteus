@@ -1,0 +1,15 @@
+{
+  "Version": 0,
+  "Name": "Stocking Pattern",
+  "Description": "",
+  "Image": "",
+  "Page": 0,
+  "Priority": 0,
+  "Type": "Single",
+  "DefaultSettings": 0,
+  "Options": [
+    { "Name": "Roses",   "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+    { "Name": "Stripes", "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+    { "Name": "Dots",    "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] }
+  ]
+}

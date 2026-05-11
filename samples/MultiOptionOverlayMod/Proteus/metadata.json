@@ -2,6 +2,7 @@
   "FormatVersion": 1,
   "Name": "Example Stocking Overlays (Bibo+)",
   "Author": "YourNameHere",
+
   "OptionGroups": [
     {
       "PenumbraGroupName": "Stocking Pattern",
@@ -11,8 +12,13 @@
           "Overlays": [
             {
               "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
-              "Diffuse": "overlays/roses_d.png"
+              "Diffuse": "overlays/roses_d.png",
+              "Normal":  "overlays/roses_n.png",
+              "Index":   "overlays/roses_id.png"
             }
+          ],
+          "ColorTableRows": [
+            { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Emissive": 0.0 } }
           ]
         },
         {
@@ -22,6 +28,9 @@
               "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
               "Diffuse": "overlays/stripes_d.png"
             }
+          ],
+          "ColorTableRows": [
+            { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Emissive": 0.0 } }
           ]
         },
         {
@@ -31,6 +40,31 @@
               "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
               "Diffuse": "overlays/dots_d.png"
             }
+          ],
+          "ColorTableRows": [
+            { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Emissive": 0.0 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "PenumbraGroupName": "Gloves",
+      "Options": [
+        {
+          "Name": "None",
+          "Overlays": []
+        },
+        {
+          "Name": "Gloves",
+          "Overlays": [
+            {
+              "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+              "Normal": "overlays/gloves_n.png"
+            }
+          ],
+          "ColorTableRows": [
+            { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Emissive": 0.0 } }
           ]
         }
       ]
