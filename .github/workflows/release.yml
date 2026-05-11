@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://goatcorp.github.io/dalamud-distrib/stg/latest.zip' -OutFile dalamud.zip
+          Expand-Archive dalamud.zip -DestinationPath dalamud_dist
+          "DALAMUD_HOME=$env:GITHUB_WORKSPACE\dalamud_dist" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Build
+        run: dotnet build Proteus/Proteus.csproj -c Release
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $json = Get-ChildItem "Proteus\bin\Release\win-x64" -Filter "*.json" | Select-Object -First 1
+          $manifest = Get-Content $json.FullName | ConvertFrom-Json
+          "version=$($manifest.AssemblyVersion)" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path "Proteus\bin\Release\win-x64\*" -DestinationPath latest.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: latest.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-repo-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ needs.build.outputs.version != '' }}
+
+    steps:
+      - name: Checkout plugins repo
+        uses: actions/checkout@v4
+        with:
+          repository: solona-m/plugins
+          token: ${{ secrets.PLUGINS_REPO_TOKEN }}
+
+      - name: Update repo.json
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          TIMESTAMP=$(date +%s)
+          jq \
+            --arg v "$VERSION" \
+            --argjson t "$TIMESTAMP" \
+            '(.[] | select(.InternalName == "Proteus") | .AssemblyVersion) |= $v |
+             (.[] | select(.InternalName == "Proteus") | .LastUpdate) |= $t' \
+            repo.json > repo.json.tmp
+          mv repo.json.tmp repo.json
+
+      - name: Commit and push
+        run: |
+          git config user.name "Solona"
+          git config user.email "corey.roussel@outlook.com"
+          git add repo.json
+          git diff --staged --quiet || git commit -m "Proteus ${{ needs.build.outputs.version }}"
+          git push
