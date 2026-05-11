@@ -52,11 +52,11 @@ public class PenumbraBridge : IDisposable
         trySetModPriority = new TrySetModPriority(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
 
-        modSettingChangedSub = IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
+        modSettingChangedSub = Penumbra.Api.IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
             (change, collId, modDir, inherited) => ModSettingChanged?.Invoke(change, collId, modDir, inherited));
-        modAddedSub = IpcSubscribers.ModAdded.Subscriber(pluginInterface,
+        modAddedSub = Penumbra.Api.IpcSubscribers.ModAdded.Subscriber(pluginInterface,
             modDir => ModAdded?.Invoke(modDir));
-        modDeletedSub = IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
+        modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
             modDir => ModDeleted?.Invoke(modDir));
 
         CheckAvailability();

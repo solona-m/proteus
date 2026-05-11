@@ -14,6 +14,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] public static IPluginLog Log { get; private set; } = null!;
     [PluginService] public static IFramework Framework { get; private set; } = null!;
+    [PluginService] public static IDataManager DataManager { get; private set; } = null!;
 
     private const string CommandName = "/proteus";
 
@@ -35,7 +36,7 @@ public sealed class Plugin : IDalamudPlugin
         config.Initialize(pluginInterface);
 
         penumbra = new PenumbraBridge(pluginInterface, log);
-        textureLoader = new TextureLoader(log);
+        textureLoader = new TextureLoader(DataManager, log);
         discovery = new SidecarDiscoveryService(penumbra, log);
         compositor = new CompositorService(penumbra, discovery, textureLoader, config, log);
 

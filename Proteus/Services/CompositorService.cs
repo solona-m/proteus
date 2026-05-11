@@ -110,6 +110,11 @@ public class CompositorService : IDisposable
         {
             EnsureManagedModExists();
 
+            // Clear any previous redirects first so ResolvePlayer sees the original
+            // mod textures rather than our own previously-composited output.
+            WriteManagedModJson(new Dictionary<string, string>());
+            penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+
             var entries = discovery.DiscoverEnabled();
             if (ct.IsCancellationRequested) return;
 
@@ -153,13 +158,15 @@ public class CompositorService : IDisposable
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
-                if (mtrlDisk == null || !File.Exists(mtrlDisk))
+                var texPaths = (mtrlDisk != null && File.Exists(mtrlDisk))
+                    ? textureLoader.ResolveMtrlTextures(mtrlDisk)
+                    : textureLoader.ResolveMtrlTexturesFromGame(mtrlGamePath);
+
+                if (texPaths.Diffuse == null && texPaths.Normal == null && texPaths.Mask == null)
                 {
-                    log.Warning("[Proteus] Material not found on disk: {0}", mtrlGamePath);
+                    log.Warning("[Proteus] No textures found for material: {0}", mtrlGamePath);
                     continue;
                 }
-
-                var texPaths = textureLoader.ResolveMtrlTextures(mtrlDisk);
 
                 // Load base + composite each channel that has at least one overlay
                 byte[]? baseD = null, baseN = null, baseM = null;
@@ -173,12 +180,9 @@ public class CompositorService : IDisposable
                     {
                         if (baseD == null)
                         {
-                            var diskPath = penumbra.ResolvePlayer(texPaths.Diffuse);
-                            if (diskPath != null && File.Exists(diskPath))
-                            {
-                                var loaded = textureLoader.LoadTexAsRgba(diskPath);
-                                if (loaded.HasValue) { baseD = loaded.Value.rgba; w = loaded.Value.width; h = loaded.Value.height; }
-                            }
+                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                            var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                            if (loaded.HasValue) { baseD = loaded.Value.rgba; w = loaded.Value.width; h = loaded.Value.height; }
                             baseD ??= new byte[0];
                         }
                         if (baseD.Length > 0)
@@ -193,16 +197,8 @@ public class CompositorService : IDisposable
                     {
                         if (baseN == null)
                         {
-                            var diskPath = penumbra.ResolvePlayer(texPaths.Normal);
-                            if (diskPath != null && File.Exists(diskPath))
-                            {
-                                var loaded = textureLoader.LoadTexAsRgba(diskPath);
-                                if (loaded.HasValue)
-                                {
-                                    baseN = loaded.Value.rgba;
-                                    if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; }
-                                }
-                            }
+                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Normal), texPaths.Normal);
+                            if (loaded.HasValue) { baseN = loaded.Value.rgba; if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; } }
                             baseN ??= new byte[0];
                         }
                         if (baseN.Length > 0)
@@ -217,16 +213,8 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var diskPath = penumbra.ResolvePlayer(texPaths.Mask);
-                            if (diskPath != null && File.Exists(diskPath))
-                            {
-                                var loaded = textureLoader.LoadTexAsRgba(diskPath);
-                                if (loaded.HasValue)
-                                {
-                                    baseM = loaded.Value.rgba;
-                                    if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; }
-                                }
-                            }
+                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Mask), texPaths.Mask);
+                            if (loaded.HasValue) { baseM = loaded.Value.rgba; if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; } }
                             baseM ??= new byte[0];
                         }
                         if (baseM.Length > 0)
@@ -242,23 +230,23 @@ public class CompositorService : IDisposable
 
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_d.png");
-                    var relPath = "textures/" + baseName + "_d.png";
-                    if (textureLoader.WritePng(baseD, w, h, outPath))
+                    var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
+                    var relPath = "textures/" + baseName + "_d.tex";
+                    if (textureLoader.WriteTex(baseD, w, h, outPath))
                     { redirects[texPaths.Diffuse] = relPath; texturesPatched++; }
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_n.png");
-                    var relPath = "textures/" + baseName + "_n.png";
-                    if (textureLoader.WritePng(baseN, w, h, outPath))
+                    var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
+                    var relPath = "textures/" + baseName + "_n.tex";
+                    if (textureLoader.WriteTex(baseN, w, h, outPath))
                     { redirects[texPaths.Normal] = relPath; texturesPatched++; }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_m.png");
-                    var relPath = "textures/" + baseName + "_m.png";
-                    if (textureLoader.WritePng(baseM, w, h, outPath))
+                    var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
+                    var relPath = "textures/" + baseName + "_m.tex";
+                    if (textureLoader.WriteTex(baseM, w, h, outPath))
                     { redirects[texPaths.Mask] = relPath; texturesPatched++; }
                 }
             }
