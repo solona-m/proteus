@@ -1,0 +1,9 @@
+{
+  "FileVersion": 3,
+  "Name": "Example Tattoo Overlay (Bibo+)",
+  "Author": "YourNameHere",
+  "Description": "Example Proteus sidecar overlay. Replaces the diffuse texture for the Bibo+ body material.",
+  "Version": "1.0",
+  "Website": "",
+  "ModTags": []
+}

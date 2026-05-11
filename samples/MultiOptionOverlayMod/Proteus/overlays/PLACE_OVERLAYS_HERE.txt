@@ -1,0 +1,9 @@
+Place one PNG per option here, matching the filenames referenced in metadata.json:
+
+  roses_d.png    — diffuse overlay for the "Roses" pattern
+  stripes_d.png  — diffuse overlay for the "Stripes" pattern
+  dots_d.png     — diffuse overlay for the "Dots" pattern
+
+Each PNG is RGBA at the same resolution as the body diffuse texture.
+Only the selected option's PNG is composited — switching options in Penumbra
+triggers an automatic recomposite by Proteus.

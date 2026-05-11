@@ -1,0 +1,15 @@
+Place your overlay PNG files here:
+
+  diffuse.png  — RGBA, same resolution as the body diffuse texture (e.g. 2048×2048 for Bibo+)
+                 Paint your tattoo/decal in full color. Transparent areas show the base skin through.
+
+  normal.png   — RGBA, same resolution as the body normal texture.
+                 Optional. Use if you want to add surface detail (bumps, raised lines, etc.)
+
+  mask.png     — RGBA, same resolution as the body mask texture.
+                 Optional. Use if you want to modify specular/gloss properties.
+
+All three files are optional — omit any you don't need.
+
+The overlay is composited on top of whatever body mod (or vanilla skin) is currently active
+in Penumbra. Paint in UV space — use a UV template for Bibo+ to position correctly.

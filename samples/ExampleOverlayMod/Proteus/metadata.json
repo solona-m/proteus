@@ -1,0 +1,13 @@
+{
+  "FormatVersion": 1,
+  "Name": "Example Tattoo Overlay (Bibo+)",
+  "Author": "YourNameHere",
+  "Overlays": [
+    {
+      "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+      "Diffuse": "overlays/diffuse.png",
+      "Normal":  "overlays/normal.png",
+      "Mask":    "overlays/mask.png"
+    }
+  ]
+}
