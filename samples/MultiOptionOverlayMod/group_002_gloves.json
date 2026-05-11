@@ -1,0 +1,14 @@
+{
+  "Version": 0,
+  "Name": "Gloves",
+  "Description": "",
+  "Image": "",
+  "Page": 0,
+  "Priority": 0,
+  "Type": "Single",
+  "DefaultSettings": 0,
+  "Options": [
+    { "Name": "None",   "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+    { "Name": "Gloves", "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] }
+  ]
+}
