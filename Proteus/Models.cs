@@ -84,6 +84,13 @@ public class OverlayOption
 
     [JsonPropertyName("Overlays")]
     public List<OverlayDescriptor> Overlays { get; set; } = new();
+
+    /// <summary>
+    /// Per-row color overrides for this option's overlays.
+    /// Overrides the top-level ColorTableRows when present; falls back to top-level when null.
+    /// </summary>
+    [JsonPropertyName("ColorTableRows")]
+    public List<ColorTableRowPreset>? ColorTableRows { get; set; }
 }
 
 /// <summary>Resolved texture game paths extracted from a parsed .mtrl file.</summary>

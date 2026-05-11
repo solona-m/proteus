@@ -16,6 +16,16 @@ public record OverlayEntry(
     string SidecarRoot   // absolute path to the Proteus/ subfolder
 );
 
+/// <summary>
+/// A single overlay descriptor paired with the color table rows that apply to it.
+/// ColorTableRows comes from the option that owns the descriptor (if any), falling
+/// back to the top-level metadata ColorTableRows.
+/// </summary>
+public record ResolvedOverlay(
+    OverlayDescriptor Descriptor,
+    List<ColorTableRowPreset>? ColorTableRows
+);
+
 public class SidecarDiscoveryService
 {
     private readonly PenumbraBridge penumbra;
@@ -72,43 +82,94 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Resolve the list of active OverlayDescriptors for an entry.
-    /// Simple mods: use Overlays directly.
-    /// Option-group mods: look up the currently selected option per group and use its overlays.
+    /// Resolve the active overlays for an entry, paired with their applicable color table rows.
+    /// Simple mods (top-level Overlays): all overlays are active, using top-level ColorTableRows.
+    /// Option-group mods: all currently-selected options contribute their overlays, supporting
+    /// both single-select and multi-select Penumbra groups. Each option's ColorTableRows overrides
+    /// the top-level rows; falls back to top-level if the option has none.
     /// </summary>
-    public List<OverlayDescriptor> ResolveActiveOverlays(OverlayEntry entry)
+    public List<ResolvedOverlay> ResolveActiveOverlays(OverlayEntry entry)
     {
         if (entry.Metadata.Overlays is { Count: > 0 })
-            return entry.Metadata.Overlays;
+            return entry.Metadata.Overlays
+                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows))
+                .ToList();
 
         if (entry.Metadata.OptionGroups == null) return [];
 
-        var collId = penumbra.GetPlayerCollectionId();
-        var settings = collId.HasValue
-            ? penumbra.GetModSettings(collId.Value, entry.ModDirectory)
-            : null;
+        var collId   = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
 
-        var result = new List<OverlayDescriptor>();
+        var result = new List<ResolvedOverlay>();
 
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
 
-            // Penumbra returns selected option names as a list per group name.
             List<string>? selected = null;
             settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
 
-            // Default to first option if nothing selected.
-            var selectedName = selected?.Count > 0 ? selected[0] : null;
-            var option = selectedName != null
-                ? group.Options.FirstOrDefault(o => string.Equals(o.Name, selectedName, StringComparison.OrdinalIgnoreCase))
-                : null;
-            option ??= group.Options[0];
-
-            result.AddRange(option.Overlays);
+            if (selected is { Count: > 0 })
+            {
+                // Include ALL selected options — handles both single-select and multi-select groups.
+                foreach (var name in selected)
+                {
+                    var opt = group.Options.FirstOrDefault(o =>
+                        string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (opt == null) continue;
+                    var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
+                    foreach (var d in opt.Overlays)
+                        result.Add(new ResolvedOverlay(d, rows));
+                }
+            }
+            else
+            {
+                // Nothing selected — default to first option.
+                var opt  = group.Options[0];
+                var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
+                foreach (var d in opt.Overlays)
+                    result.Add(new ResolvedOverlay(d, rows));
+            }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns the ColorTableRows list that the editor should read/write for the currently
+    /// active option. Creates an empty list in the right place if absent.
+    /// Unconditional mods: top-level ColorTableRows.
+    /// Option-group mods: the currently selected option's ColorTableRows.
+    /// </summary>
+    public List<ColorTableRowPreset> GetActiveColorRows(OverlayEntry entry)
+    {
+        if (entry.Metadata.Overlays is { Count: > 0 } || entry.Metadata.OptionGroups == null)
+        {
+            entry.Metadata.ColorTableRows ??= new List<ColorTableRowPreset>();
+            return entry.Metadata.ColorTableRows;
+        }
+
+        var collId   = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+
+        foreach (var group in entry.Metadata.OptionGroups)
+        {
+            if (group.Options.Count == 0) continue;
+            List<string>? selected = null;
+            settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
+
+            OverlayOption? opt = null;
+            if (selected is { Count: > 0 })
+                opt = group.Options.FirstOrDefault(o =>
+                    string.Equals(o.Name, selected[0], StringComparison.OrdinalIgnoreCase));
+            opt ??= group.Options[0];
+
+            opt.ColorTableRows ??= new List<ColorTableRowPreset>();
+            return opt.ColorTableRows;
+        }
+
+        entry.Metadata.ColorTableRows ??= new List<ColorTableRowPreset>();
+        return entry.Metadata.ColorTableRows;
     }
 
     public void SaveMetadata(OverlayEntry entry)

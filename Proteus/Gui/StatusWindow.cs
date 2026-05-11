@@ -118,14 +118,15 @@ public class StatusWindow : Window
 
                 if (ImGui.BeginPopup(popupId))
                 {
-                    DrawColorEditor(entry);
+                    DrawColorEditor(entry, discovery.GetActiveColorRows(entry));
                     ImGui.EndPopup();
                 }
 
                 // Overlay count
                 ImGui.TableNextColumn();
                 var activeOverlays = discovery.ResolveActiveOverlays(entry);
-                ImGui.TextUnformatted($"{activeOverlays.Count} overlay{(activeOverlays.Count != 1 ? "s" : "")}");
+                int ovCount = activeOverlays.Count;
+                ImGui.TextUnformatted($"{ovCount} overlay{(ovCount != 1 ? "s" : "")}");
             }
 
             ImGui.EndTable();
@@ -157,16 +158,14 @@ public class StatusWindow : Window
         }
     }
 
-    private void DrawColorEditor(OverlayEntry entry)
+    private void DrawColorEditor(OverlayEntry entry, List<ColorTableRowPreset> rows)
     {
         ImGui.TextUnformatted(entry.ModName);
         ImGui.Separator();
 
         var overlays  = discovery.ResolveActiveOverlays(entry);
-        bool hasIndex = overlays.Any(o => o.Index != null);
+        bool hasIndex = overlays.Any(o => o.Descriptor.Index != null);
 
-        entry.Metadata.ColorTableRows ??= new List<ColorTableRowPreset>();
-        var rows    = entry.Metadata.ColorTableRows;
         bool changed = false;
 
         if (!hasIndex)
