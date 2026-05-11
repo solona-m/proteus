@@ -1,8 +1,16 @@
 using System;
+using System.Collections.Generic;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 
 namespace Proteus;
+
+[Serializable]
+public class ModOverride
+{
+    public bool Disabled { get; set; } = false;
+    public int? PriorityOverride { get; set; } = null;
+}
 
 [Serializable]
 public class Configuration : IPluginConfiguration
@@ -12,6 +20,8 @@ public class Configuration : IPluginConfiguration
     public bool PluginEnabled { get; set; } = true;
 
     public int ManagedModPriority { get; set; } = 999;
+
+    public Dictionary<string, ModOverride> ModOverrides { get; set; } = new();
 
     public void Initialize(IDalamudPluginInterface pluginInterface)
         => pluginInterface.SavePluginConfig(this);

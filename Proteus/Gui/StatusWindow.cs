@@ -65,21 +65,50 @@ public class StatusWindow : Window
         }
         else
         {
-            ImGui.BeginTable("##mods", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
-            ImGui.TableSetupColumn("Mod", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Pri", ImGuiTableColumnFlags.WidthFixed, 40);
+            ImGui.BeginTable("##mods", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+            ImGui.TableSetupColumn("##en",     ImGuiTableColumnFlags.WidthFixed, 20);
+            ImGui.TableSetupColumn("Mod",      ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("Pri",      ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Overlays", ImGuiTableColumnFlags.WidthFixed, 70);
             ImGui.TableHeadersRow();
 
             foreach (var entry in mods)
             {
                 ImGui.TableNextRow();
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted(entry.ModName);
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted(entry.Priority.ToString());
-                ImGui.TableNextColumn();
 
+                config.ModOverrides.TryGetValue(entry.ModDirectory, out var ov);
+
+                // Checkbox
+                ImGui.TableNextColumn();
+                bool active = ov == null || !ov.Disabled;
+                if (ImGui.Checkbox($"##en_{entry.ModDirectory}", ref active))
+                {
+                    if (ov == null) { ov = new ModOverride(); config.ModOverrides[entry.ModDirectory] = ov; }
+                    ov.Disabled = !active;
+                    config.Save();
+                    compositor.TriggerRecomposite("override-enable");
+                }
+
+                // Mod name (dimmed when disabled)
+                ImGui.TableNextColumn();
+                if (active) ImGui.TextUnformatted(entry.ModName);
+                else        ImGui.TextDisabled(entry.ModName);
+
+                // Priority (drag to edit, Ctrl+click to type)
+                ImGui.TableNextColumn();
+                int pri = ov?.PriorityOverride ?? entry.Priority;
+                ImGui.SetNextItemWidth(55);
+                ImGui.DragInt($"##pri_{entry.ModDirectory}", ref pri, 1f);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                {
+                    if (ov == null) { ov = new ModOverride(); config.ModOverrides[entry.ModDirectory] = ov; }
+                    ov.PriorityOverride = pri;
+                    config.Save();
+                    compositor.TriggerRecomposite("priority-change");
+                }
+
+                // Overlay count
+                ImGui.TableNextColumn();
                 var activeOverlays = discovery.ResolveActiveOverlays(entry);
                 ImGui.TextUnformatted($"{activeOverlays.Count} overlay{(activeOverlays.Count != 1 ? "s" : "")}");
             }

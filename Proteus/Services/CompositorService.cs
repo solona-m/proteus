@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -115,10 +116,12 @@ public class CompositorService : IDisposable
             WriteManagedModJson(new Dictionary<string, string>());
             penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
 
-            var entries = discovery.DiscoverEnabled();
+            var allEntries = discovery.DiscoverEnabled();
             if (ct.IsCancellationRequested) return;
 
-            LastDiscovered = entries;
+            LastDiscovered = allEntries;
+
+            var entries = ApplyOverrides(allEntries);
 
             if (entries.Count == 0)
             {
@@ -271,6 +274,19 @@ public class CompositorService : IDisposable
             LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message };
             ResultChanged?.Invoke();
         }
+    }
+
+    // ── Override application ─────────────────────────────────────────────────
+
+    private List<OverlayEntry> ApplyOverrides(List<OverlayEntry> entries)
+    {
+        return entries
+            .Where(e => !(config.ModOverrides.TryGetValue(e.ModDirectory, out var ov) && ov.Disabled))
+            .Select(e => config.ModOverrides.TryGetValue(e.ModDirectory, out var ov) && ov.PriorityOverride.HasValue
+                ? e with { Priority = ov.PriorityOverride.Value }
+                : e)
+            .OrderBy(e => e.Priority)
+            .ToList();
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────
