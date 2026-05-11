@@ -10,10 +10,6 @@ public class ModOverride
 {
     public bool Disabled { get; set; } = false;
     public int? PriorityOverride { get; set; } = null;
-    public float TintR { get; set; } = 1f;
-    public float TintG { get; set; } = 1f;
-    public float TintB { get; set; } = 1f;
-    public float TintA { get; set; } = 1f; // tint strength: 0 = no tint, 1 = full tint
 }
 
 [Serializable]

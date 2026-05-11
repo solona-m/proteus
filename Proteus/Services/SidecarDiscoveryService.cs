@@ -111,6 +111,21 @@ public class SidecarDiscoveryService
         return result;
     }
 
+    public void SaveMetadata(OverlayEntry entry)
+    {
+        try
+        {
+            var path = Path.Combine(entry.SidecarRoot, MetadataFile);
+            var json = JsonSerializer.Serialize(entry.Metadata,
+                new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to save Proteus metadata for {0}", entry.ModDirectory);
+        }
+    }
+
     private ProteusMetadata? TryParseMetadata(string metaPath)
     {
         try
