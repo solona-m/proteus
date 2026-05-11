@@ -55,34 +55,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  update-repo-manifest:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ needs.build.outputs.version != '' }}
-
-    steps:
-      - name: Checkout plugins repo
-        uses: actions/checkout@v4
-        with:
-          repository: solona-m/plugins
-          token: ${{ secrets.PLUGINS_REPO_TOKEN }}
-
-      - name: Update repo.json
-        run: |
-          VERSION="${{ needs.build.outputs.version }}"
-          TIMESTAMP=$(date +%s)
-          jq \
-            --arg v "$VERSION" \
-            --argjson t "$TIMESTAMP" \
-            '(.[] | select(.InternalName == "Proteus") | .AssemblyVersion) |= $v |
-             (.[] | select(.InternalName == "Proteus") | .LastUpdate) |= $t' \
-            repo.json > repo.json.tmp
-          mv repo.json.tmp repo.json
-
-      - name: Commit and push
-        run: |
-          git config user.name "Solona"
-          git config user.email "corey.roussel@outlook.com"
-          git add repo.json
-          git diff --staged --quiet || git commit -m "Proteus ${{ needs.build.outputs.version }}"
-          git push
