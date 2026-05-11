@@ -125,7 +125,7 @@ public class TextureLoader
     {
         int w = tex.Header.Width;
         int h = tex.Header.Height;
-        var bgra = tex.ImageData;
+        var bgra = tex.TextureBuffer.Filter(mip: 0, z: 0, format: TexFile.TextureFormat.B8G8R8A8).RawData;
         var rgba = new byte[bgra.Length];
         for (int i = 0; i < bgra.Length; i += 4)
         {
@@ -180,28 +180,19 @@ public class TextureLoader
 
             // 80-byte TexHeader (StructLayout Explicit, Size=80)
             var header = new byte[80];
-            // Offset 0: Attribute = TextureType2D (0x00800000)
             BitConverter.TryWriteBytes(header.AsSpan(0), 0x00800000u);
-            // Offset 4: Format = B8G8R8A8 (0x1450)
             BitConverter.TryWriteBytes(header.AsSpan(4), 0x1450u);
-            // Offset 8: Width
             BitConverter.TryWriteBytes(header.AsSpan(8),  (ushort)width);
-            // Offset 10: Height
             BitConverter.TryWriteBytes(header.AsSpan(10), (ushort)height);
-            // Offset 12: Depth = 1
             BitConverter.TryWriteBytes(header.AsSpan(12), (ushort)1);
-            // Offset 14: MipLevelsCount = 1
             header[14] = 1;
-            // Offset 15: ArraySize = 0
-            header[15] = 0;
-            // Offset 16: LodOffset[3] = {0, 0, 0} (already zero)
-            // Offset 28: OffsetToSurface[13] — first entry = 80 (header size)
             BitConverter.TryWriteBytes(header.AsSpan(28), 80u);
-            // remaining OffsetToSurface entries stay zero
 
-            using var stream = File.Create(outputPath);
-            stream.Write(header, 0, header.Length);
-            stream.Write(bgra, 0, bgra.Length);
+            WriteWithRetry(outputPath, stream =>
+            {
+                stream.Write(header, 0, header.Length);
+                stream.Write(bgra,   0, bgra.Length);
+            });
             return true;
         }
         catch (Exception ex)
@@ -251,6 +242,274 @@ public class TextureLoader
         int end = offset;
         while (end < strings.Length && strings[end] != 0) end++;
         return Encoding.UTF8.GetString(strings, offset, end - offset);
+    }
+
+    public byte[]? LoadRawMtrl(string? diskPath, string gamePath)
+    {
+        if (diskPath != null && File.Exists(diskPath))
+        {
+            try { return File.ReadAllBytes(diskPath); }
+            catch (Exception ex) { log.Error(ex, "Failed to read raw mtrl: {0}", diskPath); }
+        }
+        try { return dataManager.GetFile<MtrlFile>(gamePath)?.Data; }
+        catch (Exception ex) { log.Error(ex, "Failed to load raw mtrl from game: {0}", gamePath); return null; }
+    }
+
+    // Returns (patchedBytes, true) when the key was found and the value replaced,
+    // or (originalClone, false) when the key was not present in the file.
+    public static (byte[] data, bool found) PatchShaderKey(byte[] mtrl, uint key, uint value)
+    {
+        var result = (byte[])mtrl.Clone();
+        Span<byte> kb = stackalloc byte[4];
+        BitConverter.TryWriteBytes(kb, key);
+        for (int i = 0; i <= result.Length - 8; i++)
+        {
+            if (result[i] == kb[0] && result[i+1] == kb[1] && result[i+2] == kb[2] && result[i+3] == kb[3])
+            {
+                BitConverter.TryWriteBytes(result.AsSpan(i + 4), value);
+                return (result, true);
+            }
+        }
+        return (result, false);
+    }
+
+    // Patches the key in-place if found; otherwise inserts a new ShaderKey entry and updates
+    // ShaderKeyCount and FileSize in the MaterialFileHeader.
+    // MaterialHeader layout (12 bytes): ShaderValueListSize(2) ShaderKeyCount(2) ConstantCount(2)
+    //   SamplerCount(2) Unknown1(2) Unknown2(2) — followed by ShaderKeys[ShaderKeyCount] (8 bytes each).
+    public static byte[] EnsureShaderKey(byte[] mtrl, uint category, uint value)
+    {
+        var (patched, found) = PatchShaderKey(mtrl, category, value);
+        if (found) return patched;
+        if (mtrl.Length < 16) return patched;
+
+        uint packed      = BitConverter.ToUInt32(mtrl, 4);
+        int  dataSetSize = (ushort)(packed >> 16);
+        int  strSize     = BitConverter.ToUInt16(mtrl, 8);
+        int  texCount    = mtrl[12];
+        int  uvCount     = mtrl[13];
+        int  colorCount  = mtrl[14];
+        int  addlSize    = mtrl[15];
+
+        int matHeaderStart = 16 + texCount * 4 + uvCount * 4 + colorCount * 4 + strSize + addlSize + dataSetSize;
+        if (matHeaderStart + 12 > mtrl.Length) return patched;
+
+        int    keyCountOffset = matHeaderStart + 2;  // after ShaderValueListSize(2)
+        ushort keyCount       = BitConverter.ToUInt16(mtrl, keyCountOffset);
+        int    insertAt       = matHeaderStart + 12 + keyCount * 8;
+        if (insertAt > mtrl.Length) return patched;
+
+        var result = new byte[mtrl.Length + 8];
+        Array.Copy(mtrl, 0, result, 0, insertAt);
+        BitConverter.TryWriteBytes(result.AsSpan(insertAt),     category);
+        BitConverter.TryWriteBytes(result.AsSpan(insertAt + 4), value);
+        Array.Copy(mtrl, insertAt, result, insertAt + 8, mtrl.Length - insertAt);
+
+        BitConverter.TryWriteBytes(result.AsSpan(keyCountOffset), (ushort)(keyCount + 1));
+
+        // Update FileSize (lower 16 bits of the uint32 at offset 4)
+        ushort fileSize = BitConverter.ToUInt16(result, 4);
+        BitConverter.TryWriteBytes(result.AsSpan(4), (ushort)(fileSize + 8));
+
+        return result;
+    }
+
+    // Shared header parsing used by both constant helpers below.
+    private static bool TryParseMtrlHeader(byte[] mtrl,
+        out int matHeaderStart, out int svListSize,
+        out int keyCount, out int constCount, out int sampCount, out int constBase, out int svBase)
+    {
+        matHeaderStart = svListSize = keyCount = constCount = sampCount = constBase = svBase = 0;
+        if (mtrl.Length < 16) return false;
+
+        uint packed      = BitConverter.ToUInt32(mtrl, 4);
+        int  dataSetSize = (ushort)(packed >> 16);
+        int  strSize     = BitConverter.ToUInt16(mtrl, 8);
+        int  texCount    = mtrl[12];
+        int  uvCount     = mtrl[13];
+        int  colorCount  = mtrl[14];
+        int  addlSize    = mtrl[15];
+
+        matHeaderStart = 16 + texCount * 4 + uvCount * 4 + colorCount * 4 + strSize + addlSize + dataSetSize;
+        if (matHeaderStart + 12 > mtrl.Length) return false;
+
+        svListSize = BitConverter.ToUInt16(mtrl, matHeaderStart);
+        keyCount   = BitConverter.ToUInt16(mtrl, matHeaderStart + 2);
+        constCount = BitConverter.ToUInt16(mtrl, matHeaderStart + 4);
+        sampCount  = BitConverter.ToUInt16(mtrl, matHeaderStart + 6);
+
+        constBase = matHeaderStart + 12 + keyCount * 8;
+        svBase    = constBase + constCount * 8 + sampCount * 12;
+        return svBase <= mtrl.Length;
+    }
+
+    // Returns (shaderName, constId[]) for diagnostic logging.
+    public static (string shader, uint[] constIds) GetMtrlInfo(byte[] mtrl)
+    {
+        if (mtrl.Length < 16) return ("?", []);
+
+        int strSize  = BitConverter.ToUInt16(mtrl, 8);
+        int shOff    = BitConverter.ToUInt16(mtrl, 10);
+        int texCount = mtrl[12], uvCount = mtrl[13], colorCount = mtrl[14];
+        int strBase  = 16 + texCount * 4 + uvCount * 4 + colorCount * 4;
+
+        string shaderName = "?";
+        if (strBase + shOff < mtrl.Length)
+            shaderName = ReadNullTerminatedString(mtrl, strBase + shOff);
+
+        if (!TryParseMtrlHeader(mtrl, out _, out _, out _, out int constCount, out _, out int constBase, out _))
+            return (shaderName, []);
+
+        var ids = new uint[constCount];
+        for (int i = 0; i < constCount; i++)
+        {
+            int e = constBase + i * 8;
+            if (e + 4 > mtrl.Length) break;
+            ids[i] = BitConverter.ToUInt32(mtrl, e);
+        }
+        return (shaderName, ids);
+    }
+
+    // Patches the float32 emissive-color constant (ID 0x38A64362) if present.
+    // Returns (patched, true) on success; (originalClone, false) if not found.
+    public static (byte[] data, bool found) PatchEmissiveColorConstant(byte[] mtrl, float r, float g, float b)
+    {
+        if (!TryParseMtrlHeader(mtrl, out _, out int svListSize,
+                out _, out int constCount, out _, out int constBase, out int svBase))
+            return ((byte[])mtrl.Clone(), false);
+
+        const uint EmissiveColorId = 0x38A64362u;
+
+        for (int i = 0; i < constCount; i++)
+        {
+            int e = constBase + i * 8;
+            if (e + 8 > mtrl.Length) break;
+            if (BitConverter.ToUInt32(mtrl, e) != EmissiveColorId) continue;
+
+            int valOffset = BitConverter.ToUInt16(mtrl, e + 4); // byte offset into ShaderValues
+            int valCount  = BitConverter.ToUInt16(mtrl, e + 6); // byte count
+            int byteOff   = svBase + valOffset;
+            if (valCount < 12 || byteOff + 12 > mtrl.Length) break;
+
+            var result = (byte[])mtrl.Clone();
+            BitConverter.TryWriteBytes(result.AsSpan(byteOff),      r);
+            BitConverter.TryWriteBytes(result.AsSpan(byteOff + 4),  g);
+            BitConverter.TryWriteBytes(result.AsSpan(byteOff + 8),  b);
+            return (result, true);
+        }
+        return ((byte[])mtrl.Clone(), false);
+    }
+
+    // Ensures emissive color constant (0x38A64362) is present with the given RGB values.
+    // Patches in-place if found; inserts a new constant entry + ShaderValues data if not.
+    public static byte[] EnsureEmissiveColorConstant(byte[] mtrl, float r, float g, float b)
+    {
+        var (patched, found) = PatchEmissiveColorConstant(mtrl, r, g, b);
+        if (found) return patched;
+
+        if (!TryParseMtrlHeader(mtrl, out int matHeaderStart, out int svListSize,
+                out _, out int constCount, out _, out int constBase, out int svBase))
+            return (byte[])mtrl.Clone();
+        if (svBase + svListSize > mtrl.Length) return (byte[])mtrl.Clone();
+
+        // Constant entry (8 bytes) goes after existing const entries, before samplers.
+        int insertConstAt = constBase + constCount * 8;
+        // 3 float values (12 bytes) appended at end of ShaderValues; svBase shifts +8 after const entry insert.
+        int appendValAt   = svBase + 8 + svListSize;
+        ushort newValOffset = (ushort)svListSize;   // byte offset = current svListSize (values go right after)
+        const ushort newValCount = 12;              // 12 bytes = 3 float32 (vec3 RGB, matching skin.shpk)
+
+        var result = new byte[mtrl.Length + 20];  // +8 const entry, +12 float values
+
+        // Copy bytes before insertion point
+        Array.Copy(mtrl, 0, result, 0, insertConstAt);
+
+        // Write new constant entry
+        BitConverter.TryWriteBytes(result.AsSpan(insertConstAt),     0x38A64362u);
+        BitConverter.TryWriteBytes(result.AsSpan(insertConstAt + 4), newValOffset);
+        BitConverter.TryWriteBytes(result.AsSpan(insertConstAt + 6), newValCount);
+
+        // Copy samplers + existing ShaderValues (shifted by 8)
+        Array.Copy(mtrl, insertConstAt, result, insertConstAt + 8, mtrl.Length - insertConstAt);
+
+        // Append new float values (vec3: R, G, B)
+        BitConverter.TryWriteBytes(result.AsSpan(appendValAt),     r);
+        BitConverter.TryWriteBytes(result.AsSpan(appendValAt + 4), g);
+        BitConverter.TryWriteBytes(result.AsSpan(appendValAt + 8), b);
+
+        // Update MaterialHeader: constCount +1, svListSize +12 (3 floats × 4 bytes)
+        BitConverter.TryWriteBytes(result.AsSpan(matHeaderStart + 4), (ushort)(constCount + 1));
+        BitConverter.TryWriteBytes(result.AsSpan(matHeaderStart),     (ushort)(svListSize + 12));
+
+        // Update MaterialFileHeader FileSize (lower 16 bits of uint32 at offset 4)
+        // +8 const entry + +12 float values = +20 total
+        ushort fileSize = BitConverter.ToUInt16(result, 4);
+        BitConverter.TryWriteBytes(result.AsSpan(4), (ushort)(fileSize + 20));
+
+        return result;
+    }
+
+    // Patches emissive R/G/B (half-floats at byte offsets 8–12 within each 16-byte sub-row)
+    // across all 32 sub-rows of the ColorSetInfo block in the .mtrl DataSet.
+    public static byte[] PatchColorTableEmissive(byte[] mtrl, float r, float g, float b)
+    {
+        if (mtrl.Length < 16) return (byte[])mtrl.Clone();
+
+        uint packed        = BitConverter.ToUInt32(mtrl, 4);
+        ushort dataSetSize = (ushort)(packed >> 16);
+        if (dataSetSize == 0) return (byte[])mtrl.Clone();
+
+        int texCount   = mtrl[12];
+        int uvCount    = mtrl[13];
+        int colorCount = mtrl[14];
+        int addlSize   = mtrl[15];
+        int strSize    = BitConverter.ToUInt16(mtrl, 8);
+
+        int colorSetOffset = 16 + texCount * 4 + uvCount * 4 + colorCount * 4 + strSize + addlSize;
+        if (colorSetOffset + 512 > mtrl.Length) return (byte[])mtrl.Clone();
+
+        var result = (byte[])mtrl.Clone();
+        ushort hr = (ushort)BitConverter.HalfToInt16Bits((Half)r);
+        ushort hg = (ushort)BitConverter.HalfToInt16Bits((Half)g);
+        ushort hb = (ushort)BitConverter.HalfToInt16Bits((Half)b);
+
+        for (int i = 0; i < 32; i++)
+        {
+            int off = colorSetOffset + i * 16;
+            BitConverter.TryWriteBytes(result.AsSpan(off + 8),  hr);
+            BitConverter.TryWriteBytes(result.AsSpan(off + 10), hg);
+            BitConverter.TryWriteBytes(result.AsSpan(off + 12), hb);
+        }
+        return result;
+    }
+
+    public bool WriteMtrl(byte[] bytes, string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            WriteWithRetry(path, stream => stream.Write(bytes, 0, bytes.Length));
+            return true;
+        }
+        catch (Exception ex) { log.Error(ex, "Failed to write .mtrl: {0}", path); return false; }
+    }
+
+    // Retries File.Create on IOException (file locked by a concurrent recomposite).
+    private static void WriteWithRetry(string path, Action<FileStream> write, int attempts = 5, int delayMs = 40)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                using var stream = File.Create(path);
+                write(stream);
+                return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                System.Threading.Thread.Sleep(delayMs);
+            }
+        }
     }
 
     // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match
