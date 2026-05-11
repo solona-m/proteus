@@ -1,0 +1,25 @@
+{
+  "Author": "Solona",
+  "Name": "Proteus",
+  "InternalName": "Proteus",
+  "Description": "Headless overlay compositor for Penumbra. Discovers mods with a Proteus/ sidecar, composites their overlay textures in Penumbra priority order, and maintains a single managed mod at priority 999. No authoring UI — all work happens in external tools. Type /proteus to open the status window.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "texture",
+    "overlay",
+    "compositor",
+    "penumbra",
+    "skin",
+    "mod"
+  ],
+  "CategoryTags": [
+    "utility"
+  ],
+  "DalamudApiLevel": 15,
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false,
+  "LoadPriority": 0,
+  "Punchline": "Automatic overlay compositor for Penumbra mods",
+  "AcceptsFeedback": true
+}
