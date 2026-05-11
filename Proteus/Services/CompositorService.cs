@@ -147,8 +147,8 @@ public class CompositorService : IDisposable
                 return;
             }
 
-            // Flatten: (entry, overlayDescriptor) pairs, grouped by material game path
-            var byMaterial = new Dictionary<string, List<(OverlayEntry, OverlayDescriptor)>>(
+            // Flatten: (entry, resolvedOverlay) pairs, grouped by material game path
+            var byMaterial = new Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>>(
                 StringComparer.OrdinalIgnoreCase);
 
             foreach (var entry in entries)
@@ -156,9 +156,9 @@ public class CompositorService : IDisposable
                 var overlays = discovery.ResolveActiveOverlays(entry);
                 foreach (var overlay in overlays)
                 {
-                    if (string.IsNullOrEmpty(overlay.MaterialGamePath)) continue;
-                    if (!byMaterial.TryGetValue(overlay.MaterialGamePath, out var list))
-                        byMaterial[overlay.MaterialGamePath] = list = new();
+                    if (string.IsNullOrEmpty(overlay.Descriptor.MaterialGamePath)) continue;
+                    if (!byMaterial.TryGetValue(overlay.Descriptor.MaterialGamePath, out var list))
+                        byMaterial[overlay.Descriptor.MaterialGamePath] = list = new();
                     list.Add((entry, overlay));
                 }
             }
@@ -190,20 +190,21 @@ public class CompositorService : IDisposable
                 byte[]? baseD = null, baseN = null, baseM = null;
                 int w = 0, h = 0;
 
-                foreach (var (entry, overlay) in pairs)
+                foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
 
-                    var rows  = BuildRowDict(entry.Metadata.ColorTableRows);
+                    var desc   = resolved.Descriptor;
+                    var rows   = BuildRowDict(resolved.ColorTableRows);
                     rows.TryGetValue(15, out var row16);
                     var row16A = row16?.A ?? new ColorTableSubRow();
 
-                    byte[]? idRgba       = null;  // index texture, loaded lazily once per entry
-                    byte[]? diffuseOv    = null;  // diffuse overlay, kept for emissive fallback
-                    byte[]? normalOv     = null;  // normal overlay, kept for emissive pass
+                    byte[]? idRgba    = null;  // index texture, loaded lazily once per overlay
+                    byte[]? diffuseOv = null;  // diffuse overlay, kept for emissive fallback
+                    byte[]? normalOv  = null;  // normal overlay, kept for emissive pass
 
                     // ── Diffuse ──────────────────────────────────────────────
-                    if (overlay.Diffuse != null && texPaths.Diffuse != null)
+                    if (desc.Diffuse != null && texPaths.Diffuse != null)
                     {
                         if (baseD == null)
                         {
@@ -214,12 +215,12 @@ public class CompositorService : IDisposable
                         }
                         if (baseD.Length > 0)
                         {
-                            diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, overlay.Diffuse), w, h);
+                            diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), w, h);
                             if (diffuseOv != null)
                             {
-                                if (overlay.Index != null)
+                                if (desc.Index != null)
                                 {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, overlay.Index), w, h);
+                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), w, h);
                                     if (idRgba != null)
                                         ApplyIndexedOverlay(baseD, diffuseOv, idRgba, rows, false, w, h);
                                     else
@@ -233,18 +234,44 @@ public class CompositorService : IDisposable
 
                     // ── Normal RGB composite ──────────────────────────────────
                     log.Debug("[Proteus] NormDbg entry={0} overlayNormal={1} texNormal={2} baseNNull={3}",
-                        entry.ModDirectory, overlay.Normal ?? "(null)", texPaths.Normal ?? "(null)", baseN == null);
-                    if (overlay.Normal != null && texPaths.Normal != null)
+                        entry.ModDirectory, desc.Normal ?? "(null)", texPaths.Normal ?? "(null)", baseN == null);
+                    if (desc.Normal != null && texPaths.Normal != null)
                     {
                         if (baseN == null)
-                        {
                             baseN = LoadBaseNormal(texPaths.Normal, ref w, ref h);
-                        }
                         if (baseN.Length > 0)
                         {
-                            normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, overlay.Normal), w, h);
+                            normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), w, h);
                             if (normalOv != null)
-                                AlphaComposite(baseN, normalOv, w, h);
+                            {
+                                // Normal-only overlay: synthesize a white diffuse using the normal's blue
+                                // channel as opacity. This gates the normal composite to the detail region
+                                // and applies a matching white tint to the base diffuse.
+                                if (diffuseOv == null)
+                                {
+                                    diffuseOv = new byte[normalOv.Length];
+                                    for (int si = 0; si < normalOv.Length; si += 4)
+                                    {
+                                        diffuseOv[si]     = 255;
+                                        diffuseOv[si + 1] = 255;
+                                        diffuseOv[si + 2] = 255;
+                                        diffuseOv[si + 3] = normalOv[si + 2]; // blue → opacity
+                                    }
+                                    if (texPaths.Diffuse != null)
+                                    {
+                                        if (baseD == null)
+                                        {
+                                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                                            var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                                            if (loaded.HasValue) { baseD = loaded.Value.rgba; if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; } }
+                                            baseD ??= Array.Empty<byte>();
+                                        }
+                                        if (baseD.Length > 0)
+                                            ApplyFlatOverlay(baseD, diffuseOv, row16A, w, h);
+                                    }
+                                }
+                                AlphaComposite(baseN, normalOv, w, h, diffuseOv);
+                            }
                         }
                     }
 
@@ -264,9 +291,9 @@ public class CompositorService : IDisposable
                             if (baseN.Length > 0)
                             {
                                 log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
-                                if (overlay.Index != null)
+                                if (desc.Index != null)
                                 {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, overlay.Index), w, h);
+                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), w, h);
                                     if (idRgba != null)
                                         ApplyIndexedOverlay(baseN, emissiveMask, idRgba, rows, true, w, h);
                                     else
@@ -281,7 +308,7 @@ public class CompositorService : IDisposable
                     }
 
                     // ── Mask ─────────────────────────────────────────────────
-                    if (overlay.Mask != null && texPaths.Mask != null)
+                    if (desc.Mask != null && texPaths.Mask != null)
                     {
                         if (baseM == null)
                         {
@@ -291,7 +318,7 @@ public class CompositorService : IDisposable
                         }
                         if (baseM.Length > 0)
                         {
-                            var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, overlay.Mask), w, h);
+                            var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Mask), w, h);
                             if (ov != null) AlphaComposite(baseM, ov, w, h);
                         }
                     }
@@ -328,7 +355,7 @@ public class CompositorService : IDisposable
 
                 // Patch .mtrl with emissive shader key + color table if any row has Emissive > 0
                 bool needsEmissive = pairs.Any(p =>
-                    p.Item1.Metadata.ColorTableRows?.Any(r =>
+                    p.Overlay.ColorTableRows?.Any(r =>
                         r.SubRowA?.Emissive > 0.001f || r.SubRowB?.Emissive > 0.001f) == true);
 
                 if (needsEmissive)
@@ -341,7 +368,7 @@ public class CompositorService : IDisposable
                     else
                     {
                         float er = 1f, eg = 1f, eb = 1f;
-                        var topRows = pairs[0].Item1.Metadata.ColorTableRows;
+                        var topRows = pairs[0].Overlay.ColorTableRows;
                         var row16p  = topRows?.FirstOrDefault(r => r.Row == 16);
                         if (row16p?.SubRowA?.Diffuse != null)
                             (er, eg, eb) = ParseHex(row16p.SubRowA.Diffuse);
@@ -445,7 +472,14 @@ public class CompositorService : IDisposable
 
         var obj = new { Files = files, Swaps = new { }, Manipulations = Array.Empty<object>() };
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(Path.Combine(managedModDir, "default_mod.json"), json);
+        var target = Path.Combine(managedModDir, "default_mod.json");
+        var tmp    = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllText(tmp, json);
+        for (int i = 0; ; i++)
+        {
+            try { File.Move(tmp, target, overwrite: true); break; }
+            catch (Exception) when (i < 5) { Thread.Sleep(50 << i); } // 50 100 200 400 800ms
+        }
     }
 
     private void ReloadAndRedraw()
@@ -553,7 +587,7 @@ public class CompositorService : IDisposable
             int   pairIdx = idx[i]     / 17;        // red → pair 0–15
             float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
 
-            if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+            if (!rows.TryGetValue(pairIdx, out var pair)) pair = new ColorTableRowOverride();
 
             float dr = pair.B.DiffuseR + (pair.A.DiffuseR - pair.B.DiffuseR) * blendA;
             float dg = pair.B.DiffuseG + (pair.A.DiffuseG - pair.B.DiffuseG) * blendA;
@@ -575,12 +609,16 @@ public class CompositorService : IDisposable
     }
 
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a). Dst alpha unchanged.
-    private static void AlphaComposite(byte[] dst, byte[] src, int w, int h)
+    // mask: if provided, effective alpha = min(src alpha, mask alpha) — used so a diffuse overlay
+    // silhouette gates the normal composite (invisible diffuse pixels stay at base normal).
+    private static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         int len = w * h * 4;
         for (int i = 0; i < len; i += 4)
         {
             float a = src[i + 3] / 255f;
+            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+            if (a <= 0f) continue;
             float ia = 1f - a;
             dst[i]     = (byte)(src[i]     * a + dst[i]     * ia);
             dst[i + 1] = (byte)(src[i + 1] * a + dst[i + 1] * ia);
