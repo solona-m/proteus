@@ -1,0 +1,17 @@
+## Build outputs
+bin/
+obj/
+*.user
+
+## VS files
+.vs/
+*.suo
+*.userosscache
+*.sln.docobj
+
+## Rider
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db

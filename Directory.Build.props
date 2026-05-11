@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <DALAMUD_HOME Condition="'$(DALAMUD_HOME)' == '' AND Exists('$(AppData)\XIVLauncherCN\addon\Hooks\dev')">$(AppData)\XIVLauncherCN\addon\Hooks\dev</DALAMUD_HOME>
+    <DALAMUD_HOME Condition="'$(DALAMUD_HOME)' == ''">$(AppData)\XIVLauncher\addon\Hooks\dev</DALAMUD_HOME>
+    <DalamudLibPath>$(DALAMUD_HOME)\</DalamudLibPath>
+  </PropertyGroup>
+
+  <Target Name="ComputeProteusVersion" BeforeTargets="GetAssemblyVersion;GenerateNuspec;Build" Condition="'$(ProteusVersion)' == ''">
+    <Exec Command="git rev-list --count HEAD" ConsoleToMsBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitCount" />
+    </Exec>
+    <CreateProperty Value="$([System.DateTime]::UtcNow.ToString('yyMM')).$(GitCommitCount)">
+      <Output TaskParameter="Value" PropertyName="ProteusVersion" />
+    </CreateProperty>
+    <CreateProperty Value="$(ProteusVersion)">
+      <Output TaskParameter="Value" PropertyName="Version" />
+    </CreateProperty>
+    <CreateProperty Value="$(ProteusVersion)">
+      <Output TaskParameter="Value" PropertyName="AssemblyVersion" />
+    </CreateProperty>
+    <CreateProperty Value="$(ProteusVersion)">
+      <Output TaskParameter="Value" PropertyName="FileVersion" />
+    </CreateProperty>
+  </Target>
+</Project>
