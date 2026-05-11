@@ -1,0 +1,9 @@
+{
+  "FileVersion": 3,
+  "Name": "Example Stocking Overlays (Bibo+)",
+  "Author": "YourNameHere",
+  "Description": "Example Proteus multi-option overlay. Select a stocking pattern in Penumbra to apply that overlay.",
+  "Version": "1.0",
+  "Website": "",
+  "ModTags": []
+}

@@ -1,0 +1,39 @@
+{
+  "FormatVersion": 1,
+  "Name": "Example Stocking Overlays (Bibo+)",
+  "Author": "YourNameHere",
+  "OptionGroups": [
+    {
+      "PenumbraGroupName": "Stocking Pattern",
+      "Options": [
+        {
+          "Name": "Roses",
+          "Overlays": [
+            {
+              "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+              "Diffuse": "overlays/roses_d.png"
+            }
+          ]
+        },
+        {
+          "Name": "Stripes",
+          "Overlays": [
+            {
+              "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+              "Diffuse": "overlays/stripes_d.png"
+            }
+          ]
+        },
+        {
+          "Name": "Dots",
+          "Overlays": [
+            {
+              "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+              "Diffuse": "overlays/dots_d.png"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
