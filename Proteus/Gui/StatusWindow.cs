@@ -65,10 +65,11 @@ public class StatusWindow : Window
         }
         else
         {
-            ImGui.BeginTable("##mods", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+            ImGui.BeginTable("##mods", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
             ImGui.TableSetupColumn("##en",     ImGuiTableColumnFlags.WidthFixed, 20);
             ImGui.TableSetupColumn("Mod",      ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",      ImGuiTableColumnFlags.WidthFixed, 60);
+            ImGui.TableSetupColumn("Tint",     ImGuiTableColumnFlags.WidthFixed, 26);
             ImGui.TableSetupColumn("Overlays", ImGuiTableColumnFlags.WidthFixed, 70);
             ImGui.TableHeadersRow();
 
@@ -105,6 +106,19 @@ public class StatusWindow : Window
                     ov.PriorityOverride = pri;
                     config.Save();
                     compositor.TriggerRecomposite("priority-change");
+                }
+
+                // Tint color picker
+                ImGui.TableNextColumn();
+                var tintCol = new Vector4(ov?.TintR ?? 1f, ov?.TintG ?? 1f, ov?.TintB ?? 1f, ov?.TintA ?? 1f);
+                ImGui.SetNextItemWidth(22);
+                if (ImGui.ColorEdit4($"##tint_{entry.ModDirectory}", ref tintCol,
+                    ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.AlphaPreview))
+                {
+                    if (ov == null) { ov = new ModOverride(); config.ModOverrides[entry.ModDirectory] = ov; }
+                    ov.TintR = tintCol.X; ov.TintG = tintCol.Y; ov.TintB = tintCol.Z; ov.TintA = tintCol.W;
+                    config.Save();
+                    compositor.TriggerRecomposite("tint-change");
                 }
 
                 // Overlay count

@@ -192,7 +192,11 @@ public class CompositorService : IDisposable
                         {
                             var ovPath = Path.Combine(entry.SidecarRoot, overlay.Diffuse);
                             var ov = textureLoader.LoadPngAsRgba(ovPath, w, h);
-                            if (ov != null) AlphaComposite(baseD, ov, w, h);
+                            if (ov != null)
+                            {
+                                TintOverlay(entry.ModDirectory, ov);
+                                AlphaComposite(baseD, ov, w, h);
+                            }
                         }
                     }
 
@@ -335,6 +339,31 @@ public class CompositorService : IDisposable
     }
 
     // ── Compositing ──────────────────────────────────────────────────────────
+
+    private void TintOverlay(string modDirectory, byte[] overlay)
+    {
+        if (!config.ModOverrides.TryGetValue(modDirectory, out var ov)) return;
+        if (ov.TintA < 0.001f) return;
+        if (Math.Abs(ov.TintR - 1f) < 0.001f &&
+            Math.Abs(ov.TintG - 1f) < 0.001f &&
+            Math.Abs(ov.TintB - 1f) < 0.001f) return;
+        ApplyTint(overlay, ov.TintR, ov.TintG, ov.TintB, ov.TintA);
+    }
+
+    // Lerp each pixel toward tintRGB by strength — works on dark/black pixels, alpha unchanged
+    private static void ApplyTint(byte[] pixels, float r, float g, float b, float strength)
+    {
+        float inv = 1f - strength;
+        float tr = r * 255f * strength;
+        float tg = g * 255f * strength;
+        float tb = b * 255f * strength;
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            pixels[i]     = (byte)(pixels[i]     * inv + tr);
+            pixels[i + 1] = (byte)(pixels[i + 1] * inv + tg);
+            pixels[i + 2] = (byte)(pixels[i + 2] * inv + tb);
+        }
+    }
 
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a)
     private static void AlphaComposite(byte[] dst, byte[] src, int w, int h)
