@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Proteus;
@@ -35,15 +37,16 @@ public class ProteusMetadata
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
 }
 
-/// <summary>Describes one set of overlay textures targeting a single material.</summary>
+/// <summary>Describes one set of overlay textures targeting one or more materials.</summary>
 public class OverlayDescriptor
 {
     /// <summary>
-    /// Penumbra game path of the .mtrl file. Proteus resolves this via ResolvePlayerPath
-    /// (body mod overrides respected) then parses the mtrl to find the actual texture paths.
+    /// Penumbra game path(s) of the .mtrl file(s). Accepts a single string or a JSON array.
+    /// The same overlay textures are composited onto every listed material.
     /// </summary>
     [JsonPropertyName("MaterialGamePath")]
-    public string MaterialGamePath { get; set; } = string.Empty;
+    [JsonConverter(typeof(StringOrStringArrayConverter))]
+    public List<string> MaterialGamePaths { get; set; } = [];
 
     /// <summary>Relative path (from Proteus/ sidecar root) to the diffuse overlay PNG. Optional.</summary>
     [JsonPropertyName("Diffuse")]
@@ -143,4 +146,41 @@ public class ColorTableRowOverride
 {
     public ColorTableSubRow A { get; set; } = new();
     public ColorTableSubRow B { get; set; } = new();
+}
+
+/// <summary>
+/// Deserialises MaterialGamePath as either a JSON string or a JSON array of strings.
+/// Serialises a single-element list back as a plain string for compact output.
+/// </summary>
+public class StringOrStringArrayConverter : JsonConverter<List<string>>
+{
+    public override List<string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+            return [reader.GetString()!];
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            var list = new List<string>();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                if (reader.TokenType == JsonTokenType.String)
+                    list.Add(reader.GetString()!);
+            return list;
+        }
+
+        throw new JsonException($"Expected string or array for MaterialGamePath, got {reader.TokenType}");
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<string> value, JsonSerializerOptions options)
+    {
+        if (value.Count == 1)
+            writer.WriteStringValue(value[0]);
+        else
+        {
+            writer.WriteStartArray();
+            foreach (var s in value)
+                writer.WriteStringValue(s);
+            writer.WriteEndArray();
+        }
+    }
 }

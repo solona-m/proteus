@@ -181,10 +181,13 @@ public class CompositorService : IDisposable
                 var overlays = discovery.ResolveActiveOverlays(entry);
                 foreach (var overlay in overlays)
                 {
-                    if (string.IsNullOrEmpty(overlay.Descriptor.MaterialGamePath)) continue;
-                    if (!byMaterial.TryGetValue(overlay.Descriptor.MaterialGamePath, out var list))
-                        byMaterial[overlay.Descriptor.MaterialGamePath] = list = new();
-                    list.Add((entry, overlay));
+                    foreach (var mtrlPath in overlay.Descriptor.MaterialGamePaths)
+                    {
+                        if (string.IsNullOrEmpty(mtrlPath)) continue;
+                        if (!byMaterial.TryGetValue(mtrlPath, out var list))
+                            byMaterial[mtrlPath] = list = new();
+                        list.Add((entry, overlay));
+                    }
                 }
             }
 
@@ -211,6 +214,14 @@ public class CompositorService : IDisposable
                     log.Warning("[Proteus] No textures found for material: {0}", mtrlGamePath);
                     continue;
                 }
+
+                // If any entry in this material's stack uses emissive, the normal alpha must
+                // start at 0 so that only overlay-covered pixels receive emissive intensity.
+                // (BC5-decoded normals have alpha=255 everywhere; without this reset, the
+                // entire material would glow when the emissive shader key is active.)
+                bool anyEmissive = pairs.Any(p =>
+                    p.Overlay.ColorTableRows?.Any(r =>
+                        r.SubRowA?.Emissive > 0.001f || r.SubRowB?.Emissive > 0.001f) == true);
 
                 byte[]? baseD = null, baseN = null, baseM = null;
                 int wD = 0, hD = 0, wN = 0, hN = 0, wM = 0, hM = 0;
@@ -262,6 +273,8 @@ public class CompositorService : IDisposable
                     {
                         if (baseN == null)
                             baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                            if (anyEmissive && baseN.Length > 0)
+                                for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
                         if (baseN.Length > 0)
                         {
                             normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), wN, hN);
@@ -301,7 +314,7 @@ public class CompositorService : IDisposable
 
                     // ── Emissive → normal alpha ───────────────────────────────
                     // skin.shpk: normal alpha = per-pixel emissive intensity mask (key 0x380CAED0 = EMISSIVE).
-                    var emissiveMask = normalOv ?? diffuseOv;
+                    var emissiveMask = diffuseOv ?? normalOv;
                     if (emissiveMask != null && row16A.Emissive > 0.001f)
                     {
                         if (texPaths.Normal == null)
@@ -312,6 +325,8 @@ public class CompositorService : IDisposable
                         {
                             if (baseN == null)
                                 baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                            if (anyEmissive && baseN.Length > 0)
+                                for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
                             if (baseN.Length > 0 && emissiveMask.Length == baseN.Length)
                             {
                                 log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
