@@ -213,7 +213,7 @@ public class CompositorService : IDisposable
                 }
 
                 byte[]? baseD = null, baseN = null, baseM = null;
-                int w = 0, h = 0;
+                int wD = 0, hD = 0, wN = 0, hN = 0, wM = 0, hM = 0;
 
                 foreach (var (entry, resolved) in pairs)
                 {
@@ -235,38 +235,36 @@ public class CompositorService : IDisposable
                         {
                             var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
                             var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                            if (loaded.HasValue) { baseD = loaded.Value.rgba; w = loaded.Value.width; h = loaded.Value.height; }
+                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                             baseD ??= Array.Empty<byte>();
                         }
                         if (baseD.Length > 0)
                         {
-                            diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), w, h);
+                            diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), wD, hD);
                             if (diffuseOv != null)
                             {
                                 if (desc.Index != null)
                                 {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), w, h);
+                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
                                     if (idRgba != null)
-                                        ApplyIndexedOverlay(baseD, diffuseOv, idRgba, rows, false, w, h);
+                                        ApplyIndexedOverlay(baseD, diffuseOv, idRgba, rows, false, wD, hD);
                                     else
-                                        ApplyFlatOverlay(baseD, diffuseOv, row16A, w, h);
+                                        ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                                 }
                                 else
-                                    ApplyFlatOverlay(baseD, diffuseOv, row16A, w, h);
+                                    ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                             }
                         }
                     }
 
                     // ── Normal RGB composite ──────────────────────────────────
-                    log.Debug("[Proteus] NormDbg entry={0} overlayNormal={1} texNormal={2} baseNNull={3}",
-                        entry.ModDirectory, desc.Normal ?? "(null)", texPaths.Normal ?? "(null)", baseN == null);
                     if (desc.Normal != null && texPaths.Normal != null)
                     {
                         if (baseN == null)
-                            baseN = LoadBaseNormal(texPaths.Normal, ref w, ref h);
+                            baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
-                            normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), w, h);
+                            normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), wN, hN);
                             if (normalOv != null)
                             {
                                 // Normal-only overlay: synthesize a white diffuse using the normal's blue
@@ -288,21 +286,22 @@ public class CompositorService : IDisposable
                                         {
                                             var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
                                             var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                                            if (loaded.HasValue) { baseD = loaded.Value.rgba; if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; } }
+                                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                                             baseD ??= Array.Empty<byte>();
                                         }
-                                        if (baseD.Length > 0)
-                                            ApplyFlatOverlay(baseD, diffuseOv, row16A, w, h);
+                                        // Only apply the white tint to the diffuse if the sizes match.
+                                        if (baseD.Length > 0 && wD == wN && hD == hN)
+                                            ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                                     }
                                 }
-                                AlphaComposite(baseN, normalOv, w, h, diffuseOv);
+                                AlphaComposite(baseN, normalOv, wN, hN, wN == wD && hN == hD ? diffuseOv : null);
                             }
                         }
                     }
 
                     // ── Emissive → normal alpha ───────────────────────────────
                     // skin.shpk: normal alpha = per-pixel emissive intensity mask (key 0x380CAED0 = EMISSIVE).
-                    var emissiveMask = diffuseOv ?? normalOv;
+                    var emissiveMask = normalOv ?? diffuseOv;
                     if (emissiveMask != null && row16A.Emissive > 0.001f)
                     {
                         if (texPaths.Normal == null)
@@ -312,22 +311,22 @@ public class CompositorService : IDisposable
                         else
                         {
                             if (baseN == null)
-                                baseN = LoadBaseNormal(texPaths.Normal, ref w, ref h);
-                            if (baseN.Length > 0)
+                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                            if (baseN.Length > 0 && emissiveMask.Length == baseN.Length)
                             {
                                 log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
                                 if (desc.Index != null)
                                 {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), w, h);
+                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
                                     if (idRgba != null)
-                                        ApplyIndexedOverlay(baseN, emissiveMask, idRgba, rows, true, w, h);
+                                        ApplyIndexedOverlay(baseN, emissiveMask, idRgba, rows, true, wN, hN);
                                     else
-                                        ApplyFlatEmissive(baseN, emissiveMask, row16A, w, h);
+                                        ApplyFlatEmissive(baseN, emissiveMask, row16A, wN, hN);
                                 }
                                 else
-                                    ApplyFlatEmissive(baseN, emissiveMask, row16A, w, h);
+                                    ApplyFlatEmissive(baseN, emissiveMask, row16A, wN, hN);
                             }
-                            else
+                            else if (baseN.Length == 0)
                                 log.Warning("[Proteus] Base normal failed to load for emissive: {0}", texPaths.Normal);
                         }
                     }
@@ -338,13 +337,13 @@ public class CompositorService : IDisposable
                         if (baseM == null)
                         {
                             var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Mask), texPaths.Mask);
-                            if (loaded.HasValue) { baseM = loaded.Value.rgba; if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; } }
+                            if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
                         if (baseM.Length > 0)
                         {
-                            var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Mask), w, h);
-                            if (ov != null) AlphaComposite(baseM, ov, w, h);
+                            var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Mask), wM, hM);
+                            if (ov != null) AlphaComposite(baseM, ov, wM, hM);
                         }
                     }
                 }
@@ -355,26 +354,21 @@ public class CompositorService : IDisposable
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
                     var relPath = "textures/" + baseName + "_d.tex";
-                    if (textureLoader.WriteTex(baseD, w, h, outPath))
+                    if (textureLoader.WriteTex(baseD, wD, hD, outPath))
                     { redirects[texPaths.Diffuse] = relPath; texturesPatched++; }
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
                     var relPath = "textures/" + baseName + "_n.tex";
-                    if (textureLoader.WriteTex(baseN, w, h, outPath))
+                    if (textureLoader.WriteTex(baseN, wN, hN, outPath))
                     { redirects[texPaths.Normal] = relPath; texturesPatched++; }
-                    // Debug: write alongside as PNG so alpha channel can be inspected visually
-                    textureLoader.WritePng(baseN, w, h, Path.Combine(texturesDir, baseName + "_n_debug.png"));
-                    int emPx = 0;
-                    for (int ai = 3; ai < baseN.Length; ai += 4) if (baseN[ai] > 0) emPx++;
-                    log.Debug("[Proteus] Normal tex written: {0}×{1}, emissive pixels={2}/{3}", w, h, emPx, baseN.Length / 4);
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
                     var relPath = "textures/" + baseName + "_m.tex";
-                    if (textureLoader.WriteTex(baseM, w, h, outPath))
+                    if (textureLoader.WriteTex(baseM, wM, hM, outPath))
                     { redirects[texPaths.Mask] = relPath; texturesPatched++; }
                 }
 
@@ -552,7 +546,8 @@ public class CompositorService : IDisposable
         if (!loaded.HasValue) return Array.Empty<byte>();
 
         var rgba = loaded.Value.rgba;
-        if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; }
+        w = loaded.Value.width;
+        h = loaded.Value.height;
         return rgba;
     }
 
