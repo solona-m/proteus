@@ -15,6 +15,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IPluginLog Log { get; private set; } = null!;
     [PluginService] public static IFramework Framework { get; private set; } = null!;
     [PluginService] public static IDataManager DataManager { get; private set; } = null!;
+    [PluginService] public static ICondition Condition { get; private set; } = null!;
 
     private const string CommandName = "/proteus";
 
