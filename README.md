@@ -10,8 +10,7 @@ Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your
 
 ### Installation
 
-Add this repo to your experimental tab under /xlplugins https://github.com/solona-m/plugins/blob/main/repo.json
-
+Add this repo to your experimental tab under /xlplugins https://raw.githubusercontent.com/solona-m/plugins/main/repo.json
 Save, then find Proteus in the main /xlplugins window.
 
 Install some overlay mods made for proteus, chose your options and your character will update.
