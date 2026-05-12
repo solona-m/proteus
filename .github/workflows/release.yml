@@ -88,7 +88,7 @@ jobs:
               LoadPriority         = 0
             }
           )
-          $json = $repo | ConvertTo-Json -Depth 5
+          $json = ConvertTo-Json -InputObject $repo -Depth 5
           $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
 
           $headers = @{
