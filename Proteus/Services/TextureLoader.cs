@@ -86,7 +86,9 @@ public class TextureLoader
     {
         try
         {
-            var tex = LoadLuminaFile<TexFile>(diskPath);
+            if (!File.Exists(diskPath)) return null;
+            var bytes = SanitizeTexBytes(File.ReadAllBytes(diskPath));
+            var tex = LoadLuminaFileFromBytes<TexFile>(bytes);
             if (tex == null) return null;
             return ConvertTex(tex);
         }
@@ -228,12 +230,53 @@ public class TextureLoader
     private static T? LoadLuminaFile<T>(string diskPath) where T : FileResource
     {
         if (!File.Exists(diskPath)) return null;
-        var bytes = File.ReadAllBytes(diskPath);
-        var file  = Activator.CreateInstance<T>();
+        return LoadLuminaFileFromBytes<T>(File.ReadAllBytes(diskPath));
+    }
+
+    private static T? LoadLuminaFileFromBytes<T>(byte[] bytes) where T : FileResource
+    {
+        var file = Activator.CreateInstance<T>();
         PropData.SetValue(file, bytes);
         PropReader.SetValue(file, new LuminaBinaryReader(bytes, PlatformId.Win32));
         file.LoadFile();
         return file;
+    }
+
+    // Some mod tools write .tex files with MipCount > 1 but leave the extra OffsetToSurface slots
+    // at zero. Lumina computes negative mipmap allocations from those zeroed offsets and passes a
+    // negative count to Buffer.BlockCopy, which throws ArgumentException. Pre-patch the header so
+    // MipCount only reflects the offsets that are actually populated.
+    private static byte[] SanitizeTexBytes(byte[] bytes)
+    {
+        if (bytes.Length < 80) return bytes;
+        int mipCount = bytes[14] & 0x7F;
+        if (mipCount <= 1) return bytes;
+
+        uint prev = BitConverter.ToUInt32(bytes, 28);
+        if (prev == 0)
+        {
+            var p = (byte[])bytes.Clone();
+            p[14] = (byte)((p[14] & 0x80) | 1);
+            return p;
+        }
+
+        int validMips = 1;
+        for (int i = 1; i < Math.Min(mipCount, 13); i++)
+        {
+            uint cur = BitConverter.ToUInt32(bytes, 28 + i * 4);
+            // Reject zero, non-monotonic, OR out-of-bounds offsets.
+            // Some mod tools write OffsetToSurface as if the texture were uncompressed
+            // (4 bytes/pixel) even for BC formats, making offsets 4× too large and
+            // pointing past the end of the compressed file.
+            if (cur == 0 || cur <= prev || cur >= (uint)bytes.Length) break;
+            prev = cur;
+            validMips = i + 1;
+        }
+        if (validMips == mipCount) return bytes;
+
+        var patched = (byte[])bytes.Clone();
+        patched[14] = (byte)((patched[14] & 0x80) | (validMips & 0x7F));
+        return patched;
     }
 
     private static string ReadNullTerminatedString(byte[] strings, int offset)
@@ -511,6 +554,10 @@ public class TextureLoader
             }
         }
     }
+
+    /// <summary>Nearest-neighbour resize of an RGBA8 buffer.</summary>
+    public byte[] ScaleRgba(byte[] src, int sw, int sh, int dw, int dh)
+        => ScaleNearest(src, sw, sh, dw, dh);
 
     // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match
     private static byte[] ScaleNearest(byte[] src, int sw, int sh, int dw, int dh)

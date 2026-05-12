@@ -247,11 +247,17 @@ public class CompositorService : IDisposable
                     rows.TryGetValue(15, out var row16);
                     var row16A = row16?.A ?? new ColorTableSubRow();
 
-                    byte[]? idRgba    = null;  // index texture, loaded lazily once per overlay
-                    byte[]? diffuseOv = null;  // diffuse overlay, kept for emissive fallback
-                    byte[]? normalOv  = null;  // normal overlay, kept for emissive pass
+                    byte[]? diffuseOv = null;
+                    byte[]? normalOv  = null;
 
-                    // ── Diffuse ──────────────────────────────────────────────
+                    // Coverage mask: the alpha of the diffuse overlay defines WHERE this overlay
+                    // applies. When there is no diffuse overlay (normal-only), the mask is
+                    // synthesized from the normal map's blue channel. Every compositing channel
+                    // — diffuse, normal, emissive, mask texture — is gated by this same mask.
+                    byte[]? covSrc = null;  // coverage source at (covW × covH)
+                    int covW = 0, covH = 0;
+
+                    // ── Step 1: load diffuse overlay (establishes coverage) ───
                     if (desc.Diffuse != null && texPaths.Diffuse != null)
                     {
                         if (baseD == null)
@@ -264,70 +270,83 @@ public class CompositorService : IDisposable
                         if (baseD.Length > 0)
                         {
                             diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), wD, hD);
-                            if (diffuseOv != null)
-                            {
-                                if (desc.Index != null)
-                                {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
-                                    if (idRgba != null)
-                                        ApplyIndexedOverlay(baseD, diffuseOv, idRgba, rows, false, wD, hD);
-                                    else
-                                        ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
-                                }
-                                else
-                                    ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
-                            }
+                            if (diffuseOv != null) { covSrc = diffuseOv; covW = wD; covH = hD; }
                         }
                     }
 
-                    // ── Normal RGB composite ──────────────────────────────────
+                    // ── Step 2: load normal overlay; synthesize coverage if needed ──
                     if (desc.Normal != null && texPaths.Normal != null)
                     {
                         if (baseN == null)
+                        {
                             baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                             if (anyEmissive && baseN.Length > 0)
                                 for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
+                        }
                         if (baseN.Length > 0)
-                        {
                             normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), wN, hN);
-                            if (normalOv != null)
+
+                        if (normalOv != null && covSrc == null)
+                        {
+                            // No diffuse overlay — synthesize coverage from normal blue channel.
+                            var synth = new byte[normalOv.Length];
+                            for (int si = 0; si < normalOv.Length; si += 4)
                             {
-                                // Normal-only overlay: synthesize a white diffuse using the normal's blue
-                                // channel as opacity. This gates the normal composite to the detail region
-                                // and applies a matching white tint to the base diffuse.
-                                if (diffuseOv == null)
-                                {
-                                    diffuseOv = new byte[normalOv.Length];
-                                    for (int si = 0; si < normalOv.Length; si += 4)
-                                    {
-                                        diffuseOv[si]     = 255;
-                                        diffuseOv[si + 1] = 255;
-                                        diffuseOv[si + 2] = 255;
-                                        diffuseOv[si + 3] = normalOv[si + 2]; // blue → opacity
-                                    }
-                                    if (texPaths.Diffuse != null)
-                                    {
-                                        if (baseD == null)
-                                        {
-                                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
-                                            var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                                            baseD ??= Array.Empty<byte>();
-                                        }
-                                        // Only apply the white tint to the diffuse if the sizes match.
-                                        if (baseD.Length > 0 && wD == wN && hD == hN)
-                                            ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
-                                    }
-                                }
-                                AlphaComposite(baseN, normalOv, wN, hN, wN == wD && hN == hD ? diffuseOv : null);
+                                synth[si] = synth[si + 1] = synth[si + 2] = 255;
+                                synth[si + 3] = normalOv[si + 2]; // blue → opacity
                             }
+                            diffuseOv = synth;
+                            covSrc = synth; covW = wN; covH = hN;
                         }
                     }
 
-                    // ── Emissive → normal alpha ───────────────────────────────
-                    // skin.shpk: normal alpha = per-pixel emissive intensity mask (key 0x380CAED0 = EMISSIVE).
-                    var emissiveMask = diffuseOv ?? normalOv;
-                    if (emissiveMask != null && row16A.Emissive > 0.001f)
+                    if (covSrc == null) continue; // no coverage — nothing to composite
+
+                    // Returns the coverage mask resized to (tw × th) on demand.
+                    // Re-loads from the diffuse PNG when possible; falls back to scaling.
+                    byte[]? CovAt(int tw, int th)
+                    {
+                        if (tw == covW && th == covH) return covSrc;
+                        if (desc.Diffuse != null)
+                            return textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th);
+                        return textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
+                    }
+
+                    // ── Phase A: diffuse composite ────────────────────────────
+                    if (desc.Diffuse != null && diffuseOv != null && baseD is { Length: > 0 })
+                    {
+                        if (desc.Index != null)
+                        {
+                            var idD = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
+                            if (idD != null) ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
+                            else             ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                        }
+                        else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                    }
+                    else if (desc.Diffuse == null && normalOv != null && texPaths.Diffuse != null)
+                    {
+                        // Normal-only overlay: apply synthesized white tint to the diffuse channel.
+                        if (baseD == null)
+                        {
+                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                            var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                            baseD ??= Array.Empty<byte>();
+                        }
+                        if (baseD.Length > 0)
+                        {
+                            var tint = CovAt(wD, hD);
+                            if (tint != null) ApplyFlatOverlay(baseD, tint, row16A, wD, hD);
+                        }
+                    }
+
+                    // ── Phase B: normal composite ─────────────────────────────
+                    if (normalOv != null && baseN is { Length: > 0 })
+                        AlphaComposite(baseN, normalOv, wN, hN, CovAt(wN, hN));
+
+                    // ── Phase C: emissive → normal alpha ──────────────────────
+                    // skin.shpk: normal alpha = per-pixel emissive intensity (key 0x380CAED0).
+                    if (row16A.Emissive > 0.001f)
                     {
                         if (texPaths.Normal == null)
                         {
@@ -336,29 +355,31 @@ public class CompositorService : IDisposable
                         else
                         {
                             if (baseN == null)
-                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                            if (anyEmissive && baseN.Length > 0)
-                                for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
-                            if (baseN.Length > 0 && emissiveMask.Length == baseN.Length)
                             {
-                                log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
-                                if (desc.Index != null)
-                                {
-                                    idRgba ??= textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
-                                    if (idRgba != null)
-                                        ApplyIndexedOverlay(baseN, emissiveMask, idRgba, rows, true, wN, hN);
-                                    else
-                                        ApplyFlatEmissive(baseN, emissiveMask, row16A, wN, hN);
-                                }
-                                else
-                                    ApplyFlatEmissive(baseN, emissiveMask, row16A, wN, hN);
+                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                                if (anyEmissive && baseN.Length > 0)
+                                    for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
                             }
-                            else if (baseN.Length == 0)
-                                log.Warning("[Proteus] Base normal failed to load for emissive: {0}", texPaths.Normal);
+                            if (baseN.Length > 0)
+                            {
+                                var emMask = CovAt(wN, hN);
+                                if (emMask != null)
+                                {
+                                    log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
+                                    if (desc.Index != null)
+                                    {
+                                        var idN = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
+                                        if (idN != null) ApplyIndexedOverlay(baseN, emMask, idN, rows, true, wN, hN);
+                                        else             ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
+                                    }
+                                    else ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
+                                }
+                                else log.Warning("[Proteus] Base normal failed to load for emissive: {0}", texPaths.Normal);
+                            }
                         }
                     }
 
-                    // ── Mask ─────────────────────────────────────────────────
+                    // ── Phase D: mask texture composite ───────────────────────
                     if (desc.Mask != null && texPaths.Mask != null)
                     {
                         if (baseM == null)
@@ -370,7 +391,7 @@ public class CompositorService : IDisposable
                         if (baseM.Length > 0)
                         {
                             var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Mask), wM, hM);
-                            if (ov != null) AlphaComposite(baseM, ov, wM, hM);
+                            if (ov != null) AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
                         }
                     }
                 }
