@@ -553,18 +553,6 @@ public class CompositorService : IDisposable
 
         var rgba = loaded.Value.rgba;
         if (w == 0) { w = loaded.Value.width; h = loaded.Value.height; }
-
-        // Detect stale all-255 feedback loop artifact; natural normals have avg alpha ~5.
-        int ffCount = 0, total = rgba.Length / 4;
-        for (int ai = 3; ai < rgba.Length; ai += 4)
-            if (rgba[ai] == 255) ffCount++;
-        if (ffCount > total / 2)
-        {
-            log.Warning("[Proteus] Normal alpha reset: {0}/{1} pixels were 255 (stale output detected)", ffCount, total);
-            for (int ai = 3; ai < rgba.Length; ai += 4)
-                rgba[ai] = 0;
-        }
-
         return rgba;
     }
 
