@@ -28,6 +28,7 @@ public class CompositorService : IDisposable
     private readonly Configuration config;
     private readonly IPluginLog log;
 
+    private readonly string modsRoot;
     private readonly string managedModDir;
 
     private CancellationTokenSource? currentCts;
@@ -50,7 +51,7 @@ public class CompositorService : IDisposable
         this.config = config;
         this.log = log;
 
-        var modsRoot = penumbra.GetModDirectory() ?? string.Empty;
+        modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
 
         penumbra.ModSettingChanged += OnModSettingChanged;
@@ -72,14 +73,32 @@ public class CompositorService : IDisposable
 
     private void OnModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
     {
-        // Skip changes to the managed mod itself (we write it — would cause a loop).
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return;
+        var playerColl = penumbra.GetPlayerCollectionId();
+        if (playerColl == null || collId != playerColl.Value)
             return;
         TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
     }
 
-    private void OnModAdded(string modDir)   => TriggerRecomposite($"ModAdded:{modDir}");
-    private void OnModDeleted(string modDir) => TriggerRecomposite($"ModDeleted:{modDir}");
+    private void OnModAdded(string modDir)
+    {
+        if (!HasSidecar(modDir)) return;
+        TriggerRecomposite($"ModAdded:{modDir}");
+    }
+
+    private void OnModDeleted(string modDir)
+    {
+        if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)))
+            return;
+        TriggerRecomposite($"ModDeleted:{modDir}");
+    }
+
+    private bool HasSidecar(string modDir)
+    {
+        var metaPath = Path.Combine(modsRoot, modDir, "Proteus", "metadata.json");
+        return File.Exists(metaPath);
+    }
 
     // ── Trigger ──────────────────────────────────────────────────────────────
 
@@ -100,7 +119,13 @@ public class CompositorService : IDisposable
         }
 
         log.Debug("[Proteus] Recomposite triggered: {0}", reason);
-        Task.Run(() => Recomposite(cts.Token), cts.Token);
+        var token = cts.Token;
+        Task.Run(async () =>
+        {
+            try { await Task.Delay(500, token); }
+            catch (OperationCanceledException) { return; }
+            Recomposite(token);
+        });
     }
 
     // ── Core compositor ──────────────────────────────────────────────────────
