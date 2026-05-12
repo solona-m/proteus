@@ -28,12 +28,16 @@ public class PenumbraBridge : IDisposable
     private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
     private readonly EventSubscriber<string> modAddedSub;
     private readonly EventSubscriber<string> modDeletedSub;
+    private readonly EventSubscriber initializedSub;
+    private readonly EventSubscriber disposedSub;
 
     public bool IsAvailable { get; private set; }
 
     public event Action<ModSettingChange, Guid, string, bool>? ModSettingChanged;
     public event Action<string>? ModAdded;
     public event Action<string>? ModDeleted;
+    /// <summary>Fired when Penumbra becomes available (including late initialization after plugin load).</summary>
+    public event Action? PenumbraReady;
 
     public PenumbraBridge(IDalamudPluginInterface pluginInterface, IPluginLog log)
     {
@@ -58,8 +62,22 @@ public class PenumbraBridge : IDisposable
             modDir => ModAdded?.Invoke(modDir));
         modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
             modDir => ModDeleted?.Invoke(modDir));
+        initializedSub = Penumbra.Api.IpcSubscribers.Initialized.Subscriber(pluginInterface, OnPenumbraInitialized);
+        disposedSub    = Penumbra.Api.IpcSubscribers.Disposed.Subscriber(pluginInterface, OnPenumbraDisposed);
 
         CheckAvailability();
+    }
+
+    private void OnPenumbraInitialized()
+    {
+        CheckAvailability();
+        if (IsAvailable)
+            PenumbraReady?.Invoke();
+    }
+
+    private void OnPenumbraDisposed()
+    {
+        IsAvailable = false;
     }
 
     private void CheckAvailability()
@@ -184,5 +202,7 @@ public class PenumbraBridge : IDisposable
         modSettingChangedSub.Dispose();
         modAddedSub.Dispose();
         modDeletedSub.Dispose();
+        initializedSub.Dispose();
+        disposedSub.Dispose();
     }
 }

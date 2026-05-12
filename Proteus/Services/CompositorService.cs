@@ -28,8 +28,8 @@ public class CompositorService : IDisposable
     private readonly Configuration config;
     private readonly IPluginLog log;
 
-    private readonly string modsRoot;
-    private readonly string managedModDir;
+    private string modsRoot;
+    private string managedModDir;
 
     private CancellationTokenSource? currentCts;
     private readonly object triggerLock = new();
@@ -57,6 +57,7 @@ public class CompositorService : IDisposable
         penumbra.ModSettingChanged += OnModSettingChanged;
         penumbra.ModAdded          += OnModAdded;
         penumbra.ModDeleted        += OnModDeleted;
+        penumbra.PenumbraReady     += OnPenumbraReady;
     }
 
     public void Dispose()
@@ -64,6 +65,7 @@ public class CompositorService : IDisposable
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
         penumbra.ModDeleted        -= OnModDeleted;
+        penumbra.PenumbraReady     -= OnPenumbraReady;
 
         currentCts?.Cancel();
         currentCts?.Dispose();
@@ -74,6 +76,8 @@ public class CompositorService : IDisposable
     private void OnModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
     {
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (!HasSidecar(modDir))
             return;
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
@@ -92,6 +96,14 @@ public class CompositorService : IDisposable
         if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)))
             return;
         TriggerRecomposite($"ModDeleted:{modDir}");
+    }
+
+    private void OnPenumbraReady()
+    {
+        modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
+        managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
+        if (config.PluginEnabled)
+            TriggerRecomposite("PenumbraReady");
     }
 
     private bool HasSidecar(string modDir)
@@ -520,9 +532,12 @@ public class CompositorService : IDisposable
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        // Give Penumbra's async reload time to process before the redraw re-requests textures.
-        Thread.Sleep(300);
-        penumbra.RedrawPlayer();
+        if (!config.DisableAutoRedraw)
+        {
+            // Give Penumbra's async reload time to process before the redraw re-requests textures.
+            Thread.Sleep(300);
+            penumbra.RedrawPlayer();
+        }
     }
 
     // ── Compositing ──────────────────────────────────────────────────────────

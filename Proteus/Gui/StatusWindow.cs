@@ -55,6 +55,14 @@ public class StatusWindow : Window
         if (ImGui.Button("Refresh"))
             compositor.TriggerRecomposite("manual");
 
+        ImGui.SameLine();
+        var disableRedraw = config.DisableAutoRedraw;
+        if (ImGui.Checkbox("Disable auto redraw", ref disableRedraw))
+        {
+            config.DisableAutoRedraw = disableRedraw;
+            config.Save();
+        }
+
         if (!penumbra.IsAvailable)
         {
             ImGui.SameLine();

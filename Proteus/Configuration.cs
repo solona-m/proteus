@@ -19,6 +19,8 @@ public class Configuration : IPluginConfiguration
 
     public bool PluginEnabled { get; set; } = true;
 
+    public bool DisableAutoRedraw { get; set; } = false;
+
     public int ManagedModPriority { get; set; } = 999;
 
     public Dictionary<string, ModOverride> ModOverrides { get; set; } = new();
