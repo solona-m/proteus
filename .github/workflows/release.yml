@@ -39,8 +39,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $json = Get-ChildItem "Proteus\bin\Release\win-x64" -Filter "*.json" | Select-Object -First 1
-          $manifest = Get-Content $json.FullName | ConvertFrom-Json
+          $manifest = Get-Content "Proteus\bin\Release\win-x64\Proteus.json" | ConvertFrom-Json
           "version=$($manifest.AssemblyVersion)" | Out-File -Append $env:GITHUB_OUTPUT
 
       - name: Package
