@@ -55,3 +55,60 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Update plugins repo
+        shell: pwsh
+        env:
+          PLUGINS_REPO_TOKEN: ${{ secrets.PLUGINS_REPO_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $timestamp = [int][double]::Parse((Get-Date -UFormat %s))
+
+          $repo = @(
+            [ordered]@{
+              Author               = "Solona"
+              Name                 = "Proteus"
+              InternalName         = "Proteus"
+              AssemblyVersion      = $version
+              Description          = "Headless overlay compositor for Penumbra. Discovers mods with a Proteus/ sidecar, composites their overlay textures in Penumbra priority order, and maintains a single managed mod at priority 999. No authoring UI — all work happens in external tools. Type /proteus to open the status window."
+              ApplicableVersion    = "any"
+              Tags                 = @("texture","overlay","compositor","penumbra","skin","mod")
+              CategoryTags         = @("utility")
+              DalamudApiLevel      = 15
+              IsHide               = $false
+              IsTestingExclusive   = $false
+              DownloadLinkInstall  = "https://github.com/solona-m/proteus/releases/latest/download/latest.zip"
+              DownloadLinkTesting  = "https://github.com/solona-m/proteus/releases/latest/download/latest.zip"
+              DownloadLinkUpdate   = "https://github.com/solona-m/proteus/releases/latest/download/latest.zip"
+              DownloadCount        = 0
+              LastUpdate           = $timestamp
+              Punchline            = "Automatic overlay compositor for Penumbra mods"
+              AcceptsFeedback      = $true
+              LoadRequiredState    = 0
+              LoadSync             = $false
+              CanUnloadAsync       = $false
+              LoadPriority         = 0
+            }
+          )
+          $json = $repo | ConvertTo-Json -Depth 5
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+
+          $headers = @{
+            Authorization = "Bearer $env:PLUGINS_REPO_TOKEN"
+            Accept        = "application/vnd.github+json"
+          }
+
+          $current = Invoke-RestMethod -Uri "https://api.github.com/repos/solona-m/plugins/contents/repo.json" -Headers $headers
+          $sha = $current.sha
+
+          $body = @{
+            message = "update Proteus to $version"
+            content = $encoded
+            sha     = $sha
+          } | ConvertTo-Json
+
+          Invoke-RestMethod -Method Put `
+            -Uri "https://api.github.com/repos/solona-m/plugins/contents/repo.json" `
+            -Headers $headers `
+            -Body $body `
+            -ContentType "application/json"
+
