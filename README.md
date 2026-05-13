@@ -56,7 +56,7 @@ Changes are saved immediately to the mod's `metadata.json` and trigger a re-comp
 
 ### How It Works
 
-EZ Mode to just start creating: https://github.com/solona-m/substance-proteus-packager will give you one click mod publishing.
+EZ Mode to just start creating: https://github.com/solona-m/substance-proteus-packager will give you one click mod publishing. Install the mod. Set your colorset rows in the /proteus editor and reexport the mod from penumbra.
 
 Proteus scans for Penumbra mods that contain a `Proteus/` subfolder. At composite time it:
 
