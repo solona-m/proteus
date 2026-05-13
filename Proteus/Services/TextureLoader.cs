@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -492,9 +493,10 @@ public class TextureLoader
         return result;
     }
 
-    // Patches emissive R/G/B (half-floats at byte offsets 8–12 within each 16-byte sub-row)
-    // across all 32 sub-rows of the ColorSetInfo block in the .mtrl DataSet.
-    public static byte[] PatchColorTableEmissive(byte[] mtrl, float r, float g, float b)
+    // Patches the ColorSetInfo block with per-row emissive intensities from the configured
+    // row overrides. Sub-rows with emissive > 0 are written; all others are zeroed.
+    // Sub-row layout: index i → pairIdx = i/2 (0-based row), sub-row A when even, B when odd.
+    public static byte[] PatchColorTableEmissive(byte[] mtrl, Dictionary<int, ColorTableRowOverride> rows)
     {
         if (mtrl.Length < 16) return (byte[])mtrl.Clone();
 
@@ -512,16 +514,21 @@ public class TextureLoader
         if (colorSetOffset + 512 > mtrl.Length) return (byte[])mtrl.Clone();
 
         var result = (byte[])mtrl.Clone();
-        ushort hr = (ushort)BitConverter.HalfToInt16Bits((Half)r);
-        ushort hg = (ushort)BitConverter.HalfToInt16Bits((Half)g);
-        ushort hb = (ushort)BitConverter.HalfToInt16Bits((Half)b);
 
         for (int i = 0; i < 32; i++)
         {
+            int pairIdx = i / 2;
+            bool isB    = (i % 2) == 1;
+            float er = 0f, eg = 0f, eb = 0f;
+            if (rows.TryGetValue(pairIdx, out var pair))
+            {
+                var sub = isB ? pair.B : pair.A;
+                if (sub.Emissive > 0.001f) { er = sub.DiffuseR; eg = sub.DiffuseG; eb = sub.DiffuseB; }
+            }
             int off = colorSetOffset + i * 16;
-            BitConverter.TryWriteBytes(result.AsSpan(off + 8),  hr);
-            BitConverter.TryWriteBytes(result.AsSpan(off + 10), hg);
-            BitConverter.TryWriteBytes(result.AsSpan(off + 12), hb);
+            BitConverter.TryWriteBytes(result.AsSpan(off + 8),  (ushort)BitConverter.HalfToInt16Bits((Half)er));
+            BitConverter.TryWriteBytes(result.AsSpan(off + 10), (ushort)BitConverter.HalfToInt16Bits((Half)eg));
+            BitConverter.TryWriteBytes(result.AsSpan(off + 12), (ushort)BitConverter.HalfToInt16Bits((Half)eb));
         }
         return result;
     }

@@ -346,7 +346,8 @@ public class CompositorService : IDisposable
 
                     // ── Phase C: emissive → normal alpha ──────────────────────
                     // skin.shpk: normal alpha = per-pixel emissive intensity (key 0x380CAED0).
-                    if (row16A.Emissive > 0.001f)
+                    bool thisOverlayHasEmissive = rows.Values.Any(r => r.A.Emissive > 0.001f || r.B.Emissive > 0.001f);
+                    if (thisOverlayHasEmissive)
                     {
                         if (texPaths.Normal == null)
                         {
@@ -362,19 +363,21 @@ public class CompositorService : IDisposable
                             }
                             if (baseN.Length > 0)
                             {
-                                var emMask = CovAt(wN, hN);
-                                if (emMask != null)
+                                if (desc.Index != null)
                                 {
-                                    log.Debug("[Proteus] Writing emissive intensity={0:F2} to normal alpha for {1}", row16A.Emissive, mtrlGamePath);
-                                    if (desc.Index != null)
-                                    {
-                                        var idN = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
-                                        if (idN != null) ApplyIndexedOverlay(baseN, emMask, idN, rows, true, wN, hN);
-                                        else             ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
-                                    }
-                                    else ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
+                                    // Index texture maps each pixel to a color table row.
+                                    // Write configured emissive for that row to normal alpha.
+                                    // Pixels outside the overlay have R=0 → unmapped → stay at 0.
+                                    var idN = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
+                                    var emMask = CovAt(wN, hN);
+                                    if (idN != null && emMask != null) ApplyIndexedEmissive(baseN, idN, emMask, rows, wN, hN);
                                 }
-                                else log.Warning("[Proteus] Base normal failed to load for emissive: {0}", texPaths.Normal);
+                                else
+                                {
+                                    var emMask = CovAt(wN, hN);
+                                    if (emMask != null) ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
+                                    else log.Warning("[Proteus] No emissive mask for: {0}", texPaths.Normal);
+                                }
                             }
                         }
                     }
@@ -434,26 +437,29 @@ public class CompositorService : IDisposable
                     }
                     else
                     {
-                        float er = 1f, eg = 1f, eb = 1f;
-                        var topRows = pairs[0].Overlay.ColorTableRows;
-                        var row16p  = topRows?.FirstOrDefault(r => r.Row == 16);
-                        if (row16p?.SubRowA?.Diffuse != null)
-                            (er, eg, eb) = ParseHex(row16p.SubRowA.Diffuse);
+                        var combinedRows = new Dictionary<int, ColorTableRowOverride>();
+                        foreach (var (_, ov2) in pairs)
+                        {
+                            var dict = BuildRowDict(ov2.ColorTableRows);
+                            foreach (var (pairIdx, row) in dict)
+                                if (!combinedRows.ContainsKey(pairIdx))
+                                    combinedRows[pairIdx] = row;
+                        }
 
                         var (shaderName, constIds) = TextureLoader.GetMtrlInfo(raw);
                         log.Debug("[Proteus] Mtrl shader={0}, consts=[{1}]",
                             shaderName, string.Join(",", constIds.Select(id => $"0x{id:X8}")));
 
                         raw = TextureLoader.EnsureShaderKey(raw, 0x380CAED0u, 0x72E697CDu);
-                        raw = TextureLoader.PatchColorTableEmissive(raw, er, eg, eb);
+                        raw = TextureLoader.PatchColorTableEmissive(raw, combinedRows);
 
                         // Ensure emissive color constant (0x38A64362) is warm gold [1.4, 0.931, 0.574].
                         // clia skin and some other bibo mods omit this constant; without it the
                         // emissive color defaults to black and the glow is invisible.
                         var (rawEmConst, emConstPatched) = TextureLoader.PatchEmissiveColorConstant(raw, 1.4f, 0.931f, 0.574f);
                         raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1.4f, 0.931f, 0.574f);
-                        log.Debug("[Proteus] Emissive mtrl patch: color=({0:F2},{1:F2},{2:F2}) constOp={3} → {4}",
-                            er, eg, eb, emConstPatched ? "patched" : "inserted", baseName);
+                        log.Debug("[Proteus] Emissive mtrl patch: constOp={0} → {1}",
+                            emConstPatched ? "patched" : "inserted", baseName);
 
                         var (verifyShader, verifyConsts) = TextureLoader.GetMtrlInfo(raw);
                         log.Debug("[Proteus] Post-patch verify: shader={0} constCount={1} has38A64362={2}",
@@ -628,6 +634,28 @@ public class CompositorService : IDisposable
         for (int i = 0; i < len; i += 4)
             if (ov[i + 3] > 0)
                 baseN[i + 3] = Math.Max(baseN[i + 3], intensity);
+    }
+
+    // Write emissive intensity to normal alpha driven by index texture row mapping.
+    // cov gates which pixels belong to this overlay (diffuse alpha > 0 = inside overlay).
+    // For covered pixels, pairIdx (idx R/17) selects the row; only rows in `rows` with
+    // emissive > 0 write a value. All other pixels remain at 0 (set by the anyEmissive reset).
+    private static void ApplyIndexedEmissive(
+        byte[] baseN, byte[] idx, byte[] cov,
+        Dictionary<int, ColorTableRowOverride> rows,
+        int w, int h)
+    {
+        int len = w * h * 4;
+        for (int i = 0; i < len; i += 4)
+        {
+            if (cov[i + 3] == 0) continue; // outside this overlay's coverage
+            int pairIdx = idx[i] / 17;
+            if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+            float blendA = idx[i + 1] / 255f;
+            float em = pair.B.Emissive + (pair.A.Emissive - pair.B.Emissive) * blendA;
+            if (em > 0.001f)
+                baseN[i + 3] = Math.Max(baseN[i + 3], (byte)(em * 255f));
+        }
     }
 
     // Per-pixel color and emissive driven by index texture.
