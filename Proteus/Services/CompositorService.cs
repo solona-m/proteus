@@ -102,7 +102,12 @@ public class CompositorService : IDisposable
     {
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
-        if (config.PluginEnabled)
+        if (!config.PluginEnabled) return;
+        // Only trigger if discovery already sees mods. PenumbraReady can fire before Penumbra's
+        // mod settings are readable; if discovery returns empty we'd wipe the existing output.
+        // Leave previous-session files intact — ModSettingChanged/ModAdded will fire the first
+        // real composite once settings are available.
+        if (discovery.DiscoverEnabled().Count > 0)
             TriggerRecomposite("PenumbraReady");
     }
 

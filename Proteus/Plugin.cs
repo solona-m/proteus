@@ -54,8 +54,11 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Open the Proteus overlay compositor status window.",
         });
 
-        // Recomposite on startup to sync with current Penumbra state.
-        if (config.PluginEnabled && penumbra.IsAvailable)
+        // Recomposite on startup only if Penumbra's mod list is already readable.
+        // At early load GetPlayerCollectionId() returns null and discovery returns empty,
+        // which would wipe the existing output. OnPenumbraReady handles the normal boot
+        // path; this covers plugin-reload where PenumbraReady won't fire again.
+        if (config.PluginEnabled && penumbra.IsAvailable && discovery.DiscoverEnabled().Count > 0)
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0}", penumbra.IsAvailable);
