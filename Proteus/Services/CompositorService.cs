@@ -229,7 +229,18 @@ public class CompositorService : IDisposable
                 return data;
             }
 
-            foreach (var (mtrlGamePath, pairs) in byMaterial)
+            // Sort: player's body material first so the character updates visually ASAP.
+            // Other race variants are processed in a second pass with no extra redraw.
+            var playerBodyCode = GetPlayerBodyCode();
+            var orderedMaterials = playerBodyCode != null
+                ? byMaterial
+                    .OrderByDescending(kv => kv.Key.Contains(playerBodyCode, StringComparison.OrdinalIgnoreCase))
+                    .ToList()
+                : byMaterial.ToList();
+            int processedCount = 0;
+            bool didEarlyFlush = false;
+
+            foreach (var (mtrlGamePath, pairs) in orderedMaterials)
             {
                 if (ct.IsCancellationRequested) return;
 
@@ -490,12 +501,35 @@ public class CompositorService : IDisposable
                             redirects[mtrlGamePath] = relPath;
                     }
                 }
+
+                processedCount++;
+
+                // Flush and redraw as soon as each player-race material is written,
+                // so the character shows the updated texture without waiting for other
+                // race variants. Secondary materials continue in the background.
+                bool isPlayerMaterial = playerBodyCode != null &&
+                    mtrlGamePath.Contains(playerBodyCode, StringComparison.OrdinalIgnoreCase);
+                bool hasSecondaryMaterials = processedCount < orderedMaterials.Count;
+
+                if (isPlayerMaterial && hasSecondaryMaterials && !ct.IsCancellationRequested)
+                {
+                    WriteManagedModJson(redirects);
+                    ReloadAndRedraw();
+                    didEarlyFlush = true;
+                    log.Debug("[Proteus] Early flush for player material; {0} other race variant(s) remaining",
+                        orderedMaterials.Count - processedCount);
+                }
             }
 
             if (ct.IsCancellationRequested) return;
 
             WriteManagedModJson(redirects);
-            ReloadAndRedraw();
+            if (didEarlyFlush)
+                // Secondary materials done; just update Penumbra's file list — no redraw needed
+                // since these race variants are not currently rendered on the player's character.
+                penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+            else
+                ReloadAndRedraw();
 
             LastResult = new CompositorResult
             {
@@ -572,11 +606,11 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void ReloadAndRedraw()
+    private void ReloadAndRedraw(bool redraw = true)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (!config.DisableAutoRedraw)
+        if (redraw && !config.DisableAutoRedraw)
         {
             // Give Penumbra's async reload time to process before the redraw re-requests textures.
             Thread.Sleep(300);
@@ -759,6 +793,40 @@ public class CompositorService : IDisposable
             hex = string.Concat(hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]);
         int v = Convert.ToInt32(hex, 16);
         return ((v >> 16 & 0xFF) / 255f, (v >> 8 & 0xFF) / 255f, (v & 0xFF) / 255f);
+    }
+
+    // Returns the FFXIV body model character code (e.g. "c0201") for the local player,
+    // accounting for mid-body sharing (Elezen/Lalafell/Miqo'te/Roegadyn all use c0201/c0101).
+    // Returns null if the player is not in game or the race cannot be determined.
+    private static string? GetPlayerBodyCode()
+    {
+        try
+        {
+            var ps = Plugin.PlayerState;
+            if (ps == null || !ps.IsLoaded) return null;
+            return BodyCodeFromCustomize((byte)ps.Race.RowId, (byte)ps.Tribe.RowId, (byte)ps.Sex);
+        }
+        catch { return null; }
+    }
+
+    private static string? BodyCodeFromCustomize(byte race, byte tribe, byte sex)
+    {
+        bool f = sex == 1;
+        if (race == 1) return (tribe == 2, f) switch // Hyur: tribe 2 = Highlander
+        {
+            (false, false) => "c0101",
+            (false, true)  => "c0201",
+            (true,  false) => "c0301",
+            _              => "c0401",
+        };
+        return race switch
+        {
+            2 or 3 or 4 or 5 => f ? "c0201" : "c0101", // Elezen/Lalafell/Miqo'te/Roegadyn share mid bodies
+            6 => f ? "c1401" : "c1301", // Au Ra
+            7 => f ? "c1601" : "c1501", // Hrothgar
+            8 => f ? "c1801" : "c1701", // Viera
+            _ => null,
+        };
     }
 
     private static string SanitizeName(string gamePath)
