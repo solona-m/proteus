@@ -304,7 +304,20 @@ public class CompositorService : IDisposable
                         if (baseD.Length > 0)
                         {
                             diffuseOv = LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), wD, hD);
-                            if (diffuseOv != null) { covSrc = diffuseOv; covW = wD; covH = hD; }
+                            if (diffuseOv != null)
+                            {
+                                // Apply per-row opacity to coverage before downstream compositing.
+                                // Indexed: blend per-pixel from the index texture (same as diffuse/emissive).
+                                // Flat: apply row 16A's opacity uniformly across the whole overlay.
+                                if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
+                                {
+                                    var idD = LoadPng(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
+                                    if (idD != null) diffuseOv = ApplyIndexedOpacity(diffuseOv, idD, rows);
+                                }
+                                else if (desc.Index == null && row16A.Opacity != 0)
+                                    diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
+                                covSrc = diffuseOv; covW = wD; covH = hD;
+                            }
                         }
                     }
 
@@ -329,6 +342,13 @@ public class CompositorService : IDisposable
                                 synth[si] = synth[si + 1] = synth[si + 2] = 255;
                                 synth[si + 3] = normalOv[si + 2]; // blue → opacity
                             }
+                            if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
+                            {
+                                var idN = LoadPng(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
+                                if (idN != null) synth = ApplyIndexedOpacity(synth, idN, rows);
+                            }
+                            else if (desc.Index == null && row16A.Opacity != 0)
+                                synth = ScaleOverlayAlpha(synth, row16A.Opacity);
                             diffuseOv = synth;
                             covSrc = synth; covW = wN; covH = hN;
                         }
@@ -340,10 +360,13 @@ public class CompositorService : IDisposable
                     // Re-loads from the diffuse PNG when possible; falls back to scaling.
                     byte[]? CovAt(int tw, int th)
                     {
-                        if (tw == covW && th == covH) return covSrc;
-                        if (desc.Diffuse != null)
-                            return LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th);
-                        return textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
+                        if (tw == covW && th == covH) return covSrc; // already scaled
+                        byte[]? cov = desc.Diffuse != null
+                            ? LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th)
+                            : textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
+                        if (cov != null && desc.Index == null && row16A.Opacity != 0)
+                            cov = ScaleOverlayAlpha(cov, row16A.Opacity);
+                        return cov;
                     }
 
                     // ── Phase A: diffuse composite ────────────────────────────
@@ -781,11 +804,13 @@ public class CompositorService : IDisposable
             {
                 if (a.Diffuse != null) (row.A.DiffuseR, row.A.DiffuseG, row.A.DiffuseB) = ParseHex(a.Diffuse);
                 row.A.Emissive = a.Emissive;
+                row.A.Opacity  = a.Opacity;
             }
             if (p.SubRowB is { } b)
             {
                 if (b.Diffuse != null) (row.B.DiffuseR, row.B.DiffuseG, row.B.DiffuseB) = ParseHex(b.Diffuse);
                 row.B.Emissive = b.Emissive;
+                row.B.Opacity  = b.Opacity;
             }
             dict[p.Row - 1] = row; // 1-based JSON → 0-based internal
         }
@@ -833,6 +858,42 @@ public class CompositorService : IDisposable
             8 => f ? "c1801" : "c1701", // Viera
             _ => null,
         };
+    }
+
+    // Apply per-pixel opacity from the index texture, blending sub-row A/B values just
+    // like diffuse color and emissive. Returns a new array; src and pngCache are not mutated.
+    private static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
+    {
+        var dst = (byte[])src.Clone();
+        for (int i = 0; i < dst.Length; i += 4)
+        {
+            float a = dst[i + 3] / 255f;
+            if (a <= 0f) continue;
+            int pairIdx = idx[i] / 17;
+            if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+            float blendA = idx[i + 1] / 255f;
+            float op = pair.B.Opacity + (pair.A.Opacity - pair.B.Opacity) * blendA;
+            if (op == 0f) continue;
+            float newA = op < 0f
+                ? a * (100f + op) / 100f
+                : a + (1f - a) * op / 100f;
+            dst[i + 3] = (byte)(newA * 255f + 0.5f);
+        }
+        return dst;
+    }
+
+    private static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
+    {
+        var dst = (byte[])src.Clone();
+        for (int i = 3; i < dst.Length; i += 4)
+        {
+            int a = dst[i];
+            if (opacity < 0)
+                dst[i] = (byte)(a * (100 + opacity) / 100);
+            else if (a > 0)
+                dst[i] = (byte)Math.Min(255, a + (255 - a) * opacity / 100);
+        }
+        return dst;
     }
 
     private static string SanitizeName(string gamePath)

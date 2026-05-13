@@ -130,6 +130,13 @@ public class ColorTableSubRowPreset
     /// <summary>Emissive intensity 0–1. Zero means no glow.</summary>
     [JsonPropertyName("Emissive")]
     public float Emissive { get; set; } = 0f;
+
+    /// <summary>
+    /// Opacity adjustment −100…100. Negative fades the overlay toward transparent;
+    /// positive pushes semi-transparent pixels toward fully opaque. Zero = no change.
+    /// </summary>
+    [JsonPropertyName("Opacity")]
+    public int Opacity { get; set; } = 0;
 }
 
 /// <summary>Runtime (0-based) representation of a single color table sub-row.</summary>
@@ -139,6 +146,7 @@ public class ColorTableSubRow
     public float DiffuseG { get; set; } = 1f;
     public float DiffuseB { get; set; } = 1f;
     public float Emissive { get; set; } = 0f;
+    public int   Opacity  { get; set; } = 0;
 }
 
 /// <summary>Runtime pair of sub-rows A and B for one color table row pair.</summary>

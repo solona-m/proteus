@@ -216,6 +216,17 @@ public class StatusWindow : Window
                 changed = true;
             }
 
+            ImGui.SameLine();
+            int opA = preset?.SubRowA?.Opacity ?? 0;
+            ImGui.SetNextItemWidth(50);
+            if (ImGui.DragInt($"##opA_{entry.ModDirectory}_{pairNum}", ref opA, 1f, -100, 100, "%d%%"))
+            {
+                preset = EnsurePreset(rows, pairNum);
+                preset.SubRowA ??= new ColorTableSubRowPreset();
+                preset.SubRowA.Opacity = Math.Clamp(opA, -100, 100);
+                changed = true;
+            }
+
             // Sub-row B
             ImGui.SameLine();
             ImGui.TextDisabled(" B");
@@ -240,6 +251,17 @@ public class StatusWindow : Window
                 preset = EnsurePreset(rows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Emissive = Math.Clamp(emB, 0f, 1f);
+                changed = true;
+            }
+
+            ImGui.SameLine();
+            int opB = preset?.SubRowB?.Opacity ?? 0;
+            ImGui.SetNextItemWidth(50);
+            if (ImGui.DragInt($"##opB_{entry.ModDirectory}_{pairNum}", ref opB, 1f, -100, 100, "%d%%"))
+            {
+                preset = EnsurePreset(rows, pairNum);
+                preset.SubRowB ??= new ColorTableSubRowPreset();
+                preset.SubRowB.Opacity = Math.Clamp(opB, -100, 100);
                 changed = true;
             }
         }
