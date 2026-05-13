@@ -229,6 +229,12 @@ public class CompositorService : IDisposable
                 return data;
             }
 
+            // Unique suffix for all output files in this composite run. FFXIV caches textures
+            // by their resolved path; using the same filename across runs means the game never
+            // reloads the file even after the content changes. A new suffix each run guarantees
+            // Penumbra sees a genuinely different redirect path → forces a cache miss.
+            var runId = Guid.NewGuid().ToString("N")[..8];
+
             // Sort: player's body material first so the character updates visually ASAP.
             // Other race variants are processed in a second pass with no extra redraw.
             var playerBodyCode = GetPlayerBodyCode();
@@ -427,7 +433,7 @@ public class CompositorService : IDisposable
                     }
                 }
 
-                var baseName = SanitizeName(mtrlGamePath);
+                var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
 
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {

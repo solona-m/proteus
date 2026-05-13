@@ -107,7 +107,14 @@ public class SidecarDiscoveryService
             if (group.Options.Count == 0) continue;
 
             List<string>? selected = null;
-            settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
+            if (settings.HasValue)
+                selected = settings.Value.Options
+                    .FirstOrDefault(kv => string.Equals(kv.Key, group.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
+                    .Value;
+
+            log.Debug("[Proteus] ResolveActive: group={0} selected={1}",
+                group.PenumbraGroupName,
+                selected != null ? string.Join(",", selected) : "<default>");
 
             if (selected is { Count: > 0 })
             {
