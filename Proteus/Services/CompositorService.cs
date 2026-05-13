@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -214,20 +215,8 @@ public class CompositorService : IDisposable
             var materialsDir = materialsDirEarly;
             Directory.CreateDirectory(texturesDir);
 
-            var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var redirects = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             int texturesPatched = 0;
-
-            // Per-run PNG cache: the same overlay PNGs (e.g., one stocking diffuse for 5 bibo
-            // race variants) are loaded multiple times at the same size. Cache by (path, w, h)
-            // so each unique PNG is only decoded from disk once per composite run.
-            var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
-            byte[]? LoadPng(string path, int w, int h)
-            {
-                var key = (path, w, h);
-                if (!pngCache.TryGetValue(key, out var data))
-                    pngCache[key] = data = textureLoader.LoadPngAsRgba(path, w, h);
-                return data;
-            }
 
             // Unique suffix for all output files in this composite run. FFXIV caches textures
             // by their resolved path; using the same filename across runs means the game never
@@ -235,19 +224,21 @@ public class CompositorService : IDisposable
             // Penumbra sees a genuinely different redirect path → forces a cache miss.
             var runId = Guid.NewGuid().ToString("N")[..8];
 
-            // Sort: player's body material first so the character updates visually ASAP.
-            // Other race variants are processed in a second pass with no extra redraw.
-            var playerBodyCode = GetPlayerBodyCode();
-            var orderedMaterials = playerBodyCode != null
-                ? byMaterial
-                    .OrderByDescending(kv => kv.Key.Contains(playerBodyCode, StringComparison.OrdinalIgnoreCase))
-                    .ToList()
-                : byMaterial.ToList();
-            int processedCount = 0;
-            bool didEarlyFlush = false;
-
-            foreach (var (mtrlGamePath, pairs) in orderedMaterials)
+            // Process all race-variant materials in parallel — each is independent.
+            // PNG cache is per-iteration (not shared) so each thread decodes at its own dimensions.
+            Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct }, kvp =>
             {
+                var (mtrlGamePath, pairs) = kvp;
+
+                var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
+                byte[]? LoadPng(string path, int w, int h)
+                {
+                    var key = (path, w, h);
+                    if (!pngCache.TryGetValue(key, out var data))
+                        pngCache[key] = data = textureLoader.LoadPngAsRgba(path, w, h);
+                    return data;
+                }
+
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
@@ -258,7 +249,7 @@ public class CompositorService : IDisposable
                 if (texPaths.Diffuse == null && texPaths.Normal == null && texPaths.Mask == null)
                 {
                     log.Warning("[Proteus] No textures found for material: {0}", mtrlGamePath);
-                    continue;
+                    return;
                 }
 
                 // If any entry in this material's stack uses emissive, the normal alpha must
@@ -463,21 +454,21 @@ public class CompositorService : IDisposable
                     var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
                     var relPath = "textures/" + baseName + "_d.tex";
                     if (textureLoader.WriteTex(baseD, wD, hD, outPath))
-                    { redirects[texPaths.Diffuse] = relPath; texturesPatched++; }
+                    { redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); }
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
                     var relPath = "textures/" + baseName + "_n.tex";
                     if (textureLoader.WriteTex(baseN, wN, hN, outPath))
-                    { redirects[texPaths.Normal] = relPath; texturesPatched++; }
+                    { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
                     var relPath = "textures/" + baseName + "_m.tex";
                     if (textureLoader.WriteTex(baseM, wM, hM, outPath))
-                    { redirects[texPaths.Mask] = relPath; texturesPatched++; }
+                    { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); }
                 }
 
                 // Patch .mtrl with emissive shader key + color table if any row has Emissive > 0
@@ -531,34 +522,10 @@ public class CompositorService : IDisposable
                     }
                 }
 
-                processedCount++;
-
-                // Flush and redraw as soon as each player-race material is written,
-                // so the character shows the updated texture without waiting for other
-                // race variants. Secondary materials continue in the background.
-                bool isPlayerMaterial = playerBodyCode != null &&
-                    mtrlGamePath.Contains(playerBodyCode, StringComparison.OrdinalIgnoreCase);
-                bool hasSecondaryMaterials = processedCount < orderedMaterials.Count;
-
-                if (isPlayerMaterial && hasSecondaryMaterials && !ct.IsCancellationRequested)
-                {
-                    WriteManagedModJson(redirects);
-                    ReloadAndRedraw();
-                    didEarlyFlush = true;
-                    log.Debug("[Proteus] Early flush for player material; {0} other race variant(s) remaining",
-                        orderedMaterials.Count - processedCount);
-                }
-            }
-
-            if (ct.IsCancellationRequested) return;
+            });
 
             WriteManagedModJson(redirects);
-            if (didEarlyFlush)
-                // Secondary materials done; just update Penumbra's file list — no redraw needed
-                // since these race variants are not currently rendered on the player's character.
-                penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
-            else
-                ReloadAndRedraw();
+            ReloadAndRedraw();
 
             LastResult = new CompositorResult
             {
@@ -616,7 +583,7 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void WriteManagedModJson(Dictionary<string, string> redirects)
+    private void WriteManagedModJson(IDictionary<string, string> redirects)
     {
         // Penumbra default_mod.json: { "Files": { "gamePath": "relPath", ... }, "Swaps": {}, "Manipulations": [] }
         var files = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
