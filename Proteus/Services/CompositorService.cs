@@ -212,6 +212,18 @@ public class CompositorService : IDisposable
             var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             int texturesPatched = 0;
 
+            // Per-run PNG cache: the same overlay PNGs (e.g., one stocking diffuse for 5 bibo
+            // race variants) are loaded multiple times at the same size. Cache by (path, w, h)
+            // so each unique PNG is only decoded from disk once per composite run.
+            var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
+            byte[]? LoadPng(string path, int w, int h)
+            {
+                var key = (path, w, h);
+                if (!pngCache.TryGetValue(key, out var data))
+                    pngCache[key] = data = textureLoader.LoadPngAsRgba(path, w, h);
+                return data;
+            }
+
             foreach (var (mtrlGamePath, pairs) in byMaterial)
             {
                 if (ct.IsCancellationRequested) return;
@@ -269,7 +281,7 @@ public class CompositorService : IDisposable
                         }
                         if (baseD.Length > 0)
                         {
-                            diffuseOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), wD, hD);
+                            diffuseOv = LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), wD, hD);
                             if (diffuseOv != null) { covSrc = diffuseOv; covW = wD; covH = hD; }
                         }
                     }
@@ -284,7 +296,7 @@ public class CompositorService : IDisposable
                                 for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
                         }
                         if (baseN.Length > 0)
-                            normalOv = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Normal), wN, hN);
+                            normalOv = LoadPng(Path.Combine(entry.SidecarRoot, desc.Normal), wN, hN);
 
                         if (normalOv != null && covSrc == null)
                         {
@@ -308,7 +320,7 @@ public class CompositorService : IDisposable
                     {
                         if (tw == covW && th == covH) return covSrc;
                         if (desc.Diffuse != null)
-                            return textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th);
+                            return LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th);
                         return textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
                     }
 
@@ -317,7 +329,7 @@ public class CompositorService : IDisposable
                     {
                         if (desc.Index != null)
                         {
-                            var idD = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
+                            var idD = LoadPng(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD);
                             if (idD != null) ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
                             else             ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                         }
@@ -368,7 +380,7 @@ public class CompositorService : IDisposable
                                     // Index texture maps each pixel to a color table row.
                                     // Write configured emissive for that row to normal alpha.
                                     // Pixels outside the overlay have R=0 → unmapped → stay at 0.
-                                    var idN = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
+                                    var idN = LoadPng(Path.Combine(entry.SidecarRoot, desc.Index), wN, hN);
                                     var emMask = CovAt(wN, hN);
                                     if (idN != null && emMask != null) ApplyIndexedEmissive(baseN, idN, emMask, rows, wN, hN);
                                 }
@@ -393,7 +405,7 @@ public class CompositorService : IDisposable
                         }
                         if (baseM.Length > 0)
                         {
-                            var ov = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, desc.Mask), wM, hM);
+                            var ov = LoadPng(Path.Combine(entry.SidecarRoot, desc.Mask), wM, hM);
                             if (ov != null) AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
                         }
                     }
