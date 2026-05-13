@@ -453,11 +453,11 @@ public class CompositorService : IDisposable
                         raw = TextureLoader.EnsureShaderKey(raw, 0x380CAED0u, 0x72E697CDu);
                         raw = TextureLoader.PatchColorTableEmissive(raw, combinedRows);
 
-                        // Ensure emissive color constant (0x38A64362) is warm gold [1.4, 0.931, 0.574].
-                        // clia skin and some other bibo mods omit this constant; without it the
-                        // emissive color defaults to black and the glow is invisible.
-                        var (rawEmConst, emConstPatched) = TextureLoader.PatchEmissiveColorConstant(raw, 1.4f, 0.931f, 0.574f);
-                        raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1.4f, 0.931f, 0.574f);
+                        // Ensure emissive color constant (0x38A64362) is neutral [1, 1, 1] so the
+                        // glow color matches the diffuse color set in the color picker exactly.
+                        // Some skins omit this constant; without it the glow defaults to black.
+                        var (rawEmConst, emConstPatched) = TextureLoader.PatchEmissiveColorConstant(raw, 1f, 1f, 1f);
+                        raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1f, 1f, 1f);
                         log.Debug("[Proteus] Emissive mtrl patch: constOp={0} → {1}",
                             emConstPatched ? "patched" : "inserted", baseName);
 
