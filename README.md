@@ -4,6 +4,8 @@ Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your
 
 **Requires:** [Penumbra](https://github.com/xivdev/Penumbra)
 
+If you need help, please join https//discord.gg/solona and ask in the #help channel.
+
 ---
 
 ## For Users
