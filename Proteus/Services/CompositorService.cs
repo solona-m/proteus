@@ -152,7 +152,7 @@ public class CompositorService : IDisposable
     {
         try
         {
-            log.Debug("[Proteus] Recomposite START v3");
+            log.Debug("[Proteus] Recomposite START");
             EnsureManagedModExists();
 
             // Delete previously written files BEFORE clearing redirects so that
@@ -448,28 +448,32 @@ public class CompositorService : IDisposable
                 }
 
                 var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
+                var channels = new System.Text.StringBuilder();
 
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
                     var relPath = "textures/" + baseName + "_d.tex";
                     if (textureLoader.WriteTex(baseD, wD, hD, outPath))
-                    { redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); }
+                    { redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse"); }
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
                     var relPath = "textures/" + baseName + "_n.tex";
                     if (textureLoader.WriteTex(baseN, wN, hN, outPath))
-                    { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); }
+                    { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal"); }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
                     var relPath = "textures/" + baseName + "_m.tex";
                     if (textureLoader.WriteTex(baseM, wM, hM, outPath))
-                    { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); }
+                    { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask"); }
                 }
+
+                if (channels.Length > 0)
+                    log.Debug("[Proteus] Composited {0}:{1}", mtrlGamePath, channels);
 
                 // Patch .mtrl with emissive shader key + color table if any row has Emissive > 0
                 bool needsEmissive = pairs.Any(p =>
@@ -494,10 +498,6 @@ public class CompositorService : IDisposable
                                     combinedRows[pairIdx] = row;
                         }
 
-                        var (shaderName, constIds) = TextureLoader.GetMtrlInfo(raw);
-                        log.Debug("[Proteus] Mtrl shader={0}, consts=[{1}]",
-                            shaderName, string.Join(",", constIds.Select(id => $"0x{id:X8}")));
-
                         raw = TextureLoader.EnsureShaderKey(raw, 0x380CAED0u, 0x72E697CDu);
                         raw = TextureLoader.PatchColorTableEmissive(raw, combinedRows);
 
@@ -506,13 +506,6 @@ public class CompositorService : IDisposable
                         // Some skins omit this constant; without it the glow defaults to black.
                         var (rawEmConst, emConstPatched) = TextureLoader.PatchEmissiveColorConstant(raw, 1f, 1f, 1f);
                         raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1f, 1f, 1f);
-                        log.Debug("[Proteus] Emissive mtrl patch: constOp={0} → {1}",
-                            emConstPatched ? "patched" : "inserted", baseName);
-
-                        var (verifyShader, verifyConsts) = TextureLoader.GetMtrlInfo(raw);
-                        log.Debug("[Proteus] Post-patch verify: shader={0} constCount={1} has38A64362={2}",
-                            verifyShader, verifyConsts.Length,
-                            verifyConsts.Any(id => id == 0x38A64362u));
 
                         Directory.CreateDirectory(materialsDir);
                         var outPath = Path.Combine(materialsDir, baseName + ".mtrl");
@@ -636,14 +629,6 @@ public class CompositorService : IDisposable
                 log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} — falling back to game data", gamePath);
                 diskPath = null;
             }
-            else
-            {
-                log.Debug("[Proteus] Loading base normal from: {0}", diskPath);
-            }
-        }
-        else
-        {
-            log.Debug("[Proteus] Loading base normal from: game-data");
         }
 
         var loaded = textureLoader.LoadBaseTexture(diskPath, gamePath);
