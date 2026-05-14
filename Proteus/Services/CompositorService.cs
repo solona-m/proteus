@@ -177,6 +177,8 @@ public class CompositorService : IDisposable
             var allEntries = discovery.DiscoverEnabled();
             if (ct.IsCancellationRequested) return;
 
+            CheckManagedModHealth(allEntries);
+
             LastDiscovered = allEntries;
 
             var entries = ApplyOverrides(allEntries);
@@ -573,6 +575,35 @@ public class CompositorService : IDisposable
         {
             penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
             penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, config.ManagedModPriority);
+        }
+    }
+
+    private void CheckManagedModHealth(List<OverlayEntry> overlayEntries)
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+        if (!collId.HasValue) return;
+
+        var settings = penumbra.GetModSettings(collId.Value, SidecarDiscoveryService.ManagedModDir);
+        if (settings == null)
+        {
+            log.Warning("[Proteus] Managed mod not found in player collection — re-adding");
+            penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+            return;
+        }
+
+        if (!settings.Value.Enabled)
+        {
+            log.Warning("[Proteus] Managed mod is disabled in player collection — enabling");
+            penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+        }
+
+        if (overlayEntries.Count > 0)
+        {
+            int managedPriority = settings.Value.Priority;
+            int maxOverlayPriority = overlayEntries.Max(e => e.Priority);
+            if (maxOverlayPriority >= managedPriority)
+                log.Warning("[Proteus] Managed mod priority ({0}) is not higher than overlay mod priority ({1}) — composited textures may be overridden",
+                    managedPriority, maxOverlayPriority);
         }
     }
 
