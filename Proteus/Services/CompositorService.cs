@@ -673,7 +673,7 @@ public class CompositorService : IDisposable
 
     // Tint + alpha composite using a flat sub-row color (no index texture).
     // When DiffuseR/G/B = 1, this is a standard alpha-over composite.
-    private static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h)
+    internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h)
     {
         float cr = row.DiffuseR, cg = row.DiffuseG, cb = row.DiffuseB;
         int len = w * h * 4;
@@ -689,7 +689,7 @@ public class CompositorService : IDisposable
     }
 
     // Write emissive intensity to the normal map alpha where the overlay is opaque.
-    private static void ApplyFlatEmissive(byte[] baseN, byte[] ov, ColorTableSubRow row, int w, int h)
+    internal static void ApplyFlatEmissive(byte[] baseN, byte[] ov, ColorTableSubRow row, int w, int h)
     {
         if (row.Emissive <= 0.001f) return;
         byte intensity = (byte)(row.Emissive * 255f);
@@ -703,7 +703,7 @@ public class CompositorService : IDisposable
     // cov gates which pixels belong to this overlay (diffuse alpha > 0 = inside overlay).
     // For covered pixels, pairIdx (idx R/17) selects the row; only rows in `rows` with
     // emissive > 0 write a value. All other pixels remain at 0 (set by the anyEmissive reset).
-    private static void ApplyIndexedEmissive(
+    internal static void ApplyIndexedEmissive(
         byte[] baseN, byte[] idx, byte[] cov,
         Dictionary<int, ColorTableRowOverride> rows,
         int w, int h)
@@ -723,7 +723,7 @@ public class CompositorService : IDisposable
 
     // Per-pixel color and emissive driven by index texture.
     // isNormal = false: tint+composite diffuse; isNormal = true: write emissive to normal alpha.
-    private static void ApplyIndexedOverlay(
+    internal static void ApplyIndexedOverlay(
         byte[] baseTex, byte[] ov, byte[] idx,
         Dictionary<int, ColorTableRowOverride> rows,
         bool isNormal, int w, int h)
@@ -761,7 +761,7 @@ public class CompositorService : IDisposable
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a). Dst alpha unchanged.
     // mask: if provided, effective alpha = min(src alpha, mask alpha) — used so a diffuse overlay
     // silhouette gates the normal composite (invisible diffuse pixels stay at base normal).
-    private static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    internal static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         int len = w * h * 4;
         for (int i = 0; i < len; i += 4)
@@ -776,7 +776,7 @@ public class CompositorService : IDisposable
         }
     }
 
-    private static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
+    internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
     {
         var dict = new Dictionary<int, ColorTableRowOverride>();
         if (presets == null) return dict;
@@ -800,7 +800,7 @@ public class CompositorService : IDisposable
         return dict;
     }
 
-    private static (float r, float g, float b) ParseHex(string hex)
+    internal static (float r, float g, float b) ParseHex(string hex)
     {
         hex = hex.TrimStart('#');
         if (hex.Length == 3)
@@ -823,7 +823,7 @@ public class CompositorService : IDisposable
         catch { return null; }
     }
 
-    private static string? BodyCodeFromCustomize(byte race, byte tribe, byte sex)
+    internal static string? BodyCodeFromCustomize(byte race, byte tribe, byte sex)
     {
         bool f = sex == 1;
         if (race == 1) return (tribe == 2, f) switch // Hyur: tribe 2 = Highlander
@@ -845,7 +845,7 @@ public class CompositorService : IDisposable
 
     // Apply per-pixel opacity from the index texture, blending sub-row A/B values just
     // like diffuse color and emissive. Returns a new array; src and pngCache are not mutated.
-    private static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
+    internal static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
     {
         var dst = (byte[])src.Clone();
         for (int i = 0; i < dst.Length; i += 4)
@@ -865,7 +865,7 @@ public class CompositorService : IDisposable
         return dst;
     }
 
-    private static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
+    internal static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
     {
         var dst = (byte[])src.Clone();
         for (int i = 3; i < dst.Length; i += 4)
@@ -879,7 +879,7 @@ public class CompositorService : IDisposable
         return dst;
     }
 
-    private static string SanitizeName(string gamePath)
+    internal static string SanitizeName(string gamePath)
     {
         var name = Path.GetFileNameWithoutExtension(gamePath);
         foreach (var ch in Path.GetInvalidFileNameChars())
