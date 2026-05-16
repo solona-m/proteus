@@ -8,4 +8,4 @@
 [submodule "Glamourer"]
 	path = Glamourer
 	url = https://github.com/Ottermandias/Glamourer.git
-	branch = main
+	branch = testing
