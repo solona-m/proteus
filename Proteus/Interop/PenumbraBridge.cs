@@ -17,7 +17,7 @@ public class PenumbraBridge : IDisposable
     private readonly GetModList getModList;
     private readonly GetModDirectory getModDirectory;
     private readonly GetCollectionForObject getCollectionForObject;
-    private readonly GetCurrentModSettings getCurrentModSettings;
+    private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
@@ -48,7 +48,7 @@ public class PenumbraBridge : IDisposable
         getModList = new GetModList(pluginInterface);
         getModDirectory = new GetModDirectory(pluginInterface);
         getCollectionForObject = new GetCollectionForObject(pluginInterface);
-        getCurrentModSettings = new GetCurrentModSettings(pluginInterface);
+        getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
@@ -140,10 +140,10 @@ public class PenumbraBridge : IDisposable
         {
             var (ec, t) = getCurrentModSettings.Invoke(collectionId, modDirectory);
             if (ec != PenumbraApiEc.Success || t == null) return null;
-            var (enabled, priority, options, _) = t.Value;
+            var (enabled, priority, options, _, _) = t.Value;
             return (enabled, priority, options);
         }
-        catch (Exception ex) { log.Error(ex, "GetCurrentModSettings failed for {0}", modDirectory); return null; }
+        catch (Exception ex) { log.Error(ex, "GetCurrentModSettingsWithTemp failed for {0}", modDirectory); return null; }
     }
 
     /// <summary>Resolve a game path to the player's current on-disk file (respects all active mods).</summary>

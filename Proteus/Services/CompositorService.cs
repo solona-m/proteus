@@ -24,6 +24,7 @@ public class CompositorResult
 public class CompositorService : IDisposable
 {
     private readonly PenumbraBridge penumbra;
+    private readonly GlamourerBridge glamourer;
     private readonly SidecarDiscoveryService discovery;
     private readonly TextureLoader textureLoader;
     private readonly Configuration config;
@@ -41,12 +42,14 @@ public class CompositorService : IDisposable
 
     public CompositorService(
         PenumbraBridge penumbra,
+        GlamourerBridge glamourer,
         SidecarDiscoveryService discovery,
         TextureLoader textureLoader,
         Configuration config,
         IPluginLog log)
     {
-        this.penumbra = penumbra;
+        this.penumbra  = penumbra;
+        this.glamourer = glamourer;
         this.discovery = discovery;
         this.textureLoader = textureLoader;
         this.config = config;
@@ -59,6 +62,7 @@ public class CompositorService : IDisposable
         penumbra.ModAdded          += OnModAdded;
         penumbra.ModDeleted        += OnModDeleted;
         penumbra.PenumbraReady     += OnPenumbraReady;
+        glamourer.LocalPlayerStateChanged += OnGlamourerStateChanged;
     }
 
     public void Dispose()
@@ -67,6 +71,7 @@ public class CompositorService : IDisposable
         penumbra.ModAdded          -= OnModAdded;
         penumbra.ModDeleted        -= OnModDeleted;
         penumbra.PenumbraReady     -= OnPenumbraReady;
+        glamourer.LocalPlayerStateChanged -= OnGlamourerStateChanged;
 
         currentCts?.Cancel();
         currentCts?.Dispose();
@@ -110,6 +115,25 @@ public class CompositorService : IDisposable
         // real composite once settings are available.
         if (discovery.DiscoverEnabled().Count > 0)
             TriggerRecomposite("PenumbraReady");
+    }
+
+    private void OnGlamourerStateChanged()
+    {
+        // Glamourer applied a design / reset / reapplied state on the local player.
+        // Diff the discovered set against the last known set — only recomposite if something changed.
+        var current = discovery.DiscoverEnabled();
+        if (DiscoveredSetsEqual(current, LastDiscovered)) return;
+        TriggerRecomposite("glamourer-design");
+    }
+
+    private static bool DiscoveredSetsEqual(List<OverlayEntry> a, List<OverlayEntry> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+            if (!string.Equals(a[i].ModDirectory, b[i].ModDirectory, StringComparison.OrdinalIgnoreCase)
+                || a[i].Priority != b[i].Priority)
+                return false;
+        return true;
     }
 
     private bool HasSidecar(string modDir)

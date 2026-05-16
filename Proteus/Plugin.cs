@@ -17,11 +17,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IDataManager DataManager { get; private set; } = null!;
     [PluginService] public static ICondition Condition { get; private set; } = null!;
     [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
+    [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
 
     private const string CommandName = "/proteus";
 
     private readonly Configuration config;
     private readonly PenumbraBridge penumbra;
+    private readonly GlamourerBridge glamourer;
     private readonly TextureLoader textureLoader;
     private readonly SidecarDiscoveryService discovery;
     private readonly CompositorService compositor;
@@ -38,9 +40,10 @@ public sealed class Plugin : IDalamudPlugin
         config.Initialize(pluginInterface);
 
         penumbra = new PenumbraBridge(pluginInterface, log);
+        glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
         textureLoader = new TextureLoader(DataManager, log);
         discovery = new SidecarDiscoveryService(penumbra, log);
-        compositor = new CompositorService(penumbra, discovery, textureLoader, config, log);
+        compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config);
 
@@ -80,6 +83,7 @@ public sealed class Plugin : IDalamudPlugin
 
         windowSystem.RemoveAllWindows();
         compositor.Dispose();
+        glamourer.Dispose();
         penumbra.Dispose();
     }
 }

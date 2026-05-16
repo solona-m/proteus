@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
+    <ProjectReference Include="..\..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
     <ProjectReference Include="..\Lumina\src\Lumina\Lumina.csproj" />
   </ItemGroup>
 
