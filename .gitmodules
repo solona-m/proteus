@@ -5,3 +5,7 @@
 [submodule "Lumina"]
 	path = Lumina
 	url = https://github.com/NotAdam/Lumina.git
+[submodule "Glamourer"]
+	path = Glamourer
+	url = https://github.com/Ottermandias/Glamourer.git
+	branch = main
