@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
 using Proteus.Services;
@@ -35,9 +34,6 @@ public class StatusWindow : Window
             MaximumSize = new System.Numerics.Vector2(900, 700),
         };
     }
-
-    public override bool DrawConditions()
-        => !Plugin.Condition[ConditionFlag.WatchingCutscene];
 
     public override void Draw()
     {
