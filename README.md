@@ -7,6 +7,8 @@ Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your
 If you need help, please look at this [Troubleshooting Guide](TROUBLESHOOTING.md).
 Then, join https//discord.gg/solona and ask in the #help channel. This is still new but I'll work to fix any bugs asap!
 
+If you're a creator and want to make mods for Proteus, read  [Creator's Guide](For%20Creators.md).
+
 ---
 
 ## For Users
