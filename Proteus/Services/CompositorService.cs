@@ -250,20 +250,16 @@ public class CompositorService : IDisposable
             // Penumbra sees a genuinely different redirect path → forces a cache miss.
             var runId = Guid.NewGuid().ToString("N")[..8];
 
-            // Process all race-variant materials in parallel — each is independent.
-            // PNG cache is per-iteration (not shared) so each thread decodes at its own dimensions.
+            // Shared across all parallel iterations — each unique (path, w, h) is decoded once
+            // regardless of how many race variants reference the same overlay PNG.
+            var sharedPngCache = new ConcurrentDictionary<(string path, int w, int h), byte[]?>();
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
 
-                var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
                 byte[]? LoadPng(string path, int w, int h)
-                {
-                    var key = (path, w, h);
-                    if (!pngCache.TryGetValue(key, out var data))
-                        pngCache[key] = data = textureLoader.LoadPngAsRgba(path, w, h);
-                    return data;
-                }
+                    => sharedPngCache.GetOrAdd((path, w, h), _ => textureLoader.LoadPngAsRgba(path, w, h));
 
                 if (ct.IsCancellationRequested) return;
 
