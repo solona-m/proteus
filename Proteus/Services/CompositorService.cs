@@ -178,7 +178,7 @@ public class CompositorService : IDisposable
         var token = cts.Token;
         Task.Run(async () =>
         {
-            try { await Task.Delay(500, token); }
+            try { await Task.Delay(200, token); }
             catch (OperationCanceledException) { return; }
             Recomposite(token);
         });
@@ -264,20 +264,21 @@ public class CompositorService : IDisposable
             // Penumbra sees a genuinely different redirect path → forces a cache miss.
             var runId = Guid.NewGuid().ToString("N")[..8];
 
-            Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 2 }, kvp =>
+            // Shared across all parallel tasks within this run. The same overlay PNG
+            // (e.g. diffuse.png at 4096×4096) is needed by every body-type material;
+            // per-material caches previously decoded it once per material (6× for stockings).
+            // Scoped to this Recomposite call so it doesn't accumulate across runs.
+            var runPngCache = new ConcurrentDictionary<(string path, int w, int h), Lazy<byte[]?>>();
+
+            Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
 
-                // Per-material cache: each parallel task holds only its own decoded PNGs.
-                // Shared cache would keep all 14-style × 3-texture buffers live simultaneously
-                // across every concurrent task, which can exceed 2 GB for 4K overlay sets.
-                var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
-                byte[]? LoadPng(string path, int w, int h)
-                {
-                    if (!pngCache.TryGetValue((path, w, h), out var v))
-                        pngCache[(path, w, h)] = v = textureLoader.LoadPngAsRgba(path, w, h);
-                    return v;
-                }
+                byte[]? LoadPng(string path, int w, int h) =>
+                    runPngCache.GetOrAdd(
+                        (path, w, h),
+                        static (key, loader) => new Lazy<byte[]?>(() => loader.LoadPngAsRgba(key.path, key.w, key.h)),
+                        textureLoader).Value;
 
                 if (ct.IsCancellationRequested) return;
 

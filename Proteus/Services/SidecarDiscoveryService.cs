@@ -64,12 +64,15 @@ public class SidecarDiscoveryService
             if (string.Equals(modDir, ManagedModDir, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var settings = penumbra.GetModSettings(collId.Value, modDir);
-            if (settings == null || !settings.Value.Enabled) continue;
-
+            // Check for sidecar before calling GetModSettings: a local File.Exists costs ~0.1 ms
+            // while a Penumbra IPC call costs ~2–5 ms per hop through the framework thread.
+            // Users with 500+ enabled mods would otherwise spend 1–2 s on IPC alone per discovery.
             var sidecarDir = Path.Combine(modsRoot, modDir, SidecarSubdir);
             var metaPath   = Path.Combine(sidecarDir, MetadataFile);
             if (!File.Exists(metaPath)) continue;
+
+            var settings = penumbra.GetModSettings(collId.Value, modDir);
+            if (settings == null || !settings.Value.Enabled) continue;
 
             var metadata = TryParseMetadata(metaPath);
             if (metadata == null) continue;

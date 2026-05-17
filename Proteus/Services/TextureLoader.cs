@@ -544,21 +544,23 @@ public class TextureLoader
         catch (Exception ex) { log.Error(ex, "Failed to write .mtrl: {0}", path); return false; }
     }
 
-    // Retries File.Create on IOException (file locked by a concurrent recomposite).
+    // Writes to a uniquely-named .tmp file in the same directory, then atomically moves it to
+    // the final path. Mare Synchronos watches .tex/.mtrl extensions and will hash-lock them
+    // immediately on creation; writing to a .tmp first means the final path appears fully-written
+    // or not at all, eliminating the file-lock retries that previously added seconds per run.
     private static void WriteWithRetry(string path, Action<FileStream> write, int attempts = 5, int delayMs = 40)
     {
-        for (int attempt = 1; ; attempt++)
+        var tmp = path + "." + Path.GetRandomFileName() + ".tmp";
+        try
         {
-            try
-            {
-                using var stream = File.Create(path);
+            using (var stream = File.Create(tmp))
                 write(stream);
-                return;
-            }
-            catch (IOException) when (attempt < attempts)
-            {
-                System.Threading.Thread.Sleep(delayMs);
-            }
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch { }
+            throw;
         }
     }
 
