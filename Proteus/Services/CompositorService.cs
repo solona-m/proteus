@@ -123,11 +123,17 @@ public class CompositorService : IDisposable
         // Glamourer applied a design / reset / reapplied state on the local player.
         // Diff the discovered set against the last known set — only recomposite if something changed.
         var current = discovery.DiscoverEnabled();
+
+        // Empty results mean Penumbra's IPC is temporarily unavailable (e.g. mid-reload).
+        // Treat empty as "no information" rather than "no mods" to avoid overwriting a good
+        // LastDiscovered with [] and re-triggering on the next Reapply event.
+        if (current.Count == 0) return;
+
         if (DiscoveredSetsEqual(current, LastDiscovered)) return;
 
         // Update LastDiscovered eagerly before triggering. Without this, repeated glamourer events
-        // (which fire every ~500ms) cancel the in-flight recomposite before it reaches the
-        // `LastDiscovered = allEntries` line, keeping the sets permanently unequal and looping.
+        // cancel the in-flight recomposite before it reaches the `LastDiscovered = allEntries` line,
+        // keeping the sets permanently unequal and looping.
         LastDiscovered = current;
         TriggerRecomposite("glamourer-design");
     }
