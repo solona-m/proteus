@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -250,16 +251,20 @@ public class CompositorService : IDisposable
             // Penumbra sees a genuinely different redirect path → forces a cache miss.
             var runId = Guid.NewGuid().ToString("N")[..8];
 
-            // Shared across all parallel iterations — each unique (path, w, h) is decoded once
-            // regardless of how many race variants reference the same overlay PNG.
-            var sharedPngCache = new ConcurrentDictionary<(string path, int w, int h), byte[]?>();
-
-            Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct }, kvp =>
+            Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 2 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
 
+                // Per-material cache: each parallel task holds only its own decoded PNGs.
+                // Shared cache would keep all 14-style × 3-texture buffers live simultaneously
+                // across every concurrent task, which can exceed 2 GB for 4K overlay sets.
+                var pngCache = new Dictionary<(string path, int w, int h), byte[]?>();
                 byte[]? LoadPng(string path, int w, int h)
-                    => sharedPngCache.GetOrAdd((path, w, h), _ => textureLoader.LoadPngAsRgba(path, w, h));
+                {
+                    if (!pngCache.TryGetValue((path, w, h), out var v))
+                        pngCache[(path, w, h)] = v = textureLoader.LoadPngAsRgba(path, w, h);
+                    return v;
+                }
 
                 if (ct.IsCancellationRequested) return;
 
@@ -538,6 +543,12 @@ public class CompositorService : IDisposable
                 }
 
             });
+
+            // Release all large PNG decode buffers back to the LOH before reload.
+            // The LOH does not compact automatically; without this, Task Manager can show
+            // a persistent multi-GB footprint even after the Parallel.ForEach finishes.
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
 
             WriteManagedModJson(redirects);
             ReloadAndRedraw();
