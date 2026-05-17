@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Runtime;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -557,11 +556,6 @@ public class CompositorService : IDisposable
                 }
 
             });
-
-            log.Debug("[Proteus] Recomposite: triggering LOH compaction GC");
-            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            log.Debug("[Proteus] Recomposite: LOH compaction GC complete");
 
             WriteManagedModJson(redirects);
             ReloadAndRedraw();
