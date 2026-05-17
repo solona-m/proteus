@@ -126,7 +126,7 @@ public class StatusWindow : Window
 
                 if (ImGui.BeginPopup(popupId))
                 {
-                    DrawColorEditor(entry, discovery.GetActiveColorRows(entry));
+                    DrawColorEditor(entry, discovery.GetMergedColorRows(entry), discovery.GetEditableColorRows(entry));
                     ImGui.EndPopup();
                 }
 
@@ -166,7 +166,9 @@ public class StatusWindow : Window
         }
     }
 
-    private void DrawColorEditor(OverlayEntry entry, List<ColorTableRowPreset> rows)
+    // displayRows: merged view matching what the compositor applies (read-only, for showing current values).
+    // editRows: the highest-priority active option's list (writable, changes saved to metadata).
+    private void DrawColorEditor(OverlayEntry entry, List<ColorTableRowPreset> displayRows, List<ColorTableRowPreset> editRows)
     {
         ImGui.TextUnformatted(entry.ModName);
         ImGui.Separator();
@@ -181,7 +183,8 @@ public class StatusWindow : Window
 
         for (int pairNum = 1; pairNum <= 16; pairNum++)
         {
-            var preset = rows.FirstOrDefault(r => r.Row == pairNum);
+            // Display the effective merged value so the picker matches what the compositor applies.
+            var preset = displayRows.FirstOrDefault(r => r.Row == pairNum);
 
             ImGui.TextUnformatted($"{pairNum,2}");
 
@@ -195,7 +198,7 @@ public class StatusWindow : Window
             if (ImGui.ColorEdit3($"##dA_{entry.ModDirectory}_{pairNum}", ref colA,
                 ImGuiColorEditFlags.NoInputs))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Diffuse = Vec3ToHex(colA);
                 changed = true;
@@ -206,7 +209,7 @@ public class StatusWindow : Window
             ImGui.SetNextItemWidth(60);
             if (ImGui.DragFloat($"##eA_{entry.ModDirectory}_{pairNum}", ref emA, 0.01f, 0f, 1f, "%.2f"))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Emissive = Math.Clamp(emA, 0f, 1f);
                 changed = true;
@@ -217,7 +220,7 @@ public class StatusWindow : Window
             ImGui.SetNextItemWidth(50);
             if (ImGui.DragInt($"##opA_{entry.ModDirectory}_{pairNum}", ref opA, 1f, -100, 100, "%d%%"))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Opacity = Math.Clamp(opA, -100, 100);
                 changed = true;
@@ -233,7 +236,7 @@ public class StatusWindow : Window
             if (ImGui.ColorEdit3($"##dB_{entry.ModDirectory}_{pairNum}", ref colB,
                 ImGuiColorEditFlags.NoInputs))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Diffuse = Vec3ToHex(colB);
                 changed = true;
@@ -244,7 +247,7 @@ public class StatusWindow : Window
             ImGui.SetNextItemWidth(60);
             if (ImGui.DragFloat($"##eB_{entry.ModDirectory}_{pairNum}", ref emB, 0.01f, 0f, 1f, "%.2f"))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Emissive = Math.Clamp(emB, 0f, 1f);
                 changed = true;
@@ -255,7 +258,7 @@ public class StatusWindow : Window
             ImGui.SetNextItemWidth(50);
             if (ImGui.DragInt($"##opB_{entry.ModDirectory}_{pairNum}", ref opB, 1f, -100, 100, "%d%%"))
             {
-                preset = EnsurePreset(rows, pairNum);
+                preset = EnsurePreset(editRows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Opacity = Math.Clamp(opB, -100, 100);
                 changed = true;

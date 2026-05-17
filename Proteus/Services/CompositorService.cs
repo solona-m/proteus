@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Concurrent;
+using System.Runtime;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -544,11 +544,10 @@ public class CompositorService : IDisposable
 
             });
 
-            // Release all large PNG decode buffers back to the LOH before reload.
-            // The LOH does not compact automatically; without this, Task Manager can show
-            // a persistent multi-GB footprint even after the Parallel.ForEach finishes.
+            log.Debug("[Proteus] Recomposite: triggering LOH compaction GC");
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            log.Debug("[Proteus] Recomposite: LOH compaction GC complete");
 
             WriteManagedModJson(redirects);
             ReloadAndRedraw();
