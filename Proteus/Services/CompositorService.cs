@@ -124,15 +124,23 @@ public class CompositorService : IDisposable
         // Diff the discovered set against the last known set — only recomposite if something changed.
         var current = discovery.DiscoverEnabled();
         if (DiscoveredSetsEqual(current, LastDiscovered)) return;
+
+        // Update LastDiscovered eagerly before triggering. Without this, repeated glamourer events
+        // (which fire every ~500ms) cancel the in-flight recomposite before it reaches the
+        // `LastDiscovered = allEntries` line, keeping the sets permanently unequal and looping.
+        LastDiscovered = current;
         TriggerRecomposite("glamourer-design");
     }
 
+    // Set-based comparison — order-independent. DiscoverEnabled sorts by priority but the sort
+    // is not stable, so two mods with equal priority can swap positions between calls.
     private static bool DiscoveredSetsEqual(List<OverlayEntry> a, List<OverlayEntry> b)
     {
         if (a.Count != b.Count) return false;
-        for (int i = 0; i < a.Count; i++)
-            if (!string.Equals(a[i].ModDirectory, b[i].ModDirectory, StringComparison.OrdinalIgnoreCase)
-                || a[i].Priority != b[i].Priority)
+        var lookup = new Dictionary<string, int>(a.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var e in a) lookup[e.ModDirectory] = e.Priority;
+        foreach (var e in b)
+            if (!lookup.TryGetValue(e.ModDirectory, out var p) || p != e.Priority)
                 return false;
         return true;
     }
