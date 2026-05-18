@@ -35,6 +35,7 @@ public class CompositorService : IDisposable
 
     private CancellationTokenSource? currentCts;
     private readonly object triggerLock = new();
+    private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
 
     public CompositorResult? LastResult { get; private set; }
     public List<OverlayEntry> LastDiscovered { get; private set; } = [];
@@ -99,6 +100,15 @@ public class CompositorService : IDisposable
             if (current.Count == 0) return;
             if (DiscoveredSetsEqual(current, LastDiscovered)) return;
             LastDiscovered = current;
+        }
+        else if (change == ModSettingChange.TemporarySetting)
+        {
+            // Glamourer re-applies temporary mod settings (option groups) after every character
+            // redraw caused by RedrawPlayer(). The echo fires ~90ms after our redraw call.
+            // Suppress triggers within 1500ms of our own redraw — human design-switching takes
+            // at least a few seconds after seeing the result, so false suppression is negligible.
+            var msSince = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnRedrawTick));
+            if (msSince >= 0 && msSince < 1500) return;
         }
 
         TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
@@ -686,6 +696,7 @@ public class CompositorService : IDisposable
         {
             // Give Penumbra's async reload time to process before the redraw re-requests textures.
             Thread.Sleep(300);
+            Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
             penumbra.RedrawPlayer();
         }
     }
