@@ -88,6 +88,19 @@ public class CompositorService : IDisposable
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
             return;
+
+        // For enable/disable events, re-check whether the active mod set actually changed.
+        // Glamourer re-applies designs after each redraw, calling Penumbra to enable already-enabled
+        // mod associations — Penumbra fires EnableState regardless of whether the value changed.
+        // Without this guard: RedrawPlayer() → Glamourer re-apply → OnModSettingChanged → loop.
+        if (change is ModSettingChange.EnableState or ModSettingChange.MultiEnableState)
+        {
+            var current = discovery.DiscoverEnabled();
+            if (current.Count == 0) return;
+            if (DiscoveredSetsEqual(current, LastDiscovered)) return;
+            LastDiscovered = current;
+        }
+
         TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
     }
 
