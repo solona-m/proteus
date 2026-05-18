@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
 using Proteus.Services;
+using StbImageSharp;
 
 namespace Proteus.Gui;
 
@@ -15,6 +17,10 @@ public class StatusWindow : Window
     private readonly SidecarDiscoveryService discovery;
     private readonly PenumbraBridge penumbra;
     private readonly Configuration config;
+
+    // null value = no index texture (show all rows); non-null = 1-based row numbers that have pixels.
+    // Cleared on each popup open so option-group switches are reflected immediately.
+    private readonly Dictionary<string, HashSet<int>?> _indexRowCache = new();
 
     public StatusWindow(
         CompositorService compositor,
@@ -176,6 +182,12 @@ public class StatusWindow : Window
         var overlays  = discovery.ResolveActiveOverlays(entry);
         bool hasIndex = overlays.Any(o => o.Descriptor.Index != null);
 
+        if (ImGui.IsWindowAppearing())
+            _indexRowCache.Remove(entry.ModDirectory);
+        if (!_indexRowCache.ContainsKey(entry.ModDirectory))
+            _indexRowCache[entry.ModDirectory] = ComputeUsedIndexRows(entry, overlays);
+        var usedRows = _indexRowCache[entry.ModDirectory];
+
         bool changed = false;
 
         if (!hasIndex)
@@ -183,6 +195,7 @@ public class StatusWindow : Window
 
         for (int pairNum = 1; pairNum <= 16; pairNum++)
         {
+            if (usedRows != null && !usedRows.Contains(pairNum)) continue;
             // Display the effective merged value so the picker matches what the compositor applies.
             var preset = displayRows.FirstOrDefault(r => r.Row == pairNum);
 
@@ -270,6 +283,31 @@ public class StatusWindow : Window
             discovery.SaveMetadata(entry);
             compositor.TriggerRecomposite("colors-change");
         }
+    }
+
+    private HashSet<int>? ComputeUsedIndexRows(OverlayEntry entry, List<ResolvedOverlay> overlays)
+    {
+        var used = new HashSet<int>();
+        bool foundAny = false;
+
+        foreach (var ov in overlays)
+        {
+            if (ov.Descriptor.Index == null) continue;
+            var path = Path.Combine(entry.SidecarRoot, ov.Descriptor.Index);
+            if (!File.Exists(path)) continue;
+
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+                foundAny = true;
+                for (int i = 0; i < img.Data.Length; i += 4) // RGBA stride
+                    used.Add(img.Data[i] / 17 + 1);           // red channel → 1-based row number
+            }
+            catch { /* corrupt or unreadable — skip */ }
+        }
+
+        return foundAny ? used : null;
     }
 
     private static ColorTableRowPreset EnsurePreset(List<ColorTableRowPreset> rows, int row)
