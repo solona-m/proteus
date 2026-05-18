@@ -103,16 +103,7 @@ public class SidecarDiscoveryService
         var collId   = penumbra.GetPlayerCollectionId();
         var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
 
-        // Two-pass resolution: collect overlays and color rows independently across all groups.
-        // Color-only groups (no overlays on their options) can still contribute color table rows
-        // that apply to overlays from style groups, enabling independent style + color option groups.
-        var rawOverlays  = new List<OverlayDescriptor>();
-        // Seed with top-level rows so they act as the lowest-priority fallback.
-        var mergedRows   = new Dictionary<int, ColorTableRowPreset>();
-        if (entry.Metadata.ColorTableRows != null)
-            foreach (var row in entry.Metadata.ColorTableRows)
-                mergedRows[row.Row] = row;
-
+        var resolved = new List<ResolvedOverlay>();
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
@@ -125,25 +116,19 @@ public class SidecarDiscoveryService
 
             IEnumerable<OverlayOption> active;
             if (selected is { Count: > 0 })
-                // Include ALL selected options — handles both single-select and multi-select groups.
                 active = group.Options.Where(o => selected.Any(s =>
                     string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)));
             else
-                // Nothing selected — default to first option.
                 active = [group.Options[0]];
 
             foreach (var opt in active)
             {
-                rawOverlays.AddRange(opt.Overlays);
-                // Later groups override earlier groups for the same row index.
-                if (opt.ColorTableRows != null)
-                    foreach (var row in opt.ColorTableRows)
-                        mergedRows[row.Row] = row;
+                var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
+                foreach (var desc in opt.Overlays)
+                    resolved.Add(new ResolvedOverlay(desc, rows));
             }
         }
-
-        var finalRows = mergedRows.Count > 0 ? mergedRows.Values.ToList() : null;
-        return rawOverlays.Select(d => new ResolvedOverlay(d, finalRows)).ToList();
+        return resolved;
     }
 
     /// <summary>

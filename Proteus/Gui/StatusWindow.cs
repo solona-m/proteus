@@ -18,9 +18,11 @@ public class StatusWindow : Window
     private readonly PenumbraBridge penumbra;
     private readonly Configuration config;
 
-    // null value = no index texture (show all rows); non-null = 1-based row numbers that have pixels.
-    // Cleared on each popup open so option-group switches are reflected immediately.
-    private readonly Dictionary<string, HashSet<int>?> _indexRowCache = new();
+    // Key: absolute index-texture path → 1-based row numbers that appear in it.
+    // Cleared per-entry on each popup open so option switches are reflected.
+    private readonly Dictionary<string, HashSet<int>> _indexRowCache = new();
+    // Key: modDir → selected index into the active-options list (for the dropdown).
+    private readonly Dictionary<string, int> _colorEditorSelection = new();
 
     public StatusWindow(
         CompositorService compositor,
@@ -132,7 +134,7 @@ public class StatusWindow : Window
 
                 if (ImGui.BeginPopup(popupId))
                 {
-                    DrawColorEditor(entry, discovery.GetMergedColorRows(entry), discovery.GetEditableColorRows(entry));
+                    DrawColorEditor(entry);
                     ImGui.EndPopup();
                 }
 
@@ -172,46 +174,121 @@ public class StatusWindow : Window
         }
     }
 
-    // displayRows: merged view matching what the compositor applies (read-only, for showing current values).
-    // editRows: the highest-priority active option's list (writable, changes saved to metadata).
-    private void DrawColorEditor(OverlayEntry entry, List<ColorTableRowPreset> displayRows, List<ColorTableRowPreset> editRows)
+    private void DrawColorEditor(OverlayEntry entry)
     {
         ImGui.TextUnformatted(entry.ModName);
         ImGui.Separator();
 
-        var overlays  = discovery.ResolveActiveOverlays(entry);
-        bool hasIndex = overlays.Any(o => o.Descriptor.Index != null);
-
+        // Clear per-entry index cache on popup open so option switches are reflected.
         if (ImGui.IsWindowAppearing())
-            _indexRowCache.Remove(entry.ModDirectory);
-        if (!_indexRowCache.ContainsKey(entry.ModDirectory))
-            _indexRowCache[entry.ModDirectory] = ComputeUsedIndexRows(entry, overlays);
-        var usedRows = _indexRowCache[entry.ModDirectory];
+            foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
+                _indexRowCache.Remove(k);
 
-        bool changed = false;
+        // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
+        if (entry.Metadata.OptionGroups is not { Count: > 0 })
+        {
+            var rows = entry.Metadata.ColorTableRows ??= [];
+            var usedRowsSimple = new HashSet<int>();
+            bool hasIdxSimple  = false;
+            foreach (var ov in entry.Metadata.Overlays ?? [])
+            {
+                if (ov.Index == null) continue;
+                var idxPath = Path.Combine(entry.SidecarRoot, ov.Index);
+                if (!_indexRowCache.ContainsKey(idxPath))
+                    _indexRowCache[idxPath] = ScanIndexFile(idxPath);
+                usedRowsSimple.UnionWith(_indexRowCache[idxPath]);
+                hasIdxSimple = true;
+            }
+            HashSet<int>? filteredSimple = (hasIdxSimple && usedRowsSimple.Count > 0) ? usedRowsSimple : null;
+            if (!hasIdxSimple)
+                ImGui.TextDisabled("No index texture — only Row 16 is applied.");
+            bool changedSimple = false;
+            DrawRowControls(entry.ModDirectory, rows, filteredSimple, ref changedSimple);
+            if (changedSimple) { discovery.SaveMetadata(entry); compositor.TriggerRecomposite("colors-change"); }
+            return;
+        }
 
-        if (!hasIndex)
+        // ── option-group path ─────────────────────────────────────────────────
+
+        var collId   = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+
+        var activeOptions = new List<(string GroupName, OverlayOption Option)>();
+        foreach (var group in entry.Metadata.OptionGroups)
+        {
+            if (group.Options.Count == 0) continue;
+            List<string>? selected = null;
+            settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
+
+            IEnumerable<OverlayOption> active = (selected is { Count: > 0 })
+                ? group.Options.Where(o => selected.Any(s =>
+                      string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)))
+                : [group.Options[0]];
+
+            foreach (var opt in active)
+                activeOptions.Add((group.PenumbraGroupName, opt));
+        }
+
+        if (activeOptions.Count == 0) return;
+
+        int selIdx = _colorEditorSelection.GetValueOrDefault(entry.ModDirectory, 0);
+        if (selIdx >= activeOptions.Count) selIdx = 0;
+
+        if (activeOptions.Count > 1)
+        {
+            var labels = activeOptions.Select(x => $"{x.GroupName} / {x.Option.Name}").ToArray();
+            ImGui.SetNextItemWidth(220);
+            if (ImGui.Combo($"##optsel_{entry.ModDirectory}", ref selIdx, labels, labels.Length))
+                _colorEditorSelection[entry.ModDirectory] = selIdx;
+        }
+
+        var (groupName, activeOpt) = activeOptions[selIdx];
+
+        HashSet<int>? usedRows = null;
+        var idxDesc = activeOpt.Overlays.FirstOrDefault(o => o.Index != null);
+        if (idxDesc?.Index != null)
+        {
+            var idxPath = Path.Combine(entry.SidecarRoot, idxDesc.Index);
+            if (!_indexRowCache.ContainsKey(idxPath))
+                _indexRowCache[idxPath] = ScanIndexFile(idxPath);
+            var scan = _indexRowCache[idxPath];
+            if (scan.Count > 0) usedRows = scan;
+        }
+
+        if (usedRows == null && !activeOpt.Overlays.Any(o => o.Index != null))
             ImGui.TextDisabled("No index texture — only Row 16 is applied.");
 
+        activeOpt.ColorTableRows ??= [];
+        bool changed = false;
+        DrawRowControls($"{entry.ModDirectory}_{groupName}", activeOpt.ColorTableRows, usedRows, ref changed);
+        if (changed) { discovery.SaveMetadata(entry); compositor.TriggerRecomposite("colors-change"); }
+    }
+
+    // Renders the per-row A/B color/emissive/opacity controls, filtered by usedRows when non-null.
+    // idScope is embedded in widget IDs to prevent collisions between groups.
+    private static void DrawRowControls(
+        string idScope,
+        List<ColorTableRowPreset> rows,
+        HashSet<int>? usedRows,
+        ref bool changed)
+    {
         for (int pairNum = 1; pairNum <= 16; pairNum++)
         {
             if (usedRows != null && !usedRows.Contains(pairNum)) continue;
-            // Display the effective merged value so the picker matches what the compositor applies.
-            var preset = displayRows.FirstOrDefault(r => r.Row == pairNum);
+
+            var preset = rows.FirstOrDefault(r => r.Row == pairNum);
 
             ImGui.TextUnformatted($"{pairNum,2}");
 
-            // Sub-row A
             ImGui.SameLine();
             ImGui.TextDisabled("A");
             ImGui.SameLine();
 
             var colA = HexToVec3(preset?.SubRowA?.Diffuse);
             ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"##dA_{entry.ModDirectory}_{pairNum}", ref colA,
-                ImGuiColorEditFlags.NoInputs))
+            if (ImGui.ColorEdit3($"##dA_{idScope}_{pairNum}", ref colA, ImGuiColorEditFlags.NoInputs))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Diffuse = Vec3ToHex(colA);
                 changed = true;
@@ -220,9 +297,9 @@ public class StatusWindow : Window
             ImGui.SameLine();
             float emA = preset?.SubRowA?.Emissive ?? 0f;
             ImGui.SetNextItemWidth(60);
-            if (ImGui.DragFloat($"##eA_{entry.ModDirectory}_{pairNum}", ref emA, 0.01f, 0f, 1f, "%.2f"))
+            if (ImGui.DragFloat($"##eA_{idScope}_{pairNum}", ref emA, 0.01f, 0f, 1f, "%.2f"))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Emissive = Math.Clamp(emA, 0f, 1f);
                 changed = true;
@@ -231,25 +308,23 @@ public class StatusWindow : Window
             ImGui.SameLine();
             int opA = preset?.SubRowA?.Opacity ?? 0;
             ImGui.SetNextItemWidth(50);
-            if (ImGui.DragInt($"##opA_{entry.ModDirectory}_{pairNum}", ref opA, 1f, -100, 100, "%d%%"))
+            if (ImGui.DragInt($"##opA_{idScope}_{pairNum}", ref opA, 1f, -100, 100, "%d%%"))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowA ??= new ColorTableSubRowPreset();
                 preset.SubRowA.Opacity = Math.Clamp(opA, -100, 100);
                 changed = true;
             }
 
-            // Sub-row B
             ImGui.SameLine();
             ImGui.TextDisabled(" B");
             ImGui.SameLine();
 
             var colB = HexToVec3(preset?.SubRowB?.Diffuse);
             ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"##dB_{entry.ModDirectory}_{pairNum}", ref colB,
-                ImGuiColorEditFlags.NoInputs))
+            if (ImGui.ColorEdit3($"##dB_{idScope}_{pairNum}", ref colB, ImGuiColorEditFlags.NoInputs))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Diffuse = Vec3ToHex(colB);
                 changed = true;
@@ -258,9 +333,9 @@ public class StatusWindow : Window
             ImGui.SameLine();
             float emB = preset?.SubRowB?.Emissive ?? 0f;
             ImGui.SetNextItemWidth(60);
-            if (ImGui.DragFloat($"##eB_{entry.ModDirectory}_{pairNum}", ref emB, 0.01f, 0f, 1f, "%.2f"))
+            if (ImGui.DragFloat($"##eB_{idScope}_{pairNum}", ref emB, 0.01f, 0f, 1f, "%.2f"))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Emissive = Math.Clamp(emB, 0f, 1f);
                 changed = true;
@@ -269,45 +344,28 @@ public class StatusWindow : Window
             ImGui.SameLine();
             int opB = preset?.SubRowB?.Opacity ?? 0;
             ImGui.SetNextItemWidth(50);
-            if (ImGui.DragInt($"##opB_{entry.ModDirectory}_{pairNum}", ref opB, 1f, -100, 100, "%d%%"))
+            if (ImGui.DragInt($"##opB_{idScope}_{pairNum}", ref opB, 1f, -100, 100, "%d%%"))
             {
-                preset = EnsurePreset(editRows, pairNum);
+                preset = EnsurePreset(rows, pairNum);
                 preset.SubRowB ??= new ColorTableSubRowPreset();
                 preset.SubRowB.Opacity = Math.Clamp(opB, -100, 100);
                 changed = true;
             }
         }
-
-        if (changed)
-        {
-            discovery.SaveMetadata(entry);
-            compositor.TriggerRecomposite("colors-change");
-        }
     }
 
-    private HashSet<int>? ComputeUsedIndexRows(OverlayEntry entry, List<ResolvedOverlay> overlays)
+    private HashSet<int> ScanIndexFile(string absolutePath)
     {
         var used = new HashSet<int>();
-        bool foundAny = false;
-
-        foreach (var ov in overlays)
+        try
         {
-            if (ov.Descriptor.Index == null) continue;
-            var path = Path.Combine(entry.SidecarRoot, ov.Descriptor.Index);
-            if (!File.Exists(path)) continue;
-
-            try
-            {
-                using var stream = File.OpenRead(path);
-                var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-                foundAny = true;
-                for (int i = 0; i < img.Data.Length; i += 4) // RGBA stride
-                    used.Add(img.Data[i] / 17 + 1);           // red channel → 1-based row number
-            }
-            catch { /* corrupt or unreadable — skip */ }
+            using var stream = File.OpenRead(absolutePath);
+            var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+            for (int i = 0; i < img.Data.Length; i += 4)
+                used.Add(img.Data[i] / 17 + 1); // red channel → 1-based row number
         }
-
-        return foundAny ? used : null;
+        catch { }
+        return used;
     }
 
     private static ColorTableRowPreset EnsurePreset(List<ColorTableRowPreset> rows, int row)
