@@ -44,6 +44,9 @@
         "resolved": "10.0.0",
         "contentHash": "bpeCq0IYmVLACyEUMzFIOQX+zZUElG1t+nu1lSxthe7B+1oNYking7b91305+jNB6iwojp9fqTY9O+Nh7ULQxg=="
       },
+      "glamourer.api": {
+        "type": "Project"
+      },
       "lumina": {
         "type": "Project",
         "dependencies": {
