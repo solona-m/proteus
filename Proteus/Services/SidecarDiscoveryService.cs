@@ -23,7 +23,9 @@ public record OverlayEntry(
 /// </summary>
 public record ResolvedOverlay(
     OverlayDescriptor Descriptor,
-    List<ColorTableRowPreset>? ColorTableRows
+    List<ColorTableRowPreset>? ColorTableRows,
+    string? OptionGroup,
+    string? Option
 );
 
 public class SidecarDiscoveryService
@@ -95,7 +97,7 @@ public class SidecarDiscoveryService
     {
         if (entry.Metadata.Overlays is { Count: > 0 })
             return entry.Metadata.Overlays
-                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows))
+                .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows, null, null))
                 .ToList();
 
         if (entry.Metadata.OptionGroups == null) return [];
@@ -125,7 +127,7 @@ public class SidecarDiscoveryService
             {
                 var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
                 foreach (var desc in opt.Overlays)
-                    resolved.Add(new ResolvedOverlay(desc, rows));
+                    resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name));
             }
         }
         return resolved;
