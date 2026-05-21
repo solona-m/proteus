@@ -226,7 +226,11 @@ public class StatusWindow : Window
                 : [group.Options[0]];
 
             foreach (var opt in active)
+            {
+                if (string.Equals(opt.Name, "None", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 activeOptions.Add((group.PenumbraGroupName, opt));
+            }
         }
 
         if (activeOptions.Count == 0) return;
