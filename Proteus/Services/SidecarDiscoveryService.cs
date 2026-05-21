@@ -119,7 +119,7 @@ public class SidecarDiscoveryService
                 active = group.Options.Where(o => selected.Any(s =>
                     string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)));
             else
-                active = [group.Options[0]];
+                continue;
 
             foreach (var opt in active)
             {
