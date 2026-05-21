@@ -1,0 +1,22 @@
+{
+  "Version": 0,
+  "Name": "Overlays",
+  "Description": "",
+  "Image": "",
+  "Page": 0,
+  "Priority": 0,
+  "Type": "Multi",
+  "DefaultSettings": 0,
+  "Options": [
+    {
+      "Name": "Left",
+      "Description": "",
+      "Priority": 0
+    },
+    {
+      "Name": "Right",
+      "Description": "",
+      "Priority": 0
+    }
+  ]
+}
