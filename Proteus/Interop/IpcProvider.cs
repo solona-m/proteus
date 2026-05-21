@@ -65,7 +65,7 @@ public class IpcProvider : IDisposable {
     
     private string GetColorTable(string modDirectory) {
         try {
-            var entry = _compositor.LastDiscovered.FirstOrDefault(s => s.ModDirectory == modDirectory);
+            var entry = _compositor.LastDiscovered.FirstOrDefault(s => s.ModDirectory.Equals(modDirectory, StringComparison.InvariantCultureIgnoreCase));
             if (entry == null) return string.Empty;
             var colorTable = _discovery.GetMergedColorRows(entry);
             return JsonSerializer.Serialize(colorTable);
@@ -77,7 +77,7 @@ public class IpcProvider : IDisposable {
     
     private bool SetColorTable(string modDirectory, string colorTableJson) {
         try {
-            var entry = _compositor.LastDiscovered.FirstOrDefault(s => s.ModDirectory == modDirectory);
+            var entry = _compositor.LastDiscovered.FirstOrDefault(s => s.ModDirectory.Equals(modDirectory, StringComparison.InvariantCultureIgnoreCase));
             if (entry == null) return false;
             var newColorTable = JsonSerializer.Deserialize<List<ColorTableRowPreset>>(colorTableJson);
             if (newColorTable == null) return false;
