@@ -28,6 +28,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly CompositorService compositor;
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
+    private readonly IpcProvider ipcProvider;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -43,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
         textureLoader = new TextureLoader(DataManager, log);
         discovery = new SidecarDiscoveryService(penumbra, log);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log);
+        ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config);
 
@@ -82,6 +84,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
 
         windowSystem.RemoveAllWindows();
+        ipcProvider.Dispose();
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();
