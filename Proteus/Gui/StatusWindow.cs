@@ -227,7 +227,7 @@ public class StatusWindow : Window
 
             foreach (var opt in active)
             {
-                if (string.Equals(opt.Name, "None", StringComparison.OrdinalIgnoreCase))
+                if (opt.Name.EndsWith("None", StringComparison.OrdinalIgnoreCase))
                     continue;
                 activeOptions.Add((group.PenumbraGroupName, opt));
             }
