@@ -2,7 +2,6 @@
   <Project Path="Glamourer/Glamourer.Api/Glamourer.Api.csproj">
     <Platform Project="x64" />
   </Project>
-  <Project Path="Lumina/src/Lumina/Lumina.csproj" />
   <Project Path="Penumbra.Api/Penumbra.Api.csproj">
     <Platform Project="x64" />
   </Project>
