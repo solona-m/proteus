@@ -117,11 +117,13 @@ public class StatusWindow : Window
                 ImGui.TableNextColumn();
                 int pri = ov?.PriorityOverride ?? entry.Priority;
                 ImGui.SetNextItemWidth(55);
-                ImGui.DragInt($"##pri_{entry.ModDirectory}", ref pri, 1f);
-                if (ImGui.IsItemDeactivatedAfterEdit())
+                if (ImGui.DragInt($"##pri_{entry.ModDirectory}", ref pri, 0.1f)) 
                 {
                     if (ov == null) { ov = new ModOverride(); config.ModOverrides[entry.ModDirectory] = ov; }
                     ov.PriorityOverride = pri;
+                }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                {
                     config.Save();
                     compositor.TriggerRecomposite("priority-change");
                 }
