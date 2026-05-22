@@ -2,9 +2,6 @@
 	path = Penumbra.Api
 	url = https://github.com/MeowZWR/Penumbra.Api.git
 	branch = cn
-[submodule "Lumina"]
-	path = Lumina
-	url = https://github.com/NotAdam/Lumina.git
 [submodule "Glamourer"]
 	path = Glamourer
 	url = https://github.com/Ottermandias/Glamourer.git
