@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
 using Proteus.Services;
@@ -110,8 +111,13 @@ public class StatusWindow : Window
 
                 // Mod name (dimmed when disabled)
                 ImGui.TableNextColumn();
-                if (active) ImGui.TextUnformatted(entry.ModName);
-                else        ImGui.TextDisabled(entry.ModName);
+                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
+                {
+                    if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
+                    {
+                        penumbra.OpenToMod(entry.ModDirectory);
+                    }
+                }
 
                 // Priority (drag to edit, Ctrl+click to type)
                 ImGui.TableNextColumn();

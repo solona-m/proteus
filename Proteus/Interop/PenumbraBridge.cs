@@ -24,6 +24,7 @@ public class PenumbraBridge : IDisposable
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
     private readonly RedrawObject redrawObject;
+    private readonly OpenMainWindow openMainWindow;
 
     private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
     private readonly EventSubscriber<string> modAddedSub;
@@ -55,6 +56,7 @@ public class PenumbraBridge : IDisposable
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
+        openMainWindow = new OpenMainWindow(pluginInterface);
 
         modSettingChangedSub = Penumbra.Api.IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
             (change, collId, modDir, inherited) => ModSettingChanged?.Invoke(change, collId, modDir, inherited));
@@ -195,6 +197,13 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return;
         try { redrawObject.Invoke(0, RedrawType.Redraw); }
         catch (Exception ex) { log.Error(ex, "RedrawObject failed"); }
+    }
+
+    public void OpenToMod(string modDirectory)
+    {
+        if (!IsAvailable) return;
+        try { openMainWindow.Invoke(TabType.Mods, modDirectory); }
+        catch (Exception ex) { log.Error(ex, "OpenMainWindow failed"); }
     }
 
     public void Dispose()
