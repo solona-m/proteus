@@ -541,7 +541,7 @@ public class CompositorService : IDisposable
                     {
                         if (suffix == srcSuffix) continue;
                         var dstPath = stem + suffix;
-                        if (!activeMtrl.Contains(dstPath) || byMaterial.ContainsKey(dstPath) || siblings.ContainsKey(dstPath))
+                        if (!activeMtrl.Contains(dstPath))
                             continue;
 
                         bool vanilla = bodyType == "gen2";
@@ -551,11 +551,19 @@ public class CompositorService : IDisposable
                         if (dstPairs.Count == 0) continue;
 
                         log.Debug("[Proteus] Sibling synthesis{0}: {1} → {2}", vanilla ? " (vanilla)" : "", srcPath, dstPath);
-                        siblings[dstPath] = dstPairs;
+                        if (siblings.TryGetValue(dstPath, out var existSiblings))
+                            existSiblings.AddRange(dstPairs);
+                        else
+                            siblings[dstPath] = dstPairs;
                     }
                 }
                 foreach (var (path, pairs) in siblings)
-                    byMaterial[path] = pairs;
+                {
+                    if (byMaterial.TryGetValue(path, out var existing))
+                        existing.AddRange(pairs);
+                    else
+                        byMaterial[path] = pairs;
+                }
             }
 
             if (ct.IsCancellationRequested) return;
@@ -620,8 +628,17 @@ public class CompositorService : IDisposable
                         var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
                         return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
                     }
-                    // Transfer-map paths always output at map resolution (4096×4096).
-                    if (w != 4096 || h != 4096) return png;
+                    // Transfer-map paths operate at 4096×4096. If the overlay was loaded at a
+                    // smaller size (e.g. base texture is 2048), reload at full res, remap, resize.
+                    if (w != 4096 || h != 4096)
+                    {
+                        if (overlayPath == null) return png;
+                        var native4k = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096);
+                        if (native4k == null) return png;
+                        var remapped4k = uvRemap.Remap(native4k, 4096, 4096, srcType, dstBodyType);
+                        if (ReferenceEquals(remapped4k, native4k)) return png;
+                        return UVRemapService.ResizeBilinear(remapped4k, 4096, 4096, w, h);
+                    }
                     return uvRemap.Remap(png, w, h, srcType, dstBodyType);
                 }
 
@@ -746,6 +763,12 @@ public class CompositorService : IDisposable
                         {
                             var diffPath = Path.Combine(entry.SidecarRoot, desc.Diffuse);
                             diffuseOv = RemapIfNeeded(LoadPng(diffPath, wD, hD), wD, hD, srcBodyType, diffPath);
+                            if (diffuseOv != null && !string.Equals(srcBodyType, dstBodyType, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var dbgPath = Path.Combine(managedModDir, $"debug_remap_{dstBodyType}_diffuse.png");
+                                textureLoader.WritePng(diffuseOv, wD, hD, dbgPath);
+                                log.Information("[Proteus] Debug remap saved: {0}", dbgPath);
+                            }
                             if (diffuseOv != null)
                             {
                                 // Apply per-row opacity to coverage before downstream compositing.
