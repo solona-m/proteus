@@ -258,6 +258,55 @@ public class CompositorMathTests
         Assert.Equal(255, dst[3]); // dst alpha is never touched
     }
 
+    // ── CompoundNormal ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CompoundNormal_AddsXYDetail()
+    {
+        // Base: tilted right (X > 128), flat Y — decoded X ≈ +0.25
+        byte[] dst = [160, 128, 200, 0];
+        // Overlay: same tilt, fully opaque
+        byte[] src = [160, 128, 180, 255];
+
+        CompositorService.CompoundNormal(dst, src, 1, 1);
+
+        // XY compounds: result X must exceed either input alone
+        Assert.True(dst[0] > 160);
+        // Blue and alpha untouched
+        Assert.Equal(200, dst[2]);
+        Assert.Equal(0,   dst[3]);
+    }
+
+    [Fact]
+    public void CompoundNormal_FlatOverlay_LeavesBaseXYUnchanged()
+    {
+        // Flat overlay (128,128) = zero deviation — adding zero changes nothing
+        byte[] dst = [180, 90, 200, 0];
+        CompositorService.CompoundNormal(dst, [128, 128, 255, 255], 1, 1);
+        Assert.Equal(180, dst[0]);
+        Assert.Equal(90,  dst[1]);
+    }
+
+    [Fact]
+    public void CompoundNormal_ZeroAlpha_LeavesBaseUnchanged()
+    {
+        byte[] dst      = [160, 128, 200, 0];
+        byte[] original = (byte[])dst.Clone();
+        CompositorService.CompoundNormal(dst, [255, 0, 180, 0], 1, 1);
+        Assert.Equal(original, dst);
+    }
+
+    [Fact]
+    public void CompoundNormal_WithMask_MaskZeroBlocksComposite()
+    {
+        byte[] dst  = [160, 128, 200, 0];
+        byte[] src  = [200, 200, 180, 255];
+        byte[] mask = [0,   0,   0,   0];
+        byte[] orig = (byte[])dst.Clone();
+        CompositorService.CompoundNormal(dst, src, 1, 1, mask);
+        Assert.Equal(orig, dst);
+    }
+
     // ── BuildRowDict ──────────────────────────────────────────────────────────
 
     [Fact]

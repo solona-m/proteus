@@ -903,7 +903,7 @@ public class CompositorService : IDisposable
 
                     // ── Phase B: normal composite ─────────────────────────────
                     if (normalOv != null && baseN is { Length: > 0 })
-                        AlphaComposite(baseN, normalOv, wN, hN, CovAt(wN, hN));
+                        CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
 
                     // ── Phase B2: suppress skin-color influence under the overlay ──
                     // skin.shpk reads the normal map's BLUE channel as "skin color influence":
@@ -1422,6 +1422,30 @@ public class CompositorService : IDisposable
             {
                 baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
             }
+        }
+    }
+
+    // Partial-derivative linear add for normal maps: XY (tangent/bitangent) components are decoded
+    // to signed [-1,1] space, the overlay's contribution (scaled by alpha) is added to the base,
+    // then re-encoded. Blue (skin color influence) and Alpha (emissive) are left untouched — each
+    // has its own dedicated pass. This compounds detail: overlay bumps stack on top of base bumps
+    // rather than lerping them away.
+    internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        int len = w * h * 4;
+        for (int i = 0; i < len; i += 4)
+        {
+            float a = src[i + 3] / 255f;
+            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+            if (a <= 0f) continue;
+
+            float bx = dst[i]     / 127.5f - 1f;
+            float by = dst[i + 1] / 127.5f - 1f;
+            float ox = src[i]     / 127.5f - 1f;
+            float oy = src[i + 1] / 127.5f - 1f;
+
+            dst[i]     = (byte)Math.Clamp((bx + ox * a + 1f) * 127.5f, 0, 255);
+            dst[i + 1] = (byte)Math.Clamp((by + oy * a + 1f) * 127.5f, 0, 255);
         }
     }
 
