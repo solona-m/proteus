@@ -400,17 +400,7 @@ public class CompositorService : IDisposable
                 // the live metadata colors when the binding has none for that overlay.
                 if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var ovr))
                     overlays = overlays
-                        .Select(o =>
-                        {
-                            var ovrRows = ovr.Resolve(o.OptionGroup, o.Option);
-                            // TEMP DIAGNOSTIC: trace whether the binding override actually reaches the
-                            // composite for each active overlay, what option it keyed on, and the colour.
-                            log.Debug("[Proteus] colorovr {0} opt={1}/{2} -> {3} (A={4})",
-                                entry.ModDirectory, o.OptionGroup ?? "-", o.Option ?? "-",
-                                ovrRows != null ? "OVERRIDE" : "metadata-fallback",
-                                (ovrRows ?? o.ColorTableRows)?.FirstOrDefault()?.SubRowA?.Diffuse ?? "none");
-                            return o with { ColorTableRows = ovrRows ?? o.ColorTableRows };
-                        })
+                        .Select(o => o with { ColorTableRows = ovr.Resolve(o.OptionGroup, o.Option) ?? o.ColorTableRows })
                         .ToList();
 
                 foreach (var overlay in overlays)
@@ -541,7 +531,7 @@ public class CompositorService : IDisposable
                     {
                         if (suffix == srcSuffix) continue;
                         var dstPath = stem + suffix;
-                        if (!activeMtrl.Contains(dstPath) || byMaterial.ContainsKey(dstPath) || siblings.ContainsKey(dstPath))
+                        if (!activeMtrl.Contains(dstPath))
                             continue;
 
                         bool vanilla = bodyType == "gen2";
@@ -551,11 +541,19 @@ public class CompositorService : IDisposable
                         if (dstPairs.Count == 0) continue;
 
                         log.Debug("[Proteus] Sibling synthesis{0}: {1} → {2}", vanilla ? " (vanilla)" : "", srcPath, dstPath);
-                        siblings[dstPath] = dstPairs;
+                        if (siblings.TryGetValue(dstPath, out var existSiblings))
+                            existSiblings.AddRange(dstPairs);
+                        else
+                            siblings[dstPath] = dstPairs;
                     }
                 }
                 foreach (var (path, pairs) in siblings)
-                    byMaterial[path] = pairs;
+                {
+                    if (byMaterial.TryGetValue(path, out var existing))
+                        existing.AddRange(pairs);
+                    else
+                        byMaterial[path] = pairs;
+                }
             }
 
             if (ct.IsCancellationRequested) return;
@@ -584,7 +582,7 @@ public class CompositorService : IDisposable
                 var masks = discovery.ResolveActiveMasks(entry);
                 if (masks.Count > 0) maskPathsByMod[entry.ModDirectory] = masks;
             }
-            var combinedMaskCache = new ConcurrentDictionary<(string mod, int w, int h), (byte[] W, byte[] T)?>();
+            var combinedMaskCache = new ConcurrentDictionary<(string mod, int w, int h, string bodyType), (byte[] W, byte[] T)?>();
 
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
@@ -620,8 +618,17 @@ public class CompositorService : IDisposable
                         var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
                         return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
                     }
-                    // Transfer-map paths always output at map resolution (4096×4096).
-                    if (w != 4096 || h != 4096) return png;
+                    // Transfer-map paths operate at 4096×4096. If the overlay was loaded at a
+                    // smaller size (e.g. base texture is 2048), reload at full res, remap, resize.
+                    if (w != 4096 || h != 4096)
+                    {
+                        if (overlayPath == null) return png;
+                        var native4k = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096);
+                        if (native4k == null) return png;
+                        var remapped4k = uvRemap.Remap(native4k, 4096, 4096, srcType, dstBodyType);
+                        if (ReferenceEquals(remapped4k, native4k)) return png;
+                        return UVRemapService.ResizeBilinear(remapped4k, 4096, 4096, w, h);
+                    }
                     return uvRemap.Remap(png, w, h, srcType, dstBodyType);
                 }
 
@@ -635,16 +642,18 @@ public class CompositorService : IDisposable
                 // gray*a target); the apply step is cov' = cov*W + T, gated by base alpha > 0.
                 // `paths` is ordered highest-priority-first and applied in reverse so the top-of-list
                 // mask wins where masks overlap. Returns null when none active. W/T are bytes (0–255).
-                (byte[] W, byte[] T)? CombinedMaskAt(string modDir, int w, int h)
+                (byte[] W, byte[] T)? CombinedMaskAt(string modDir, int w, int h, string? srcBodyType = null)
                 {
                     if (!maskPathsByMod.TryGetValue(modDir, out var paths) || paths.Count == 0) return null;
-                    return combinedMaskCache.GetOrAdd((modDir, w, h), _ =>
+                    var bodyKey = $"{srcBodyType ?? ""}→{dstBodyType ?? ""}";
+                    return combinedMaskCache.GetOrAdd((modDir, w, h, bodyKey), _ =>
                     {
                         int n = w * h;
                         byte[]? wArr = null, tArr = null;
                         for (int pidx = paths.Count - 1; pidx >= 0; pidx--)
                         {
                             var m = textureLoader.LoadPngAsRgba(paths[pidx], w, h);
+                            if (m != null) m = RemapIfNeeded(m, w, h, srcBodyType, paths[pidx]);
                             if (m == null) continue;
                             if (wArr == null)
                             {
@@ -748,17 +757,9 @@ public class CompositorService : IDisposable
                             diffuseOv = RemapIfNeeded(LoadPng(diffPath, wD, hD), wD, hD, srcBodyType, diffPath);
                             if (diffuseOv != null)
                             {
-                                // Apply per-row opacity to coverage before downstream compositing.
-                                // Indexed: blend per-pixel from the index texture (same as diffuse/emissive).
-                                // Flat: apply row 16A's opacity uniformly across the whole overlay.
-                                if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
-                                {
-                                    var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                                    var idD = RemapIfNeeded(LoadPng(idxPath, wD, hD), wD, hD, srcBodyType, idxPath);
-                                    if (idD != null) diffuseOv = ApplyIndexedOpacity(diffuseOv, idD, rows);
-                                }
-                                else if (desc.Index == null && row16A.Opacity != 0)
-                                    diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
+                                // All opacity (indexed and flat) is applied AFTER the Masks-group mask
+                                // in the block below, so the user's transparency slider always scales
+                                // the mask result rather than the mask overriding the slider.
                                 covSrc = diffuseOv; covW = wD; covH = hD;
                             }
                         }
@@ -788,14 +789,7 @@ public class CompositorService : IDisposable
                                 synth[si] = synth[si + 1] = synth[si + 2] = 255;
                                 synth[si + 3] = normalOv[si + 2]; // blue → opacity
                             }
-                            if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
-                            {
-                                var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                                var idN = RemapIfNeeded(LoadPng(idxPath, wN, hN), wN, hN, srcBodyType, idxPath);
-                                if (idN != null) synth = ApplyIndexedOpacity(synth, idN, rows);
-                            }
-                            else if (desc.Index == null && row16A.Opacity != 0)
-                                synth = ScaleOverlayAlpha(synth, row16A.Opacity);
+                            // Opacity (indexed and flat) deferred — CovAt applies it after the Masks-group mask.
                             diffuseOv = synth;
                             covSrc = synth; covW = wN; covH = hN;
                         }
@@ -819,8 +813,7 @@ public class CompositorService : IDisposable
                             var maskOv = RemapIfNeeded(LoadPng(maskPath3, wM, hM), wM, hM, srcBodyType, maskPath3);
                             if (maskOv != null)
                             {
-                                if (desc.Index == null && row16A.Opacity != 0)
-                                    maskOv = ScaleOverlayAlpha(maskOv, row16A.Opacity);
+                                // Flat opacity deferred — CovAt applies it after the Masks-group mask.
                                 covSrc = maskOv; covW = wM; covH = hM;
                             }
                         }
@@ -832,42 +825,91 @@ public class CompositorService : IDisposable
 
                     if (covSrc == null) continue; // no coverage — nothing to composite
 
-                    // ── Per-mod transparency masks ────────────────────────────
-                    // The diffuse overlay's own alpha (diffuseOv) is consumed directly by the diffuse
-                    // composite, so mask it here. covSrc stays UNMASKED as the canonical seed — CovAt
-                    // applies the mask itself on every path (including its native-size early-return),
-                    // so masking covSrc too would double-apply. (Synth/mask-only coverage isn't used
-                    // directly by any composite; those phases all gate through CovAt.)
+                    // ── Per-mod transparency masks + opacity ─────────────────
+                    // diffuseOv is consumed directly by Phase A, so apply mask and opacity here.
+                    // covSrc stays raw — CovAt applies the same sequence on every path so it stays
+                    // consistent. Synth/mask-only coverage isn't used directly; those gate through CovAt.
+                    // Order: Masks-group mask first, then opacity — so the user's transparency slider
+                    // always scales the mask result rather than the mask overriding the slider.
                     if (desc.Diffuse != null && diffuseOv != null)
                     {
-                        var mask = CombinedMaskAt(entry.ModDirectory, covW, covH);
-                        if (mask != null) diffuseOv = ApplyCoverageMask(diffuseOv, mask.Value.W, mask.Value.T);
+                        var msk = CombinedMaskAt(entry.ModDirectory, covW, covH, srcBodyType);
+                        if (msk != null) diffuseOv = ApplyCoverageMask(diffuseOv, msk.Value.W, msk.Value.T);
+                        if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
+                        {
+                            var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
+                            var idD = RemapIfNeeded(LoadPng(idxPath, covW, covH), covW, covH, srcBodyType, idxPath);
+                            if (idD != null) diffuseOv = ApplyIndexedOpacity(diffuseOv, idD, rows);
+                        }
+                        else if (desc.Index == null && row16A.Opacity != 0)
+                            diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
                     }
 
-                    // Returns the coverage mask resized to (tw × th) on demand.
-                    // Re-loads from the diffuse PNG when possible; falls back to scaling.
-                    // The combined mask (if any) sets coverage opacity last, after opacity.
+                    // Returns coverage at (tw × th): mask first, then opacity (indexed or flat).
+                    // covSrc is raw — no opacity pre-baked — so the Masks-group always shapes
+                    // coverage before the user's transparency slider scales the result.
                     byte[]? CovAt(int tw, int th)
                     {
                         byte[]? cov;
                         if (tw == covW && th == covH)
                         {
-                            cov = covSrc; // unmasked seed
+                            cov = covSrc; // raw seed
+                        }
+                        else if (desc.Diffuse != null)
+                        {
+                            // Reload the overlay at the requested size and remap into the
+                            // destination UV space — same as the covSrc seed (line ~767) and the
+                            // index load below. Without the remap, coverage comes back in the
+                            // SOURCE (e.g. bibo) UV space and lands misaligned on a converted base
+                            // (gen3/vanilla), producing a fringe/seam at UV-island boundaries.
+                            var diffPath = Path.Combine(entry.SidecarRoot, desc.Diffuse);
+                            cov = RemapIfNeeded(LoadPng(diffPath, tw, th), tw, th, srcBodyType, diffPath);
                         }
                         else
                         {
-                            cov = desc.Diffuse != null
-                                ? LoadPng(Path.Combine(entry.SidecarRoot, desc.Diffuse), tw, th)
-                                : textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
-                            if (cov != null && desc.Index == null && row16A.Opacity != 0)
-                                cov = ScaleOverlayAlpha(cov, row16A.Opacity);
+                            cov = textureLoader.ScaleRgba(covSrc!, covW, covH, tw, th);
                         }
+                        // Mask first.
                         if (cov != null)
                         {
-                            var mask = CombinedMaskAt(entry.ModDirectory, tw, th);
+                            var mask = CombinedMaskAt(entry.ModDirectory, tw, th, srcBodyType);
                             if (mask != null) cov = ApplyCoverageMask(cov, mask.Value.W, mask.Value.T);
                         }
+                        // Opacity after mask (TextureLoader cache deduplicates the index-texture load).
+                        if (cov != null && desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
+                        {
+                            var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
+                            var idxCov = RemapIfNeeded(LoadPng(idxPath, tw, th), tw, th, srcBodyType, idxPath);
+                            if (idxCov != null) cov = ApplyIndexedOpacity(cov, idxCov, rows);
+                        }
+                        else if (cov != null && desc.Index == null && row16A.Opacity != 0)
+                            cov = ScaleOverlayAlpha(cov, row16A.Opacity);
                         return cov;
+                    }
+
+                    // ── UV-seam bleed removal ─────────────────────────────────
+                    // ONLY for coverage that was actually cross-UV converted (sibling synthesis /
+                    // bibo↔gen3 bake). A native (same-UV) overlay is rendered verbatim and must be
+                    // left untouched — the seam artefacts only exist because of the remap.
+                    // Decide on the final composited coverage (post Masks-group + opacity) and drop
+                    // the chosen pixels from covSrc (drives every channel via CovAt) and diffuseOv
+                    // (Phase A), keeping all channels consistent.
+                    if (srcBodyType != null && dstBodyType != null
+                        && !string.Equals(srcBodyType, dstBodyType, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var decision = CovAt(covW, covH);
+                        var dropMask = decision != null
+                            ? uvRemap.ComputeSeamDropMask(decision, covW, covH, srcBodyType, dstBodyType)
+                            : null;
+                        if (dropMask != null)
+                            for (int di = 0; di < dropMask.Length; di++)
+                            {
+                                if (!dropMask[di]) continue;
+                                int o = di * 4;
+                                covSrc![o] = covSrc[o + 1] = covSrc[o + 2] = covSrc[o + 3] = 0;
+                                if (diffuseOv != null && diffuseOv.Length == covSrc.Length)
+                                    diffuseOv[o] = diffuseOv[o + 1] = diffuseOv[o + 2] = diffuseOv[o + 3] = 0;
+                            }
                     }
 
                     // ── Phase A: diffuse composite ────────────────────────────
@@ -1580,6 +1622,7 @@ public class CompositorService : IDisposable
         }
         return dst;
     }
+
 
     // Apply a per-mod "Masks" map to a coverage RGBA buffer. A mask SETS the overlay's opacity
     // explicitly within its alpha region: cov' = cov*W + T, where W (how much the overlay's own

@@ -1,0 +1,5 @@
+{
+  "msbuild-sdks": {
+    "Dalamud.NET.Sdk": "15.0.0"
+  }
+}

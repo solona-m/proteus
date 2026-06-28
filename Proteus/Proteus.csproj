@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+<Project>
+  <!-- Default to Release when no configuration is passed. Must be set before the Dalamud
+       SDK props import, which otherwise defaults Configuration to Debug. This is why the
+       SDK is imported explicitly below instead of via the Project Sdk="..." attribute. -->
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+  </PropertyGroup>
+
+  <Import Project="Sdk.props" Sdk="Dalamud.NET.Sdk" />
+
   <PropertyGroup>
     <Version>$(ProteusVersion)</Version>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
@@ -39,5 +48,7 @@
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
   </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Dalamud.NET.Sdk" />
 
 </Project>

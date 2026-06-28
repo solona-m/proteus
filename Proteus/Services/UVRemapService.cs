@@ -25,6 +25,14 @@ public class UVRemapService
         public readonly ushort[] Y = y;
         public readonly bool[]   Valid = valid;
         public readonly int      W = w, H = h;
+        // Dest pixels with moderate round-trip error (UV-seam region). Dropped by ApplyRemap
+        // only where the local neighbourhood is sparse, so stranded seam coverage goes but
+        // genuine garment edges (which read as ~half covered) are left intact.
+        public byte[]? DropLevel;
+        // Valid dest pixels within BorderReach px of a UV-island border (a valid↔invalid edge).
+        // The seam-drop is confined to these, so interior fine detail (e.g. a fishnet's net lines,
+        // which read as stranded slivers between holes) is never touched.
+        public bool[]? NearBorder;
     }
 
     public UVRemapService(IPluginLog log, string pluginDir)
@@ -89,7 +97,110 @@ public class UVRemapService
         }
     }
 
+    // Loads the forward map (from→to) and, when the reverse map (to→from) is available,
+    // invalidates destination pixels whose forward→reverse round trip doesn't return near
+    // the start. Those pixels are where the transfer map is unreliable (typically UV-island
+    // seams like the shoulder): the forward map points them at a source location whose true
+    // destination is elsewhere, so they pull in coverage that doesn't belong, producing a
+    // dyed seam after compositing. Dropping only the inconsistent pixels leaves accurate
+    // continuous coverage intact (unlike a blanket boundary erosion, which would gap-seam
+    // garments that legitimately span two islands).
     private TransferMap? LoadMap(string from, string to)
+    {
+        var fwd = LoadMapRaw(from, to);
+        if (fwd == null) return null;
+
+        var rev = LoadMapRaw(to, from);
+        if (rev != null)
+        {
+            // Flag round-trip-inconsistent pixels by severity, but DON'T invalidate them here —
+            // the drop decision is made later against the actual coverage so the garment interior
+            // is spared. A gross (≥512px) mismap buried inside the garment (an internal seam) must
+            // be kept; only one adjacent to bare skin (the shoulder bleed) is dropped.
+            //   level 1 — moderate (softThresh..ultraThresh)
+            //   level 2 — gross    (≥ ultraThresh): nothing legitimate maps 1/8 of the texture away
+            float softThresh  = Math.Max(16f, fwd.W / 128f);  // ~32px  @4096
+            float ultraThresh = fwd.W / 8f;                   // ~512px @4096
+            float softT2 = softThresh * softThresh, ultraT2 = ultraThresh * ultraThresh;
+            var dropLevel = new byte[fwd.Valid.Length];
+            int moderate = 0, gross = 0;
+            for (int i = 0; i < fwd.Valid.Length; i++)
+            {
+                if (!fwd.Valid[i]) continue;
+                // Forward: this dest pixel (in to-space) → source coord in from-space,
+                // which is the index space of the reverse map.
+                int sx = (int)((float)fwd.X[i] / 65535f * (rev.W - 1) + 0.5f);
+                int sy = (int)((float)fwd.Y[i] / 65535f * (rev.H - 1) + 0.5f);
+                int qi = sy * rev.W + sx;
+                // Source lands where the reverse map has no correspondence (a gutter near an
+                // island edge). Can't measure the round trip — keep it, so legitimate garment
+                // edges aren't carved away.
+                if (!rev.Valid[qi]) continue;
+                // Reverse: that from-space pixel → coord back in to-space (this map's index space).
+                float bx = (float)rev.X[qi] / 65535f * (fwd.W - 1);
+                float by = (float)rev.Y[qi] / 65535f * (fwd.H - 1);
+                float dx = bx - (i % fwd.W);
+                float dy = by - (i / fwd.W);
+                float e2 = dx * dx + dy * dy;
+                if (e2 > ultraT2)     { dropLevel[i] = 2; gross++; }
+                else if (e2 > softT2) { dropLevel[i] = 1; moderate++; }
+            }
+            fwd.DropLevel = (moderate + gross) > 0 ? dropLevel : null;
+
+            // Mark valid pixels within BorderReach of a UV-island border, so the seam-drop only
+            // operates near borders and leaves interior detail alone. Check BOTH UVs: a pixel is
+            // near a border if it's near a DESTINATION (this map's) island edge OR its mapped
+            // SOURCE location is near a source island edge — seams originate from either side.
+            const int BorderReach = 150;
+
+            // Near-border mask for a validity grid: valid pixels within `reach` of an invalid one.
+            // Uses a summed-area table of the INVALID mask so each box query is O(1).
+            static bool[] NearBorderMask(bool[] valid, int w, int h, int reach)
+            {
+                int sw = w + 1;
+                var invSat = new int[sw * (h + 1)];
+                for (int y = 0; y < h; y++)
+                {
+                    int above = y * sw, cur = (y + 1) * sw, rowSum = 0, row = y * w;
+                    for (int x = 0; x < w; x++)
+                    {
+                        rowSum += valid[row + x] ? 0 : 1;
+                        invSat[cur + x + 1] = invSat[above + x + 1] + rowSum;
+                    }
+                }
+                var nb = new bool[w * h];
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        int i = y * w + x;
+                        if (!valid[i]) continue;
+                        int x0 = Math.Max(0, x - reach), x1 = Math.Min(w - 1, x + reach);
+                        int y0 = Math.Max(0, y - reach), y1 = Math.Min(h - 1, y + reach);
+                        int invalid = invSat[(y1 + 1) * sw + (x1 + 1)] - invSat[y0 * sw + (x1 + 1)]
+                                    - invSat[(y1 + 1) * sw + x0] + invSat[y0 * sw + x0];
+                        if (invalid > 0) nb[i] = true;
+                    }
+                return nb;
+            }
+
+            var destNB = NearBorderMask(fwd.Valid, fwd.W, fwd.H, BorderReach);
+            var srcNB  = NearBorderMask(rev.Valid, rev.W, rev.H, BorderReach);
+            var nearBorder = new bool[fwd.Valid.Length];
+            for (int i = 0; i < fwd.Valid.Length; i++)
+            {
+                if (!fwd.Valid[i]) continue;
+                if (destNB[i]) { nearBorder[i] = true; continue; }
+                // Mapped source (e.g. gen3) location for this destination pixel.
+                int sx = (int)((float)fwd.X[i] / 65535f * (rev.W - 1) + 0.5f);
+                int sy = (int)((float)fwd.Y[i] / 65535f * (rev.H - 1) + 0.5f);
+                if (srcNB[sy * rev.W + sx]) nearBorder[i] = true;
+            }
+            fwd.NearBorder = nearBorder;
+        }
+        return fwd;
+    }
+
+    private TransferMap? LoadMapRaw(string from, string to)
     {
         var filename = $"{from.ToLowerInvariant()}_to_{to.ToLowerInvariant()}_transfer.tif";
         var path = Path.Combine(mapsDir, filename);
@@ -186,6 +297,103 @@ public class UVRemapService
         }
 
         return dst;
+    }
+
+    // Computes which flagged seam pixels to drop, from the FINAL composited (post-mask) coverage.
+    // For each flagged (moderate round-trip error) pixel it looks across the boundary:
+    //   • both opposing sides totally transparent  → the bleed is stranded in bare skin
+    //     (the shoulder seam) → SHOULDER scenario, dropped readily (ShoulderMaxCover).
+    //   • coverage present on a side               → the garment continues across the boundary
+    //     (an internal seam) → INTERNAL scenario, kept unless nearly isolated (InternalMaxCover).
+    // Returns a per-pixel drop mask (true = remove) so the caller can apply it to every coverage
+    // buffer consistently, or null when nothing is flagged. `decision` is the post-mask coverage;
+    // analysing it (not the raw remap) means masked-out regions read as the bare skin they are.
+    private const int   EmptyRadius      = 8;     // dest neighbourhood half-size, dest pixels
+    private const int   SideReach        = 10;    // how far across the boundary to test, dest px
+    private const int   SideThick        = 3;     // perpendicular half-thickness of a side block
+    private const int   SideOffset       = 2;     // skip pixels nearest the centre (the sliver)
+    private const float SideBlackFrac    = 0.10f; // a side block is "transparent" below this cover
+    private const float ShoulderMaxCover = 0.97f; // both-sides-bare: drop unless almost fully covered
+    private const float InternalMaxCover = 0.05f; // coverage adjacent: drop only when nearly isolated
+    public bool[]? ComputeSeamDropMask(byte[] decision, int w, int h, string? from, string? to)
+    {
+        if (from == null || to == null || string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var map = GetMap(from, to);
+        var lvl = map?.DropLevel;
+        var nearBorder = map?.NearBorder;
+        if (lvl == null || nearBorder == null) return null;
+        int mw = map!.W, mh = map.H, n = w * h;
+
+        var a0 = new byte[n];
+        for (int i = 0; i < n; i++) a0[i] = decision[i * 4 + 3];
+
+        // Summed-area table of binary coverage (alpha>16), zero-padded, so every box query — the
+        // side tests and the local-coverage test — is O(1). Lets us classify EVERY covered pixel,
+        // not only round-trip-flagged ones: the shoulder bleed maps cleanly (low error, unflagged)
+        // yet sits stranded in bare skin, so it must be reachable by the both-sides-bare test.
+        int sw = w + 1;
+        var sat = new int[sw * (h + 1)];
+        for (int y = 0; y < h; y++)
+        {
+            int above = y * sw, cur = (y + 1) * sw, rowSum = 0, srcRow = y * w;
+            for (int x = 0; x < w; x++)
+            {
+                rowSum += a0[srcRow + x] > 16 ? 1 : 0;
+                sat[cur + x + 1] = sat[above + x + 1] + rowSum;
+            }
+        }
+        (int cov, int tot) Box(int x0, int x1, int y0, int y1)
+        {
+            x0 = Math.Max(0, x0); x1 = Math.Min(w - 1, x1);
+            y0 = Math.Max(0, y0); y1 = Math.Min(h - 1, y1);
+            if (x1 < x0 || y1 < y0) return (0, 0);
+            int cov = sat[(y1 + 1) * sw + (x1 + 1)] - sat[y0 * sw + (x1 + 1)]
+                    - sat[(y1 + 1) * sw + x0] + sat[y0 * sw + x0];
+            return (cov, (x1 - x0 + 1) * (y1 - y0 + 1));
+        }
+        bool Transparent(int x0, int x1, int y0, int y1)
+        {
+            var (cov, tot) = Box(x0, x1, y0, y1);
+            return tot == 0 || cov < tot * SideBlackFrac;
+        }
+
+        bool[]? mask = null;
+        for (int idx = 0; idx < n; idx++)
+        {
+            if (a0[idx] == 0) continue;
+            int cx = idx % w, cy = idx / w;
+
+            // Confine the cleanup to within ~10px of a UV-island border. Away from borders there
+            // are no seam artefacts, only genuine detail (e.g. fishnet net lines), which must be
+            // left intact.
+            int mx = mw == w ? cx : cx * mw / w;
+            int my = mh == h ? cy : cy * mh / h;
+            int mi = my * mw + mx;
+            if (!nearBorder[mi]) continue;
+
+            // Both opposing sides bare → a sliver stranded in bare skin → SHOULDER. This is tested
+            // on every covered pixel because the shoulder bleed is usually NOT round-trip-flagged.
+            bool left  = Transparent(cx - SideReach, cx - SideOffset, cy - SideThick, cy + SideThick);
+            bool right = Transparent(cx + SideOffset, cx + SideReach, cy - SideThick, cy + SideThick);
+            bool up    = Transparent(cx - SideThick, cx + SideThick, cy - SideReach, cy - SideOffset);
+            bool down  = Transparent(cx - SideThick, cx + SideThick, cy + SideOffset, cy + SideReach);
+            bool shoulder = (left && right) || (up && down);
+
+            // Non-shoulder pixels are only candidates for the gentle internal-seam drop when they
+            // are round-trip-flagged (a UV-island boundary); otherwise they're plain garment, kept.
+            bool flagged = lvl[mi] != 0;
+            if (!shoulder && !flagged) continue;
+
+            var (covered, total) = Box(cx - EmptyRadius, cx + EmptyRadius, cy - EmptyRadius, cy + EmptyRadius);
+            float thr = shoulder ? ShoulderMaxCover : InternalMaxCover;
+            if (covered < total * thr)
+            {
+                mask ??= new bool[n];
+                mask[idx] = true;
+            }
+        }
+        return mask;
     }
 
     public static byte[] ResizeBilinear(byte[] src, int srcW, int srcH, int dstW, int dstH)
