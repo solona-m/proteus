@@ -584,6 +584,18 @@ public class CompositorService : IDisposable
             }
             var combinedMaskCache = new ConcurrentDictionary<(string mod, int w, int h, string bodyType), (byte[] W, byte[] T)?>();
 
+            // Masks whose exported layer also produced a companion relief normal and/or color-row
+            // index (see proteus_packager.py's Masks-group export) — resolved once per mod, same as
+            // maskPathsByMod above. Only mods with at least one such companion appear here.
+            var maskAssetsByMod = new Dictionary<string, List<(string MaskPath, string? NormalPath, string? IndexPath)>>(
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                var assets = discovery.ResolveActiveMaskAssets(entry)
+                    .Where(a => a.NormalPath != null || a.IndexPath != null).ToList();
+                if (assets.Count > 0) maskAssetsByMod[entry.ModDirectory] = assets;
+            }
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -630,6 +642,35 @@ public class CompositorService : IDisposable
                         return UVRemapService.ResizeBilinear(remapped4k, 4096, 4096, w, h);
                     }
                     return uvRemap.Remap(png, w, h, srcType, dstBodyType);
+                }
+
+                // Loads an overlay's Index texture, then replaces its per-pixel row selection
+                // (R = row, G = subrow blend) with any active "Masks" option's own Index
+                // companion wherever that mask has coverage — a hard swap (not a blend: R
+                // encodes a row *id*, so interpolating it between two arbitrary rows would
+                // select a meaningless third row) at alpha ≥ 50%. This makes a mask's Index
+                // "win" over whatever the mod's other overlay(s) would otherwise select there,
+                // using the exact same ColorTableRows the overlay's own Index already resolves
+                // against — no separate per-mask colorset needed.
+                byte[]? LoadIndexMerged(string idxPath, int w, int h, string? srcType, string modDir)
+                {
+                    var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
+                    if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
+
+                    foreach (var (maskPath, _, maskIndexPath) in assets)
+                    {
+                        if (maskIndexPath == null) continue;
+                        var maskPng = RemapIfNeeded(LoadPng(maskPath, w, h), w, h, srcType, maskPath);
+                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h), w, h, srcType, maskIndexPath);
+                        if (maskPng == null || maskIdx == null) continue;
+                        for (int i = 0; i < idx.Length; i += 4)
+                        {
+                            if (maskPng[i + 3] < 128) continue;
+                            idx[i]     = maskIdx[i];
+                            idx[i + 1] = maskIdx[i + 1];
+                        }
+                    }
+                    return idx;
                 }
 
                 // Combined coverage-mask for a mod's active masks at a given size, cached per run.
@@ -710,6 +751,10 @@ public class CompositorService : IDisposable
                 byte[]? baseD = null, baseN = null, baseM = null;
                 int wD = 0, hD = 0, wN = 0, hN = 0, wM = 0, hM = 0;
 
+                // Captured per mod as the loop below runs, for the Masks-driven relief pass
+                // afterwards (masks are mod-level, not tied to one overlay descriptor).
+                var lastSrcBodyTypeByMod = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
                 foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
@@ -730,6 +775,8 @@ public class CompositorService : IDisposable
                     var rows   = BuildRowDict(resolved.ColorTableRows);
                     rows.TryGetValue(15, out var row16);
                     var row16A = row16?.A ?? new ColorTableSubRow();
+
+                    lastSrcBodyTypeByMod[entry.ModDirectory] = srcBodyType;
 
                     byte[]? diffuseOv = null;
                     byte[]? normalOv  = null;
@@ -838,7 +885,7 @@ public class CompositorService : IDisposable
                         if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                            var idD = RemapIfNeeded(LoadPng(idxPath, covW, covH), covW, covH, srcBodyType, idxPath);
+                            var idD = LoadIndexMerged(idxPath, covW, covH, srcBodyType, entry.ModDirectory);
                             if (idD != null) diffuseOv = ApplyIndexedOpacity(diffuseOv, idD, rows);
                         }
                         else if (desc.Index == null && row16A.Opacity != 0)
@@ -879,7 +926,7 @@ public class CompositorService : IDisposable
                         if (cov != null && desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                            var idxCov = RemapIfNeeded(LoadPng(idxPath, tw, th), tw, th, srcBodyType, idxPath);
+                            var idxCov = LoadIndexMerged(idxPath, tw, th, srcBodyType, entry.ModDirectory);
                             if (idxCov != null) cov = ApplyIndexedOpacity(cov, idxCov, rows);
                         }
                         else if (cov != null && desc.Index == null && row16A.Opacity != 0)
@@ -918,7 +965,7 @@ public class CompositorService : IDisposable
                         if (desc.Index != null)
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                            var idD = RemapIfNeeded(LoadPng(idxPath, wD, hD), wD, hD, srcBodyType, idxPath);
+                            var idD = LoadIndexMerged(idxPath, wD, hD, srcBodyType, entry.ModDirectory);
                             if (idD != null) ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
                             else             ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                         }
@@ -1008,7 +1055,7 @@ public class CompositorService : IDisposable
                                     // Write configured emissive for that row to normal alpha.
                                     // Pixels outside the overlay have R=0 → unmapped → stay at 0.
                                     var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                                    var idN = RemapIfNeeded(LoadPng(idxPath, wN, hN), wN, hN, srcBodyType, idxPath);
+                                    var idN = LoadIndexMerged(idxPath, wN, hN, srcBodyType, entry.ModDirectory);
                                     var emMask = CovAt(wN, hN);
                                     if (idN != null && emMask != null) ApplyIndexedEmissive(baseN, idN, emMask, rows, wN, hN);
                                 }
@@ -1036,6 +1083,61 @@ public class CompositorService : IDisposable
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = RemapIfNeeded(LoadPng(maskPathD, wM, hM), wM, hM, srcBodyType, maskPathD);
                             if (ov != null) AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
+                        }
+                    }
+                }
+
+                // ── Masks-driven relief ────────────────────────────────────────
+                // Runs once per mod, after every overlay in its stack has composited, for any
+                // active "Masks" option whose export also produced a companion relief normal
+                // (see proteus_packager.py). The companion Index texture (if any) is handled
+                // earlier via LoadIndexMerged, inline with the overlay's own Index usage.
+                //
+                // Order: compute the base normal (overlay stack) PLUS every active mask's own
+                // relief first, then fold in the combined Masks-group coverage (the same
+                // priority-ordered reduction CombinedMaskAt already applies to the regular
+                // overlay's coverage) as a final show/hide pass. Gating each mask's relief only
+                // by its own alpha (as before) let mask A's bump bleed into territory a
+                // DIFFERENT active mask B is meant to erase — B's own shape never got a say.
+                foreach (var modDir in pairs.Select(p => p.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!maskAssetsByMod.TryGetValue(modDir, out var assets)) continue;
+                    if (texPaths.Normal == null || !assets.Any(a => a.NormalPath != null)) continue;
+                    lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
+
+                    if (baseN == null)
+                    {
+                        baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                        if (anyEmissive && baseN.Length > 0)
+                            for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
+                    }
+                    if (baseN.Length > 0)
+                    {
+                        // Snapshot before any mask relief — the combined masks-group coverage
+                        // below decides, per pixel, how much to blend back toward this.
+                        var preRelief = (byte[])baseN.Clone();
+
+                        foreach (var (maskPath, normalPath, _) in assets)
+                        {
+                            if (normalPath == null) continue;
+                            var maskPng  = RemapIfNeeded(LoadPng(maskPath, wN, hN), wN, hN, maskSrcBodyType, maskPath);
+                            var normalOv = RemapIfNeeded(LoadPng(normalPath, wN, hN), wN, hN, maskSrcBodyType, normalPath);
+                            if (maskPng != null && normalOv != null)
+                                CompoundNormal(baseN, normalOv, wN, hN, maskPng);
+                        }
+
+                        var msk = CombinedMaskAt(modDir, wN, hN, maskSrcBodyType);
+                        if (msk != null)
+                        {
+                            var full = new byte[wN * hN * 4];
+                            for (int fi = 3; fi < full.Length; fi += 4) full[fi] = 255;
+                            var weight = ApplyCoverageMask(full, msk.Value.W, msk.Value.T);
+                            for (int i = 0; i < baseN.Length; i += 4)
+                            {
+                                float t = weight[i + 3] / 255f;
+                                baseN[i]     = (byte)(preRelief[i]     * (1f - t) + baseN[i]     * t);
+                                baseN[i + 1] = (byte)(preRelief[i + 1] * (1f - t) + baseN[i + 1] * t);
+                            }
                         }
                     }
                 }

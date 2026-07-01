@@ -399,6 +399,16 @@ public class StatusWindow : Window
                 usedRowsSimple.UnionWith(_indexRowCache[idxPath]);
                 hasIdxSimple = true;
             }
+            // Active "Masks" options can inject additional rows via their own Index companion —
+            // see the option-group path below for the full explanation.
+            foreach (var asset in discovery.ResolveActiveMaskAssets(entry))
+            {
+                if (asset.IndexPath == null) continue;
+                if (!_indexRowCache.ContainsKey(asset.IndexPath))
+                    _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath);
+                usedRowsSimple.UnionWith(_indexRowCache[asset.IndexPath]);
+                hasIdxSimple = true;
+            }
             HashSet<int>? filteredSimple = (hasIdxSimple && usedRowsSimple.Count > 0) ? usedRowsSimple : null;
             if (!hasIdxSimple)
                 ImGui.TextDisabled("No index texture — only Row 16 is applied.");
@@ -464,7 +474,24 @@ public class StatusWindow : Window
             if (scan.Count > 0) usedRows = scan;
         }
 
-        if (usedRows == null && !activeOpt.Overlays.Any(o => o.Index != null))
+        // Active "Masks" options can inject additional rows via their own Index companion
+        // (Masks/<Option>_id.png), overriding row selection at composite time (see
+        // LoadIndexMerged in CompositorService) — union those in too, so a row referenced
+        // only by a mask still gets a color picker here.
+        var maskAssets = discovery.ResolveActiveMaskAssets(entry);
+        foreach (var asset in maskAssets)
+        {
+            if (asset.IndexPath == null) continue;
+            if (!_indexRowCache.ContainsKey(asset.IndexPath))
+                _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath);
+            var maskScan = _indexRowCache[asset.IndexPath];
+            if (maskScan.Count == 0) continue;
+            usedRows ??= [];
+            usedRows.UnionWith(maskScan);
+        }
+
+        bool hasAnyIndex = idxDesc?.Index != null || maskAssets.Any(a => a.IndexPath != null);
+        if (usedRows == null && !hasAnyIndex)
             ImGui.TextDisabled("No index texture — only Row 16 is applied.");
 
         activeOpt.ColorTableRows ??= [];

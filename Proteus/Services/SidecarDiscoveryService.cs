@@ -183,6 +183,46 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
+    /// Like <see cref="ResolveActiveMasks"/>, but also resolves each mask's optional companion
+    /// relief normal (<c>Masks/&lt;Option&gt;_n.png</c>) and color-row index
+    /// (<c>Masks/&lt;Option&gt;_id.png</c>) — present only for mask layers exported with bump
+    /// detail or their own row assignment (see the Substance export packager). Null when absent.
+    /// </summary>
+    public List<(string MaskPath, string? NormalPath, string? IndexPath)> ResolveActiveMaskAssets(OverlayEntry entry)
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId == null) return [];
+
+        var settings = penumbra.GetModSettings(collId.Value, entry.ModDirectory);
+        if (settings == null) return [];
+
+        var selected = settings.Value.Options
+            .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+            .Value;
+        if (selected is not { Count: > 0 }) return [];
+
+        var modRoot = Path.GetDirectoryName(
+            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var order = modRoot != null ? ReadMaskGroupOptionOrder(modRoot) : [];
+
+        var result = new List<(string, string?, string?)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var option in OrderByGroup(selected, order))
+        {
+            if (string.IsNullOrWhiteSpace(option)) continue;
+            var maskPath = Path.Combine(entry.SidecarRoot, MaskSubdir, option + ".png");
+            if (!seen.Add(maskPath) || !File.Exists(maskPath)) continue;
+
+            var normalPath = Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_n.png");
+            var indexPath  = Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_id.png");
+            result.Add((maskPath,
+                File.Exists(normalPath) ? normalPath : null,
+                File.Exists(indexPath) ? indexPath : null));
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Pure mapping from selected mask-option names to existing <c>Masks/&lt;name&gt;.png</c> files
     /// under <paramref name="sidecarRoot"/>, preserving the input order. Skips options whose file is
     /// missing; dedupes case-insensitively. Factored out so it can be unit-tested without IPC.
