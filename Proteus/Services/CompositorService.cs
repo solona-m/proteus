@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
@@ -56,6 +57,21 @@ public class CompositorService : IDisposable
     // Snapshot of the player's active material game paths, captured on the main thread at trigger
     // time so the background recomposite can filter without touching main-thread-only IPCs.
     private volatile HashSet<string>? _activeMtrlSnapshot;
+    // Set when a body mod (one whose files include an obj/body/ material) changes, or the player
+    // collection changes — anything that could make _activeMtrlSnapshot wrong without a redraw.
+    // GetActivePlayerMaterialPaths (a full Penumbra resource-tree walk on the framework thread) is
+    // only paid for when this is set or the snapshot is cold; everything else reuses the cache.
+    private volatile bool _activeMtrlSnapshotDirty;
+    // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
+    // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
+    // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
+    // ConcurrentDictionary because IsBodyMod runs on a background thread (its manifest file I/O +
+    // config.Save must not touch the framework thread) while OnModDeleted may read/remove entries.
+    private readonly ConcurrentDictionary<string, (bool IsBodyMod, long Fingerprint)> _bodyModCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by IsBodyMod
+    // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
+    private readonly object _bodyModConfigLock = new();
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -91,6 +107,16 @@ public class CompositorService : IDisposable
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
 
+        foreach (var (modDir, entry) in config.KnownBodyMods)
+            _bodyModCache[modDir] = (entry.IsBodyMod, entry.Fingerprint);
+
+        // Seed from the last session's snapshot instead of forcing an expensive Penumbra walk at
+        // boot. Trusted until a body mod change or a real redraw proves it stale.
+        if (config.CachedActiveMaterialPaths is { Count: > 0 } cached)
+            _activeMtrlSnapshot = new HashSet<string>(cached, StringComparer.OrdinalIgnoreCase);
+        else
+            _activeMtrlSnapshotDirty = true;
+
         penumbra.ModSettingChanged += OnModSettingChanged;
         penumbra.ModAdded          += OnModAdded;
         penumbra.ModDeleted        += OnModDeleted;
@@ -122,17 +148,17 @@ public class CompositorService : IDisposable
     {
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
             return;
-        if (!HasSidecar(modDir))
-            return;
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
             return;
 
-        // For enable/disable events, re-check whether the active mod set actually changed.
-        // Glamourer re-applies designs after each redraw, calling Penumbra to enable already-enabled
-        // mod associations — Penumbra fires EnableState regardless of whether the value changed.
-        // Without this guard: RedrawPlayer() → Glamourer re-apply → OnModSettingChanged → loop.
-        if (change is ModSettingChange.EnableState or ModSettingChange.MultiEnableState)
+        var sidecar = HasSidecar(modDir);
+
+        // For enable/disable events on our own overlay mods, re-check whether the active mod set
+        // actually changed. Glamourer re-applies designs after each redraw, calling Penumbra to
+        // enable already-enabled mod associations — Penumbra fires EnableState regardless of whether
+        // the value changed. Without this guard: RedrawPlayer() → Glamourer re-apply → this → loop.
+        if (sidecar && change is ModSettingChange.EnableState or ModSettingChange.MultiEnableState)
         {
             var current = discovery.DiscoverAll();
             if (current.Count == 0) return;
@@ -145,24 +171,74 @@ public class CompositorService : IDisposable
             // redraw caused by RedrawPlayer(). The echo fires ~90ms after our redraw call.
             // Suppress triggers within 1500ms of our own redraw — human design-switching takes
             // at least a few seconds after seeing the result, so false suppression is negligible.
+            // Applies to overlay and body mods alike (both can be design-associated).
             var msSince = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnRedrawTick));
             if (msSince >= 0 && msSince < 1500) return;
         }
 
-        TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
+        if (sidecar)
+        {
+            TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
+            return;
+        }
+
+        // Not one of our overlay mods: the only other thing we react to is a body mod (ships an
+        // obj/body/ material), whose change can leave the cached snapshot wrong without a redraw.
+        // Its detection does manifest file I/O + a config.Save, so run it off the framework thread.
+        EvaluateBodyModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}");
     }
 
     private void OnModAdded(string modDir)
     {
-        if (!HasSidecar(modDir)) return;
-        TriggerRecomposite($"ModAdded:{modDir}");
+        if (HasSidecar(modDir))
+        {
+            TriggerRecomposite($"ModAdded:{modDir}");
+            return;
+        }
+        // A (re)installed body mod may have changed its files without changing its directory name —
+        // IsBodyMod's fingerprint check handles that. Off-thread, same as OnModSettingChanged.
+        EvaluateBodyModOffThread(modDir, $"ModAdded:{modDir}");
     }
 
     private void OnModDeleted(string modDir)
     {
-        if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)))
+        // Files are already gone by the time this fires, so use the last-known classification
+        // rather than rescanning; then drop it, there's nothing left to invalidate against.
+        var wasBodyMod = _bodyModCache.TryGetValue(modDir, out var cached) && cached.IsBodyMod;
+        if (wasBodyMod) _activeMtrlSnapshotDirty = true;
+
+        // Drop the cached classification off the framework thread — config.Save is a disk write.
+        Task.Run(() =>
+        {
+            _bodyModCache.TryRemove(modDir, out _);
+            lock (_bodyModConfigLock)
+                if (config.KnownBodyMods.Remove(modDir)) config.Save();
+        });
+
+        if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
+            && !wasBodyMod)
             return;
         TriggerRecomposite($"ModDeleted:{modDir}");
+    }
+
+    // IsBodyMod does manifest file I/O + a config.Save on a cache miss, both of which must stay off
+    // the framework-thread event handlers. Evaluate it on a background thread; if the mod turns out
+    // to ship body materials, mark the snapshot dirty and trigger a (debounced) recomposite.
+    private void EvaluateBodyModOffThread(string modDir, string reason)
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                if (!IsBodyMod(modDir)) return;
+                _activeMtrlSnapshotDirty = true;
+                TriggerRecomposite(reason);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "[Proteus] Body-mod evaluation failed for {0}", modDir);
+            }
+        });
     }
 
     private void OnPenumbraReady()
@@ -182,20 +258,31 @@ public class CompositorService : IDisposable
     {
         // The collection assigned to the player changed — the enabled mod set, priorities and
         // option selections are all collection-scoped, so the whole composite must be recomputed.
+        // Rare event; not worth trying to scan every mod in the new collection, just force one walk.
+        _activeMtrlSnapshotDirty = true;
         if (!config.PluginEnabled) return;
         TriggerRecomposite("collection-changed");
     }
 
     // Called on the framework thread by PenumbraBridge whenever the local player's draw object is
-    // redrawn. Material paths only change when the draw object is recreated, so this is the only
-    // point where the snapshot needs refreshing — caching it here avoids framework-thread round-trips
-    // during every recomposite trigger. Only write non-null: GameObjectRedrawn can fire mid-redraw
-    // while the draw object is being destroyed, at which point GetActivePlayerMaterialPaths returns
-    // null. Writing null would clear a valid cached snapshot and trigger the all-races bug.
+    // redrawn. Most material changes happen this way, so this is the cheap, common-case refresh —
+    // it's piggybacking on work Penumbra/the game already did, not an extra query. Only write
+    // non-null: GameObjectRedrawn can fire mid-redraw while the draw object is being destroyed, at
+    // which point GetActivePlayerMaterialPaths returns null. Writing null would clear a valid cached
+    // snapshot and trigger the all-races bug.
     private void OnLocalPlayerRedrawn()
     {
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
-        if (snapshot != null) _activeMtrlSnapshot = snapshot;
+        if (snapshot != null)
+        {
+            _activeMtrlSnapshot = snapshot;
+            _activeMtrlSnapshotDirty = false;
+            // Update the in-memory field only — this runs on the framework thread on every redraw
+            // (equipment changes, zoning, etc.), and a disk write here would reintroduce the same
+            // class of framework-thread cost this whole change exists to avoid. The value still gets
+            // persisted the next time TriggerRecomposite's own fetch (below) calls config.Save().
+            config.CachedActiveMaterialPaths = snapshot.ToList();
+        }
 
         RefreshGlamourerCharCode();
 
@@ -292,6 +379,85 @@ public class CompositorService : IDisposable
         return File.Exists(metaPath);
     }
 
+    // ── Body-mod detection ──────────────────────────────────────────────────────
+    // Whether a mod ships an obj/body/ material redirect — the only kind of change that can make
+    // _activeMtrlSnapshot wrong (see the sibling-synthesis staleness this fixes: a body-shape mod
+    // like AB Body applies its option as an in-place Penumbra file redirect on an already-loaded
+    // resource, with no redraw, so the old "only refresh on redraw" assumption went stale forever).
+    // Detected from the mod's own manifest files on disk — no Penumbra IPC needed, so it can run on
+    // any thread. It's driven off the framework thread (EvaluateBodyModOffThread) because the
+    // manifest reads + config.Save on a cache miss shouldn't block the game's main thread.
+
+    private static readonly Regex BodyMaterialPattern = new(
+        // BodySuffixes entries look like "_bibo.mtrl" / "_b.mtrl" — strip the leading "_" and
+        // trailing ".mtrl" to get the alternation core ("bibo", "b", "eve", "a").
+        @"obj[/\\]body[/\\][^""]*?_(" + string.Join('|', BodySuffixes
+            .Select(s => Regex.Escape(s.Suffix[1..^".mtrl".Length]))) + @")\.mtrl",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Sums size + mtime over a mod's own default_mod.json/group_*.json (same top-level enumeration
+    // SidecarDiscoveryService.ReadMaskGroupOptionOrder uses for group_*.json) — cheap invalidation
+    // key so a mod update is detected without a plugin restart.
+    private static long ComputeModFingerprint(string modRoot)
+    {
+        long fp = 0;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(file);
+                if (!string.Equals(name, "default_mod.json", StringComparison.OrdinalIgnoreCase)
+                    && !name.StartsWith("group_", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var info = new FileInfo(file);
+                fp = unchecked(fp * 31 + info.Length + info.LastWriteTimeUtc.Ticks);
+            }
+        }
+        catch { /* modRoot missing/unreadable */ }
+        return fp;
+    }
+
+    private static bool ScanModForBodyMaterials(string modRoot)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(file);
+                if (!string.Equals(name, "default_mod.json", StringComparison.OrdinalIgnoreCase)
+                    && !name.StartsWith("group_", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (BodyMaterialPattern.IsMatch(File.ReadAllText(file))) return true;
+            }
+        }
+        catch { /* modRoot missing/unreadable */ }
+        return false;
+    }
+
+    private bool IsBodyMod(string modDir)
+    {
+        // Proteus's own sidecar/overlay mods legitimately reference body materials too — that's
+        // their redirect target, not a body-shape change — and they're already fully handled via
+        // the HasSidecar-gated recompose path regardless of this flag. Exclude them here, or every
+        // mask/color toggle on the user's own overlay mods would re-trigger the expensive walk this
+        // whole mechanism exists to avoid.
+        if (HasSidecar(modDir)) return false;
+
+        var modRoot = Path.Combine(modsRoot, modDir);
+        var fingerprint = ComputeModFingerprint(modRoot);
+        if (_bodyModCache.TryGetValue(modDir, out var cached) && cached.Fingerprint == fingerprint)
+            return cached.IsBodyMod;
+
+        var isBody = ScanModForBodyMaterials(modRoot);
+        _bodyModCache[modDir] = (isBody, fingerprint);
+        lock (_bodyModConfigLock)
+        {
+            config.KnownBodyMods[modDir] = new BodyModCacheEntry { IsBodyMod = isBody, Fingerprint = fingerprint };
+            config.Save();
+        }
+        return isBody;
+    }
+
     // ── Color override (design bindings) ───────────────────────────────────────
 
     /// <summary>
@@ -324,24 +490,84 @@ public class CompositorService : IDisposable
         var token = cts.Token;
         Task.Run(async () =>
         {
-            try { await Task.Delay(200, token); }
+            try { await Task.Delay(200, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
-            // Refresh on every trigger, not just when the cache is cold: OnLocalPlayerRedrawn only
-            // fires when the draw object is recreated, but some mods (e.g. body replacers that work
-            // by redirecting an always-loaded "smallclothes" resource in place) change which materials
-            // are active WITHOUT a redraw. Relying solely on the redraw-cached snapshot left stale
-            // body-type entries (and therefore stale sibling synthesis) behind after such a change.
-            // This is one framework-thread round trip per settled (debounced) recomposite, not per
-            // trigger, so the cost is acceptable.
-            try
+            // OnLocalPlayerRedrawn only fires when the draw object is recreated, but some mods (e.g.
+            // body replacers that redirect an always-loaded "smallclothes" resource in place) change
+            // which materials are active WITHOUT a redraw. GetActivePlayerMaterialPaths must run on
+            // the framework thread (it walks the draw object); it's cheap (~2-8ms), but we still only
+            // pay for it when the cache is cold or IsBodyMod flagged it dirty (see OnModSettingChanged/
+            // OnModAdded/OnModDeleted/OnPlayerCollectionChanged), not on every mask/color toggle.
+            if (_activeMtrlSnapshot == null || _activeMtrlSnapshotDirty)
             {
-                var fresh = await Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths);
-                if (fresh != null) _activeMtrlSnapshot = fresh;
+                bool wasDirty = _activeMtrlSnapshotDirty;
+                log.Debug("[Proteus] Refreshing active-material snapshot (cold={0}, dirty={1})",
+                    _activeMtrlSnapshot == null, wasDirty);
+
+                // GetResult(), NOT await: RunOnFrameworkThread's task COMPLETES on the framework
+                // thread, and an await continuation would run INLINE on that completing thread
+                // (ConfigureAwait(false) doesn't prevent this — it only suppresses returning to a
+                // captured context). That would hop the rest of this lambda — including Recomposite,
+                // whose Parallel.ForEach uses its calling thread as a worker — onto the framework
+                // thread, freezing the game for the whole multi-second composite. GetResult() instead
+                // blocks THIS background pool thread for the ~2ms IPC and stays on it, mirroring the
+                // ReapplyPlayerState call later in Recomposite.
+                HashSet<string>? fresh;
+                try { fresh = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { return; }
+
+                // A body mod changed, but the new body's materials don't load until the character is
+                // reloaded — and that reload is normally Proteus's OWN post-composite reapply. So a
+                // plain composite here keys off the stale (pre-load) snapshot and needs a second
+                // corrective composite once the reapply lands the new materials. If the body-type set
+                // still matches what we last composited (the change hasn't landed), force the reload
+                // up front and wait for the body types to actually change, so we composite ONCE with
+                // the settled state. SchedulePostRedrawBodyTypeCheck stays as a backstop for a load
+                // slower than this window.
+                if (wasDirty && fresh != null
+                    && string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase))
+                {
+                    var beforeKey = _lastCompositedBodyType;
+                    RefreshPlayerTextures(); // reload the character so the new body's materials load
+                    for (int i = 0; i < 12; i++) // up to ~3s, then compose anyway (backstop covers misses)
+                    {
+                        try { await Task.Delay(250, token).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+                        HashSet<string>? next;
+                        try { next = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult(); }
+                        catch (OperationCanceledException) { return; }
+                        if (next == null) break;
+                        fresh = next;
+                        if (!string.Equals(BodyTypeKey(next), beforeKey, StringComparison.OrdinalIgnoreCase))
+                            break; // the reload landed the new body materials → settled
+                    }
+                }
+
+                if (token.IsCancellationRequested) return;
+                if (fresh != null)
+                {
+                    _activeMtrlSnapshot = fresh;
+                    _activeMtrlSnapshotDirty = false;
+                    config.CachedActiveMaterialPaths = fresh.ToList();
+                    config.Save();
+                }
             }
-            catch (OperationCanceledException) { return; }
-            if (token.IsCancellationRequested) return;
             Recomposite(token);
         });
+    }
+
+    // Comma-joined sorted set of the body types present in a snapshot (e.g. "bibo,gen2,gen3"),
+    // matching the format of _lastCompositedBodyType. Used to detect when a body-mod change has
+    // actually landed in the loaded materials.
+    private static string? BodyTypeKey(HashSet<string> snapshot)
+    {
+        var types = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in snapshot)
+        {
+            var bt = UVRemapService.InferBodyType(m);
+            if (bt != null) types.Add(bt);
+        }
+        return types.Count > 0 ? string.Join(",", types) : null;
     }
 
     // ── Core compositor ──────────────────────────────────────────────────────
@@ -537,6 +763,10 @@ public class CompositorService : IDisposable
                     {
                         if (suffix == srcSuffix) continue;
                         var dstPath = stem + suffix;
+                        // A sibling body-type material is a synthesis target only if it's actually
+                        // loaded on the character (its suffix appears in the active-material snapshot).
+                        // The snapshot must be settled for this to be correct — see the post-composite
+                        // re-verification in SchedulePostRedrawBodyTypeCheck.
                         if (!activeMtrl.Contains(dstPath))
                             continue;
 
@@ -1410,21 +1640,28 @@ public class CompositorService : IDisposable
         SchedulePostRedrawBodyTypeCheck();
     }
 
-    // After a character redraw, check whether the active body type changed (e.g. user switched from
-    // bibo to gen3). The snapshot at trigger time reflects the PRE-redraw state, so the first
-    // composite may have used the wrong body type. If the post-redraw snapshot shows a different
-    // body type, fire one corrective recomposite. The second run captures a fresh snapshot, sets
-    // _lastCompositedBodyType to the new type, and the check then no-ops on its subsequent redraw.
+    // After a composite, verify it used the settled body state. The snapshot at trigger time can
+    // reflect PRE-settle state: a body-mod toggle changes which materials are loaded (bibo vs gen3
+    // etc.), but that update lands slightly later — sometimes via a redraw, sometimes as an in-place
+    // resource reload with NO redraw event at all. So the just-finished composite may have keyed off
+    // a stale body-type set (which manifested as sibling synthesis being one toggle behind). This
+    // re-fetches the LIVE snapshot (not the cached _activeMtrlSnapshot, which only updates on a redraw
+    // event) after a settle delay, and re-composites once if the settled body-type set differs from
+    // what was composited. It converges: the re-composite records the settled body type as
+    // _lastCompositedBodyType, so the check that follows it finds no change and stops.
     private void SchedulePostRedrawBodyTypeCheck()
     {
         _ = Task.Run(async () =>
         {
             try
             {
-                // Wait for GameObjectRedrawn to fire and update the cached snapshot via OnLocalPlayerRedrawn.
-                await Task.Delay(600);
+                await Task.Delay(600).ConfigureAwait(false);
 
-                var snapshot = _activeMtrlSnapshot;
+                // GetResult (not await) so the continuation stays on this background pool thread and
+                // never hops onto the framework thread — see TriggerRecomposite for the full rationale.
+                HashSet<string>? snapshot;
+                try { snapshot = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { return; }
                 if (snapshot == null) return;
 
                 var newBodyTypes  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1449,10 +1686,15 @@ public class CompositorService : IDisposable
 
                 if (bodyTypeChanged || charCodeChanged)
                 {
-                    log.Debug("[Proteus] Post-redraw correction: bodyType={0}→{1} charCode={2}→{3}",
+                    log.Debug("[Proteus] Post-settle correction: bodyType={0}→{1} charCode={2}→{3}",
                         _lastCompositedBodyType ?? "none", newBodyTypeKey ?? "none",
                         _lastCompositedCharCodes ?? "none", newCharCodeKey ?? "none");
-                    TriggerRecomposite("post-redraw-correction");
+                    // Publish the settled snapshot so the corrective recomposite uses it directly
+                    // (dirty stays false → TriggerRecomposite won't re-fetch a possibly-still-settling one).
+                    _activeMtrlSnapshot = snapshot;
+                    _activeMtrlSnapshotDirty = false;
+                    config.CachedActiveMaterialPaths = snapshot.ToList();
+                    TriggerRecomposite("post-settle-correction");
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }

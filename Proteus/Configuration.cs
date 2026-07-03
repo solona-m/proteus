@@ -16,6 +16,14 @@ public enum SiblingSynthesisMode
     AllBodies = 2,
 }
 
+/// <summary>Cached classification of one mod directory for <see cref="Configuration.KnownBodyMods"/>.</summary>
+[Serializable]
+public class BodyModCacheEntry
+{
+    public bool IsBodyMod { get; set; }
+    public long Fingerprint { get; set; }
+}
+
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
@@ -56,6 +64,19 @@ public class Configuration : IPluginConfiguration
     /// <summary>Sibling-synthesis mode for a mod, applying the absent-default.</summary>
     public SiblingSynthesisMode SiblingModeFor(string modDir) =>
         SiblingSynthesis.TryGetValue(modDir, out var m) ? m : SiblingSynthesisMode.BiboGen3Only;
+
+    /// <summary>Per-mod cache of whether it ships obj/body/ material redirects, keyed by mod
+    /// directory. Invalidated by Fingerprint (file size + mtime summed over the mod's own
+    /// default_mod.json/group_*.json manifests) so mod updates are picked up without a plugin
+    /// restart. Lets the compositor avoid an expensive Penumbra resource-tree walk unless a mod
+    /// that could actually change the active body-type materials was touched.</summary>
+    public Dictionary<string, BodyModCacheEntry> KnownBodyMods { get; set; } = new();
+
+    /// <summary>Last-known active player material paths, persisted so the compositor doesn't need
+    /// an expensive Penumbra resource-tree walk immediately at plugin boot/login — it seeds from
+    /// this and only re-fetches once something actually invalidates it (a body mod change, or a
+    /// real redraw).</summary>
+    public List<string>? CachedActiveMaterialPaths { get; set; } = null;
 
     public void Initialize(IDalamudPluginInterface pluginInterface)
         => pluginInterface.SavePluginConfig(this);
