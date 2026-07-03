@@ -191,6 +191,142 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// Load a .dds file as RGBA8. BC-compressed payloads (BC1/2/3/5/7) are wrapped as an in-memory
+    /// single-mip .tex and handed to Lumina's decoder — the same path base skin textures use — so no
+    /// standalone BC7 decoder is needed. Uncompressed 32-bpp payloads are reordered directly via the
+    /// pixel-format channel masks. Returns null on failure or an unsupported format.
+    /// </summary>
+    public (byte[] rgba, int width, int height)? LoadDdsAsRgba(string diskPath)
+    {
+        try
+        {
+            if (!File.Exists(diskPath)) return null;
+            return DecodeDds(File.ReadAllBytes(diskPath));
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "Failed to load .dds: {0}", diskPath);
+            return null;
+        }
+    }
+
+    // DDS layout: 4-byte magic "DDS ", 124-byte DDS_HEADER, then (if fourCC == "DX10") a 20-byte
+    // DDS_HEADER_DXT10, then the surface data. Only mip 0 is read. Offsets are into the whole file.
+    private (byte[] rgba, int width, int height)? DecodeDds(byte[] dds)
+    {
+        const uint DdsMagic   = 0x20534444; // "DDS "
+        const uint DdpfFourCC = 0x4;
+        const uint DdpfRgb    = 0x40;
+        if (dds.Length < 128 || BitConverter.ToUInt32(dds, 0) != DdsMagic) return null;
+
+        int  height  = (int)BitConverter.ToUInt32(dds, 12);
+        int  width   = (int)BitConverter.ToUInt32(dds, 16);
+        uint pfFlags = BitConverter.ToUInt32(dds, 80);
+        uint fourCC  = BitConverter.ToUInt32(dds, 84);
+        if (width <= 0 || height <= 0) return null;
+
+        int  dataOffset = 128;
+        uint luminaFmt  = 0;   // 0 → not a BC format handled via the .tex wrap below
+
+        if ((pfFlags & DdpfFourCC) != 0)
+        {
+            if (fourCC == 0x30315844) // "DX10" extended header
+            {
+                if (dds.Length < 148) return null;
+                uint dxgi = BitConverter.ToUInt32(dds, 128);
+                dataOffset = 148;
+                // Uncompressed DXGI formats decode directly; BC formats go through Lumina.
+                if (dxgi is 28 or 29)  return DecodeUncompressedDds(dds, dataOffset, width, height, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000); // R8G8B8A8
+                if (dxgi == 87)        return DecodeUncompressedDds(dds, dataOffset, width, height, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000); // B8G8R8A8
+                luminaFmt = dxgi switch
+                {
+                    71 or 72 => 0x3420u, // BC1
+                    74 or 75 => 0x3430u, // BC2
+                    77 or 78 => 0x3431u, // BC3
+                    83 or 84 => 0x6230u, // BC5
+                    98 or 99 => 0x6432u, // BC7
+                    _        => 0u,
+                };
+            }
+            else
+            {
+                luminaFmt = fourCC switch
+                {
+                    0x31545844 => 0x3420u, // "DXT1" → BC1
+                    0x33545844 => 0x3430u, // "DXT3" → BC2
+                    0x35545844 => 0x3431u, // "DXT5" → BC3
+                    0x32495441 => 0x6230u, // "ATI2" → BC5
+                    _          => 0u,
+                };
+            }
+        }
+        else if ((pfFlags & DdpfRgb) != 0 && BitConverter.ToUInt32(dds, 88) == 32)
+        {
+            // Uncompressed 32-bpp: reorder using the DDS_PIXELFORMAT channel masks.
+            uint rMask = BitConverter.ToUInt32(dds, 92);
+            uint gMask = BitConverter.ToUInt32(dds, 96);
+            uint bMask = BitConverter.ToUInt32(dds, 100);
+            uint aMask = BitConverter.ToUInt32(dds, 104);
+            return DecodeUncompressedDds(dds, dataOffset, width, height, rMask, gMask, bMask, aMask);
+        }
+
+        if (luminaFmt == 0)
+        {
+            log.Warning("[Proteus] Unsupported .dds format (fourCC=0x{0:X8}, flags=0x{1:X8})", fourCC, pfFlags);
+            return null;
+        }
+
+        long mip0 = Mip0ByteSize(luminaFmt, width, height);
+        if (mip0 <= 0 || dataOffset + mip0 > dds.Length) return null;
+
+        // Wrap mip 0 as a minimal single-surface .tex (80-byte header + block data) so Lumina's
+        // format decoder — which already handles every BC format the game ships — does the work.
+        var tex = new byte[80 + mip0];
+        BitConverter.TryWriteBytes(tex.AsSpan(0),  0x00800000u);   // attribute
+        BitConverter.TryWriteBytes(tex.AsSpan(4),  luminaFmt);     // format
+        BitConverter.TryWriteBytes(tex.AsSpan(8),  (ushort)width);
+        BitConverter.TryWriteBytes(tex.AsSpan(10), (ushort)height);
+        BitConverter.TryWriteBytes(tex.AsSpan(12), (ushort)1);     // depth
+        tex[14] = 1;                                               // mip count
+        BitConverter.TryWriteBytes(tex.AsSpan(28), 80u);           // OffsetToSurface[0]
+        Array.Copy(dds, dataOffset, tex, 80, mip0);
+
+        var texFile = LoadLuminaFileFromBytes<TexFile>(tex);
+        return texFile == null ? null : ConvertTex(texFile);
+    }
+
+    // Reorders an uncompressed 32-bpp DDS surface to RGBA8 using per-channel bit masks. Assumes each
+    // mask selects a contiguous 8-bit byte (true for all standard 32-bpp DDS layouts). aMask == 0
+    // means no alpha channel → opaque.
+    private static (byte[] rgba, int width, int height)? DecodeUncompressedDds(
+        byte[] dds, int offset, int width, int height, uint rMask, uint gMask, uint bMask, uint aMask)
+    {
+        long need = (long)width * height * 4;
+        if (offset + need > dds.Length) return null;
+
+        int rSh = MaskShift(rMask), gSh = MaskShift(gMask), bSh = MaskShift(bMask), aSh = MaskShift(aMask);
+        var rgba = new byte[need];
+        for (int i = 0; i < width * height; i++)
+        {
+            uint px = BitConverter.ToUInt32(dds, offset + i * 4);
+            int o = i * 4;
+            rgba[o]     = (byte)((px & rMask) >> rSh);
+            rgba[o + 1] = (byte)((px & gMask) >> gSh);
+            rgba[o + 2] = (byte)((px & bMask) >> bSh);
+            rgba[o + 3] = aMask == 0 ? (byte)255 : (byte)((px & aMask) >> aSh);
+        }
+        return (rgba, width, height);
+    }
+
+    private static int MaskShift(uint mask)
+    {
+        if (mask == 0) return 0;
+        int shift = 0;
+        while ((mask & 1) == 0) { mask >>= 1; shift++; }
+        return shift;
+    }
+
+    /// <summary>
     /// Load a base texture as RGBA8, trying a Penumbra-resolved disk path first,
     /// then falling back to the game's SqPack for vanilla (unmodded) textures.
     /// </summary>
@@ -247,29 +383,53 @@ public class TextureLoader
         return (rgba, w, h);
     }
 
-    /// <summary>Load a PNG from disk, scale to (targetW × targetH) if needed. Returns null on failure.</summary>
-    public byte[]? LoadPngAsRgba(string pngPath, int targetW, int targetH)
+    /// <summary>
+    /// Load an overlay image from disk as RGBA8, scaled to (targetW × targetH) if needed.
+    /// Accepts <c>.png</c> (StbImageSharp), <c>.tex</c> (Lumina) and <c>.dds</c> (parsed here). The
+    /// two GPU-texture containers decompress any format — including BC7 — to RGBA via Lumina's
+    /// decoder, the same path the base skin textures use. Dispatch is by extension because Proteus
+    /// mods reference each overlay by its exact file path, so a BC7-packaged mod names its overlays
+    /// <c>*.dds</c> (or <c>*.tex</c>). Returns null on failure.
+    /// </summary>
+    public byte[]? LoadPngAsRgba(string path, int targetW, int targetH)
     {
+        bool isTex = path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase);
+        bool isDds = path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase);
+
         (byte[] rgba, int width, int height)? Decode()
         {
             try
             {
-                using var stream = File.OpenRead(pngPath);
+                if (isTex || isDds)
+                {
+                    // Decompress the native format (BC7/BC5/uncompressed) to RGBA at its stored size;
+                    // scale to the requested target to match the PNG path's contract.
+                    var full = isTex ? LoadTexAsRgba(path) : LoadDdsAsRgba(path);
+                    if (full == null) return null;
+                    var (rgba, sw, sh) = full.Value;
+                    var data = (sw == targetW && sh == targetH)
+                        ? rgba
+                        : ScaleNearest(rgba, sw, sh, targetW, targetH);
+                    return (data, targetW, targetH);
+                }
+
+                using var stream = File.OpenRead(path);
                 var img = ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
-                var data = (img.Width == targetW && img.Height == targetH)
+                var pdata = (img.Width == targetW && img.Height == targetH)
                     ? img.Data
                     : ScaleNearest(img.Data, img.Width, img.Height, targetW, targetH);
-                return (data, targetW, targetH);
+                return (pdata, targetW, targetH);
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to load PNG: {0}", pngPath);
+                log.Error(ex, "Failed to load overlay image: {0}", path);
                 return null;
             }
         }
 
-        // Key includes the target size — the same PNG is cached separately per scale.
-        var key = DiskKey("PNG", pngPath);
+        // Key includes the target size — the same source is cached separately per scale. Distinct
+        // prefixes keep a .tex/.dds/.png that happen to share a stem from colliding in the cache.
+        var key = DiskKey(isTex ? "TEXO" : isDds ? "DDSO" : "PNG", path);
         if (key == null) return Decode()?.rgba;
 
         // Read-only for callers, so the cached array is shared (no clone).

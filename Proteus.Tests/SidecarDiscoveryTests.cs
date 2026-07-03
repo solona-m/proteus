@@ -339,6 +339,35 @@ public class SidecarDiscoveryTests
         Assert.Empty(SidecarDiscoveryService.ResolveMaskPaths(tmp.Path, ["", "   "]));
     }
 
+    [Fact]
+    public void ResolveMaskPaths_TexFallback_WhenNoPng()
+    {
+        using var tmp = new TempDirectory();
+        var masksDir = Path.Combine(tmp.Path, "Masks");
+        Directory.CreateDirectory(masksDir);
+        File.WriteAllBytes(Path.Combine(masksDir, "Sleeves.tex"), [0]);
+
+        var result = SidecarDiscoveryService.ResolveMaskPaths(tmp.Path, ["Sleeves"]);
+
+        Assert.Single(result);
+        Assert.EndsWith("Sleeves.tex", result[0]);
+    }
+
+    [Fact]
+    public void ResolveMaskPaths_PngPreferredOverTex()
+    {
+        using var tmp = new TempDirectory();
+        var masksDir = Path.Combine(tmp.Path, "Masks");
+        Directory.CreateDirectory(masksDir);
+        File.WriteAllBytes(Path.Combine(masksDir, "Sleeves.png"), [0]);
+        File.WriteAllBytes(Path.Combine(masksDir, "Sleeves.tex"), [0]);
+
+        var result = SidecarDiscoveryService.ResolveMaskPaths(tmp.Path, ["Sleeves"]);
+
+        Assert.Single(result);
+        Assert.EndsWith("Sleeves.png", result[0]);
+    }
+
     // ── Mask priority ordering (higher in the group list wins) ──────────────────
 
     private const string MasksGroupJson = """

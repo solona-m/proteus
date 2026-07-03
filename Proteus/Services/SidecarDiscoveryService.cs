@@ -210,14 +210,12 @@ public class SidecarDiscoveryService
         foreach (var option in OrderByGroup(selected, order))
         {
             if (string.IsNullOrWhiteSpace(option)) continue;
-            var maskPath = Path.Combine(entry.SidecarRoot, MaskSubdir, option + ".png");
-            if (!seen.Add(maskPath) || !File.Exists(maskPath)) continue;
+            var maskPath = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option));
+            if (maskPath == null || !seen.Add(maskPath)) continue;
 
-            var normalPath = Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_n.png");
-            var indexPath  = Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_id.png");
-            result.Add((maskPath,
-                File.Exists(normalPath) ? normalPath : null,
-                File.Exists(indexPath) ? indexPath : null));
+            var normalPath = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_n"));
+            var indexPath  = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option + "_id"));
+            result.Add((maskPath, normalPath, indexPath));
         }
         return result;
     }
@@ -236,12 +234,28 @@ public class SidecarDiscoveryService
         foreach (var option in selectedOptions)
         {
             if (string.IsNullOrWhiteSpace(option)) continue;
-            var path = Path.Combine(sidecarRoot, MaskSubdir, option + ".png");
-            if (seen.Add(path) && File.Exists(path))
+            var stem = Path.Combine(sidecarRoot, MaskSubdir, option);
+            var path = ResolveMaskAsset(stem);
+            if (path != null && seen.Add(path))
                 result.Add(path);
         }
         return result;
     }
+
+    // Resolve a Masks/ asset given its path without extension, preferring .png but falling back to
+    // the BC7-capable containers (.dds then .tex) so a mod packaged entirely in BC7 (masks included)
+    // still resolves. Null if none exist.
+    internal static string? ResolveMaskAsset(string basePathNoExt)
+    {
+        foreach (var ext in MaskAssetExtensions)
+        {
+            var path = basePathNoExt + ext;
+            if (File.Exists(path)) return path;
+        }
+        return null;
+    }
+
+    private static readonly string[] MaskAssetExtensions = [".png", ".dds", ".tex"];
 
     /// <summary>
     /// Reads the option-name order of the Penumbra group named <see cref="MaskGroupName"/> from the
