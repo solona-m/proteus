@@ -326,14 +326,20 @@ public class CompositorService : IDisposable
         {
             try { await Task.Delay(200, token); }
             catch (OperationCanceledException) { return; }
-            // If no GameObjectRedrawn has fired yet (e.g. first composite after plugin load),
-            // the cache is cold — fetch once on the framework thread to prime it.
-            if (_activeMtrlSnapshot == null)
+            // Refresh on every trigger, not just when the cache is cold: OnLocalPlayerRedrawn only
+            // fires when the draw object is recreated, but some mods (e.g. body replacers that work
+            // by redirecting an always-loaded "smallclothes" resource in place) change which materials
+            // are active WITHOUT a redraw. Relying solely on the redraw-cached snapshot left stale
+            // body-type entries (and therefore stale sibling synthesis) behind after such a change.
+            // This is one framework-thread round trip per settled (debounced) recomposite, not per
+            // trigger, so the cost is acceptable.
+            try
             {
-                try { _activeMtrlSnapshot = await Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths); }
-                catch (OperationCanceledException) { return; }
-                if (token.IsCancellationRequested) return;
+                var fresh = await Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths);
+                if (fresh != null) _activeMtrlSnapshot = fresh;
             }
+            catch (OperationCanceledException) { return; }
+            if (token.IsCancellationRequested) return;
             Recomposite(token);
         });
     }
@@ -657,6 +663,10 @@ public class CompositorService : IDisposable
                     var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
                     if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
 
+                    // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
+                    // mutation contract) — clone before writing into it, or a mask toggled off later
+                    // still shows the swapped rows because the cache itself was corrupted.
+                    idx = (byte[])idx.Clone();
                     foreach (var (maskPath, _, maskIndexPath) in assets)
                     {
                         if (maskIndexPath == null) continue;
