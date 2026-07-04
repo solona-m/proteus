@@ -256,6 +256,8 @@ public class TextureLoader
                     0x33545844 => 0x3430u, // "DXT3" → BC2
                     0x35545844 => 0x3431u, // "DXT5" → BC3
                     0x32495441 => 0x6230u, // "ATI2" → BC5
+                    0x55354342 => 0x6230u, // "BC5U" → BC5 (unsigned)
+                    0x53354342 => 0x6230u, // "BC5S" → BC5 (signed)
                     _          => 0u,
                 };
             }
