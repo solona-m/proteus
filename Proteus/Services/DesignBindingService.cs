@@ -191,6 +191,7 @@ public class DesignBindingService : IDisposable
                 });
             }
 
+            Dictionary<string, OverlayColorOverride> newOverride;
             lock (gate)
             {
                 store.Bindings[designId] = new DesignBinding
@@ -201,8 +202,19 @@ public class DesignBindingService : IDisposable
                     Mods        = mods,
                 };
                 designCache.Remove(designId); // design content changed → drop cached gear
+
+                // The design was just saved from the current live state, so it's already "applied" in
+                // spirit — mark it active immediately so the UI shows the binding as bound (blue) without
+                // waiting for a separate Glamourer apply. Penumbra settings aren't re-pushed since they're
+                // already what we just captured from.
+                newOverride = mods.ToDictionary(m => m.ModDirectory, m => m.Colors, StringComparer.OrdinalIgnoreCase);
+                activeDesignId       = designId;
+                activeOverride       = newOverride;
+                unboundModsDisabled  = false;
                 Save();
             }
+            compositor.SetActiveColorOverride(newOverride);
+            compositor.TriggerRecomposite($"design-capture:{designId}");
 
             log.Information("[Proteus] Captured Proteus state for design {0} ({1} mods).", name ?? designId.ToString(), mods.Count);
         }
