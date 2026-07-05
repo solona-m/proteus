@@ -73,6 +73,7 @@ public class DesignBindingService : IDisposable
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
     private Dictionary<string, OverlayColorOverride>? activeOverride;
     private Guid? activeDesignId;
+    private bool unboundModsDisabled;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
 
@@ -257,16 +258,21 @@ public class DesignBindingService : IDisposable
         lock (gate) store.Bindings.TryGetValue(designId, out b);
         if (b == null) return;
 
-        var present = discovery.DiscoverAll()
+        var allMods = discovery.DiscoverAll();
+        var present = allMods
             .Select(e => e.ModDirectory)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var boundDirs = b.Mods
+            .Select(m => m.ModDirectory)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var collId = penumbra.GetPlayerCollectionId();
 
         lock (gate)
         {
-            suppressUntilTick = Environment.TickCount64 + RestoreSuppressMs;
-            activeDesignId    = designId;
-            activeOverride    = b.Mods.ToDictionary(m => m.ModDirectory, m => m.Colors, StringComparer.OrdinalIgnoreCase);
+            suppressUntilTick   = Environment.TickCount64 + RestoreSuppressMs;
+            activeDesignId      = designId;
+            activeOverride      = b.Mods.ToDictionary(m => m.ModDirectory, m => m.Colors, StringComparer.OrdinalIgnoreCase);
+            unboundModsDisabled = false;
         }
         compositor.SetActiveColorOverride(activeOverride);
 
@@ -280,6 +286,15 @@ public class DesignBindingService : IDisposable
                 foreach (var (group, sel) in m.Options)
                     penumbra.SetModOption(collId.Value, m.ModDirectory, group, sel);
             }
+
+            // Any Proteus mod not part of this binding shouldn't carry over from whatever was
+            // active before — e.g. enabled after this design was captured, or left on from a
+            // previous unrelated look.
+            foreach (var e in allMods)
+            {
+                if (!boundDirs.Contains(e.ModDirectory))
+                    penumbra.SetModEnabled(collId.Value, e.ModDirectory, false);
+            }
         }
 
         compositor.TriggerRecomposite($"design-restore:{designId}");
@@ -292,6 +307,40 @@ public class DesignBindingService : IDisposable
         lock (gate) { activeDesignId = null; activeOverride = null; }
         compositor.SetActiveColorOverride(null);
         compositor.TriggerRecomposite("design-override-clear");
+    }
+
+    /// <summary>
+    /// The currently applied design has no captured binding (never bound, or no gear match): revert
+    /// colors to metadata and disable every discovered Proteus overlay mod, so an unrecognized look
+    /// never keeps a previous design's overlays composited onto it. Idempotent via
+    /// <see cref="unboundModsDisabled"/> so repeated apply signals while sitting on the same unbound
+    /// design don't re-issue Penumbra calls every event.
+    /// </summary>
+    private void HandleUnboundDesign()
+    {
+        bool changed = false;
+        lock (gate)
+        {
+            if (activeDesignId != null) { activeDesignId = null; activeOverride = null; changed = true; }
+        }
+        if (changed) compositor.SetActiveColorOverride(null);
+
+        if (!unboundModsDisabled)
+        {
+            DisableAllProteusMods();
+            unboundModsDisabled = true;
+            changed = true;
+        }
+
+        if (changed) compositor.TriggerRecomposite("design-binding-unbound");
+    }
+
+    private void DisableAllProteusMods()
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId == null) return;
+        foreach (var e in discovery.DiscoverAll())
+            penumbra.SetModEnabled(collId.Value, e.ModDirectory, false);
     }
 
     // ── Live override editing (UI, framework thread) ────────────────────────────
@@ -398,7 +447,7 @@ public class DesignBindingService : IDisposable
 
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
-        if (candidateIds.Length == 0) return; // nothing bound → leave composite as-is
+        if (candidateIds.Length == 0) { HandleUnboundDesign(); return; } // nothing ever bound
 
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
@@ -413,8 +462,8 @@ public class DesignBindingService : IDisposable
 
         if (matches.Count == 0)
         {
-            // An unbound/unrecognized design was applied → revert to base colors.
-            if (activeDesignId != null) ClearColorOverride();
+            // An unbound/unrecognized design was applied.
+            HandleUnboundDesign();
             return;
         }
 
