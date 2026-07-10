@@ -332,6 +332,19 @@ public class TextureLoader
     /// Load a base texture as RGBA8, trying a Penumbra-resolved disk path first,
     /// then falling back to the game's SqPack for vanilla (unmodded) textures.
     /// </summary>
+    // The composite runs at the base skin's native resolution and writes the final textures back at
+    // that size, so the base texture dimensions determine the output resolution. To guarantee 4K
+    // output, every base texture below 4096 is upscaled (bilinear) to 4096×4096; textures already at
+    // 4096+ are left untouched. The cache stays native — upscaling happens on the returned buffer.
+    public const int BaseTargetSize = 4096;
+
+    // Clone (for in-place compositing) when already ≥4K, otherwise upscale to 4K. Upscaling produces a
+    // fresh buffer, so no separate clone is needed on that path.
+    private static (byte[] rgba, int width, int height) CloneOrUpscaleBase(byte[] rgba, int width, int height)
+        => width >= BaseTargetSize && height >= BaseTargetSize
+            ? ((byte[])rgba.Clone(), width, height)
+            : (UVRemapService.ResizeBilinear(rgba, width, height, BaseTargetSize, BaseTargetSize), BaseTargetSize, BaseTargetSize);
+
     public (byte[] rgba, int width, int height)? LoadBaseTexture(string? diskPath, string gamePath)
     {
         if (diskPath != null && File.Exists(diskPath))
@@ -340,14 +353,15 @@ public class TextureLoader
             if (key != null)
             {
                 var hit = GetOrDecode(key, () => LoadTexAsRgba(diskPath));
-                // Clone: the caller composites overlays into this buffer in place.
-                if (hit != null) return ((byte[])hit.Rgba.Clone(), hit.Width, hit.Height);
+                // Clone (or upscale to 4K): the caller composites overlays into this buffer in place.
+                if (hit != null) return CloneOrUpscaleBase(hit.Rgba, hit.Width, hit.Height);
                 // Decode failed — fall through to the game-data fallback below.
             }
             else
             {
                 var result = LoadTexAsRgba(diskPath);
-                if (result.HasValue) return result;
+                // Fresh, unshared decode — safe to upscale in place of a clone.
+                if (result.HasValue) return CloneOrUpscaleBase(result.Value.rgba, result.Value.width, result.Value.height);
             }
         }
 
@@ -366,7 +380,7 @@ public class TextureLoader
                 return null;
             }
         });
-        return ge == null ? null : ((byte[])ge.Rgba.Clone(), ge.Width, ge.Height);
+        return ge == null ? null : CloneOrUpscaleBase(ge.Rgba, ge.Width, ge.Height);
     }
 
     private static (byte[] rgba, int width, int height) ConvertTex(TexFile tex)
