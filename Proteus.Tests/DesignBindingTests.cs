@@ -372,38 +372,6 @@ public class DesignBindingTests
         Assert.Null(ovr.Resolve("g", "o"));
     }
 
-    // ── ApplyManualModEdit ───────────────────────────────────────────────────────
-
-    private static DesignBinding BindingWith(string modDir, bool enabled, int priority) =>
-        new() { Mods = [ new ProteusModBinding { ModDirectory = modDir, Enabled = enabled, Priority = priority } ] };
-
-    [Fact]
-    public void ApplyManualModEdit_TogglingEnabled_UpdatesBinding()
-    {
-        var b = BindingWith("Stockings", enabled: true, priority: 0);
-        Assert.True(DesignBindingService.ApplyManualModEdit(b, "Stockings", enabled: false, priority: null));
-        Assert.False(b.Mods[0].Enabled);
-    }
-
-    [Fact]
-    public void ApplyManualModEdit_IsCaseInsensitiveOnModDir_AndEditsPriority()
-    {
-        var b = BindingWith("Stockings", enabled: true, priority: 0);
-        Assert.True(DesignBindingService.ApplyManualModEdit(b, "STOCKINGS", enabled: null, priority: 7));
-        Assert.Equal(7, b.Mods[0].Priority);
-        Assert.True(b.Mods[0].Enabled); // untouched when only priority is supplied
-    }
-
-    [Fact]
-    public void ApplyManualModEdit_NoChangeOrUnknownMod_ReturnsFalse()
-    {
-        var b = BindingWith("Stockings", enabled: true, priority: 5);
-        // Same values → no change.
-        Assert.False(DesignBindingService.ApplyManualModEdit(b, "Stockings", enabled: true, priority: 5));
-        // Mod not part of the binding → no change.
-        Assert.False(DesignBindingService.ApplyManualModEdit(b, "OtherMod", enabled: false, priority: 1));
-    }
-
     // ── PickMostRecent ─────────────────────────────────────────────────────────
 
     [Fact]

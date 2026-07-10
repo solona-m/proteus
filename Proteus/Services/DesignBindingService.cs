@@ -172,24 +172,7 @@ public class DesignBindingService : IDisposable
             }
 
             var name = glamourer.GetDesigns().TryGetValue(designId, out var n) ? n : null;
-
-            var mods = new List<ProteusModBinding>();
-            foreach (var e in discovery.DiscoverAll())
-            {
-                var settings = penumbra.GetModSettings(collId.Value, e.ModDirectory);
-                var options  = settings?.Options is { } o
-                    ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
-                    : new Dictionary<string, List<string>>();
-
-                mods.Add(new ProteusModBinding
-                {
-                    ModDirectory = e.ModDirectory,
-                    Enabled      = e.Enabled,
-                    Priority     = e.Priority,
-                    Options      = options,
-                    Colors       = CaptureColors(e),
-                });
-            }
+            var mods = BuildModBindings(collId.Value);
 
             Dictionary<string, OverlayColorOverride> newOverride;
             lock (gate)
@@ -206,8 +189,9 @@ public class DesignBindingService : IDisposable
                 // The design was just saved from the current live state, so it's already "applied" in
                 // spirit — mark it active immediately so the UI shows the binding as bound (blue) without
                 // waiting for a separate Glamourer apply. Penumbra settings aren't re-pushed since they're
-                // already what we just captured from.
-                newOverride = mods.ToDictionary(m => m.ModDirectory, m => m.Colors, StringComparer.OrdinalIgnoreCase);
+                // already what we just captured from. The live override is cloned so subsequent edits
+                // preview without mutating the stored binding (see UpdateActiveBindingFromCurrentState).
+                newOverride = CloneOverrides(mods);
                 activeDesignId       = designId;
                 activeOverride       = newOverride;
                 unboundModsDisabled  = false;
@@ -262,6 +246,39 @@ public class DesignBindingService : IDisposable
         return result;
     }
 
+    // Snapshot every discovered Proteus mod's current live state (Penumbra enable/priority/options +
+    // effective colors) into fresh binding entries. Shared by design-save capture and the manual
+    // "Update binding" action.
+    private List<ProteusModBinding> BuildModBindings(Guid collId)
+    {
+        var mods = new List<ProteusModBinding>();
+        foreach (var e in discovery.DiscoverAll())
+        {
+            var settings = penumbra.GetModSettings(collId, e.ModDirectory);
+            var options  = settings?.Options is { } o
+                ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
+                : new Dictionary<string, List<string>>();
+
+            mods.Add(new ProteusModBinding
+            {
+                ModDirectory = e.ModDirectory,
+                Enabled      = e.Enabled,
+                Priority     = e.Priority,
+                Options      = options,
+                Colors       = CaptureColors(e),
+            });
+        }
+        return mods;
+    }
+
+    // Build a live color override keyed by mod dir, cloned so editing it (live preview) never mutates
+    // the persisted binding those colors came from.
+    private static Dictionary<string, OverlayColorOverride> CloneOverrides(IEnumerable<ProteusModBinding> mods)
+        => mods.ToDictionary(m => m.ModDirectory, m => CloneOverride(m.Colors), StringComparer.OrdinalIgnoreCase);
+
+    private static OverlayColorOverride CloneOverride(OverlayColorOverride o)
+        => JsonSerializer.Deserialize<OverlayColorOverride>(JsonSerializer.Serialize(o)) ?? new();
+
     // ── Restore / clear (framework thread) ──────────────────────────────────────
 
     public void Restore(Guid designId)
@@ -283,7 +300,9 @@ public class DesignBindingService : IDisposable
         {
             suppressUntilTick   = Environment.TickCount64 + RestoreSuppressMs;
             activeDesignId      = designId;
-            activeOverride      = b.Mods.ToDictionary(m => m.ModDirectory, m => m.Colors, StringComparer.OrdinalIgnoreCase);
+            // Clone so live color edits preview without mutating the stored binding (they only fold
+            // in via UpdateActiveBindingFromCurrentState).
+            activeOverride      = CloneOverrides(b.Mods);
             unboundModsDisabled = false;
         }
         compositor.SetActiveColorOverride(activeOverride);
@@ -390,50 +409,47 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// Persist + re-push the live override after the editor mutated a list from
-    /// GetEditableOverrideRows. No-op if no binding active. Caller triggers the recomposite.
+    /// Re-snapshot the current live Proteus state (Penumbra enable/priority/options + the live color
+    /// override, including unsaved editor tweaks) into the active binding and persist it. This is the
+    /// only path that folds manual UI edits into a binding — edits are otherwise live-preview only.
+    /// No-op (returns false) if no binding is active. Framework thread.
     /// </summary>
-    public void CommitActiveOverrideEdit()
+    public bool UpdateActiveBindingFromCurrentState()
     {
-        Dictionary<string, OverlayColorOverride>? snapshot;
-        lock (gate)
-        {
-            if (activeDesignId == null || activeOverride == null) return;
-            snapshot = activeOverride;
-            Save();
-        }
-        compositor.SetActiveColorOverride(snapshot);
-    }
-
-    /// <summary>
-    /// Fold a manual enable/priority change (made in the Proteus UI) into the active binding so the
-    /// edit becomes the binding's new truth, instead of being reverted by the next restore. No-op if
-    /// no binding is active or the mod isn't part of it. Returns true if the binding was updated.
-    /// </summary>
-    public bool UpdateActiveBindingMod(string modDir, bool? enabled = null, int? priority = null)
-    {
+        Guid id;
+        string? name;
         lock (gate)
         {
             if (activeDesignId == null) return false;
-            if (!store.Bindings.TryGetValue(activeDesignId.Value, out var b)) return false;
-            if (!ApplyManualModEdit(b, modDir, enabled, priority)) return false;
-            Save();
-            return true;
+            id   = activeDesignId.Value;
+            name = store.Bindings.TryGetValue(id, out var existing) ? existing.DesignName : null;
         }
-    }
 
-    // Apply an enable/priority edit to a binding's stored mod entry. Returns true iff something
-    // actually changed (so the caller can skip persisting). Pure — unit-tested without Dalamud.
-    internal static bool ApplyManualModEdit(DesignBinding b, string modDir, bool? enabled, int? priority)
-    {
-        var mod = b.Mods.FirstOrDefault(m =>
-            string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-        if (mod == null) return false;
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId == null) return false;
 
-        bool changed = false;
-        if (enabled.HasValue  && mod.Enabled  != enabled.Value)  { mod.Enabled  = enabled.Value;  changed = true; }
-        if (priority.HasValue && mod.Priority != priority.Value) { mod.Priority = priority.Value; changed = true; }
-        return changed;
+        var mods = BuildModBindings(collId.Value);
+        name ??= glamourer.GetDesigns().TryGetValue(id, out var n) ? n : null;
+
+        Dictionary<string, OverlayColorOverride> newOverride;
+        lock (gate)
+        {
+            if (activeDesignId != id) return false; // active binding changed underfoot
+            store.Bindings[id] = new DesignBinding
+            {
+                DesignId    = id,
+                DesignName  = name,
+                CapturedUtc = DateTime.UtcNow,
+                Mods        = mods,
+            };
+            newOverride    = CloneOverrides(mods);
+            activeOverride = newOverride;
+            Save();
+        }
+        compositor.SetActiveColorOverride(newOverride);
+        compositor.TriggerRecomposite($"design-binding-update:{id}");
+        log.Information("[Proteus] Updated binding for design {0} from current state.", name ?? id.ToString());
+        return true;
     }
 
     // ── Heuristic apply detection (framework thread) ────────────────────────────

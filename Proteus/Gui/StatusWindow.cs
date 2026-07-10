@@ -166,9 +166,8 @@ public class StatusWindow : Window
                 if (ImGui.Checkbox($"##en_{entry.ModDirectory}", ref active) && collId.HasValue)
                 {
                     penumbra.SetModEnabled(collId.Value, entry.ModDirectory, active);
-                    // If a design binding drives this mod, fold the manual toggle into the binding so
-                    // the next restore doesn't flip it back (UI toggle vs. restore would otherwise fight).
-                    designBindings.UpdateActiveBindingMod(entry.ModDirectory, enabled: active);
+                    // Live edit only — write straight to Penumbra. Folding this into the active binding
+                    // happens solely via the "Update binding" button (see DrawDesignBindings).
                     compositor.TriggerRecomposite("penumbra-enable");
                 }
 
@@ -193,8 +192,7 @@ public class StatusWindow : Window
                     _priorityEdits.Remove(entry.ModDirectory);
                     if (collId.HasValue)
                         penumbra.SetModPriority(collId.Value, entry.ModDirectory, pri);
-                    // Fold the manual priority edit into the active binding (see enable toggle above).
-                    designBindings.UpdateActiveBindingMod(entry.ModDirectory, priority: pri);
+                    // Live edit only (see enable toggle above); folded into the binding via the button.
                     compositor.TriggerRecomposite("penumbra-priority");
                 }
 
@@ -209,7 +207,7 @@ public class StatusWindow : Window
                         ImGui.OpenPopup(popupId);
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits update the binding; base colors are unchanged.");
+                    ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update binding\" to save them. Base colors are unchanged.");
 
                 if (ImGui.BeginPopup(popupId))
                 {
@@ -307,6 +305,12 @@ public class StatusWindow : Window
         {
             var act = bindings.FirstOrDefault(b => b.DesignId == activeId.Value);
             ImGui.TextDisabled($"Active: {act?.DesignName ?? activeId.Value.ToString()[..8]}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Update binding"))
+                designBindings.UpdateActiveBindingFromCurrentState();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Snapshot the current Proteus state (enable / priority / options / colors)\n" +
+                                 "into the active binding. Manual edits only persist when you click this.");
         }
 
         if (bindings.Count == 0)
@@ -369,7 +373,7 @@ public class StatusWindow : Window
             var activeId = designBindings.ActiveDesignId;
             var name = designBindings.Bindings.FirstOrDefault(b => b.DesignId == activeId)?.DesignName
                        ?? activeId?.ToString()[..8] ?? "?";
-            ImGui.TextColored(BindingAccent, $"Editing binding '{name}' — base colors unchanged.");
+            ImGui.TextColored(BindingAccent, $"Editing binding '{name}' — previewing live; click \"Update binding\" to save. Base colors unchanged.");
         }
 
         ImGui.Separator();
@@ -416,8 +420,10 @@ public class StatusWindow : Window
             DrawRowControls(entry.ModDirectory, rows, filteredSimple, ref changedSimple);
             if (changedSimple)
             {
-                if (ovrRows != null) designBindings.CommitActiveOverrideEdit();
-                else                 discovery.SaveMetadata(entry);
+                // Binding path (ovrRows != null): live-preview only — the edit stays in the in-memory
+                // override and is folded into the binding solely via "Update binding". Metadata path
+                // (base colors) persists immediately as before.
+                if (ovrRows == null) discovery.SaveMetadata(entry);
                 compositor.TriggerRecomposite("colors-change");
             }
             return;
@@ -504,8 +510,8 @@ public class StatusWindow : Window
         DrawRowControls($"{entry.ModDirectory}_{groupName}", editRows, usedRows, ref changed);
         if (changed)
         {
-            if (ovrOptRows != null) designBindings.CommitActiveOverrideEdit();
-            else                    discovery.SaveMetadata(entry);
+            // Binding path: live-preview only (folded in via "Update binding"). Metadata path persists.
+            if (ovrOptRows == null) discovery.SaveMetadata(entry);
             compositor.TriggerRecomposite("colors-change");
         }
     }
