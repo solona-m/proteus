@@ -464,12 +464,12 @@ public class DesignBindingService : IDisposable
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
 
-        var matches = new List<Guid>();
+        var matches = new List<(Guid id, int specificity)>();
         foreach (var id in candidateIds)
         {
             var design = GetDesignCached(id);
-            if (design != null && GearMatches(design, state))
-                matches.Add(id);
+            if (design != null && StateMatches(design, state, out var spec))
+                matches.Add((id, spec));
         }
 
         if (matches.Count == 0)
@@ -480,13 +480,23 @@ public class DesignBindingService : IDisposable
         }
 
         // For ambiguous matches (variations of the same outfit share a gear set), prefer the
-        // most recently captured binding — that's the design most likely to be the one just
-        // saved/applied, and avoids stale older overrides sticking around.
+        // most *specific* match — the design that constrains the most applied fields (e.g. one
+        // that also matches the applied dye beats a gear-only design). Break remaining ties by
+        // the most recently captured binding, which avoids stale older overrides sticking around.
         Guid pick;
         if (matches.Count == 1)
-            pick = matches[0];
+        {
+            pick = matches[0].id;
+        }
         else
-            lock (gate) pick = PickMostRecent(matches, store.Bindings);
+        {
+            var best = matches.Max(m => m.specificity);
+            var top  = matches.Where(m => m.specificity == best).Select(m => m.id).ToList();
+            if (top.Count == 1)
+                pick = top[0];
+            else
+                lock (gate) pick = PickMostRecent(top, store.Bindings);
+        }
 
         if (activeDesignId == pick) return; // already applied
         Restore(pick);
@@ -512,31 +522,112 @@ public class DesignBindingService : IDisposable
     private static readonly HashSet<string> NonMatchedSlots =
         new(StringComparer.OrdinalIgnoreCase) { "MainHand", "OffHand" };
 
-    // A design matches the state when every applied (non-weapon) equipment slot has the same ItemId
-    // as the player's current state, and it applies a meaningful number of slots. Weapons, stains,
-    // and meta entries are ignored.
-    internal static bool GearMatches(JObject design, JObject state)
+    // A design matches the state when every applied field it carries equals the player's current
+    // state: equipment items, dyes/stains, bonus items (glasses/facewear), customize values, and
+    // advanced parameters. Only fields the design actually applies are compared (Apply / ApplyStain
+    // = true); anything else is left to whatever the state already had. Weapons, wetness, and
+    // material color tables are excluded (situational, or overlapping Proteus's own color override).
+    //
+    // `specificity` counts how many applied fields matched: a richer design that also matches the
+    // dye/bonus/appearance scores higher than a gear-only design for the same look, so the caller can
+    // prefer the most-constrained match. Any mismatch on an applied field rejects the design outright.
+    internal static bool StateMatches(JObject design, JObject state, out int specificity)
     {
+        specificity = 0;
         if (design["Equipment"] is not JObject dEquip || state["Equipment"] is not JObject sEquip)
             return false;
 
-        int applied = 0;
+        int gearSlots = 0;
         foreach (var prop in dEquip.Properties())
         {
             if (NonMatchedSlots.Contains(prop.Name)) continue;      // weapons vary situationally
-            if (prop.Value is not JObject slot) continue;
-            var itemTok = slot["ItemId"];
-            if (itemTok == null) continue;                          // skip meta entries (Hat/Visor/Weapon/VieraEars)
-            if (slot["Apply"]?.ToObject<bool>() != true) continue;  // slot not applied by the design
+            if (prop.Value is not JObject dSlot) continue;
+            var sSlot = sEquip[prop.Name] as JObject;
 
-            if (sEquip[prop.Name] is not JObject sSlot || sSlot["ItemId"] is not { } sItem)
-                return false;                                       // state lacks the slot
-            if (itemTok.ToObject<ulong>() != sItem.ToObject<ulong>())
-                return false;                                       // different item → not this design
-            applied++;
+            // Equipment item id. Meta entries (Hat/Visor/Weapon/VieraEars) have no ItemId → skipped.
+            if (dSlot["ItemId"] is { } dItem && dSlot["Apply"]?.ToObject<bool>() == true)
+            {
+                if (sSlot?["ItemId"] is not { } sItem) return false;                 // state lacks the slot
+                if (dItem.ToObject<ulong>() != sItem.ToObject<ulong>()) return false; // different item
+                gearSlots++;
+                specificity++;
+            }
+
+            // Dye/stain, compared independently of the item (a re-dye is a different look).
+            if (dSlot["ApplyStain"]?.ToObject<bool>() == true)
+            {
+                if (sSlot == null) return false;
+                if (!IdEquals(dSlot["Stain"],  sSlot["Stain"]))  return false;
+                if (!IdEquals(dSlot["Stain2"], sSlot["Stain2"])) return false;
+                specificity++;
+            }
         }
 
-        return applied >= MinGearSlots;
+        if (gearSlots < MinGearSlots) return false; // appearance-only designs never match (safe abstain)
+
+        // Bonus items (glasses / facewear).
+        if (design["Bonus"] is JObject dBonus && state["Bonus"] is JObject sBonus)
+        {
+            foreach (var prop in dBonus.Properties())
+            {
+                if (prop.Value is not JObject dItem) continue;
+                if (dItem["Apply"]?.ToObject<bool>() != true) continue;
+                if (sBonus[prop.Name] is not JObject sItem) return false;
+                if (!IdEquals(dItem["BonusId"], sItem["BonusId"])) return false;
+                specificity++;
+            }
+        }
+
+        // Customize (skin colour, hair, eyes, face…). Per-index objects only; the base64 "Array"
+        // form (non-human models — out of scope for skin overlays) has no per-field objects to
+        // compare, so it simply contributes nothing. Wetness is situational and skipped.
+        if (design["Customize"] is JObject dCust && state["Customize"] is JObject sCust)
+        {
+            foreach (var prop in dCust.Properties())
+            {
+                if (prop.Name == "Wetness") continue;
+                if (prop.Value is not JObject dEntry) continue;     // ModelId scalar / Array form → skipped
+                if (dEntry["Apply"]?.ToObject<bool>() != true) continue;
+                if (dEntry["Value"] is not { } dVal) continue;
+                if (sCust[prop.Name] is not JObject sEntry || sEntry["Value"] is not { } sVal) return false;
+                if (dVal.ToObject<long>() != sVal.ToObject<long>()) return false;
+                specificity++;
+            }
+        }
+
+        // Advanced parameters (RGBA / value / percentage colours).
+        if (design["Parameters"] is JObject dParams && state["Parameters"] is JObject sParams)
+        {
+            foreach (var prop in dParams.Properties())
+            {
+                if (prop.Value is not JObject dEntry) continue;
+                if (dEntry["Apply"]?.ToObject<bool>() != true) continue;
+                if (sParams[prop.Name] is not JObject sEntry) return false;
+                if (!ParameterEquals(dEntry, sEntry)) return false;
+                specificity++;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IdEquals(JToken? a, JToken? b)
+        => a != null && b != null && a.ToObject<ulong>() == b.ToObject<ulong>();
+
+    // Compare whichever numeric colour fields the design entry carries against the state entry, with
+    // a small tolerance to absorb float round-trip noise. A field present on the design but missing
+    // from the state is treated as a mismatch.
+    private static readonly string[] ParamFields = ["Value", "Percentage", "Red", "Green", "Blue", "Alpha"];
+
+    private static bool ParameterEquals(JObject d, JObject s)
+    {
+        foreach (var f in ParamFields)
+        {
+            if (d[f] is not { } dv) continue;
+            if (s[f] is not { } sv) return false;
+            if (Math.Abs(dv.ToObject<double>() - sv.ToObject<double>()) > 1e-4) return false;
+        }
+        return true;
     }
 
     // ── Persistence ─────────────────────────────────────────────────────────────

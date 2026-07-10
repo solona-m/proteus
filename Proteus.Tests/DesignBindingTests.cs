@@ -36,75 +36,248 @@ public class DesignBindingTests
         return new JObject { ["Equipment"] = eq };
     }
 
-    // ── GearMatches ──────────────────────────────────────────────────────────
+    private static bool Matches(JObject design, JObject state)
+        => DesignBindingService.StateMatches(design, state, out _);
+
+    private static int Specificity(JObject design, JObject state)
+    {
+        DesignBindingService.StateMatches(design, state, out var spec);
+        return spec;
+    }
+
+    // ── Fluent fingerprint builders (mutate + return the JObject) ──────────────
+
+    private static JObject WithStain(JObject o, string slot, ulong stain, ulong stain2, bool applyStain = true)
+    {
+        var eq = (JObject)(o["Equipment"] ??= new JObject());
+        var s  = (JObject)(eq[slot] ??= new JObject());
+        s["Stain"]      = stain;
+        s["Stain2"]     = stain2;
+        s["ApplyStain"] = applyStain;
+        return o;
+    }
+
+    private static JObject WithBonus(JObject o, string slot, ulong bonusId, bool apply = true)
+    {
+        var b = (JObject)(o["Bonus"] ??= new JObject());
+        b[slot] = new JObject { ["BonusId"] = bonusId, ["Apply"] = apply };
+        return o;
+    }
+
+    private static JObject WithCustomize(JObject o, string index, long value, bool apply = true)
+    {
+        var c = (JObject)(o["Customize"] ??= new JObject());
+        c[index] = new JObject { ["Value"] = value, ["Apply"] = apply };
+        return o;
+    }
+
+    private static JObject WithParameter(JObject o, string flag, bool apply, params (string field, double val)[] fields)
+    {
+        var p = (JObject)(o["Parameters"] ??= new JObject());
+        var e = new JObject { ["Apply"] = apply };
+        foreach (var (f, v) in fields)
+            e[f] = v;
+        p[flag] = e;
+        return o;
+    }
+
+    // ── StateMatches: equipment baseline (formerly GearMatches) ────────────────
 
     [Fact]
-    public void GearMatches_AllAppliedSlotsEqual_AndEnoughSlots_IsTrue()
+    public void StateMatches_AllAppliedSlotsEqual_AndEnoughSlots_IsTrue()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
         var state  = State(("Head", 1), ("Body", 2), ("Hands", 3), ("Legs", 99));
-        Assert.True(DesignBindingService.GearMatches(design, state));
+        Assert.True(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_WeaponSlotsAreIgnored()
+    public void StateMatches_WeaponSlotsAreIgnored()
     {
         // The applied design matches the outfit in every armor slot but the drawn weapon differs
         // (job/gearset/sheathe state) — must still match, because MainHand/OffHand are excluded.
         var design = Design(("MainHand", 8654, true), ("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
         var state  = State(("MainHand", 16060), ("Head", 1), ("Body", 2), ("Hands", 3));
-        Assert.True(DesignBindingService.GearMatches(design, state));
+        Assert.True(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_OneAppliedItemDiffers_IsFalse()
+    public void StateMatches_OneAppliedItemDiffers_IsFalse()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
         var state  = State(("Head", 1), ("Body", 2), ("Hands", 7)); // hands differ
-        Assert.False(DesignBindingService.GearMatches(design, state));
+        Assert.False(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_FewerThanMinimumAppliedSlots_IsFalse()
+    public void StateMatches_FewerThanMinimumAppliedSlots_IsFalse()
     {
         // Only two applied slots — below MinGearSlots — even though they match.
         var design = Design(("Head", 1, true), ("Body", 2, true));
         var state  = State(("Head", 1), ("Body", 2));
-        Assert.False(DesignBindingService.GearMatches(design, state));
+        Assert.False(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_UnappliedSlotsAreIgnored()
+    public void StateMatches_UnappliedSlotsAreIgnored()
     {
         // Legs is present but Apply=false with a mismatching item — must be ignored.
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true), ("Legs", 555, false));
         var state  = State(("Head", 1), ("Body", 2), ("Hands", 3), ("Legs", 1));
-        Assert.True(DesignBindingService.GearMatches(design, state));
+        Assert.True(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_StateMissingAppliedSlot_IsFalse()
+    public void StateMatches_StateMissingAppliedSlot_IsFalse()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
         var state  = State(("Head", 1), ("Body", 2)); // no Hands in state
-        Assert.False(DesignBindingService.GearMatches(design, state));
+        Assert.False(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_MetaEntriesWithoutItemId_AreIgnored()
+    public void StateMatches_MetaEntriesWithoutItemId_AreIgnored()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
         // Add a meta entry (no ItemId), like Hat/Visor — should be skipped, not crash.
         ((JObject)design["Equipment"]!)["Hat"] = new JObject { ["Show"] = true, ["Apply"] = true };
         var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
-        Assert.True(DesignBindingService.GearMatches(design, state));
+        Assert.True(Matches(design, state));
     }
 
     [Fact]
-    public void GearMatches_MissingEquipmentObject_IsFalse()
+    public void StateMatches_MissingEquipmentObject_IsFalse()
     {
-        Assert.False(DesignBindingService.GearMatches(new JObject(), State(("Head", 1))));
-        Assert.False(DesignBindingService.GearMatches(Design(("Head", 1, true)), new JObject()));
+        Assert.False(Matches(new JObject(), State(("Head", 1))));
+        Assert.False(Matches(Design(("Head", 1, true)), new JObject()));
+    }
+
+    // ── StateMatches: dyes / stains ────────────────────────────────────────────
+
+    [Fact]
+    public void StateMatches_SameGearDifferentAppliedDye_IsFalse()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithStain(design, "Body", stain: 10, stain2: 0);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithStain(state, "Body", stain: 20, stain2: 0); // player is wearing a different dye
+        Assert.False(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_MatchingAppliedDye_CountsTowardSpecificity()
+    {
+        var gearOnly = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var dyed     = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithStain(dyed, "Body", stain: 10, stain2: 5);
+
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithStain(state, "Body", stain: 10, stain2: 5);
+
+        Assert.True(Matches(gearOnly, state));
+        Assert.True(Matches(dyed, state));
+        // The dyed design constrains one extra field, so it is strictly more specific.
+        Assert.True(Specificity(dyed, state) > Specificity(gearOnly, state));
+    }
+
+    [Fact]
+    public void StateMatches_UnappliedDyeIsIgnored()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithStain(design, "Body", stain: 10, stain2: 0, applyStain: false); // dye present but not applied
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithStain(state, "Body", stain: 99, stain2: 0); // mismatching dye must be tolerated
+        Assert.True(Matches(design, state));
+    }
+
+    // ── StateMatches: bonus items ──────────────────────────────────────────────
+
+    [Fact]
+    public void StateMatches_BonusItemMismatch_IsFalse()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", bonusId: 4);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 7); // different glasses
+        Assert.False(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_UnappliedBonusItemIsIgnored()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", bonusId: 4, apply: false);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 7);
+        Assert.True(Matches(design, state));
+    }
+
+    // ── StateMatches: customize ────────────────────────────────────────────────
+
+    [Fact]
+    public void StateMatches_CustomizeValueMismatch_IsFalse()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithCustomize(design, "SkinColor", value: 12);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithCustomize(state, "SkinColor", value: 30);
+        Assert.False(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_WetnessIsIgnored()
+    {
+        // Wetness lives in Customize with a bool Value; it is situational and must be skipped
+        // (both that it isn't compared and that its bool Value doesn't crash the numeric compare).
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        ((JObject)(design["Customize"] ??= new JObject()))["Wetness"] = new JObject { ["Value"] = true, ["Apply"] = true };
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        ((JObject)(state["Customize"] ??= new JObject()))["Wetness"] = new JObject { ["Value"] = false, ["Apply"] = true };
+        Assert.True(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_CustomizeArrayFormIsSkipped()
+    {
+        // Non-human models serialize customize as a base64 "Array" scalar, not per-index objects.
+        // It has nothing to compare and must not crash or reject.
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        ((JObject)(design["Customize"] ??= new JObject()))["Array"] = "AAAA==";
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        ((JObject)(state["Customize"] ??= new JObject()))["Array"] = "BBBB==";
+        Assert.True(Matches(design, state));
+    }
+
+    // ── StateMatches: advanced parameters ──────────────────────────────────────
+
+    [Fact]
+    public void StateMatches_ParameterMismatch_IsFalse()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithParameter(design, "SkinDiffuse", apply: true, ("Red", 0.5), ("Green", 0.5), ("Blue", 0.5));
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithParameter(state, "SkinDiffuse", apply: true, ("Red", 0.9), ("Green", 0.5), ("Blue", 0.5));
+        Assert.False(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_ParameterWithinTolerance_Matches()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithParameter(design, "SkinDiffuse", apply: true, ("Red", 0.5));
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithParameter(state, "SkinDiffuse", apply: true, ("Red", 0.50000001)); // float round-trip noise
+        Assert.True(Matches(design, state));
+    }
+
+    [Fact]
+    public void StateMatches_UnappliedParameterIsIgnored()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithParameter(design, "SkinDiffuse", apply: false, ("Red", 0.5));
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithParameter(state, "SkinDiffuse", apply: true, ("Red", 0.9));
+        Assert.True(Matches(design, state));
     }
 
     // ── IsApplySignal ────────────────────────────────────────────────────────────
