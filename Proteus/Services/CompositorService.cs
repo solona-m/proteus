@@ -46,6 +46,8 @@ public class CompositorService : IDisposable
     private string managedModDir;
 
     private CancellationTokenSource? currentCts;
+    private readonly SecondSkinService secondSkin;
+
     private readonly object triggerLock = new();
     private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
     private long _lastOwnReapplyTick = 0; // TickCount64 when we last called Glamourer ReapplyState()
@@ -103,6 +105,7 @@ public class CompositorService : IDisposable
         this.config = config;
         this.log = log;
         this.uvRemap = uvRemap;
+        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, log);
 
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
@@ -584,12 +587,16 @@ public class CompositorService : IDisposable
             // This prevents us from loading our own stale output as the base texture.
             var texturesDirEarly  = Path.Combine(managedModDir, "textures");
             var materialsDirEarly = Path.Combine(managedModDir, "materials");
+            var modelsDirEarly    = Path.Combine(managedModDir, "models");
             if (Directory.Exists(texturesDirEarly))
                 foreach (var f in Directory.GetFiles(texturesDirEarly, "*.tex"))
                     try { File.Delete(f); } catch { }
             if (Directory.Exists(materialsDirEarly))
                 foreach (var f in Directory.GetFiles(materialsDirEarly, "*.mtrl"))
                     try { File.Delete(f); } catch { }
+            if (Directory.Exists(modelsDirEarly))
+                foreach (var f in Directory.GetFiles(modelsDirEarly, "*.mdl"))
+                    try { File.Delete(f); } catch { }   // second-skin shells
 
             // Clear redirects and reload. Penumbra's IPC reload may process asynchronously
             // on the game main thread, so sleep briefly to let it take effect before any
@@ -623,6 +630,10 @@ public class CompositorService : IDisposable
 
             var colorOverride = _colorOverride; // snapshot the volatile reference for this run
 
+            // Gear overlays don't composite into a skin material — each becomes its own second-skin
+            // shell with its own material and shader. Collect them separately.
+            var gearOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
+
             foreach (var entry in entries)
             {
                 var overlays = discovery.ResolveActiveOverlays(entry);
@@ -637,6 +648,12 @@ public class CompositorService : IDisposable
 
                 foreach (var overlay in overlays)
                 {
+                    if (overlay.Descriptor.Layer == OverlayLayer.Gear)
+                    {
+                        gearOverlays.Add((entry, overlay));
+                        continue;
+                    }
+
                     foreach (var mtrlPath in overlay.Descriptor.MaterialGamePaths)
                     {
                         if (string.IsNullOrEmpty(mtrlPath)) continue;
@@ -1460,7 +1477,31 @@ public class CompositorService : IDisposable
 
             });
 
-            WriteManagedModJson(redirects);
+            // ── Second skin: one gear shell per Layer:Gear overlay ────────────
+            // Built from the body model the character is CURRENTLY drawing (resolved live through
+            // Penumbra) — a shell cut from any other body shape shows the body through it.
+            List<object>? manipulations = null;
+            if (gearOverlays.Count > 0)
+            {
+                var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
+                    ?.TrimStart('c', 'C');
+                if (string.IsNullOrEmpty(charCode))
+                    log.Warning("[Proteus] {0} gear overlay(s) skipped: no character code yet", gearOverlays.Count);
+                else
+                    try
+                    {
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir);
+                        if (shells != null)
+                        {
+                            foreach (var (gamePath, relPath) in shells.Redirects)
+                                redirects[gamePath] = relPath;
+                            manipulations = shells.Manipulations;
+                        }
+                    }
+                    catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
+            }
+
+            WriteManagedModJson(redirects, manipulations);
             ReloadAndRedrawWhenReady(redirects, runId);
 
             LastResult = new CompositorResult
@@ -1535,14 +1576,24 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void WriteManagedModJson(IDictionary<string, string> redirects)
+    /// <summary>
+    /// Write the managed mod's default_mod.json.
+    /// <paramref name="manipulations"/> carries metadata edits — a second-skin shell needs an EQDP entry
+    /// so the accessory it rides on loads the character's own race/gender model rather than the default.
+    /// </summary>
+    private void WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null)
     {
         // Penumbra default_mod.json: { "Files": { "gamePath": "relPath", ... }, "Swaps": {}, "Manipulations": [] }
         var files = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
-        var obj = new { Files = files, Swaps = new { }, Manipulations = Array.Empty<object>() };
+        var obj = new
+        {
+            Files = files,
+            Swaps = new { },
+            Manipulations = (IReadOnlyList<object>)(manipulations ?? Array.Empty<object>()),
+        };
         var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
         var target = Path.Combine(managedModDir, "default_mod.json");
         var tmp    = target + "." + Guid.NewGuid().ToString("N") + ".tmp";

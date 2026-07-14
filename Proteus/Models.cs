@@ -37,9 +37,47 @@ public class ProteusMetadata
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
 }
 
+/// <summary>Which surface an overlay renders on.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum OverlayLayer
+{
+    /// <summary>The character's own skin, composited into the body material. Always skin.shpk.</summary>
+    Skin,
+
+    /// <summary>
+    /// A "second skin": the body's skin meshes duplicated, pushed out along their normals, and drawn as
+    /// gear so they can run a full gear shader (color table, sphere maps, metalness, scrolling emissive)
+    /// — none of which skin.shpk offers. Shells stack, gated by their normal map's blue channel.
+    /// </summary>
+    Gear,
+}
+
 /// <summary>Describes one set of overlay textures targeting one or more materials.</summary>
 public class OverlayDescriptor
 {
+    /// <summary>Surface this overlay renders on. Defaults to the skin itself.</summary>
+    [JsonPropertyName("Layer")]
+    public OverlayLayer Layer { get; set; } = OverlayLayer.Skin;
+
+    /// <summary>
+    /// Shader package for a <see cref="OverlayLayer.Gear"/> overlay — e.g. "character.shpk" (default)
+    /// or "characterscroll.shpk" (adds a time-animated scrolling emissive driven by an _o texture).
+    /// Ignored on the skin layer, which is always skin.shpk. Prefer <see cref="ShaderPackage"/>.
+    /// </summary>
+    [JsonPropertyName("Shader")]
+    public string? Shader { get; set; }
+
+    /// <summary>Skin overlays have no shader choice — the body material is skin.shpk.</summary>
+    public const string SkinShader = "skin.shpk";
+
+    /// <summary>Gear shells default to plain character.shpk unless the option names another.</summary>
+    public const string DefaultGearShader = "character.shpk";
+
+    /// <summary>The shader this overlay actually renders with, after applying the layer's rules.</summary>
+    [JsonIgnore]
+    public string ShaderPackage
+        => Layer == OverlayLayer.Skin ? SkinShader : (Shader ?? DefaultGearShader);
+
     /// <summary>
     /// Penumbra game path(s) of the .mtrl file(s). Accepts a single string or a JSON array.
     /// The same overlay textures are composited onto every listed material.
@@ -67,6 +105,14 @@ public class OverlayDescriptor
     /// </summary>
     [JsonPropertyName("Index")]
     public string? Index { get; set; }
+
+    /// <summary>
+    /// Gear layer only. Relative path to the scrolling emissive map (vanilla calls this texture "_catc";
+    /// mods often name it "_o"). Its color and intensity become the glow, animated by the shader from
+    /// global time. Requires Shader = "characterscroll.shpk"; ignored otherwise.
+    /// </summary>
+    [JsonPropertyName("Scroll")]
+    public string? Scroll { get; set; }
 
     /// <summary>
     /// For a normal-only overlay (no Diffuse), whether to synthesize a diffuse tint from the
@@ -165,6 +211,27 @@ public class ColorTableSubRowPreset
     /// </summary>
     [JsonPropertyName("Opacity")]
     public int Opacity { get; set; } = 0;
+
+    /// <summary>
+    /// Gear layer only. Sphere map to reflect on this row — a slice of the game's shared
+    /// chara/common/texture/sphere_d_array.tex. Needs no texture of our own.
+    /// Has no effect unless <see cref="SphereIntensity"/> is also non-zero, and does not work under
+    /// characterscroll.shpk (use the default character.shpk).
+    /// </summary>
+    [JsonPropertyName("SphereMap")]
+    public int? SphereMap { get; set; }
+
+    /// <summary>Gear layer only. How strongly the sphere map blends in (0–1).</summary>
+    [JsonPropertyName("SphereIntensity")]
+    public float? SphereIntensity { get; set; }
+
+    /// <summary>Gear layer only. Surface roughness (0–1). Null keeps the shader default.</summary>
+    [JsonPropertyName("Roughness")]
+    public float? Roughness { get; set; }
+
+    /// <summary>Gear layer only. Metalness (0–1). Null keeps the shader default.</summary>
+    [JsonPropertyName("Metalness")]
+    public float? Metalness { get; set; }
 }
 
 /// <summary>Runtime (0-based) representation of a single color table sub-row.</summary>

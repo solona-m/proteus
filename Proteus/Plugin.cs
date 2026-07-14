@@ -17,6 +17,10 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IDataManager DataManager { get; private set; } = null!;
     [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
+
+    /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
+    public const int BuildNumber = 5;
 
     private const string CommandName = "/proteus";
 
@@ -86,6 +90,7 @@ public sealed class Plugin : IDalamudPlugin
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0}", penumbra.IsAvailable);
+        ChatGui.Print($"[Proteus] loaded — build #{BuildNumber}");
     }
 
     private void DrawUi() => windowSystem.Draw();
