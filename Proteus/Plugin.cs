@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 61;
+    public const int BuildNumber = 62;
 
     private const string CommandName = "/proteus";
 
@@ -53,7 +53,14 @@ public sealed class Plugin : IDalamudPlugin
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
         textureLoader = new TextureLoader(DataManager, log);
-        discovery = new SidecarDiscoveryService(penumbra, log);
+        discovery = new SidecarDiscoveryService(penumbra, log)
+        {
+            AssemblyDir = pluginInterface.AssemblyLocation.DirectoryName,
+        };
+        // Fill the global effects library with the bundled starter set (skips names already there).
+        // Safe to call before Penumbra is up — it no-ops until the mod directory is resolvable, and
+        // OnPenumbraReady calls it again once it is.
+        discovery.SeedDefaultEffects();
         uvRemap = new UVRemapService(log, pluginInterface.AssemblyLocation.DirectoryName!);
         uvMapDl = new UVMapDownloadService(log, pluginInterface.AssemblyLocation.DirectoryName!);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);

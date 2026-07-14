@@ -248,6 +248,8 @@ public class CompositorService : IDisposable
     {
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
+        // Now that the mod directory is resolvable, make sure the bundled starter effects are present.
+        discovery.SeedDefaultEffects();
         if (!config.PluginEnabled) return;
         // Only trigger if discovery already sees mods. PenumbraReady can fire before Penumbra's
         // mod settings are readable; if discovery returns empty we'd wipe the existing output.

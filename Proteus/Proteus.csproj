@@ -53,6 +53,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Starter scroll-effect library. Shipped alongside the plugin and seeded into the user's
+         global Effects folder on first run (SidecarDiscoveryService.SeedDefaultEffects), so every
+         gear overlay's Effect dropdown has something to choose from out of the box. -->
+    <Content Include="DefaultEffects\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>DefaultEffects\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
   </ItemGroup>

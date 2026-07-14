@@ -51,6 +51,9 @@ public class SidecarDiscoveryService
     public  const string MaskGroupName = "Masks";
     private const string MaskSubdir    = "Masks";
 
+    /// <summary>Plugin assembly directory — the bundled DefaultEffects live under it. Set once at startup.</summary>
+    public string? AssemblyDir { get; set; }
+
     public SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log)
     {
         this.penumbra = penumbra;
@@ -296,6 +299,32 @@ public class SidecarDiscoveryService
         var dir = Path.Combine(root, ManagedModDir, EffectsSubdir);
         try { Directory.CreateDirectory(dir); } catch { return null; }
         return dir;
+    }
+
+    /// <summary>
+    /// Copy the plugin's bundled starter effects (shipped in <c>&lt;assembly&gt;\DefaultEffects\</c>) into the
+    /// user's global effects library, skipping any file already there. Runs once on startup; a file the
+    /// user has since deleted stays deleted (we only fill gaps, and only for names that aren't present).
+    /// Never overwrites — a user's edited copy of a bundled effect is left alone.
+    /// </summary>
+    public void SeedDefaultEffects()
+    {
+        if (AssemblyDir == null) return;
+        var src = Path.Combine(AssemblyDir, "DefaultEffects");
+        var dst = EffectsLibraryPath();
+        if (dst == null || !Directory.Exists(src)) return;
+
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(src))
+            {
+                var target = Path.Combine(dst, Path.GetFileName(f));
+                if (File.Exists(target)) continue;
+                try { File.Copy(f, target); }
+                catch (Exception ex) { log.Warning(ex, "[Proteus] could not seed effect {0}", Path.GetFileName(f)); }
+            }
+        }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] SeedDefaultEffects failed"); }
     }
 
     /// <summary>
