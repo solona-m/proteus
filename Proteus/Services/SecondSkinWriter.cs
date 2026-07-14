@@ -92,12 +92,57 @@ public static class SecondSkinWriter
 
     public readonly record struct Stats(int Meshes, int Submeshes, int Bones, int TrianglesIn, int TrianglesOut, int VerticesOut);
 
+    /// <summary>
+    /// The material names a body model references, e.g. "/mt_c0201b0001_bibo.mtrl". The shell inherits
+    /// this model's UVs, so its material is the authoritative statement of which UV space those are —
+    /// far more reliable than guessing from whatever body materials happen to be loaded.
+    /// </summary>
+    public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
+
+    private static List<string> ReadMaterialNames(byte[] s, Source src)
+    {
+        var names = new List<string>();
+        for (int i = 0; i < src.MatCount; i++)
+        {
+            int o = src.StrBlock + (int)BitConverter.ToUInt32(s, src.MatOffStart + i * 4), e = o;
+            while (s[e] != 0) e++;
+            names.Add(Encoding.ASCII.GetString(s, o, e - o));
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// The UV space of a SKIN material, or null if this isn't skin at all.
+    ///
+    /// This is what "select all the skin elements" means in practice. A body model is NOT all skin: it
+    /// also carries the smallclothes/undies mesh (gear UV!), plus nails, piercings and pubes, each with
+    /// its own material and UV layout. Duplicating those into the shell and painting them with a
+    /// body-UV overlay smears the art across the hips and hands. Only meshes whose material is a body
+    /// skin material (mt_c{race}b{body}_…) belong in a second skin.
+    /// </summary>
+    public static string? SkinMaterialBodyType(string materialName)
+    {
+        var n = materialName.TrimStart('/');
+        if (!n.StartsWith("mt_c", StringComparison.OrdinalIgnoreCase)) return null;
+
+        // skin is mt_c{race}b{body}_… ; equipment is mt_c{race}e{id}_…
+        int b = n.IndexOf('b', 4);
+        if (b < 0 || b > 8) return null;
+
+        if (n.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)) return "bibo";
+        if (n.EndsWith("_eve.mtrl", StringComparison.OrdinalIgnoreCase)) return "gen3";
+        if (n.EndsWith("_b.mtrl", StringComparison.OrdinalIgnoreCase)) return "gen3";
+        if (n.EndsWith("_a.mtrl", StringComparison.OrdinalIgnoreCase)) return "gen2";
+        return null;   // _neolithe_undies, _nails, _piercings, _bibopube, … — not skin
+    }
+
     /// <summary>A parsed body part.</summary>
     private sealed class Source
     {
         public required byte[] S;
-        public int Mh, MeshStart, SubmeshStart, Vb, Ib;
-        public ushort MeshCount, SubmeshCount, BoneCount;
+        public int Mh, MeshStart, SubmeshStart, Vb, Ib, StrBlock, MatOffStart;
+        public ushort MeshCount, SubmeshCount, BoneCount, MatCount;
+        public List<string> MatNames = [];
         public string[] BoneNames = [];
         public ushort[][] BoneTables = [];
         public ushort[] SubmeshBoneMap = [];
@@ -167,6 +212,13 @@ public static class SecondSkinWriter
                     int mo = src.MeshStart + m * 36;
                     ushort vc = U16(mo);
                     if (vc == 0) continue;
+
+                    // SKIN ONLY. A body model also holds the smallclothes/undies mesh (gear UV), nails,
+                    // piercings and pubes; duplicating those and painting them with a body-UV overlay
+                    // smears the art across the hips and hands.
+                    ushort srcMat = U16(mo + 8);
+                    if (srcMat >= src.MatNames.Count || SkinMaterialBodyType(src.MatNames[srcMat]) == null)
+                        continue;
 
                     ushort srcSubIdx = U16(mo + 10), srcSubCount = U16(mo + 12), srcBoneTbl = U16(mo + 14);
                     uint vbo0 = U32(mo + 20), vbo1 = U32(mo + 24);
@@ -533,14 +585,26 @@ public static class SecondSkinWriter
         var lods = new byte[3 * 60];
         Array.Copy(s, lodStart, lods, 0, lods.Length);
 
+        var matNames = new List<string>();
+        for (int i = 0; i < matCount; i++)
+        {
+            int o = strBlock + (int)U32(matOffStart + i * 4), e = o;
+            while (s[e] != 0) e++;
+            matNames.Add(Encoding.ASCII.GetString(s, o, e - o));
+        }
+
         return new Source
         {
+            MatNames = matNames,
             S = s,
             Mh = mh,
             MeshStart = meshStart,
             SubmeshStart = submeshStart,
             Vb = (int)vtxOff,
             Ib = (int)idxOff,
+            StrBlock = strBlock,
+            MatOffStart = matOffStart,
+            MatCount = matCount,
             MeshCount = meshCount,
             SubmeshCount = submeshCount,
             BoneCount = boneCount,

@@ -20,7 +20,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 5;
+    public const int BuildNumber = 10;
 
     private const string CommandName = "/proteus";
 

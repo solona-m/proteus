@@ -105,7 +105,7 @@ public class CompositorService : IDisposable
         this.config = config;
         this.log = log;
         this.uvRemap = uvRemap;
-        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, log);
+        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, log);
 
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
@@ -1490,7 +1490,16 @@ public class CompositorService : IDisposable
                 else
                     try
                     {
-                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir);
+                        // The shell inherits the BODY's UVs, so overlays authored for another body's UV
+                        // layout must be remapped into the body's space — not the accessory material's.
+                        // Use THIS character's body material: _lastCompositedBodyType can list several
+                        // types (bibo hands + gen3 body, say) and taking whichever sorts first is wrong.
+                        var bodyType = activeMtrl?
+                            .Where(m => m.Contains($"/c{charCode}/obj/body/", StringComparison.OrdinalIgnoreCase))
+                            .Select(UVRemapService.InferBodyType)
+                            .FirstOrDefault(t => t != null)
+                            ?? _lastCompositedBodyType?.Split(',').FirstOrDefault();
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType);
                         if (shells != null)
                         {
                             foreach (var (gamePath, relPath) in shells.Redirects)

@@ -20,6 +20,7 @@ public sealed class SecondSkinService
     private readonly PenumbraBridge penumbra;
     private readonly TextureLoader textureLoader;
     private readonly SidecarDiscoveryService discovery;
+    private readonly UVRemapService uvRemap;
     private readonly IPluginLog log;
 
     /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
@@ -41,11 +42,13 @@ public sealed class SecondSkinService
     private static readonly string[] Parts = ["top", "dwn", "glv", "sho"];
 
     public SecondSkinService(
-        PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery, IPluginLog log)
+        PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
+        UVRemapService uvRemap, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
         this.discovery = discovery;
+        this.uvRemap = uvRemap;
         this.log = log;
     }
 
@@ -57,10 +60,80 @@ public sealed class SecondSkinService
     /// ("0201" = Midlander female). <paramref name="outputRoot"/> is the managed mod directory.
     /// Returns null when there is nothing to build.
     /// </summary>
+    /// <summary>
+    /// The UV space an overlay's art is painted in, inferred from the body materials it targets — a mod
+    /// listing only <c>*_bibo.mtrl</c> is bibo art. Returns null when the materials disagree or name no
+    /// body type, in which case the art is assumed to already be in the body's space.
+    /// </summary>
+    private static string? InferOverlayBodyType(OverlayDescriptor d)
+    {
+        string? found = null;
+        foreach (var p in d.MaterialGamePaths)
+        {
+            var t = UVRemapService.InferBodyType(p);
+            if (t == null) continue;
+            if (found == null) found = t;
+            else if (!string.Equals(found, t, StringComparison.OrdinalIgnoreCase)) return null;   // mixed
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// Load an overlay image and, if it was painted for a different body's UV layout, remap it into the
+    /// body's UV space. The shell INHERITS the body's UVs, so the destination is the character's body UV
+    /// type — not the accessory material's. Mirrors CompositorService.RemapIfNeeded; keep them in step.
+    /// </summary>
+    private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h)
+    {
+        if (rel == null) return null;
+        var path = Path.Combine(sidecarRoot, rel);
+        return RemapPath(path, srcType, dstType, w, h);
+    }
+
+    private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h)
+    {
+        var png = textureLoader.LoadPngAsRgba(path, w, h);
+        if (png == null || srcType == null || dstType == null) return png;
+        if (string.Equals(srcType, dstType, StringComparison.OrdinalIgnoreCase)) return png;
+
+        // Any source -> gen2 (vanilla): vanilla UV is the RIGHT HALF of bibo UV space, so convert to
+        // bibo first (via transfer map when needed), crop, then resize.
+        if (string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase))
+        {
+            var native = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            if (native == null) return png;
+            byte[] biboSpace;
+            if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
+            {
+                biboSpace = native;
+            }
+            else
+            {
+                var converted = uvRemap.Remap(native, 4096, 4096, srcType, "bibo");
+                if (ReferenceEquals(converted, native)) return png;   // no transfer map — leave it alone
+                biboSpace = converted;
+            }
+            var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
+            return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
+        }
+
+        // Transfer maps operate at 4096x4096; our textures are smaller, so remap at full res then resize.
+        if (w != 4096 || h != 4096)
+        {
+            var native4k = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            if (native4k == null) return png;
+            var remapped = uvRemap.Remap(native4k, 4096, 4096, srcType, dstType);
+            if (ReferenceEquals(remapped, native4k)) return png;
+            return UVRemapService.ResizeBilinear(remapped, 4096, 4096, w, h);
+        }
+        return uvRemap.Remap(png, w, h, srcType, dstType);
+    }
+
     public Result? Build(
         string charCode,
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
-        string outputRoot)
+        string outputRoot,
+        string? bodyType)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -97,6 +170,19 @@ public sealed class SecondSkinService
             return null;
         }
 
+        // The shell inherits the body model's UVs, so ask THAT MODEL which material it uses — its suffix
+        // names the UV space outright. Inferring from "whichever body material happens to be loaded" is
+        // ambiguous (a character can have a vanilla _a material alongside a gen3 body) and picked wrong.
+        var modelType = bodies.SelectMany(SecondSkinWriter.MaterialNames)
+                              .Select(SecondSkinWriter.SkinMaterialBodyType)
+                              .FirstOrDefault(t => t != null);
+        if (modelType != null && !string.Equals(modelType, bodyType, StringComparison.OrdinalIgnoreCase))
+        {
+            log.Information("[Proteus] second skin: body UV is {0} per the model's material (was {1})",
+                modelType, bodyType ?? "unknown");
+            bodyType = modelType;
+        }
+
         var layers = new List<SecondSkinLayer>();
         for (int i = 0; i < gearOverlays.Count; i++)
         {
@@ -114,10 +200,23 @@ public sealed class SecondSkinService
             // Coverage is authored the same way as on the skin layer: the overlay's own alpha, SHAPED BY
             // the mod's selected "Masks" options. For a lot of mods the diffuse is opaque everywhere and
             // the mask IS the shape, so skipping masks would paint the whole body.
-            var alpha = BuildAlpha(ov.Descriptor, entry, TexSize, TexSize);
+            // Which UV space is this art painted in? An overlay usually doesn't say — it just lists the
+            // body materials it targets, and THAT is the declaration: a mod listing only *_bibo.mtrl is
+            // bibo art. The skin layer gets this gating for free (a bibo overlay simply doesn't match a
+            // gen3 body's material, so it never composites). The gear layer has no such gate — it paints
+            // the shell regardless — so without this it would spray bibo art across a gen3 body.
+            var srcType = ov.Descriptor.SourceBodyType ?? InferOverlayBodyType(ov.Descriptor);
+            log.Information(
+                "[Proteus] gear layer {0}: shader={1} UV {2} -> {3}{4}",
+                letter, shader, srcType ?? "(unknown)", bodyType ?? "(unknown)",
+                srcType != null && bodyType != null && !string.Equals(srcType, bodyType, StringComparison.OrdinalIgnoreCase)
+                    ? " [REMAP]" : " [no remap]");
+            var alpha = BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize);
             var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
 
-            var texPaths = WriteTextures(ov.Descriptor, sidecarRoot, shader, texPrefix, texturesDir, redirects, letter, alpha);
+            var texPaths = WriteTextures(
+                ov.Descriptor, sidecarRoot, shader, texPrefix, texturesDir, redirects, letter, alpha,
+                srcType, bodyType);
             if (texPaths == null) continue;
 
             var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
@@ -185,7 +284,8 @@ public sealed class SecondSkinService
     /// mask can both carve coverage away and force it on. Mirrors CompositorService.CombinedMaskAt /
     /// ApplyCoverageMask; keep the two in step.
     /// </summary>
-    private byte[]? BuildAlpha(OverlayDescriptor d, OverlayEntry entry, int w, int h)
+    private byte[]? BuildAlpha(
+        OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType, int w, int h)
     {
         var artPath = d.Diffuse ?? d.Normal ?? d.Mask;
         var masks = discovery.ResolveActiveMasks(entry);
@@ -196,7 +296,7 @@ public sealed class SecondSkinService
 
         if (artPath != null)
         {
-            var art = textureLoader.LoadPngAsRgba(Path.Combine(entry.SidecarRoot, artPath), w, h);
+            var art = LoadRemapped(artPath, entry.SidecarRoot, srcType, dstType, w, h);
             if (art == null) return null;
             for (int i = 0; i < n; i++) alpha[i] = art[i * 4 + 3];
         }
@@ -209,7 +309,7 @@ public sealed class SecondSkinService
         byte[]? wArr = null, tArr = null;
         for (int p = masks.Count - 1; p >= 0; p--)
         {
-            var m = textureLoader.LoadPngAsRgba(masks[p], w, h);
+            var m = RemapPath(masks[p], srcType, dstType, w, h);   // masks share the overlay's UV space
             if (m == null) continue;
             if (wArr == null)
             {
@@ -272,12 +372,12 @@ public sealed class SecondSkinService
     /// </summary>
     private List<string>? WriteTextures(
         OverlayDescriptor d, string sidecarRoot, string shader, string texPrefix,
-        string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha)
+        string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
+        string? srcType, string? dstType)
     {
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
 
-        byte[]? Png(string? rel) =>
-            rel == null ? null : textureLoader.LoadPngAsRgba(Path.Combine(sidecarRoot, rel), TexSize, TexSize);
+        byte[]? Png(string? rel) => LoadRemapped(rel, sidecarRoot, srcType, dstType, TexSize, TexSize);
 
         var diffuse = Png(d.Diffuse);
         var normal = Png(d.Normal);
