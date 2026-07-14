@@ -45,17 +45,27 @@ public static class ColorTableEditor
         var first = overlays[0];
 
         bool gear = first.Layer == OverlayLayer.Gear;
-        if (ImGui.Checkbox($"Gear Layer##{idScope}", ref gear))
+
+        ImGui.SetNextItemWidth(110);
+        if (ImGui.BeginCombo($"Layer##{idScope}", gear ? "Gear" : "Skin"))
         {
-            foreach (var d in overlays)
-                d.Layer = gear ? OverlayLayer.Gear : OverlayLayer.Skin;
-            changed = true;
+            foreach (var layer in new[] { OverlayLayer.Skin, OverlayLayer.Gear })
+            {
+                bool selected = layer == first.Layer;
+                if (ImGui.Selectable(layer == OverlayLayer.Gear ? "Gear" : "Skin", selected) && !selected)
+                {
+                    foreach (var d in overlays) d.Layer = layer;
+                    changed = true;
+                }
+            }
+            ImGui.EndCombo();
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(
-                "Render this option on a \"second skin\" — a copy of your skin drawn as gear, so it can\n" +
-                "use a full gear shader: sphere maps, metalness, and animated emissive, none of which\n" +
-                "skin.shpk offers. Rides an invisible ring, so it survives any outfit.");
+                "Skin — composited into your skin's own textures (the default).\n\n" +
+                "Gear — rendered on a \"second skin\": a copy of your skin drawn as gear, so it can use a\n" +
+                "full gear shader (sphere maps, metalness, animated emissive), none of which skin.shpk\n" +
+                "offers. Rides an invisible ring, so it survives any outfit.");
 
         if (!gear) return changed;
 
@@ -118,7 +128,17 @@ public static class ColorTableEditor
         selectedRow = sel;
 
         // ── row picker ───────────────────────────────────────────────────────
-        const int perLine = 8;
+        // Each button previews its row: three columns (diffuse, specular, glow), each split top = A,
+        // bottom = B — so the whole table is readable at a glance without clicking through it.
+        // Left-align the label, or it centres itself under the swatches and disappears.
+        using var align = ImRaii.PushStyle(ImGuiStyleVar.ButtonTextAlign, new Vector2(0f, 0.5f));
+
+        // Wrap to whatever width the window actually has, rather than a fixed count that falls off the
+        // right edge when the window is narrow.
+        var btn = new Vector2(70, 30);
+        float avail = ImGui.GetContentRegionAvail().X;
+        int perLine = Math.Max(1, (int)((avail + ImGui.GetStyle().ItemSpacing.X) / (btn.X + ImGui.GetStyle().ItemSpacing.X)));
+
         for (int row = 1; row <= 16; row++)
         {
             if ((row - 1) % perLine != 0) ImGui.SameLine();
@@ -127,11 +147,13 @@ public static class ColorTableEditor
             using (ImRaii.Disabled(!used))
             using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), row == selectedRow))
             {
-                if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", new Vector2(38, 0)))
+                if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", btn))
                     selectedRow = row;
             }
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip("This overlay's index texture never selects this row,\nso editing it would have no effect.");
+
+            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax());
         }
 
         ImGui.Separator();
@@ -151,6 +173,49 @@ public static class ColorTableEditor
 
             ImGui.EndTable();
         }
+    }
+
+    /// <summary>
+    /// Paint a row's colours onto its picker button: three columns — diffuse, specular, glow — each
+    /// split top = sub-row A, bottom = sub-row B. The glow swatch is the emissive colour scaled by its
+    /// intensity, i.e. what actually lands in the colour table, so a row with no glow reads as black.
+    /// </summary>
+    private static void DrawRowSwatches(List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max)
+    {
+        var preset = rows.FirstOrDefault(r => r.Row == row);
+        var draw = ImGui.GetWindowDrawList();
+
+        // The label sits on the left; swatches fill the right half of the button.
+        float x0 = min.X + 34f, x1 = max.X - 3f;
+        float y0 = min.Y + 3f, y1 = max.Y - 3f;
+        if (x1 <= x0) return;
+
+        float colW = (x1 - x0) / 3f;
+        float midY = (y0 + y1) * 0.5f;
+
+        Vector3 Swatch(ColorTableSubRowPreset? s, int column) => column switch
+        {
+            0 => HexToVec3(s?.Diffuse),
+            1 => HexToVec3(s?.Specular),
+            _ => HexToVec3(s?.EmissiveColor ?? s?.Diffuse) * (s?.Emissive ?? 0f),
+        };
+
+        for (int c = 0; c < 3; c++)
+        {
+            float cx0 = x0 + c * colW, cx1 = cx0 + colW - 1f;
+            foreach (var (sub, ry0, ry1) in new[]
+                     {
+                         (preset?.SubRowA, y0, midY),
+                         (preset?.SubRowB, midY, y1),
+                     })
+            {
+                var v = Swatch(sub, c);
+                uint col = ImGui.GetColorU32(new Vector4(v.X, v.Y, v.Z, 1f));
+                draw.AddRectFilled(new Vector2(cx0, ry0), new Vector2(cx1, ry1), col);
+            }
+        }
+
+        draw.AddRect(new Vector2(x0, y0), new Vector2(x1, y1), ImGui.GetColorU32(ImGuiCol.Border));
     }
 
     private static void DrawSubRow(
@@ -199,11 +264,13 @@ public static class ColorTableEditor
                                  "wants a DARK surface with a bright glow. Defaults to the diffuse.");
         }
 
-        float em = sub?.Emissive ?? 0f;
+        // Stored 0–1, shown as a percentage. Fine steps matter: characterscroll's glow gate sits at
+        // about 2.5%, and anything much larger washes the scroll map's colour out.
+        float emPct = (sub?.Emissive ?? 0f) * 100f;
         ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Glow##e_{id}", ref em, 0.005f, 0f, 1f, "%.3f"))
+        if (ImGui.DragFloat($"Glow##e_{id}", ref emPct, 0.25f, 0f, 100f, "%.1f%%"))
         {
-            Edit().Emissive = Math.Clamp(em, 0f, 1f);
+            Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 1f);
             changed = true;
         }
         if (gear && ImGui.IsItemHovered())

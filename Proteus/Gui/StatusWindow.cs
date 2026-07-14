@@ -34,6 +34,9 @@ public class StatusWindow : Window
     private readonly Dictionary<string, int> _colorEditorSelection = new();
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
+    // Mod whose colour editor window is open, or null. A window rather than a popup: colour work means
+    // clicking back and forth with the game, and a popup closes on any click outside it.
+    private string? _colorWindowMod;
     // Key: modDir → priority value being dragged; committed to Penumbra on edit-end.
     private readonly Dictionary<string, int> _priorityEdits = new();
 
@@ -84,6 +87,28 @@ public class StatusWindow : Window
 
         ImGui.Separator();
         DrawLastResult();
+
+        DrawColorWindow();
+    }
+
+    /// <summary>The colour editor, as its own window — stays open until closed.</summary>
+    private void DrawColorWindow()
+    {
+        if (_colorWindowMod == null) return;
+
+        var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
+        if (entry == null) { _colorWindowMod = null; return; }
+
+        bool open = true;
+        // Wide enough for the 16 row buttons to sit 8-across on two lines.
+        ImGui.SetNextWindowSize(new Vector2(720, 580), ImGuiCond.FirstUseEver);
+        // Narrow enough and the row picker wraps; this just stops it collapsing to something useless.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(400, 300), new Vector2(float.MaxValue, float.MaxValue));
+        if (ImGui.Begin($"Colors — {entry.ModName}###ProteusColors", ref open))
+            DrawColorEditor(entry);
+        ImGui.End();
+
+        if (!open) _colorWindowMod = null;
     }
 
     private void DrawStatusBanner()
@@ -262,24 +287,18 @@ public class StatusWindow : Window
                     compositor.TriggerRecomposite("penumbra-priority");
                 }
 
-                // Colors button + popup editor. Tinted when a design binding is currently
-                // driving this mod's colors (edits target the binding, not metadata).
+                // Colors button. Opens a real window (not a popup) so it survives clicking away —
+                // colour work means going back and forth with the game, and a popup dies on any
+                // click outside it. Tinted when a design binding is driving this mod's colours.
                 ImGui.TableNextColumn();
-                var popupId = $"##colors_{entry.ModDirectory}";
                 bool bindingDriven = designBindings.IsOverrideActiveFor(entry.ModDirectory);
                 using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(BindingAccent with { W = 0.45f }), bindingDriven))
                 {
                     if (ImGui.Button($"Colors##{entry.ModDirectory}"))
-                        ImGui.OpenPopup(popupId);
+                        _colorWindowMod = _colorWindowMod == entry.ModDirectory ? null : entry.ModDirectory;
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
                     ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update binding\" to save them. Base colors are unchanged.");
-
-                if (ImGui.BeginPopup(popupId))
-                {
-                    DrawColorEditor(entry);
-                    ImGui.EndPopup();
-                }
 
                 // Sibling-synthesis mode (which body types to generate for this mod).
                 ImGui.TableNextColumn();
