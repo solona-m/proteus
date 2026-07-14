@@ -206,6 +206,17 @@ public class ColorTableSubRowPreset
     public float Emissive { get; set; } = 0f;
 
     /// <summary>
+    /// Gear layer only. Glow colour, independent of <see cref="Diffuse"/>. Defaults to the diffuse
+    /// colour when omitted.
+    ///
+    /// These have to be separate: a scrolling-emissive material typically wants a nearly BLACK diffuse
+    /// (so the glow reads against it) with a WHITE emissive — e.g. Luci's shirt is diffuse (0.08,0,0),
+    /// emissive (1,1,1). Deriving the glow from the diffuse cannot express that.
+    /// </summary>
+    [JsonPropertyName("EmissiveColor")]
+    public string? EmissiveColor { get; set; }
+
+    /// <summary>
     /// Opacity adjustment −100…100. Negative fades the overlay toward transparent;
     /// positive pushes semi-transparent pixels toward fully opaque. Zero = no change.
     /// </summary>

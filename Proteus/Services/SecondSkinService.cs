@@ -219,7 +219,12 @@ public sealed class SecondSkinService
                 srcType, bodyType);
             if (texPaths == null) continue;
 
-            var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
+            // characterscroll ships with the plugin (vanilla ones glow flat white); the rest come from
+            // vanilla game data, so no mod needs to be installed.
+            var vanillaPath = GearMaterialWriter.TemplateFor(shader);
+            var template = vanillaPath != null
+                ? textureLoader.LoadRawMtrl(null, vanillaPath)
+                : GearMaterialWriter.EmbeddedTemplate(shader);
             if (template == null)
             {
                 log.Error("[Proteus] second skin: missing template material for {0}", shader);
@@ -443,12 +448,18 @@ public sealed class SecondSkinService
         {
             if (sub == null) return;
             var rgb = ParseHex(sub.Diffuse);
+            // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
+            // with a white emissive), falling back to the diffuse when not given.
+            var emis = ParseHex(sub.EmissiveColor) ?? rgb;
             rows[rowIndex] = new GearColorRow
             {
                 Diffuse = rgb,
-                Emissive = sub.Emissive > 0f && rgb is { } c
+                // Always write emissive — a template's own emissive must be CLEARED, not inherited.
+                // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
+                // white glow and drowns out the scroll map entirely.
+                Emissive = sub.Emissive > 0f && emis is { } c
                     ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
-                    : null,
+                    : (0f, 0f, 0f),
                 SphereMapIndex = sub.SphereMap,
                 SphereMapMask = sub.SphereIntensity,
                 Roughness = sub.Roughness,

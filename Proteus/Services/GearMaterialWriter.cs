@@ -37,30 +37,46 @@ public sealed class GearColorRow
 public static class GearMaterialWriter
 {
     /// <summary>
-    /// VANILLA materials used as templates, one per supported gear shader — both are real shipping
-    /// items, so they are always in game data and we never depend on the user having a given mod.
+    /// Game path of the VANILLA material used as a template, or null when we ship our own.
     ///
-    /// The two shaders take different texture counts AND orders, so cloning the right template is what
-    /// keeps the texture table agreeing with the shader. Slot orders are read from the vanilla files
-    /// (see <see cref="TextureOrder"/>) — do not assume they match a modded material's layout.
+    /// character.shpk clones a real shipping item (e0041), so it needs nothing installed.
+    ///
+    /// characterscroll does NOT: every vanilla characterscroll material carries a non-zero colorset
+    /// emissive, which renders as a flat white glow that drowns out the scroll map entirely. So for
+    /// that shader we ship a known-good material as an embedded resource instead — see
+    /// <see cref="EmbeddedTemplate"/>.
     /// </summary>
-    public static string TemplateFor(string shaderPackage) => shaderPackage switch
+    public static string? TemplateFor(string shaderPackage) => shaderPackage switch
     {
-        "characterscroll.shpk" => "chara/equipment/e6257/material/v0001/mt_c0201e6257_top_a.mtrl",
+        "characterscroll.shpk" => null,   // use the embedded one
         _                      => "chara/equipment/e0041/material/v0001/mt_c0201e0041_top_a.mtrl",
     };
 
+    /// <summary>The material we ship for a shader, or null when a vanilla template is used instead.</summary>
+    public static byte[]? EmbeddedTemplate(string shaderPackage)
+    {
+        if (!string.Equals(shaderPackage, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        using var s = typeof(GearMaterialWriter).Assembly
+            .GetManifestResourceStream("Proteus.Resources.characterscroll_template.mtrl");
+        if (s == null) return null;
+        using var ms = new MemoryStream();
+        s.CopyTo(ms);
+        return ms.ToArray();
+    }
+
     /// <summary>
-    /// Texture slot order the given shader's template expects. Both are 4 textures, but neither the
-    /// order nor the set matches:
-    ///   character.shpk       base, norm, mask, id
-    ///   characterscroll.shpk norm, mask, id, catc   -- "catc" is the scrolling map that drives the
-    ///                                                  animated emissive (mods often name it "_o");
-    ///                                                  vanilla characterscroll has NO base texture.
+    /// Texture slot order the shader's template expects — neither the count nor the order matches
+    /// between them, so this drives the texture table:
+    ///   character.shpk       4: base, norm, mask, id
+    ///   characterscroll.shpk 5: norm, mask, id, catc, base
+    /// "catc" is the scrolling map that drives the animated emissive (mods often name it "_o"); it is
+    /// the glow itself — its colour and intensity — not a mask on the colorset's emissive.
     /// </summary>
     public static IReadOnlyList<string> TextureOrder(string shaderPackage) => shaderPackage switch
     {
-        "characterscroll.shpk" => ["norm", "mask", "id", "catc"],
+        "characterscroll.shpk" => ["norm", "mask", "id", "catc", "base"],
         _                      => ["base", "norm", "mask", "id"],
     };
 

@@ -39,6 +39,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Known-good characterscroll material, used as the template for animated-emissive gear shells.
+         Vanilla characterscroll materials carry a non-zero colorset emissive that drowns out the scroll
+         map, so we ship one that is set up correctly instead. -->
+    <EmbeddedResource Include="Resources\characterscroll_template.mtrl" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="images\icon.png" Condition="Exists('images\icon.png')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

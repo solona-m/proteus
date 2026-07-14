@@ -687,10 +687,16 @@ public static class SecondSkinWriter
             // Vertex colour gates the gear shaders' emissive; the body's own colour would switch it off.
             gs1[go1 + 12] = 255; gs1[go1 + 13] = 255; gs1[go1 + 14] = 255; gs1[go1 + 15] = 255;
 
-            W16(gs1, go1 + 16, Half(BitConverter.ToSingle(s, vb + bo1 + 20)));   // uv0.x
-            W16(gs1, go1 + 18, Half(BitConverter.ToSingle(s, vb + bo1 + 24)));   // uv0.y
-            W16(gs1, go1 + 20, Half(-1f));                                       // uv1: a constant the gear
-            W16(gs1, go1 + 22, Half(2f));                                        // shaders read, not a texcoord
+            // Gear texcoord is half4 = (uv0.x, uv0.y, uv1.x, uv1.y). uv1 is a REAL per-vertex texcoord —
+            // characterscroll samples its scrolling map with it. Writing a constant there makes every
+            // pixel sample the same texel, so the whole surface pulses in time instead of the pattern
+            // sliding across it. The body has one UV set, so uv1 mirrors uv0.
+            float u = BitConverter.ToSingle(s, vb + bo1 + 20);
+            float v = BitConverter.ToSingle(s, vb + bo1 + 24);
+            W16(gs1, go1 + 16, Half(u));
+            W16(gs1, go1 + 18, Half(v));
+            W16(gs1, go1 + 20, Half(u));
+            W16(gs1, go1 + 22, Half(v));
         }
     }
 
