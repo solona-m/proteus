@@ -103,6 +103,7 @@ public static class GearMaterialWriter
     private const int HDiffuse = 0, HSpecular = 4, HEmissive = 8;
     private const int HRoughness = 16, HMetalness = 18;
     private const int HSphereMask = 21, HSphereIndex = 27;
+    private const int HTileAlpha = 26;
     private const int RowCount = 32, RowBytes = 64;
 
     /// <summary>
@@ -184,6 +185,19 @@ public static class GearMaterialWriter
         // Without this the blue-channel alpha is a binary cutout and a sheer overlay renders solid.
         var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
         if (found) r = withAlpha;
+
+        // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
+        // and the templates ship it at full strength. A second skin is SKIN — that weave shows up as a
+        // rough, grainy texture the real skin doesn't have. Switch it off on every row.
+        {
+            int cs = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strings.Length + addDataSize;
+            for (int row = 0; row < RowCount; row++)
+            {
+                int at = cs + row * RowBytes + HTileAlpha * 2;
+                if (at + 2 <= r.Length)
+                    BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)0f)).CopyTo(r, at);
+            }
+        }
 
         if (rows is { Count: > 0 })
         {
