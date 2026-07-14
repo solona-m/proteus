@@ -471,6 +471,46 @@ public class CompositorService : IDisposable
     public void SetActiveColorOverride(IReadOnlyDictionary<string, OverlayColorOverride>? overrideByMod)
         => _colorOverride = overrideByMod;
 
+    /// <summary>
+    /// Apply the plugin's enabled state, both visually and in Penumbra.
+    ///
+    /// Turning off in the wrong order leaves the character still wearing the last composite: the mod has
+    /// to stop contributing files and the character has to be redrawn BEFORE the mod entry is switched
+    /// off, or the redraw would just re-apply what was already there.
+    ///
+    /// Off: clear the managed mod's redirects -> redraw (character now shows no Proteus) -> disable the
+    /// mod in Penumbra.  On: enable the mod, then recomposite (which reloads and redraws).
+    /// </summary>
+    public void SetEnabled(bool enabled)
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+
+        if (enabled)
+        {
+            EnsureManagedModExists();
+            if (collId.HasValue)
+                penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+            TriggerRecomposite("enabled");
+            return;
+        }
+
+        Task.Run(() =>
+        {
+            try
+            {
+                WriteManagedModJson(new Dictionary<string, string>());
+                penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+                ReloadAndRedraw();   // character reverts to un-composited
+
+                if (collId.HasValue)
+                    penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, false);
+
+                log.Debug("[Proteus] disabled: output cleared, redrawn, Penumbra mod off");
+            }
+            catch (Exception ex) { log.Error(ex, "[Proteus] failed to disable cleanly"); }
+        });
+    }
+
     // ── Trigger ──────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -53,18 +53,45 @@ public class StatusWindow : Window
 
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new System.Numerics.Vector2(380, 80),
+            // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
+            // doesn't shrink the window (it's AlwaysAutoResize).
+            MinimumSize = new System.Numerics.Vector2(520, 80),
             MaximumSize = new System.Numerics.Vector2(900, 700),
         };
     }
 
     public override void Draw()
     {
-        // ── UV map download banner ────────────────────────────────────────────
+        // Status — not controls — so it stays outside the tabs and is visible from any of them.
+        DrawStatusBanner();
+
+        using (var tabs = ImRaii.TabBar("##proteusTabs"))
+        {
+            if (tabs)
+            {
+                using (var t = ImRaii.TabItem("Mods"))
+                    if (t) DrawModsTab();
+
+                using (var t = ImRaii.TabItem("Bindings"))
+                    if (t) DrawBindingsTab();
+
+                using (var t = ImRaii.TabItem("Settings"))
+                    if (t) DrawSettingsTab();
+            }
+        }
+
+        ImGui.Separator();
+        DrawLastResult();
+    }
+
+    private void DrawStatusBanner()
+    {
+        bool any = false;
+
         if (uvMapDl.State == UVMapDownloadState.Downloading)
         {
             ImGui.TextColored(new Vector4(1f, 0.8f, 0.2f, 1f), uvMapDl.StatusMessage);
-            ImGui.Separator();
+            any = true;
         }
         else if (uvMapDl.State == UVMapDownloadState.Failed)
         {
@@ -72,24 +99,57 @@ public class StatusWindow : Window
             ImGui.SameLine();
             if (ImGui.Button("Retry"))
                 uvMapDl.EnsureMapsAsync();
-            ImGui.Separator();
+            any = true;
         }
 
-        // ── Toolbar ──────────────────────────────────────────────────────────
+        if (!penumbra.IsAvailable)
+        {
+            ImGui.TextColored(new Vector4(1, 0.4f, 0.4f, 1), "Penumbra unavailable");
+            any = true;
+        }
+
+        if (any)
+            ImGui.Separator();
+    }
+
+    private void DrawLastResult()
+    {
+        var result = compositor.LastResult;
+        if (result == null)
+        {
+            ImGui.TextDisabled("No composite result yet.");
+            return;
+        }
+
+        if (!result.Success)
+        {
+            ImGui.TextColored(new Vector4(1, 0.4f, 0.4f, 1), $"Error: {result.ErrorMessage ?? "unknown"}");
+            return;
+        }
+
+        var elapsed = DateTime.UtcNow - result.Timestamp;
+        var timeStr = elapsed.TotalSeconds < 60
+            ? $"{elapsed.TotalSeconds:F1}s ago"
+            : $"{elapsed.TotalMinutes:F0}m ago";
+
+        ImGui.TextDisabled($"Last composite: {timeStr}   " +
+                           $"{result.TexturesPatched} texture{(result.TexturesPatched != 1 ? "s" : "")} patched   " +
+                           $"{result.OverlayModsUsed} mod{(result.OverlayModsUsed != 1 ? "s" : "")}");
+    }
+
+    private void DrawSettingsTab()
+    {
         var enabled = config.PluginEnabled;
         if (ImGui.Checkbox("Enabled", ref enabled))
         {
             config.PluginEnabled = enabled;
             config.Save();
-            if (enabled && penumbra.IsAvailable)
-                compositor.TriggerRecomposite("enabled");
+            compositor.SetEnabled(enabled);   // clears output, redraws, then toggles the Penumbra mod
         }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Turning this off clears Proteus's output, redraws you without it,\n" +
+                             "and disables the managed \"Proteus\" mod in Penumbra.");
 
-        ImGui.SameLine();
-        if (ImGui.Button("Refresh"))
-            compositor.TriggerRecomposite("manual");
-
-        ImGui.SameLine();
         var disableRedraw = config.DisableAutoRedraw;
         if (ImGui.Checkbox("Disable auto redraw", ref disableRedraw))
         {
@@ -97,7 +157,6 @@ public class StatusWindow : Window
             config.Save();
         }
 
-        ImGui.SameLine();
         var inPlaceReload = config.UseInPlaceReload;
         if (ImGui.Checkbox("In-place reload", ref inPlaceReload))
         {
@@ -108,12 +167,6 @@ public class StatusWindow : Window
             ImGui.SetTooltip("Refresh textures via Glamourer's in-place equipment reload instead of a full\n" +
                 "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
                 "automatically when Glamourer can't service it.");
-
-        if (!penumbra.IsAvailable)
-        {
-            ImGui.SameLine();
-            ImGui.TextColored(new System.Numerics.Vector4(1, 0.4f, 0.4f, 1), "Penumbra unavailable");
-        }
 
         // Skin-tint suppression strength (global multiplier). The per-pixel amount is weighted by
         // overlay color: bright dyes get de-tinted, dark dyes are left skin-tinted and matte.
@@ -132,24 +185,35 @@ public class StatusWindow : Window
                 "Applied per pixel by color: white/bright dyes keep their authored color on any\n" +
                 "skin tone (slightly shinier), dark dyes stay skin-tinted and matte automatically.\n" +
                 "0.00 disables it entirely (original look).");
+    }
+
+    private void DrawModsTab()
+    {
+        if (ImGui.Button("Refresh"))
+            compositor.TriggerRecomposite("manual");
 
         ImGui.Separator();
 
         // ── Overlay mod list ─────────────────────────────────────────────────
+        // The list comes from the last composite, so while the plugin is off it stays empty — say so
+        // rather than claiming there are no sidecar mods.
         var mods = compositor.LastDiscovered;
-        if (mods.Count == 0)
+        if (!config.PluginEnabled)
+        {
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.2f, 1f), "Proteus is disabled — enable it in Settings.");
+        }
+        else if (mods.Count == 0)
         {
             ImGui.TextDisabled("No Proteus sidecar mods detected.");
         }
         else
         {
-            ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
-            ImGui.TableSetupColumn("##en",     ImGuiTableColumnFlags.WidthFixed, 20);
-            ImGui.TableSetupColumn("Mod",      ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Pri",      ImGuiTableColumnFlags.WidthFixed, 60);
-            ImGui.TableSetupColumn("Colors",   ImGuiTableColumnFlags.WidthFixed, 60);
-            ImGui.TableSetupColumn("Bodies",   ImGuiTableColumnFlags.WidthFixed, 110);
-            ImGui.TableSetupColumn("Overlays", ImGuiTableColumnFlags.WidthFixed, 70);
+            ImGui.BeginTable("##mods", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+            ImGui.TableSetupColumn("##en",   ImGuiTableColumnFlags.WidthFixed, 20);
+            ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
+            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, 60);
+            ImGui.TableSetupColumn("Bodies", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableHeadersRow();
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
@@ -237,53 +301,14 @@ public class StatusWindow : Window
                         "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
                         "bibo+gen3 = bake to the sibling body only (default)\n" +
                         "Off = no synthesis");
-
-                // Overlay count
-                ImGui.TableNextColumn();
-                var activeOverlays = discovery.ResolveActiveOverlays(entry);
-                int ovCount = activeOverlays.Count;
-                ImGui.TextUnformatted($"{ovCount} overlay{(ovCount != 1 ? "s" : "")}");
             }
 
             ImGui.EndTable();
         }
-
-        ImGui.Separator();
-
-        // ── Design bindings ──────────────────────────────────────────────────
-        DrawDesignBindings();
-
-        ImGui.Separator();
-
-        // ── Last result ───────────────────────────────────────────────────────
-        var result = compositor.LastResult;
-        if (result == null)
-        {
-            ImGui.TextDisabled("No composite result yet.");
-        }
-        else if (!result.Success)
-        {
-            ImGui.TextColored(new System.Numerics.Vector4(1, 0.4f, 0.4f, 1),
-                $"Error: {result.ErrorMessage ?? "unknown"}");
-        }
-        else
-        {
-            var elapsed = DateTime.UtcNow - result.Timestamp;
-            var timeStr = elapsed.TotalSeconds < 60
-                ? $"{elapsed.TotalSeconds:F1}s ago"
-                : $"{elapsed.TotalMinutes:F0}m ago";
-
-            ImGui.TextDisabled($"Last composite: {timeStr}   " +
-                               $"{result.TexturesPatched} texture{(result.TexturesPatched != 1 ? "s" : "")} patched   " +
-                               $"{result.OverlayModsUsed} mod{(result.OverlayModsUsed != 1 ? "s" : "")}");
-        }
     }
 
-    private void DrawDesignBindings()
+    private void DrawBindingsTab()
     {
-        if (!ImGui.CollapsingHeader("Design bindings"))
-            return;
-
         bool bindEnabled = config.DesignBindingEnabled;
         if (ImGui.Checkbox("Bind Proteus state to Glamourer designs", ref bindEnabled))
         {
