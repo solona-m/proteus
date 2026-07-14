@@ -404,13 +404,18 @@ public sealed class SecondSkinService
         for (int i = 0; i < TexSize * TexSize; i++)
             norm[i * 4 + 2] = alpha?[i] ?? 255;
 
+        // BaseColor replaces the surface with a flat colour while the diffuse art still drives coverage.
+        byte[]? flatBase = null;
+        if (ParseHex(d.BaseColor) is { } bc)
+            flatBase = Solid((byte)(bc.R * 255), (byte)(bc.G * 255), (byte)(bc.B * 255), 255);
+
         var slots = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["norm"] = norm,
             ["mask"] = mask ?? Solid(128, 128, 128, 255),
-            ["id"]   = index ?? Solid(0, 0, 0, 255),          // row 0
-            ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // colour tint comes from the color table
-            ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
+            ["id"]   = index ?? Solid(0, 0, 0, 255),                      // row 0
+            ["base"] = flatBase ?? diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
+            ["catc"] = scroll ?? Solid(0, 0, 0, 255),                     // black = no glow
         };
 
         var order = GearMaterialWriter.TextureOrder(shader);
@@ -454,6 +459,7 @@ public sealed class SecondSkinService
             rows[rowIndex] = new GearColorRow
             {
                 Diffuse = rgb,
+                Specular = ParseHex(sub.Specular),
                 // Always write emissive — a template's own emissive must be CLEARED, not inherited.
                 // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
                 // white glow and drowns out the scroll map entirely.

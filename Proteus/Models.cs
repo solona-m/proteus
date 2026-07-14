@@ -107,6 +107,15 @@ public class OverlayDescriptor
     public string? Index { get; set; }
 
     /// <summary>
+    /// Gear layer only. Replaces the base (diffuse) texture with this flat colour, e.g. "#FFFFFF".
+    /// The <see cref="Diffuse"/> art is still used for coverage — so the overlay keeps its shape while
+    /// the surface itself becomes a plain colour. Useful when the material effect (metal, sphere map)
+    /// is the point and the art would only muddy it.
+    /// </summary>
+    [JsonPropertyName("BaseColor")]
+    public string? BaseColor { get; set; }
+
+    /// <summary>
     /// Gear layer only. Relative path to the scrolling emissive map (vanilla calls this texture "_catc";
     /// mods often name it "_o"). Its color and intensity become the glow, animated by the shader from
     /// global time. Requires Shader = "characterscroll.shpk"; ignored otherwise.
@@ -235,6 +244,10 @@ public class ColorTableSubRowPreset
     /// <summary>Gear layer only. How strongly the sphere map blends in (0–1).</summary>
     [JsonPropertyName("SphereIntensity")]
     public float? SphereIntensity { get; set; }
+
+    /// <summary>Gear layer only. Specular colour. Null keeps the template's value.</summary>
+    [JsonPropertyName("Specular")]
+    public string? Specular { get; set; }
 
     /// <summary>Gear layer only. Surface roughness (0–1). Null keeps the shader default.</summary>
     [JsonPropertyName("Roughness")]

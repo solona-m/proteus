@@ -12,6 +12,7 @@ public sealed class GearColorRow
 {
     public (float R, float G, float B)? Diffuse { get; init; }
     public (float R, float G, float B)? Emissive { get; init; }
+    public (float R, float G, float B)? Specular { get; init; }
 
     /// <summary>
     /// Slice of the shared array chara/common/texture/sphere_d_array.tex. Needs no material texture.
@@ -163,12 +164,12 @@ public static class GearMaterialWriter
 
                 if (def.Diffuse is { } d) { WH(HDiffuse, d.R); WH(HDiffuse + 1, d.G); WH(HDiffuse + 2, d.B); }
                 if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
+                if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
                 if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
                 if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
                 if (def.Roughness is { } ro) WH(HRoughness, ro);
                 if (def.Metalness is { } me) WH(HMetalness, me);
             }
-            _ = HSpecular;
         }
 
         return r;
