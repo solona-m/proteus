@@ -1422,7 +1422,7 @@ public class CompositorService : IDisposable
                             var maskPng  = RemapIfNeeded(LoadPng(maskPath, wN, hN), wN, hN, maskSrcBodyType, maskPath);
                             var normalOv = RemapIfNeeded(LoadPng(normalPath, wN, hN), wN, hN, maskSrcBodyType, normalPath);
                             if (maskPng != null && normalOv != null)
-                                CompoundNormal(baseN, normalOv, wN, hN, maskPng);
+                                ReplaceNormal(baseN, normalOv, wN, hN, maskPng);   // the mask IS the surface
                         }
 
                         var msk = CombinedMaskAt(modDir, wN, hN, maskSrcBodyType);
@@ -1944,6 +1944,27 @@ public class CompositorService : IDisposable
     // then re-encoded. Blue (skin color influence) and Alpha (emissive) are left untouched — each
     // has its own dedicated pass. This compounds detail: overlay bumps stack on top of base bumps
     // rather than lerping them away.
+    /// <summary>
+    /// Overwrite the base normal with <paramref name="src"/> where it applies, instead of adding to it.
+    ///
+    /// A Masks option's relief normal is the surface there — a strap, a seam, a weave — not a bump to
+    /// pile on top of whatever the overlay already had. Compounding them layers two reliefs and reads
+    /// as noise, so the mask's own normal replaces the base, faded in by its alpha.
+    /// </summary>
+    internal static void ReplaceNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        int len = w * h * 4;
+        for (int i = 0; i < len; i += 4)
+        {
+            float a = src[i + 3] / 255f;
+            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+            if (a <= 0f) continue;
+
+            dst[i]     = (byte)Math.Clamp(dst[i]     + (src[i]     - dst[i])     * a, 0, 255);
+            dst[i + 1] = (byte)Math.Clamp(dst[i + 1] + (src[i + 1] - dst[i + 1]) * a, 0, 255);
+        }
+    }
+
     internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         int len = w * h * 4;

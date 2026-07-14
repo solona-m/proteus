@@ -475,8 +475,10 @@ public sealed class SecondSkinService
                 var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
                 if (maskNormal != null)
                 {
+                    // The mask's relief IS the surface there — replace the base normal rather than
+                    // piling a second bump on top of it (same rule as the skin layer).
                     normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
-                    CompositorService.CompoundNormal(normal, maskNormal, TexSize, TexSize, maskPng);
+                    CompositorService.ReplaceNormal(normal, maskNormal, TexSize, TexSize, maskPng);
                 }
             }
         }
