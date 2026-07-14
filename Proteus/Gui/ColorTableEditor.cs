@@ -153,7 +153,7 @@ public static class ColorTableEditor
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip("This overlay's index texture never selects this row,\nso editing it would have no effect.");
 
-            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax());
+            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used);
         }
 
         ImGui.Separator();
@@ -220,7 +220,8 @@ public static class ColorTableEditor
     /// split top = sub-row A, bottom = sub-row B. The glow swatch is the emissive colour scaled by its
     /// intensity, i.e. what actually lands in the colour table, so a row with no glow reads as black.
     /// </summary>
-    private static void DrawRowSwatches(List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max)
+    private static void DrawRowSwatches(
+        List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var draw = ImGui.GetWindowDrawList();
@@ -233,12 +234,16 @@ public static class ColorTableEditor
         float colW = (x1 - x0) / 3f;
         float midY = (y0 + y1) * 0.5f;
 
-        Vector3 Swatch(ColorTableSubRowPreset? s, int column) => column switch
+        // Rows the index texture never selects are dimmed, so the ones actually in play stand out.
+        // ImGui's Disabled only fades the widget itself — these swatches are hand-drawn, so dim them too.
+        float dim = used ? 1f : 0.25f;
+
+        Vector3 Swatch(ColorTableSubRowPreset? s, int column) => dim * (column switch
         {
             0 => HexToVec3(s?.Diffuse),
             1 => HexToVec3(s?.Specular),
             _ => HexToVec3(s?.EmissiveColor ?? s?.Diffuse) * (s?.Emissive ?? 0f),
-        };
+        });
 
         for (int c = 0; c < 3; c++)
         {
