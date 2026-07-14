@@ -168,7 +168,8 @@ public sealed class SecondSkinService
         string charCode,
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
         string outputRoot,
-        string? bodyType)
+        string? bodyType,
+        string? effectsFolder)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -254,23 +255,25 @@ public sealed class SecondSkinService
 
             var texPaths = WriteTextures(
                 entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, letter, alpha,
-                srcType, bodyType, ov.ColorTableRows, ref shellChanged);
+                srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged);
             if (texPaths == null) continue;
 
-            // characterscroll ships with the plugin (vanilla ones glow flat white); the rest come from
-            // vanilla game data, so no mod needs to be installed.
-            var vanillaPath = GearMaterialWriter.TemplateFor(shader);
-            var template = vanillaPath != null
-                ? textureLoader.LoadRawMtrl(null, vanillaPath)
-                : GearMaterialWriter.EmbeddedTemplate(shader);
+            // Both templates are vanilla game materials, so no mod needs to be installed.
+            var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
             if (template == null)
             {
                 log.Error("[Proteus] second skin: missing template material for {0}", shader);
                 continue;
             }
 
+            var scroll = new ScrollSettings(
+                ov.Descriptor.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
+                ov.Descriptor.ScrollSpeedY ?? ScrollSettings.Default.SpeedY,
+                ov.Descriptor.ScrollTilingX ?? ScrollSettings.Default.TilingX,
+                ov.Descriptor.ScrollTilingY ?? ScrollSettings.Default.TilingY);
+
             byte[] mtrl;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows)); }
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{letter}.mtrl");
@@ -424,7 +427,8 @@ public sealed class SecondSkinService
     private List<string>? WriteTextures(
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
-        string? srcType, string? dstType, List<ColorTableRowPreset>? rows, ref bool texturesChanged)
+        string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
+        ref bool texturesChanged)
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -435,7 +439,19 @@ public sealed class SecondSkinService
         var normal = Png(d.Normal);
         var mask = Png(d.Mask);
         var index = Png(d.Index);
-        var scroll = Png(d.Scroll);
+
+        // The scroll map is NOT body-UV art — it's a tiling pattern the shader samples with uv1, so it
+        // must NOT be UV-remapped (that would tear the pattern apart). It also lives in an effects
+        // folder, not the sidecar tree, so resolve it separately.
+        byte[]? scroll = null;
+        if (d.Scroll != null)
+        {
+            var effectPath = SidecarDiscoveryService.ResolveEffectPath(entry, effectsFolder, d.Scroll);
+            if (effectPath != null)
+                scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+            else
+                log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
+        }
 
         byte[] Solid(byte r, byte g, byte b, byte a)
         {

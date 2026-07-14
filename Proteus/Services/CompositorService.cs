@@ -468,6 +468,16 @@ public class CompositorService : IDisposable
     /// composite time in place of metadata.json colors. Pass null to clear. Does not itself trigger
     /// a recomposite — the caller decides when to recomposite.
     /// </summary>
+    /// <summary>
+    /// Gear-layer settings pushed by a design binding — layer, shader, effect, scroll speed and tiling.
+    /// Applied at composite time onto a COPY of the descriptor, so metadata.json is never mutated
+    /// (same contract as the colour override).
+    /// </summary>
+    private volatile IReadOnlyDictionary<string, OverlayGearOverride>? _gearOverride;
+
+    public void SetActiveGearOverride(IReadOnlyDictionary<string, OverlayGearOverride>? overrideByMod)
+        => _gearOverride = overrideByMod;
+
     public void SetActiveColorOverride(IReadOnlyDictionary<string, OverlayColorOverride>? overrideByMod)
         => _colorOverride = overrideByMod;
 
@@ -602,6 +612,10 @@ public class CompositorService : IDisposable
     // Comma-joined sorted set of the body types present in a snapshot (e.g. "bibo,gen2,gen3"),
     // matching the format of _lastCompositedBodyType. Used to detect when a body-mod change has
     // actually landed in the loaded materials.
+    /// <summary>Deep copy, so a binding's gear override never mutates the mod's own metadata objects.</summary>
+    private static OverlayDescriptor CloneDescriptor(OverlayDescriptor d)
+        => JsonSerializer.Deserialize<OverlayDescriptor>(JsonSerializer.Serialize(d))!;
+
     private static string? BodyTypeKey(HashSet<string> snapshot)
     {
         var types = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -671,6 +685,7 @@ public class CompositorService : IDisposable
                 StringComparer.OrdinalIgnoreCase);
 
             var colorOverride = _colorOverride; // snapshot the volatile reference for this run
+            var gearOverride  = _gearOverride;
 
             // Gear overlays don't composite into a skin material — each becomes its own second-skin
             // shell with its own material and shader. Collect them separately.
@@ -686,6 +701,20 @@ public class CompositorService : IDisposable
                 if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var ovr))
                     overlays = overlays
                         .Select(o => o with { ColorTableRows = ovr.Resolve(o.OptionGroup, o.Option) ?? o.ColorTableRows })
+                        .ToList();
+
+                // Same for the gear settings, onto a COPY of the descriptor — the binding must not write
+                // through to metadata.json.
+                if (gearOverride != null && gearOverride.TryGetValue(entry.ModDirectory, out var gOvr))
+                    overlays = overlays
+                        .Select(o =>
+                        {
+                            var gs = gOvr.Resolve(o.OptionGroup, o.Option);
+                            if (gs == null) return o;
+                            var copy = CloneDescriptor(o.Descriptor);
+                            gs.ApplyTo(copy);
+                            return o with { Descriptor = copy };
+                        })
                         .ToList();
 
                 foreach (var overlay in overlays)
@@ -1542,7 +1571,7 @@ public class CompositorService : IDisposable
                             .Select(UVRemapService.InferBodyType)
                             .FirstOrDefault(t => t != null)
                             ?? _lastCompositedBodyType?.Split(',').FirstOrDefault();
-                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType);
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath());
                         if (shells != null)
                         {
                             foreach (var (gamePath, relPath) in shells.Redirects)

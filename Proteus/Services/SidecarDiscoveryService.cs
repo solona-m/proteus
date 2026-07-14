@@ -257,6 +257,90 @@ public class SidecarDiscoveryService
 
     private static readonly string[] MaskAssetExtensions = [".png", ".dds", ".tex"];
 
+    // ── Effects (characterscroll `_o` / `catc` scroll maps) ──────────────────
+
+    private const string EffectsSubdir = "Effects";
+
+    /// <summary>
+    /// Image types an effect can be. .tex and .dds get the game-format decoders; everything else goes
+    /// through StbImageSharp, which reads all of these — so the list is just what we're willing to
+    /// enumerate, not a decoding constraint.
+    /// </summary>
+    private static readonly string[] EffectExtensions =
+        [".png", ".dds", ".tex", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".gif"];
+
+    /// <summary>
+    /// The global effects library: <c>&lt;penumbra mods&gt;\Proteus\Effects\</c>, i.e. inside Proteus's own
+    /// managed mod folder. Self-locating, so there's nothing for the user to configure — drop scroll maps
+    /// in there and they show up in every gear overlay's Effect dropdown. Created on demand.
+    /// </summary>
+    public string? EffectsLibraryPath()
+    {
+        var root = penumbra.GetModDirectory();
+        if (string.IsNullOrWhiteSpace(root)) return null;
+
+        var dir = Path.Combine(root, ManagedModDir, EffectsSubdir);
+        try { Directory.CreateDirectory(dir); } catch { return null; }
+        return dir;
+    }
+
+    /// <summary>
+    /// The scroll maps an overlay can choose from: the mod's own <c>Proteus/Effects/</c> first, then the
+    /// user's global library folder. A mod that ships its own effects stays portable; the global folder
+    /// is a personal library. Deduped by file name — the mod's copy wins.
+    /// </summary>
+    public List<(string Name, string Path, bool FromMod)> ResolveAvailableEffects(
+        OverlayEntry entry, string? globalFolder)
+    {
+        var result = new List<(string, string, bool)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Scan(string? dir, bool fromMod)
+        {
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return;
+            foreach (var f in Directory.EnumerateFiles(dir).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!EffectExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+                    continue;
+                var name = Path.GetFileName(f);
+                if (seen.Add(name))
+                    result.Add((name, f, fromMod));
+            }
+        }
+
+        Scan(Path.Combine(entry.SidecarRoot, EffectsSubdir), true);
+        Scan(globalFolder, false);
+        return result;
+    }
+
+    /// <summary>
+    /// Resolve an overlay's stored <c>Scroll</c> value to a file on disk: a bare file name is looked up
+    /// in the mod's Effects/ then the global folder; a relative path is taken as sidecar-relative (what
+    /// hand-written metadata does today). Null when nothing matches.
+    /// </summary>
+    public static string? ResolveEffectPath(OverlayEntry entry, string? globalFolder, string scroll)
+    {
+        if (string.IsNullOrWhiteSpace(scroll)) return null;
+
+        // Bare file name → the effects folders.
+        if (!scroll.Contains('/') && !scroll.Contains('\\'))
+        {
+            var inMod = Path.Combine(entry.SidecarRoot, EffectsSubdir, scroll);
+            if (File.Exists(inMod)) return inMod;
+
+            if (!string.IsNullOrWhiteSpace(globalFolder))
+            {
+                var inLib = Path.Combine(globalFolder, scroll);
+                if (File.Exists(inLib)) return inLib;
+            }
+            return null;
+        }
+
+        // Otherwise a sidecar-relative path (back-compat with metadata written by hand).
+        var rel = Path.Combine(entry.SidecarRoot, scroll);
+        return File.Exists(rel) ? rel : null;
+    }
+
     /// <summary>
     /// Reads the option-name order of the Penumbra group named <see cref="MaskGroupName"/> from the
     /// mod's <c>group_*.json</c> files in <paramref name="modRoot"/>. Returns the names top-to-bottom

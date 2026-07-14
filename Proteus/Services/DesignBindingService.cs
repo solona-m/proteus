@@ -39,6 +39,10 @@ public class ProteusModBinding
 
     /// <summary>Effective colors at capture time (in-memory override on restore; never written to metadata.json).</summary>
     public OverlayColorOverride Colors { get; set; } = new();
+
+    /// <summary>Effective gear-layer settings at capture time — layer, shader, effect, scroll speed and
+    /// tiling. Same contract as Colors: applied as an in-memory override, metadata.json is untouched.</summary>
+    public OverlayGearOverride Gear { get; set; } = new();
 }
 
 /// <summary>
@@ -72,6 +76,7 @@ public class DesignBindingService : IDisposable
 
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
     private Dictionary<string, OverlayColorOverride>? activeOverride;
+    private Dictionary<string, OverlayGearOverride>? activeGearOverride;
     private Guid? activeDesignId;
     private bool unboundModsDisabled;
     private long suppressUntilTick;
@@ -120,7 +125,7 @@ public class DesignBindingService : IDisposable
             if (!store.Bindings.Remove(id)) return;
             designCache.Remove(id);
             wasActive = activeDesignId == id;
-            if (wasActive) { activeDesignId = null; activeOverride = null; }
+            if (wasActive) { activeDesignId = null; activeOverride = null; activeGearOverride = null; }
             Save();
         }
         if (wasActive)
@@ -194,10 +199,12 @@ public class DesignBindingService : IDisposable
                 newOverride = CloneOverrides(mods);
                 activeDesignId       = designId;
                 activeOverride       = newOverride;
+                activeGearOverride   = CloneGear(mods);
                 unboundModsDisabled  = false;
                 Save();
             }
             compositor.SetActiveColorOverride(newOverride);
+            compositor.SetActiveGearOverride(activeGearOverride);
             compositor.TriggerRecomposite($"design-capture:{designId}");
 
             log.Information("[Proteus] Captured Proteus state for design {0} ({1} mods).", name ?? designId.ToString(), mods.Count);
@@ -266,6 +273,7 @@ public class DesignBindingService : IDisposable
                 Priority     = e.Priority,
                 Options      = options,
                 Colors       = CaptureColors(e),
+                Gear         = CaptureGear(e),
             });
         }
         return mods;
@@ -303,9 +311,11 @@ public class DesignBindingService : IDisposable
             // Clone so live color edits preview without mutating the stored binding (they only fold
             // in via UpdateActiveBindingFromCurrentState).
             activeOverride      = CloneOverrides(b.Mods);
+            activeGearOverride  = CloneGear(b.Mods);
             unboundModsDisabled = false;
         }
         compositor.SetActiveColorOverride(activeOverride);
+        compositor.SetActiveGearOverride(activeGearOverride);
 
         if (collId != null)
         {
@@ -335,8 +345,9 @@ public class DesignBindingService : IDisposable
     /// <summary>Drop the active color override (revert to metadata colors) and recomposite.</summary>
     public void ClearColorOverride()
     {
-        lock (gate) { activeDesignId = null; activeOverride = null; }
+        lock (gate) { activeDesignId = null; activeOverride = null; activeGearOverride = null; }
         compositor.SetActiveColorOverride(null);
+        compositor.SetActiveGearOverride(null);
         compositor.TriggerRecomposite("design-override-clear");
     }
 
@@ -352,9 +363,9 @@ public class DesignBindingService : IDisposable
         bool changed = false;
         lock (gate)
         {
-            if (activeDesignId != null) { activeDesignId = null; activeOverride = null; changed = true; }
+            if (activeDesignId != null) { activeDesignId = null; activeOverride = null; activeGearOverride = null; changed = true; }
         }
-        if (changed) compositor.SetActiveColorOverride(null);
+        if (changed) { compositor.SetActiveColorOverride(null); compositor.SetActiveGearOverride(null); }
 
         if (!unboundModsDisabled)
         {
@@ -672,6 +683,40 @@ public class DesignBindingService : IDisposable
         {
             log.Warning(ex, "[Proteus] Failed to save design bindings.");
         }
+    }
+
+    private static Dictionary<string, OverlayGearOverride> CloneGear(IEnumerable<ProteusModBinding> mods)
+        => mods.ToDictionary(
+            m => m.ModDirectory,
+            m => JsonSerializer.Deserialize<OverlayGearOverride>(JsonSerializer.Serialize(m.Gear)) ?? new(),
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Snapshot a mod's gear-layer settings for every option, so the binding is self-contained (the
+    /// right one is picked at composite time via OverlayGearOverride.Resolve) — mirrors CaptureColors.
+    /// </summary>
+    private static OverlayGearOverride CaptureGear(OverlayEntry e)
+    {
+        var result = new OverlayGearOverride();
+
+        var top = (e.Metadata.Overlays ?? []).FirstOrDefault();
+        if (top != null) result.Top = GearSettingsPreset.From(top);
+
+        if (e.Metadata.OptionGroups is { } groups)
+        {
+            var opts = new Dictionary<string, Dictionary<string, GearSettingsPreset>>();
+            foreach (var g in groups)
+            foreach (var o in g.Options)
+            {
+                var d = o.Overlays.FirstOrDefault();
+                if (d == null) continue;
+                if (!opts.TryGetValue(g.PenumbraGroupName, out var inner))
+                    opts[g.PenumbraGroupName] = inner = new();
+                inner[o.Name] = GearSettingsPreset.From(d);
+            }
+            if (opts.Count > 0) result.Options = opts;
+        }
+        return result;
     }
 
     private static List<ColorTableRowPreset>? CloneRows(List<ColorTableRowPreset>? rows)

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
+using Proteus.Services;
 
 namespace Proteus.Gui;
 
@@ -37,7 +39,10 @@ public static class ColorTableEditor
     /// colour rows, so they always write to metadata.json — a design binding only carries rows.
     /// Returns true when something changed.
     /// </summary>
-    public static bool DrawLayerHeader(string idScope, IReadOnlyList<OverlayDescriptor> overlays)
+    public static bool DrawLayerHeader(
+        string idScope,
+        IReadOnlyList<OverlayDescriptor> overlays,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         if (overlays.Count == 0) return false;
 
@@ -92,12 +97,71 @@ public static class ColorTableEditor
 
         if (string.Equals(shader, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase))
         {
-            ImGui.TextDisabled(first.Scroll is { } s
-                ? $"Scroll map: {s}"
-                : "Scroll map: none — set \"Scroll\" in metadata.json for an animated glow.");
+            ImGui.SetNextItemWidth(220);
+            var currentEffect = first.Scroll;
+            var label = currentEffect == null ? "None" : Path.GetFileNameWithoutExtension(currentEffect);
+
+            if (ImGui.BeginCombo($"Effect##{idScope}", label))
+            {
+                if (ImGui.Selectable("None", currentEffect == null) && currentEffect != null)
+                {
+                    foreach (var d in overlays) d.Scroll = null;
+                    changed = true;
+                }
+
+                foreach (var (name, _, fromMod) in effects)
+                {
+                    bool selected = string.Equals(name, currentEffect, StringComparison.OrdinalIgnoreCase);
+                    var text = fromMod
+                        ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)"
+                        : Path.GetFileNameWithoutExtension(name);
+
+                    if (ImGui.Selectable(text, selected) && !selected)
+                    {
+                        foreach (var d in overlays) d.Scroll = name;
+                        changed = true;
+                    }
+                }
+                ImGui.EndCombo();
+            }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("The scrolling map IS the glow: its colour, its pattern, and its animation.\n" +
-                                 "The row's emissive is only a small gate that switches the glow on.");
+                ImGui.SetTooltip(
+                    "The scrolling map IS the glow: its colour, its pattern, and its animation.\n" +
+                    "The row's emissive is only a small gate that switches it on (~2.5%).\n\n" +
+                    "Effects come from the mod's own Proteus/Effects/ folder, then your\n" +
+                    "Effects folder in Settings.");
+
+            if (effects.Count == 0)
+                ImGui.TextDisabled("No effects found — drop image files into the Effects library\n" +
+                                   "(see Settings), or the mod's own Proteus/Effects/ folder.");
+
+            // Scroll speed / tiling. These are material constants, and vanilla ships the speeds at zero,
+            // so without them the pattern would sit still.
+            var speed = new Vector2(
+                first.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
+                first.ScrollSpeedY ?? ScrollSettings.Default.SpeedY);
+            var tile = new Vector2(
+                first.ScrollTilingX ?? ScrollSettings.Default.TilingX,
+                first.ScrollTilingY ?? ScrollSettings.Default.TilingY);
+
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.DragFloat2($"Scroll speed##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
+            {
+                foreach (var d in overlays) { d.ScrollSpeedX = speed.X; d.ScrollSpeedY = speed.Y; }
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("How fast the effect flows, X and Y. Negative reverses the direction;\n" +
+                                 "0 holds it still. About 0.01 is a normal rate.");
+
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.DragFloat2($"Tiling##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
+            {
+                foreach (var d in overlays) { d.ScrollTilingX = tile.X; d.ScrollTilingY = tile.Y; }
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
         }
 
         return changed;
@@ -112,9 +176,14 @@ public static class ColorTableEditor
         List<ColorTableRowPreset> rows,
         HashSet<int>? usedRows,
         bool gear,
+        string? shader,
         ref int selectedRow,
         ref bool changed)
     {
+        // characterscroll drives its look from the scroll map; the material fields below do nothing on
+        // it (sphere maps provably don't render there), so don't offer knobs that can't turn.
+        bool material = gear && !string.Equals(shader, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase);
+
         // Every row is shown; rows the index texture never selects are disabled rather than hidden, so
         // the table's shape stays constant and it's obvious WHICH rows the overlay actually uses.
         bool InUse(int r) => usedRows == null || usedRows.Contains(r);
@@ -166,10 +235,10 @@ public static class ColorTableEditor
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, ref changed);
+            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, ref changed);
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, ref changed);
+            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, ref changed);
 
             ImGui.EndTable();
         }
@@ -264,7 +333,8 @@ public static class ColorTableEditor
     }
 
     private static void DrawSubRow(
-        string id, List<ColorTableRowPreset> rows, int row, bool isA, bool gear, ref bool changed)
+        string id, List<ColorTableRowPreset> rows, int row, bool isA, bool gear, bool material,
+        ref bool changed)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var sub = isA ? preset?.SubRowA : preset?.SubRowB;
@@ -286,6 +356,12 @@ public static class ColorTableEditor
             Edit().Diffuse = Vec3ToHex(diffuse);
             changed = true;
         }
+        if (gear && ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "The surface UNDER the glow — it multiplies the overlay's own diffuse art.\n\n" +
+                "Keep it DARK for a glowing material, or the glow has nothing to stand out\n" +
+                "against and looks faint however high you push it. The vanilla scrolling\n" +
+                "materials pair a near-black diffuse with a bright emissive for exactly this.");
 
         if (gear)
         {
@@ -335,9 +411,10 @@ public static class ColorTableEditor
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Negative fades this row toward transparent; positive pushes it toward opaque.");
 
-        if (!gear) return;
+        // Roughness / metalness / sphere map are inert under characterscroll.
+        if (!material) return;
 
-        // ── Gear only ────────────────────────────────────────────────────────
+        // ── Gear, non-scroll shaders only ────────────────────────────────────
         ImGui.TextDisabled("Physical");
 
         float rough = sub?.Roughness ?? 0.5f;

@@ -198,6 +198,22 @@ public class StatusWindow : Window
                 "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
                 "automatically when Glamourer can't service it.");
 
+        // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure.
+        var lib = discovery.EffectsLibraryPath();
+        if (lib != null)
+        {
+            ImGui.TextDisabled($"Effects library: {lib}");
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Drop scroll maps (the \"_o\" textures that ARE the animated glow) in here and\n" +
+                                 "they appear in every gear overlay's Effect dropdown.\n" +
+                                 "Accepts .tex, .dds, .png, .jpg, .bmp, .tga, .psd and .gif.\n" +
+                                 "A mod's own Proteus/Effects/ folder takes precedence over it.");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Open"))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(lib) { UseShellExecute = true }); }
+                catch { /* no file manager — the path is shown anyway */ }
+        }
+
         // Skin-tint suppression strength (global multiplier). The per-pixel amount is weighted by
         // overlay color: bright dyes get de-tinted, dark dyes are left skin-tinted and matte.
         ImGui.SetNextItemWidth(140);
@@ -436,6 +452,9 @@ public class StatusWindow : Window
         // index scan can ignore the dilated bleed outside them.
         var bodyType = OverlayBodyType(entry);
 
+        // Scroll maps a gear overlay can pick from: the mod's own Effects/ folder, then the user's.
+        var effects = discovery.ResolveAvailableEffects(entry, discovery.EffectsLibraryPath());
+
         // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
         if (entry.Metadata.OptionGroups is not { Count: > 0 })
         {
@@ -473,18 +492,19 @@ public class StatusWindow : Window
             // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
             // binding only carries colour rows.
             var simpleOverlays = entry.Metadata.Overlays ?? [];
-            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays))
+            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, effects))
             {
                 discovery.SaveMetadata(entry);
                 compositor.TriggerRecomposite("layer-change");
             }
             bool gearSimple = simpleOverlays.Count > 0 && simpleOverlays[0].Layer == OverlayLayer.Gear;
+            var shaderSimple = simpleOverlays.Count > 0 ? simpleOverlays[0].ShaderPackage : null;
 
             ImGui.Separator();
 
             bool changedSimple = false;
             int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
-            ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple,
+            ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
                 ref selSimple, ref changedSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
@@ -580,18 +600,19 @@ public class StatusWindow : Window
 
         // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
         // binding only carries colour rows.
-        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays))
+        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, effects))
         {
             discovery.SaveMetadata(entry);
             compositor.TriggerRecomposite("layer-change");
         }
         bool gear = activeOpt.Overlays.Count > 0 && activeOpt.Overlays[0].Layer == OverlayLayer.Gear;
+        var shader = activeOpt.Overlays.Count > 0 ? activeOpt.Overlays[0].ShaderPackage : null;
 
         ImGui.Separator();
 
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
-        ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, ref sel, ref changed);
+        ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader, ref sel, ref changed);
         _rowSelection[scope] = sel;
 
         if (changed)

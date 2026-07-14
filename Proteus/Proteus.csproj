@@ -39,10 +39,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Known-good characterscroll material, used as the template for animated-emissive gear shells.
-         Vanilla characterscroll materials carry a non-zero colorset emissive that drowns out the scroll
-         map, so we ship one that is set up correctly instead. -->
-    <EmbeddedResource Include="Resources\characterscroll_template.mtrl" />
     <!-- The 32 sphere-map slices, as one 64x2048 vertical strip. Lumina cannot decode the game's
          ARRAY texture (chara/common/texture/sphere_d_array.tex) and Penumbra only manages it by
          slicing the live GPU texture through native interop — so the slices are extracted offline

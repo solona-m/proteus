@@ -28,6 +28,15 @@ public sealed class GearColorRow
 }
 
 /// <summary>
+/// How a characterscroll material's scroll map flows. Speed and tiling are material constants, and
+/// vanilla ships the speeds at ZERO, so a material with no settings sits still.
+/// </summary>
+public sealed record ScrollSettings(float SpeedX, float SpeedY, float TilingX, float TilingY)
+{
+    public static readonly ScrollSettings Default = new(0.01f, 0.01f, 1f, 1f);
+}
+
+/// <summary>
 /// Writes the .mtrl for a second-skin shell by cloning a known-good vanilla material of the target
 /// shader, repointing its texture table at our own paths, and patching its color table.
 ///
@@ -42,42 +51,32 @@ public static class GearMaterialWriter
     ///
     /// character.shpk clones a real shipping item (e0041), so it needs nothing installed.
     ///
-    /// characterscroll does NOT: every vanilla characterscroll material carries a non-zero colorset
-    /// emissive, which renders as a flat white glow that drowns out the scroll map entirely. So for
-    /// that shader we ship a known-good material as an embedded resource instead — see
-    /// <see cref="EmbeddedTemplate"/>.
+    /// characterscroll clones vanilla e6257. Its rows carry a non-zero emissive, but we always write the
+    /// emissive explicitly (see Build), so that no longer leaks through as a flat white glow.
     /// </summary>
     public static string? TemplateFor(string shaderPackage) => shaderPackage switch
     {
-        "characterscroll.shpk" => null,   // use the embedded one
+        "characterscroll.shpk" => "chara/equipment/e6257/material/v0001/mt_c0201e6257_top_a.mtrl",
         _                      => "chara/equipment/e0041/material/v0001/mt_c0201e0041_top_a.mtrl",
     };
 
-    /// <summary>The material we ship for a shader, or null when a vanilla template is used instead.</summary>
-    public static byte[]? EmbeddedTemplate(string shaderPackage)
-    {
-        if (!string.Equals(shaderPackage, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        using var s = typeof(GearMaterialWriter).Assembly
-            .GetManifestResourceStream("Proteus.Resources.characterscroll_template.mtrl");
-        if (s == null) return null;
-        using var ms = new MemoryStream();
-        s.CopyTo(ms);
-        return ms.ToArray();
-    }
-
     /// <summary>
-    /// Texture slot order the shader's template expects — neither the count nor the order matches
-    /// between them, so this drives the texture table:
+    /// Texture slot order the shader's template expects — the sets differ, so this drives the table:
     ///   character.shpk       4: base, norm, mask, id
-    ///   characterscroll.shpk 5: norm, mask, id, catc, base
-    /// "catc" is the scrolling map that drives the animated emissive (mods often name it "_o"); it is
-    /// the glow itself — its colour and intensity — not a mask on the colorset's emissive.
+    ///   characterscroll.shpk 4: norm, mask, id, catc   — NO base texture.
+    ///
+    /// "catc" is the scrolling map that drives the animated emissive (mods name it "_o"); it is the
+    /// glow itself — colour, pattern and animation.
+    ///
+    /// characterscroll having NO base is load-bearing, not an oversight. When a base texture is present
+    /// (Solona's modded 5-texture variant), it DRIVES the diffuse and the colour table's diffuse is
+    /// ignored — so the surface is stuck at whatever the overlay's art is, and a glow on white art can
+    /// never read. Vanilla scrolling materials take their surface from the colour table instead, which
+    /// is how they pair a near-black diffuse with a bright emissive and get a vivid effect.
     /// </summary>
     public static IReadOnlyList<string> TextureOrder(string shaderPackage) => shaderPackage switch
     {
-        "characterscroll.shpk" => ["norm", "mask", "id", "catc", "base"],
+        "characterscroll.shpk" => ["norm", "mask", "id", "catc"],
         _                      => ["base", "norm", "mask", "id"],
     };
 
@@ -99,6 +98,26 @@ public static class GearMaterialWriter
     /// </summary>
     private const uint ConstAlphaThreshold = 0x29AC0223;
 
+    /// <summary>
+    /// GetDecalColor = GetDecalColorRGBA.
+    ///
+    /// This is what makes the scroll map's COLOUR reach the glow. Without it the shader defaults to
+    /// GetDecalColorOff and takes only intensity from the map, tinting it with the row's emissive — so a
+    /// vivid rainbow effect renders as a flat white glow no matter what the texture holds. Vanilla e6257
+    /// doesn't set it; every scrolling-effect mod does.
+    /// </summary>
+    private const uint KeyGetDecalColor = 0xD2777173;
+    private const uint ValDecalColorRGBA = 0xF35F5131;
+
+    /// <summary>
+    /// characterscroll needs TWO UV sets declared — "map1" and "map2". The scroll map is sampled with
+    /// uv1 (map2); with only map1 declared the shader falls back to uv0 and the effect renders as a
+    /// flat, colourless wash however the colour table is set. Vanilla e6257 declares only map1; every
+    /// mod with a working scrolling effect declares both.
+    /// </summary>
+    private const string SecondUvSet = "map2";
+    private const ushort SecondUvSetFlags = 0x0001;
+
     // Dawntrail color table row = 32 halves (64B). Offsets per Penumbra.GameData ColorTableRow.cs.
     private const int HDiffuse = 0, HSpecular = 4, HEmissive = 8;
     private const int HRoughness = 16, HMetalness = 18;
@@ -107,11 +126,37 @@ public static class GearMaterialWriter
     private const int RowCount = 32, RowBytes = 64;
 
     /// <summary>
+    /// What actually switches the scrolling effect ON — per Bacara's characterscroll guide, and confirmed
+    /// against every working effect mod:
+    ///
+    ///   [23] "Effect Unknown A"  — must be 1 (or 2). REQUIRED, even with the shader keys set. Zero here
+    ///                              and the effect never renders, no matter what else is right.
+    ///   [21] Sphere Map Opacity  — doubles as the effect's VISIBILITY on this shader (can be negative).
+    ///
+    /// A row with no emissive isn't a glow row, so we only arm the rows that have one.
+    /// </summary>
+    private const int HEffectEnable = 23;
+
+    /// <summary>
+    /// Scroll speed and tiling live in material constants. Vanilla e6257 ships the speeds at ZERO — so
+    /// even a correctly-armed material sits still. Names from the guide; ~0.01 is the usual speed range
+    /// and tiling defaults to 1.
+    /// </summary>
+    private const uint ConstTranslateSpeedX = 0x738A241C;
+    private const uint ConstTranslateSpeedY = 0x71CC9A45;
+    private const uint ConstTilingX = 0x43345395;
+    private const uint ConstTilingY = 0x4172EDCC;
+
+    /// <summary>
     /// Clone <paramref name="template"/>, point it at <paramref name="texturePaths"/> (which must be in
     /// the shader's slot order — see <see cref="TextureOrder"/>), and apply <paramref name="rows"/>
     /// (keyed by 0-based color table row; absent rows keep the template's values).
     /// </summary>
-    public static byte[] Build(byte[] template, IReadOnlyList<string> texturePaths, IReadOnlyDictionary<int, GearColorRow>? rows)
+    public static byte[] Build(
+        byte[] template,
+        IReadOnlyList<string> texturePaths,
+        IReadOnlyDictionary<int, GearColorRow>? rows,
+        ScrollSettings? scroll = null)
     {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
@@ -132,7 +177,17 @@ public static class GearMaterialWriter
         if (texturePaths.Count != texCount)
             throw new ArgumentException($"template wants {texCount} textures, got {texturePaths.Count}", nameof(texturePaths));
 
-        string uvName = StrAt(U16(uvTbl)), csName = StrAt(U16(csTbl)), shpkName = StrAt(U16(10));
+        string csName = StrAt(U16(csTbl)), shpkName = StrAt(U16(10));
+
+        // UV sets, as declared by the template.
+        var uvSets = new List<(string Name, ushort Flags)>();
+        for (int i = 0; i < uvCount; i++)
+            uvSets.Add((StrAt(U16(uvTbl + i * 4)), U16(uvTbl + i * 4 + 2)));
+
+        // characterscroll samples its scroll map with uv1, which only exists if map2 is declared.
+        bool isScroll = string.Equals(shpkName, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase);
+        if (isScroll && uvSets.Count < 2)
+            uvSets.Add((SecondUvSet, SecondUvSetFlags));
 
         // Rebuild the string table with our texture paths.
         var sb = new MemoryStream();
@@ -144,7 +199,8 @@ public static class GearMaterialWriter
             sb.WriteByte(0);
         }
         foreach (var tp in texturePaths) Put(tp);
-        int uvOff = (int)sb.Position; Put(uvName);
+        var uvOffs = new List<int>();
+        foreach (var (name, _) in uvSets) { uvOffs.Add((int)sb.Position); Put(name); }
         int csOff = (int)sb.Position; Put(csName);
         int shpkOff = (int)sb.Position; Put(shpkName);
         while (sb.Position % 4 != 0) sb.WriteByte(0);
@@ -159,13 +215,17 @@ public static class GearMaterialWriter
         }
 
         outMs.Write(m, 0, 4);                                            // version
-        OW16((ushort)(fileSize + (strings.Length - strTableSize)));
+        OW16((ushort)(fileSize + (strings.Length - strTableSize) + (uvSets.Count - uvCount) * 4));
         OW16(dataSetSize);
         OW16((ushort)strings.Length);
         OW16((ushort)shpkOff);
-        outMs.Write(m, 12, 4);                                           // counts
+        // counts — uvCount may have grown (see uvSets above)
+        outMs.WriteByte(texCount);
+        outMs.WriteByte((byte)uvSets.Count);
+        outMs.WriteByte(colorSetCount);
+        outMs.WriteByte(addDataSize);
         for (int i = 0; i < texCount; i++) { OW16((ushort)offs[i]); OW16(U16(texTbl + i * 4 + 2)); }
-        for (int i = 0; i < uvCount; i++) { OW16((ushort)uvOff); OW16(U16(uvTbl + i * 4 + 2)); }
+        for (int i = 0; i < uvSets.Count; i++) { OW16((ushort)uvOffs[i]); OW16(uvSets[i].Flags); }
         for (int i = 0; i < colorSetCount; i++) { OW16((ushort)csOff); OW16(U16(csTbl + i * 4 + 2)); }
         outMs.Write(strings);
         int afterStrings = strStart + strTableSize;
@@ -174,11 +234,12 @@ public static class GearMaterialWriter
 
         // Shader section sits right after the data set. Its layout is
         // { u16 valueListSize, u16 keyCount, u16 constCount, u16 samplerCount, u32 flags }.
-        int shaderStart = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strings.Length
+        int shaderStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length
                         + addDataSize + dataSetSize;
         if (shaderStart + 12 <= r.Length)
         {
             uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency | FlagHideBackfaces;
+
             BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
         }
 
@@ -186,11 +247,24 @@ public static class GearMaterialWriter
         var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
         if (found) r = withAlpha;
 
+        // Let the scroll map's own colour through, instead of a flat emissive-tinted white.
+        if (isScroll)
+        {
+            r = TextureLoader.EnsureShaderKey(r, KeyGetDecalColor, ValDecalColorRGBA);
+
+            // Vanilla ships the scroll speeds at zero, so the pattern would sit still.
+            var sc = scroll ?? ScrollSettings.Default;
+            r = TextureLoader.PatchConstantValues(r, ConstTranslateSpeedX, sc.SpeedX).data;
+            r = TextureLoader.PatchConstantValues(r, ConstTranslateSpeedY, sc.SpeedY).data;
+            r = TextureLoader.PatchConstantValues(r, ConstTilingX, sc.TilingX).data;
+            r = TextureLoader.PatchConstantValues(r, ConstTilingY, sc.TilingY).data;
+        }
+
         // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
         // and the templates ship it at full strength. A second skin is SKIN — that weave shows up as a
         // rough, grainy texture the real skin doesn't have. Switch it off on every row.
         {
-            int cs = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strings.Length + addDataSize;
+            int cs = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
             for (int row = 0; row < RowCount; row++)
             {
                 int at = cs + row * RowBytes + HTileAlpha * 2;
@@ -201,7 +275,7 @@ public static class GearMaterialWriter
 
         if (rows is { Count: > 0 })
         {
-            int csStart = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strings.Length + addDataSize;
+            int csStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
             foreach (var (row, def) in rows)
             {
                 if (row < 0 || row >= RowCount) continue;
@@ -215,6 +289,14 @@ public static class GearMaterialWriter
                 if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
                 if (def.Roughness is { } ro) WH(HRoughness, ro);
                 if (def.Metalness is { } me) WH(HMetalness, me);
+
+                // Arm the scrolling effect on rows that actually glow. Field 23 is the master switch —
+                // without it nothing renders — and sphere-map opacity doubles as the effect's visibility.
+                if (isScroll && def.Emissive is { } em && (em.R > 0 || em.G > 0 || em.B > 0))
+                {
+                    WH(HEffectEnable, 1f);
+                    WH(HSphereMask, def.SphereMapMask ?? 1f);
+                }
             }
         }
 

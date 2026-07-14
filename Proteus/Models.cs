@@ -115,6 +115,27 @@ public class OverlayDescriptor
     public string? Scroll { get; set; }
 
     /// <summary>
+    /// Gear + characterscroll only. How fast the scroll map flows, per axis. These live in material
+    /// constants, and vanilla ships them at ZERO — so without a speed the pattern sits still. ~0.01 is a
+    /// typical rate; negative reverses the direction. Null = the default.
+    /// </summary>
+    [JsonPropertyName("ScrollSpeedX")]
+    public float? ScrollSpeedX { get; set; }
+
+    [JsonPropertyName("ScrollSpeedY")]
+    public float? ScrollSpeedY { get; set; }
+
+    /// <summary>
+    /// Gear + characterscroll only. How many times the scroll map repeats across the surface, per axis.
+    /// 1 = once. Null = the default.
+    /// </summary>
+    [JsonPropertyName("ScrollTilingX")]
+    public float? ScrollTilingX { get; set; }
+
+    [JsonPropertyName("ScrollTilingY")]
+    public float? ScrollTilingY { get; set; }
+
+    /// <summary>
     /// For a normal-only overlay (no Diffuse), whether to synthesize a diffuse tint from the
     /// normal's coverage and Row 16's color. Default true (legacy behaviour). Set false when the
     /// overlay should only touch the normal/mask and leave the skin diffuse untouched
@@ -289,6 +310,82 @@ public class OverlayColorOverride
         if (group != null && option != null && Options != null
             && Options.TryGetValue(group, out var opts) && opts.TryGetValue(option, out var rows))
             return rows;
+        return Top;
+    }
+}
+
+/// <summary>
+/// The gear-layer settings of one overlay option: which layer and shader it renders with, and its
+/// scrolling-effect setup. These live on <see cref="OverlayDescriptor"/> rather than the colour rows,
+/// so a design binding has to capture them separately from the colours.
+/// </summary>
+public class GearSettingsPreset
+{
+    [JsonPropertyName("Layer")]
+    public OverlayLayer? Layer { get; set; }
+
+    [JsonPropertyName("Shader")]
+    public string? Shader { get; set; }
+
+    [JsonPropertyName("Scroll")]
+    public string? Scroll { get; set; }
+
+    [JsonPropertyName("ScrollSpeedX")]
+    public float? ScrollSpeedX { get; set; }
+
+    [JsonPropertyName("ScrollSpeedY")]
+    public float? ScrollSpeedY { get; set; }
+
+    [JsonPropertyName("ScrollTilingX")]
+    public float? ScrollTilingX { get; set; }
+
+    [JsonPropertyName("ScrollTilingY")]
+    public float? ScrollTilingY { get; set; }
+
+    /// <summary>Snapshot an overlay's gear settings.</summary>
+    public static GearSettingsPreset From(OverlayDescriptor d) => new()
+    {
+        Layer = d.Layer,
+        Shader = d.Shader,
+        Scroll = d.Scroll,
+        ScrollSpeedX = d.ScrollSpeedX,
+        ScrollSpeedY = d.ScrollSpeedY,
+        ScrollTilingX = d.ScrollTilingX,
+        ScrollTilingY = d.ScrollTilingY,
+    };
+
+    /// <summary>Apply onto a descriptor (used on a clone, so metadata.json is never mutated).</summary>
+    public void ApplyTo(OverlayDescriptor d)
+    {
+        if (Layer is { } l) d.Layer = l;
+        d.Shader = Shader;
+        d.Scroll = Scroll;
+        d.ScrollSpeedX = ScrollSpeedX;
+        d.ScrollSpeedY = ScrollSpeedY;
+        d.ScrollTilingX = ScrollTilingX;
+        d.ScrollTilingY = ScrollTilingY;
+    }
+}
+
+/// <summary>
+/// Per-mod gear-settings override pushed by the design-binding system into the compositor — the same
+/// shape as <see cref="OverlayColorOverride"/>, and applied the same way: only at composite time, onto a
+/// copy of the descriptor. metadata.json is never modified.
+/// </summary>
+public class OverlayGearOverride
+{
+    [JsonPropertyName("Top")]
+    public GearSettingsPreset? Top { get; set; }
+
+    /// <summary>group → option → settings.</summary>
+    [JsonPropertyName("Options")]
+    public Dictionary<string, Dictionary<string, GearSettingsPreset>>? Options { get; set; }
+
+    public GearSettingsPreset? Resolve(string? group, string? option)
+    {
+        if (group != null && option != null && Options != null
+            && Options.TryGetValue(group, out var opts) && opts.TryGetValue(option, out var s))
+            return s;
         return Top;
     }
 }
