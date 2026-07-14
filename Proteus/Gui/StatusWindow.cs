@@ -20,6 +20,7 @@ public class StatusWindow : Window
     private readonly Configuration config;
     private readonly DesignBindingService designBindings;
     private readonly UVMapDownloadService uvMapDl;
+    private readonly UVRemapService uvRemap;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static readonly Vector4 BindingAccent = new(0.45f, 0.75f, 1f, 1f);
@@ -46,7 +47,8 @@ public class StatusWindow : Window
         PenumbraBridge penumbra,
         Configuration config,
         DesignBindingService designBindings,
-        UVMapDownloadService uvMapDl)
+        UVMapDownloadService uvMapDl,
+        UVRemapService uvRemap)
         : base("Proteus###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
     {
         this.compositor     = compositor;
@@ -55,6 +57,7 @@ public class StatusWindow : Window
         this.config         = config;
         this.designBindings = designBindings;
         this.uvMapDl        = uvMapDl;
+        this.uvRemap        = uvRemap;
 
         SizeConstraints = new WindowSizeConstraints
         {
@@ -429,6 +432,10 @@ public class StatusWindow : Window
             foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
                 _indexRowCache.Remove(k);
 
+        // Which body's UV this mod's art is painted in — needed to know where its UV islands are, so the
+        // index scan can ignore the dilated bleed outside them.
+        var bodyType = OverlayBodyType(entry);
+
         // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
         if (entry.Metadata.OptionGroups is not { Count: > 0 })
         {
@@ -445,7 +452,7 @@ public class StatusWindow : Window
                 if (ov.Index == null) continue;
                 var idxPath = Path.Combine(entry.SidecarRoot, ov.Index);
                 if (!_indexRowCache.ContainsKey(idxPath))
-                    _indexRowCache[idxPath] = ScanIndexFile(idxPath);
+                    _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
                 usedRowsSimple.UnionWith(_indexRowCache[idxPath]);
                 hasIdxSimple = true;
             }
@@ -455,7 +462,7 @@ public class StatusWindow : Window
             {
                 if (asset.IndexPath == null) continue;
                 if (!_indexRowCache.ContainsKey(asset.IndexPath))
-                    _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath);
+                    _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
                 usedRowsSimple.UnionWith(_indexRowCache[asset.IndexPath]);
                 hasIdxSimple = true;
             }
@@ -538,7 +545,7 @@ public class StatusWindow : Window
         {
             var idxPath = Path.Combine(entry.SidecarRoot, idxDesc.Index);
             if (!_indexRowCache.ContainsKey(idxPath))
-                _indexRowCache[idxPath] = ScanIndexFile(idxPath);
+                _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
             var scan = _indexRowCache[idxPath];
             if (scan.Count > 0) usedRows = scan;
         }
@@ -552,7 +559,7 @@ public class StatusWindow : Window
         {
             if (asset.IndexPath == null) continue;
             if (!_indexRowCache.ContainsKey(asset.IndexPath))
-                _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath);
+                _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
             var maskScan = _indexRowCache[asset.IndexPath];
             if (maskScan.Count == 0) continue;
             usedRows ??= [];
@@ -602,24 +609,72 @@ public class StatusWindow : Window
     /// along every edge sweep the red channel through intermediate values, and a naive scan reports
     /// nearly all 16 rows as "in use". Only rows with real coverage are returned.
     /// </summary>
-    private HashSet<int> ScanIndexFile(string absolutePath)
+    /// <summary>
+    /// Which color table rows an index texture actually selects (1-based).
+    ///
+    /// ONLY pixels inside a UV island count. Art tools dilate colour outward past the island edges so
+    /// that bilinear filtering doesn't sample background, and that bleed smears the red channel through
+    /// values the artist never used — which then read as rows the overlay doesn't have. The game never
+    /// samples those pixels; neither should we.
+    /// </summary>
+    private static string? OverlayBodyType(OverlayEntry entry)
+    {
+        IEnumerable<OverlayDescriptor> All()
+        {
+            foreach (var o in entry.Metadata.Overlays ?? []) yield return o;
+            foreach (var g in entry.Metadata.OptionGroups ?? [])
+                foreach (var opt in g.Options)
+                    foreach (var o in opt.Overlays)
+                        yield return o;
+        }
+
+        foreach (var d in All())
+        {
+            if (d.SourceBodyType != null) return d.SourceBodyType;
+            foreach (var p in d.MaterialGamePaths)
+            {
+                var t = UVRemapService.InferBodyType(p);
+                if (t != null) return t;
+            }
+        }
+        return null;
+    }
+
+    private HashSet<int> ScanIndexFile(string absolutePath, string? bodyType)
     {
         var used = new HashSet<int>();
         try
         {
             using var stream = File.OpenRead(absolutePath);
             var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+            int w = img.Width, h = img.Height;
+
+            int islandW = 0, islandH = 0;
+            bool[]? island = bodyType != null ? uvRemap.IslandMask(bodyType, out islandW, out islandH) : null;
+            if (islandW == 0 || islandH == 0) island = null;
 
             var counts = new int[17];
             int total = 0;
-            for (int i = 0; i < img.Data.Length; i += 4)
+            for (int y = 0; y < h; y++)
             {
-                counts[img.Data[i] / 17 + 1]++;   // red channel → 1-based row number
-                total++;
+                for (int x = 0; x < w; x++)
+                {
+                    if (island != null)
+                    {
+                        // The map is its own resolution; sample it nearest-neighbour.
+                        int mx = x * islandW / w, my = y * islandH / h;
+                        int mi = my * islandW + mx;
+                        if (mi >= island.Length || !island[mi]) continue;   // outside the islands
+                    }
+
+                    counts[img.Data[(y * w + x) * 4] / 17 + 1]++;   // red → 1-based row
+                    total++;
+                }
             }
 
-            // A row has to cover at least 0.1% of the texture to count as used.
-            int threshold = Math.Max(16, total / 1000);
+            if (total == 0) return used;
+
+            int threshold = Math.Max(64, total / 1000);   // 0.1% of the island area
             for (int row = 1; row <= 16; row++)
                 if (counts[row] >= threshold)
                     used.Add(row);

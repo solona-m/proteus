@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 44;
+    public const int BuildNumber = 46;
 
     private const string CommandName = "/proteus";
 
@@ -74,7 +74,7 @@ public sealed class Plugin : IDalamudPlugin
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
 
-        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl);
+        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);

@@ -85,6 +85,30 @@ public class UVRemapService
 
     // ── Map cache ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Which pixels of a body's texture actually lie inside a UV island, at the transfer map's
+    /// resolution. Everything outside is padding — and art tools bleed/dilate colour into that padding,
+    /// so anything read from there is an artefact of the export, not something the game ever samples.
+    ///
+    /// Derived from a transfer map whose DESTINATION is this body type (its Valid mask is exactly the
+    /// islands). Returns null for body types we ship no map for, in which case callers should assume
+    /// every pixel counts.
+    /// </summary>
+    public bool[]? IslandMask(string bodyType, out int w, out int h)
+    {
+        w = h = 0;
+        foreach (var from in new[] { "bibo", "gen3" })
+        {
+            if (string.Equals(from, bodyType, StringComparison.OrdinalIgnoreCase)) continue;
+            var map = GetMap(from, bodyType);
+            if (map == null) continue;
+            w = map.W;
+            h = map.H;
+            return map.Valid;
+        }
+        return null;
+    }
+
     private TransferMap? GetMap(string from, string to)
     {
         var key = (from.ToLowerInvariant(), to.ToLowerInvariant());
