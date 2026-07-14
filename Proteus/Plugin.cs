@@ -18,9 +18,10 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
+    [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 39;
+    public const int BuildNumber = 41;
 
     private const string CommandName = "/proteus";
 
@@ -38,6 +39,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
+    private readonly SphereMapPreview spherePreview;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -67,6 +69,10 @@ public sealed class Plugin : IDalamudPlugin
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
         designWatcher = new GlamourerDesignWatcher(designBindings, config.GlamourerDesignDirOverride ?? glamourer.DesignsDirectory, log);
         ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, log);
+
+        // Sphere-map thumbnails for the colour table editor.
+        spherePreview = new SphereMapPreview(TextureProvider, log);
+        Gui.ColorTableEditor.Spheres = spherePreview;
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl);
 
@@ -108,6 +114,8 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
 
         windowSystem.RemoveAllWindows();
+        Gui.ColorTableEditor.Spheres = null;
+        spherePreview.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
         designBindings.Dispose();

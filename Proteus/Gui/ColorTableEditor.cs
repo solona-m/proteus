@@ -175,6 +175,46 @@ public static class ColorTableEditor
         }
     }
 
+    /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
+    public static SphereMapPreview? Spheres { get; set; }
+
+    /// <summary>Sphere map index, as a dropdown of thumbnails — an index alone tells you nothing.</summary>
+    private static void DrawSpherePicker(string id, ref int index, out bool changed)
+    {
+        changed = false;
+        const float current = 32f;   // the one in use, beside the combo
+        const float thumb = 56f;     // the pictures in the list — click one to pick it
+
+        Spheres?.Draw(index, current);
+        if (Spheres != null) ImGui.SameLine();
+
+        ImGui.SetNextItemWidth(70);
+        if (ImGui.BeginCombo($"Index##sp_{id}", index.ToString(), ImGuiComboFlags.HeightLarge))
+        {
+            for (int i = 0; i < SphereMapPreview.Count; i++)
+            {
+                // The picture is the button — clicking it selects that index and closes the list.
+                if (Spheres?.DrawButton($"##sphimg_{id}_{i}", i, thumb) == true && i != index)
+                {
+                    index = i;
+                    changed = true;
+                    ImGui.CloseCurrentPopup();
+                }
+                if (Spheres != null) ImGui.SameLine();
+
+                if (ImGui.Selectable($"{i}##sph_{id}_{i}", i == index, ImGuiSelectableFlags.None,
+                        new Vector2(0, thumb)) && i != index)
+                {
+                    index = i;
+                    changed = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(SphereTip);
+    }
+
     /// <summary>
     /// Paint a row's colours onto its picker button: three columns — diffuse, specular, glow — each
     /// split top = sub-row A, bottom = sub-row B. The glow swatch is the emissive colour scaled by its
@@ -316,14 +356,12 @@ public static class ColorTableEditor
         ImGui.TextDisabled("Sphere map");
 
         int sphere = sub?.SphereMap ?? 0;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragInt($"Index##sp_{id}", ref sphere, 0.2f, 0, 31))
+        DrawSpherePicker(id, ref sphere, out bool sphereChanged);
+        if (sphereChanged)
         {
-            Edit().SphereMap = Math.Clamp(sphere, 0, 31);
+            Edit().SphereMap = Math.Clamp(sphere, 0, SphereMapPreview.Count - 1);
             changed = true;
         }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(SphereTip);
 
         float sphereInt = sub?.SphereIntensity ?? 0f;
         ImGui.SetNextItemWidth(70);
