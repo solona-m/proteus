@@ -690,6 +690,9 @@ public class CompositorService : IDisposable
             // Gear overlays don't composite into a skin material — each becomes its own second-skin
             // shell with its own material and shader. Collect them separately.
             var gearOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
+            // Every active overlay of every mod, both layers — the second-skin builder ranks groups
+            // across layers (a skin group can outrank a gear group), so it needs the full picture.
+            var allOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
 
             foreach (var entry in entries)
             {
@@ -719,6 +722,7 @@ public class CompositorService : IDisposable
 
                 foreach (var overlay in overlays)
                 {
+                    allOverlays.Add((entry, overlay));
                     if (overlay.Descriptor.Layer == OverlayLayer.Gear)
                     {
                         gearOverlays.Add((entry, overlay));
@@ -920,6 +924,28 @@ public class CompositorService : IDisposable
                 if (assets.Count > 0) maskAssetsByMod[entry.ModDirectory] = assets;
             }
 
+            // Within a mod, a HIGHER-priority group (lower group_NNN number) must composite LAST so it
+            // lands on top. Across mods the existing Penumbra-priority order is preserved.
+            foreach (var list in byMaterial.Values)
+            {
+                var sorted = list
+                    .OrderBy(p => p.Entry.Priority)
+                    .ThenByDescending(p => p.Overlay.GroupOrder)
+                    .ToList();
+                list.Clear();
+                list.AddRange(sorted);
+            }
+
+            // The mod's highest-priority group. Only it is granted a mask's forced-opacity term; see
+            // ApplyCoverageMask. Mods with no groups (top-level Overlays) all sit at int.MaxValue, so
+            // every overlay qualifies and the old behaviour stands.
+            var topGroupByMod = byMaterial.Values.SelectMany(l => l)
+                .GroupBy(p => p.Entry.ModDirectory, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Min(p => p.Overlay.GroupOrder), StringComparer.OrdinalIgnoreCase);
+
+            bool MaskAdds(OverlayEntry e, ResolvedOverlay o)
+                => !topGroupByMod.TryGetValue(e.ModDirectory, out var top) || o.GroupOrder <= top;
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -1083,6 +1109,109 @@ public class CompositorService : IDisposable
                 // afterwards (masks are mod-level, not tied to one overlay descriptor).
                 var lastSrcBodyTypeByMod = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
+                // ── Higher-priority group claims ──────────────────────────────
+                // A mod's groups are ranked by Penumbra's own numbering (group_002 beats group_003), and a
+                // higher group wins wherever it is VISIBLE: a lower one is faded by the higher one's alpha.
+                // Coverage drives every channel — CovAt gates the normal/mask/emissive phases — so fading
+                // the alpha is also what stops a lower group's normal COMPOUNDING through an opaque higher
+                // one (CompoundNormal is additive), which is the bug that flattened the leather cup.
+                var claimCache = new Dictionary<(string Mod, int Group, int W, int H), byte[]?>();
+
+                string? SrcTypeOf(OverlayDescriptor d)
+                {
+                    if (d.SourceBodyType != null) return d.SourceBodyType;
+                    if (d.MaterialGamePaths.Any(p => p.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)))
+                        return "bibo";
+                    if (d.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3"))
+                        return "gen3";
+                    return null;
+                }
+
+                // One overlay's effective coverage — art alpha, then the Masks group, then opacity.
+                // Same rules CovAt applies, just for a different descriptor.
+                byte[]? CoverageOf(OverlayEntry e, ResolvedOverlay o, int tw, int th)
+                {
+                    var d = o.Descriptor;
+                    var srcT = SrcTypeOf(d);
+                    byte[]? cov = null;
+
+                    if (d.Diffuse != null)
+                    {
+                        var p = Path.Combine(e.SidecarRoot, d.Diffuse);
+                        cov = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                    }
+                    else if (d.Normal != null)
+                    {
+                        var p = Path.Combine(e.SidecarRoot, d.Normal);
+                        var n = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                        if (n != null)
+                        {
+                            cov = new byte[n.Length];
+                            for (int i = 0; i < n.Length; i += 4) cov[i + 3] = n[i + 2];   // blue → opacity
+                        }
+                    }
+                    else if (d.Mask != null)
+                    {
+                        var p = Path.Combine(e.SidecarRoot, d.Mask);
+                        cov = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                    }
+                    if (cov == null) return null;
+
+                    var msk = CombinedMaskAt(e.ModDirectory, tw, th, srcT);
+                    if (msk != null) cov = ApplyCoverageMask(cov, msk.Value.W, msk.Value.T, MaskAdds(e, o));
+
+                    var r = BuildRowDict(o.ColorTableRows);
+                    if (d.Index != null && r.Values.Any(x => x.A.Opacity != 0 || x.B.Opacity != 0))
+                    {
+                        var ip = Path.Combine(e.SidecarRoot, d.Index);
+                        var idx = LoadIndexMerged(ip, tw, th, srcT, e.ModDirectory);
+                        if (idx != null) cov = ApplyIndexedOpacity(cov, idx, r);
+                    }
+                    else if (d.Index == null)
+                    {
+                        r.TryGetValue(15, out var r16);
+                        int op = r16?.A.Opacity ?? 0;
+                        if (op != 0) cov = ScaleOverlayAlpha(cov, op);
+                    }
+                    return cov;
+                }
+
+                // Union alpha of every same-mod overlay in a higher-priority group.
+                byte[]? ClaimAt(string modDir, int groupOrder, int tw, int th)
+                {
+                    var key = (modDir, groupOrder, tw, th);
+                    if (claimCache.TryGetValue(key, out var hit)) return hit;
+
+                    byte[]? acc = null;
+                    foreach (var (e, o) in pairs)
+                    {
+                        if (o.GroupOrder >= groupOrder) continue;
+                        if (!string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)) continue;
+
+                        var cov = CoverageOf(e, o, tw, th);
+                        if (cov == null) continue;
+
+                        acc ??= new byte[tw * th];
+                        for (int i = 0, a = 3; i < acc.Length && a < cov.Length; i++, a += 4)
+                            acc[i] = (byte)(acc[i] + (255 - acc[i]) * cov[a] / 255);   // alpha-over union
+                    }
+                    claimCache[key] = acc;
+                    return acc;
+                }
+
+                // Fade a coverage buffer by what the higher groups already claim.
+                byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int tw, int th)
+                {
+                    if (cov == null) return null;
+                    var claim = ClaimAt(e.ModDirectory, o.GroupOrder, tw, th);
+                    if (claim == null) return cov;
+
+                    var dst = (byte[])cov.Clone();
+                    for (int i = 0, a = 3; i < claim.Length && a < dst.Length; i++, a += 4)
+                        dst[a] = (byte)(dst[a] * (255 - claim[i]) / 255);
+                    return dst;
+                }
+
                 foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
@@ -1209,7 +1338,8 @@ public class CompositorService : IDisposable
                     if (desc.Diffuse != null && diffuseOv != null)
                     {
                         var msk = CombinedMaskAt(entry.ModDirectory, covW, covH, srcBodyType);
-                        if (msk != null) diffuseOv = ApplyCoverageMask(diffuseOv, msk.Value.W, msk.Value.T);
+                        if (msk != null)
+                            diffuseOv = ApplyCoverageMask(diffuseOv, msk.Value.W, msk.Value.T, MaskAdds(entry, resolved));
                         if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
@@ -1219,6 +1349,10 @@ public class CompositorService : IDisposable
                         else if (desc.Index == null && row16A.Opacity != 0)
                             diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
                     }
+
+                    // Phase A reads diffuseOv directly, so it needs the same higher-group fade CovAt
+                    // applies to every other channel. Suppress() clones, so covSrc stays raw for CovAt.
+                    diffuseOv = Suppress(diffuseOv, entry, resolved, covW, covH);
 
                     // Returns coverage at (tw × th): mask first, then opacity (indexed or flat).
                     // covSrc is raw — no opacity pre-baked — so the Masks-group always shapes
@@ -1248,7 +1382,8 @@ public class CompositorService : IDisposable
                         if (cov != null)
                         {
                             var mask = CombinedMaskAt(entry.ModDirectory, tw, th, srcBodyType);
-                            if (mask != null) cov = ApplyCoverageMask(cov, mask.Value.W, mask.Value.T);
+                            if (mask != null)
+                                cov = ApplyCoverageMask(cov, mask.Value.W, mask.Value.T, MaskAdds(entry, resolved));
                         }
                         // Opacity after mask (TextureLoader cache deduplicates the index-texture load).
                         if (cov != null && desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
@@ -1259,6 +1394,9 @@ public class CompositorService : IDisposable
                         }
                         else if (cov != null && desc.Index == null && row16A.Opacity != 0)
                             cov = ScaleOverlayAlpha(cov, row16A.Opacity);
+
+                        // Finally, fade by what a higher-priority group in this mod already claims.
+                        cov = Suppress(cov, entry, resolved, tw, th);
                         return cov;
                     }
 
@@ -1571,7 +1709,7 @@ public class CompositorService : IDisposable
                             .Select(UVRemapService.InferBodyType)
                             .FirstOrDefault(t => t != null)
                             ?? _lastCompositedBodyType?.Split(',').FirstOrDefault();
-                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath());
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath(), allOverlays);
                         if (shells != null)
                         {
                             foreach (var (gamePath, relPath) in shells.Redirects)
@@ -2156,7 +2294,12 @@ public class CompositorService : IDisposable
     // the pixel stays fully transparent, so a mask can never paint opacity onto bare skin.
     // Returns the input unchanged when the map is null; otherwise returns a clone, since the
     // coverage may be a shared, cached PNG array that must not be mutated.
-    internal static byte[] ApplyCoverageMask(byte[] coverageRgba, byte[]? w, byte[]? t)
+    // `additive` withholds the T term. A mask is a garment element in its own right (it carries its
+    // own relief normal and color row), and it must overwrite whatever else the mod draws underneath —
+    // so only the mod's HIGHEST-priority group is granted the forced opacity. Lower groups see W alone,
+    // which is 0 wherever the mask is opaque, erasing them from the mask's territory instead of letting
+    // them paint over it.
+    internal static byte[] ApplyCoverageMask(byte[] coverageRgba, byte[]? w, byte[]? t, bool additive = true)
     {
         if (w == null || t == null) return coverageRgba;
         var dst = (byte[])coverageRgba.Clone();
@@ -2165,7 +2308,7 @@ public class CompositorService : IDisposable
         {
             int baseA = dst[pi * 4 + 3];
             if (baseA == 0) continue;                        // no base coverage → mask has no say (stays 0)
-            int v = baseA * w[pi] / 255 + t[pi];             // surviving overlay coverage + mask target
+            int v = baseA * w[pi] / 255 + (additive ? t[pi] : 0);
             dst[pi * 4 + 3] = (byte)(v > 255 ? 255 : v);
         }
         return dst;

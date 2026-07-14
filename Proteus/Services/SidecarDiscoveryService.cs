@@ -26,7 +26,13 @@ public record ResolvedOverlay(
     OverlayDescriptor Descriptor,
     List<ColorTableRowPreset>? ColorTableRows,
     string? OptionGroup,
-    string? Option
+    string? Option,
+    /// <summary>
+    /// Penumbra's own group number (group_002_fabric.json → 2). LOWER = higher priority, and a higher
+    /// group wins wherever it is visible: the compositor suppresses lower groups underneath it.
+    /// int.MaxValue for top-level overlays, which belong to no group.
+    /// </summary>
+    int GroupOrder = int.MaxValue
 );
 
 public class SidecarDiscoveryService
@@ -124,10 +130,18 @@ public class SidecarDiscoveryService
         var collId   = penumbra.GetPlayerCollectionId();
         var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
 
+        // Priority comes from Penumbra's group numbering, not the order the groups happen to sit in
+        // metadata.json — the author controls it by ordering the groups, which is what they expect.
+        var modRoot = Path.GetDirectoryName(
+            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
+
         var resolved = new List<ResolvedOverlay>();
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
+
+            int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
 
             List<string>? selected = null;
             if (settings.HasValue)
@@ -146,7 +160,7 @@ public class SidecarDiscoveryService
             {
                 var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
                 foreach (var desc in opt.Overlays)
-                    resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name));
+                    resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name, order));
             }
         }
         return resolved;
@@ -373,6 +387,37 @@ public class SidecarDiscoveryService
         }
         catch { /* modRoot missing/unreadable */ }
         return [];
+    }
+
+    /// <summary>
+    /// Penumbra group name → its number, taken from the filename (<c>group_002_fabric.json</c> → 2).
+    /// LOWER is higher priority. This — not the order groups happen to appear in metadata.json — is what
+    /// decides which group wins where two of them overlay the same skin.
+    /// </summary>
+    internal static Dictionary<string, int> ReadGroupOrder(string modRoot)
+    {
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
+            {
+                try
+                {
+                    // group_002_fabric.json -> 2
+                    var stem = Path.GetFileNameWithoutExtension(file);
+                    var parts = stem.Split('_');
+                    if (parts.Length < 2 || !int.TryParse(parts[1], out var number)) continue;
+
+                    using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                    if (doc.RootElement.TryGetProperty("Name", out var nameEl)
+                        && nameEl.GetString() is { Length: > 0 } name)
+                        result[name] = number;
+                }
+                catch { /* skip a malformed group file, keep scanning */ }
+            }
+        }
+        catch { /* modRoot missing/unreadable */ }
+        return result;
     }
 
     /// <summary>

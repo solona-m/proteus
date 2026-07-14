@@ -169,9 +169,23 @@ public sealed class SecondSkinService
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
         string outputRoot,
         string? bodyType,
-        string? effectsFolder)
+        string? effectsFolder,
+        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null)
     {
         if (gearOverlays.Count == 0) return null;
+
+        // A mask's forced-opacity term belongs to the mod's HIGHEST-priority group alone (see
+        // CompositorService.ApplyCoverageMask — same rule, and the two must agree). A gear overlay in a
+        // lower group must not be handed coverage inside a mask's territory: it becomes a SHELL, so it
+        // would render its art, its relief and its color rows straight over whatever the mask is meant to
+        // be. The ranking spans BOTH layers — a skin-layer group can outrank a gear one — so it has to be
+        // taken over every active overlay of the mod, not just the gear ones.
+        var topGroupByMod = (allOverlays ?? gearOverlays)
+            .GroupBy(p => p.Entry.ModDirectory, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Min(p => p.Overlay.GroupOrder), StringComparer.OrdinalIgnoreCase);
+
+        bool MaskAdds(OverlayEntry e, ResolvedOverlay o)
+            => !topGroupByMod.TryGetValue(e.ModDirectory, out var top) || o.GroupOrder <= top;
 
         var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var manipulations = new List<object>();
@@ -250,7 +264,7 @@ public sealed class SecondSkinService
                 letter, shader, srcType ?? "(unknown)", bodyType ?? "(unknown)",
                 srcType != null && bodyType != null && !string.Equals(srcType, bodyType, StringComparison.OrdinalIgnoreCase)
                     ? " [REMAP]" : " [no remap]");
-            var alpha = BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize);
+            var alpha = BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize, MaskAdds(entry, ov));
             var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
 
             var texPaths = WriteTextures(
@@ -331,7 +345,8 @@ public sealed class SecondSkinService
     /// ApplyCoverageMask; keep the two in step.
     /// </summary>
     private byte[]? BuildAlpha(
-        OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType, int w, int h)
+        OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType, int w, int h,
+        bool maskAdds = true)
     {
         var artPath = d.Diffuse ?? d.Normal ?? d.Mask;
         var masks = discovery.ResolveActiveMasks(entry);
@@ -386,7 +401,7 @@ public sealed class SecondSkinService
             for (int i = 0; i < n; i++)
             {
                 if (alpha[i] == 0) continue;                       // no base coverage -> mask has no say
-                int v = alpha[i] * wArr[i] / 255 + tArr![i];
+                int v = alpha[i] * wArr[i] / 255 + (maskAdds ? tArr![i] : 0);
                 alpha[i] = (byte)(v > 255 ? 255 : v);
             }
 
