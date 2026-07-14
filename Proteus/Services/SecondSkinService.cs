@@ -52,8 +52,43 @@ public sealed class SecondSkinService
         this.log = log;
     }
 
-    /// <summary>Files to redirect, plus the metadata edits that make the shells load.</summary>
-    public sealed record Result(Dictionary<string, string> Redirects, List<object> Manipulations);
+    /// <summary>
+    /// Files to redirect, plus the metadata edits that make the shells load.
+    /// <paramref name="ShellChanged"/> is true only when the model or a material actually differs from
+    /// what was already on disk. Glamourer's in-place reload can't see .mdl/.mtrl changes, so those runs
+    /// need a full redraw — but a run that rewrites identical bytes must not force one.
+    /// </summary>
+    public sealed record Result(
+        Dictionary<string, string> Redirects, List<object> Manipulations, bool ShellChanged);
+
+    /// <summary>Write only if the content differs; reports whether it did.</summary>
+    private static bool WriteIfChanged(string path, byte[] data)
+    {
+        try
+        {
+            if (File.Exists(path) && File.ReadAllBytes(path).AsSpan().SequenceEqual(data))
+                return false;
+        }
+        catch { /* unreadable — fall through and rewrite */ }
+
+        File.WriteAllBytes(path, data);
+        return true;
+    }
+
+    /// <summary>
+    /// Content hash of each shell texture we last wrote, so we can tell a real change from a rewrite of
+    /// identical bytes. The shell's TEXTURES matter as much as its model: an opacity or mask edit only
+    /// moves coverage, which lands in the normal map — and the game won't pick that up on an in-place
+    /// reload either, because the texture belongs to an accessory rather than the body.
+    /// </summary>
+    private readonly Dictionary<string, ulong> _texHashes = new(StringComparer.OrdinalIgnoreCase);
+
+    private static ulong Hash(byte[] data)
+    {
+        ulong h = 14695981039346656037;   // FNV-1a
+        foreach (var b in data) { h ^= b; h *= 1099511628211; }
+        return h;
+    }
 
     /// <summary>
     /// Build every gear shell for the character. <paramref name="charCode"/> is the human model code
@@ -183,6 +218,9 @@ public sealed class SecondSkinService
             bodyType = modelType;
         }
 
+        // Only a shell whose bytes actually differ from what's on disk needs a full redraw.
+        bool shellChanged = false;
+
         var layers = new List<SecondSkinLayer>();
         for (int i = 0; i < gearOverlays.Count; i++)
         {
@@ -215,8 +253,8 @@ public sealed class SecondSkinService
             var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
 
             var texPaths = WriteTextures(
-                ov.Descriptor, sidecarRoot, shader, texPrefix, texturesDir, redirects, letter, alpha,
-                srcType, bodyType);
+                entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, letter, alpha,
+                srcType, bodyType, ov.ColorTableRows, ref shellChanged);
             if (texPaths == null) continue;
 
             // characterscroll ships with the plugin (vanilla ones glow flat white); the rest come from
@@ -236,7 +274,7 @@ public sealed class SecondSkinService
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{letter}.mtrl");
-            File.WriteAllBytes(matDisk, mtrl);
+            shellChanged |= WriteIfChanged(matDisk, mtrl);
             redirects[matGamePath] = Rel(outputRoot, matDisk);
 
             layers.Add(new SecondSkinLayer
@@ -260,7 +298,7 @@ public sealed class SecondSkinService
 
         var mdlGamePath = $"chara/accessory/a{EmperorSetId:D4}/model/c{charCode}a{EmperorSetId:D4}_{Accessory}.mdl";
         var mdlDisk = Path.Combine(modelsDir, "secondskin.mdl");
-        File.WriteAllBytes(mdlDisk, shell);
+        shellChanged |= WriteIfChanged(mdlDisk, shell);
         redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
 
         // Without an EQDP entry the ring falls back to another race's model, and the shell — which is
@@ -275,7 +313,7 @@ public sealed class SecondSkinService
             stats.TrianglesIn == 0 ? 0 : (stats.TrianglesIn - stats.TrianglesOut) * 100.0 / stats.TrianglesIn,
             shell.Length / 1024);
 
-        return new Result(redirects, manipulations);
+        return new Result(redirects, manipulations, shellChanged);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
@@ -349,6 +387,14 @@ public sealed class SecondSkinService
                 alpha[i] = (byte)(v > 255 ? 255 : v);
             }
 
+        long opaque = 0, clear = 0;
+        foreach (var a in alpha) { if (a == 0) clear++; else if (a == 255) opaque++; }
+        log.Information(
+            "[Proteus] gear coverage: art={0} masks={1} [{2}] -> {3:F1}% clear, {4:F1}% opaque, {5:F1}% partial",
+            artPath ?? "none", masks.Count,
+            string.Join(", ", masks.Select(Path.GetFileNameWithoutExtension)),
+            clear * 100.0 / n, opaque * 100.0 / n, (n - clear - opaque) * 100.0 / n);
+
         return alpha;
     }
 
@@ -376,10 +422,11 @@ public sealed class SecondSkinService
     /// transparency for gear, and therefore what lets stacked shells composite instead of occlude.
     /// </summary>
     private List<string>? WriteTextures(
-        OverlayDescriptor d, string sidecarRoot, string shader, string texPrefix,
+        OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
-        string? srcType, string? dstType)
+        string? srcType, string? dstType, List<ColorTableRowPreset>? rows, ref bool texturesChanged)
     {
+        var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
 
         byte[]? Png(string? rel) => LoadRemapped(rel, sidecarRoot, srcType, dstType, TexSize, TexSize);
@@ -397,25 +444,88 @@ public sealed class SecondSkinService
             return t;
         }
 
+        // ── Proteus "Masks" options ──────────────────────────────────────────
+        // A mask isn't only coverage: its export can also ship its OWN row assignment (Masks/<x>_id.png)
+        // and relief normal (Masks/<x>_n.dds). The skin layer merges both — LoadIndexMerged and the
+        // masks-driven relief pass in CompositorService — so the gear layer must too, or a mask silently
+        // loses its rows and its bump. (Coverage itself is already folded in by BuildAlpha.)
+        foreach (var (maskPath, maskNormalPath, maskIndexPath) in discovery.ResolveActiveMaskAssets(entry))
+        {
+            var maskPng = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
+            if (maskPng == null) continue;
+
+            if (maskIndexPath != null)
+            {
+                var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
+                if (maskIdx != null)
+                {
+                    // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
+                    index = index != null ? (byte[])index.Clone() : Solid(0, 0, 0, 255);
+                    for (int i = 0; i < index.Length; i += 4)
+                    {
+                        if (maskPng[i + 3] < 128) continue;   // only where the mask is actually present
+                        index[i]     = maskIdx[i];            // red   → row pair
+                        index[i + 1] = maskIdx[i + 1];        // green → sub-row
+                    }
+                }
+            }
+
+            if (maskNormalPath != null)
+            {
+                var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
+                if (maskNormal != null)
+                {
+                    normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+                    CompositorService.CompoundNormal(normal, maskNormal, TexSize, TexSize, maskPng);
+                }
+            }
+        }
+
+        // ── per-row opacity ──────────────────────────────────────────────────
+        // Each color table row carries an Opacity (-100..100), and the index texture says which row a
+        // pixel uses — so opacity is per-region, not global. Same blend the skin layer applies
+        // (CompositorService.ApplyIndexedOpacity): negative fades toward transparent, positive pushes
+        // toward opaque, interpolated between sub-rows A and B by the index's green channel.
+        if (alpha != null && index != null && rows is { Count: > 0 })
+        {
+            alpha = (byte[])alpha.Clone();
+            for (int i = 0; i < alpha.Length; i++)
+            {
+                float a = alpha[i] / 255f;
+                if (a <= 0f) continue;
+
+                int pair = index[i * 4] / 17 + 1;                       // red → 1-based row pair
+                var preset = rows.FirstOrDefault(p => p.Row == pair);
+                if (preset == null) continue;
+
+                float blendA = index[i * 4 + 1] / 255f;                 // green → sub-row A weight
+                float opA = preset.SubRowA?.Opacity ?? 0;
+                float opB = preset.SubRowB?.Opacity ?? 0;
+                float op = opB + (opA - opB) * blendA;
+                if (op == 0f) continue;
+
+                float newA = op < 0f ? a * (100f + op) / 100f : a + (1f - a) * op / 100f;
+                alpha[i] = (byte)(Math.Clamp(newA, 0f, 1f) * 255f + 0.5f);
+            }
+        }
+
         // norm: RG = the normal itself, B = TRANSPARENCY (the gear alpha gate), A = unused.
         // This is the whole trick: a Proteus overlay is gated by opacity, and on the gear layer that
         // opacity has to be translated into the normal map's BLUE channel or the shell renders solid.
+        // (It also needs the material's transparency flag on — see GearMaterialWriter.)
         var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
         for (int i = 0; i < TexSize * TexSize; i++)
-            norm[i * 4 + 2] = alpha?[i] ?? 255;
-
-        // BaseColor replaces the surface with a flat colour while the diffuse art still drives coverage.
-        byte[]? flatBase = null;
-        if (ParseHex(d.BaseColor) is { } bc)
-            flatBase = Solid((byte)(bc.R * 255), (byte)(bc.G * 255), (byte)(bc.B * 255), 255);
+            norm[i * 4 + 2] = alpha?[i] ?? 255;   // blue is the gate; alpha is not used
 
         var slots = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["norm"] = norm,
-            ["mask"] = mask ?? Solid(128, 128, 128, 255),
-            ["id"]   = index ?? Solid(0, 0, 0, 255),                      // row 0
-            ["base"] = flatBase ?? diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
-            ["catc"] = scroll ?? Solid(0, 0, 0, 255),                     // black = no glow
+            // A fabricated mask must be WHITE, not mid-grey. The gear shaders read occlusion/gloss out
+            // of it, so a 50% grey mask halves the lighting everywhere and a white surface renders grey.
+            ["mask"] = mask ?? Solid(255, 255, 255, 255),
+            ["id"]   = index ?? Solid(0, 0, 0, 255),          // row 0
+            ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
+            ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
         };
 
         var order = GearMaterialWriter.TextureOrder(shader);
@@ -424,11 +534,22 @@ public sealed class SecondSkinService
         {
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
-            if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk))
+
+            // Skip the write when the content is byte-identical to what we last wrote — otherwise every
+            // recomposite would look like a change and force a redraw.
+            var hash = Hash(slots[slot]);
+            bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
+            if (!same)
             {
-                log.Error("[Proteus] second skin: failed to write {0}", disk);
-                return null;
+                if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk))
+                {
+                    log.Error("[Proteus] second skin: failed to write {0}", disk);
+                    return null;
+                }
+                _texHashes[disk] = hash;
+                texturesChanged = true;
             }
+
             redirects[gamePath] = Rel(outputRoot, disk);
             paths.Add(gamePath);
         }

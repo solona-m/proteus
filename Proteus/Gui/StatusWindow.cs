@@ -32,6 +32,8 @@ public class StatusWindow : Window
     private readonly Dictionary<string, HashSet<int>> _indexRowCache = new();
     // Key: modDir → selected index into the active-options list (for the dropdown).
     private readonly Dictionary<string, int> _colorEditorSelection = new();
+    // Key: editor scope → which color table row (1–16) is open in the editor.
+    private readonly Dictionary<string, int> _rowSelection = new();
     // Key: modDir → priority value being dragged; committed to Penumbra on edit-end.
     private readonly Dictionary<string, int> _priorityEdits = new();
 
@@ -441,8 +443,25 @@ public class StatusWindow : Window
             HashSet<int>? filteredSimple = (hasIdxSimple && usedRowsSimple.Count > 0) ? usedRowsSimple : null;
             if (!hasIdxSimple)
                 ImGui.TextDisabled("No index texture — only Row 16 is applied.");
+
+            // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
+            // binding only carries colour rows.
+            var simpleOverlays = entry.Metadata.Overlays ?? [];
+            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays))
+            {
+                discovery.SaveMetadata(entry);
+                compositor.TriggerRecomposite("layer-change");
+            }
+            bool gearSimple = simpleOverlays.Count > 0 && simpleOverlays[0].Layer == OverlayLayer.Gear;
+
+            ImGui.Separator();
+
             bool changedSimple = false;
-            DrawRowControls(entry.ModDirectory, rows, filteredSimple, ref changedSimple);
+            int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
+            ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple,
+                ref selSimple, ref changedSimple);
+            _rowSelection[entry.ModDirectory] = selSimple;
+
             if (changedSimple)
             {
                 // Binding path (ovrRows != null): live-preview only — the edit stays in the in-memory
@@ -531,8 +550,24 @@ public class StatusWindow : Window
             : null;
         var editRows = ovrOptRows ?? activeOpt.ColorTableRows;
 
+        var scope = $"{entry.ModDirectory}_{groupName}_{activeOpt.Name}";
+
+        // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
+        // binding only carries colour rows.
+        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays))
+        {
+            discovery.SaveMetadata(entry);
+            compositor.TriggerRecomposite("layer-change");
+        }
+        bool gear = activeOpt.Overlays.Count > 0 && activeOpt.Overlays[0].Layer == OverlayLayer.Gear;
+
+        ImGui.Separator();
+
         bool changed = false;
-        DrawRowControls($"{entry.ModDirectory}_{groupName}", editRows, usedRows, ref changed);
+        int sel = _rowSelection.GetValueOrDefault(scope, 1);
+        ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, ref sel, ref changed);
+        _rowSelection[scope] = sel;
+
         if (changed)
         {
             // Binding path: live-preview only (folded in via "Update binding"). Metadata path persists.
@@ -541,96 +576,13 @@ public class StatusWindow : Window
         }
     }
 
-    // Renders the per-row A/B color/emissive/opacity controls, filtered by usedRows when non-null.
-    // idScope is embedded in widget IDs to prevent collisions between groups.
-    private static void DrawRowControls(
-        string idScope,
-        List<ColorTableRowPreset> rows,
-        HashSet<int>? usedRows,
-        ref bool changed)
-    {
-        for (int pairNum = 1; pairNum <= 16; pairNum++)
-        {
-            if (usedRows != null && !usedRows.Contains(pairNum)) continue;
-
-            var preset = rows.FirstOrDefault(r => r.Row == pairNum);
-
-            ImGui.TextUnformatted($"{pairNum,2}");
-
-            ImGui.SameLine();
-            ImGui.TextDisabled("A");
-            ImGui.SameLine();
-
-            var colA = HexToVec3(preset?.SubRowA?.Diffuse);
-            ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"##dA_{idScope}_{pairNum}", ref colA, ImGuiColorEditFlags.NoInputs))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowA ??= new ColorTableSubRowPreset();
-                preset.SubRowA.Diffuse = Vec3ToHex(colA);
-                changed = true;
-            }
-
-            ImGui.SameLine();
-            float emA = preset?.SubRowA?.Emissive ?? 0f;
-            ImGui.SetNextItemWidth(60);
-            if (ImGui.DragFloat($"##eA_{idScope}_{pairNum}", ref emA, 0.01f, 0f, 1f, "%.2f"))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowA ??= new ColorTableSubRowPreset();
-                preset.SubRowA.Emissive = Math.Clamp(emA, 0f, 1f);
-                changed = true;
-            }
-
-            ImGui.SameLine();
-            int opA = preset?.SubRowA?.Opacity ?? 0;
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.DragInt($"##opA_{idScope}_{pairNum}", ref opA, 1f, -100, 100, "%d%%"))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowA ??= new ColorTableSubRowPreset();
-                preset.SubRowA.Opacity = Math.Clamp(opA, -100, 100);
-                changed = true;
-            }
-
-            ImGui.SameLine();
-            ImGui.TextDisabled(" B");
-            ImGui.SameLine();
-
-            var colB = HexToVec3(preset?.SubRowB?.Diffuse);
-            ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"##dB_{idScope}_{pairNum}", ref colB, ImGuiColorEditFlags.NoInputs))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowB ??= new ColorTableSubRowPreset();
-                preset.SubRowB.Diffuse = Vec3ToHex(colB);
-                changed = true;
-            }
-
-            ImGui.SameLine();
-            float emB = preset?.SubRowB?.Emissive ?? 0f;
-            ImGui.SetNextItemWidth(60);
-            if (ImGui.DragFloat($"##eB_{idScope}_{pairNum}", ref emB, 0.01f, 0f, 1f, "%.2f"))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowB ??= new ColorTableSubRowPreset();
-                preset.SubRowB.Emissive = Math.Clamp(emB, 0f, 1f);
-                changed = true;
-            }
-
-            ImGui.SameLine();
-            int opB = preset?.SubRowB?.Opacity ?? 0;
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.DragInt($"##opB_{idScope}_{pairNum}", ref opB, 1f, -100, 100, "%d%%"))
-            {
-                preset = EnsurePreset(rows, pairNum);
-                preset.SubRowB ??= new ColorTableSubRowPreset();
-                preset.SubRowB.Opacity = Math.Clamp(opB, -100, 100);
-                changed = true;
-            }
-        }
-    }
-
+    /// <summary>
+    /// Which color table rows an index texture actually selects (1-based).
+    ///
+    /// Counts pixels per row and drops the stragglers: index art is antialiased, so the blend pixels
+    /// along every edge sweep the red channel through intermediate values, and a naive scan reports
+    /// nearly all 16 rows as "in use". Only rows with real coverage are returned.
+    /// </summary>
     private HashSet<int> ScanIndexFile(string absolutePath)
     {
         var used = new HashSet<int>();
@@ -638,39 +590,22 @@ public class StatusWindow : Window
         {
             using var stream = File.OpenRead(absolutePath);
             var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+
+            var counts = new int[17];
+            int total = 0;
             for (int i = 0; i < img.Data.Length; i += 4)
-                used.Add(img.Data[i] / 17 + 1); // red channel → 1-based row number
+            {
+                counts[img.Data[i] / 17 + 1]++;   // red channel → 1-based row number
+                total++;
+            }
+
+            // A row has to cover at least 0.1% of the texture to count as used.
+            int threshold = Math.Max(16, total / 1000);
+            for (int row = 1; row <= 16; row++)
+                if (counts[row] >= threshold)
+                    used.Add(row);
         }
         catch { }
         return used;
-    }
-
-    private static ColorTableRowPreset EnsurePreset(List<ColorTableRowPreset> rows, int row)
-    {
-        var p = rows.FirstOrDefault(r => r.Row == row);
-        if (p == null) { p = new ColorTableRowPreset { Row = row }; rows.Add(p); }
-        return p;
-    }
-
-    private static Vector3 HexToVec3(string? hex)
-    {
-        if (hex == null) return Vector3.One;
-        hex = hex.TrimStart('#');
-        if (hex.Length == 3)
-            hex = string.Concat(hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]);
-        try
-        {
-            int v = Convert.ToInt32(hex, 16);
-            return new Vector3((v >> 16 & 0xFF) / 255f, (v >> 8 & 0xFF) / 255f, (v & 0xFF) / 255f);
-        }
-        catch { return Vector3.One; }
-    }
-
-    private static string Vec3ToHex(Vector3 c)
-    {
-        int r = Math.Clamp((int)(c.X * 255), 0, 255);
-        int g = Math.Clamp((int)(c.Y * 255), 0, 255);
-        int b = Math.Clamp((int)(c.Z * 255), 0, 255);
-        return $"#{r:X2}{g:X2}{b:X2}";
     }
 }

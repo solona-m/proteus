@@ -384,8 +384,13 @@ public class SidecarDiscoveryService
         try
         {
             var path = Path.Combine(entry.SidecarRoot, MetadataFile);
-            var json = JsonSerializer.Serialize(entry.Metadata,
-                new JsonSerializerOptions { WriteIndented = true });
+            // Skip nulls: the gear-layer fields are all optional, and writing them out as null would
+            // bloat every mod's metadata.json the first time it's saved.
+            var json = JsonSerializer.Serialize(entry.Metadata, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            });
             File.WriteAllText(path, json);
         }
         catch (Exception ex)

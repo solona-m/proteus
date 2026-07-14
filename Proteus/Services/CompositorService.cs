@@ -625,18 +625,20 @@ public class CompositorService : IDisposable
             // Delete previously written files BEFORE clearing redirects so that
             // File.Exists checks fail even if the Penumbra IPC reload is asynchronous.
             // This prevents us from loading our own stale output as the base texture.
+            // Second-skin files (ss_*, models/) are deliberately NOT deleted: they're compared against
+            // the new build to decide whether the shell actually changed, and a changed shell is what
+            // forces a full redraw. Wiping them first would make every run look like a change.
+            // They're never read back as a compositing source, so a stale one is harmless.
             var texturesDirEarly  = Path.Combine(managedModDir, "textures");
             var materialsDirEarly = Path.Combine(managedModDir, "materials");
-            var modelsDirEarly    = Path.Combine(managedModDir, "models");
             if (Directory.Exists(texturesDirEarly))
                 foreach (var f in Directory.GetFiles(texturesDirEarly, "*.tex"))
-                    try { File.Delete(f); } catch { }
+                    if (!Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
+                        try { File.Delete(f); } catch { }
             if (Directory.Exists(materialsDirEarly))
                 foreach (var f in Directory.GetFiles(materialsDirEarly, "*.mtrl"))
-                    try { File.Delete(f); } catch { }
-            if (Directory.Exists(modelsDirEarly))
-                foreach (var f in Directory.GetFiles(modelsDirEarly, "*.mdl"))
-                    try { File.Delete(f); } catch { }   // second-skin shells
+                    if (!Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
+                        try { File.Delete(f); } catch { }
 
             // Clear redirects and reload. Penumbra's IPC reload may process asynchronously
             // on the game main thread, so sleep briefly to let it take effect before any
@@ -1521,6 +1523,7 @@ public class CompositorService : IDisposable
             // Built from the body model the character is CURRENTLY drawing (resolved live through
             // Penumbra) — a shell cut from any other body shape shows the body through it.
             List<object>? manipulations = null;
+            _needFullRedraw = false;
             if (gearOverlays.Count > 0)
             {
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
@@ -1545,6 +1548,13 @@ public class CompositorService : IDisposable
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
+
+                            // Only when the shell's .mdl/.mtrl actually changed — an in-place reload
+                            // refreshes textures but cannot see a new model or material, so those runs
+                            // need a real redraw. Colour-only or texture-only runs don't.
+                            _needFullRedraw = shells.ShellChanged;
+                            if (_needFullRedraw)
+                                log.Debug("[Proteus] second skin changed — forcing a full redraw");
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
@@ -1669,9 +1679,17 @@ public class CompositorService : IDisposable
     // Force the game to reload the (just-recomposited) player textures. Prefers Glamourer's in-place
     // equipment reload (ReapplyState) to avoid the full despawn/respawn flicker; falls back to a
     // Penumbra full redraw when in-place reload is disabled or Glamourer can't service it.
+    /// <summary>
+    /// True when the last run wrote a second-skin shell. Glamourer's in-place reload only re-requests
+    /// TEXTURES — it does not rebuild the draw object — so a changed .mdl or .mtrl (the shell's geometry,
+    /// and the material flags that carry transparency) is simply never picked up. Those runs need a real
+    /// redraw, or the character keeps rendering the previous shell until the mod is toggled off and on.
+    /// </summary>
+    private volatile bool _needFullRedraw;
+
     private void RefreshPlayerTextures()
     {
-        if (config.UseInPlaceReload)
+        if (config.UseInPlaceReload && !_needFullRedraw)
         {
             Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
             // ReapplyState mutates game objects (loads weapons, flags slots) synchronously on the

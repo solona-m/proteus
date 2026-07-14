@@ -81,6 +81,24 @@ public static class GearMaterialWriter
         _                      => ["base", "norm", "mask", "id"],
     };
 
+    /// <summary>
+    /// Material shader flags (the "Enable Transparency" / "Hide Backfaces" toggles in a material editor).
+    ///
+    /// TRANSPARENCY IS NOT ON BY DEFAULT: the vanilla character.shpk template ships flags 0x0D — no
+    /// 0x10 — so the normal map's blue channel (the gear alpha gate) is simply IGNORED and the shell
+    /// renders fully opaque. A second skin is always a transparent surface, so we force both bits on.
+    /// </summary>
+    private const uint FlagHideBackfaces = 0x01;
+    private const uint FlagTransparency = 0x10;
+
+    /// <summary>
+    /// g_AlphaThreshold. The vanilla templates ship this at 0, which makes the shader treat the normal
+    /// map's blue channel as a binary cutout — every pixel is either fully opaque or discarded, so a
+    /// sheer overlay renders solid. Setting it to 1 turns on real alpha blending, which is what a second
+    /// skin always wants.
+    /// </summary>
+    private const uint ConstAlphaThreshold = 0x29AC0223;
+
     // Dawntrail color table row = 32 halves (64B). Offsets per Penumbra.GameData ColorTableRow.cs.
     private const int HDiffuse = 0, HSpecular = 4, HEmissive = 8;
     private const int HRoughness = 16, HMetalness = 18;
@@ -152,6 +170,20 @@ public static class GearMaterialWriter
         int afterStrings = strStart + strTableSize;
         outMs.Write(m, afterStrings, m.Length - afterStrings);           // additional data + color table + shader section, verbatim
         byte[] r = outMs.ToArray();
+
+        // Shader section sits right after the data set. Its layout is
+        // { u16 valueListSize, u16 keyCount, u16 constCount, u16 samplerCount, u32 flags }.
+        int shaderStart = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strings.Length
+                        + addDataSize + dataSetSize;
+        if (shaderStart + 12 <= r.Length)
+        {
+            uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency | FlagHideBackfaces;
+            BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
+        }
+
+        // Without this the blue-channel alpha is a binary cutout and a sheer overlay renders solid.
+        var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
+        if (found) r = withAlpha;
 
         if (rows is { Count: > 0 })
         {

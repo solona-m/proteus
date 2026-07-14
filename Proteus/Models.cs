@@ -107,15 +107,6 @@ public class OverlayDescriptor
     public string? Index { get; set; }
 
     /// <summary>
-    /// Gear layer only. Replaces the base (diffuse) texture with this flat colour, e.g. "#FFFFFF".
-    /// The <see cref="Diffuse"/> art is still used for coverage — so the overlay keeps its shape while
-    /// the surface itself becomes a plain colour. Useful when the material effect (metal, sphere map)
-    /// is the point and the art would only muddy it.
-    /// </summary>
-    [JsonPropertyName("BaseColor")]
-    public string? BaseColor { get; set; }
-
-    /// <summary>
     /// Gear layer only. Relative path to the scrolling emissive map (vanilla calls this texture "_catc";
     /// mods often name it "_o"). Its color and intensity become the glow, animated by the shader from
     /// global time. Requires Shader = "characterscroll.shpk"; ignored otherwise.
