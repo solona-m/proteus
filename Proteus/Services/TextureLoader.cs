@@ -622,15 +622,25 @@ public class TextureLoader
         return Encoding.UTF8.GetString(strings, offset, end - offset);
     }
 
-    public byte[]? LoadRawMtrl(string? diskPath, string gamePath)
+    public byte[]? LoadRawMtrl(string? diskPath, string gamePath) => LoadRawFile(diskPath, gamePath);
+
+    /// <summary>
+    /// Raw bytes of any game file (e.g. a .mdl or .mtrl), from the mod redirect if present else the game's
+    /// own data. <paramref name="diskPath"/> is Penumbra's resolved path — for an UNMODDED file that is the
+    /// game path unchanged, not a real file — so a missing/relative disk path falls through to the game
+    /// data. Lets the second skin cut a shell from vanilla (unmodded) body/gear models, which never
+    /// resolve to an on-disk file. Reads the raw FileResource — no Lumina parse, so a Dawntrail file whose
+    /// typed layout Lumina misreads still comes back byte-exact.
+    /// </summary>
+    public byte[]? LoadRawFile(string? diskPath, string gamePath)
     {
         if (diskPath != null && File.Exists(diskPath))
         {
             try { return File.ReadAllBytes(diskPath); }
-            catch (Exception ex) { log.Error(ex, "Failed to read raw mtrl: {0}", diskPath); }
+            catch (Exception ex) { log.Error(ex, "Failed to read raw file: {0}", diskPath); }
         }
-        try { return dataManager.GetFile<MtrlFile>(gamePath)?.Data; }
-        catch (Exception ex) { log.Error(ex, "Failed to load raw mtrl from game: {0}", gamePath); return null; }
+        try { return dataManager.GetFile(gamePath)?.Data; }
+        catch (Exception ex) { log.Error(ex, "Failed to load raw file from game: {0}", gamePath); return null; }
     }
 
     // Returns (patchedBytes, true) when the key was found and the value replaced,

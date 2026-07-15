@@ -420,6 +420,32 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
+    /// The mutable gear-settings preset the layer/shader editor should bind to when an override is active
+    /// for this mod, or null if none. Mirrors <see cref="GetEditableOverrideRows"/>: group/option=null
+    /// targets the top-level overlay; otherwise the option's. Seeds from the metadata descriptor's own
+    /// gear settings when the override has nothing stored yet, so editing starts from what's on screen.
+    /// </summary>
+    public GearSettingsPreset? GetEditableGearOverride(
+        string modDir, string? group, string? option, OverlayDescriptor seed)
+    {
+        lock (gate)
+        {
+            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
+                return null;
+            if (group != null && option != null)
+            {
+                ovr.Options ??= new();
+                if (!ovr.Options.TryGetValue(group, out var inner))
+                    ovr.Options[group] = inner = new();
+                if (!inner.TryGetValue(option, out var g))
+                    inner[option] = g = GearSettingsPreset.From(seed);
+                return g;
+            }
+            return ovr.Top ??= GearSettingsPreset.From(seed);
+        }
+    }
+
+    /// <summary>
     /// Re-snapshot the current live Proteus state (Penumbra enable/priority/options + the live color
     /// override, including unsaved editor tweaks) into the active binding and persist it. This is the
     /// only path that folds manual UI edits into a binding — edits are otherwise live-preview only.
@@ -695,12 +721,19 @@ public class DesignBindingService : IDisposable
     /// Snapshot a mod's gear-layer settings for every option, so the binding is self-contained (the
     /// right one is picked at composite time via OverlayGearOverride.Resolve) — mirrors CaptureColors.
     /// </summary>
-    private static OverlayGearOverride CaptureGear(OverlayEntry e)
+    // Capture the *effective* gear settings (what the compositor is currently using): the live override
+    // for this mod if a design is active — including unsaved layer/shader editor tweaks — else the mod's
+    // metadata. Mirrors CaptureColors, so "Update binding" folds gear edits in just like colour edits.
+    private OverlayGearOverride CaptureGear(OverlayEntry e)
     {
+        OverlayGearOverride? active = null;
+        lock (gate) activeGearOverride?.TryGetValue(e.ModDirectory, out active);
+
         var result = new OverlayGearOverride();
 
         var top = (e.Metadata.Overlays ?? []).FirstOrDefault();
-        if (top != null) result.Top = GearSettingsPreset.From(top);
+        if (active?.Top != null) result.Top = CloneGearPreset(active.Top);
+        else if (top != null) result.Top = GearSettingsPreset.From(top);
 
         if (e.Metadata.OptionGroups is { } groups)
         {
@@ -708,16 +741,28 @@ public class DesignBindingService : IDisposable
             foreach (var g in groups)
             foreach (var o in g.Options)
             {
-                var d = o.Overlays.FirstOrDefault();
-                if (d == null) continue;
+                GearSettingsPreset? preset = null;
+                if (active?.Options != null
+                    && active.Options.TryGetValue(g.PenumbraGroupName, out var d)
+                    && d.TryGetValue(o.Name, out var p))
+                    preset = CloneGearPreset(p);
+                if (preset == null)
+                {
+                    var desc = o.Overlays.FirstOrDefault();
+                    if (desc == null) continue;
+                    preset = GearSettingsPreset.From(desc);
+                }
                 if (!opts.TryGetValue(g.PenumbraGroupName, out var inner))
                     opts[g.PenumbraGroupName] = inner = new();
-                inner[o.Name] = GearSettingsPreset.From(d);
+                inner[o.Name] = preset;
             }
             if (opts.Count > 0) result.Options = opts;
         }
         return result;
     }
+
+    private static GearSettingsPreset CloneGearPreset(GearSettingsPreset p)
+        => JsonSerializer.Deserialize<GearSettingsPreset>(JsonSerializer.Serialize(p)) ?? new();
 
     private static List<ColorTableRowPreset>? CloneRows(List<ColorTableRowPreset>? rows)
         => rows == null ? null : JsonSerializer.Deserialize<List<ColorTableRowPreset>>(JsonSerializer.Serialize(rows));

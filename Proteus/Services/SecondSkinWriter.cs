@@ -24,13 +24,18 @@ public sealed class SecondSkinLayer
 
 /// <summary>
 /// Builds the "second skin" model: every skin part (chest, legs, hands, feet…) duplicated, pushed out
-/// along its normals, transcoded from body to GEAR vertex format, and MERGED into a single model so the
-/// whole thing rides one invisible accessory (the right ring). Each part × layer becomes its own mesh
-/// group, and each group carries its layer's material — so different regions can run different shaders.
+/// along its normals, and MERGED into a single model so the whole thing rides one invisible accessory
+/// (the right ring). Each part × layer becomes its own mesh group, and each group carries its layer's
+/// material — so different regions can run different shaders.
+///
+/// Each mesh keeps its SOURCE vertex format verbatim (its own declaration and stream layout); only the
+/// position (pushed), vertex colour (whitened), and uv1 (mirrored from uv0 for the scroll shader) are
+/// rewritten. See <see cref="BuildVerbatim"/> — this is what lets vanilla, bibo and Neolithe bodies,
+/// whose blend/uv byte formats differ, all skin correctly without reinterpreting the skinning data.
 ///
 /// Hard-won constraints, each of which was a crash or a silent no-render:
-///  - The model must be UNIFORMLY gear format; never mix body-format and gear-format meshes.
-///  - Every mesh needs its own vertex declaration (vertDeclCount == meshCount).
+///  - Every mesh needs its own vertex declaration (vertDeclCount == meshCount); the meshes may mix
+///    formats, since each declaration describes its own mesh.
 ///  - RuntimeSize must be recomputed (vtxOffset - 0x44 - StackSize).
 ///  - Each mesh must keep its source's FULL submesh structure; collapsing to one submesh yields a bone
 ///    range that doesn't cover the mesh's vertices -> ModelDrawInit fault.
@@ -65,30 +70,7 @@ public static class SecondSkinWriter
     public const float LayerSeparation = 2e-4f;
 
     private const int DeclSize = 17 * 8;   // vertex declaration block, one per mesh
-    private const byte GearStride0 = 20;   // pos f32x3 + weights ubyte4 + indices ubyte4
-    private const byte GearStride1 = 24;   // normal half4 + tangent ubyte4n + colour ubyte4n + uv half4
     private const int BBoxSize = 32;       // min Vec4 + max Vec4
-
-    /// <summary>Gear vertex declaration, lifted verbatim from a shipping Dawntrail gear model.</summary>
-    private static readonly byte[] GearDecl = BuildGearDecl();
-
-    private static byte[] BuildGearDecl()
-    {
-        var d = new byte[DeclSize];
-        ReadOnlySpan<byte> elems = new byte[]
-        {
-            0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,   // stream0 +0   f32x3    Position
-            0x00, 0x0C, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00,   // stream0 +12  ubyte4   BlendWeight
-            0x00, 0x10, 0x05, 0x02, 0x00, 0x00, 0x00, 0x00,   // stream0 +16  ubyte4   BlendIndices
-            0x01, 0x00, 0x0E, 0x03, 0x00, 0x00, 0x00, 0x00,   // stream1 +0   half4    Normal
-            0x01, 0x08, 0x08, 0x06, 0x00, 0x00, 0x00, 0x00,   // stream1 +8   ubyte4n  Binormal
-            0x01, 0x0C, 0x08, 0x07, 0x00, 0x00, 0x00, 0x00,   // stream1 +12  ubyte4n  Colour
-            0x01, 0x10, 0x0E, 0x04, 0x00, 0x00, 0x00, 0x00,   // stream1 +16  half4    Texcoord
-            0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // terminator
-        };
-        elems.CopyTo(d);
-        return d;
-    }
 
     public readonly record struct Stats(int Meshes, int Submeshes, int Bones, int TrianglesIn, int TrianglesOut, int VerticesOut);
 
@@ -136,16 +118,30 @@ public static class SecondSkinWriter
         return null;   // _neolithe_undies, _nails, _piercings, _bibopube, … — not skin
     }
 
+    /// <summary>
+    /// One entry of a mesh's vertex declaration: where and in what format a given attribute (Usage) sits
+    /// within its vertex stream. Read so the transcoder can locate attributes by declaration instead of
+    /// assuming a fixed layout — vanilla and modded models declare different offsets and types (half vs
+    /// float, compressed positions), so a fixed layout skins the wrong bytes as garbage.
+    /// </summary>
+    private readonly record struct VElem(byte Stream, byte Offset, byte Type, byte Usage, byte UsageIndex);
+
+    // Vertex Usage ids (FFXIV mdl).
+    private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2,
+                       UseNormal = 3, UseUV = 4, UseTangent2 = 5, UseTangent1 = 6, UseColor = 7;
+
     /// <summary>A parsed body part.</summary>
     private sealed class Source
     {
         public required byte[] S;
         public int Mh, MeshStart, SubmeshStart, Vb, Ib, StrBlock, MatOffStart;
         public ushort MeshCount, SubmeshCount, BoneCount, MatCount;
+        public VElem[][] Decls = [];      // one element list per mesh (declCount == meshCount)
         public List<string> MatNames = [];
         public string[] BoneNames = [];
         public ushort[][] BoneTables = [];
         public ushort[] SubmeshBoneMap = [];
+        public ushort Lod0MeshIndex, Lod0MeshCount;   // only LOD0 meshes are shelled
         public byte[] BoneBBoxes = [];    // BoneCount * 32
         public byte[] ModelBBoxes = [];   // 4 * 32
         public float Radius, ModelClip, ShadowClip;
@@ -184,6 +180,7 @@ public static class SecondSkinWriter
         var vBuf = new MemoryStream();
         var iBuf = new MemoryStream();
         var meshOut = new List<byte[]>();
+        var declOut = new List<byte[]>();        // per-mesh vertex declaration (source format, preserved)
         var subOut = new List<byte[]>();
         var boneTables = new List<ushort[]>();   // one per emitted mesh
         var submeshBoneMap = new List<ushort>();
@@ -198,6 +195,7 @@ public static class SecondSkinWriter
 
             foreach (var src in parsed)
             {
+
                 // Each (source, layer) pair contributes its own copy of the source's submesh bone map;
                 // submesh boneStart values are kept as authored and rebased onto it.
                 int mapBase = submeshBoneMap.Count;
@@ -207,7 +205,10 @@ public static class SecondSkinWriter
                 uint U32(int o) => BitConverter.ToUInt32(s, o);
                 ushort U16(int o) => BitConverter.ToUInt16(s, o);
 
-                for (int m = 0; m < src.MeshCount; m++)
+                // LOD0 meshes only — never the lower LODs (a full game model has all three; merging them
+                // stacks overlapping low-poly copies that fling geometry across the scene).
+                int mEnd = src.Lod0MeshIndex + src.Lod0MeshCount;
+                for (int m = src.Lod0MeshIndex; m < mEnd && m < src.MeshCount; m++)
                 {
                     int mo = src.MeshStart + m * 36;
                     ushort vc = U16(mo);
@@ -221,17 +222,13 @@ public static class SecondSkinWriter
                         continue;
 
                     ushort srcSubIdx = U16(mo + 10), srcSubCount = U16(mo + 12), srcBoneTbl = U16(mo + 14);
-                    uint vbo0 = U32(mo + 20), vbo1 = U32(mo + 24);
-                    byte bs0 = s[mo + 32], bs1 = s[mo + 33];
+                    // Up to three vertex streams (offset + stride each); a v6 MeshStruct carries all three.
+                    uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+                    byte[] bs  = { s[mo + 32], s[mo + 33], s[mo + 34] };
+                    var decl = m < src.Decls.Length ? src.Decls[m] : [];
 
-                    Transcode(s, src.Vb, vc, vbo0, vbo1, bs0, bs1, push, out var g0all, out var g1all);
-
-                    var uv = new (float U, float V)[vc];
-                    for (int i = 0; i < vc; i++)
-                    {
-                        int bo1 = (int)vbo1 + i * bs1;
-                        uv[i] = (BitConverter.ToSingle(s, src.Vb + bo1 + 20), BitConverter.ToSingle(s, src.Vb + bo1 + 24));
-                    }
+                    BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
+                        out var outStreams, out var outStrides, out var declBlock, out var uv);
 
                     // Keep a triangle if ANY texel under its UV footprint is visible. Sampling only the
                     // corners culls triangles whose interior is visible, leaving a sawtooth edge.
@@ -262,22 +259,27 @@ public static class SecondSkinWriter
                         mapAppended = true;
                     }
 
-                    // Compact the vertex buffer down to the vertices the surviving triangles reference.
+                    // Compact each vertex stream down to the vertices the surviving triangles reference.
+                    int streamCount = outStreams.Length;
                     var remap = new ushort[vc];
                     ushort nv = 0;
-                    var c0 = new MemoryStream();
-                    var c1 = new MemoryStream();
+                    var comp = new MemoryStream[streamCount];
+                    for (int st = 0; st < streamCount; st++) comp[st] = new MemoryStream();
                     for (int i = 0; i < vc; i++)
                     {
                         if (!used[i]) continue;
                         remap[i] = nv++;
-                        c0.Write(g0all, i * GearStride0, GearStride0);
-                        c1.Write(g1all, i * GearStride1, GearStride1);
+                        for (int st = 0; st < streamCount; st++)
+                            comp[st].Write(outStreams[st], i * outStrides[st], outStrides[st]);
                     }
                     vertOut += nv;
 
-                    uint v0 = (uint)vBuf.Position; vBuf.Write(c0.GetBuffer(), 0, (int)c0.Length);
-                    uint v1 = (uint)vBuf.Position; vBuf.Write(c1.GetBuffer(), 0, (int)c1.Length);
+                    var vOff = new uint[streamCount];
+                    for (int st = 0; st < streamCount; st++)
+                    {
+                        vOff[st] = (uint)vBuf.Position;
+                        vBuf.Write(comp[st].GetBuffer(), 0, (int)comp[st].Length);
+                    }
 
                     uint meshStartIdx = idxCursor;
                     ushort keptSubs = 0;
@@ -322,12 +324,16 @@ public static class SecondSkinWriter
                     W16(nm, 12, keptSubs);
                     W16(nm, 14, (ushort)boneTables.Count);  // this mesh's own table
                     W32(nm, 16, meshStartIdx);
-                    W32(nm, 20, v0);
-                    W32(nm, 24, v1);
-                    W32(nm, 28, 0);
-                    nm[32] = GearStride0; nm[33] = GearStride1; nm[34] = 0; nm[35] = 2;
+                    W32(nm, 20, vOff[0]);
+                    W32(nm, 24, streamCount > 1 ? vOff[1] : 0);
+                    W32(nm, 28, streamCount > 2 ? vOff[2] : 0);
+                    nm[32] = outStrides[0];
+                    nm[33] = streamCount > 1 ? outStrides[1] : (byte)0;
+                    nm[34] = streamCount > 2 ? outStrides[2] : (byte)0;
+                    nm[35] = (byte)streamCount;
 
                     meshOut.Add(nm);
+                    declOut.Add(declBlock);
                     boneTables.Add(table);
                     subOut.AddRange(subsForMesh);
                     subCursor += keptSubs;
@@ -364,7 +370,7 @@ public static class SecondSkinWriter
 
         var ms = new MemoryStream();
         ms.Write(head.S, 0, 0x44);                                  // ModelFileHeader (patched below)
-        for (int i = 0; i < meshCount; i++) ms.Write(GearDecl);
+        for (int i = 0; i < meshCount; i++) ms.Write(declOut[i]);   // each mesh's own (source) declaration
         ms.Write(new byte[4]);                                      // string count (unused)
         Span<byte> tmp4 = stackalloc byte[4];
         BitConverter.TryWriteBytes(tmp4, (uint)strings.Length);
@@ -523,6 +529,22 @@ public static class SecondSkinWriter
         ushort declCount = U16(12);
         uint vtxOff = U32(16), idxOff = U32(28);
         int declEnd = 0x44 + declCount * DeclSize;
+
+        // Vertex declarations: declCount blocks of up to 17 elements (8 bytes each), one block per mesh,
+        // terminated by a Stream == 0xFF sentinel. { Stream, Offset, Type, Usage, UsageIndex, 3× pad }.
+        var decls = new VElem[declCount][];
+        for (int d = 0; d < declCount; d++)
+        {
+            int db = 0x44 + d * DeclSize;
+            var elems = new List<VElem>(17);
+            for (int e = 0; e < 17; e++)
+            {
+                int o = db + e * 8;
+                if (s[o] == 0xFF) break;
+                elems.Add(new VElem(s[o], s[o + 1], s[o + 2], s[o + 3], s[o + 4]));
+            }
+            decls[d] = elems.ToArray();
+        }
         uint strSize = U32(declEnd + 4);
         int strBlock = declEnd + 8;
         int mh = strBlock + (int)strSize;
@@ -536,6 +558,10 @@ public static class SecondSkinWriter
         ushort tsSubmesh = U16(mh + 38);
 
         int lodStart = mh + 56 + elemCount * 32;
+        // LOD0's mesh range. A full game model carries 3 LODs; a mod .mdl is usually LOD0-only. We only
+        // ever want LOD0 — merging the lower LODs would stack overlapping low-poly copies (polys flying
+        // everywhere). LOD struct: { u16 MeshIndex, u16 MeshCount, … } at lodStart.
+        ushort lod0MeshIndex = U16(lodStart), lod0MeshCount = U16(lodStart + 2);
         int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
         int attrStart = meshStart + meshCount * 36;
         int submeshStart = attrStart + attrCount * 4 + tsMesh * 20;
@@ -605,6 +631,9 @@ public static class SecondSkinWriter
             StrBlock = strBlock,
             MatOffStart = matOffStart,
             MatCount = matCount,
+            Decls = decls,
+            Lod0MeshIndex = lod0MeshIndex,
+            Lod0MeshCount = lod0MeshCount,
             MeshCount = meshCount,
             SubmeshCount = submeshCount,
             BoneCount = boneCount,
@@ -623,80 +652,199 @@ public static class SecondSkinWriter
     }
 
     /// <summary>
-    /// Body vertex format -> gear vertex format, pushing each vertex out along its normal.
-    /// The body carries up to 8 bone influences and gear holds 4, but 99.8% of body vertices use =&lt;4
-    /// and the rest discard ~0.4% of their weight — measured, harmless.
+    /// Body vertex format -> gear vertex format, pushing each vertex out along its normal, and decoding
+    /// each vertex's UV (returned in <paramref name="uvs"/> for the coverage test).
+    ///
+    /// Attributes are located via the mesh's own vertex <paramref name="decl"/>, NOT a fixed layout:
+    /// modded bodies store position/normal/uv as float and blend at offsets 12/16, but vanilla models
+    /// use half-precision and different offsets, so a fixed reader would skin the wrong bytes as garbage.
+    /// The body carries up to 8 bone influences and gear holds 4, but almost every body vertex uses ≤4
+    /// and the rest discard a fraction of a percent of their weight — measured, harmless.
     /// </summary>
-    private static void Transcode(
-        byte[] s, int vb, ushort vc, uint vbo0, uint vbo1, byte bs0, byte bs1, float push,
-        out byte[] gs0, out byte[] gs1)
+    /// <summary>
+    /// Copy each vertex VERBATIM into the shell, preserving the source model's own vertex format — blend
+    /// weights, bone indices, UVs and tangents are never decoded or reinterpreted, so any body (vanilla,
+    /// bibo, Neolithe, …) skins exactly as authored and the byte-format zoo stops mattering. Only what
+    /// the shell genuinely needs is touched: position is pushed out along its normal (z-fight clearance),
+    /// vertex colour is forced white (the gear shaders gate emissive on it), and a second UV set is
+    /// appended when the source lacks one (characterscroll samples its scroll map with uv1). Output
+    /// stream strides equal the source's (the uv1 stream grown by the copy). Also returns this mesh's
+    /// declaration block (source decl, plus the uv1 element) and decoded uv0 for the coverage test.
+    /// </summary>
+    private static void BuildVerbatim(
+        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
+        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs)
     {
-        gs0 = new byte[vc * GearStride0];
-        gs1 = new byte[vc * GearStride1];
+        VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
+        foreach (var el in decl)
+            switch (el.Usage)
+            {
+                case UsePosition: pos ??= el; break;
+                case UseNormal:   norm ??= el; break;
+                case UseColor:    col ??= el; break;
+                case UseUV:       if (el.UsageIndex == 0) uv0 ??= el; else uv1El ??= el; break;
+            }
+
+        // Emit every stream that carries data OR is named by a declaration element, so the per-attribute
+        // writes below can never index past the arrays (a mesh with only stream 0, or a decl that names a
+        // stream the stride table didn't flag, would otherwise crash).
+        int streamCount = bs[2] > 0 ? 3 : (bs[1] > 0 ? 2 : 1);
+        foreach (var el in decl) streamCount = Math.Max(streamCount, Math.Min((int)el.Stream, 2) + 1);
+
+        // The scroll shader reads its texcoord from uv1; a body has one real UV, so uv1 must MIRROR uv0.
+        // The model's own uv1 slot holds an unrelated aux coord (a Float4/Half4 uv0 packs it in .zw; some
+        // models add a separate uidx1 element) — junk for scrolling, so we overwrite every uv1 slot with
+        // uv0. Only when uv0 is a bare 2-component element with no uidx1 do we append a Float2 uv1 — into
+        // uv0's OWN stream (guaranteed present), not a hard-coded stream 1.
+        bool zwValid = uv0 is { } uz && (uz.Type == 3 || uz.Type == 14);
+        int  zwOff   = uv0 is { } uo ? uo.Offset + (uo.Type == 3 ? 8 : 4) : 0;
+        bool zwHalf  = uv0 is { } uh && uh.Type == 14;
+        bool appendUv1 = uv0 is not null && !zwValid && uv1El is null;
+        int  uv1Stream = uv0 is { } us ? us.Stream : 1;
+        int  uv1Bytes  = appendUv1 ? 8 : 0;                  // appended as Float2
+
+        outStrides = new byte[streamCount];
+        for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
+        if (appendUv1) outStrides[uv1Stream] = (byte)(bs[uv1Stream] + uv1Bytes);
+        outStreams = new byte[streamCount][];
+        for (int st = 0; st < streamCount; st++) outStreams[st] = new byte[vc * outStrides[st]];
+
+        uvs = new (float, float)[vc];
+        Span<float> tmp = stackalloc float[4];
+        int SrcAddr(int st, int i, int off) => vb + (int)vbo[st] + i * bs[st] + off;
 
         for (int i = 0; i < vc; i++)
         {
-            int bo0 = (int)vbo0 + i * bs0, bo1 = (int)vbo1 + i * bs1;
-            int go0 = i * GearStride0, go1 = i * GearStride1;
+            for (int st = 0; st < streamCount; st++)
+                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * outStrides[st], bs[st]);
 
-            float nx = BitConverter.ToSingle(s, vb + bo1);
-            float ny = BitConverter.ToSingle(s, vb + bo1 + 4);
-            float nz = BitConverter.ToSingle(s, vb + bo1 + 8);
-            float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
-            if (len > 1e-6f) { nx /= len; ny /= len; nz /= len; }
-
-            W32(gs0, go0 + 0, (uint)BitConverter.SingleToInt32Bits(BitConverter.ToSingle(s, vb + bo0) + nx * push));
-            W32(gs0, go0 + 4, (uint)BitConverter.SingleToInt32Bits(BitConverter.ToSingle(s, vb + bo0 + 4) + ny * push));
-            W32(gs0, go0 + 8, (uint)BitConverter.SingleToInt32Bits(BitConverter.ToSingle(s, vb + bo0 + 8) + nz * push));
-
-            if (bs0 >= 28)
+            // Push position along its normalized normal, re-encoded in the position's own type.
+            if (pos is { } pe && norm is { } ne)
             {
-                Span<byte> w = stackalloc byte[8];
-                Span<byte> ix = stackalloc byte[8];
-                for (int k = 0; k < 8; k++) { w[k] = s[vb + bo0 + 12 + k]; ix[k] = s[vb + bo0 + 20 + k]; }
-                for (int a = 0; a < 4; a++)
-                {
-                    int best = a;
-                    for (int b = a + 1; b < 8; b++) if (w[b] > w[best]) best = b;
-                    (w[a], w[best]) = (w[best], w[a]);
-                    (ix[a], ix[best]) = (ix[best], ix[a]);
-                }
-                int sum = w[0] + w[1] + w[2] + w[3];
-                if (sum == 0) { w[0] = 255; sum = 255; }
-                int acc = 0;
-                for (int k = 0; k < 4; k++)
-                {
-                    byte q = k < 3 ? (byte)Math.Round(w[k] * 255.0 / sum) : (byte)Math.Clamp(255 - acc, 0, 255);
-                    acc += q;
-                    gs0[go0 + 12 + k] = q;
-                    gs0[go0 + 16 + k] = ix[k];
-                }
-            }
-            else
-            {
-                Array.Copy(s, vb + bo0 + 12, gs0, go0 + 12, 4);
-                Array.Copy(s, vb + bo0 + 16, gs0, go0 + 16, 4);
+                ReadTyped(s, SrcAddr(ne.Stream, i, ne.Offset), ne.Type, tmp);
+                float nx = tmp[0], ny = tmp[1], nz = tmp[2];
+                if (ne.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+                float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                if (len > 1e-6f) { nx /= len; ny /= len; nz /= len; }
+                ReadTyped(s, SrcAddr(pe.Stream, i, pe.Offset), pe.Type, tmp);
+                WriteXYZ(outStreams[pe.Stream], i * outStrides[pe.Stream] + pe.Offset, pe.Type,
+                    tmp[0] + nx * push, tmp[1] + ny * push, tmp[2] + nz * push);
             }
 
-            W16(gs1, go1 + 0, Half(nx));
-            W16(gs1, go1 + 2, Half(ny));
-            W16(gs1, go1 + 4, Half(nz));
-            W16(gs1, go1 + 6, Half(0f));
-            Array.Copy(s, vb + bo1 + 12, gs1, go1 + 8, 4);   // tangent
+            // Force vertex colour white so the gear shader's emissive isn't gated off.
+            if (col is { } ce)
+            {
+                int o = i * outStrides[ce.Stream] + ce.Offset;
+                outStreams[ce.Stream][o] = outStreams[ce.Stream][o + 1]
+                    = outStreams[ce.Stream][o + 2] = outStreams[ce.Stream][o + 3] = 0xFF;
+            }
 
-            // Vertex colour gates the gear shaders' emissive; the body's own colour would switch it off.
-            gs1[go1 + 12] = 255; gs1[go1 + 13] = 255; gs1[go1 + 14] = 255; gs1[go1 + 15] = 255;
+            // Decode uv0 (raw) — normalized and written below, once the mesh's UV cell is known.
+            if (uv0 is { } ue) { ReadTyped(s, SrcAddr(ue.Stream, i, ue.Offset), ue.Type, tmp); uvs[i] = (tmp[0], tmp[1]); }
+        }
 
-            // Gear texcoord is half4 = (uv0.x, uv0.y, uv1.x, uv1.y). uv1 is a REAL per-vertex texcoord —
-            // characterscroll samples its scrolling map with it. Writing a constant there makes every
-            // pixel sample the same texel, so the whole surface pulses in time instead of the pattern
-            // sliding across it. The body has one UV set, so uv1 mirrors uv0.
-            float u = BitConverter.ToSingle(s, vb + bo1 + 20);
-            float v = BitConverter.ToSingle(s, vb + bo1 + 24);
-            W16(gs1, go1 + 16, Half(u));
-            W16(gs1, go1 + 18, Half(v));
-            W16(gs1, go1 + 20, Half(u));
-            W16(gs1, go1 + 22, Half(v));
+        // Normalize the mesh's UV into the [0,1] tile and force uv1 = uv0. The overlay is a single [0,1]
+        // image, but a body UV can live in another cell (vanilla U∈[1,2], bibo V∈[-1,0]); shift the WHOLE
+        // mesh by the integer floor of its minimum UV. A per-mesh (not per-vertex) shift keeps islands
+        // together so nothing tears, and brings an island that sits WITHIN one integer cell fully onto the
+        // tile — a body part is laid out that way. (An island straddling a cell boundary would keep the
+        // overflow past 1; no body mesh does that, so it's left to the sampler's wrap.) Then write uv0 and
+        // every uv1 slot (.zw / uidx1 / appended) with the shifted value.
+        if (uv0 is { } u0e)
+        {
+            float minU = float.MaxValue, minV = float.MaxValue;
+            for (int i = 0; i < vc; i++) { minU = MathF.Min(minU, uvs[i].U); minV = MathF.Min(minV, uvs[i].V); }
+            float uOff = MathF.Floor(minU), vOff = MathF.Floor(minV);
+            bool uv0Half = u0e.Type is 13 or 14;
+            for (int i = 0; i < vc; i++)
+            {
+                float u = uvs[i].U - uOff, v = uvs[i].V - vOff;
+                uvs[i] = (u, v);
+                int so = i * outStrides[u0e.Stream];
+                WriteUV2(outStreams[u0e.Stream], so + u0e.Offset, uv0Half, u, v);   // uv0.xy (normalized)
+                if (zwValid)         WriteUV2(outStreams[u0e.Stream], so + zwOff, zwHalf, u, v);
+                if (uv1El is { } e1) WriteUV2(outStreams[e1.Stream], i * outStrides[e1.Stream] + e1.Offset, e1.Type is 13 or 14, u, v);
+                if (appendUv1)       WriteUV2(outStreams[uv1Stream], i * outStrides[uv1Stream] + bs[uv1Stream], false, u, v);
+            }
+        }
+
+        // Declaration: copy the source mesh's block verbatim, splicing in a uv1 element only when we
+        // appended one (the .zw / existing-uidx1 cases already declare their uv1).
+        declBlock = new byte[DeclSize];
+        Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
+        if (appendUv1)
+            for (int e = 0; e < 17; e++)
+            {
+                int o = e * 8;
+                if (declBlock[o] != 0xFF) continue;
+                declBlock[o]     = (byte)uv1Stream;
+                declBlock[o + 1] = bs[uv1Stream];
+                declBlock[o + 2] = 1;                         // Float2
+                declBlock[o + 3] = UseUV;
+                declBlock[o + 4] = 1;                         // usageIndex 1
+                if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
+                break;
+            }
+    }
+
+    /// <summary>Write a 2-component UV (u,v) at <paramref name="off"/>, as two halves or two floats.</summary>
+    private static void WriteUV2(byte[] a, int off, bool half, float u, float v)
+    {
+        if (half) { W16(a, off, Half(u)); W16(a, off + 2, Half(v)); }
+        else
+        {
+            W32(a, off, (uint)BitConverter.SingleToInt32Bits(u));
+            W32(a, off + 4, (uint)BitConverter.SingleToInt32Bits(v));
+        }
+    }
+
+    /// <summary>Write x,y,z into a position element of the given type, leaving any 4th component intact.</summary>
+    private static void WriteXYZ(byte[] a, int off, byte type, float x, float y, float z)
+    {
+        switch (type)
+        {
+            case 2: case 3:   // Float3 / Float4
+                W32(a, off, (uint)BitConverter.SingleToInt32Bits(x));
+                W32(a, off + 4, (uint)BitConverter.SingleToInt32Bits(y));
+                W32(a, off + 8, (uint)BitConverter.SingleToInt32Bits(z));
+                break;
+            case 14:          // Half4
+                W16(a, off, Half(x)); W16(a, off + 2, Half(y)); W16(a, off + 4, Half(z));
+                break;
+            case 13:          // Half2 (unusual for position)
+                W16(a, off, Half(x)); W16(a, off + 2, Half(y));
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Decode a vertex attribute of the given FFXIV vertex-declaration <paramref name="type"/> into up to
+    /// four floats. Covers the types skin meshes actually use for position/normal/uv (float, half, and
+    /// the normalized integer forms); unknown types leave the destination zeroed.
+    /// </summary>
+    private static void ReadTyped(byte[] s, int addr, byte type, Span<float> o)
+    {
+        o.Clear();
+        float H(int a) => (float)BitConverter.ToHalf(s, a);
+        float F(int a) => BitConverter.ToSingle(s, a);
+        short I(int a) => BitConverter.ToInt16(s, a);
+        ushort U(int a) => BitConverter.ToUInt16(s, a);
+        switch (type)
+        {
+            case 0:  o[0] = F(addr); break;                                                             // Float1
+            case 1:  o[0] = F(addr); o[1] = F(addr + 4); break;                                         // Float2
+            case 2:  o[0] = F(addr); o[1] = F(addr + 4); o[2] = F(addr + 8); break;                     // Float3
+            case 3:  o[0] = F(addr); o[1] = F(addr + 4); o[2] = F(addr + 8); o[3] = F(addr + 12); break; // Float4
+            case 5:  for (int k = 0; k < 4; k++) o[k] = s[addr + k]; break;                             // Ubyte4
+            case 8:  for (int k = 0; k < 4; k++) o[k] = s[addr + k] / 255f; break;                      // Ubyte4n
+            case 6:  o[0] = I(addr); o[1] = I(addr + 2); break;                                         // Short2
+            case 7:  for (int k = 0; k < 4; k++) o[k] = I(addr + k * 2); break;                         // Short4
+            case 9:  o[0] = I(addr) / 32767f; o[1] = I(addr + 2) / 32767f; break;                       // Short2n
+            case 10: for (int k = 0; k < 4; k++) o[k] = I(addr + k * 2) / 32767f; break;                // Short4n
+            case 13: o[0] = H(addr); o[1] = H(addr + 2); break;                                         // Half2
+            case 14: o[0] = H(addr); o[1] = H(addr + 2); o[2] = H(addr + 4); o[3] = H(addr + 6); break; // Half4
+            case 16: o[0] = U(addr); o[1] = U(addr + 2); break;                                         // Ushort2
+            case 17: for (int k = 0; k < 4; k++) o[k] = U(addr + k * 2); break;                         // Ushort4
         }
     }
 

@@ -529,12 +529,15 @@ public class StatusWindow : Window
             if (!hasIdxSimple)
                 ImGui.TextDisabled("No index texture — only Row 16 is applied.");
 
-            // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
-            // binding only carries colour rows.
+            // Layer/shader normally persist to metadata.json — but while a binding is being edited they
+            // go into its gear override (live preview, saved on "Update binding"), like colour rows.
             var simpleOverlays = entry.Metadata.Overlays ?? [];
-            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, effects))
+            var gearOvrSimple = editingBinding && simpleOverlays.Count > 0
+                ? designBindings.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
+                : null;
+            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, gearOvrSimple, effects))
             {
-                discovery.SaveMetadata(entry);
+                if (gearOvrSimple == null) discovery.SaveMetadata(entry);
                 compositor.TriggerRecomposite("layer-change");
             }
             bool gearSimple = simpleOverlays.Count > 0 && simpleOverlays[0].Layer == OverlayLayer.Gear;
@@ -638,11 +641,14 @@ public class StatusWindow : Window
 
         var scope = $"{entry.ModDirectory}_{groupName}_{activeOpt.Name}";
 
-        // Layer/shader live on the descriptors, so they always persist to metadata.json — a design
-        // binding only carries colour rows.
-        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, effects))
+        // Layer/shader normally persist to metadata.json — but while a binding is being edited they go
+        // into its gear override (live preview, saved on "Update binding"), like colour rows.
+        var gearOvrOpt = editingBinding && activeOpt.Overlays.Count > 0
+            ? designBindings.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
+            : null;
+        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, gearOvrOpt, effects))
         {
-            discovery.SaveMetadata(entry);
+            if (gearOvrOpt == null) discovery.SaveMetadata(entry);
             compositor.TriggerRecomposite("layer-change");
         }
         bool gear = activeOpt.Overlays.Count > 0 && activeOpt.Overlays[0].Layer == OverlayLayer.Gear;

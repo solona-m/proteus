@@ -100,6 +100,18 @@ public sealed class SecondSkinService
     /// listing only <c>*_bibo.mtrl</c> is bibo art. Returns null when the materials disagree or name no
     /// body type, in which case the art is assumed to already be in the body's space.
     /// </summary>
+    /// <summary>The UV space of a body model, read from its own skin material's suffix, or null.</summary>
+    private static string? SkinBodyType(byte[] model)
+    {
+        try
+        {
+            return SecondSkinWriter.MaterialNames(model)
+                .Select(SecondSkinWriter.SkinMaterialBodyType)
+                .FirstOrDefault(t => t != null);
+        }
+        catch { return null; }
+    }
+
     private static string? InferOverlayBodyType(OverlayDescriptor d)
     {
         string? found = null;
@@ -171,7 +183,8 @@ public sealed class SecondSkinService
         string? bodyType,
         string? effectsFolder,
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null,
-        IReadOnlyDictionary<string, string>? equippedPartModels = null)
+        IReadOnlyDictionary<string, string>? equippedPartModels = null,
+        Func<string, bool>? gen2Allowed = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -202,40 +215,56 @@ public sealed class SecondSkinService
         // The shell is a COPY of the body geometry, so it must be cut from the models the character is
         // actually drawing. A shell built from any other body/size is a different shape and the body
         // pokes through it at any push distance. Resolve them live, every time.
+        // gen2 (vanilla) is opt-in per the gear mode, exactly like the skin layer's gen2 sibling — but the
+        // gate is per-PART, not per-character: a bibo torso plus a vanilla skirt's exposed legs is ONE
+        // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
+        bool anyGen2Allowed = gen2Allowed == null || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
+
         var bodies = new List<byte[]>();
+        string? modelType = null;   // UV space of the first kept part, from its own skin material
         foreach (var part in Parts)
         {
             // When gear is equipped in a slot, the bare-body part for that slot ISN'T drawn — the gear
             // model is, and it carries the skin it exposes posed to fit (a high heel tiptoes the foot,
             // a bikini bottom reshapes the hip, etc.), as an mt_c….b….skin mesh beside its cloth meshes.
-            // Cut the shell from that equipped model so it deforms WITH the gear; the flat bare-body e0000
-            // would leave the overlay floating off the posed skin. The skin-material filter in
-            // SecondSkinWriter keeps only the skin mesh and drops the gear geometry. Slots with no gear
-            // (or gear that exposes no skin) fall back to the bare body e0000.
+            // Cut the shell from that equipped model so it deforms WITH the gear AND covers only the skin
+            // the gear actually exposes (the hidden skin under cloth isn't in the model, so nothing pokes
+            // through it); the flat bare-body e0000 would shell the whole body and float off the posed
+            // skin. The skin-material filter in SecondSkinWriter keeps only the skin mesh. Slots with no
+            // gear (or gear that exposes no skin) fall back to the bare body e0000.
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
                 : $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
+            // ResolvePlayer only yields a real file for MODDED models; a vanilla piece resolves to the
+            // game path unchanged, so read from the game data in that case. The transcoder reads each
+            // model's own vertex declaration, so vanilla and modded models both skin correctly.
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
-            if (bodyDisk == null || !File.Exists(bodyDisk))
+            var bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+            if (bytes == null)
             {
-                log.Debug("[Proteus] second skin: {0} not drawn, skipping", bodyGamePath);
+                log.Debug("[Proteus] second skin: {0} not loadable, skipping", bodyGamePath);
                 continue;
             }
-            try { bodies.Add(File.ReadAllBytes(bodyDisk)); }
-            catch (Exception ex) { log.Error(ex, "[Proteus] second skin: cannot read {0}", bodyDisk); }
+
+            // The part's UV space names itself in its skin material's suffix. A vanilla (gen2) part gets
+            // no shell unless a gear overlay is set to All bodies — otherwise the overlay would wear on
+            // vanilla whether or not the author opted in. Ambiguity (a vanilla _a material alongside a
+            // gen3 body) is avoided by reading THIS part's own model rather than the loaded-material soup.
+            var partType = SkinBodyType(bytes);
+            if (string.Equals(partType, "gen2", StringComparison.OrdinalIgnoreCase) && !anyGen2Allowed)
+            {
+                log.Information("[Proteus] second skin: {0} is vanilla (gen2) — no gear overlay opted into All bodies, skipping part", bodyGamePath);
+                continue;
+            }
+            bodies.Add(bytes);
+            modelType ??= partType;
         }
         if (bodies.Count == 0)
         {
-            log.Warning("[Proteus] second skin: no skin models resolved for c{0}", charCode);
+            log.Warning("[Proteus] second skin: no skin models resolved for c{0} (or all parts gated out)", charCode);
             return null;
         }
 
-        // The shell inherits the body model's UVs, so ask THAT MODEL which material it uses — its suffix
-        // names the UV space outright. Inferring from "whichever body material happens to be loaded" is
-        // ambiguous (a character can have a vanilla _a material alongside a gen3 body) and picked wrong.
-        var modelType = bodies.SelectMany(SecondSkinWriter.MaterialNames)
-                              .Select(SecondSkinWriter.SkinMaterialBodyType)
-                              .FirstOrDefault(t => t != null);
         if (modelType != null && !string.Equals(modelType, bodyType, StringComparison.OrdinalIgnoreCase))
         {
             log.Information("[Proteus] second skin: body UV is {0} per the model's material (was {1})",

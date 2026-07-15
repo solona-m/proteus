@@ -42,6 +42,7 @@ public static class ColorTableEditor
     public static bool DrawLayerHeader(
         string idScope,
         IReadOnlyList<OverlayDescriptor> overlays,
+        GearSettingsPreset? ovr,
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         if (overlays.Count == 0) return false;
@@ -49,17 +50,37 @@ public static class ColorTableEditor
         bool changed = false;
         var first = overlays[0];
 
-        bool gear = first.Layer == OverlayLayer.Gear;
+        // When a design binding is being edited, every layer/shader/scroll edit goes into its gear
+        // OVERRIDE (live preview, folded in on "Update binding") instead of metadata.json — mirrors the
+        // colour editor. Effective values read the override first, then fall back to the descriptor.
+        OverlayLayer curLayer  = ovr?.Layer ?? first.Layer;
+        string? curShaderField = ovr != null ? ovr.Shader : first.Shader;
+        string? curScroll      = ovr != null ? ovr.Scroll : first.Scroll;
+        float? curSpeedX = ovr != null ? ovr.ScrollSpeedX : first.ScrollSpeedX;
+        float? curSpeedY = ovr != null ? ovr.ScrollSpeedY : first.ScrollSpeedY;
+        float? curTileX  = ovr != null ? ovr.ScrollTilingX : first.ScrollTilingX;
+        float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
+
+        void SetLayer(OverlayLayer l)  { if (ovr != null) ovr.Layer = l;   else foreach (var d in overlays) d.Layer = l; }
+        void SetShader(string? s)      { if (ovr != null) ovr.Shader = s;  else foreach (var d in overlays) d.Shader = s; }
+        void SetScroll(string? s)      { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
+        void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
+        void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
+
+        bool gear = curLayer == OverlayLayer.Gear;
+        var shader = curLayer == OverlayLayer.Skin
+            ? OverlayDescriptor.SkinShader
+            : (curShaderField ?? OverlayDescriptor.DefaultGearShader);
 
         ImGui.SetNextItemWidth(110);
         if (ImGui.BeginCombo($"Layer##{idScope}", gear ? "Gear" : "Skin"))
         {
             foreach (var layer in new[] { OverlayLayer.Skin, OverlayLayer.Gear })
             {
-                bool selected = layer == first.Layer;
+                bool selected = layer == curLayer;
                 if (ImGui.Selectable(layer == OverlayLayer.Gear ? "Gear" : "Skin", selected) && !selected)
                 {
-                    foreach (var d in overlays) d.Layer = layer;
+                    SetLayer(layer);
                     changed = true;
                 }
             }
@@ -76,14 +97,13 @@ public static class ColorTableEditor
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(170);
-        var shader = first.ShaderPackage;
         if (ImGui.BeginCombo($"Shader##{idScope}", shader))
         {
             foreach (var s in GearShaders)
             {
                 if (ImGui.Selectable(s, s == shader) && s != shader)
                 {
-                    foreach (var d in overlays) d.Shader = s;
+                    SetShader(s);
                     changed = true;
                 }
             }
@@ -98,14 +118,14 @@ public static class ColorTableEditor
         if (string.Equals(shader, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase))
         {
             ImGui.SetNextItemWidth(220);
-            var currentEffect = first.Scroll;
+            var currentEffect = curScroll;
             var label = currentEffect == null ? "None" : Path.GetFileNameWithoutExtension(currentEffect);
 
             if (ImGui.BeginCombo($"Effect##{idScope}", label))
             {
                 if (ImGui.Selectable("None", currentEffect == null) && currentEffect != null)
                 {
-                    foreach (var d in overlays) d.Scroll = null;
+                    SetScroll(null);
                     changed = true;
                 }
 
@@ -118,7 +138,7 @@ public static class ColorTableEditor
 
                     if (ImGui.Selectable(text, selected) && !selected)
                     {
-                        foreach (var d in overlays) d.Scroll = name;
+                        SetScroll(name);
                         changed = true;
                     }
                 }
@@ -138,16 +158,16 @@ public static class ColorTableEditor
             // Scroll speed / tiling. These are material constants, and vanilla ships the speeds at zero,
             // so without them the pattern would sit still.
             var speed = new Vector2(
-                first.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
-                first.ScrollSpeedY ?? ScrollSettings.Default.SpeedY);
+                curSpeedX ?? ScrollSettings.Default.SpeedX,
+                curSpeedY ?? ScrollSettings.Default.SpeedY);
             var tile = new Vector2(
-                first.ScrollTilingX ?? ScrollSettings.Default.TilingX,
-                first.ScrollTilingY ?? ScrollSettings.Default.TilingY);
+                curTileX ?? ScrollSettings.Default.TilingX,
+                curTileY ?? ScrollSettings.Default.TilingY);
 
             ImGui.SetNextItemWidth(150);
             if (ImGui.DragFloat2($"Scroll speed##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
             {
-                foreach (var d in overlays) { d.ScrollSpeedX = speed.X; d.ScrollSpeedY = speed.Y; }
+                SetSpeed(speed.X, speed.Y);
                 changed = true;
             }
             if (ImGui.IsItemHovered())
@@ -157,7 +177,7 @@ public static class ColorTableEditor
             ImGui.SetNextItemWidth(150);
             if (ImGui.DragFloat2($"Tiling##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
             {
-                foreach (var d in overlays) { d.ScrollTilingX = tile.X; d.ScrollTilingY = tile.Y; }
+                SetTile(tile.X, tile.Y);
                 changed = true;
             }
             if (ImGui.IsItemHovered())

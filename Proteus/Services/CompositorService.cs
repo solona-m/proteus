@@ -939,7 +939,18 @@ public class CompositorService : IDisposable
                             : config.SiblingModeFor(p.Entry.ModDirectory) != SiblingSynthesisMode.Off).ToList();
                         if (dstPairs.Count == 0) continue;
 
-                        log.Debug("[Proteus] Sibling synthesis{0}: {1} → {2}", vanilla ? " (vanilla)" : "", srcPath, dstPath);
+                        // Name the mod/option(s) driving this sibling — and their sibling mode — so any
+                        // "why is it baking to <body> when I have <X> equipped/nothing equipped?" can be
+                        // traced to the exact mod whose mode to change. The destination body type is
+                        // always tagged (gen3/eve/gen2), so a gen3 item pulling in a gen3 sibling is as
+                        // legible as the vanilla case (vanilla only fires for mods set to All bodies).
+                        var contributors = string.Join(", ", dstPairs
+                            .Select(p => p.Overlay.Option != null
+                                ? $"\"{p.Entry.ModName}\"/{p.Overlay.OptionGroup}:{p.Overlay.Option} [{config.SiblingModeFor(p.Entry.ModDirectory)}]"
+                                : $"\"{p.Entry.ModName}\" [{config.SiblingModeFor(p.Entry.ModDirectory)}]")
+                            .Distinct());
+                        log.Debug("[Proteus] Sibling synthesis ({0}): {1} → {2} (from {3})",
+                            vanilla ? "gen2/vanilla" : bodyType, srcPath, dstPath, contributors);
                         if (siblings.TryGetValue(dstPath, out var existSiblings))
                             existSiblings.AddRange(dstPairs);
                         else
@@ -1796,7 +1807,10 @@ public class CompositorService : IDisposable
                             string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
 
-                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath(), allOverlays, equippedModels);
+                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
+                            discovery.EffectsLibraryPath(), allOverlays, equippedModels,
+                            modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies);
                         if (shells != null)
                         {
                             foreach (var (gamePath, relPath) in shells.Redirects)
