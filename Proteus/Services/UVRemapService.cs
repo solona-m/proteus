@@ -97,6 +97,10 @@ public class UVRemapService
     public bool[]? IslandMask(string bodyType, out int w, out int h)
     {
         w = h = 0;
+        // gen2 (vanilla) is a right-half crop of bibo space, not a transfer-map destination —
+        // we ship no *_to_gen2 map, so there's no island mask to derive. Bail before GetMap
+        // logs a spurious "transfer map not found".
+        if (string.Equals(bodyType, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
         foreach (var from in new[] { "bibo", "gen3" })
         {
             if (string.Equals(from, bodyType, StringComparison.OrdinalIgnoreCase)) continue;

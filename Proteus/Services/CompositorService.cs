@@ -1478,8 +1478,12 @@ public class CompositorService : IDisposable
                     // Decide on the final composited coverage (post Masks-group + opacity) and drop
                     // the chosen pixels from covSrc (drives every channel via CovAt) and diffuseOv
                     // (Phase A), keeping all channels consistent.
+                    // Skip gen2: vanilla UV is a right-half crop of bibo space, not a transfer-map
+                    // stitch, so it has no UV-island seams to clean — and no *_to_gen2 map exists
+                    // (asking for one just logs a spurious "transfer map not found").
                     if (srcBodyType != null && dstBodyType != null
-                        && !string.Equals(srcBodyType, dstBodyType, StringComparison.OrdinalIgnoreCase))
+                        && !string.Equals(srcBodyType, dstBodyType, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         var decision = CovAt(covW, covH);
                         var dropMask = decision != null
