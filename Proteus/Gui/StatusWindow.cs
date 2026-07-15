@@ -35,6 +35,10 @@ public class StatusWindow : Window
     private readonly Dictionary<string, int> _colorEditorSelection = new();
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
+    // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
+    // so wait this long after the LAST change before recompositing (TriggerRecomposite restarts the
+    // timer on each call). The on-screen editor swatches update live regardless — only the bake waits.
+    private const int ColorEditDebounceMs = 5000;
     // Mod whose colour editor window is open, or null. A window rather than a popup: colour work means
     // clicking back and forth with the game, and a popup closes on any click outside it.
     private string? _colorWindowMod;
@@ -514,7 +518,7 @@ public class StatusWindow : Window
                 // override and is folded into the binding solely via "Update binding". Metadata path
                 // (base colors) persists immediately as before.
                 if (ovrRows == null) discovery.SaveMetadata(entry);
-                compositor.TriggerRecomposite("colors-change");
+                compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
             }
             return;
         }
@@ -619,7 +623,7 @@ public class StatusWindow : Window
         {
             // Binding path: live-preview only (folded in via "Update binding"). Metadata path persists.
             if (ovrOptRows == null) discovery.SaveMetadata(entry);
-            compositor.TriggerRecomposite("colors-change");
+            compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
         }
     }
 

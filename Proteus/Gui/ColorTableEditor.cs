@@ -227,6 +227,32 @@ public static class ColorTableEditor
 
         ImGui.Separator();
 
+        // ── copy / paste the whole selected row-pair (both sub-rows) ─────────
+        // Mirrors Penumbra's advanced-material row copy: grab one row's colours and stamp them onto
+        // another. The per-sub-row buttons below (in each A/B panel) do the same for a single column,
+        // and share their clipboard, so you can copy sub-row A and paste it into B.
+        int curRow = selectedRow;   // a ref param can't be captured by a lambda
+        if (ImGui.SmallButton($"Copy row##copyrow_{idScope}"))
+            _rowClip = CloneRow(rows.FirstOrDefault(r => r.Row == curRow));
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Copy both sub-rows (A and B) of this row.");
+
+        ImGui.SameLine();
+        using (ImRaii.Disabled(_rowClip == null))
+        {
+            if (ImGui.SmallButton($"Paste row##pasterow_{idScope}"))
+            {
+                var p = EnsurePreset(rows, selectedRow);
+                p.SubRowA = _rowClip!.SubRowA is { } a ? Clone(a) : null;
+                p.SubRowB = _rowClip!.SubRowB is { } b ? Clone(b) : null;
+                changed = true;
+            }
+        }
+        if (_rowClip == null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip("Copy a row first.");
+        else if (ImGui.IsItemHovered())
+            ImGui.SetTooltip($"Overwrite row {selectedRow} (both sub-rows) with the copied row.");
+
         if (ImGui.BeginTable($"##ab_{idScope}", 2, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchSame))
         {
             ImGui.TableSetupColumn($"Row {selectedRow}A");
@@ -346,6 +372,30 @@ public static class ColorTableEditor
             return p.SubRowB ??= new ColorTableSubRowPreset();
         }
 
+        // ── copy / paste this single sub-row (the "column") ──────────────────
+        // The clipboard is shared with the other panel and with "Copy row", so copying sub-row A and
+        // pasting into B works, and a row copied whole can seed a single sub-row here.
+        if (ImGui.SmallButton($"Copy##copysub_{id}"))
+            _subClip = Clone(sub ?? new ColorTableSubRowPreset());
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Copy this sub-row's values.");
+
+        ImGui.SameLine();
+        using (ImRaii.Disabled(_subClip == null))
+        {
+            if (ImGui.SmallButton($"Paste##pastesub_{id}"))
+            {
+                var p = EnsurePreset(rows, row);
+                if (isA) p.SubRowA = Clone(_subClip!);
+                else p.SubRowB = Clone(_subClip!);
+                changed = true;
+            }
+        }
+        if (_subClip == null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip("Copy a sub-row first.");
+        else if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Overwrite this sub-row with the copied values.");
+
         // ── Colours ──────────────────────────────────────────────────────────
         ImGui.TextDisabled("Colours");
 
@@ -455,6 +505,32 @@ public static class ColorTableEditor
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(SphereTip);
     }
+
+    // ── copy / paste clipboard ────────────────────────────────────────────────
+    // Static so it persists across options and windows for the session — copy from one overlay,
+    // paste into another. Both hold deep copies, so later edits to the source don't mutate them.
+    private static ColorTableSubRowPreset? _subClip;
+    private static ColorTableRowPreset? _rowClip;
+
+    /// <summary>Deep copy of a sub-row. All fields are value types or immutable strings.</summary>
+    private static ColorTableSubRowPreset Clone(ColorTableSubRowPreset s) => new()
+    {
+        Diffuse         = s.Diffuse,
+        Emissive        = s.Emissive,
+        EmissiveColor   = s.EmissiveColor,
+        Opacity         = s.Opacity,
+        SphereMap       = s.SphereMap,
+        SphereIntensity = s.SphereIntensity,
+        Specular        = s.Specular,
+        Roughness       = s.Roughness,
+        Metalness       = s.Metalness,
+    };
+
+    private static ColorTableRowPreset CloneRow(ColorTableRowPreset? p) => new()
+    {
+        SubRowA = p?.SubRowA is { } a ? Clone(a) : null,
+        SubRowB = p?.SubRowB is { } b ? Clone(b) : null,
+    };
 
     // ── helpers ──────────────────────────────────────────────────────────────
 

@@ -527,9 +527,12 @@ public class CompositorService : IDisposable
 
     /// <summary>
     /// Schedule a recomposite on a background thread.
-    /// Any in-flight recomposite is cancelled first (debounce).
+    /// Any in-flight recomposite is cancelled first (debounce), so the timer restarts from the last
+    /// call. <paramref name="delayMs"/> sets how long to wait: the default 200ms coalesces bursts like
+    /// mask toggles, while colour-table edits pass a longer window so a run of slider drags recomposites
+    /// only once, 5s after the user stops.
     /// </summary>
-    public void TriggerRecomposite(string reason)
+    public void TriggerRecomposite(string reason, int delayMs = 200)
     {
         if (!config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -541,11 +544,11 @@ public class CompositorService : IDisposable
             cts = currentCts = new CancellationTokenSource();
         }
 
-        log.Debug("[Proteus] Recomposite triggered: {0}", reason);
+        log.Debug("[Proteus] Recomposite triggered: {0} (delay {1}ms)", reason, delayMs);
         var token = cts.Token;
         Task.Run(async () =>
         {
-            try { await Task.Delay(200, token).ConfigureAwait(false); }
+            try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
             // OnLocalPlayerRedrawn only fires when the draw object is recreated, but some mods (e.g.
             // body replacers that redirect an always-loaded "smallclothes" resource in place) change
