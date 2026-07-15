@@ -74,6 +74,10 @@ public class CompositorService : IDisposable
     // on the framework thread from the draw object's loaded models so the background build can read it
     // without an IPC. Refreshed wherever the material snapshot is.
     private volatile IReadOnlyDictionary<string, string>? _equippedPartModels;
+    // Which ring/bracelet the second skin appends its shell into (slot rir|ril|wrs -> .mdl game path),
+    // captured the same way as _equippedPartModels. Empty when no accessory is worn, in which case the
+    // shell falls back to replacing the invisible Emperor's New Ring.
+    private volatile IReadOnlyDictionary<string, string>? _equippedAccessoryModels;
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
     // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
@@ -301,9 +305,12 @@ public class CompositorService : IDisposable
 
             // Did the gear the second skin cuts its shells from change? Equipping/removing an item
             // fires no mod-setting or design event, so this diff is what makes the shell follow it.
-            var equipped = EquippedPartModelsFromModels(penumbra.GetActivePlayerModelPaths());
+            var modelPaths = penumbra.GetActivePlayerModelPaths();
+            var equipped = EquippedPartModelsFromModels(modelPaths);
+            var accessories = EquippedAccessoryModelsFromModels(modelPaths);
             _equippedPartModels = equipped;
-            var sig = EquipSignature(equipped);
+            _equippedAccessoryModels = accessories;
+            var sig = EquipSignature(equipped, accessories);
             equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
             _lastEquipSignature = sig;
         }
@@ -582,7 +589,11 @@ public class CompositorService : IDisposable
             try
             {
                 var equipped = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
-                if (equipped != null) _equippedPartModels = EquippedPartModelsFromModels(equipped);
+                if (equipped != null)
+                {
+                    _equippedPartModels = EquippedPartModelsFromModels(equipped);
+                    _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
+                }
             }
             catch (OperationCanceledException) { return; }
 
@@ -681,9 +692,32 @@ public class CompositorService : IDisposable
         return models;
     }
 
-    // Stable string of the equipped part models, for cheap change detection on redraw.
-    private static string EquipSignature(IReadOnlyDictionary<string, string>? models)
-        => models == null ? "" : string.Join("|", models
+    // The second skin appends its shell into a ring/bracelet the player already wears (so the accessory
+    // stays visible), keyed by slot — chara/accessory/a0114/model/c0201a0114_rir.mdl → rir. Detect them
+    // the same way as the equipment models above.
+    private static readonly System.Text.RegularExpressions.Regex AccessoryModelRe = new(
+        @"chara/accessory/(a\d+)/model/c\d+a\d+_(rir|ril|wrs)\.mdl",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static Dictionary<string, string> EquippedAccessoryModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (modelPaths == null) return models;
+        foreach (var p in modelPaths)
+        {
+            var match = AccessoryModelRe.Match(p);
+            if (!match.Success) continue;
+            models[match.Groups[2].Value.ToLowerInvariant()] = match.Value;
+        }
+        return models;
+    }
+
+    // Stable string of the equipped part + accessory models, for cheap change detection on redraw. A ring
+    // swap must rebuild the shell (it changes the host), so the accessory map is folded in too.
+    private static string EquipSignature(
+        IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null)
+        => string.Join("|",
+            (models ?? new Dictionary<string, string>()).Concat(accessories ?? new Dictionary<string, string>())
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => $"{kv.Key}={kv.Value}"));
 
@@ -1803,13 +1837,16 @@ public class CompositorService : IDisposable
                         // never call the draw-object IPC from this background thread.
                         var equippedModels = _equippedPartModels
                             ?? new Dictionary<string, string>();
-                        log.Information("[Proteus] second skin: equipped part models [{0}] ({1})",
+                        var equippedAccessories = _equippedAccessoryModels
+                            ?? new Dictionary<string, string>();
+                        log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}] ({2})",
                             string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
+                            string.Join(", ", equippedAccessories.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
 
                         // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
-                            discovery.EffectsLibraryPath(), allOverlays, equippedModels,
+                            discovery.EffectsLibraryPath(), allOverlays, equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies);
                         if (shells != null)
                         {

@@ -17,6 +17,8 @@ public class SecondSkinWriterVerbatimTests
         @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes\0201e0000_top.mdl";
     private const string BiboTop =
         @"E:\Penumbradt\Bibo+\Breasts - Small Clothes\Nude - Large\chara\equipment\e0000\model\c0201e0000_top.mdl";
+    private const string HostRing =
+        @"E:\Penumbradt\classic gold\classic gold accessories\rings\chara\accessory\a0001\model\c0201a0001_rir.mdl";
 
     [Fact]
     public void Verbatim_output_is_structurally_consistent()
@@ -50,6 +52,39 @@ public class SecondSkinWriterVerbatimTests
             new[] { File.ReadAllBytes(NeoTop), File.ReadAllBytes(BiboTop) }, layers, out var stats);
 
         Assert.True(stats.Meshes >= 2);
+        Validate(outBytes);
+    }
+
+    [Fact]
+    public void Appended_host_ring_keeps_its_materials_and_meshes()
+    {
+        // Append the shell INTO an equipped ring: the ring's own materials/meshes must survive at the FRONT
+        // (so the accessory still renders) and the shell's material is added after them.
+        if (!File.Exists(NeoTop) || !File.Exists(HostRing)) return;
+
+        var body = File.ReadAllBytes(NeoTop);
+        var ring = File.ReadAllBytes(HostRing);
+        var ringMats = SecondSkinWriter.MaterialNames(ring);
+
+        var layers = new[]
+        {
+            new SecondSkinLayer { MaterialName = "/mt_c0201a0001_rir_b.mtrl", Coverage = null },
+        };
+
+        // Same shell WITHOUT the host, so the mesh delta is exactly the host's kept meshes.
+        SecondSkinWriter.Build(new[] { body }, layers, out var shellOnly);
+        var outBytes = SecondSkinWriter.Build(new[] { body }, layers, ring, out var stats);
+
+        // Materials: the ring's, then ours.
+        var outMats = SecondSkinWriter.MaterialNames(outBytes);
+        Assert.Equal(ringMats.Count + layers.Length, outMats.Count);
+        Assert.Equal("/mt_c0201a0001_rir_b.mtrl", outMats[^1]);
+        for (int i = 0; i < ringMats.Count; i++)
+            Assert.Equal(ringMats[i], outMats[i]);
+
+        // Meshes: the shell's, plus the host's own (at least one).
+        Assert.True(stats.Meshes > shellOnly.Meshes, "host added no meshes");
+
         Validate(outBytes);
     }
 

@@ -149,23 +149,43 @@ public static class SecondSkinWriter
         public byte[] Lods = [];          // 3 * 60
     }
 
+    /// <summary>A model carries at most 4 materials — the host-selection cap (enforced in the caller).</summary>
+    public const int MaxMaterials = 4;
+
     /// <summary>
     /// Build the merged shell. <paramref name="sources"/> are the body models the character is currently
     /// drawing (resolve them live — never ship a prebuilt shell); every one contributes its own mesh
     /// groups. Every layer is applied to every source.
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers, out Stats stats)
+        => Build(sources, layers, null, out stats);
+
+    /// <summary>
+    /// Append the shell into a HOST accessory model (an equipped ring/bracelet) rather than replacing it:
+    /// <paramref name="baseModel"/>'s meshes/materials are emitted verbatim FIRST (so the ring still
+    /// renders), then the body-shell layers are appended with material indices offset past the host's.
+    /// Null <paramref name="baseModel"/> = the original replace behaviour (a fresh shell-only model).
+    /// </summary>
+    public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
+        byte[]? baseModel, out Stats stats)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
 
         var parsed = sources.Select(Parse).ToList();
+        Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
+        int baseMatCount = baseSrc?.MatNames.Count ?? 0;
+        if (baseMatCount + layers.Count > MaxMaterials)
+            throw new InvalidOperationException(
+                $"host has {baseMatCount} materials + {layers.Count} layers > {MaxMaterials} max");
 
-        // Union bone list. u16 indices, so hundreds of bones are fine.
+        // Union bone list. u16 indices, so hundreds of bones are fine. The host (if any) goes FIRST so its
+        // own meshes can remap their bone tables by name.
         var boneNames = new List<string>();
         var boneIndex = new Dictionary<string, ushort>(StringComparer.Ordinal);
         var boneBBox = new List<byte[]>();
-        foreach (var src in parsed)
+        var boneSources = baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed;
+        foreach (var src in boneSources)
             for (int i = 0; i < src.BoneNames.Length; i++)
             {
                 if (boneIndex.ContainsKey(src.BoneNames[i])) continue;
@@ -188,22 +208,179 @@ public static class SecondSkinWriter
         ushort subCursor = 0;
         int triIn = 0, triOut = 0, vertOut = 0;
 
+        // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
+        // byte copy, keep every triangle, keep the authored material index) and the shell layers
+        // (preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed). Mutates the shared
+        // accumulators; `cov` null keeps all triangles; `mapBase`/`mapAppended` share the src's submesh bone
+        // map across its meshes.
+        void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
+                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended)
+        {
+            var s = src.S;
+            uint U32(int o) => BitConverter.ToUInt32(s, o);
+            ushort U16(int o) => BitConverter.ToUInt16(s, o);
+
+            int mo = src.MeshStart + m * 36;
+            ushort vc = U16(mo);
+            if (vc == 0) return;
+
+            ushort srcSubIdx = U16(mo + 10), srcSubCount = U16(mo + 12), srcBoneTbl = U16(mo + 14);
+            // Up to three vertex streams (offset + stride each); a v6 MeshStruct carries all three.
+            uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] bs  = { s[mo + 32], s[mo + 33], s[mo + 34] };
+            var decl = m < src.Decls.Length ? src.Decls[m] : [];
+
+            byte[][] outStreams; byte[] outStrides; byte[] declBlock;
+            (float U, float V)[] uv;
+            if (preserve)
+            {
+                CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
+                    out outStreams, out outStrides, out declBlock);
+                uv = [];   // no coverage trim for the host mesh
+            }
+            else
+            {
+                BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
+                    out outStreams, out outStrides, out declBlock, out uv);
+            }
+
+            // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
+            var keptPerSub = new List<ushort[]>();
+            var used = new bool[vc];
+            for (int su = 0; su < srcSubCount; su++)
+            {
+                int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
+                uint so = U32(ss), sc = U32(ss + 4);
+                var keep = new List<ushort>();
+                for (uint t = 0; t + 2 < sc; t += 3)
+                {
+                    int p = src.Ib + (int)(so + t) * 2;
+                    ushort a = BitConverter.ToUInt16(s, p), b = BitConverter.ToUInt16(s, p + 2), c = BitConverter.ToUInt16(s, p + 4);
+                    triIn++;
+                    if (cov != null && !AnyVisible(cov, uv[a], uv[b], uv[c])) continue;
+                    keep.Add(a); keep.Add(b); keep.Add(c);
+                    used[a] = used[b] = used[c] = true;
+                    triOut++;
+                }
+                keptPerSub.Add(keep.ToArray());
+            }
+            if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
+
+            if (!mapAppended)
+            {
+                submeshBoneMap.AddRange(src.SubmeshBoneMap);
+                mapAppended = true;
+            }
+
+            // Compact each vertex stream down to the vertices the surviving triangles reference.
+            int streamCount = outStreams.Length;
+            var remap = new ushort[vc];
+            ushort nv = 0;
+            var comp = new MemoryStream[streamCount];
+            for (int st = 0; st < streamCount; st++) comp[st] = new MemoryStream();
+            for (int i = 0; i < vc; i++)
+            {
+                if (!used[i]) continue;
+                remap[i] = nv++;
+                for (int st = 0; st < streamCount; st++)
+                    comp[st].Write(outStreams[st], i * outStrides[st], outStrides[st]);
+            }
+            vertOut += nv;
+
+            var vOff = new uint[streamCount];
+            for (int st = 0; st < streamCount; st++)
+            {
+                vOff[st] = (uint)vBuf.Position;
+                vBuf.Write(comp[st].GetBuffer(), 0, (int)comp[st].Length);
+            }
+
+            uint meshStartIdx = idxCursor;
+            ushort keptSubs = 0;
+            var subsForMesh = new List<byte[]>();
+            for (int su = 0; su < srcSubCount; su++)
+            {
+                var keep = keptPerSub[su];
+                if (keep.Length == 0) continue;
+                int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
+                uint subStart = idxCursor;
+                var idxBytes = new byte[keep.Length * 2];
+                for (int k = 0; k < keep.Length; k++)
+                    BitConverter.TryWriteBytes(idxBytes.AsSpan(k * 2), remap[keep[k]]);
+                iBuf.Write(idxBytes);
+                idxCursor += (uint)keep.Length;
+
+                var ns = new byte[16];
+                W32(ns, 0, subStart);
+                W32(ns, 4, (uint)keep.Length);
+                W32(ns, 8, 0);                                            // attributes dropped
+                W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));            // boneStart, rebased
+                W16(ns, 14, U16(ss + 14));                                // boneCount, as authored
+                subsForMesh.Add(ns);
+                keptSubs++;
+            }
+
+            // This mesh's OWN bone table, entries remapped onto the union list. Never merged with
+            // other meshes' tables — ubyte4 vertex indices cap a table at 255 entries.
+            var srcTable = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
+            var table = new ushort[srcTable.Length];
+            for (int i = 0; i < srcTable.Length; i++)
+            {
+                var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
+                table[i] = name != null && boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
+            }
+
+            var nm = new byte[36];
+            W16(nm, 0, nv);
+            W32(nm, 4, idxCursor - meshStartIdx);
+            W16(nm, 8, materialIndex);
+            W16(nm, 10, subCursor);
+            W16(nm, 12, keptSubs);
+            W16(nm, 14, (ushort)boneTables.Count);  // this mesh's own table
+            W32(nm, 16, meshStartIdx);
+            W32(nm, 20, vOff[0]);
+            W32(nm, 24, streamCount > 1 ? vOff[1] : 0);
+            W32(nm, 28, streamCount > 2 ? vOff[2] : 0);
+            nm[32] = outStrides[0];
+            nm[33] = streamCount > 1 ? outStrides[1] : (byte)0;
+            nm[34] = streamCount > 2 ? outStrides[2] : (byte)0;
+            nm[35] = (byte)streamCount;
+
+            meshOut.Add(nm);
+            declOut.Add(declBlock);
+            boneTables.Add(table);
+            subOut.AddRange(subsForMesh);
+            subCursor += keptSubs;
+        }
+
+        // Host pre-pass: the ring/bracelet's own LOD0 meshes, verbatim and unfiltered, at their authored
+        // material indices (0..baseMatCount-1) — so the accessory still renders under the appended shell.
+        if (baseSrc != null)
+        {
+            int mapBase = submeshBoneMap.Count;
+            bool mapAppended = false;
+            int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
+            for (int m = baseSrc.Lod0MeshIndex; m < bEnd && m < baseSrc.MeshCount; m++)
+            {
+                int bmo = baseSrc.MeshStart + m * 36;
+                ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
+                EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended);
+            }
+        }
+
         for (ushort layer = 0; layer < layers.Count; layer++)
         {
             var def = layers[layer];
             float push = BaseOffset + LayerSeparation * layer;
+            ushort matIndex = (ushort)(baseMatCount + layer);
 
             foreach (var src in parsed)
             {
+                var s = src.S;
+                ushort U16(int o) => BitConverter.ToUInt16(s, o);
 
-                // Each (source, layer) pair contributes its own copy of the source's submesh bone map;
-                // submesh boneStart values are kept as authored and rebased onto it.
+                // Each (source, layer) pair contributes its own copy of the source's submesh bone map.
                 int mapBase = submeshBoneMap.Count;
                 bool mapAppended = false;
-
-                var s = src.S;
-                uint U32(int o) => BitConverter.ToUInt32(s, o);
-                ushort U16(int o) => BitConverter.ToUInt16(s, o);
 
                 // LOD0 meshes only — never the lower LODs (a full game model has all three; merging them
                 // stacks overlapping low-poly copies that fling geometry across the scene).
@@ -211,8 +388,7 @@ public static class SecondSkinWriter
                 for (int m = src.Lod0MeshIndex; m < mEnd && m < src.MeshCount; m++)
                 {
                     int mo = src.MeshStart + m * 36;
-                    ushort vc = U16(mo);
-                    if (vc == 0) continue;
+                    if (U16(mo) == 0) continue;   // empty mesh
 
                     // SKIN ONLY. A body model also holds the smallclothes/undies mesh (gear UV), nails,
                     // piercings and pubes; duplicating those and painting them with a body-UV overlay
@@ -221,122 +397,7 @@ public static class SecondSkinWriter
                     if (srcMat >= src.MatNames.Count || SkinMaterialBodyType(src.MatNames[srcMat]) == null)
                         continue;
 
-                    ushort srcSubIdx = U16(mo + 10), srcSubCount = U16(mo + 12), srcBoneTbl = U16(mo + 14);
-                    // Up to three vertex streams (offset + stride each); a v6 MeshStruct carries all three.
-                    uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
-                    byte[] bs  = { s[mo + 32], s[mo + 33], s[mo + 34] };
-                    var decl = m < src.Decls.Length ? src.Decls[m] : [];
-
-                    BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
-                        out var outStreams, out var outStrides, out var declBlock, out var uv);
-
-                    // Keep a triangle if ANY texel under its UV footprint is visible. Sampling only the
-                    // corners culls triangles whose interior is visible, leaving a sawtooth edge.
-                    var keptPerSub = new List<ushort[]>();
-                    var used = new bool[vc];
-                    for (int su = 0; su < srcSubCount; su++)
-                    {
-                        int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
-                        uint so = U32(ss), sc = U32(ss + 4);
-                        var keep = new List<ushort>();
-                        for (uint t = 0; t + 2 < sc; t += 3)
-                        {
-                            int p = src.Ib + (int)(so + t) * 2;
-                            ushort a = BitConverter.ToUInt16(s, p), b = BitConverter.ToUInt16(s, p + 2), c = BitConverter.ToUInt16(s, p + 4);
-                            triIn++;
-                            if (!AnyVisible(def, uv[a], uv[b], uv[c])) continue;
-                            keep.Add(a); keep.Add(b); keep.Add(c);
-                            used[a] = used[b] = used[c] = true;
-                            triOut++;
-                        }
-                        keptPerSub.Add(keep.ToArray());
-                    }
-                    if (keptPerSub.All(k => k.Length == 0)) continue;   // this layer paints nothing here
-
-                    if (!mapAppended)
-                    {
-                        submeshBoneMap.AddRange(src.SubmeshBoneMap);
-                        mapAppended = true;
-                    }
-
-                    // Compact each vertex stream down to the vertices the surviving triangles reference.
-                    int streamCount = outStreams.Length;
-                    var remap = new ushort[vc];
-                    ushort nv = 0;
-                    var comp = new MemoryStream[streamCount];
-                    for (int st = 0; st < streamCount; st++) comp[st] = new MemoryStream();
-                    for (int i = 0; i < vc; i++)
-                    {
-                        if (!used[i]) continue;
-                        remap[i] = nv++;
-                        for (int st = 0; st < streamCount; st++)
-                            comp[st].Write(outStreams[st], i * outStrides[st], outStrides[st]);
-                    }
-                    vertOut += nv;
-
-                    var vOff = new uint[streamCount];
-                    for (int st = 0; st < streamCount; st++)
-                    {
-                        vOff[st] = (uint)vBuf.Position;
-                        vBuf.Write(comp[st].GetBuffer(), 0, (int)comp[st].Length);
-                    }
-
-                    uint meshStartIdx = idxCursor;
-                    ushort keptSubs = 0;
-                    var subsForMesh = new List<byte[]>();
-                    for (int su = 0; su < srcSubCount; su++)
-                    {
-                        var keep = keptPerSub[su];
-                        if (keep.Length == 0) continue;
-                        int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
-                        uint subStart = idxCursor;
-                        var idxBytes = new byte[keep.Length * 2];
-                        for (int k = 0; k < keep.Length; k++)
-                            BitConverter.TryWriteBytes(idxBytes.AsSpan(k * 2), remap[keep[k]]);
-                        iBuf.Write(idxBytes);
-                        idxCursor += (uint)keep.Length;
-
-                        var ns = new byte[16];
-                        W32(ns, 0, subStart);
-                        W32(ns, 4, (uint)keep.Length);
-                        W32(ns, 8, 0);                                            // attributes dropped
-                        W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));            // boneStart, rebased
-                        W16(ns, 14, U16(ss + 14));                                // boneCount, as authored
-                        subsForMesh.Add(ns);
-                        keptSubs++;
-                    }
-
-                    // This mesh's OWN bone table, entries remapped onto the union list. Never merged with
-                    // other meshes' tables — ubyte4 vertex indices cap a table at 255 entries.
-                    var srcTable = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
-                    var table = new ushort[srcTable.Length];
-                    for (int i = 0; i < srcTable.Length; i++)
-                    {
-                        var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
-                        table[i] = name != null && boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
-                    }
-
-                    var nm = new byte[36];
-                    W16(nm, 0, nv);
-                    W32(nm, 4, idxCursor - meshStartIdx);
-                    W16(nm, 8, layer);                      // material index == layer
-                    W16(nm, 10, subCursor);
-                    W16(nm, 12, keptSubs);
-                    W16(nm, 14, (ushort)boneTables.Count);  // this mesh's own table
-                    W32(nm, 16, meshStartIdx);
-                    W32(nm, 20, vOff[0]);
-                    W32(nm, 24, streamCount > 1 ? vOff[1] : 0);
-                    W32(nm, 28, streamCount > 2 ? vOff[2] : 0);
-                    nm[32] = outStrides[0];
-                    nm[33] = streamCount > 1 ? outStrides[1] : (byte)0;
-                    nm[34] = streamCount > 2 ? outStrides[2] : (byte)0;
-                    nm[35] = (byte)streamCount;
-
-                    meshOut.Add(nm);
-                    declOut.Add(declBlock);
-                    boneTables.Add(table);
-                    subOut.AddRange(subsForMesh);
-                    subCursor += keptSubs;
+                    EmitMesh(src, m, matIndex, push, preserve: false, cov: def, mapBase, ref mapAppended);
                 }
             }
         }
@@ -356,6 +417,15 @@ public static class SecondSkinWriter
             strMs.WriteByte(0);
         }
         var matStrOff = new List<uint>();
+        // Host materials FIRST (indices 0..baseMatCount-1, referenced verbatim by the host's own meshes),
+        // then the appended shell layer materials.
+        if (baseSrc != null)
+            foreach (var name in baseSrc.MatNames)
+            {
+                matStrOff.Add((uint)strMs.Position);
+                strMs.Write(Encoding.ASCII.GetBytes(name));
+                strMs.WriteByte(0);
+            }
         foreach (var l in layers)
         {
             matStrOff.Add((uint)strMs.Position);
@@ -383,7 +453,7 @@ public static class SecondSkinWriter
         W16(mh, 4, (ushort)meshCount);
         W16(mh, 6, 0);                                              // attributes dropped
         W16(mh, 8, (ushort)subOut.Count);
-        W16(mh, 10, (ushort)layers.Count);
+        W16(mh, 10, (ushort)(baseMatCount + layers.Count));
         W16(mh, 12, (ushort)boneCount);
         W16(mh, 14, (ushort)boneTables.Count);
         W16(mh, 16, 0); W16(mh, 18, 0); W16(mh, 20, 0);             // shapes dropped
@@ -420,7 +490,7 @@ public static class SecondSkinWriter
 
         // Bounding boxes: 4 model-level boxes then one per union bone. The model box must cover EVERY
         // part, or the merged model gets culled whenever only one part is on screen.
-        ms.Write(UnionModelBBoxes(parsed));
+        ms.Write(UnionModelBBoxes(baseSrc != null ? [baseSrc, .. parsed] : parsed));
         foreach (var bb in boneBBox) ms.Write(bb);
 
         long vtxOffOut = ms.Position;
@@ -433,7 +503,7 @@ public static class SecondSkinWriter
         W32(o, 4, stackSize);
         W32(o, 8, (uint)(vtxOffOut - 0x44 - stackSize));            // RuntimeSize
         W16(o, 12, (ushort)meshCount);                              // vertDeclCount == meshCount
-        W16(o, 14, (ushort)layers.Count);
+        W16(o, 14, (ushort)(baseMatCount + layers.Count));
         W32(o, 16, (uint)vtxOffOut); W32(o, 20, 0); W32(o, 24, 0);
         W32(o, 28, (uint)idxOffOut); W32(o, 32, 0); W32(o, 36, 0);
         W32(o, 40, vtxSize); W32(o, 44, 0); W32(o, 48, 0);
@@ -671,6 +741,33 @@ public static class SecondSkinWriter
     /// stream strides equal the source's (the uv1 stream grown by the copy). Also returns this mesh's
     /// declaration block (source decl, plus the uv1 element) and decoded uv0 for the coverage test.
     /// </summary>
+    /// <summary>
+    /// Copy a host (ring/bracelet) mesh's vertex streams and declaration byte-for-byte, with NONE of the
+    /// shell tricks — no push, no colour-whiten, no uv1 mirroring, no UV normalization. The accessory must
+    /// render exactly as authored, so its format passes through untouched.
+    /// </summary>
+    private static void CopyVerbatim(
+        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs,
+        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock)
+    {
+        // Match BuildVerbatim's stream count: every stream carrying data OR named by a decl element.
+        int streamCount = bs[2] > 0 ? 3 : (bs[1] > 0 ? 2 : 1);
+        foreach (var el in decl) streamCount = Math.Max(streamCount, Math.Min((int)el.Stream, 2) + 1);
+
+        outStrides = new byte[streamCount];
+        for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
+        outStreams = new byte[streamCount][];
+        for (int st = 0; st < streamCount; st++)
+        {
+            outStreams[st] = new byte[vc * bs[st]];
+            for (int i = 0; i < vc; i++)
+                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * bs[st], bs[st]);
+        }
+
+        declBlock = new byte[DeclSize];
+        Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
+    }
+
     private static void BuildVerbatim(
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs)
