@@ -77,6 +77,8 @@ public class StatusWindow : Window
         // Status — not controls — so it stays outside the tabs and is visible from any of them.
         DrawStatusBanner();
 
+        DrawDiscordButton();
+
         using (var tabs = ImRaii.TabBar("##proteusTabs"))
         {
             if (tabs)
@@ -116,6 +118,40 @@ public class StatusWindow : Window
         ImGui.End();
 
         if (!open) _colorWindowMod = null;
+    }
+
+    private const string DiscordUrl = "https://discord.gg/solona";
+
+    /// <summary>A right-aligned Discord link that sits in the top-right of the window, level with the tab bar.</summary>
+    private void DrawDiscordButton()
+    {
+        const string label = "Discord";
+        var  style = ImGui.GetStyle();
+        float width = ImGui.CalcTextSize(label).X + style.FramePadding.X * 2;
+
+        // Right-align to the content region, then re-anchor the cursor so the tab bar draws on this same line.
+        float startX = ImGui.GetCursorPosX();
+        float startY = ImGui.GetCursorPosY();
+        float avail  = ImGui.GetContentRegionAvail().X;
+        if (avail > width)
+            ImGui.SetCursorPosX(startX + avail - width);
+
+        using (ImRaii.PushColor(ImGuiCol.Button,        new Vector4(0.35f, 0.40f, 0.95f, 1f))
+                     .Push(ImGuiCol.ButtonHovered,      new Vector4(0.45f, 0.50f, 1.00f, 1f))
+                     .Push(ImGuiCol.ButtonActive,       new Vector4(0.30f, 0.35f, 0.85f, 1f)))
+        {
+            if (ImGui.Button(label))
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(DiscordUrl) { UseShellExecute = true }); }
+                catch { /* opening a browser is best-effort */ }
+            }
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(DiscordUrl);
+
+        // Let the tab bar share this row rather than dropping below the button.
+        ImGui.SameLine();
+        ImGui.SetCursorPos(new Vector2(startX, startY));
     }
 
     private void DrawStatusBanner()
