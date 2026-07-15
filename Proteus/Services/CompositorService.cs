@@ -535,18 +535,26 @@ public class CompositorService : IDisposable
             return;
         }
 
+        // If gear shells were active, a hosted accessory's model is redirected to our merged model. An
+        // in-place reload won't reload that .mdl, so the shell would linger on the accessory after the
+        // redirect clears — force a FULL redraw to reload the accessory's original model.
+        bool restoreAccessory = _secondSkinActive;
+
         Task.Run(() =>
         {
             try
             {
                 WriteManagedModJson(new Dictionary<string, string>());
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+                if (restoreAccessory) _needFullRedraw = true;
                 ReloadAndRedraw();   // character reverts to un-composited
+                _secondSkinActive = false;
 
                 if (collId.HasValue)
                     penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, false);
 
-                log.Debug("[Proteus] disabled: output cleared, redrawn, Penumbra mod off");
+                log.Debug("[Proteus] disabled: output cleared, redrawn ({0}), Penumbra mod off",
+                    restoreAccessory ? "full — accessory restored" : "in-place");
             }
             catch (Exception ex) { log.Error(ex, "[Proteus] failed to disable cleanly"); }
         });
@@ -1811,6 +1819,7 @@ public class CompositorService : IDisposable
             // Penumbra) — a shell cut from any other body shape shows the body through it.
             List<object>? manipulations = null;
             _needFullRedraw = false;
+            _secondSkinActive = false;
             if (gearOverlays.Count > 0)
             {
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
@@ -1853,6 +1862,7 @@ public class CompositorService : IDisposable
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
+                            _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
                             // Only when the shell's .mdl/.mtrl actually changed — an in-place reload
                             // refreshes textures but cannot see a new model or material, so those runs
@@ -1991,6 +2001,37 @@ public class CompositorService : IDisposable
     /// redraw, or the character keeps rendering the previous shell until the mod is toggled off and on.
     /// </summary>
     private volatile bool _needFullRedraw;
+
+    /// <summary>
+    /// True when the last composite produced second-skin gear shells — i.e. an accessory's model was
+    /// redirected to our merged (host + shell) model. Reverting that needs a FULL redraw: clearing the
+    /// redirect alone leaves the game rendering the merged model, because an in-place reload never reloads
+    /// an accessory's .mdl. Used to decide whether disabling must force a full redraw.
+    /// </summary>
+    private volatile bool _secondSkinActive;
+
+    /// <summary>
+    /// Restore any accessory whose model the second skin replaced back to its original geometry, by
+    /// forcing a FULL player redraw so the game reloads the accessory's own .mdl. When the managed mod's
+    /// redirects have been cleared (disable, or nothing composited) this reverts the accessory to vanilla;
+    /// otherwise it re-renders the current composite from scratch, clearing any shell an in-place reload
+    /// left stuck on the accessory. Runs off the framework thread; safe to call anytime.
+    /// </summary>
+    public void RestoreChangedAccessory()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+                Thread.Sleep(300);
+                Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
+                Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult();
+                log.Information("[Proteus] restored changed accessory via full redraw");
+            }
+            catch (Exception ex) { log.Error(ex, "[Proteus] restore changed accessory failed"); }
+        });
+    }
 
     private void RefreshPlayerTextures()
     {

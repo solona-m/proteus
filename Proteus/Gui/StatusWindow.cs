@@ -238,6 +238,16 @@ public class StatusWindow : Window
                 "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
                 "automatically when Glamourer can't service it.");
 
+        // The second skin rides on an equipped ring/bracelet (its model is redirected to our merged
+        // shell). An in-place reload can't reload that .mdl, so if a shell ever gets stuck on the
+        // accessory this forces a full redraw to reload the accessory's original model.
+        if (ImGui.Button("Restore changed accessory"))
+            compositor.RestoreChangedAccessory();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Force a full redraw to reload any ring/bracelet the second skin replaced,\n" +
+                "restoring it to its original model. Use if a gear shell stays stuck on an\n" +
+                "accessory after disabling or swapping.");
+
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure.
         var lib = discovery.EffectsLibraryPath();
         if (lib != null)
