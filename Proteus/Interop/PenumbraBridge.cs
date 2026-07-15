@@ -216,6 +216,30 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed; compositing all materials"); return null; }
     }
 
+    /// <summary>
+    /// The set of MODEL (.mdl) game paths currently loaded by the local player's draw object, or null
+    /// when unavailable. The second skin uses this to find which gear model is drawn on each slot — the
+    /// model loads reliably even when a gear piece's own materials fail or resolve to odd paths, so this
+    /// is a sturdier signal than the material snapshot.
+    /// </summary>
+    public HashSet<string>? GetActivePlayerModelPaths()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return null;
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var gamePaths in dict.Values)
+                foreach (var p in gamePaths)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+                        paths.Add(p);
+            return paths.Count > 0 ? paths : null;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (models)"); return null; }
+    }
+
     /// <summary>Register a new mod directory with Penumbra.</summary>
     public PenumbraApiEc AddModDirectory(string modDirectory)
     {

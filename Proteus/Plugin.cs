@@ -102,7 +102,7 @@ public sealed class Plugin : IDalamudPlugin
         if (config.PluginEnabled && penumbra.IsAvailable && discovery.DiscoverEnabled().Count > 0)
             compositor.TriggerRecomposite("startup");
 
-        log.Information("Proteus loaded. Penumbra={0}", penumbra.IsAvailable);
+        log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
         ChatGui.Print($"[Proteus] loaded — build #{BuildNumber}");
     }
 

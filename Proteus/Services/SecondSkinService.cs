@@ -170,7 +170,8 @@ public sealed class SecondSkinService
         string outputRoot,
         string? bodyType,
         string? effectsFolder,
-        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null)
+        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null,
+        IReadOnlyDictionary<string, string>? equippedPartModels = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -204,7 +205,16 @@ public sealed class SecondSkinService
         var bodies = new List<byte[]>();
         foreach (var part in Parts)
         {
-            var bodyGamePath = $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
+            // When gear is equipped in a slot, the bare-body part for that slot ISN'T drawn — the gear
+            // model is, and it carries the skin it exposes posed to fit (a high heel tiptoes the foot,
+            // a bikini bottom reshapes the hip, etc.), as an mt_c….b….skin mesh beside its cloth meshes.
+            // Cut the shell from that equipped model so it deforms WITH the gear; the flat bare-body e0000
+            // would leave the overlay floating off the posed skin. The skin-material filter in
+            // SecondSkinWriter keeps only the skin mesh and drops the gear geometry. Slots with no gear
+            // (or gear that exposes no skin) fall back to the bare body e0000.
+            var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
+                ? eq
+                : $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
             if (bodyDisk == null || !File.Exists(bodyDisk))
             {

@@ -64,6 +64,16 @@ public class CompositorService : IDisposable
     // GetActivePlayerMaterialPaths (a full Penumbra resource-tree walk on the framework thread) is
     // only paid for when this is set or the snapshot is cold; everything else reuses the cache.
     private volatile bool _activeMtrlSnapshotDirty;
+    // Signature of the equipped gear models the second skin cuts its shells from (feet/legs/hands/body).
+    // The shell now depends on WHICH gear is worn — a heel poses the foot, a top reshapes the chest — so
+    // a redraw that changes the equipped set must rebuild it. Equipping through the game fires no mod or
+    // design event, so this redraw-time diff is the only signal for it. Null until the first redraw sets
+    // the baseline (the initial composite already covers load).
+    private string? _lastEquipSignature;
+    // Which gear model the second skin sources each slot's shell from (part -> .mdl game path), captured
+    // on the framework thread from the draw object's loaded models so the background build can read it
+    // without an IPC. Refreshed wherever the material snapshot is.
+    private volatile IReadOnlyDictionary<string, string>? _equippedPartModels;
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
     // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
@@ -278,6 +288,7 @@ public class CompositorService : IDisposable
     private void OnLocalPlayerRedrawn()
     {
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
+        bool equipChanged = false;
         if (snapshot != null)
         {
             _activeMtrlSnapshot = snapshot;
@@ -287,9 +298,20 @@ public class CompositorService : IDisposable
             // class of framework-thread cost this whole change exists to avoid. The value still gets
             // persisted the next time TriggerRecomposite's own fetch (below) calls config.Save().
             config.CachedActiveMaterialPaths = snapshot.ToList();
+
+            // Did the gear the second skin cuts its shells from change? Equipping/removing an item
+            // fires no mod-setting or design event, so this diff is what makes the shell follow it.
+            var equipped = EquippedPartModelsFromModels(penumbra.GetActivePlayerModelPaths());
+            _equippedPartModels = equipped;
+            var sig = EquipSignature(equipped);
+            equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
+            _lastEquipSignature = sig;
         }
 
         RefreshGlamourerCharCode();
+
+        if (equipChanged && config.PluginEnabled)
+            TriggerRecomposite("equipment-change");
 
         if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
             TriggerRecomposite("glamourer-customization");
@@ -550,6 +572,20 @@ public class CompositorService : IDisposable
         {
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
+
+            // Refresh the equipped gear models the second skin sources its shells from, EVERY composite.
+            // Unlike the material snapshot this can't be gated on cold/dirty: equipping an item fires no
+            // mod/collection event, and a composite can be triggered while no redraw has repopulated the
+            // cache (e.g. right after load, when the first walk hit a not-yet-ready player and returned
+            // null). The walk is the same cheap ~2-8ms framework call. Keep the last value on a transient
+            // null so a mid-reload blank draw object doesn't wipe a good set.
+            try
+            {
+                var equipped = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
+                if (equipped != null) _equippedPartModels = EquippedPartModelsFromModels(equipped);
+            }
+            catch (OperationCanceledException) { return; }
+
             // OnLocalPlayerRedrawn only fires when the draw object is recreated, but some mods (e.g.
             // body replacers that redirect an always-loaded "smallclothes" resource in place) change
             // which materials are active WITHOUT a redraw. GetActivePlayerMaterialPaths must run on
@@ -620,6 +656,36 @@ public class CompositorService : IDisposable
     /// <summary>Deep copy, so a binding's gear override never mutates the mod's own metadata objects.</summary>
     private static OverlayDescriptor CloneDescriptor(OverlayDescriptor d)
         => JsonSerializer.Deserialize<OverlayDescriptor>(JsonSerializer.Serialize(d))!;
+
+    // The second skin cuts each slot's shell from the gear MODEL the character is drawing there (whose
+    // exposed skin is posed to fit the gear) instead of the flat bare body. Detect those models straight
+    // from the loaded .mdl resources — e.g. chara/equipment/e6039/model/c0201e6039_sho.mdl → sho. Read
+    // the model, NOT the material: the model loads reliably even when a gear piece's materials fail
+    // (some mods ship a material that FailedSubResource), so a material scan would miss it. Bare slots
+    // (e0000) are omitted, so the shell falls back to the bare-body default there.
+    private static readonly System.Text.RegularExpressions.Regex EquipModelRe = new(
+        @"chara/equipment/(e\d+)/model/c\d+e\d+_(top|dwn|glv|sho)\.mdl",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static Dictionary<string, string> EquippedPartModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (modelPaths == null) return models;
+        foreach (var p in modelPaths)
+        {
+            var match = EquipModelRe.Match(p);
+            if (!match.Success) continue;
+            if (string.Equals(match.Groups[1].Value, "e0000", StringComparison.OrdinalIgnoreCase)) continue;
+            models[match.Groups[2].Value.ToLowerInvariant()] = match.Value;
+        }
+        return models;
+    }
+
+    // Stable string of the equipped part models, for cheap change detection on redraw.
+    private static string EquipSignature(IReadOnlyDictionary<string, string>? models)
+        => models == null ? "" : string.Join("|", models
+            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => $"{kv.Key}={kv.Value}"));
 
     private static string? BodyTypeKey(HashSet<string> snapshot)
     {
@@ -1714,7 +1780,19 @@ public class CompositorService : IDisposable
                             .Select(UVRemapService.InferBodyType)
                             .FirstOrDefault(t => t != null)
                             ?? _lastCompositedBodyType?.Split(',').FirstOrDefault();
-                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath(), allOverlays);
+
+                        // Gear poses the skin it exposes in its OWN model (a heel tiptoes the foot, a
+                        // skimpy top reshapes the chest). Cut each equipped slot's shell from the model
+                        // the character is actually drawing there, not the flat bare body. Captured on
+                        // the framework thread at redraw/trigger time (draw-object model resources);
+                        // never call the draw-object IPC from this background thread.
+                        var equippedModels = _equippedPartModels
+                            ?? new Dictionary<string, string>();
+                        log.Information("[Proteus] second skin: equipped part models [{0}] ({1})",
+                            string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
+                            _equippedPartModels == null ? "cache null" : "cached");
+
+                        var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType, discovery.EffectsLibraryPath(), allOverlays, equippedModels);
                         if (shells != null)
                         {
                             foreach (var (gamePath, relPath) in shells.Redirects)
