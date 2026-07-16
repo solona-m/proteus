@@ -81,7 +81,8 @@ public sealed class Plugin : IDalamudPlugin
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
 
-        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap);
+        var modCreation = new ModCreationService(penumbra, compositor, log);
+        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);

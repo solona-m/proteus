@@ -615,7 +615,12 @@ public sealed class SecondSkinService
             // A fabricated mask must be WHITE, not mid-grey. The gear shaders read occlusion/gloss out
             // of it, so a 50% grey mask halves the lighting everywhere and a white surface renders grey.
             ["mask"] = mask ?? Solid(255, 255, 255, 255),
-            ["id"]   = index ?? Solid(0, 0, 0, 255),          // row 0
+            // No index texture → select Row 16 sub-row A everywhere, matching the SKIN layer's fallback
+            // (it applies row16A as a flat tint when desc.Index == null). red 255 → row pair 16, green 255
+            // → sub-row A. Defaulting to black (row 1) instead picked up the template's default row — which
+            // renders the shell a flat red — and ignored the Row 16 tint the overlay actually carries.
+            ["id"]   = index ?? Solid(255, 255, 0, 255),
+
             ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
             ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
         };

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
@@ -21,6 +22,7 @@ public class StatusWindow : Window
     private readonly DesignBindingService designBindings;
     private readonly UVMapDownloadService uvMapDl;
     private readonly UVRemapService uvRemap;
+    private readonly ModCreationService modCreation;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static readonly Vector4 BindingAccent = new(0.45f, 0.75f, 1f, 1f);
@@ -45,6 +47,21 @@ public class StatusWindow : Window
     // Key: modDir → priority value being dragged; committed to Penumbra on edit-end.
     private readonly Dictionary<string, int> _priorityEdits = new();
 
+    // ── Create tab state ──
+    private readonly FileDialogManager _fileDialog = new();
+    private string _createName = "";
+    private string _createAuthor = "";
+    private string _createMaterial = "";
+    private string _createDiffuse = "";   // "" = no file picked
+    private string _createMask = "";
+    private string _createNormal = "";
+    private string _createIndex = "";
+    private bool _createMaterialLocked;   // stop auto-detecting once we have a real body (or the user edits)
+    private string _createMaterialAuto = "";  // the value we last auto-filled, to tell a user edit apart
+    private long _createDetectNextTick;   // throttle the detect poll while the character isn't drawn yet
+    private string? _createStatus;        // last create result message
+    private bool _createStatusOk;
+
     public StatusWindow(
         CompositorService compositor,
         SidecarDiscoveryService discovery,
@@ -52,7 +69,8 @@ public class StatusWindow : Window
         Configuration config,
         DesignBindingService designBindings,
         UVMapDownloadService uvMapDl,
-        UVRemapService uvRemap)
+        UVRemapService uvRemap,
+        ModCreationService modCreation)
         : base("Proteus###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
     {
         this.compositor     = compositor;
@@ -62,13 +80,14 @@ public class StatusWindow : Window
         this.designBindings = designBindings;
         this.uvMapDl        = uvMapDl;
         this.uvRemap        = uvRemap;
+        this.modCreation    = modCreation;
 
         SizeConstraints = new WindowSizeConstraints
         {
             // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
             // doesn't shrink the window (it's AlwaysAutoResize).
             MinimumSize = new System.Numerics.Vector2(520, 80),
-            MaximumSize = new System.Numerics.Vector2(900, 700),
+            MaximumSize = new System.Numerics.Vector2(1100, 700),
         };
     }
 
@@ -89,6 +108,9 @@ public class StatusWindow : Window
                 using (var t = ImRaii.TabItem("Bindings"))
                     if (t) DrawBindingsTab();
 
+                using (var t = ImRaii.TabItem("Create"))
+                    if (t) DrawCreateTab();
+
                 using (var t = ImRaii.TabItem("Settings"))
                     if (t) DrawSettingsTab();
             }
@@ -98,6 +120,9 @@ public class StatusWindow : Window
         DrawLastResult();
 
         DrawColorWindow();
+
+        // File-picker dialogs must pump every frame while open.
+        _fileDialog.Draw();
     }
 
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
@@ -282,6 +307,125 @@ public class StatusWindow : Window
                 "skin tone (slightly shinier), dark dyes stay skin-tinted and matte automatically.\n" +
                 "0.00 disables it entirely (original look).");
     }
+
+    /// <summary>Author a basic skin-overlay mod: name + author + up to three textures → a new Penumbra mod.</summary>
+    private void DrawCreateTab()
+    {
+        ImGui.TextWrapped("Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a " +
+            "new Penumbra mod and opens it so you can enable and tweak it.");
+        ImGui.Separator();
+
+        ImGui.InputText("Mod name", ref _createName, 128);
+        ImGui.InputText("Author", ref _createAuthor, 128);
+
+        // Material target — the exact body material the overlay paints on. Auto-fill from the body the
+        // character is drawing. Detection returns null until the character loads, so keep polling (throttled)
+        // rather than locking in the fallback default; stop the moment we resolve a real body OR the user
+        // edits the box (so their choice is never clobbered).
+        if (!_createMaterialLocked)
+        {
+            if (_createMaterial != _createMaterialAuto)
+            {
+                _createMaterialLocked = true;   // user typed something — hands off
+            }
+            else if (Environment.TickCount64 >= _createDetectNextTick)
+            {
+                _createDetectNextTick = Environment.TickCount64 + 500;
+                var detected = modCreation.DetectBodyMaterial();
+                if (detected != null)
+                {
+                    _createMaterial = _createMaterialAuto = detected;
+                    _createMaterialLocked = true;
+                }
+                else if (_createMaterial.Length == 0)
+                {
+                    _createMaterial = _createMaterialAuto = ModCreationService.DefaultBodyMaterial;
+                }
+            }
+        }
+        ImGui.SetNextItemWidth(560);
+        ImGui.InputText("Material target", ref _createMaterial, 256);
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Re-detect"))
+        {
+            _createMaterial = _createMaterialAuto = modCreation.DetectBodyMaterial() ?? ModCreationService.DefaultBodyMaterial;
+            _createMaterialLocked = true;   // explicit request — take this value and stop polling
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("The body material this overlay composites onto. Auto-filled from the body\n" +
+                "you're currently wearing; edit it to target a different body/race.");
+
+        ImGui.Spacing();
+        DrawTextureRow("Diffuse", ref _createDiffuse);
+        DrawTextureRow("Mask", ref _createMask);
+        DrawTextureRow("Normal", ref _createNormal);
+        DrawTextureRow("Index", ref _createIndex);
+
+        ImGui.Separator();
+
+        bool valid = !string.IsNullOrWhiteSpace(_createName)
+            && !string.IsNullOrWhiteSpace(_createMaterial)
+            && (_createDiffuse.Length > 0 || _createMask.Length > 0
+                || _createNormal.Length > 0 || _createIndex.Length > 0);
+
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button("Create"))
+            {
+                var r = modCreation.Create(
+                    _createName, _createAuthor, _createMaterial,
+                    NullIfEmpty(_createDiffuse), NullIfEmpty(_createMask),
+                    NullIfEmpty(_createNormal), NullIfEmpty(_createIndex));
+                _createStatus = r.Message;
+                _createStatusOk = r.Ok;
+                if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
+                    _createDiffuse = _createMask = _createNormal = _createIndex = "";
+            }
+        if (!valid && ImGui.IsItemHovered())
+            ImGui.SetTooltip("Enter a mod name, a material target, and pick at least one texture.");
+
+        if (_createStatus != null)
+            ImGui.TextColored(
+                _createStatusOk ? new Vector4(0.4f, 0.9f, 0.4f, 1f) : new Vector4(1f, 0.5f, 0.4f, 1f),
+                _createStatus);
+    }
+
+    /// <summary>One texture slot: current file name, a Browse button, and a Clear button.</summary>
+    private void DrawTextureRow(string label, ref string path)
+    {
+        var shown = path.Length == 0 ? "(none)" : Path.GetFileName(path);
+        ImGui.TextUnformatted($"{label}:");
+        ImGui.SameLine(90);
+        ImGui.TextUnformatted(shown);
+
+        ImGui.SameLine(360);
+        // Capture the field by a local setter — ref can't cross the dialog callback.
+        var captured = label;
+        if (ImGui.SmallButton($"Browse##{label}"))
+        {
+            _fileDialog.OpenFileDialog(
+                $"Select {label} texture", "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
+                (ok, paths) =>
+                {
+                    if (!ok) return;
+                    var picked = paths.FirstOrDefault() ?? "";
+                    switch (captured)
+                    {
+                        case "Diffuse": _createDiffuse = picked; break;
+                        case "Mask":    _createMask = picked; break;
+                        case "Normal":  _createNormal = picked; break;
+                        case "Index":   _createIndex = picked; break;
+                    }
+                }, 1);
+        }
+        if (path.Length > 0)
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Clear##{label}"))
+                path = "";
+        }
+    }
+
+    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
     private void DrawModsTab()
     {
