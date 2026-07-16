@@ -66,6 +66,8 @@ public static class ColorTableEditor
         void SetScroll(string? s)      { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
         void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
         void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
+        bool curNylon = ovr != null ? (ovr.EnhancedNylon ?? false) : first.EnhancedNylon;
+        void SetNylon(bool v) { if (ovr != null) ovr.EnhancedNylon = v; else foreach (var d in overlays) d.EnhancedNylon = v; }
 
         bool gear = curLayer == OverlayLayer.Gear;
         var shader = curLayer == OverlayLayer.Skin
@@ -182,6 +184,18 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
+        }
+        else   // character.shpk (non-scroll gear)
+        {
+            bool nylon = curNylon;
+            if (ImGui.Checkbox($"Enhanced Nylon##{idScope}", ref nylon))
+            {
+                SetNylon(nylon);
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Raises the shader's g_AlphaOffset to 1 for a sheerer alpha falloff\n" +
+                                 "(nylon/stocking look). character.shpk only; off by default.");
         }
 
         return changed;
@@ -455,13 +469,16 @@ public static class ColorTableEditor
                                  "wants a DARK surface with a bright glow. Defaults to the diffuse.");
         }
 
-        // Stored 0–1, shown as a percentage. Fine steps matter: characterscroll's glow gate sits at
-        // about 2.5%, and anything much larger washes the scroll map's colour out.
+        // Shown as a percentage. Fine steps matter: characterscroll's glow gate sits at about 2.5%. The
+        // cap goes past 100% because the emissive is written as a Half — vanilla scrolling materials push
+        // it above 1.0 for a brighter bloom, which a graphics-only (black-background) effect needs to make
+        // up for the surface it no longer glows across.
+        // Drag is coarse for a quick sweep of the wide range; ctrl+click to type the fine gate (~2.5%).
         float emPct = (sub?.Emissive ?? 0f) * 100f;
         ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Glow##e_{id}", ref emPct, 0.25f, 0f, 100f, "%.1f%%"))
+        if (ImGui.DragFloat($"Glow##e_{id}", ref emPct, 2.5f, 0f, 1000f, "%.1f%%"))
         {
-            Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 1f);
+            Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 10f);
             changed = true;
         }
         if (gear && ImGui.IsItemHovered())
@@ -515,11 +532,14 @@ public static class ColorTableEditor
             changed = true;
         }
 
+        // Cap goes past 1.0 for the same reason as Glow: the value is written as a Half, so it can over-
+        // drive the sphere-map contribution (and, on characterscroll, the effect's visibility) for a
+        // stronger effect than the vanilla 0–1 range allows.
         float sphereInt = sub?.SphereIntensity ?? 0f;
         ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Intensity##si_{id}", ref sphereInt, 0.01f, 0f, 1f, "%.2f"))
+        if (ImGui.DragFloat($"Intensity##si_{id}", ref sphereInt, 0.05f, 0f, 10f, "%.2f"))
         {
-            Edit().SphereIntensity = Math.Clamp(sphereInt, 0f, 1f);
+            Edit().SphereIntensity = Math.Clamp(sphereInt, 0f, 10f);
             changed = true;
         }
         if (ImGui.IsItemHovered())

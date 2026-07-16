@@ -99,6 +99,12 @@ public static class GearMaterialWriter
     private const uint ConstAlphaThreshold = 0x29AC0223;
 
     /// <summary>
+    /// g_AlphaOffset (CRC of the name under the game's reflected CRC-32). "Enhanced Nylon" raises it to 1
+    /// on character.shpk for a sheerer alpha falloff. Gear non-scroll only.
+    /// </summary>
+    private const uint ConstAlphaOffset = 0xD07A6A65;
+
+    /// <summary>
     /// GetDecalColor = GetDecalColorRGBA.
     ///
     /// This is what makes the scroll map's COLOUR reach the glow. Without it the shader defaults to
@@ -156,7 +162,8 @@ public static class GearMaterialWriter
         byte[] template,
         IReadOnlyList<string> texturePaths,
         IReadOnlyDictionary<int, GearColorRow>? rows,
-        ScrollSettings? scroll = null)
+        ScrollSettings? scroll = null,
+        bool enhancedNylon = false)
     {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
@@ -258,6 +265,12 @@ public static class GearMaterialWriter
             r = TextureLoader.PatchConstantValues(r, ConstTranslateSpeedY, sc.SpeedY).data;
             r = TextureLoader.PatchConstantValues(r, ConstTilingX, sc.TilingX).data;
             r = TextureLoader.PatchConstantValues(r, ConstTilingY, sc.TilingY).data;
+        }
+        else if (enhancedNylon)
+        {
+            // "Enhanced Nylon": raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer. Not
+            // applicable to characterscroll. No-ops safely if the template lacks the constant.
+            r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1f).data;
         }
 
         // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
