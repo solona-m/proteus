@@ -20,9 +20,8 @@ Inside your Penumbra mod folder, create a `Proteus/` subfolder:
 
 ```
 YourMod/
-  meta.json               ← Penumbra mod metadata (you already have this)
-  default_mod.json        ← Penumbra default option (you already have this)
-  group_001_style.json    ← Penumbra option group (if your mod has options)
+  meta.json               ← Penumbra mod metadata: default option + any
+                            option groups (you already have this)
   Proteus/
     metadata.json         ← Proteus sidecar — required
     OptionA/
@@ -146,27 +145,43 @@ Create your index texture as you would for any gear mod.
 
 ### Penumbra Option Groups
 
-If your mod has multiple options (style variants, independent pieces, etc.) you need both a Penumbra group JSON at the mod root **and** the matching `OptionGroups` in your Proteus `metadata.json`. The `PenumbraGroupName` must exactly match the `Name` in the group JSON.
+If your mod has multiple options (style variants, independent pieces, etc.) you need both a Penumbra group in `meta.json` **and** the matching `OptionGroups` in your Proteus `metadata.json`. The `PenumbraGroupName` must exactly match the group's `Name`.
 
-**Penumbra group JSON** (`group_001_style.json`):
+**Penumbra `meta.json`** — since Penumbra's FileVersion 4 the whole mod layout lives in this one file at the mod root. Groups are entries in the `Groups` array (they used to be separate `group_001_style.json` files), and the default option is the `DefaultData` object (it used to be `default_mod.json`):
 ```json
 {
-  "Version": 0,
-  "Name": "Style",
+  "FileVersion": 4,
+  "Identifier": "a1b2c3d4-0000-4000-8000-000000000001",
+  "Name": "My Stockings",
+  "Author": "YourName",
   "Description": "",
-  "Image": "",
-  "Page": 0,
-  "Priority": 0,
-  "Type": "Single",
-  "DefaultSettings": 0,
-  "Options": [
-    { "Name": "Roses",   "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] },
-    { "Name": "Stripes", "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] }
+  "Version": "1.0",
+  "Website": "",
+  "ModTags": [],
+  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+  "Groups": [
+    {
+      "Type": "Single",
+      "Id": "a1b2c3d4-0000-4000-8000-000000000002",
+      "Name": "Style",
+      "Description": "",
+      "Image": "",
+      "Page": 0,
+      "DefaultSettings": 0,
+      "Options": [
+        { "Id": "a1b2c3d4-0000-4000-8000-000000000003", "Name": "Roses",   "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+        { "Id": "a1b2c3d4-0000-4000-8000-000000000004", "Name": "Stripes", "Description": "", "Files": {}, "FileSwaps": {}, "Manipulations": [] }
+      ]
+    }
   ]
 }
 ```
 
-`"Type": "Single"` means only one option is active at a time. The options list in the Penumbra JSON just needs the names — all texture work is handled by Proteus, so `Files` stays empty.
+`"Type": "Single"` means only one option is active at a time. The options list just needs the names — all texture work is handled by Proteus, so `Files` stays empty. `Id` values are GUIDs Penumbra uses to keep a user's saved selections stable across mod updates; keep them the same when you re-export.
+
+**Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array wins. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
+
+The easiest way to get all this right is to build the group in Penumbra's own mod editor, or let the Substance Painter packager write it for you.
 
 **Proteus metadata.json:**
 ```json
@@ -247,12 +262,12 @@ Masks let users **carve away** parts of your overlays so the skin underneath (or
 
 Masks are **convention-based** — there is nothing to add to `metadata.json`. You need two things:
 
-1. A Penumbra **multi-select** group named exactly **`Masks`** (set `"Type": "Multi"` in its group JSON).
+1. A Penumbra **multi-select** group named exactly **`Masks`** (a `Groups` entry in `meta.json` with `"Type": "Multi"`).
 2. A `Proteus/Masks/` subfolder containing one **grayscale PNG per option**, named to match the option exactly: option `Sleeves` → `Proteus/Masks/Sleeves.png`.
 
 ```
 YourMod/
-  group_002_Masks.json     ← Penumbra Multi group named "Masks"
+  meta.json                ← contains a Multi group named "Masks"
   Proteus/
     metadata.json
     Masks/
@@ -269,7 +284,7 @@ So to punch a clean hole, paint the hole region **alpha = white, RGB = black**; 
 
 - **A mask only acts where the overlay is already visible.** The added opacity is gated by the overlay's own coverage: where the overlay is fully transparent (above where a stocking ends, or the holes of a fishnet) the mask has no effect — it can boost a sheer area to opaque, but it can never paint opacity onto bare skin. You don't need to carefully avoid those areas in your mask.
 - A mask applies to **every overlay in the same mod** (all groups/options), at full UV resolution. Author your mask in the same UV space as your overlays.
-- When a user selects **several masks at once**, masks **higher in the Penumbra group list win** where they overlap — the top mask sets the opacity in its alpha region, and lower masks only show through where the higher one's alpha leaves room.
+- When a user selects **several masks at once**, masks **earlier in the group's `Options` list win** where they overlap — the top mask sets the opacity in its alpha region, and lower masks only show through where the higher one's alpha leaves room.
 
 Because `Masks` is just a Penumbra group, the user's selection is saved and restored by Glamourer designs automatically, and toggling a mask re-composites immediately.
 
@@ -279,9 +294,7 @@ Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra im
 
 ```
 YourMod.pmp (rename from .zip)
-  meta.json
-  default_mod.json
-  group_001_style.json    ← only if you have option groups
+  meta.json               ← including "Groups", if you have option groups
   Proteus/
     metadata.json
     OptionA/

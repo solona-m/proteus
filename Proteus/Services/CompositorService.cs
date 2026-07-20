@@ -429,9 +429,16 @@ public class CompositorService : IDisposable
             .Select(s => Regex.Escape(s.Suffix[1..^".mtrl".Length]))) + @")\.mtrl",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Sums size + mtime over a mod's own default_mod.json/group_*.json (same top-level enumeration
-    // SidecarDiscoveryService.ReadMaskGroupOptionOrder uses for group_*.json) — cheap invalidation
-    // key so a mod update is detected without a plugin restart.
+    // A mod's own redirect manifest(s). Penumbra v4 keeps everything in meta.json; the legacy
+    // default_mod.json/group_*.json pair is still accepted for folders an older Penumbra wrote.
+    private static bool IsModManifestFile(string fileName)
+        => string.Equals(fileName, PenumbraModMeta.MetaFile, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileName, PenumbraModMeta.LegacyDefaultMod, StringComparison.OrdinalIgnoreCase)
+        || fileName.StartsWith("group_", StringComparison.OrdinalIgnoreCase);
+
+    // Sums size + mtime over a mod's manifest files — cheap invalidation key so a mod update is
+    // detected without a plugin restart. Adding meta.json to the set invalidates every cached
+    // KnownBodyMods entry once; that's a one-time rescan, and self-healing.
     private static long ComputeModFingerprint(string modRoot)
     {
         long fp = 0;
@@ -439,10 +446,7 @@ public class CompositorService : IDisposable
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
             {
-                var name = Path.GetFileName(file);
-                if (!string.Equals(name, "default_mod.json", StringComparison.OrdinalIgnoreCase)
-                    && !name.StartsWith("group_", StringComparison.OrdinalIgnoreCase))
-                    continue;
+                if (!IsModManifestFile(Path.GetFileName(file))) continue;
                 var info = new FileInfo(file);
                 fp = unchecked(fp * 31 + info.Length + info.LastWriteTimeUtc.Ticks);
             }
@@ -457,10 +461,7 @@ public class CompositorService : IDisposable
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
             {
-                var name = Path.GetFileName(file);
-                if (!string.Equals(name, "default_mod.json", StringComparison.OrdinalIgnoreCase)
-                    && !name.StartsWith("group_", StringComparison.OrdinalIgnoreCase))
-                    continue;
+                if (!IsModManifestFile(Path.GetFileName(file))) continue;
                 if (BodyMaterialPattern.IsMatch(File.ReadAllText(file))) return true;
             }
         }
@@ -1905,8 +1906,10 @@ public class CompositorService : IDisposable
         Directory.CreateDirectory(Path.Combine(managedModDir, "textures"));
 
         File.WriteAllText(
-            Path.Combine(managedModDir, "meta.json"),
-            """{"FileVersion":3,"Name":"Proteus","Author":"Proteus","Description":"Managed by the Proteus overlay compositor plugin.","Version":"","Website":"","ModTags":[]}""");
+            Path.Combine(managedModDir, PenumbraModMeta.MetaFile),
+            PenumbraModMeta.NewMetaJson(
+                SidecarDiscoveryService.ManagedModDir, "Proteus",
+                "Managed by the Proteus overlay compositor plugin."));
 
         WriteManagedModJson(new Dictionary<string, string>());
 
@@ -1951,32 +1954,23 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
-    /// Write the managed mod's default_mod.json.
+    /// Write the managed mod's redirects into its meta.json <c>DefaultData</c> (Penumbra v4 — this used
+    /// to be a separate default_mod.json, which Penumbra no longer reads).
     /// <paramref name="manipulations"/> carries metadata edits — a second-skin shell needs an EQDP entry
     /// so the accessory it rides on loads the character's own race/gender model rather than the default.
     /// </summary>
     private void WriteManagedModJson(IDictionary<string, string> redirects, IReadOnlyList<object>? manipulations = null)
     {
-        // Penumbra default_mod.json: { "Files": { "gamePath": "relPath", ... }, "Swaps": {}, "Manipulations": [] }
-        var files = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
-        var obj = new
-        {
-            Files = files,
-            Swaps = new { },
-            Manipulations = (IReadOnlyList<object>)(manipulations ?? Array.Empty<object>()),
-        };
-        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
-        var target = Path.Combine(managedModDir, "default_mod.json");
-        var tmp    = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(tmp, json);
-        for (int i = 0; ; i++)
-        {
-            try { File.Move(tmp, target, overwrite: true); break; }
-            catch (Exception) when (i < 5) { Thread.Sleep(50 << i); } // 50 100 200 400 800ms
-        }
+        PenumbraModMeta.WriteDefaultData(
+            managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
+
+        // Penumbra migrated our folder to v4 on its own; drop the default_mod.json it left behind so a
+        // stale copy can't be mistaken for the live redirect set.
+        PenumbraModMeta.CleanLegacyFiles(managedModDir);
     }
 
     private void ReloadAndRedraw(bool redraw = true)

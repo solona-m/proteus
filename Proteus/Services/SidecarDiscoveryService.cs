@@ -28,7 +28,7 @@ public record ResolvedOverlay(
     string? OptionGroup,
     string? Option,
     /// <summary>
-    /// Penumbra's own group number (group_002_fabric.json → 2). LOWER = higher priority, and a higher
+    /// Penumbra's own group ordinal (its index in meta.json's Groups array). LOWER = higher priority, and a higher
     /// group wins wherever it is visible: the compositor suppresses lower groups underneath it.
     /// int.MaxValue for top-level overlays, which belong to no group.
     /// </summary>
@@ -385,12 +385,21 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Reads the option-name order of the Penumbra group named <see cref="MaskGroupName"/> from the
-    /// mod's <c>group_*.json</c> files in <paramref name="modRoot"/>. Returns the names top-to-bottom
-    /// as shown in Penumbra, or an empty list if no such group file is found or it can't be parsed.
+    /// Reads the option-name order of the Penumbra group named <see cref="MaskGroupName"/> from the mod's
+    /// manifest in <paramref name="modRoot"/> — <c>meta.json</c>'s <c>Groups</c> array (Penumbra v4),
+    /// falling back to the legacy <c>group_*.json</c> files. Returns the names top-to-bottom as shown in
+    /// Penumbra, or an empty list if no such group is found or it can't be parsed.
     /// </summary>
     internal static List<string> ReadMaskGroupOptionOrder(string modRoot)
     {
+        if (PenumbraModMeta.TryReadGroups(modRoot) is { } groups)
+        {
+            foreach (var (name, group) in groups)
+                if (string.Equals(name, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+                    return PenumbraModMeta.ReadOptionNames(group);
+            return [];
+        }
+
         try
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
@@ -419,13 +428,22 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Penumbra group name → its number, taken from the filename (<c>group_002_fabric.json</c> → 2).
+    /// Penumbra group name → its ordinal: the index in <c>meta.json</c>'s <c>Groups</c> array (Penumbra
+    /// v4), or the legacy filename number (<c>group_002_fabric.json</c> → 2) for unmigrated folders.
     /// LOWER is higher priority. This — not the order groups happen to appear in metadata.json — is what
     /// decides which group wins where two of them overlay the same skin.
     /// </summary>
     internal static Dictionary<string, int> ReadGroupOrder(string modRoot)
     {
         var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        if (PenumbraModMeta.TryReadGroups(modRoot) is { } groups)
+        {
+            for (int i = 0; i < groups.Count; i++)
+                result[groups[i].Name] = i;
+            return result;
+        }
+
         try
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))

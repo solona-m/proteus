@@ -384,8 +384,51 @@ public class SidecarDiscoveryTests
         }
         """;
 
+    // Penumbra FileVersion 4: every group lives in the root meta.json's "Groups" array, and the
+    // array index — not a filename number — is the group's priority order.
+    private const string MetaJsonV4 = """
+        {
+          "FileVersion": 4,
+          "Identifier": "3f1b6c2a-0000-4000-8000-000000000001",
+          "Name": "Test Mod",
+          "Groups": [
+            {
+              "Type": "Multi",
+              "Id": "3f1b6c2a-0000-4000-8000-000000000002",
+              "Name": "Masks",
+              "Options": [
+                { "Name": "Asymmetric High" },
+                { "Name": "Asymmetric" },
+                { "Name": "Ripped" },
+                { "Name": "Strategically Ripped" },
+                { "Name": "Stirrups" }
+              ]
+            },
+            {
+              "Type": "Single",
+              "Id": "3f1b6c2a-0000-4000-8000-000000000003",
+              "Name": "Style",
+              "Options": [ { "Name": "None" }, { "Name": "A" } ]
+            }
+          ]
+        }
+        """;
+
     [Fact]
-    public void ReadMaskGroupOptionOrder_ReadsNamesInGroupOrder()
+    public void ReadMaskGroupOptionOrder_ReadsNamesInGroupOrder_V4()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "meta.json"), MetaJsonV4);
+
+        var order = SidecarDiscoveryService.ReadMaskGroupOptionOrder(tmp.Path);
+
+        Assert.Equal(
+            ["Asymmetric High", "Asymmetric", "Ripped", "Strategically Ripped", "Stirrups"],
+            order);
+    }
+
+    [Fact]
+    public void ReadMaskGroupOptionOrder_ReadsNamesInGroupOrder_LegacyGroupFiles()
     {
         using var tmp = new TempDirectory();
         File.WriteAllText(Path.Combine(tmp.Path, "group_001_masks.json"), MasksGroupJson);
@@ -395,6 +438,20 @@ public class SidecarDiscoveryTests
         Assert.Equal(
             ["Asymmetric High", "Asymmetric", "Ripped", "Strategically Ripped", "Stirrups"],
             order);
+    }
+
+    // An unmigrated group_*.json left beside a v4 meta.json must not shadow it: the manifest wins.
+    [Fact]
+    public void ReadMaskGroupOptionOrder_MetaJsonWinsOverStaleGroupFiles()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "meta.json"), MetaJsonV4);
+        File.WriteAllText(Path.Combine(tmp.Path, "group_001_masks.json"),
+            """{ "Name": "Masks", "Options": [ { "Name": "Stale" } ] }""");
+
+        Assert.Equal(
+            ["Asymmetric High", "Asymmetric", "Ripped", "Strategically Ripped", "Stirrups"],
+            SidecarDiscoveryService.ReadMaskGroupOptionOrder(tmp.Path));
     }
 
     [Fact]
@@ -412,6 +469,32 @@ public class SidecarDiscoveryTests
     {
         using var tmp = new TempDirectory();
         Assert.Empty(SidecarDiscoveryService.ReadMaskGroupOptionOrder(tmp.Path));
+    }
+
+    [Fact]
+    public void ReadGroupOrder_V4_UsesGroupsArrayIndex()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "meta.json"), MetaJsonV4);
+
+        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
+
+        Assert.Equal(0, order["Masks"]);
+        Assert.Equal(1, order["Style"]);
+    }
+
+    [Fact]
+    public void ReadGroupOrder_LegacyGroupFiles_UsesFilenameNumber()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "group_001_masks.json"), MasksGroupJson);
+        File.WriteAllText(Path.Combine(tmp.Path, "group_002_style.json"),
+            """{ "Name": "Style", "Options": [ { "Name": "A" } ] }""");
+
+        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
+
+        Assert.Equal(1, order["Masks"]);
+        Assert.Equal(2, order["Style"]);
     }
 
     [Fact]

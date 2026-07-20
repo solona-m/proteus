@@ -26,9 +26,10 @@ public class ModCreationTests
                 "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
                 diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null);
 
-            // Penumbra manifest + default option exist.
+            // Penumbra manifest exists. Since FileVersion 4 it carries the default option itself —
+            // there is no separate default_mod.json, and writing one would be dead weight.
             Assert.True(File.Exists(Path.Combine(root, "meta.json")));
-            Assert.True(File.Exists(Path.Combine(root, "default_mod.json")));
+            Assert.False(File.Exists(Path.Combine(root, "default_mod.json")));
 
             // The picked texture was copied into the sidecar, keeping its extension.
             Assert.True(File.Exists(Path.Combine(root, "Proteus", "overlays", "diffuse.png")));
@@ -52,14 +53,22 @@ public class ModCreationTests
                 "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
                 Assert.Single(ov.MaterialGamePaths));
 
-            // default_mod.json: no file redirects, but a dummy self-swap of the target material so Penumbra
-            // doesn't flag the mod as changing nothing.
-            var def = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "default_mod.json")));
-            Assert.Equal(JsonValueKind.Object, def.RootElement.GetProperty("Files").ValueKind);
-            Assert.Empty(def.RootElement.GetProperty("Files").EnumerateObject());
-            Assert.Equal(JsonValueKind.Array, def.RootElement.GetProperty("Manipulations").ValueKind);
+            // meta.json is v4 and identifies the mod.
+            var pmeta = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "meta.json")));
+            Assert.Equal(4, pmeta.RootElement.GetProperty("FileVersion").GetInt32());
+            Assert.Equal("My Tattoo", pmeta.RootElement.GetProperty("Name").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(
+                pmeta.RootElement.GetProperty("Identifier").GetString()));
+
+            // DefaultData: no file redirects, but a dummy self-swap so Penumbra doesn't flag the mod
+            // as changing nothing.
+            var def = pmeta.RootElement.GetProperty("DefaultData");
+            Assert.Equal(JsonValueKind.Object, def.GetProperty("Files").ValueKind);
+            Assert.Empty(def.GetProperty("Files").EnumerateObject());
+            Assert.Equal(JsonValueKind.Array, def.GetProperty("Manipulations").ValueKind);
             // Dummy self-swap on a harmless vanilla monster path (not the target body material).
-            var swaps = def.RootElement.GetProperty("Swaps");
+            // Note the v4 key is "FileSwaps"; v3 called it "Swaps".
+            var swaps = def.GetProperty("FileSwaps");
             var swap = Assert.Single(swaps.EnumerateObject());
             Assert.Equal(
                 "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl", swap.Name);
