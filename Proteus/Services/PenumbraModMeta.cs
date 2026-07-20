@@ -15,13 +15,23 @@ namespace Proteus.Services;
 /// gone — but the meaning is unchanged: lower = higher priority.
 ///
 /// Reads are two-tier everywhere: v4 first, falling back to the v3 layout for folders an older Penumbra
-/// wrote and never migrated. Writes are v4 only.
+/// wrote and never migrated.
+///
+/// Writes follow whatever format the mod folder is ALREADY in, because the two are not mutually legible:
+/// a Penumbra new enough to read <c>DefaultData</c> migrates a v3 folder up on load, but an older one has
+/// never heard of <c>DefaultData</c> and silently applies no redirects at all. Writing v4 unconditionally
+/// therefore breaks users on an older Penumbra with a completely clean log. New folders are created as v3
+/// for the same reason: it is the format both understand, and a newer Penumbra upgrades it on first load.
 /// </summary>
 internal static class PenumbraModMeta
 {
-    public const string MetaFile        = "meta.json";
+    public const string MetaFile         = "meta.json";
     public const string LegacyDefaultMod = "default_mod.json";
-    public const int    FileVersion     = 4;
+
+    /// <summary>The version that moved groups and the default option into meta.json.</summary>
+    public const int SingleFileVersion = 4;
+    /// <summary>What we create new folders as — readable by every Penumbra, upgraded in place by new ones.</summary>
+    public const int LegacyFileVersion = 3;
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
@@ -64,59 +74,120 @@ internal static class PenumbraModMeta
         return names;
     }
 
-    /// <summary>A fresh v4 manifest with an empty <c>DefaultData</c> and no groups.</summary>
+    /// <summary>
+    /// The manifest's top-level keys, cloned so they outlive the parse. Empty when there is no manifest
+    /// or it can't be read. Read once per write and threaded through, so a single recomposite doesn't
+    /// parse meta.json twice.
+    /// </summary>
+    private static Dictionary<string, JsonElement> ReadManifest(string modRoot)
+    {
+        var preserved = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        try
+        {
+            var path = Path.Combine(modRoot, MetaFile);
+            if (!File.Exists(path)) return preserved;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                foreach (var p in doc.RootElement.EnumerateObject())
+                    preserved[p.Name] = p.Value.Clone();
+        }
+        catch { /* unreadable — caller falls back to the older, universally-legible format */ }
+        return preserved;
+    }
+
+    /// <summary>The <c>FileVersion</c> in an already-read manifest, defaulting to <see cref="LegacyFileVersion"/>.</summary>
+    private static int FileVersionOf(Dictionary<string, JsonElement> manifest)
+        => manifest.TryGetValue("FileVersion", out var v) && v.ValueKind == JsonValueKind.Number
+        && v.TryGetInt32(out var n) ? n : LegacyFileVersion;
+
+    /// <summary>
+    /// The folder's declared <c>FileVersion</c>, or <see cref="LegacyFileVersion"/> when there is no
+    /// manifest or it can't be read. Penumbra rewrites this field when it migrates a mod on load, so it
+    /// is a reliable statement of which format the INSTALLED Penumbra speaks — no version table needed.
+    /// </summary>
+    public static int ReadFileVersion(string modRoot)
+        => FileVersionOf(ReadManifest(modRoot));
+
+    /// <summary>A fresh manifest. See the type remarks for why this is v3 and not v4.</summary>
     public static string NewMetaJson(string name, string author, string description)
         => JsonSerializer.Serialize(new
         {
-            FileVersion,
-            Identifier  = Guid.NewGuid().ToString(),
+            FileVersion = LegacyFileVersion,
             Name        = name,
             Author      = author,
             Description = description,
             Version     = "",
             Website     = "",
             ModTags     = Array.Empty<string>(),
-            DefaultData = new
-            {
-                Files         = new Dictionary<string, string>(),
-                FileSwaps     = new Dictionary<string, string>(),
-                Manipulations = Array.Empty<object>(),
-            },
-            Groups = Array.Empty<object>(),
         }, WriteOptions);
+
+    /// <summary>
+    /// Writes the mod's always-applied redirects in whatever format the folder is already in: the
+    /// <c>DefaultData</c> object for v4+, a separate <c>default_mod.json</c> for older Penumbra.
+    ///
+    /// This is the ONLY entry point for writing redirects. The format-specific writers are private on
+    /// purpose — calling one directly skips this dispatch, which is exactly how overlays silently stop
+    /// applying for anyone on the other format.
+    /// </summary>
+    public static void WriteRedirects(
+        string modRoot, string modName,
+        IDictionary<string, string> files,
+        IDictionary<string, string>? swaps = null,
+        IReadOnlyList<object>? manipulations = null)
+    {
+        var manifest = ReadManifest(modRoot);
+        if (FileVersionOf(manifest) >= SingleFileVersion)
+        {
+            WriteDefaultData(modRoot, modName, manifest, files, swaps, manipulations);
+            // Penumbra migrated this folder itself; drop the default_mod.json it left behind so a stale
+            // copy can't be mistaken for the live redirect set.
+            CleanLegacyFiles(modRoot);
+        }
+        else
+        {
+            WriteLegacyDefaultMod(modRoot, files, swaps, manipulations);
+        }
+    }
+
+    /// <summary>
+    /// The pre-v4 <c>default_mod.json</c>: <c>{ "Files": {…}, "Swaps": {…}, "Manipulations": [] }</c>.
+    /// Note the key is <c>Swaps</c> here; v4 renamed it to <c>FileSwaps</c> inside <c>DefaultData</c>.
+    /// </summary>
+    private static void WriteLegacyDefaultMod(
+        string modRoot,
+        IDictionary<string, string> files,
+        IDictionary<string, string>? swaps = null,
+        IReadOnlyList<object>? manipulations = null)
+    {
+        var obj = new
+        {
+            Files         = files,
+            Swaps         = swaps ?? new Dictionary<string, string>(),
+            Manipulations = manipulations ?? Array.Empty<object>(),
+        };
+        AtomicWrite(Path.Combine(modRoot, LegacyDefaultMod), JsonSerializer.Serialize(obj, WriteOptions));
+    }
 
     /// <summary>
     /// Replaces the manifest's <c>DefaultData</c>, preserving every other key — critically
     /// <c>Identifier</c>, which is how Penumbra keys the mod, and any <c>Groups</c>/<c>ModTags</c>/
     /// <c>Image</c> the user set in Penumbra's UI. Creates the manifest if it is missing.
+    /// <paramref name="preserved"/> is the already-read manifest, so this doesn't re-parse it.
     /// </summary>
-    public static void WriteDefaultData(
+    private static void WriteDefaultData(
         string modRoot, string modName,
+        Dictionary<string, JsonElement> preserved,
         IDictionary<string, string> files,
         IDictionary<string, string>? swaps = null,
         IReadOnlyList<object>? manipulations = null)
     {
         var path = Path.Combine(modRoot, MetaFile);
 
-        // Round-trip the existing manifest key-by-key so nothing outside DefaultData is lost.
-        var preserved = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        try
-        {
-            if (File.Exists(path))
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                    foreach (var p in doc.RootElement.EnumerateObject())
-                        preserved[p.Name] = p.Value.Clone();
-            }
-        }
-        catch { /* unparseable manifest — rebuild it from scratch below */ }
-
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
         {
             w.WriteStartObject();
-            w.WriteNumber("FileVersion", FileVersion);
+            w.WriteNumber("FileVersion", SingleFileVersion);
             w.WriteString("Identifier",
                 preserved.TryGetValue("Identifier", out var id) && id.ValueKind == JsonValueKind.String
                     ? id.GetString()!

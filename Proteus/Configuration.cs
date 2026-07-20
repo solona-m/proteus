@@ -40,7 +40,7 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool UseInPlaceReload { get; set; } = true;
 
-    public int ManagedModPriority { get; set; } = 999;
+    public int ManagedModPriority { get; set; } = 900;
 
     /// <summary>
     /// How strongly to suppress skin-tone tinting on opaque overlay pixels (0–1), by fading the

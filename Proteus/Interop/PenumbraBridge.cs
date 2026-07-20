@@ -152,13 +152,20 @@ public class PenumbraBridge : IDisposable
 
     /// <summary>Returns the effective collection GUID for the local player (object index 0).</summary>
     public Guid? GetPlayerCollectionId()
+        => GetPlayerCollection()?.Id;
+
+    /// <summary>
+    /// The local player's effective collection, id and display name. The name is only useful for logging
+    /// and UI — everything else keys off the GUID, which is what Penumbra's API takes.
+    /// </summary>
+    public (Guid Id, string Name)? GetPlayerCollection()
     {
         if (!IsAvailable) return null;
         try
         {
             var result = getCollectionForObject.Invoke(0);
             if (!result.ObjectValid) return null;
-            return result.EffectiveCollection.Id;
+            return result.EffectiveCollection;
         }
         catch (Exception ex) { log.Error(ex, "GetCollectionForObject failed"); return null; }
     }

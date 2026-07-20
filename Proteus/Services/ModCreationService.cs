@@ -198,8 +198,8 @@ public sealed class ModCreationService
         });
         File.WriteAllText(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
 
-        // Penumbra's manifest — FileVersion 4, matching CompositorService.EnsureManagedModExists. Since
-        // v4 there is no separate default_mod.json; the default redirects live in DefaultData here.
+        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. Written in the older
+        // layout on purpose: every Penumbra can read it, and a new one migrates it into meta.json on load.
         File.WriteAllText(
             Path.Combine(root, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(modName, author, "Created for Proteus."));
@@ -207,7 +207,7 @@ public sealed class ModCreationService
         // Proteus does all the real texture redirection itself (via its managed mod) at composite time, so
         // this default option would otherwise be empty — which Penumbra flags as "changes nothing". A
         // no-op self-swap of a harmless vanilla path registers it as having content. See DummySwapPath.
-        PenumbraModMeta.WriteDefaultData(
+        PenumbraModMeta.WriteRedirects(
             root, modName,
             files: new Dictionary<string, string>(),
             swaps: new Dictionary<string, string> { [DummySwapPath] = DummySwapPath });

@@ -1900,13 +1900,24 @@ public class CompositorService : IDisposable
 
     private void EnsureManagedModExists()
     {
-        if (Directory.Exists(managedModDir)) return;
+        // Keyed on the manifest, not the directory: without meta.json Penumbra doesn't register the mod
+        // at all, so a folder that survived while its manifest didn't is dead weight that would never
+        // repair itself. Rewriting it is safe — every caller recomposites straight afterwards, which
+        // restores the redirects this clears.
+        var metaPath = Path.Combine(managedModDir, PenumbraModMeta.MetaFile);
+        if (File.Exists(metaPath)) return;
+        var repairing = Directory.Exists(managedModDir);
 
         Directory.CreateDirectory(managedModDir);
         Directory.CreateDirectory(Path.Combine(managedModDir, "textures"));
 
+        var verb = repairing ? "Repaired" : "Created";
+        if (repairing)
+            log.Warning("[Proteus] Managed mod at \"{0}\" was missing its {1} — recreating it",
+                managedModDir, PenumbraModMeta.MetaFile);
+
         File.WriteAllText(
-            Path.Combine(managedModDir, PenumbraModMeta.MetaFile),
+            metaPath,
             PenumbraModMeta.NewMetaJson(
                 SidecarDiscoveryService.ManagedModDir, "Proteus",
                 "Managed by the Proteus overlay compositor plugin."));
@@ -1916,11 +1927,23 @@ public class CompositorService : IDisposable
         var ec = penumbra.AddModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Information("[Proteus] AddMod({0}) -> {1}", managedModDir, ec);
 
-        var collId = penumbra.GetPlayerCollectionId();
-        if (collId.HasValue)
+        // Log which collection the new mod was enabled in, and where it landed. Both are the first
+        // things to check when composited textures don't show up: the mod has to be enabled in the
+        // collection the player is actually using, and the folder has to be under Penumbra's root.
+        var coll = penumbra.GetPlayerCollection();
+        if (coll.HasValue)
         {
-            penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
-            penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, config.ManagedModPriority);
+            var (collId, collName) = coll.Value;
+            penumbra.SetModEnabled(collId, SidecarDiscoveryService.ManagedModDir, true);
+            penumbra.SetModPriority(collId, SidecarDiscoveryService.ManagedModDir, config.ManagedModPriority);
+            log.Information("[Proteus] {0} managed mod at \"{1}\", enabled in collection \"{2}\" ({3}) at priority {4}",
+                verb, managedModDir, collName, collId, config.ManagedModPriority);
+        }
+        else
+        {
+            log.Warning("[Proteus] {0} managed mod at \"{1}\", but the player's collection could not be "
+                      + "determined — it has not been enabled anywhere. Overlays will not apply until it is.",
+                verb, managedModDir);
         }
     }
 
@@ -1954,8 +1977,8 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
-    /// Write the managed mod's redirects into its meta.json <c>DefaultData</c> (Penumbra v4 — this used
-    /// to be a separate default_mod.json, which Penumbra no longer reads).
+    /// Write the managed mod's redirects, in whichever layout the installed Penumbra reads — meta.json's
+    /// <c>DefaultData</c> from FileVersion 4 on, a separate default_mod.json before that.
     /// <paramref name="manipulations"/> carries metadata edits — a second-skin shell needs an EQDP entry
     /// so the accessory it rides on loads the character's own race/gender model rather than the default.
     /// </summary>
@@ -1965,12 +1988,8 @@ public class CompositorService : IDisposable
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
-        PenumbraModMeta.WriteDefaultData(
+        PenumbraModMeta.WriteRedirects(
             managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
-
-        // Penumbra migrated our folder to v4 on its own; drop the default_mod.json it left behind so a
-        // stale copy can't be mistaken for the live redirect set.
-        PenumbraModMeta.CleanLegacyFiles(managedModDir);
     }
 
     private void ReloadAndRedraw(bool redraw = true)
