@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 67;
+    public const int BuildNumber = 75;
 
     private const string CommandName = "/proteus";
 
@@ -41,6 +41,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
     private readonly ColorTableHighlighter highlighter;
+    private readonly SkinDiffuseGlow skinGlow;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -87,6 +88,10 @@ public sealed class Plugin : IDalamudPlugin
         Gui.ColorTableEditor.Highlighter = highlighter;
         compositor.Highlighter = highlighter;   // so a recomposite (shell may rebuild) clears a stale glow
 
+        // Live skin (body diffuse) glow via render-material texture rebind.
+        skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log);
+        Gui.ColorTableEditor.SkinGlow = skinGlow;
+
         var modCreation = new ModCreationService(penumbra, compositor, log);
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
 
@@ -130,6 +135,8 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.RemoveAllWindows();
         Gui.ColorTableEditor.Spheres = null;
         Gui.ColorTableEditor.Highlighter = null;
+        Gui.ColorTableEditor.SkinGlow = null;
+        skinGlow.Dispose();
         highlighter.Dispose();
         spherePreview.Dispose();
         ipcProvider.Dispose();

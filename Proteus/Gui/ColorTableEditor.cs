@@ -229,6 +229,7 @@ public static class ColorTableEditor
         bool gear,
         string? shader,
         IReadOnlyList<string>? shellMaterialLeaves,
+        IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
         ref int selectedRow,
         ref bool changed)
     {
@@ -313,10 +314,10 @@ public static class ColorTableEditor
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, shellMaterialLeaves, ref changed);
+            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, shellMaterialLeaves, skinGlowTargets, ref changed);
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, shellMaterialLeaves, ref changed);
+            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, shellMaterialLeaves, skinGlowTargets, ref changed);
 
             ImGui.EndTable();
         }
@@ -327,6 +328,9 @@ public static class ColorTableEditor
 
     /// <summary>Live colorset "glow / target" highlighter. Set once at startup; null disables the buttons.</summary>
     public static Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
+
+    /// <summary>Live skin-row glow via render-material diffuse rebind. Set once at startup; null disables the button.</summary>
+    public static Proteus.Interop.SkinDiffuseGlow? SkinGlow { get; set; }
 
     /// <summary>Sphere map index, as a dropdown of thumbnails — an index alone tells you nothing.</summary>
     private static void DrawSpherePicker(string id, ref int index, out bool changed)
@@ -415,7 +419,8 @@ public static class ColorTableEditor
 
     private static void DrawSubRow(
         string id, List<ColorTableRowPreset> rows, int row, bool isA, bool gear, bool material,
-        IReadOnlyList<string>? shellMaterialLeaves, ref bool changed)
+        IReadOnlyList<string>? shellMaterialLeaves,
+        IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets, ref bool changed)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var sub = isA ? preset?.SubRowA : preset?.SubRowB;
@@ -469,6 +474,22 @@ public static class ColorTableEditor
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Make this sub-row's mesh glow on your character so you can find it\n" +
                                  "in-game. Click again to stop.");
+        }
+        // Skin overlays have no live colour table; SkinGlow rebinds the body diffuse instead. Static
+        // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on click).
+        else if (!gear && SkinGlow != null && skinGlowTargets is { Count: > 0 })
+        {
+            bool active = SkinGlow.IsTarget(skinGlowTargets, row, isA);
+            ImGui.SameLine();
+            using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), active))
+                if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
+                {
+                    if (active) SkinGlow.Clear();
+                    else SkinGlow.SetTarget(skinGlowTargets, row, isA);
+                }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Light up this sub-row's region on your character's skin so you can find\n" +
+                                 "it in-game. Click again to stop. (Takes a moment to build the first time.)");
         }
 
         // ── Colours ──────────────────────────────────────────────────────────

@@ -727,7 +727,8 @@ public class StatusWindow : Window
             bool changedSimple = false;
             int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
-                compositor.GetShellMaterials(entry.ModDirectory, null, null), ref selSimple, ref changedSimple);
+                compositor.GetShellMaterials(entry.ModDirectory, null, null),
+                compositor.GetSkinGlowTargets(entry.ModDirectory, null, null), ref selSimple, ref changedSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
             if (changedSimple)
@@ -837,7 +838,8 @@ public class StatusWindow : Window
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
         ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
-            compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name), ref sel, ref changed);
+            compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name),
+            compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name), ref sel, ref changed);
         _rowSelection[scope] = sel;
 
         if (changed)

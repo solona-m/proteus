@@ -79,6 +79,16 @@ public class CompositorService : IDisposable
     /// <summary>The shell material file names (ss_{letter}.mtrl) for a gear overlay, or null if none were built.</summary>
     public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
         => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
+
+    // Per skin-overlay "glow" recipe (which composited-diffuse pixels map to each colour-table row),
+    // keyed by (mod, group, option), from the last composite. Lets the colorset editor's glow button
+    // light up a row's region on the live body diffuse via a texture rebind (no recomposite). Same
+    // publish contract as _shellMaterials: built on the composite thread, swapped in as one reference.
+    private volatile Dictionary<(string ModDir, string? Group, string? Option), List<Proteus.Interop.SkinGlowTarget>> _skinGlowTargets = new();
+
+    /// <summary>Glow recipes for a skin overlay (one per composited body material), or null if none.</summary>
+    public IReadOnlyList<Proteus.Interop.SkinGlowTarget>? GetSkinGlowTargets(string modDir, string? group, string? option)
+        => _skinGlowTargets.TryGetValue((modDir, group, option), out var t) ? t : null;
     // Which gear model the second skin sources each slot's shell from (part -> .mdl game path), captured
     // on the framework thread from the draw object's loaded models so the background build can read it
     // without an IPC. Refreshed wherever the material snapshot is.
@@ -1030,6 +1040,8 @@ public class CompositorService : IDisposable
 
             var redirects = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             int texturesPatched = 0;
+            // Accumulated across the parallel per-material loop; published to _skinGlowTargets after it.
+            var skinGlow = new ConcurrentDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>();
 
             // Unique suffix for all output files in this composite run. FFXIV caches textures
             // by their resolved path; using the same filename across runs means the game never
@@ -1350,6 +1362,13 @@ public class CompositorService : IDisposable
                     return dst;
                 }
 
+                // Per-overlay glow row-maps for the live "glow" button, captured from the diffuse phase
+                // below (reusing the merged index + the actual composite coverage) and finalized with the
+                // diffuse disk path after it is written. Downsampled to bound memory (full 4K would be 16 MB
+                // each); the highlighter nearest-samples it back up.
+                const int glowMapCap = 1024;
+                var glowMaps = new List<(OverlayEntry Entry, ResolvedOverlay Resolved, byte[] Map, int W, int H)>();
+
                 foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
@@ -1574,8 +1593,29 @@ public class CompositorService : IDisposable
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
                             var idD = LoadIndexMerged(idxPath, wD, hD, srcBodyType, entry.ModDirectory);
-                            if (idD != null) ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
-                            else             ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                            if (idD != null)
+                            {
+                                ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
+
+                                // Glow recipe: which pixels resolve to each row (red/17 = pair, green≥128 =
+                                // sub-row A), gated by the SAME coverage the composite used (diffuseOv alpha),
+                                // downsampled. One byte/pixel: 0 = no glow, else 0x80 | (A?0x40) | pairIdx.
+                                int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
+                                var gmap = new byte[gw * gh];
+                                for (int my = 0; my < gh; my++)
+                                {
+                                    int sy = gh == hD ? my : (int)((long)my * hD / gh);
+                                    for (int mx = 0; mx < gw; mx++)
+                                    {
+                                        int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
+                                        int si = (sy * wD + sx) * 4;
+                                        if (diffuseOv[si + 3] == 0) continue;   // outside this overlay's coverage
+                                        gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
+                                    }
+                                }
+                                glowMaps.Add((entry, resolved, gmap, gw, gh));
+                            }
+                            else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                         }
                         else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                     }
@@ -1758,7 +1798,18 @@ public class CompositorService : IDisposable
                     var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
                     var relPath = "textures/" + baseName + "_d.tex";
                     if (textureLoader.WriteTex(baseD, wD, hD, outPath))
-                    { redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse"); }
+                    {
+                        redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
+
+                        // Publish the glow recipes captured during the diffuse phase, now that the on-disk
+                        // path (what the live texture resource reports) is known.
+                        foreach (var gm in glowMaps)
+                        {
+                            var list = skinGlow.GetOrAdd((gm.Entry.ModDirectory, gm.Resolved.OptionGroup, gm.Resolved.Option),
+                                _ => new List<Proteus.Interop.SkinGlowTarget>());
+                            lock (list) list.Add(new Proteus.Interop.SkinGlowTarget(outPath, gm.Map, gm.W, gm.H));
+                        }
+                    }
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
@@ -1827,6 +1878,9 @@ public class CompositorService : IDisposable
                 }
 
             });
+
+            // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
+            _skinGlowTargets = new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
 
             // ── Second skin: one gear shell per Layer:Gear overlay ────────────
             // Built from the body model the character is CURRENTLY drawing (resolved live through
