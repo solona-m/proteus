@@ -202,6 +202,23 @@ public static class ColorTableEditor
     }
 
     /// <summary>
+    /// Effective (gear, shader) for an option's rows, resolving a live gear override first — exactly
+    /// as <see cref="DrawLayerHeader"/> does — then the descriptor. Callers must pass the SAME override
+    /// they hand the header, or the row editor's gear controls (sphere map, metalness) would disagree
+    /// with the "Gear" the header shows while a design binding is being edited.
+    /// </summary>
+    public static (bool Gear, string? Shader) EffectiveLayerShader(
+        IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
+    {
+        if (overlays.Count == 0) return (false, null);
+        var first = overlays[0];
+        var layer = ovr?.Layer ?? first.Layer;
+        if (layer == OverlayLayer.Skin) return (false, OverlayDescriptor.SkinShader);
+        var shader = (ovr != null ? ovr.Shader : first.Shader) ?? OverlayDescriptor.DefaultGearShader;
+        return (true, shader);
+    }
+
+    /// <summary>
     /// Row picker plus the A/B detail panels for the selected row.
     /// <paramref name="usedRows"/> (when non-null) limits the picker to rows the index texture uses.
     /// </summary>

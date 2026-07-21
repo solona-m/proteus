@@ -694,8 +694,7 @@ public class StatusWindow : Window
                 if (gearOvrSimple == null) discovery.SaveMetadata(entry);
                 compositor.TriggerRecomposite("layer-change");
             }
-            bool gearSimple = simpleOverlays.Count > 0 && simpleOverlays[0].Layer == OverlayLayer.Gear;
-            var shaderSimple = simpleOverlays.Count > 0 ? simpleOverlays[0].ShaderPackage : null;
+            var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
 
             ImGui.Separator();
 
@@ -805,8 +804,7 @@ public class StatusWindow : Window
             if (gearOvrOpt == null) discovery.SaveMetadata(entry);
             compositor.TriggerRecomposite("layer-change");
         }
-        bool gear = activeOpt.Overlays.Count > 0 && activeOpt.Overlays[0].Layer == OverlayLayer.Gear;
-        var shader = activeOpt.Overlays.Count > 0 ? activeOpt.Overlays[0].ShaderPackage : null;
+        var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
 
         ImGui.Separator();
 
