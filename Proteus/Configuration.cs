@@ -96,6 +96,37 @@ public class Configuration : IPluginConfiguration
     /// real redraw).</summary>
     public List<string>? CachedActiveMaterialPaths { get; set; } = null;
 
+    /// <summary>User-chosen stacking order for overlays within one Penumbra multi-select group, keyed by
+    /// <see cref="StackKey"/> → option names TOP-FIRST. Options in the same group otherwise share a
+    /// <c>GroupOrder</c> and stack in arbitrary order; this breaks that tie. Options not listed keep their
+    /// existing relative order (they fall after listed ones). A user preference, so it lives here rather
+    /// than in the mod folder and survives mod updates.</summary>
+    public Dictionary<string, List<string>> OverlayStackOrder { get; set; } = new();
+
+    /// <summary>Composite key for <see cref="OverlayStackOrder"/> (tuple keys don't round-trip through the
+    /// config JSON). NUL-separated (a control char) so neither part can collide.</summary>
+    public static string StackKey(string modDir, string group) => modDir + "\u0000" + group;
+
+    /// <summary>Position of <paramref name="option"/> in its group's user stack order (0 = top). Returns
+    /// <see cref="int.MaxValue"/> when unset, so unlisted options sort to the bottom while an all-unset
+    /// group stays a tie (preserving the existing stable order — no change until the user reorders).</summary>
+    public int StackIndexOf(string modDir, string group, string option)
+    {
+        if (OverlayStackOrder.TryGetValue(StackKey(modDir, group), out var order))
+        {
+            int i = order.FindIndex(o => string.Equals(o, option, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) return i;
+        }
+        return int.MaxValue;
+    }
+
+    /// <summary>Persist the full top-first order for a group and save.</summary>
+    public void SetStackOrder(string modDir, string group, IEnumerable<string> optionsTopFirst)
+    {
+        OverlayStackOrder[StackKey(modDir, group)] = new List<string>(optionsTopFirst);
+        Save();
+    }
+
     public void Initialize(IDalamudPluginInterface pluginInterface)
         => pluginInterface.SavePluginConfig(this);
 

@@ -1075,12 +1075,17 @@ public class CompositorService : IDisposable
             }
 
             // Within a mod, a HIGHER-priority group (lower group_NNN number) must composite LAST so it
-            // lands on top. Across mods the existing Penumbra-priority order is preserved.
+            // lands on top. Across mods the existing Penumbra-priority order is preserved. Options in the
+            // SAME group share a GroupOrder, so break that final tie with the user's stack order (index 0 =
+            // top): a smaller index must composite LAST, so sort it descending. Unlisted options are
+            // int.MaxValue → they sort first (bottom), and an all-unset group is a full tie → stable order
+            // unchanged (no reordering until the user actually drags one).
             foreach (var list in byMaterial.Values)
             {
                 var sorted = list
                     .OrderBy(p => p.Entry.Priority)
                     .ThenByDescending(p => p.Overlay.GroupOrder)
+                    .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
                 list.Clear();
                 list.AddRange(sorted);
@@ -1891,6 +1896,14 @@ public class CompositorService : IDisposable
             _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
             if (gearOverlays.Count > 0)
             {
+                // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
+                // user's per-group stack order (top-first). SecondSkinService assigns shell letters in this
+                // order, so a higher-listed gear fabric layers over a lower one.
+                gearOverlays = gearOverlays
+                    .OrderBy(p => p.Entry.Priority)
+                    .ThenByDescending(p => p.Overlay.GroupOrder)
+                    .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
+                    .ToList();
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
                     ?.TrimStart('c', 'C');
                 if (string.IsNullOrEmpty(charCode))
