@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 62;
+    public const int BuildNumber = 67;
 
     private const string CommandName = "/proteus";
 
@@ -40,6 +40,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
+    private readonly ColorTableHighlighter highlighter;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -80,6 +81,11 @@ public sealed class Plugin : IDalamudPlugin
         // Sphere-map thumbnails for the colour table editor.
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
+
+        // Live colorset "glow / target" highlighter (framework-thread material editing).
+        highlighter = new ColorTableHighlighter(Framework, ObjectTable);
+        Gui.ColorTableEditor.Highlighter = highlighter;
+        compositor.Highlighter = highlighter;   // so a recomposite (shell may rebuild) clears a stale glow
 
         var modCreation = new ModCreationService(penumbra, compositor, log);
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
@@ -123,6 +129,8 @@ public sealed class Plugin : IDalamudPlugin
 
         windowSystem.RemoveAllWindows();
         Gui.ColorTableEditor.Spheres = null;
+        Gui.ColorTableEditor.Highlighter = null;
+        highlighter.Dispose();
         spherePreview.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();

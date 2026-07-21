@@ -70,6 +70,15 @@ public class CompositorService : IDisposable
     // design event, so this redraw-time diff is the only signal for it. Null until the first redraw sets
     // the baseline (the initial composite already covers load).
     private string? _lastEquipSignature;
+    // Per gear-overlay shell material file names (ss_{letter}.mtrl), keyed by (mod, group, option), from
+    // the last shell build — lets the colorset editor's "glow" button target the right live materials.
+    // Built on the background composite thread, read on the UI thread: volatile publishes the swapped-in
+    // reference (the map is immutable once assigned).
+    private volatile Dictionary<(string ModDir, string? Group, string? Option), List<string>> _shellMaterials = new();
+
+    /// <summary>The shell material file names (ss_{letter}.mtrl) for a gear overlay, or null if none were built.</summary>
+    public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
+        => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
     // Which gear model the second skin sources each slot's shell from (part -> .mdl game path), captured
     // on the framework thread from the draw object's loaded models so the background build can read it
     // without an IPC. Refreshed wherever the material snapshot is.
@@ -563,6 +572,9 @@ public class CompositorService : IDisposable
 
     // ── Trigger ──────────────────────────────────────────────────────────────
 
+    /// <summary>Colorset "glow" highlighter, cleared on recomposite (the shell may rebuild with a new letter).</summary>
+    public Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
+
     /// <summary>
     /// Schedule a recomposite on a background thread.
     /// Any in-flight recomposite is cancelled first (debounce), so the timer restarts from the last
@@ -573,6 +585,7 @@ public class CompositorService : IDisposable
     public void TriggerRecomposite(string reason, int delayMs = 200)
     {
         if (!config.PluginEnabled || !penumbra.IsAvailable) return;
+        Highlighter?.Clear();
 
         CancellationTokenSource cts;
         lock (triggerLock)
@@ -1821,6 +1834,7 @@ public class CompositorService : IDisposable
             List<object>? manipulations = null;
             _needFullRedraw = false;
             _secondSkinActive = false;
+            _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
             if (gearOverlays.Count > 0)
             {
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
@@ -1871,6 +1885,7 @@ public class CompositorService : IDisposable
                             _needFullRedraw = shells.ShellChanged;
                             if (_needFullRedraw)
                                 log.Debug("[Proteus] second skin changed — forcing a full redraw");
+                            _shellMaterials = shells.ShellMaterials;
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }

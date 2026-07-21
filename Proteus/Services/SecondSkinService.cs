@@ -61,7 +61,8 @@ public sealed class SecondSkinService
     /// need a full redraw — but a run that rewrites identical bytes must not force one.
     /// </summary>
     public sealed record Result(
-        Dictionary<string, string> Redirects, List<object> Manipulations, bool ShellChanged);
+        Dictionary<string, string> Redirects, List<object> Manipulations, bool ShellChanged,
+        Dictionary<(string ModDir, string? Group, string? Option), List<string>> ShellMaterials);
 
     /// <summary>Write only if the content differs; reports whether it did.</summary>
     private static bool WriteIfChanged(string path, byte[] data)
@@ -206,6 +207,11 @@ public sealed class SecondSkinService
 
         var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var manipulations = new List<object>();
+        // Maps each gear overlay's identity to its shell material disk file names (ss_{letter}.mtrl) — what
+        // the live resource handle reports — so the colorset editor's "glow" button can target them. A key
+        // can hold SEVERAL: a mod/option may carry more than one gear overlay, all baking the same shared
+        // colour table, so a row's glow must reach every one of their shell materials.
+        var shellMaterials = new Dictionary<(string, string?, string?), List<string>>();
 
         var modelsDir = Path.Combine(outputRoot, "models");
         var materialsDir = Path.Combine(outputRoot, "materials");
@@ -342,6 +348,10 @@ public sealed class SecondSkinService
             var matDisk = Path.Combine(materialsDir, $"ss_{letter}.mtrl");
             shellChanged |= WriteIfChanged(matDisk, mtrl);
             redirects[matGamePath] = Rel(outputRoot, matDisk);
+            var shellKey = (entry.ModDirectory, ov.OptionGroup, ov.Option);
+            if (!shellMaterials.TryGetValue(shellKey, out var shellList))
+                shellMaterials[shellKey] = shellList = new List<string>();
+            shellList.Add($"ss_{letter}.mtrl");
 
             layers.Add(new SecondSkinLayer
             {
@@ -392,7 +402,7 @@ public sealed class SecondSkinService
             stats.TrianglesIn == 0 ? 0 : (stats.TrianglesIn - stats.TrianglesOut) * 100.0 / stats.TrianglesIn,
             shell.Length / 1024);
 
-        return new Result(redirects, manipulations, shellChanged);
+        return new Result(redirects, manipulations, shellChanged, shellMaterials);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');

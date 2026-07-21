@@ -128,10 +128,12 @@ public class StatusWindow : Window
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
     private void DrawColorWindow()
     {
-        if (_colorWindowMod == null) return;
+        // No colour editor open ⇒ no stranded glow. (You keep the editor open, aside, to watch the glow;
+        // closing it stops it.)
+        if (_colorWindowMod == null) { ColorTableEditor.Highlighter?.Clear(); return; }
 
         var entry = compositor.LastDiscovered.FirstOrDefault(e => e.ModDirectory == _colorWindowMod);
-        if (entry == null) { _colorWindowMod = null; return; }
+        if (entry == null) { _colorWindowMod = null; ColorTableEditor.Highlighter?.Clear(); return; }
 
         bool open = true;
         // Wide enough for the 16 row buttons to sit 8-across on two lines.
@@ -725,7 +727,7 @@ public class StatusWindow : Window
             bool changedSimple = false;
             int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
-                ref selSimple, ref changedSimple);
+                compositor.GetShellMaterials(entry.ModDirectory, null, null), ref selSimple, ref changedSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
             if (changedSimple)
@@ -834,7 +836,8 @@ public class StatusWindow : Window
 
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
-        ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader, ref sel, ref changed);
+        ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
+            compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name), ref sel, ref changed);
         _rowSelection[scope] = sel;
 
         if (changed)

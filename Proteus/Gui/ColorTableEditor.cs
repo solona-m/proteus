@@ -228,6 +228,7 @@ public static class ColorTableEditor
         HashSet<int>? usedRows,
         bool gear,
         string? shader,
+        IReadOnlyList<string>? shellMaterialLeaves,
         ref int selectedRow,
         ref bool changed)
     {
@@ -312,10 +313,10 @@ public static class ColorTableEditor
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, ref changed);
+            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, shellMaterialLeaves, ref changed);
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, ref changed);
+            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, shellMaterialLeaves, ref changed);
 
             ImGui.EndTable();
         }
@@ -323,6 +324,9 @@ public static class ColorTableEditor
 
     /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
     public static SphereMapPreview? Spheres { get; set; }
+
+    /// <summary>Live colorset "glow / target" highlighter. Set once at startup; null disables the buttons.</summary>
+    public static Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
 
     /// <summary>Sphere map index, as a dropdown of thumbnails — an index alone tells you nothing.</summary>
     private static void DrawSpherePicker(string id, ref int index, out bool changed)
@@ -411,7 +415,7 @@ public static class ColorTableEditor
 
     private static void DrawSubRow(
         string id, List<ColorTableRowPreset> rows, int row, bool isA, bool gear, bool material,
-        ref bool changed)
+        IReadOnlyList<string>? shellMaterialLeaves, ref bool changed)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var sub = isA ? preset?.SubRowA : preset?.SubRowB;
@@ -446,6 +450,26 @@ public static class ColorTableEditor
             ImGui.SetTooltip("Copy a sub-row first.");
         else if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Overwrite this sub-row with the copied values.");
+
+        // ── glow / target: hue-cycle this sub-row's mesh on the live character ──
+        // The overlay's colour table is baked into its shell material(s) ss_{letter}.mtrl; game row for
+        // this sub-row is (row-1)*2 + (A?0:1). Click-toggle: clicking again (or another sub-row) moves the
+        // glow. A mod/option with several gear overlays shares one colour table, so all of them glow.
+        if (gear && Highlighter != null && shellMaterialLeaves is { Count: > 0 })
+        {
+            int gameRow = (row - 1) * 2 + (isA ? 0 : 1);
+            bool active = Highlighter.IsTarget(shellMaterialLeaves, gameRow);
+            ImGui.SameLine();
+            using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), active))
+                if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
+                {
+                    if (active) Highlighter.Clear();
+                    else Highlighter.SetTarget(shellMaterialLeaves, gameRow);
+                }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Make this sub-row's mesh glow on your character so you can find it\n" +
+                                 "in-game. Click again to stop.");
+        }
 
         // ── Colours ──────────────────────────────────────────────────────────
         ImGui.TextDisabled("Colours");
