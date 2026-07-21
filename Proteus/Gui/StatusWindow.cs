@@ -719,11 +719,8 @@ public class StatusWindow : Window
             var gearOvrSimple = editingBinding && simpleOverlays.Count > 0
                 ? designBindings.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
                 : null;
-            if (ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, gearOvrSimple, effects))
-            {
-                if (gearOvrSimple == null) discovery.SaveMetadata(entry);
-                compositor.TriggerRecomposite("layer-change");
-            }
+            bool headerChangedSimple = ColorTableEditor.DrawLayerHeader(
+                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var headerEditSimple);
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
 
             ImGui.Separator();
@@ -732,16 +729,23 @@ public class StatusWindow : Window
             int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
                 compositor.GetShellMaterials(entry.ModDirectory, null, null),
-                compositor.GetSkinGlowTargets(entry.ModDirectory, null, null), ref selSimple, ref changedSimple);
+                compositor.GetSkinGlowTargets(entry.ModDirectory, null, null),
+                out var rowEditSimple, ref selSimple, ref changedSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
-            if (changedSimple)
+            // Let the features drive the render mode (unless the user pinned it). Runs after both draws so
+            // it sees this frame's edits; its result rides the same persist below.
+            bool modeChangedSimple = ReconcileMode(simpleOverlays, gearOvrSimple, rows,
+                rowEditSimple != FeatureEdit.Neutral ? rowEditSimple : headerEditSimple);
+
+            if (changedSimple || headerChangedSimple || modeChangedSimple)
             {
-                // Binding path (ovrRows != null): live-preview only — the edit stays in the in-memory
-                // override and is folded into the binding solely via "Update binding". Metadata path
-                // (base colors) persists immediately as before.
-                if (ovrRows == null) discovery.SaveMetadata(entry);
-                compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+                // Binding path: live-preview only — edits stay in the in-memory overrides and fold into the
+                // binding via "Update binding". Base metadata persists only when NOT editing a binding.
+                if (!editingBinding) discovery.SaveMetadata(entry);
+                // Discrete header/mode changes recomposite promptly; colour-row drags use the long debounce.
+                if (headerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
+                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
             }
             return;
         }
@@ -923,11 +927,8 @@ public class StatusWindow : Window
         var gearOvrOpt = editingBinding && activeOpt.Overlays.Count > 0
             ? designBindings.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
             : null;
-        if (ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, gearOvrOpt, effects))
-        {
-            if (gearOvrOpt == null) discovery.SaveMetadata(entry);
-            compositor.TriggerRecomposite("layer-change");
-        }
+        bool headerChanged = ColorTableEditor.DrawLayerHeader(
+            scope, activeOpt.Overlays, gearOvrOpt, effects, out var headerEdit);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
 
         ImGui.Separator();
@@ -936,15 +937,48 @@ public class StatusWindow : Window
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
         ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
             compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name),
-            compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name), ref sel, ref changed);
+            compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name),
+            out var rowEdit, ref sel, ref changed);
         _rowSelection[scope] = sel;
 
-        if (changed)
+        bool modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
+            rowEdit != FeatureEdit.Neutral ? rowEdit : headerEdit);
+
+        if (changed || headerChanged || modeChanged)
         {
-            // Binding path: live-preview only (folded in via "Update binding"). Metadata path persists.
-            if (ovrOptRows == null) discovery.SaveMetadata(entry);
-            compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+            // Binding path: live-preview only (folded in via "Update binding"). Base metadata persists only
+            // when NOT editing a binding — gate on that directly, not on whether a gear override exists
+            // (an option with colour rows but no overlay descriptors has a null gear override even mid-binding).
+            if (!editingBinding) discovery.SaveMetadata(entry);
+            // Discrete header/mode changes recomposite promptly; colour-row drags use the long debounce.
+            if (headerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
+            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
         }
+    }
+
+    /// <summary>
+    /// After the header + rows are drawn, point Layer/Shader at the mode the features imply — a sphere map
+    /// or metal ⇒ Cloth, a glow effect ⇒ Animated glow, nothing special ⇒ Skin — unless the user pinned it
+    /// in Advanced (<see cref="OverlayDescriptor.ManualShaderLock"/>). Writes the override when a design
+    /// binding is being edited, else the descriptors. Returns true when the mode actually changed.
+    /// </summary>
+    private static bool ReconcileMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr,
+        List<ColorTableRowPreset> rows, FeatureEdit edited)
+    {
+        // Only respond to an actual mode-relevant edit this frame. Running on every frame would force a
+        // deliberately plain Gear overlay (no sphere/metal/scroll — used for shell transparency) to Skin.
+        if (edited == FeatureEdit.Neutral) return false;
+        if (overlays.Count == 0) return false;
+        bool locked = ovr != null ? (ovr.ManualShaderLock ?? false) : overlays.Any(d => d.ManualShaderLock);
+        if (locked) return false;
+
+        var cur  = RenderModeInference.ModeOf(ovr?.Layer ?? overlays[0].Layer,
+                                              ovr != null ? ovr.Shader : overlays[0].Shader);
+        var want = RenderModeInference.Infer(rows, overlays, ovr, cur, edited);
+        if (want == cur) return false;
+
+        ColorTableEditor.ApplyMode(overlays, ovr, want);
+        return true;
     }
 
     /// <summary>

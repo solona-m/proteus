@@ -43,8 +43,10 @@ public static class ColorTableEditor
         string idScope,
         IReadOnlyList<OverlayDescriptor> overlays,
         GearSettingsPreset? ovr,
-        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
+        out FeatureEdit edited)
     {
+        edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
 
         bool changed = false;
@@ -60,52 +62,58 @@ public static class ColorTableEditor
         float? curSpeedY = ovr != null ? ovr.ScrollSpeedY : first.ScrollSpeedY;
         float? curTileX  = ovr != null ? ovr.ScrollTilingX : first.ScrollTilingX;
         float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
+        bool curNylon = ovr != null ? (ovr.EnhancedNylon ?? false) : first.EnhancedNylon;
+        bool curLock  = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
 
-        void SetLayer(OverlayLayer l)  { if (ovr != null) ovr.Layer = l;   else foreach (var d in overlays) d.Layer = l; }
-        void SetShader(string? s)      { if (ovr != null) ovr.Shader = s;  else foreach (var d in overlays) d.Shader = s; }
-        void SetScroll(string? s)      { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
+        void SetScroll(string? s)       { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
         void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
         void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
-        bool curNylon = ovr != null ? (ovr.EnhancedNylon ?? false) : first.EnhancedNylon;
-        void SetNylon(bool v) { if (ovr != null) ovr.EnhancedNylon = v; else foreach (var d in overlays) d.EnhancedNylon = v; }
+        void SetNylon(bool v)           { if (ovr != null) ovr.EnhancedNylon = v; else foreach (var d in overlays) d.EnhancedNylon = v; }
+        void SetLock(bool v)            { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
 
-        bool gear = curLayer == OverlayLayer.Gear;
-        var shader = curLayer == OverlayLayer.Skin
-            ? OverlayDescriptor.SkinShader
-            : (curShaderField ?? OverlayDescriptor.DefaultGearShader);
+        var mode = RenderModeInference.ModeOf(curLayer, curShaderField);
 
-        ImGui.SetNextItemWidth(110);
-        if (ImGui.BeginCombo($"Layer##{idScope}", gear ? "Gear" : "Skin"))
+        // ── Rendering-as badge ────────────────────────────────────────────────
+        var badgeColor = mode switch
         {
-            foreach (var layer in new[] { OverlayLayer.Skin, OverlayLayer.Gear })
-            {
-                bool selected = layer == curLayer;
-                if (ImGui.Selectable(layer == OverlayLayer.Gear ? "Gear" : "Skin", selected) && !selected)
-                {
-                    SetLayer(layer);
-                    changed = true;
-                }
-            }
-            ImGui.EndCombo();
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "Skin — composited into your skin's own textures (the default).\n\n" +
-                "Gear — rendered on a \"second skin\": a copy of your skin drawn as gear, so it can use a\n" +
-                "full gear shader (sphere maps, metalness, animated emissive), none of which skin.shpk\n" +
-                "offers. Rides an invisible ring, so it survives any outfit.");
-
-        if (!gear) return changed;
-
+            RenderMode.Cloth => new Vector4(0.60f, 0.80f, 1.00f, 1f),   // cool blue
+            RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
+            _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
+        };
+        ImGui.TextUnformatted("Rendering as:");
         ImGui.SameLine();
-        ImGui.SetNextItemWidth(170);
-        if (ImGui.BeginCombo($"Shader##{idScope}", shader))
+        ImGui.TextColored(badgeColor, ModeName(mode));
+        ImGui.SameLine();
+        ImGui.TextDisabled(curLock ? "(pinned)" : "(auto)");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(curLock
+                ? "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again."
+                : "The mode follows what you use: a sphere map or metal ⇒ Cloth · Latex,\na glow effect ⇒ Animated glow, nothing special ⇒ Skin.");
+        if (curLock)
         {
-            foreach (var s in GearShaders)
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Back to auto##{idScope}")) { SetLock(false); changed = true; }
+        }
+
+        // ── Glow effect (a feature — picking one switches to Animated glow) ─────
+        var effectLabel = curScroll == null ? "None" : Path.GetFileNameWithoutExtension(curScroll);
+        ImGui.SetNextItemWidth(220);
+        if (ImGui.BeginCombo($"Glow effect##{idScope}", effectLabel))
+        {
+            if (ImGui.Selectable("None", curScroll == null) && curScroll != null)
             {
-                if (ImGui.Selectable(s, s == shader) && s != shader)
+                SetScroll(null);
+                edited = FeatureEdit.Glow;
+                changed = true;
+            }
+            foreach (var (name, _, fromMod) in effects)
+            {
+                bool selected = string.Equals(name, curScroll, StringComparison.OrdinalIgnoreCase);
+                var text = fromMod ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)" : Path.GetFileNameWithoutExtension(name);
+                if (ImGui.Selectable(text, selected) && !selected)
                 {
-                    SetShader(s);
+                    SetScroll(name);
+                    edited = FeatureEdit.Glow;
                     changed = true;
                 }
             }
@@ -113,58 +121,17 @@ public static class ColorTableEditor
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(
-                "character.shpk — sphere maps, metalness (default).\n" +
-                "characterscroll.shpk — adds an animated scrolling glow driven by the Scroll map,\n" +
-                "but sphere maps do NOT work under it.");
+                "Pick a scrolling map to make this overlay GLOW and animate — that switches it to\n" +
+                "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow % is only\n" +
+                "a small gate. Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
+        if (effects.Count == 0)
+            ImGui.TextDisabled("No effects found — drop images into the Effects library (Settings),\nor the mod's Proteus/Effects/ folder.");
 
-        if (string.Equals(shader, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase))
+        // Scroll speed / tiling — only meaningful once glowing.
+        if (mode == RenderMode.Glow)
         {
-            ImGui.SetNextItemWidth(220);
-            var currentEffect = curScroll;
-            var label = currentEffect == null ? "None" : Path.GetFileNameWithoutExtension(currentEffect);
-
-            if (ImGui.BeginCombo($"Effect##{idScope}", label))
-            {
-                if (ImGui.Selectable("None", currentEffect == null) && currentEffect != null)
-                {
-                    SetScroll(null);
-                    changed = true;
-                }
-
-                foreach (var (name, _, fromMod) in effects)
-                {
-                    bool selected = string.Equals(name, currentEffect, StringComparison.OrdinalIgnoreCase);
-                    var text = fromMod
-                        ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)"
-                        : Path.GetFileNameWithoutExtension(name);
-
-                    if (ImGui.Selectable(text, selected) && !selected)
-                    {
-                        SetScroll(name);
-                        changed = true;
-                    }
-                }
-                ImGui.EndCombo();
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(
-                    "The scrolling map IS the glow: its colour, its pattern, and its animation.\n" +
-                    "The row's emissive is only a small gate that switches it on (~2.5%).\n\n" +
-                    "Effects come from the mod's own Proteus/Effects/ folder, then your\n" +
-                    "Effects folder in Settings.");
-
-            if (effects.Count == 0)
-                ImGui.TextDisabled("No effects found — drop image files into the Effects library\n" +
-                                   "(see Settings), or the mod's own Proteus/Effects/ folder.");
-
-            // Scroll speed / tiling. These are material constants, and vanilla ships the speeds at zero,
-            // so without them the pattern would sit still.
-            var speed = new Vector2(
-                curSpeedX ?? ScrollSettings.Default.SpeedX,
-                curSpeedY ?? ScrollSettings.Default.SpeedY);
-            var tile = new Vector2(
-                curTileX ?? ScrollSettings.Default.TilingX,
-                curTileY ?? ScrollSettings.Default.TilingY);
+            var speed = new Vector2(curSpeedX ?? ScrollSettings.Default.SpeedX, curSpeedY ?? ScrollSettings.Default.SpeedY);
+            var tile  = new Vector2(curTileX ?? ScrollSettings.Default.TilingX, curTileY ?? ScrollSettings.Default.TilingY);
 
             ImGui.SetNextItemWidth(150);
             if (ImGui.DragFloat2($"Scroll speed##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
@@ -173,8 +140,7 @@ public static class ColorTableEditor
                 changed = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("How fast the effect flows, X and Y. Negative reverses the direction;\n" +
-                                 "0 holds it still. About 0.01 is a normal rate.");
+                ImGui.SetTooltip("How fast the effect flows, X and Y. Negative reverses; 0 holds it still. ~0.01 is normal.");
 
             ImGui.SetNextItemWidth(150);
             if (ImGui.DragFloat2($"Tiling##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
@@ -185,17 +151,40 @@ public static class ColorTableEditor
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
         }
-        else   // character.shpk (non-scroll gear)
+
+        // Sheer edge — a Cloth feature (character.shpk g_AlphaOffset). Shown always; ticking it switches
+        // to Cloth · Latex. Dimmed when the current mode can't use it.
         {
+            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, mode == RenderMode.Cloth ? 1f : 0.5f);
             bool nylon = curNylon;
-            if (ImGui.Checkbox($"Enhanced Nylon##{idScope}", ref nylon))
+            if (ImGui.Checkbox($"Sheer edge (nylon)##{idScope}", ref nylon))
             {
                 SetNylon(nylon);
+                edited = FeatureEdit.Cloth;
                 changed = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Raises the shader's g_AlphaOffset to 1 for a sheerer alpha falloff\n" +
-                                 "(nylon/stocking look). character.shpk only; off by default.");
+                ImGui.SetTooltip("A sheerer alpha falloff for a nylon/stocking look (Cloth · Latex only).");
+        }
+
+        // ── Advanced: pin the mode by hand ─────────────────────────────────────
+        if (ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen))
+        {
+            ImGui.TextDisabled("Force the render mode instead of letting the features pick it:");
+            foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
+            {
+                bool sel = curLock && mode == m;
+                if (ImGui.RadioButton($"{ModeName(m)}##force_{idScope}_{m}", sel) && !(sel))
+                {
+                    ApplyMode(overlays, ovr, m);
+                    SetLock(true);
+                    changed = true;
+                }
+                if (m != RenderMode.Glow) ImGui.SameLine();
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth · Latex — character.shpk (sphere, metal).\n" +
+                                 "Animated glow — characterscroll.shpk. Pinning stops the auto mode-switch.");
         }
 
         return changed;
@@ -218,6 +207,28 @@ public static class ColorTableEditor
         return (true, shader);
     }
 
+    /// <summary>Friendly, mechanism-free mode name for the badge and Advanced labels.</summary>
+    public static string ModeName(RenderMode m) => m switch
+    {
+        RenderMode.Skin  => "Skin (painted)",
+        RenderMode.Cloth => "Cloth · Latex",
+        _                => "Animated glow",
+    };
+
+    /// <summary>Point the descriptors' (or the live design-binding override's) Layer+Shader at
+    /// <paramref name="mode"/> — how the inference result and the Advanced picker are both applied.</summary>
+    public static void ApplyMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr, RenderMode mode)
+    {
+        var (layer, shader) = mode switch
+        {
+            RenderMode.Skin  => (OverlayLayer.Skin, (string?)null),
+            RenderMode.Cloth => (OverlayLayer.Gear, RenderModeInference.ClothShader),
+            _                => (OverlayLayer.Gear, RenderModeInference.GlowShader),
+        };
+        if (ovr != null) { ovr.Layer = layer; ovr.Shader = shader; }
+        else foreach (var d in overlays) { d.Layer = layer; d.Shader = shader; }
+    }
+
     /// <summary>
     /// Row picker plus the A/B detail panels for the selected row.
     /// <paramref name="usedRows"/> (when non-null) limits the picker to rows the index texture uses.
@@ -230,12 +241,16 @@ public static class ColorTableEditor
         string? shader,
         IReadOnlyList<string>? shellMaterialLeaves,
         IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
+        out FeatureEdit edited,
         ref int selectedRow,
         ref bool changed)
     {
-        // characterscroll drives its look from the scroll map; the material fields below do nothing on
-        // it (sphere maps provably don't render there), so don't offer knobs that can't turn.
-        bool material = gear && !string.Equals(shader, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase);
+        edited = FeatureEdit.Neutral;
+
+        // The render mode drives which feature controls are LIVE vs dimmed; the features that are set
+        // drive the mode back (inference happens in the caller). characterscroll drives its look from the
+        // scroll map, so sphere/metal don't render there.
+        var mode = RenderModeInference.ModeOf(gear ? OverlayLayer.Gear : OverlayLayer.Skin, shader);
 
         // Every row is shown; rows the index texture never selects are disabled rather than hidden, so
         // the table's shape stays constant and it's obvious WHICH rows the overlay actually uses.
@@ -314,10 +329,10 @@ public static class ColorTableEditor
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_A", rows, selectedRow, true, gear, material, shellMaterialLeaves, skinGlowTargets, ref changed);
+            DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets, ref edited, ref changed);
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_B", rows, selectedRow, false, gear, material, shellMaterialLeaves, skinGlowTargets, ref changed);
+            DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets, ref edited, ref changed);
 
             ImGui.EndTable();
         }
@@ -418,10 +433,15 @@ public static class ColorTableEditor
     }
 
     private static void DrawSubRow(
-        string id, List<ColorTableRowPreset> rows, int row, bool isA, bool gear, bool material,
+        string id, List<ColorTableRowPreset> rows, int row, bool isA, RenderMode mode,
         IReadOnlyList<string>? shellMaterialLeaves,
-        IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets, ref bool changed)
+        IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
+        ref FeatureEdit edited, ref bool changed)
     {
+        bool gear     = mode != RenderMode.Skin;
+        bool material = mode == RenderMode.Cloth;   // sphere / metal / roughness live here
+        const float DimAlpha = 0.5f;                // dimmed-but-clickable: a feature the mode ignores
+
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var sub = isA ? preset?.SubRowA : preset?.SubRowB;
 
@@ -509,16 +529,24 @@ public static class ColorTableEditor
                 "against and looks faint however high you push it. The vanilla scrolling\n" +
                 "materials pair a near-black diffuse with a bright emissive for exactly this.");
 
-        if (gear)
+        // Specular is a Cloth feature. Dimmed-but-clickable in Skin (touch to switch to Cloth), active in
+        // Cloth. HIDDEN in Animated glow — like the Physical/Sphere block below — so a stray touch on a
+        // dimmed control can't silently flip the overlay out of glow.
+        if (mode != RenderMode.Glow)
         {
+            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
             var spec = HexToVec3(sub?.Specular);
             ImGui.SetNextItemWidth(22);
             if (ImGui.ColorEdit3($"Specular##s_{id}", ref spec, ImGuiColorEditFlags.NoInputs))
             {
                 Edit().Specular = Vec3ToHex(spec);
+                edited = FeatureEdit.Cloth;
                 changed = true;
             }
-
+        }
+        // Glow colour applies in any gear mode (it's the emissive colour); dimmed only on Skin.
+        {
+            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, gear ? 1f : DimAlpha);
             var emCol = HexToVec3(sub?.EmissiveColor ?? sub?.Diffuse);
             ImGui.SetNextItemWidth(22);
             if (ImGui.ColorEdit3($"Glow colour##ec_{id}", ref emCol, ImGuiColorEditFlags.NoInputs))
@@ -560,52 +588,61 @@ public static class ColorTableEditor
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Negative fades this row toward transparent; positive pushes it toward opaque.");
 
-        // Roughness / metalness / sphere map are inert under characterscroll.
-        if (!material) return;
-
-        // ── Gear, non-scroll shaders only ────────────────────────────────────
-        ImGui.TextDisabled("Physical");
-
-        float rough = sub?.Roughness ?? 0.5f;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Roughness##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
+        // Roughness / metalness / sphere map belong to Cloth · Latex. Dimmed-but-clickable in Skin (touch
+        // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
+        // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a
+        // "sphere" control let a stray 0 silently kill the glow.
+        if (mode != RenderMode.Glow)
         {
-            Edit().Roughness = Math.Clamp(rough, 0f, 1f);
-            changed = true;
-        }
+            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
-        float metal = sub?.Metalness ?? 0f;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Metalness##m_{id}", ref metal, 0.01f, 0f, 1f, "%.2f"))
-        {
-            Edit().Metalness = Math.Clamp(metal, 0f, 1f);
-            changed = true;
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(MetalTip);
+            ImGui.TextDisabled("Physical");
+            if (!material) { ImGui.SameLine(); ImGui.TextDisabled("— Cloth · Latex"); }
 
-        ImGui.TextDisabled("Sphere map");
+            float rough = sub?.Roughness ?? 0.5f;
+            ImGui.SetNextItemWidth(70);
+            if (ImGui.DragFloat($"Roughness##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
+            {
+                Edit().Roughness = Math.Clamp(rough, 0f, 1f);
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
 
-        int sphere = sub?.SphereMap ?? 0;
-        DrawSpherePicker(id, ref sphere, out bool sphereChanged);
-        if (sphereChanged)
-        {
-            Edit().SphereMap = Math.Clamp(sphere, 0, SphereMapPreview.Count - 1);
-            changed = true;
-        }
+            float metal = sub?.Metalness ?? 0f;
+            ImGui.SetNextItemWidth(70);
+            if (ImGui.DragFloat($"Metalness##m_{id}", ref metal, 0.01f, 0f, 1f, "%.2f"))
+            {
+                Edit().Metalness = Math.Clamp(metal, 0f, 1f);
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(MetalTip);
 
-        // Cap goes past 1.0 for the same reason as Glow: the value is written as a Half, so it can over-
-        // drive the sphere-map contribution (and, on characterscroll, the effect's visibility) for a
-        // stronger effect than the vanilla 0–1 range allows.
-        float sphereInt = sub?.SphereIntensity ?? 0f;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Intensity##si_{id}", ref sphereInt, 0.05f, 0f, 10f, "%.2f"))
-        {
-            Edit().SphereIntensity = Math.Clamp(sphereInt, 0f, 10f);
-            changed = true;
+            ImGui.TextDisabled("Sphere map");
+
+            int sphere = sub?.SphereMap ?? 0;
+            DrawSpherePicker(id, ref sphere, out bool sphereChanged);
+            if (sphereChanged)
+            {
+                Edit().SphereMap = Math.Clamp(sphere, 0, SphereMapPreview.Count - 1);
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
+
+            // Cap goes past 1.0 for the same reason as Glow: the value is written as a Half, so it can over-
+            // drive the sphere-map contribution for a stronger effect than the vanilla 0–1 range allows.
+            float sphereInt = sub?.SphereIntensity ?? 0f;
+            ImGui.SetNextItemWidth(70);
+            if (ImGui.DragFloat($"Intensity##si_{id}", ref sphereInt, 0.05f, 0f, 10f, "%.2f"))
+            {
+                Edit().SphereIntensity = Math.Clamp(sphereInt, 0f, 10f);
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(SphereTip);
         }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(SphereTip);
     }
 
     // ── copy / paste clipboard ────────────────────────────────────────────────

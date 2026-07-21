@@ -305,10 +305,12 @@ public static class GearMaterialWriter
 
                 // Arm the scrolling effect on rows that actually glow. Field 23 is the master switch —
                 // without it nothing renders — and sphere-map opacity doubles as the effect's visibility.
+                // SphereIntensity is a Cloth concept that has no meaning on a glow row, so only a POSITIVE
+                // value overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
                 if (isScroll && def.Emissive is { } em && (em.R > 0 || em.G > 0 || em.B > 0))
                 {
                     WH(HEffectEnable, 1f);
-                    WH(HSphereMask, def.SphereMapMask ?? 1f);
+                    WH(HSphereMask, def.SphereMapMask is { } vis && vis > 0f ? vis : 1f);
                 }
             }
         }

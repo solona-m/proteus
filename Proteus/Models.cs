@@ -79,6 +79,14 @@ public class OverlayDescriptor
         => Layer == OverlayLayer.Skin ? SkinShader : (Shader ?? DefaultGearShader);
 
     /// <summary>
+    /// When true, the editor stops auto-inferring <see cref="Layer"/>/<see cref="Shader"/> from the
+    /// features in use — the user pinned the render mode by hand (Advanced). Off = the mode follows the
+    /// features (a sphere map or metal ⇒ Cloth gear, a scroll effect ⇒ animated-glow gear).
+    /// </summary>
+    [JsonPropertyName("ManualShaderLock")]
+    public bool ManualShaderLock { get; set; }
+
+    /// <summary>
     /// Penumbra game path(s) of the .mtrl file(s). Accepts a single string or a JSON array.
     /// The same overlay textures are composited onto every listed material.
     /// </summary>
@@ -352,6 +360,9 @@ public class GearSettingsPreset
     [JsonPropertyName("EnhancedNylon")]
     public bool? EnhancedNylon { get; set; }
 
+    [JsonPropertyName("ManualShaderLock")]
+    public bool? ManualShaderLock { get; set; }
+
     /// <summary>Snapshot an overlay's gear settings.</summary>
     public static GearSettingsPreset From(OverlayDescriptor d) => new()
     {
@@ -363,6 +374,7 @@ public class GearSettingsPreset
         ScrollTilingX = d.ScrollTilingX,
         ScrollTilingY = d.ScrollTilingY,
         EnhancedNylon = d.EnhancedNylon,
+        ManualShaderLock = d.ManualShaderLock,
     };
 
     /// <summary>Apply onto a descriptor (used on a clone, so metadata.json is never mutated).</summary>
@@ -376,6 +388,7 @@ public class GearSettingsPreset
         d.ScrollTilingX = ScrollTilingX;
         d.ScrollTilingY = ScrollTilingY;
         d.EnhancedNylon = EnhancedNylon ?? false;
+        d.ManualShaderLock = ManualShaderLock ?? false;
     }
 }
 
