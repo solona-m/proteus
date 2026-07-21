@@ -88,6 +88,26 @@ public class SecondSkinWriterVerbatimTests
         Validate(outBytes);
     }
 
+    [Fact]
+    public void Skipping_connectors_drops_geometry_on_neolithe()
+    {
+        // Neolithe's skin mesh carries joint-connector submeshes (atr_nek/hij/ude/…) that overlap its
+        // complete main body. With skipConnectors on, those submeshes are dropped, so the shell has
+        // strictly fewer triangles and submeshes than the default build.
+        if (!File.Exists(NeoTop)) return;
+
+        var body = File.ReadAllBytes(NeoTop);
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+
+        SecondSkinWriter.Build(new[] { body }, layers, null, false, out var full);
+        var trimmedBytes = SecondSkinWriter.Build(new[] { body }, layers, null, true, out var trimmed);
+
+        Assert.True(trimmed.TrianglesOut < full.TrianglesOut, "connector skip removed no triangles");
+        Assert.True(trimmed.Submeshes < full.Submeshes, "connector skip removed no submeshes");
+        Assert.True(trimmed.Meshes > 0, "the main body must survive");
+        Validate(trimmedBytes);
+    }
+
     private static void Validate(byte[] m)
     {
         ushort U16(int o) => BitConverter.ToUInt16(m, o);

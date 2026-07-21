@@ -306,6 +306,30 @@ public class StatusWindow : Window
                 "Applied per pixel by color: white/bright dyes keep their authored color on any\n" +
                 "skin tone (slightly shinier), dark dyes stay skin-tinted and matte automatically.\n" +
                 "0.00 disables it entirely (original look).");
+
+        // Hide a body's redundant connector meshes on the gear shell (see Configuration).
+        var connMode = config.HideConnectorMeshes;
+        ImGui.SetNextItemWidth(140);
+        if (ImGui.BeginCombo("Hide Connector Meshes", connMode.ToString()))
+        {
+            foreach (var opt in new[] { ConnectorMeshMode.Off, ConnectorMeshMode.Neolithe })
+            {
+                if (ImGui.Selectable(opt.ToString(), opt == connMode) && opt != connMode)
+                {
+                    config.HideConnectorMeshes = opt;
+                    config.Save();
+                    compositor.TriggerRecomposite("connector-meshes");
+                }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "Skip each body part's connector ring on the gear \"second skin\" — the small extra\n" +
+                "submesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\n" +
+                "that overlaps an already-complete body; on a sheer overlay the overlap doubles up and\n" +
+                "shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
+                "skin, and hiding it would leave gaps.");
     }
 
     /// <summary>Author a basic skin-overlay mod: name + author + up to three textures → a new Penumbra mod.</summary>

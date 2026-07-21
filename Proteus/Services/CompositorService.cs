@@ -119,7 +119,7 @@ public class CompositorService : IDisposable
         this.config = config;
         this.log = log;
         this.uvRemap = uvRemap;
-        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, log);
+        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log);
 
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);

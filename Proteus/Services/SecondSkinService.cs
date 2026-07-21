@@ -21,6 +21,7 @@ public sealed class SecondSkinService
     private readonly TextureLoader textureLoader;
     private readonly SidecarDiscoveryService discovery;
     private readonly UVRemapService uvRemap;
+    private readonly Configuration config;
     private readonly IPluginLog log;
 
     /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
@@ -43,12 +44,13 @@ public sealed class SecondSkinService
 
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
-        UVRemapService uvRemap, IPluginLog log)
+        UVRemapService uvRemap, Configuration config, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
         this.discovery = discovery;
         this.uvRemap = uvRemap;
+        this.config = config;
         this.log = log;
     }
 
@@ -353,7 +355,8 @@ public sealed class SecondSkinService
 
         byte[] shell;
         SecondSkinWriter.Stats stats;
-        try { shell = SecondSkinWriter.Build(bodies, layers, host.BaseModel, out stats); }
+        bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
+        try { shell = SecondSkinWriter.Build(bodies, layers, host.BaseModel, skipConnectors, out stats); }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] second skin: model build failed");

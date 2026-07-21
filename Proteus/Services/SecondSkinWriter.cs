@@ -158,7 +158,7 @@ public static class SecondSkinWriter
     /// groups. Every layer is applied to every source.
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers, out Stats stats)
-        => Build(sources, layers, null, out stats);
+        => Build(sources, layers, null, false, out stats);
 
     /// <summary>
     /// Append the shell into a HOST accessory model (an equipped ring/bracelet) rather than replacing it:
@@ -168,6 +168,15 @@ public static class SecondSkinWriter
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats)
+        => Build(sources, layers, baseModel, false, out stats);
+
+    /// <summary>
+    /// As above, but <paramref name="skipConnectors"/> drops each source's redundant connector geometry —
+    /// the thin joint seam rings and duplicate variant submeshes — for bodies (Neolithe) that would
+    /// otherwise double up on a sheer shell.
+    /// </summary>
+    public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
+        byte[]? baseModel, bool skipConnectors, out Stats stats)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
@@ -214,7 +223,7 @@ public static class SecondSkinWriter
         // accumulators; `cov` null keeps all triangles; `mapBase`/`mapAppended` share the src's submesh bone
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
-                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended)
+                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -252,6 +261,16 @@ public static class SecondSkinWriter
                 int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
                 uint so = U32(ss), sc = U32(ss + 4);
                 var keep = new List<ushort>();
+
+                // Drop redundant connector geometry on these bodies (Neolithe): the thin seam RINGS at the
+                // joints (wrist/ankle/…, ~100-120 tris — real skin parts are 800+), plus the mesh's LAST
+                // submesh (a duplicate variant, e.g. the second calf). Kept empty ⇒ contributes nothing;
+                // never applied to a single-submesh mesh (that IS the whole part).
+                if (dropConnectors && srcSubCount > 1 && (sc / 3 < 200 || su == srcSubCount - 1))
+                {
+                    keptPerSub.Add(keep.ToArray());
+                    continue;
+                }
                 for (uint t = 0; t + 2 < sc; t += 3)
                 {
                     int p = src.Ib + (int)(so + t) * 2;
@@ -363,7 +382,8 @@ public static class SecondSkinWriter
             {
                 int bmo = baseSrc.MeshStart + m * 36;
                 ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
-                EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended);
+                EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended,
+                    dropConnectors: false);
             }
         }
 
@@ -397,7 +417,8 @@ public static class SecondSkinWriter
                     if (srcMat >= src.MatNames.Count || SkinMaterialBodyType(src.MatNames[srcMat]) == null)
                         continue;
 
-                    EmitMesh(src, m, matIndex, push, preserve: false, cov: def, mapBase, ref mapAppended);
+                    EmitMesh(src, m, matIndex, push, preserve: false, cov: def, mapBase, ref mapAppended,
+                        dropConnectors: skipConnectors);
                 }
             }
         }
