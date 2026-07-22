@@ -720,10 +720,7 @@ public class StatusWindow : Window
                 ? designBindings.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
                 : null;
             var modeBeforeSimple = EffectiveMode(simpleOverlays, gearOvrSimple);
-            bool headerChangedSimple = ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, gearOvrSimple);
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
-
-            ImGui.Separator();
 
             bool changedSimple = false;
             int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
@@ -746,13 +743,13 @@ public class StatusWindow : Window
             // zero it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
             ApplyGlowTransition(rows, modeBeforeSimple, EffectiveMode(simpleOverlays, gearOvrSimple));
 
-            if (changedSimple || headerChangedSimple || footerChangedSimple || modeChangedSimple)
+            if (changedSimple || footerChangedSimple || modeChangedSimple)
             {
                 // Binding path: live-preview only — edits stay in the in-memory overrides and fold into the
                 // binding via "Update binding". Base metadata persists only when NOT editing a binding.
                 if (!editingBinding) discovery.SaveMetadata(entry);
-                // Discrete header/footer/mode changes recomposite promptly; colour-row drags use the debounce.
-                if (headerChangedSimple || footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
+                // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
+                if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
                 else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
             }
             return;
@@ -936,10 +933,7 @@ public class StatusWindow : Window
             ? designBindings.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
             : null;
         var modeBefore = EffectiveMode(activeOpt.Overlays, gearOvrOpt);
-        bool headerChanged = ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, gearOvrOpt);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
-
-        ImGui.Separator();
 
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
@@ -960,14 +954,14 @@ public class StatusWindow : Window
         // it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
         ApplyGlowTransition(editRows, modeBefore, EffectiveMode(activeOpt.Overlays, gearOvrOpt));
 
-        if (changed || headerChanged || footerChanged || modeChanged)
+        if (changed || footerChanged || modeChanged)
         {
             // Binding path: live-preview only (folded in via "Update binding"). Base metadata persists only
             // when NOT editing a binding — gate on that directly, not on whether a gear override exists
             // (an option with colour rows but no overlay descriptors has a null gear override even mid-binding).
             if (!editingBinding) discovery.SaveMetadata(entry);
-            // Discrete header/footer/mode changes recomposite promptly; colour-row drags use the debounce.
-            if (headerChanged || footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
+            // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
+            if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
             else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
         }
     }

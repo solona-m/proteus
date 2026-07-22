@@ -33,7 +33,6 @@ public class RenderModeInferenceTests
     public static IEnumerable<object[]> ClothSubRows() => new[]
     {
         new object[] { new ColorTableSubRowPreset { Specular = "#808080" } },
-        new object[] { new ColorTableSubRowPreset { Roughness = 0.5f } },        // any explicit roughness = intent
         new object[] { new ColorTableSubRowPreset { Metalness = 0.3f } },
         new object[] { new ColorTableSubRowPreset { SphereMap = 4 } },
         new object[] { new ColorTableSubRowPreset { SphereIntensity = 0.7f } },
@@ -42,6 +41,10 @@ public class RenderModeInferenceTests
     [Fact]
     public void ExplicitZeroMetal_IsNotCloth()   // metal 0 / sphere 0 are "off", not a Cloth signal
         => Assert.False(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Metalness = 0f, SphereMap = 0, SphereIntensity = 0f }));
+
+    [Fact]
+    public void RoughnessAlone_IsNotCloth()   // roughness does nothing without metal/sphere; skin has it too
+        => Assert.False(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Roughness = 0f }));
 
     // ── Infer: single-signal cases ─────────────────────────────────────────────
 

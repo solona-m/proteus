@@ -8,7 +8,7 @@ public enum RenderMode
 {
     /// <summary>Painted into the skin (skin.shpk). No sphere/metal/animation.</summary>
     Skin,
-    /// <summary>Gear + character.shpk — sphere maps, metalness, specular, roughness, sheer edge.</summary>
+    /// <summary>Gear + character.shpk — sphere maps, metalness, specular.</summary>
     Cloth,
     /// <summary>Gear + characterscroll.shpk — animated scrolling glow.</summary>
     Glow,
@@ -19,7 +19,7 @@ public enum FeatureEdit
 {
     /// <summary>Nothing that affects the mode (diffuse, opacity, plain glow %).</summary>
     Neutral,
-    /// <summary>A Cloth-only feature (sphere/metal/roughness/specular/sheer edge).</summary>
+    /// <summary>A Cloth-only feature (sphere/metal/specular).</summary>
     Cloth,
     /// <summary>The animated-glow effect (scroll map).</summary>
     Glow,
@@ -36,16 +36,17 @@ public static class RenderModeInference
     public const string ClothShader = OverlayDescriptor.DefaultGearShader;   // character.shpk
     public const string GlowShader  = "characterscroll.shpk";
 
-    /// <summary>A sub-row uses a Cloth-only feature. All these fields are null/0 until deliberately set.</summary>
+    /// <summary>A sub-row uses a feature that genuinely needs the gear shader — a sphere map, metalness, or a
+    /// specular colour (skin.shpk can't do those). Roughness is NOT counted: skin has roughness too, and a
+    /// bare/zero roughness does nothing on its own, so it shouldn't force Cloth.</summary>
     public static bool IsClothSub(ColorTableSubRowPreset? s)
         => s != null
         && (s.Specular != null
-         || s.Roughness != null
          || s.Metalness.GetValueOrDefault() > 0f
          || s.SphereMap.GetValueOrDefault() > 0
          || s.SphereIntensity.GetValueOrDefault() > 0f);
 
-    /// <summary>Any Cloth feature (sphere/metal/roughness/specular) is set across the option's rows.</summary>
+    /// <summary>Any Cloth feature (sphere/metal/specular) is set across the option's rows.</summary>
     public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows)
         => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
 

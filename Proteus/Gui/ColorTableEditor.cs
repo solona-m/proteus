@@ -35,57 +35,9 @@ public static class ColorTableEditor
         "With no sphere map to reflect, a metallic surface just goes dark.";
 
     /// <summary>
-    /// Top of the colour editor: the "Rendering as" mode badge (+ "Back to auto" when pinned). The mode
-    /// itself is inferred from features; the manual override and the glow-effect picker live in the footer
-    /// (<see cref="DrawGlowFooter"/>) at the bottom of the window. Returns true when something changed.
-    /// </summary>
-    public static bool DrawLayerHeader(
-        string idScope,
-        IReadOnlyList<OverlayDescriptor> overlays,
-        GearSettingsPreset? ovr)
-    {
-        if (overlays.Count == 0) return false;
-
-        bool changed = false;
-        var first = overlays[0];
-
-        // A design binding edits the gear OVERRIDE (live preview); else the descriptors. Read override first.
-        OverlayLayer curLayer  = ovr?.Layer ?? first.Layer;
-        string? curShaderField = ovr != null ? ovr.Shader : first.Shader;
-        bool curLock  = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
-        void SetLock(bool v) { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
-
-        var mode = RenderModeInference.ModeOf(curLayer, curShaderField);
-
-        // ── Rendering-as badge ────────────────────────────────────────────────
-        var badgeColor = mode switch
-        {
-            RenderMode.Cloth => new Vector4(0.60f, 0.80f, 1.00f, 1f),   // cool blue
-            RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
-            _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
-        };
-        ImGui.TextUnformatted("Rendering as:");
-        ImGui.SameLine();
-        ImGui.TextColored(badgeColor, ModeName(mode));
-        ImGui.SameLine();
-        ImGui.TextDisabled(curLock ? "(pinned)" : "(auto)");
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(curLock
-                ? "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again."
-                : "The mode follows what you use: a sphere map or metal ⇒ Cloth · Latex,\na glow effect ⇒ Animated glow, nothing special ⇒ Skin.");
-        if (curLock)
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton($"Back to auto##{idScope}")) { SetLock(false); changed = true; }
-        }
-
-        return changed;
-    }
-
-    /// <summary>
-    /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling) and the
-    /// "Advanced" mode-pin. Kept below the rows so the eye lands on the colours first. Sets
-    /// <paramref name="edited"/> = Glow when the effect changes (drives the caller's mode inference).
+    /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling), the
+    /// "Advanced" mode-pin, and the "Rendering as" badge to the right of Advanced. Kept below the rows so
+    /// the eye lands on the colours first. Sets <paramref name="edited"/> = Glow when the effect changes.
     /// </summary>
     public static bool DrawGlowFooter(
         string idScope,
@@ -154,8 +106,32 @@ public static class ColorTableEditor
                 ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
         }
 
-        // ── Advanced: pin the mode by hand (very bottom of the window) ─────────
-        if (ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen))
+        // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
+        bool advOpen = ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
+
+        var badgeColor = mode switch
+        {
+            RenderMode.Cloth => new Vector4(0.60f, 0.80f, 1.00f, 1f),   // cool blue
+            RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
+            _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
+        };
+        ImGui.SameLine(0f, 24f);
+        ImGui.TextUnformatted("Rendering as:");
+        ImGui.SameLine();
+        ImGui.TextColored(badgeColor, ModeName(mode));
+        ImGui.SameLine();
+        ImGui.TextDisabled(curLock ? "(pinned)" : "(auto)");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(curLock
+                ? "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again."
+                : "The mode follows what you use: a sphere map or metal ⇒ Cloth,\na glow effect ⇒ Animated glow, nothing special ⇒ Skin.");
+        if (curLock)
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Back to auto##{idScope}")) { SetLock(false); changed = true; }
+        }
+
+        if (advOpen)
         {
             ImGui.TextDisabled("Force the render mode instead of letting the features pick it:");
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
@@ -170,7 +146,7 @@ public static class ColorTableEditor
                 if (m != RenderMode.Glow) ImGui.SameLine();
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth · Latex — character.shpk (sphere, metal).\n" +
+                ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth — character.shpk (sphere, metal).\n" +
                                  "Animated glow — characterscroll.shpk. Pinning stops the auto mode-switch.");
         }
 
@@ -244,10 +220,10 @@ public static class ColorTableEditor
     }
 
     /// <summary>
-    /// Effective (gear, shader) for an option's rows, resolving a live gear override first — exactly
-    /// as <see cref="DrawLayerHeader"/> does — then the descriptor. Callers must pass the SAME override
-    /// they hand the header, or the row editor's gear controls (sphere map, metalness) would disagree
-    /// with the "Gear" the header shows while a design binding is being edited.
+    /// Effective (gear, shader) for an option's rows, resolving a live gear override first — exactly as
+    /// <see cref="DrawGlowFooter"/> does — then the descriptor. Callers must pass the SAME override they hand
+    /// the footer, or the row editor's gear controls (sphere map, metalness) would disagree with the mode
+    /// the badge shows while a design binding is being edited.
     /// </summary>
     public static (bool Gear, string? Shader) EffectiveLayerShader(
         IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
@@ -264,7 +240,7 @@ public static class ColorTableEditor
     public static string ModeName(RenderMode m) => m switch
     {
         RenderMode.Skin  => "Skin (painted)",
-        RenderMode.Cloth => "Cloth · Latex",
+        RenderMode.Cloth => "Cloth",
         _                => "Animated glow",
     };
 
@@ -644,7 +620,7 @@ public static class ColorTableEditor
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Negative fades this row toward transparent; positive pushes it toward opaque.");
 
-        // Roughness / metalness / sphere map belong to Cloth · Latex. Dimmed-but-clickable in Skin (touch
+        // Roughness / metalness / sphere map belong to Cloth. Dimmed-but-clickable in Skin (touch
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
         // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a
         // "sphere" control let a stray 0 silently kill the glow.
@@ -653,14 +629,14 @@ public static class ColorTableEditor
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
             ImGui.TextDisabled("Physical");
-            if (!material) { ImGui.SameLine(); ImGui.TextDisabled("— Cloth · Latex"); }
+            if (!material) { ImGui.SameLine(); ImGui.TextDisabled("— Cloth"); }
 
             float rough = sub?.Roughness ?? 0.5f;
             ImGui.SetNextItemWidth(70);
             if (ImGui.DragFloat($"Roughness##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
             {
                 Edit().Roughness = Math.Clamp(rough, 0f, 1f);
-                edited = FeatureEdit.Cloth;
+                // Roughness isn't a mode trigger (it does nothing without metal/sphere), so don't flip to Cloth.
                 changed = true;
             }
 
@@ -681,7 +657,12 @@ public static class ColorTableEditor
             DrawSpherePicker(id, ref sphere, out bool sphereChanged);
             if (sphereChanged)
             {
-                Edit().SphereMap = Math.Clamp(sphere, 0, SphereMapPreview.Count - 1);
+                var e = Edit();
+                e.SphereMap = Math.Clamp(sphere, 0, SphereMapPreview.Count - 1);
+                // A sphere needs BOTH index and intensity non-zero to show, so default the intensity to 3
+                // when picking one for the first time (leave a user-set value alone).
+                if (e.SphereMap > 0 && (e.SphereIntensity ?? 0f) <= 0f)
+                    e.SphereIntensity = 3f;
                 edited = FeatureEdit.Cloth;
                 changed = true;
             }
