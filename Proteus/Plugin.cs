@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 84;
+    public const int BuildNumber = 94;
 
     private const string CommandName = "/proteus";
 
@@ -83,6 +83,9 @@ public sealed class Plugin : IDalamudPlugin
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
 
+        // Glow-effect thumbnails (loaded per-file, cached by Dalamud's texture provider).
+        Gui.ColorTableEditor.EffectThumbs = new Gui.EffectPreview(TextureProvider);
+
         // Live colorset "glow / target" highlighter (framework-thread material editing).
         highlighter = new ColorTableHighlighter(Framework, ObjectTable);
         Gui.ColorTableEditor.Highlighter = highlighter;
@@ -134,6 +137,7 @@ public sealed class Plugin : IDalamudPlugin
 
         windowSystem.RemoveAllWindows();
         Gui.ColorTableEditor.Spheres = null;
+        Gui.ColorTableEditor.EffectThumbs = null;
         Gui.ColorTableEditor.Highlighter = null;
         Gui.ColorTableEditor.SkinGlow = null;
         skinGlow.Dispose();

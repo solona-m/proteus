@@ -45,13 +45,9 @@ public static class RenderModeInference
          || s.SphereMap.GetValueOrDefault() > 0
          || s.SphereIntensity.GetValueOrDefault() > 0f);
 
-    /// <summary>Any Cloth feature is set across the option's rows or descriptors (sheer edge).</summary>
-    public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows,
-        IEnumerable<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
-    {
-        bool nylon = ovr != null ? (ovr.EnhancedNylon ?? false) : overlays.Any(d => d.EnhancedNylon);
-        return nylon || rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
-    }
+    /// <summary>Any Cloth feature (sphere/metal/roughness/specular) is set across the option's rows.</summary>
+    public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows)
+        => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
 
     /// <summary>An animated-glow effect (scroll map) is selected.</summary>
     public static bool HasGlow(IEnumerable<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
@@ -73,7 +69,7 @@ public static class RenderModeInference
         IEnumerable<OverlayDescriptor> overlays, GearSettingsPreset? ovr,
         RenderMode current, FeatureEdit edited)
     {
-        bool cloth = HasCloth(rows, overlays, ovr);   // rows enumerated once, inside HasCloth
+        bool cloth = HasCloth(rows);
         bool glow  = HasGlow(overlays, ovr);
 
         if (cloth && glow)

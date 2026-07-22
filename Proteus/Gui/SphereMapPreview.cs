@@ -27,10 +27,34 @@ public sealed class SphereMapPreview : IDisposable
     private IDalamudTextureWrap? atlas;
     private bool tried;
 
+    // Index 0 means "no sphere map"; showing atlas slice 0 (a real sphere) for it is misleading, so we
+    // draw a dedicated "none" image instead. Optional — drop Resources/none.png and add it as an
+    // EmbeddedResource to enable it; without the resource this is null and index 0 falls back to slice 0.
+    private IDalamudTextureWrap? none;
+    private bool noneTried;
+
     public SphereMapPreview(ITextureProvider textures, IPluginLog log)
     {
         this.textures = textures;
         this.log = log;
+    }
+
+    private IDalamudTextureWrap? None()
+    {
+        if (none != null || noneTried) return none;
+        noneTried = true;
+        try
+        {
+            using var s = typeof(SphereMapPreview).Assembly.GetManifestResourceStream("Proteus.Resources.none.png");
+            if (s == null) return null;   // not shipped yet — index 0 just shows slice 0
+            var img = ImageResult.FromStream(s, ColorComponents.RedGreenBlueAlpha);
+            none = textures.CreateFromRaw(RawImageSpecification.Rgba32(img.Width, img.Height), img.Data);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] failed to load the sphere 'none' image");
+        }
+        return none;
     }
 
     private IDalamudTextureWrap? Atlas()
@@ -55,9 +79,16 @@ public sealed class SphereMapPreview : IDisposable
         return atlas;
     }
 
-    /// <summary>Draw slice <paramref name="index"/> at the given size. Falls back to a blank box.</summary>
+    /// <summary>Draw slice <paramref name="index"/> at the given size. Index 0 shows the "none" image when
+    /// available. Falls back to a blank box.</summary>
     public void Draw(int index, float size)
     {
+        if (index == 0 && None() is { } n)
+        {
+            Dalamud.Bindings.ImGui.ImGui.Image(n.Handle, new Vector2(size, size));
+            return;
+        }
+
         var a = Atlas();
         if (a == null)
         {
@@ -72,6 +103,11 @@ public sealed class SphereMapPreview : IDisposable
     /// <summary>Same, but clickable — the picture itself selects the slice.</summary>
     public bool DrawButton(string id, int index, float size)
     {
+        using var scope = Dalamud.Interface.Utility.Raii.ImRaii.PushId(id);
+
+        if (index == 0 && None() is { } n)
+            return Dalamud.Bindings.ImGui.ImGui.ImageButton(n.Handle, new Vector2(size, size), Vector2.Zero, Vector2.One);
+
         var a = Atlas();
         if (a == null)
         {
@@ -81,8 +117,28 @@ public sealed class SphereMapPreview : IDisposable
 
         var (uv0, uv1) = Uv(ref index);
         // This binding's ImageButton has no string-id overload; scope it with an ID instead.
-        using var scope = Dalamud.Interface.Utility.Raii.ImRaii.PushId(id);
         return Dalamud.Bindings.ImGui.ImGui.ImageButton(a.Handle, new Vector2(size, size), uv0, uv1);
+    }
+
+    /// <summary>Draw the shared "none" icon at the given size — reused by other pickers' None entry.
+    /// Returns false (drawing nothing) when the image isn't available.</summary>
+    public bool DrawNone(float size)
+    {
+        var n = None();
+        if (n == null) return false;
+        Dalamud.Bindings.ImGui.ImGui.Image(n.Handle, new Vector2(size, size));
+        return true;
+    }
+
+    /// <summary>Clickable "none" icon. <paramref name="available"/> reports whether an image was drawn (so
+    /// the caller knows whether to <c>SameLine</c>); returns true when clicked.</summary>
+    public bool DrawNoneButton(string id, float size, out bool available)
+    {
+        var n = None();
+        available = n != null;
+        if (n == null) return false;
+        using var scope = Dalamud.Interface.Utility.Raii.ImRaii.PushId(id);
+        return Dalamud.Bindings.ImGui.ImGui.ImageButton(n.Handle, new Vector2(size, size), Vector2.Zero, Vector2.One);
     }
 
     private static (Vector2 Uv0, Vector2 Uv1) Uv(ref int index)
@@ -95,5 +151,7 @@ public sealed class SphereMapPreview : IDisposable
     {
         atlas?.Dispose();
         atlas = null;
+        none?.Dispose();
+        none = null;
     }
 }

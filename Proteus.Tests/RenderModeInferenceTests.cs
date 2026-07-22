@@ -13,8 +13,8 @@ public class RenderModeInferenceTests
     private static List<ColorTableRowPreset> Rows(ColorTableSubRowPreset? a = null, ColorTableSubRowPreset? b = null)
         => new() { new ColorTableRowPreset { Row = 16, SubRowA = a, SubRowB = b } };
 
-    private static OverlayDescriptor Desc(bool nylon = false, string? scroll = null)
-        => new() { EnhancedNylon = nylon, Scroll = scroll };
+    private static OverlayDescriptor Desc(string? scroll = null)
+        => new() { Scroll = scroll };
 
     // ── IsClothSub ────────────────────────────────────────────────────────────
 
@@ -55,11 +55,6 @@ public class RenderModeInferenceTests
         => Assert.Equal(RenderMode.Cloth,
             RenderModeInference.Infer(Rows(new ColorTableSubRowPreset { SphereMap = 3 }),
                 new[] { Desc() }, null, RenderMode.Skin, FeatureEdit.Cloth));
-
-    [Fact]
-    public void EnhancedNylon_ImpliesCloth()
-        => Assert.Equal(RenderMode.Cloth,
-            RenderModeInference.Infer(Rows(), new[] { Desc(nylon: true) }, null, RenderMode.Skin, FeatureEdit.Cloth));
 
     [Fact]
     public void ScrollEffect_ImpliesGlow()

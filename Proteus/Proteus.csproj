@@ -44,6 +44,8 @@
          slicing the live GPU texture through native interop — so the slices are extracted offline
          and shipped instead. -->
     <EmbeddedResource Include="Resources\sphere_d_array.png" />
+    <!-- Shown for sphere-map index 0 ("no sphere") in the picker, so it doesn't look like a real sphere. -->
+    <EmbeddedResource Include="Resources\none.png" />
   </ItemGroup>
 
   <ItemGroup>

@@ -144,13 +144,6 @@ public class OverlayDescriptor
     public float? ScrollTilingY { get; set; }
 
     /// <summary>
-    /// Gear + character.shpk only. Sets the shader's <c>g_AlphaOffset</c> constant to 1 ("Enhanced
-    /// Nylon") for a sheerer alpha falloff. Off by default; ignored on skin and characterscroll.
-    /// </summary>
-    [JsonPropertyName("EnhancedNylon")]
-    public bool EnhancedNylon { get; set; }
-
-    /// <summary>
     /// For a normal-only overlay (no Diffuse), whether to synthesize a diffuse tint from the
     /// normal's coverage and Row 16's color. Default true (legacy behaviour). Set false when the
     /// overlay should only touch the normal/mask and leave the skin diffuse untouched
@@ -357,9 +350,6 @@ public class GearSettingsPreset
     [JsonPropertyName("ScrollTilingY")]
     public float? ScrollTilingY { get; set; }
 
-    [JsonPropertyName("EnhancedNylon")]
-    public bool? EnhancedNylon { get; set; }
-
     [JsonPropertyName("ManualShaderLock")]
     public bool? ManualShaderLock { get; set; }
 
@@ -373,7 +363,6 @@ public class GearSettingsPreset
         ScrollSpeedY = d.ScrollSpeedY,
         ScrollTilingX = d.ScrollTilingX,
         ScrollTilingY = d.ScrollTilingY,
-        EnhancedNylon = d.EnhancedNylon,
         ManualShaderLock = d.ManualShaderLock,
     };
 
@@ -387,7 +376,6 @@ public class GearSettingsPreset
         d.ScrollSpeedY = ScrollSpeedY;
         d.ScrollTilingX = ScrollTilingX;
         d.ScrollTilingY = ScrollTilingY;
-        d.EnhancedNylon = EnhancedNylon ?? false;
         d.ManualShaderLock = ManualShaderLock ?? false;
     }
 }

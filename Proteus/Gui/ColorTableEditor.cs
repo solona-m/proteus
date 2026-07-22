@@ -35,41 +35,25 @@ public static class ColorTableEditor
         "With no sphere map to reflect, a metallic surface just goes dark.";
 
     /// <summary>
-    /// Layer / shader / surface controls for one option. These live on the descriptors rather than the
-    /// colour rows, so they always write to metadata.json — a design binding only carries rows.
-    /// Returns true when something changed.
+    /// Top of the colour editor: the "Rendering as" mode badge (+ "Back to auto" when pinned). The mode
+    /// itself is inferred from features; the manual override and the glow-effect picker live in the footer
+    /// (<see cref="DrawGlowFooter"/>) at the bottom of the window. Returns true when something changed.
     /// </summary>
     public static bool DrawLayerHeader(
         string idScope,
         IReadOnlyList<OverlayDescriptor> overlays,
-        GearSettingsPreset? ovr,
-        IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
-        out FeatureEdit edited)
+        GearSettingsPreset? ovr)
     {
-        edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
 
         bool changed = false;
         var first = overlays[0];
 
-        // When a design binding is being edited, every layer/shader/scroll edit goes into its gear
-        // OVERRIDE (live preview, folded in on "Update binding") instead of metadata.json — mirrors the
-        // colour editor. Effective values read the override first, then fall back to the descriptor.
+        // A design binding edits the gear OVERRIDE (live preview); else the descriptors. Read override first.
         OverlayLayer curLayer  = ovr?.Layer ?? first.Layer;
         string? curShaderField = ovr != null ? ovr.Shader : first.Shader;
-        string? curScroll      = ovr != null ? ovr.Scroll : first.Scroll;
-        float? curSpeedX = ovr != null ? ovr.ScrollSpeedX : first.ScrollSpeedX;
-        float? curSpeedY = ovr != null ? ovr.ScrollSpeedY : first.ScrollSpeedY;
-        float? curTileX  = ovr != null ? ovr.ScrollTilingX : first.ScrollTilingX;
-        float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
-        bool curNylon = ovr != null ? (ovr.EnhancedNylon ?? false) : first.EnhancedNylon;
         bool curLock  = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
-
-        void SetScroll(string? s)       { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
-        void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
-        void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
-        void SetNylon(bool v)           { if (ovr != null) ovr.EnhancedNylon = v; else foreach (var d in overlays) d.EnhancedNylon = v; }
-        void SetLock(bool v)            { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
+        void SetLock(bool v) { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
 
         var mode = RenderModeInference.ModeOf(curLayer, curShaderField);
 
@@ -95,35 +79,53 @@ public static class ColorTableEditor
             if (ImGui.SmallButton($"Back to auto##{idScope}")) { SetLock(false); changed = true; }
         }
 
-        // ── Glow effect (a feature — picking one switches to Animated glow) ─────
-        var effectLabel = curScroll == null ? "None" : Path.GetFileNameWithoutExtension(curScroll);
-        ImGui.SetNextItemWidth(220);
-        if (ImGui.BeginCombo($"Glow effect##{idScope}", effectLabel))
+        return changed;
+    }
+
+    /// <summary>
+    /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling) and the
+    /// "Advanced" mode-pin. Kept below the rows so the eye lands on the colours first. Sets
+    /// <paramref name="edited"/> = Glow when the effect changes (drives the caller's mode inference).
+    /// </summary>
+    public static bool DrawGlowFooter(
+        string idScope,
+        IReadOnlyList<OverlayDescriptor> overlays,
+        GearSettingsPreset? ovr,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
+        out FeatureEdit edited)
+    {
+        edited = FeatureEdit.Neutral;
+        if (overlays.Count == 0) return false;
+
+        bool changed = false;
+        var first = overlays[0];
+
+        string? curScroll = ovr != null ? ovr.Scroll : first.Scroll;
+        float? curSpeedX = ovr != null ? ovr.ScrollSpeedX : first.ScrollSpeedX;
+        float? curSpeedY = ovr != null ? ovr.ScrollSpeedY : first.ScrollSpeedY;
+        float? curTileX  = ovr != null ? ovr.ScrollTilingX : first.ScrollTilingX;
+        float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
+        bool curLock = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
+        var mode = RenderModeInference.ModeOf(ovr?.Layer ?? first.Layer, ovr != null ? ovr.Shader : first.Shader);
+
+        void SetScroll(string? s)       { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
+        void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
+        void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
+        void SetLock(bool v)            { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
+
+        // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
+        DrawEffectPicker(idScope, effects, curScroll, out bool effChanged, out string? newScroll);
+        if (effChanged)
         {
-            if (ImGui.Selectable("None", curScroll == null) && curScroll != null)
-            {
-                SetScroll(null);
-                edited = FeatureEdit.Glow;
-                changed = true;
-            }
-            foreach (var (name, _, fromMod) in effects)
-            {
-                bool selected = string.Equals(name, curScroll, StringComparison.OrdinalIgnoreCase);
-                var text = fromMod ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)" : Path.GetFileNameWithoutExtension(name);
-                if (ImGui.Selectable(text, selected) && !selected)
-                {
-                    SetScroll(name);
-                    edited = FeatureEdit.Glow;
-                    changed = true;
-                }
-            }
-            ImGui.EndCombo();
+            SetScroll(newScroll);
+            edited = FeatureEdit.Glow;
+            changed = true;
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(
                 "Pick a scrolling map to make this overlay GLOW and animate — that switches it to\n" +
-                "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow % is only\n" +
-                "a small gate. Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
+                "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow scales it.\n" +
+                "Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
         if (effects.Count == 0)
             ImGui.TextDisabled("No effects found — drop images into the Effects library (Settings),\nor the mod's Proteus/Effects/ folder.");
 
@@ -152,29 +154,14 @@ public static class ColorTableEditor
                 ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
         }
 
-        // Sheer edge — a Cloth feature (character.shpk g_AlphaOffset). Shown always; ticking it switches
-        // to Cloth · Latex. Dimmed when the current mode can't use it.
-        {
-            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, mode == RenderMode.Cloth ? 1f : 0.5f);
-            bool nylon = curNylon;
-            if (ImGui.Checkbox($"Sheer edge (nylon)##{idScope}", ref nylon))
-            {
-                SetNylon(nylon);
-                edited = FeatureEdit.Cloth;
-                changed = true;
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("A sheerer alpha falloff for a nylon/stocking look (Cloth · Latex only).");
-        }
-
-        // ── Advanced: pin the mode by hand ─────────────────────────────────────
+        // ── Advanced: pin the mode by hand (very bottom of the window) ─────────
         if (ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen))
         {
             ImGui.TextDisabled("Force the render mode instead of letting the features pick it:");
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
             {
                 bool sel = curLock && mode == m;
-                if (ImGui.RadioButton($"{ModeName(m)}##force_{idScope}_{m}", sel) && !(sel))
+                if (ImGui.RadioButton($"{ModeName(m)}##force_{idScope}_{m}", sel) && !sel)
                 {
                     ApplyMode(overlays, ovr, m);
                     SetLock(true);
@@ -188,6 +175,72 @@ public static class ColorTableEditor
         }
 
         return changed;
+    }
+
+    /// <summary>Thumbnail picker for the glow effect, modelled on <see cref="DrawSpherePicker"/>: the current
+    /// effect's image sits beside the combo, and the list is clickable pictures. <paramref name="newScroll"/>
+    /// is the chosen effect's file name (null = None) when <paramref name="changed"/> is true.</summary>
+    private static void DrawEffectPicker(string id,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
+        string? curScroll, out bool changed, out string? newScroll)
+    {
+        changed = false;
+        newScroll = curScroll;
+        const float current = 32f;
+        const float thumb   = 56f;
+
+        // Current effect's thumbnail beside the combo — the "none" icon when None, else the effect's image.
+        var cur = effects.FirstOrDefault(e => string.Equals(e.Name, curScroll, StringComparison.OrdinalIgnoreCase));
+        bool drewBeside = curScroll == null
+            ? Spheres?.DrawNone(current) == true
+            : cur.Path != null && EffectThumbs?.Draw(cur.Path, current) == true;
+        if (drewBeside) ImGui.SameLine();
+
+        var label = curScroll == null ? "None" : Path.GetFileNameWithoutExtension(curScroll);
+        ImGui.SetNextItemWidth(180);
+        if (ImGui.BeginCombo($"Glow effect##eff_{id}", label, ImGuiComboFlags.HeightLarge))
+        {
+            // None entry with the shared "none" icon (matches the sphere-map picker).
+            bool noneHas = false, noneClicked = false;
+            if (Spheres != null) noneClicked = Spheres.DrawNoneButton($"##effnone_{id}", thumb, out noneHas);
+            if (noneClicked && curScroll != null)
+            {
+                newScroll = null;
+                changed = true;
+                ImGui.CloseCurrentPopup();
+            }
+            if (noneHas) ImGui.SameLine();
+            if (ImGui.Selectable($"None##effnonesel_{id}", curScroll == null, ImGuiSelectableFlags.None,
+                    new Vector2(0, noneHas ? thumb : 0)) && curScroll != null)
+            {
+                newScroll = null;
+                changed = true;
+            }
+            foreach (var (name, path, fromMod) in effects)
+            {
+                bool selected = string.Equals(name, curScroll, StringComparison.OrdinalIgnoreCase);
+
+                bool clicked = false, hasThumb = false;
+                if (EffectThumbs != null)
+                    clicked = EffectThumbs.DrawButton($"##effimg_{id}_{name}", path, thumb, out hasThumb);
+                if (clicked && !selected)
+                {
+                    newScroll = name;
+                    changed = true;
+                    ImGui.CloseCurrentPopup();
+                }
+                if (hasThumb) ImGui.SameLine();
+
+                var text = fromMod ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)" : Path.GetFileNameWithoutExtension(name);
+                if (ImGui.Selectable($"{text}##eff_{id}_{name}", selected, ImGuiSelectableFlags.None,
+                        new Vector2(0, hasThumb ? thumb : 0)) && !selected)
+                {
+                    newScroll = name;
+                    changed = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
     }
 
     /// <summary>
@@ -340,6 +393,9 @@ public static class ColorTableEditor
 
     /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
     public static SphereMapPreview? Spheres { get; set; }
+
+    /// <summary>Thumbnails for the glow-effect picker. Set once at startup; null falls back to names only.</summary>
+    public static EffectPreview? EffectThumbs { get; set; }
 
     /// <summary>Live colorset "glow / target" highlighter. Set once at startup; null disables the buttons.</summary>
     public static Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }

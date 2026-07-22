@@ -33,7 +33,7 @@ public sealed class GearColorRow
 /// </summary>
 public sealed record ScrollSettings(float SpeedX, float SpeedY, float TilingX, float TilingY)
 {
-    public static readonly ScrollSettings Default = new(0.01f, 0.01f, 1f, 1f);
+    public static readonly ScrollSettings Default = new(0.15f, 0.15f, 5f, 5f);
 }
 
 /// <summary>
@@ -162,8 +162,7 @@ public static class GearMaterialWriter
         byte[] template,
         IReadOnlyList<string> texturePaths,
         IReadOnlyDictionary<int, GearColorRow>? rows,
-        ScrollSettings? scroll = null,
-        bool enhancedNylon = false)
+        ScrollSettings? scroll = null)
     {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
@@ -266,10 +265,11 @@ public static class GearMaterialWriter
             r = TextureLoader.PatchConstantValues(r, ConstTilingX, sc.TilingX).data;
             r = TextureLoader.PatchConstantValues(r, ConstTilingY, sc.TilingY).data;
         }
-        else if (enhancedNylon)
+        else
         {
-            // "Enhanced Nylon": raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer. Not
-            // applicable to characterscroll. No-ops safely if the template lacks the constant.
+            // Sheer edge: always raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer — a
+            // second skin should never be a hard cutout. Not applicable to characterscroll (handled above);
+            // no-ops safely if the template lacks the constant.
             r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1f).data;
         }
 

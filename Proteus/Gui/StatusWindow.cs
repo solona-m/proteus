@@ -44,7 +44,7 @@ public class StatusWindow : Window
     // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
     // so wait this long after the LAST change before recompositing (TriggerRecomposite restarts the
     // timer on each call). The on-screen editor swatches update live regardless — only the bake waits.
-    private const int ColorEditDebounceMs = 5000;
+    private const int ColorEditDebounceMs = 1000;
     // Mod whose colour editor window is open, or null. A window rather than a popup: colour work means
     // clicking back and forth with the game, and a popup closes on any click outside it.
     private string? _colorWindowMod;
@@ -719,8 +719,8 @@ public class StatusWindow : Window
             var gearOvrSimple = editingBinding && simpleOverlays.Count > 0
                 ? designBindings.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
                 : null;
-            bool headerChangedSimple = ColorTableEditor.DrawLayerHeader(
-                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var headerEditSimple);
+            var modeBeforeSimple = EffectiveMode(simpleOverlays, gearOvrSimple);
+            bool headerChangedSimple = ColorTableEditor.DrawLayerHeader(entry.ModDirectory, simpleOverlays, gearOvrSimple);
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
 
             ImGui.Separator();
@@ -733,18 +733,26 @@ public class StatusWindow : Window
                 out var rowEditSimple, ref selSimple, ref changedSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
-            // Let the features drive the render mode (unless the user pinned it). Runs after both draws so
-            // it sees this frame's edits; its result rides the same persist below.
-            bool modeChangedSimple = ReconcileMode(simpleOverlays, gearOvrSimple, rows,
-                rowEditSimple != FeatureEdit.Neutral ? rowEditSimple : headerEditSimple);
+            // Glow effect + Advanced live at the very bottom, below the rows.
+            ImGui.Separator();
+            bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
+                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple);
 
-            if (changedSimple || headerChangedSimple || modeChangedSimple)
+            // Let the features drive the render mode (unless the user pinned it). Runs after all draws.
+            bool modeChangedSimple = ReconcileMode(simpleOverlays, gearOvrSimple, rows,
+                rowEditSimple != FeatureEdit.Neutral ? rowEditSimple : footerEditSimple);
+
+            // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and
+            // zero it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
+            ApplyGlowTransition(rows, modeBeforeSimple, EffectiveMode(simpleOverlays, gearOvrSimple));
+
+            if (changedSimple || headerChangedSimple || footerChangedSimple || modeChangedSimple)
             {
                 // Binding path: live-preview only — edits stay in the in-memory overrides and fold into the
                 // binding via "Update binding". Base metadata persists only when NOT editing a binding.
                 if (!editingBinding) discovery.SaveMetadata(entry);
-                // Discrete header/mode changes recomposite promptly; colour-row drags use the long debounce.
-                if (headerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
+                // Discrete header/footer/mode changes recomposite promptly; colour-row drags use the debounce.
+                if (headerChangedSimple || footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
                 else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
             }
             return;
@@ -927,8 +935,8 @@ public class StatusWindow : Window
         var gearOvrOpt = editingBinding && activeOpt.Overlays.Count > 0
             ? designBindings.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
             : null;
-        bool headerChanged = ColorTableEditor.DrawLayerHeader(
-            scope, activeOpt.Overlays, gearOvrOpt, effects, out var headerEdit);
+        var modeBefore = EffectiveMode(activeOpt.Overlays, gearOvrOpt);
+        bool headerChanged = ColorTableEditor.DrawLayerHeader(scope, activeOpt.Overlays, gearOvrOpt);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
 
         ImGui.Separator();
@@ -941,17 +949,25 @@ public class StatusWindow : Window
             out var rowEdit, ref sel, ref changed);
         _rowSelection[scope] = sel;
 
-        bool modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
-            rowEdit != FeatureEdit.Neutral ? rowEdit : headerEdit);
+        // Glow effect + Advanced live at the very bottom, below the rows.
+        ImGui.Separator();
+        bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit);
 
-        if (changed || headerChanged || modeChanged)
+        bool modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
+            rowEdit != FeatureEdit.Neutral ? rowEdit : footerEdit);
+
+        // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and zero
+        // it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
+        ApplyGlowTransition(editRows, modeBefore, EffectiveMode(activeOpt.Overlays, gearOvrOpt));
+
+        if (changed || headerChanged || footerChanged || modeChanged)
         {
             // Binding path: live-preview only (folded in via "Update binding"). Base metadata persists only
             // when NOT editing a binding — gate on that directly, not on whether a gear override exists
             // (an option with colour rows but no overlay descriptors has a null gear override even mid-binding).
             if (!editingBinding) discovery.SaveMetadata(entry);
-            // Discrete header/mode changes recomposite promptly; colour-row drags use the long debounce.
-            if (headerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
+            // Discrete header/footer/mode changes recomposite promptly; colour-row drags use the debounce.
+            if (headerChanged || footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
             else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
         }
     }
@@ -979,6 +995,36 @@ public class StatusWindow : Window
 
         ColorTableEditor.ApplyMode(overlays, ovr, want);
         return true;
+    }
+
+    /// <summary>The render mode currently represented by an option's descriptors (override first), for
+    /// detecting a transition into/out of Animated glow.</summary>
+    private static RenderMode EffectiveMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
+    {
+        if (overlays.Count == 0) return RenderMode.Skin;
+        var d = overlays[0];
+        return RenderModeInference.ModeOf(ovr?.Layer ?? d.Layer, ovr != null ? ovr.Shader : d.Shader);
+    }
+
+    /// <summary>On the transition INTO Animated glow, default every row's Glow to 150% and its glow colour
+    /// to white (so the scroll map reads cleanly); on the transition OUT, zero the glow. A no-op when the
+    /// mode didn't cross the Glow boundary — so swapping one effect for another keeps the user's tuning.</summary>
+    private static void ApplyGlowTransition(List<ColorTableRowPreset> rows, RenderMode before, RenderMode after)
+    {
+        if (before != RenderMode.Glow && after == RenderMode.Glow) SetRowsEmissive(rows, 1.5f, "#FFFFFF");
+        else if (before == RenderMode.Glow && after != RenderMode.Glow) SetRowsEmissive(rows, 0f);
+    }
+
+    /// <summary>Set every existing sub-row's Glow (emissive) to <paramref name="v"/> — 1.0 = 100%, 0 = off —
+    /// and, when <paramref name="emissiveColor"/> is given, its glow colour too (white on entering Animated glow,
+    /// so the scroll map's own colour reads cleanly). Only touches rows that already exist.</summary>
+    private static void SetRowsEmissive(List<ColorTableRowPreset> rows, float v, string? emissiveColor = null)
+    {
+        foreach (var r in rows)
+        {
+            if (r.SubRowA != null) { r.SubRowA.Emissive = v; if (emissiveColor != null) r.SubRowA.EmissiveColor = emissiveColor; }
+            if (r.SubRowB != null) { r.SubRowB.Emissive = v; if (emissiveColor != null) r.SubRowB.EmissiveColor = emissiveColor; }
+        }
     }
 
     /// <summary>
