@@ -339,11 +339,17 @@ public class DesignBindingTests
     // ── IsApplySignal ────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(StateFinalizationType.DesignApplied)]     // manual design apply (observed in-game)
-    [InlineData(StateFinalizationType.Reapply)]           // automation-applied design lands here
-    [InlineData(StateFinalizationType.ReapplyAutomation)]
+    [InlineData(StateFinalizationType.DesignApplied)]     // StateEditor, when settings.IsFinal
+    [InlineData(StateFinalizationType.ReapplyAutomation)] // AutoDesignApplier: automation-applied designs
     public void IsApplySignal_DesignApplications_AreSignals(StateFinalizationType type)
         => Assert.True(DesignBindingService.IsApplySignal(type));
+
+    // Glamourer raises plain Reapply from ReapplyState only: the IPC call (our own post-composite
+    // reapply), /glamour reapply, a UI button, Penumbra auto-redraw. No design-application path ends
+    // there, so treating it as an apply signal just fed the heuristic our own echo.
+    [Fact]
+    public void IsApplySignal_PlainReapply_IsNotADesignApplication()
+        => Assert.False(DesignBindingService.IsApplySignal(StateFinalizationType.Reapply));
 
     // Measured in-game: a gearset change and a revert both arrived as Reapply/Reset on the OLD
     // StateChangeType signal, so the heuristic ran on both — a gearset swap restored an unrelated design,

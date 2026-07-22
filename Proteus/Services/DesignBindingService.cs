@@ -589,16 +589,19 @@ public class DesignBindingService : IDisposable
     /// (<c>Gearset</c>, <c>RevertAutomation</c>), and fires ONCE per operation where the change type fires
     /// per field — so this also collapses several redundant passes into one.
     ///
-    /// Included: a real design application, and the reapply that carries an automation-applied design
-    /// (automation does not report <c>DesignApplied</c> for the local player — hence the standing request
-    /// upstream for the design's GUID).
-    /// Excluded: <c>Gearset</c> (gear moved, the design did not) and every <c>Revert*</c> (a revert is not
-    /// an application; Glamourer's own follow-up reapply restores the correct design, so acting here only
-    /// produced the destructive unbound path).
+    /// Included, per Glamourer's own emission sites:
+    ///  • <c>DesignApplied</c> — a design was applied (StateEditor, gated on <c>settings.IsFinal</c>).
+    ///  • <c>ReapplyAutomation</c> — automation applied state, which is how automation-applied DESIGNS
+    ///    surface (<c>AutoDesignApplier</c> → <c>ReapplyAutomationState(…, wasReset: false, …)</c>).
+    ///
+    /// Excluded, and note plain <c>Reapply</c> among them: Glamourer raises that from <c>ReapplyState</c>
+    /// only — the IPC call (i.e. OUR own post-composite reapply), <c>/glamour reapply</c>, a UI button and
+    /// Penumbra's auto-redraw. No design-application path ends there, so treating it as an apply signal
+    /// just fed the heuristic our own echo. Likewise <c>Gearset</c> (gear moved, the design did not) and
+    /// every <c>Revert*</c> (handled by <see cref="IsRevertSignal"/> instead).
     /// </summary>
     internal static bool IsApplySignal(StateFinalizationType type)
         => type is StateFinalizationType.DesignApplied
-                or StateFinalizationType.Reapply
                 or StateFinalizationType.ReapplyAutomation;
 
     /// <summary>
