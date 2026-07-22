@@ -35,6 +35,52 @@ public class TextureLoader
         this.log = log;
     }
 
+    // ── Recomposite instrumentation ────────────────────────────────────────────
+    // Reset and read by CompositorService around one run; see PhaseCounter.
+
+    // Decode now happens on background prefetch threads as well as the composite thread, so a single
+    // summed timer would over-count (it adds concurrent work together) and make every stage derived
+    // from it wrong. Split by who is calling: only the composite thread's time is on the critical path.
+    [ThreadStatic] private static bool bgPrefetch;
+
+    /// <summary>
+    /// Marks the calling thread's decodes as background prefetch. Set inside a prefetch task so its
+    /// decode time is reported separately from time the composite actually waited on.
+    /// </summary>
+    public static bool BackgroundPrefetch
+    {
+        get => bgPrefetch;
+        set => bgPrefetch = value;
+    }
+
+    /// <summary>
+    /// Elapsed time the COMPOSITE thread spent inside the decode path — decoding, blocking on a decode
+    /// a prefetch thread already started, or hitting the cache. This is the real critical-path cost.
+    /// </summary>
+    public readonly PhaseCounter DecodeWaitStats = new();
+
+    /// <summary>Elapsed decode time on background prefetch threads. Overlapped work, not critical path.</summary>
+    public readonly PhaseCounter PrefetchWaitStats = new();
+
+    /// <summary>Time spent actually decoding (cache misses only), summed across all threads. Calls = misses.</summary>
+    public readonly PhaseCounter DecodeStats = new();
+    /// <summary>Calls served from the decode cache — no time recorded, only the count.</summary>
+    public readonly PhaseCounter DecodeHitStats = new();
+    /// <summary>The RGBA→BGRA conversion loop in <see cref="WriteTex"/>.</summary>
+    public readonly PhaseCounter SwizzleStats = new();
+    /// <summary>The .tex disk write itself, with bytes written.</summary>
+    public readonly PhaseCounter WriteStats = new();
+
+    public void ResetStats()
+    {
+        DecodeStats.Reset();
+        DecodeHitStats.Reset();
+        DecodeWaitStats.Reset();
+        PrefetchWaitStats.Reset();
+        SwizzleStats.Reset();
+        WriteStats.Reset();
+    }
+
     // ── Decode cache ───────────────────────────────────────────────────────────
     // A recomposite re-runs on every colour/design/enable change, but the underlying
     // .tex/.png files almost never change between those triggers — so identical bytes
@@ -57,7 +103,13 @@ public class TextureLoader
 
     private readonly ConcurrentDictionary<string, Lazy<DecodedTex?>> decodeCache = new();
     private long accessClock;
-    private const long DecodeCacheBudgetBytes = 512L * 1024 * 1024; // 512 MB
+    // Sized to hold the compositor's *in-flight* set, not a whole material's working set. One 4K RGBA
+    // entry is 64 MB, so a material with ~50 overlay textures would need gigabytes to cache outright —
+    // at 512 MB the cache held 8 entries against a 65-entry run and thrashed to a 100% miss rate
+    // (measured: 53 miss / 12 hit, 5.1 s of a 7.1 s composite). The compositor now prefetches a bounded
+    // window ahead of the blend instead, so this only has to cover that window (PrefetchDepth × 2 files)
+    // plus the three base textures, with headroom.
+    private const long DecodeCacheBudgetBytes = 1024L * 1024 * 1024; // 1 GB
 
     // Cache key for an on-disk file: prefix + path + write-time + length. Returns null
     // (→ bypass the cache) if the file is missing or its metadata can't be read.
@@ -75,9 +127,31 @@ public class TextureLoader
 
     private DecodedTex? GetOrDecode(string key, Func<(byte[] rgba, int width, int height)?> decode)
     {
+        // Charge the whole call to whoever made it: on the composite thread that covers decoding, blocking
+        // on a decode a prefetch thread got to first, and cache lookups — everything the composite waits on.
+        var tCall = PhaseCounter.Begin();
+        var background = bgPrefetch;
+        try
+        {
+            return GetOrDecodeCore(key, decode);
+        }
+        finally
+        {
+            (background ? PrefetchWaitStats : DecodeWaitStats).Stop(tCall);
+        }
+    }
+
+    private DecodedTex? GetOrDecodeCore(string key, Func<(byte[] rgba, int width, int height)?> decode)
+    {
+        // Instrumentation: the factory runs only on a miss, so this flag separates real decode cost
+        // from cache hits without timing the (near-free) hit path.
+        var decoded = false;
         var lazy = decodeCache.GetOrAdd(key, _ => new Lazy<DecodedTex?>(() =>
         {
+            decoded = true;
+            var t0 = PhaseCounter.Begin();
             var r = decode();
+            DecodeStats.Stop(t0);
             return r == null
                 ? null
                 : new DecodedTex { Rgba = r.Value.rgba, Width = r.Value.width, Height = r.Value.height };
@@ -93,6 +167,8 @@ public class TextureLoader
             decodeCache.TryRemove(new KeyValuePair<string, Lazy<DecodedTex?>>(key, lazy));
             return null;
         }
+
+        if (!decoded) DecodeHitStats.Count();
 
         entry.LastAccess = Interlocked.Increment(ref accessClock);
         TrimCache();
@@ -464,6 +540,7 @@ public class TextureLoader
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
             // Convert RGBA → BGRA
+            var tSwizzle = PhaseCounter.Begin();
             var bgra = new byte[rgba.Length];
             for (int i = 0; i < rgba.Length; i += 4)
             {
@@ -472,6 +549,7 @@ public class TextureLoader
                 bgra[i + 2] = rgba[i];     // R ← B
                 bgra[i + 3] = rgba[i + 3]; // A
             }
+            SwizzleStats.Stop(tSwizzle);
 
             // 80-byte TexHeader (StructLayout Explicit, Size=80)
             var header = new byte[80];
@@ -483,11 +561,13 @@ public class TextureLoader
             header[14] = 1;
             BitConverter.TryWriteBytes(header.AsSpan(28), 80u);
 
+            var tWrite = PhaseCounter.Begin();
             WriteWithRetry(outputPath, stream =>
             {
                 stream.Write(header, 0, header.Length);
                 stream.Write(bgra,   0, bgra.Length);
             });
+            WriteStats.Stop(tWrite, header.Length + bgra.Length);
             return true;
         }
         catch (Exception ex)

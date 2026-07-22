@@ -65,10 +65,20 @@ public class UVRemapService
     /// </summary>
     public byte[] Remap(byte[] srcRgba, int srcW, int srcH, string from, string to)
     {
+        var t0 = PhaseCounter.Begin();
         var map = GetMap(from, to);
         if (map == null) return srcRgba;
-        return ApplyRemap(srcRgba, srcW, srcH, map);
+        var result = ApplyRemap(srcRgba, srcW, srcH, map);
+        // Timed from the top so a first-call transfer-map load is attributed to remap, not to blend.
+        RemapStats.Stop(t0);
+        return result;
     }
+
+    /// <summary>
+    /// Recomposite instrumentation: time spent in <see cref="Remap"/> (including a first-call
+    /// transfer-map load). Reset and read by <see cref="CompositorService"/> around one run.
+    /// </summary>
+    public readonly PhaseCounter RemapStats = new();
 
     /// <summary>
     /// Returns the right half (x = w/2 .. w-1) of a 4-channel RGBA image as a (w/2 × h) buffer.

@@ -25,7 +25,8 @@ public sealed class SecondSkinService
     private readonly IPluginLog log;
 
     /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
-    private const int TexSize = 2048;
+    // internal so the compositor can prefetch this phase's art at the right size; see PrefetchAhead.
+    internal const int TexSize = 2048;
 
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;

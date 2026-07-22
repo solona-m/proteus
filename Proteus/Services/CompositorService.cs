@@ -34,6 +34,17 @@ public class CompositorService : IDisposable
 
     // Body-UV material suffixes (shared stem) and their UV body type, used by sibling
     // synthesis. _b/_a are body-UV only under /obj/body/, which InferBodyType enforces.
+    /// <summary>
+    /// How many overlays ahead of the blend to decode in the background.
+    ///
+    /// Depth 6 was measured and was WORSE than 3 (background work fell 867 ms -> 559 ms, composite rose
+    /// 3964 ms -> 4195 ms): spreading the same thread pool over more files makes each one finish later,
+    /// so the blend arrives mid-decode and blocks instead of hitting a warm cache. Prefetching only pays
+    /// when it COMPLETES before the consumer gets there — deeper is not better. Must also stay matched to
+    /// TextureLoader's cache budget: a file evicted before use is decoded twice.
+    /// </summary>
+    private const int PrefetchDepth = 3;
+
     private static readonly (string Suffix, string BodyType)[] BodySuffixes =
     {
         ("_bibo.mtrl", "bibo"),
@@ -958,6 +969,14 @@ public class CompositorService : IDisposable
         try
         {
             log.Debug("[Proteus] Recomposite START");
+
+            // Phase instrumentation: the counters below are reset here and reported in a single
+            // summary line after the composite loop, so a slow run can be attributed to a stage
+            // (decode / remap / blend / swizzle / write) instead of guessed at.
+            var tRunStart = PhaseCounter.Begin();
+            textureLoader.ResetStats();
+            uvRemap.RemapStats.Reset();
+
             EnsureManagedModExists();
 
             // Delete previously written files BEFORE clearing redirects so that
@@ -1295,6 +1314,39 @@ public class CompositorService : IDisposable
             bool MaskAdds(OverlayEntry e, ResolvedOverlay o)
                 => !topGroupByMod.TryGetValue(e.ModDirectory, out var top) || o.GroupOrder <= top;
 
+            // Decode a file on a background thread purely to warm the cache; callers never await it.
+            // Marking the thread keeps its time out of the critical-path decode figure (see DecodeWaitStats).
+            void WarmBg(string path, int w, int h)
+                => Task.Run(() =>
+                {
+                    TextureLoader.BackgroundPrefetch = true;
+                    try { textureLoader.LoadPngAsRgba(path, w, h); }
+                    catch { }
+                    finally { TextureLoader.BackgroundPrefetch = false; }
+                }, ct);
+
+            // ── Cold-start prefetch ──────────────────────────────────────────
+            // The blend loop cannot prefetch its own first overlays: overlay sizes follow the base
+            // texture, and that isn't decoded until the loop is already running. Measured, that left the
+            // first two overlays' diffuse/normal/index decoding serially on the composite thread —
+            // ~1.3 s, the largest remaining item once blend was parallelised.
+            //
+            // We do know the size in advance: LoadBaseTexture upscales anything smaller to
+            // BaseTargetSize, so that is what the loop will ask for unless the base is larger than 4K.
+            // Guessing wrong costs a wasted decode, never a wrong pixel — the loop still requests
+            // whatever size it actually needs, and a mismatched entry is simply never read.
+            const int coldSize = TextureLoader.BaseTargetSize;
+            foreach (var list in byMaterial.Values)
+                foreach (var (cEntry, cOverlay) in list.Take(PrefetchDepth))
+                {
+                    var cd = cOverlay.Descriptor;
+                    if (cd.Diffuse != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Diffuse), coldSize, coldSize);
+                    if (cd.Normal  != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Normal),  coldSize, coldSize);
+                    if (cd.Index   != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Index),   coldSize, coldSize);
+                }
+
+            var tSetupEnd = PhaseCounter.Begin();
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -1399,31 +1451,44 @@ public class CompositorService : IDisposable
                             var m = textureLoader.LoadPngAsRgba(paths[pidx], w, h);
                             if (m != null) m = RemapIfNeeded(m, w, h, srcBodyType, paths[pidx]);
                             if (m == null) continue;
+                            // Masks accumulate in order (outer loop), but within one mask every pixel is
+                            // independent — so the inner pass parallelises exactly like the kernels below.
+                            var src = m;
                             if (wArr == null)
                             {
-                                wArr = new byte[n];
-                                tArr = new byte[n];
-                                for (int pi = 0; pi < n; pi++)
+                                var wNew = new byte[n];
+                                var tNew = new byte[n];
+                                ParallelPixels(0, n, 1, (fromPi, toPi) =>
                                 {
-                                    int o = pi * 4;
-                                    int a = m[o + 3];
-                                    int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8; // luminance
-                                    wArr[pi] = (byte)(255 - a);       // (1-a)
-                                    tArr[pi] = (byte)(g * a / 255);   // gray*a
-                                }
+                                    for (int pi = fromPi; pi < toPi; pi++)
+                                    {
+                                        int o = pi * 4;
+                                        int a = src[o + 3];
+                                        int g = (src[o] * 77 + src[o + 1] * 150 + src[o + 2] * 29) >> 8; // luminance
+                                        wNew[pi] = (byte)(255 - a);       // (1-a)
+                                        tNew[pi] = (byte)(g * a / 255);   // gray*a
+                                    }
+                                });
+                                wArr = wNew;
+                                tArr = tNew;
                             }
                             else
                             {
-                                for (int pi = 0; pi < n; pi++)
+                                var wCur = wArr;
+                                var tCur = tArr!;
+                                ParallelPixels(0, n, 1, (fromPi, toPi) =>
                                 {
-                                    int o = pi * 4;
-                                    int a = m[o + 3];
-                                    int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;
-                                    int inv = 255 - a;
-                                    // T' = T*(1-a) + gray*a ;  W' = W*(1-a)
-                                    tArr![pi] = (byte)(tArr[pi] * inv / 255 + g * a / 255);
-                                    wArr[pi]  = (byte)(wArr[pi] * inv / 255);
-                                }
+                                    for (int pi = fromPi; pi < toPi; pi++)
+                                    {
+                                        int o = pi * 4;
+                                        int a = src[o + 3];
+                                        int g = (src[o] * 77 + src[o + 1] * 150 + src[o + 2] * 29) >> 8;
+                                        int inv = 255 - a;
+                                        // T' = T*(1-a) + gray*a ;  W' = W*(1-a)
+                                        tCur[pi] = (byte)(tCur[pi] * inv / 255 + g * a / 255);
+                                        wCur[pi] = (byte)(wCur[pi] * inv / 255);
+                                    }
+                                });
                             }
                         }
                         return wArr == null ? ((byte[] W, byte[] T)?)null : (wArr, tArr!);
@@ -1568,9 +1633,53 @@ public class CompositorService : IDisposable
                 const int glowMapCap = 1024;
                 var glowMaps = new List<(OverlayEntry Entry, ResolvedOverlay Resolved, byte[] Map, int W, int H)>();
 
+                // ── Decode prefetch ───────────────────────────────────────────
+                // Overlay decode dominates a recomposite (measured: 5.1 s of a 7.1 s composite, ~96 ms
+                // per 4K file), and the loop below consumes each overlay's art strictly in turn, so those
+                // decodes run one at a time on one thread. Warm the next few overlays on background
+                // threads while the current one blends: the decode cache is thread-safe and its Lazy
+                // wrapper dedups concurrent requests for the same file, so the loop simply finds the work
+                // already done instead of waiting for it. The depth is bounded rather than prefetching
+                // the whole material because each 4K entry is 64 MB — see DecodeCacheBudgetBytes, which
+                // is sized to hold this window plus the base textures.
+
+                // Overlay sizes follow the base textures, so this no-ops until the first base is loaded
+                // (pair 0 establishes wD/hD and wN/hN); the pipeline is full from pair 1 onward.
+                void PrefetchAhead(int fromIndex)
+                {
+                    for (int k = fromIndex; k < Math.Min(fromIndex + PrefetchDepth, pairs.Count); k++)
+                    {
+                        var pd = pairs[k].Overlay.Descriptor;
+                        var root = pairs[k].Entry.SidecarRoot;
+                        if (pd.Diffuse != null && wD > 0) WarmBg(Path.Combine(root, pd.Diffuse), wD, hD);
+                        if (pd.Normal  != null && wN > 0) WarmBg(Path.Combine(root, pd.Normal),  wN, hN);
+                        // The colour-row index map — measured at ~125 ms each and decoded once per overlay.
+                        if (pd.Index   != null && wD > 0) WarmBg(Path.Combine(root, pd.Index),   wD, hD);
+
+                        // The Masks group is read per mod by CombinedMaskAt, at the diffuse size.
+                        // Several overlays usually share one mod's masks, so the cache dedups these.
+                        var mod = pairs[k].Entry.ModDirectory;
+                        if (wD > 0 && maskPathsByMod.TryGetValue(mod, out var mPaths))
+                            foreach (var mp in mPaths) WarmBg(mp, wD, hD);
+
+                        // ...and each mask's companion relief-normal / colour-index, read in the later
+                        // passes of the same overlay. Warming the mask but not these left ~640 ms of the
+                        // measured decode-wait on the composite thread.
+                        if (wD > 0 && maskAssetsByMod.TryGetValue(mod, out var mAssets))
+                            foreach (var a in mAssets)
+                            {
+                                if (a.NormalPath != null) WarmBg(a.NormalPath, wD, hD);
+                                if (a.IndexPath  != null) WarmBg(a.IndexPath,  wD, hD);
+                            }
+                    }
+                }
+
+                int pairIndex = -1;
                 foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
+
+                    PrefetchAhead(++pairIndex + 1);
 
                     var desc        = resolved.Descriptor;
                     var srcBodyType = desc.SourceBodyType;
@@ -1644,11 +1753,15 @@ public class CompositorService : IDisposable
                         {
                             // No diffuse overlay — synthesize coverage from normal blue channel.
                             var synth = new byte[normalOv.Length];
-                            for (int si = 0; si < normalOv.Length; si += 4)
+                            var nOv = normalOv;
+                            ParallelPixels(0, nOv.Length, 4, (fromSi, toSi) =>
                             {
-                                synth[si] = synth[si + 1] = synth[si + 2] = 255;
-                                synth[si + 3] = normalOv[si + 2]; // blue → opacity
-                            }
+                                for (int si = fromSi; si < toSi; si += 4)
+                                {
+                                    synth[si] = synth[si + 1] = synth[si + 2] = 255;
+                                    synth[si + 3] = nOv[si + 2]; // blue → opacity
+                                }
+                            });
                             // Opacity (indexed and flat) deferred — CovAt applies it after the Masks-group mask.
                             diffuseOv = synth;
                             covSrc = synth; covW = wN; covH = hN;
@@ -1775,14 +1888,22 @@ public class CompositorService : IDisposable
                             ? uvRemap.ComputeSeamDropMask(decision, covW, covH, srcBodyType, dstBodyType)
                             : null;
                         if (dropMask != null)
-                            for (int di = 0; di < dropMask.Length; di++)
+                        {
+                            var cov = covSrc!;
+                            var dif = diffuseOv != null && diffuseOv.Length == cov.Length ? diffuseOv : null;
+                            var drop = dropMask;
+                            ParallelPixels(0, drop.Length, 1, (fromDi, toDi) =>
                             {
-                                if (!dropMask[di]) continue;
-                                int o = di * 4;
-                                covSrc![o] = covSrc[o + 1] = covSrc[o + 2] = covSrc[o + 3] = 0;
-                                if (diffuseOv != null && diffuseOv.Length == covSrc.Length)
-                                    diffuseOv[o] = diffuseOv[o + 1] = diffuseOv[o + 2] = diffuseOv[o + 3] = 0;
-                            }
+                                for (int di = fromDi; di < toDi; di++)
+                                {
+                                    if (!drop[di]) continue;
+                                    int o = di * 4;
+                                    cov[o] = cov[o + 1] = cov[o + 2] = cov[o + 3] = 0;
+                                    if (dif != null)
+                                        dif[o] = dif[o + 1] = dif[o + 2] = dif[o + 3] = 0;
+                                }
+                            });
+                        }
                     }
 
                     // ── Phase A: diffuse composite ────────────────────────────
@@ -1977,14 +2098,22 @@ public class CompositorService : IDisposable
                         if (msk != null)
                         {
                             var full = new byte[wN * hN * 4];
-                            for (int fi = 3; fi < full.Length; fi += 4) full[fi] = 255;
-                            var weight = ApplyCoverageMask(full, msk.Value.W, msk.Value.T);
-                            for (int i = 0; i < baseN.Length; i += 4)
+                            ParallelPixels(3, full.Length, 4, (fromFi, toFi) =>
                             {
-                                float t = weight[i + 3] / 255f;
-                                baseN[i]     = (byte)(preRelief[i]     * (1f - t) + baseN[i]     * t);
-                                baseN[i + 1] = (byte)(preRelief[i + 1] * (1f - t) + baseN[i + 1] * t);
-                            }
+                                for (int fi = fromFi; fi < toFi; fi += 4) full[fi] = 255;
+                            });
+                            var weight = ApplyCoverageMask(full, msk.Value.W, msk.Value.T);
+                            var bn = baseN;
+                            var pre = preRelief;
+                            ParallelPixels(0, bn.Length, 4, (fromI, toI) =>
+                            {
+                                for (int i = fromI; i < toI; i += 4)
+                                {
+                                    float t = weight[i + 3] / 255f;
+                                    bn[i]     = (byte)(pre[i]     * (1f - t) + bn[i]     * t);
+                                    bn[i + 1] = (byte)(pre[i + 1] * (1f - t) + bn[i + 1] * t);
+                                }
+                            });
                         }
                     }
                 }
@@ -2078,6 +2207,8 @@ public class CompositorService : IDisposable
 
             });
 
+            LogPhaseBreakdown(tRunStart, tSetupEnd, byMaterial.Count);
+
             // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
             _skinGlowTargets = new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
 
@@ -2093,6 +2224,7 @@ public class CompositorService : IDisposable
             // branch). The injection below then needs no follow-up recomposite — the redirect is already
             // in place, so the equip's own redraw lands straight on the finished shell.
             bool glassesPreHosted = false;
+            var tGear = PhaseCounter.Begin();
             if (gearOverlays.Count > 0)
             {
                 // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
@@ -2103,6 +2235,32 @@ public class CompositorService : IDisposable
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
+
+                // ── Gear-shell prefetch ──────────────────────────────────────
+                // This phase is decode-bound, not mesh-bound: its own decodes measured 803 ms of a 1050 ms
+                // phase, every one on the calling thread. Fire them all now and let the serial code below
+                // consume them as they land — roughly 15 files at ~60 ms collapse to a couple of hundred ms.
+                //
+                // Warming these back at composite start does NOT work: the skin composite decodes over a
+                // gigabyte of 4K art in between and LRU-evicts every one of them before this phase starts.
+                // Issue them here, next to their consumer, where nothing can evict them first.
+                foreach (var (gEntry, gOverlay) in gearOverlays)
+                {
+                    var gd = gOverlay.Descriptor;
+                    const int gs = SecondSkinService.TexSize;
+                    if (gd.Diffuse != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Diffuse), gs, gs);
+                    if (gd.Normal  != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Normal),  gs, gs);
+                    if (gd.Index   != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Index),   gs, gs);
+                    if (maskPathsByMod.TryGetValue(gEntry.ModDirectory, out var gMasks))
+                        foreach (var mp in gMasks) WarmBg(mp, gs, gs);
+                    if (maskAssetsByMod.TryGetValue(gEntry.ModDirectory, out var gAssets))
+                        foreach (var a in gAssets)
+                        {
+                            if (a.NormalPath != null) WarmBg(a.NormalPath, gs, gs);
+                            if (a.IndexPath  != null) WarmBg(a.IndexPath,  gs, gs);
+                        }
+                }
+
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
                     ?.TrimStart('c', 'C');
                 if (string.IsNullOrEmpty(charCode))
@@ -2169,6 +2327,11 @@ public class CompositorService : IDisposable
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
             }
 
+            // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
+            if (gearOverlays.Count > 0)
+                log.Information("[Proteus] recomposite phases: second skin {0:F0}ms ({1} gear layer(s))",
+                    PhaseCounter.MsSince(tGear), gearOverlays.Count);
+
             WriteManagedModJson(redirects, manipulations);
             ReloadAndRedrawWhenReady(redirects, runId);
 
@@ -2192,6 +2355,43 @@ public class CompositorService : IDisposable
             LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message };
             ResultChanged?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// One summary line attributing a recomposite to its stages. "blend" is the composite loop minus
+    /// the stages measured inside it, i.e. the per-pixel work itself; "materials" is how many items the
+    /// loop had to spread over its 4 workers, which is what decides whether that loop is parallel at all.
+    /// Logged at Information so a user's normal log shows it without a debug build.
+    /// </summary>
+    private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount)
+    {
+        var totalMs     = PhaseCounter.MsSince(runStart);
+        var compositeMs = PhaseCounter.MsSince(setupEnd);
+        var setupMs     = totalMs - compositeMs;
+
+        var decode   = textureLoader.DecodeStats;
+        var hits     = textureLoader.DecodeHitStats;
+        var wait     = textureLoader.DecodeWaitStats;
+        var prefetch = textureLoader.PrefetchWaitStats;
+        var swizzle  = textureLoader.SwizzleStats;
+        var write    = textureLoader.WriteStats;
+        var remap    = uvRemap.RemapStats;
+
+        // Blend is what's left of the composite once the stages measured inside it are removed. Only
+        // the COMPOSITE thread's stages may be subtracted — decode now also runs on prefetch threads,
+        // and subtracting concurrent work from wall time would understate blend by however much
+        // overlapped. Caveat: with several materials in flight these foreground counters sum across
+        // workers, so the split is only exact for the single-material case (the usual one).
+        var blendMs = compositeMs - (wait.Ms + remap.Ms + swizzle.Ms + write.Ms);
+
+        log.Information(
+            "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit) | " +
+            "prefetch {4:F0}ms bg (decode work {5:F0}ms) | remap {6:F0}ms ({7}) | blend {8:F0}ms | swizzle {9:F0}ms | " +
+            "write {10:F0}ms ({11} files, {12:F0} MB) | composite {13:F0}ms | total {14:F0}ms | {15} material(s)",
+            setupMs, wait.Ms, decode.Calls, hits.Calls,
+            prefetch.Ms, decode.Ms, remap.Ms, remap.Calls,
+            blendMs, swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
+            compositeMs, totalMs, materialCount);
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────
@@ -2511,19 +2711,54 @@ public class CompositorService : IDisposable
 
     // Tint + alpha composite using a flat sub-row color (no index texture).
     // When DiffuseR/G/B = 1, this is a standard alpha-over composite.
+    /// <summary>
+    /// Split a per-pixel loop across cores. <paramref name="body"/> is handed a [from, to) sub-range and
+    /// iterates it with the same <paramref name="step"/> the serial loop used.
+    ///
+    /// Every kernel below writes only to the pixel it is given and reads only that same index from its
+    /// inputs — no carried state, no cross-pixel reads — so partitioning cannot change the result and
+    /// the output stays byte-identical to the serial loop. Any future kernel that does NOT hold to that
+    /// (a running total, a neighbour sample) must not use this.
+    ///
+    /// Small buffers stay serial: partitioning costs more than it saves below roughly a 256×256 image.
+    /// </summary>
+    internal static void ParallelPixels(int start, int end, int step, Action<int, int> body)
+    {
+        const int MinParallelPixels = 256 * 256;
+        int span = end - start;
+        if (span <= 0) return;
+        if (span / step < MinParallelPixels || Environment.ProcessorCount < 2)
+        {
+            body(start, end);
+            return;
+        }
+
+        int workers = Math.Min(Environment.ProcessorCount, 16);
+        // Round each chunk up to a whole number of steps so no worker can start mid-pixel.
+        int chunk = ((span + workers - 1) / workers + step - 1) / step * step;
+        Parallel.For(0, workers, k =>
+        {
+            int from = start + k * chunk;
+            if (from >= end) return;
+            body(from, Math.Min(from + chunk, end));
+        });
+    }
+
     internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h)
     {
         float cr = row.DiffuseR, cg = row.DiffuseG, cb = row.DiffuseB;
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float a = ov[i + 3] / 255f;
-            if (a <= 0f) continue;
-            float ia = 1f - a;
-            baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
-            baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
-            baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                float a = ov[i + 3] / 255f;
+                if (a <= 0f) continue;
+                float ia = 1f - a;
+                baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
+                baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
+                baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
+            }
+        });
     }
 
     // Write emissive intensity to the normal map alpha where the overlay is opaque.
@@ -2531,10 +2766,12 @@ public class CompositorService : IDisposable
     {
         if (row.Emissive <= 0.001f) return;
         byte intensity = (byte)(row.Emissive * 255f);
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
-            if (ov[i + 3] > 0)
-                baseN[i + 3] = Math.Max(baseN[i + 3], intensity);
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
+        {
+            for (int i = from; i < to; i += 4)
+                if (ov[i + 3] > 0)
+                    baseN[i + 3] = Math.Max(baseN[i + 3], intensity);
+        });
     }
 
     // Write emissive intensity to normal alpha driven by index texture row mapping.
@@ -2546,17 +2783,20 @@ public class CompositorService : IDisposable
         Dictionary<int, ColorTableRowOverride> rows,
         int w, int h)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            if (cov[i + 3] == 0) continue; // outside this overlay's coverage
-            int pairIdx = idx[i] / 17;
-            if (!rows.TryGetValue(pairIdx, out var pair)) continue;
-            float blendA = idx[i + 1] / 255f;
-            float em = pair.B.Emissive + (pair.A.Emissive - pair.B.Emissive) * blendA;
-            if (em > 0.001f)
-                baseN[i + 3] = Math.Max(baseN[i + 3], (byte)(em * 255f));
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                if (cov[i + 3] == 0) continue; // outside this overlay's coverage
+                int pairIdx = idx[i] / 17;
+                if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+                float blendA = idx[i + 1] / 255f;
+                float em = pair.B.Emissive + (pair.A.Emissive - pair.B.Emissive) * blendA;
+                if (em > 0.001f)
+                    baseN[i + 3] = Math.Max(baseN[i + 3], (byte)(em * 255f));
+            }
+        });
     }
 
     // Per-pixel color and emissive driven by index texture.
@@ -2566,34 +2806,37 @@ public class CompositorService : IDisposable
         Dictionary<int, ColorTableRowOverride> rows,
         bool isNormal, int w, int h)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float ovA = ov[i + 3] / 255f;
-            if (ovA <= 0f) continue;
-
-            int   pairIdx = idx[i]     / 17;        // red → pair 0–15
-            float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
-
-            if (!rows.TryGetValue(pairIdx, out var pair)) pair = new ColorTableRowOverride();
-
-            float dr = pair.B.DiffuseR + (pair.A.DiffuseR - pair.B.DiffuseR) * blendA;
-            float dg = pair.B.DiffuseG + (pair.A.DiffuseG - pair.B.DiffuseG) * blendA;
-            float db = pair.B.DiffuseB + (pair.A.DiffuseB - pair.B.DiffuseB) * blendA;
-            float em = pair.B.Emissive  + (pair.A.Emissive  - pair.B.Emissive)  * blendA;
-
-            if (!isNormal)
+            for (int i = from; i < to; i += 4)
             {
-                float ia = 1f - ovA;
-                baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
-                baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
-                baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                float ovA = ov[i + 3] / 255f;
+                if (ovA <= 0f) continue;
+
+                int   pairIdx = idx[i]     / 17;        // red → pair 0–15
+                float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
+
+                if (!rows.TryGetValue(pairIdx, out var pair)) pair = new ColorTableRowOverride();
+
+                float dr = pair.B.DiffuseR + (pair.A.DiffuseR - pair.B.DiffuseR) * blendA;
+                float dg = pair.B.DiffuseG + (pair.A.DiffuseG - pair.B.DiffuseG) * blendA;
+                float db = pair.B.DiffuseB + (pair.A.DiffuseB - pair.B.DiffuseB) * blendA;
+                float em = pair.B.Emissive  + (pair.A.Emissive  - pair.B.Emissive)  * blendA;
+
+                if (!isNormal)
+                {
+                    float ia = 1f - ovA;
+                    baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
+                    baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
+                    baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                }
+                else
+                {
+                    baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
+                }
             }
-            else
-            {
-                baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
-            }
-        }
+        });
     }
 
     // Partial-derivative linear add for normal maps: XY (tangent/bitangent) components are decoded
@@ -2610,35 +2853,39 @@ public class CompositorService : IDisposable
     /// </summary>
     internal static void ReplaceNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float a = src[i + 3] / 255f;
-            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
-            if (a <= 0f) continue;
+            for (int i = from; i < to; i += 4)
+            {
+                float a = src[i + 3] / 255f;
+                if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+                if (a <= 0f) continue;
 
-            dst[i]     = (byte)Math.Clamp(dst[i]     + (src[i]     - dst[i])     * a, 0, 255);
-            dst[i + 1] = (byte)Math.Clamp(dst[i + 1] + (src[i + 1] - dst[i + 1]) * a, 0, 255);
-        }
+                dst[i]     = (byte)Math.Clamp(dst[i]     + (src[i]     - dst[i])     * a, 0, 255);
+                dst[i + 1] = (byte)Math.Clamp(dst[i + 1] + (src[i + 1] - dst[i + 1]) * a, 0, 255);
+            }
+        });
     }
 
     internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float a = src[i + 3] / 255f;
-            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
-            if (a <= 0f) continue;
+            for (int i = from; i < to; i += 4)
+            {
+                float a = src[i + 3] / 255f;
+                if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+                if (a <= 0f) continue;
 
-            float bx = dst[i]     / 127.5f - 1f;
-            float by = dst[i + 1] / 127.5f - 1f;
-            float ox = src[i]     / 127.5f - 1f;
-            float oy = src[i + 1] / 127.5f - 1f;
+                float bx = dst[i]     / 127.5f - 1f;
+                float by = dst[i + 1] / 127.5f - 1f;
+                float ox = src[i]     / 127.5f - 1f;
+                float oy = src[i + 1] / 127.5f - 1f;
 
-            dst[i]     = (byte)Math.Clamp((bx + ox * a + 1f) * 127.5f, 0, 255);
-            dst[i + 1] = (byte)Math.Clamp((by + oy * a + 1f) * 127.5f, 0, 255);
-        }
+                dst[i]     = (byte)Math.Clamp((bx + ox * a + 1f) * 127.5f, 0, 255);
+                dst[i + 1] = (byte)Math.Clamp((by + oy * a + 1f) * 127.5f, 0, 255);
+            }
+        });
     }
 
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a). Dst alpha unchanged.
@@ -2646,17 +2893,19 @@ public class CompositorService : IDisposable
     // silhouette gates the normal composite (invisible diffuse pixels stay at base normal).
     internal static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float a = src[i + 3] / 255f;
-            if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
-            if (a <= 0f) continue;
-            float ia = 1f - a;
-            dst[i]     = (byte)(src[i]     * a + dst[i]     * ia);
-            dst[i + 1] = (byte)(src[i + 1] * a + dst[i + 1] * ia);
-            dst[i + 2] = (byte)(src[i + 2] * a + dst[i + 2] * ia);
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                float a = src[i + 3] / 255f;
+                if (mask != null) a = Math.Min(a, mask[i + 3] / 255f);
+                if (a <= 0f) continue;
+                float ia = 1f - a;
+                dst[i]     = (byte)(src[i]     * a + dst[i]     * ia);
+                dst[i + 1] = (byte)(src[i + 1] * a + dst[i + 1] * ia);
+                dst[i + 2] = (byte)(src[i + 2] * a + dst[i + 2] * ia);
+            }
+        });
     }
 
     // Fade the normal map's BLUE channel (skin.shpk "skin color influence") toward black under the
@@ -2669,19 +2918,21 @@ public class CompositorService : IDisposable
     // luminance treated as 1 (coverage-only). `strength` is the global user multiplier.
     internal static void SuppressSkinColorInfluence(byte[] baseN, byte[] cov, byte[]? diffuse, int w, int h, float strength = 1f)
     {
-        int len = w * h * 4;
-        for (int i = 0; i < len; i += 4)
+        ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
-            float a = cov[i + 3] / 255f * strength;
-            if (a <= 0f) continue;
-            if (diffuse != null)
+            for (int i = from; i < to; i += 4)
             {
-                float lum = (0.299f * diffuse[i] + 0.587f * diffuse[i + 1] + 0.114f * diffuse[i + 2]) / 255f;
-                a *= lum;
+                float a = cov[i + 3] / 255f * strength;
                 if (a <= 0f) continue;
+                if (diffuse != null)
+                {
+                    float lum = (0.299f * diffuse[i] + 0.587f * diffuse[i + 1] + 0.114f * diffuse[i + 2]) / 255f;
+                    a *= lum;
+                    if (a <= 0f) continue;
+                }
+                baseN[i + 2] = (byte)(baseN[i + 2] * (1f - a));
             }
-            baseN[i + 2] = (byte)(baseN[i + 2] * (1f - a));
-        }
+        });
     }
 
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
@@ -2742,34 +2993,41 @@ public class CompositorService : IDisposable
     internal static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
     {
         var dst = (byte[])src.Clone();
-        for (int i = 0; i < dst.Length; i += 4)
+        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
+        ParallelPixels(0, dst.Length, 4, (from, to) =>
         {
-            float a = dst[i + 3] / 255f;
-            if (a <= 0f) continue;
-            int pairIdx = idx[i] / 17;
-            if (!rows.TryGetValue(pairIdx, out var pair)) continue;
-            float blendA = idx[i + 1] / 255f;
-            float op = pair.B.Opacity + (pair.A.Opacity - pair.B.Opacity) * blendA;
-            if (op == 0f) continue;
-            float newA = op < 0f
-                ? a * (100f + op) / 100f
-                : a + (1f - a) * op / 100f;
-            dst[i + 3] = (byte)(newA * 255f + 0.5f);
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                float a = dst[i + 3] / 255f;
+                if (a <= 0f) continue;
+                int pairIdx = idx[i] / 17;
+                if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+                float blendA = idx[i + 1] / 255f;
+                float op = pair.B.Opacity + (pair.A.Opacity - pair.B.Opacity) * blendA;
+                if (op == 0f) continue;
+                float newA = op < 0f
+                    ? a * (100f + op) / 100f
+                    : a + (1f - a) * op / 100f;
+                dst[i + 3] = (byte)(newA * 255f + 0.5f);
+            }
+        });
         return dst;
     }
 
     internal static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
     {
         var dst = (byte[])src.Clone();
-        for (int i = 3; i < dst.Length; i += 4)
+        ParallelPixels(3, dst.Length, 4, (from, to) =>
         {
-            int a = dst[i];
-            if (opacity < 0)
-                dst[i] = (byte)(a * (100 + opacity) / 100);
-            else if (a > 0)
-                dst[i] = (byte)Math.Min(255, a + (255 - a) * opacity / 100);
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                int a = dst[i];
+                if (opacity < 0)
+                    dst[i] = (byte)(a * (100 + opacity) / 100);
+                else if (a > 0)
+                    dst[i] = (byte)Math.Min(255, a + (255 - a) * opacity / 100);
+            }
+        });
         return dst;
     }
 
@@ -2794,13 +3052,16 @@ public class CompositorService : IDisposable
         if (w == null || t == null) return coverageRgba;
         var dst = (byte[])coverageRgba.Clone();
         int n = Math.Min(w.Length, dst.Length / 4);
-        for (int pi = 0; pi < n; pi++)
+        ParallelPixels(0, n, 1, (from, to) =>
         {
-            int baseA = dst[pi * 4 + 3];
-            if (baseA == 0) continue;                        // no base coverage → mask has no say (stays 0)
-            int v = baseA * w[pi] / 255 + (additive ? t[pi] : 0);
-            dst[pi * 4 + 3] = (byte)(v > 255 ? 255 : v);
-        }
+            for (int pi = from; pi < to; pi++)
+            {
+                int baseA = dst[pi * 4 + 3];
+                if (baseA == 0) continue;                    // no base coverage → mask has no say (stays 0)
+                int v = baseA * w[pi] / 255 + (additive ? t[pi] : 0);
+                dst[pi * 4 + 3] = (byte)(v > 255 ? 255 : v);
+            }
+        });
         return dst;
     }
 
