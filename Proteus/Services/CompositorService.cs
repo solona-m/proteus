@@ -125,6 +125,44 @@ public class CompositorService : IDisposable
     public List<OverlayEntry> LastDiscovered { get; private set; } = [];
     public event Action? ResultChanged;
 
+    // Guards for EnsureDiscovered's background probe: one at a time, and not more often than this.
+    private const int DiscoverProbeIntervalMs = 2000;
+    private int _discoverProbeRunning;
+    private long _lastDiscoverProbeTick;
+
+    /// <summary>
+    /// Populate <see cref="LastDiscovered"/> for the UI WITHOUT compositing. That list is otherwise only
+    /// filled deep inside a full recomposite, and at game boot none runs (Penumbra isn't up yet when the
+    /// plugin is constructed), so the mod list would sit empty until the user pressed Refresh — which
+    /// forces a whole composite just to see a list. This does the cheap discovery half only: no managed-mod
+    /// write, no Penumbra reload, no redraw. Safe to call every frame — it no-ops once the list is
+    /// populated, while a probe is in flight, or within the retry interval, and runs off the UI thread.
+    /// </summary>
+    public void EnsureDiscovered()
+    {
+        if (LastDiscovered.Count > 0 || !config.PluginEnabled || !penumbra.IsAvailable) return;
+        if (unchecked(Environment.TickCount64 - _lastDiscoverProbeTick) < DiscoverProbeIntervalMs) return;
+        if (Interlocked.Exchange(ref _discoverProbeRunning, 1) == 1) return;
+
+        _lastDiscoverProbeTick = Environment.TickCount64;
+        Task.Run(() =>
+        {
+            try
+            {
+                // Discovery returns empty while Penumbra's mod list isn't readable yet (early boot); leave
+                // LastDiscovered alone in that case so the retry interval picks it up a moment later.
+                var found = discovery.DiscoverAll();
+                if (found.Count > 0 && LastDiscovered.Count == 0)
+                {
+                    LastDiscovered = found;
+                    log.Debug("[Proteus] mod list populated by discovery probe ({0} mod(s)) — no composite run", found.Count);
+                }
+            }
+            catch (Exception ex) { log.Debug("[Proteus] discovery probe failed: {0}", ex.Message); }
+            finally { Interlocked.Exchange(ref _discoverProbeRunning, 0); }
+        });
+    }
+
     public CompositorService(
         PenumbraBridge penumbra,
         GlamourerBridge glamourer,

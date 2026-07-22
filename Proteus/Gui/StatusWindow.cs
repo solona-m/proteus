@@ -106,6 +106,11 @@ public class StatusWindow : Window
             _indexRowCache.Clear();
         }
 
+        // At game boot no composite has run yet (Penumbra isn't up when the plugin loads), so the mod list
+        // would be empty until the user pressed Refresh. Fill it from a cheap discovery-only probe instead
+        // — no compositing, no redraw. No-ops once populated.
+        compositor.EnsureDiscovered();
+
         // Status — not controls — so it stays outside the tabs and is visible from any of them.
         DrawStatusBanner();
 
