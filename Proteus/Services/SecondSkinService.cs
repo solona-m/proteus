@@ -272,6 +272,14 @@ public sealed class SecondSkinService
                 log.Information("[Proteus] second skin: {0} is vanilla (gen2) — no gear overlay opted into All bodies, skipping part", bodyGamePath);
                 continue;
             }
+            // Each part's own UV space, resolved path and size — the shell takes ONE uv space (the first
+            // kept part's, below) and maps every part's art with it, so a part whose space differs here is
+            // rendered with the wrong UVs. Logged per part because the fallback paths resolve through
+            // Penumbra to whatever body mod owns them, which can differ slot to slot.
+            log.Information("[Proteus] second skin part {0}: uv={1} {2} ({3} KB) <- {4}",
+                part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024,
+                bodyDisk ?? "(game data)");
+
             bodies.Add(bytes);
             modelType ??= partType;
         }
@@ -778,6 +786,21 @@ public sealed class SecondSkinService
                 return null;
             }
 
+            // The shell is cut from THIS character's body, so it may only be redirected onto a model the
+            // game loads under THIS character's race code. An invisible item with no model for our race
+            // loads a fallback race instead (e.g. c0101 male on a c0201 female); the game then applies
+            // race-conversion deformation to whatever sits at that path, which shrinks and warps our shell
+            // — it ends up inside the skin with only its edges poking through, correctly shaped and
+            // animated but visibly the wrong size. Skip it and let the next candidate host instead.
+            if (PathCharCode(gamePath) is { } pathCc
+                && !string.Equals(pathCc, charCode, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Information(
+                    "[Proteus] host: {0} ({1}{2:D4}) loads as c{3}, not this character's c{4} — the game would "
+                  + "race-deform the shell, skipping", slot, prefix, setId, pathCc, charCode);
+                return null;
+            }
+
             // A host's model path is one WE redirect to the shell, so Penumbra can resolve it straight back
             // to our own previous output. Taking that as the "base" is a feedback loop: on the append path
             // it would merge the shell into the shell again every composite, doubling the model each run.
@@ -948,6 +971,18 @@ public sealed class SecondSkinService
     {
         var m = System.Text.RegularExpressions.Regex.Match(gamePath, $@"/{prefix}(\d+)/");
         return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? id : null;
+    }
+
+    /// <summary>
+    /// The race/gender code a model path is loaded under, e.g. "…/model/c0101e0279_met.mdl" → "0101".
+    /// Null when the path carries none. This is NOT always the wearer's own code: an item with no model
+    /// for their race falls back to another (commonly c0101), and the game race-deforms whatever it finds
+    /// there — so a shell built for the wearer must never be redirected onto a foreign-race path.
+    /// </summary>
+    private static string? PathCharCode(string gamePath)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(gamePath, @"/c(\d+)[ae]\d+_");
+        return m.Success ? m.Groups[1].Value : null;
     }
 
     /// <summary>
