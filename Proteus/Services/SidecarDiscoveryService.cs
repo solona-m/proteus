@@ -42,6 +42,10 @@ public class SidecarDiscoveryService
 
     private const string SidecarSubdir = "Proteus";
     private const string MetadataFile  = "metadata.json";
+    // The mod's settings as Proteus first found them, copied aside just before our first write so the
+    // editor's "Reset to defaults" can restore them. Discovery only ever looks for MetadataFile by exact
+    // name, so this sits inertly beside it.
+    private const string DefaultsFile  = "metadata.default.json";
     public  const string ManagedModDir = "Proteus";  // directory name of the managed output mod
 
     // Convention-based "Masks" feature: a Penumbra multi-select group named exactly "Masks"
@@ -560,6 +564,8 @@ public class SidecarDiscoveryService
         try
         {
             var path = Path.Combine(entry.SidecarRoot, MetadataFile);
+            SnapshotDefaults(entry, path);
+
             // Skip nulls: the gear-layer fields are all optional, and writing them out as null would
             // bloat every mod's metadata.json the first time it's saved.
             var json = JsonSerializer.Serialize(entry.Metadata, new JsonSerializerOptions
@@ -573,6 +579,43 @@ public class SidecarDiscoveryService
         {
             log.Warning(ex, "Failed to save Proteus metadata for {0}", entry.ModDirectory);
         }
+    }
+
+    /// <summary>
+    /// Preserve the mod's settings as they were BEFORE Proteus ever wrote to them, so the editor's "Reset
+    /// to defaults" has something to restore. The editor mutates <c>entry.Metadata</c> in memory and only
+    /// then calls <see cref="SaveMetadata"/>, so at this moment the file on disk is still the original —
+    /// copying it here (once, before the first overwrite) captures the author's values. Best-effort: a
+    /// failed snapshot must never stop the save.
+    /// </summary>
+    private void SnapshotDefaults(OverlayEntry entry, string metaPath)
+    {
+        try
+        {
+            var defaults = Path.Combine(entry.SidecarRoot, DefaultsFile);
+            if (File.Exists(defaults) || !File.Exists(metaPath)) return;
+            File.Copy(metaPath, defaults);
+            log.Information("[Proteus] captured original settings for {0} -> {1}", entry.ModDirectory, DefaultsFile);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to snapshot original Proteus metadata for {0}", entry.ModDirectory);
+        }
+    }
+
+    /// <summary>True when this mod has a recorded pre-edit snapshot to reset back to.</summary>
+    public bool HasDefaults(OverlayEntry entry)
+        => File.Exists(Path.Combine(entry.SidecarRoot, DefaultsFile));
+
+    /// <summary>
+    /// The mod's settings as first seen by Proteus, or null when none were recorded / the file is broken.
+    /// Each call re-parses, so the returned graph is freshly owned and can be assigned into the live
+    /// metadata without cloning.
+    /// </summary>
+    public ProteusMetadata? TryLoadDefaults(OverlayEntry entry)
+    {
+        var defaults = Path.Combine(entry.SidecarRoot, DefaultsFile);
+        return File.Exists(defaults) ? TryParseMetadata(defaults) : null;
     }
 
     private ProteusMetadata? TryParseMetadata(string metaPath)

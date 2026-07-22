@@ -212,6 +212,62 @@ public class DesignBindingTests
         Assert.True(Matches(design, state));
     }
 
+    // Proteus's own invisible-glasses host sits in the Glasses slot without the player choosing it. If it
+    // were compared like a real bonus item, EVERY design that saved the slot would stop matching, the
+    // apply would be treated as unbound, and HandleUnboundDesign would disable all Proteus mods.
+    [Fact]
+    public void Neutralize_SyntheticGlassesReadAsEmpty()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", bonusId: 0);          // design saved "no glasses"
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 1);           // ...but Proteus injected its host
+
+        Assert.False(Matches(design, state));              // raw state: our host looks like a real choice
+        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
+        Assert.True(Matches(design, clean));
+    }
+
+    // Only OUR item is discounted — glasses the player actually chose still take part in the match.
+    [Fact]
+    public void Neutralize_PlayerChosenGlassesStillCompared()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", bonusId: 4);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 7);           // a different, player-picked pair
+
+        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
+        Assert.False(Matches(design, clean));
+    }
+
+    // The normalizer must not mutate the caller's state object — the raw state is reused elsewhere.
+    [Fact]
+    public void Neutralize_DoesNotMutateInput()
+    {
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 1);
+
+        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
+
+        Assert.Equal(1ul, ((JObject)state["Bonus"]!["Glasses"]!)["BonusId"]!.ToObject<ulong>());
+        Assert.Equal(0ul, ((JObject)clean["Bonus"]!["Glasses"]!)["BonusId"]!.ToObject<ulong>());
+    }
+
+    // A design that applies the glasses slot but carries no BonusId must still be REJECTED (IdEquals
+    // treats a missing id as a mismatch); coercing absent ids to 0 would let it match spuriously.
+    [Fact]
+    public void StateMatches_MissingBonusIdIsRejected()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var dBonus = (JObject)(design["Bonus"] ??= new JObject());
+        dBonus["Glasses"] = new JObject { ["Apply"] = true };   // applied, but no BonusId
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", bonusId: 0);
+
+        Assert.False(Matches(design, state));
+    }
+
     // ── StateMatches: customize ────────────────────────────────────────────────
 
     [Fact]

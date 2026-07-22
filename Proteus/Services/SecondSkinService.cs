@@ -888,11 +888,28 @@ public sealed class SecondSkinService
             WarnOverBudget("glasses/head", 'e', c.SetId, c.Mats);
         }
 
-        // NOTE: there is no invisible-glasses-from-nothing route. An empty head/facewear slot loads NO
-        // model (unlike body/hands, which always draw an e0000 base), so there is nothing to redirect —
-        // verified in-game: a replace-redirect of c{cc}e0000_met.mdl never rendered. A model only exists to
-        // host on when the player actually wears something in that slot (real glasses hit the "met" branch
-        // above; an equipped invisible Emperor accessory hits the fallback below).
+        // Nothing occupies the head "_met" slot yet, but the invisible-glasses feature is on — so the
+        // compositor is about to equip our pair. Host on it NOW instead of grabbing a ring: the injected
+        // model only loads after the equip's redraw, so waiting for it to appear in the capture would mean
+        // building a whole ring-hosted shell and redrawing, then throwing both away and rebuilding once the
+        // glasses land (measured: ~20s and two full redraws on every plugin load).
+        //
+        // Safe to commit to without the model in hand because OUR pair always takes the REPLACE path, which
+        // needs no base-model bytes, and its path is fully determined by our set id plus this character —
+        // a real Glasses-sheet item has a model for every race, so c{charCode} resolves.
+        if ((metModels == null || metModels.Count == 0) && invisibleGlassesSet is int pending)
+        {
+            var pendingPath = $"chara/equipment/e{pending:D4}/model/c{charCode}e{pending:D4}_met.mdl";
+            log.Information("[Proteus] host: CHOSEN invisible glasses e{0:D4} (met, REPLACE — pending injection)", pending);
+            return new HostAccessory(pending, "met", "Head", null, 0, "equipment", 'e', pendingPath);
+        }
+
+        // NOTE: there is no invisible-glasses-from-nothing route for a slot we DON'T fill ourselves. An
+        // empty head/facewear slot loads NO model (unlike body/hands, which always draw an e0000 base), so
+        // there is nothing to redirect — verified in-game: a replace-redirect of c{cc}e0000_met.mdl never
+        // rendered. Absent our own injection, a model only exists to host on when the player actually wears
+        // something there (real glasses hit the "met" branch above; an equipped invisible Emperor accessory
+        // hits the fallback below).
 
         // Rings next: fewest materials, right (rir) wins a tie.
         var right = Consider("rir", "RFinger");

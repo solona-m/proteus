@@ -39,12 +39,20 @@ public static class ColorTableEditor
     /// "Advanced" mode-pin, and the "Rendering as" badge to the right of Advanced. Kept below the rows so
     /// the eye lands on the colours first. Sets <paramref name="edited"/> = Glow when the effect changes.
     /// </summary>
+    /// <param name="onReset">
+    /// Restores this option's settings to the mod's recorded originals; returns true when something
+    /// actually changed. Supplied by the caller because only it knows which mod/group/option is open.
+    /// Null hides the button entirely.
+    /// </param>
+    /// <param name="resetDisabledReason">Non-null renders the reset button greyed out and explains why.</param>
     public static bool DrawGlowFooter(
         string idScope,
         IReadOnlyList<OverlayDescriptor> overlays,
         GearSettingsPreset? ovr,
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
-        out FeatureEdit edited)
+        out FeatureEdit edited,
+        Func<bool>? onReset = null,
+        string? resetDisabledReason = null)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -148,6 +156,28 @@ public static class ColorTableEditor
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth — character.shpk (sphere, metal).\n" +
                                  "Animated glow — characterscroll.shpk. Pinning stops the auto mode-switch.");
+
+            if (onReset != null)
+            {
+                ImGui.Separator();
+                bool disabled = resetDisabledReason != null;
+                // Ctrl-guarded: this overwrites the option's current colours/glow/mode with no undo.
+                bool armed = !disabled && ImGui.GetIO().KeyCtrl;
+                using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * (armed ? 1f : 0.5f)))
+                {
+                    if (ImGui.Button($"Reset to defaults##reset_{idScope}") && armed && onReset())
+                        changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(disabled
+                        ? resetDisabledReason
+                        : "Hold Ctrl and click to restore this option's colours, glow and mode to the\n" +
+                          "settings Proteus first recorded for this mod. Cannot be undone.\n\n" +
+                          "If a design is applied, this also drops that design's saved override for this\n" +
+                          "option — otherwise the design would just re-impose it. Other designs keep theirs.\n\n" +
+                          "Note: those originals were captured the first time Proteus saved this mod —\n" +
+                          "if you had already edited it before then, that edited state is the \"default\".");
+            }
         }
 
         return changed;

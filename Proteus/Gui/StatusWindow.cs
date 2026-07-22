@@ -690,7 +690,10 @@ public class StatusWindow : Window
             var activeId = designBindings.ActiveDesignId;
             var name = designBindings.Bindings.FirstOrDefault(b => b.DesignId == activeId)?.DesignName
                        ?? activeId?.ToString()[..8] ?? "?";
-            ImGui.TextColored(BindingAccent, $"Editing binding '{name}' — previewing live; click \"Update binding\" to save. Base colors unchanged.");
+            // Note the Reset caveat: it is the one control here that DOES rewrite the mod's own settings,
+            // so the blanket "base colors unchanged" promise would be a lie next to it.
+            ImGui.TextColored(BindingAccent, $"Editing binding '{name}' — previewing live; click \"Update binding\" to save.");
+            ImGui.TextColored(BindingAccent, "Base colors unchanged, except \"Reset to defaults\" (Advanced), which rewrites them.");
         }
 
         ImGui.Separator();
@@ -760,22 +763,33 @@ public class StatusWindow : Window
 
             // Glow effect + Advanced live at the very bottom, below the rows.
             ImGui.Separator();
+            bool resetSimple = false;
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
-                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple);
+                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple,
+                onReset: () => resetSimple = ResetToDefaults(entry, null, null),
+                resetDisabledReason: ResetBlockedReason(entry));
 
-            // Let the features drive the render mode (unless the user pinned it). Runs after all draws.
-            bool modeChangedSimple = ReconcileMode(simpleOverlays, gearOvrSimple, rows,
-                rowEditSimple != FeatureEdit.Neutral ? rowEditSimple : footerEditSimple);
+            // A reset just restored the recorded values — they ARE the intended state, so skip the mode
+            // re-inference and glow transition this frame. Both compare against pre-reset state and would
+            // happily re-pin the mode or zero/150% the glow rows we only just put back.
+            bool modeChangedSimple = false;
+            if (!resetSimple)
+            {
+                // Let the features drive the render mode (unless the user pinned it). Runs after all draws.
+                modeChangedSimple = ReconcileMode(simpleOverlays, gearOvrSimple, rows,
+                    rowEditSimple != FeatureEdit.Neutral ? rowEditSimple : footerEditSimple);
 
-            // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and
-            // zero it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
-            ApplyGlowTransition(rows, modeBeforeSimple, EffectiveMode(simpleOverlays, gearOvrSimple));
+                // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and
+                // zero it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
+                ApplyGlowTransition(rows, modeBeforeSimple, EffectiveMode(simpleOverlays, gearOvrSimple));
+            }
 
             if (changedSimple || footerChangedSimple || modeChangedSimple)
             {
                 // Binding path: live-preview only — edits stay in the in-memory overrides and fold into the
-                // binding via "Update binding". Base metadata persists only when NOT editing a binding.
-                if (!editingBinding) discovery.SaveMetadata(entry);
+                // binding via "Update binding". Base metadata persists only when NOT editing a binding —
+                // except a reset, which exists precisely to rewrite the base and must always land.
+                if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
                 else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
@@ -973,21 +987,31 @@ public class StatusWindow : Window
 
         // Glow effect + Advanced live at the very bottom, below the rows.
         ImGui.Separator();
-        bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit);
+        bool resetOpt = false;
+        bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
+            onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
+            resetDisabledReason: ResetBlockedReason(entry));
 
-        bool modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
-            rowEdit != FeatureEdit.Neutral ? rowEdit : footerEdit);
+        // A reset just restored the recorded values — they ARE the intended state, so skip the mode
+        // re-inference and glow transition this frame (both would re-derive from pre-reset state).
+        bool modeChanged = false;
+        if (!resetOpt)
+        {
+            modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
+                rowEdit != FeatureEdit.Neutral ? rowEdit : footerEdit);
 
-        // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and zero
-        // it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
-        ApplyGlowTransition(editRows, modeBefore, EffectiveMode(activeOpt.Overlays, gearOvrOpt));
+            // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and zero
+            // it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
+            ApplyGlowTransition(editRows, modeBefore, EffectiveMode(activeOpt.Overlays, gearOvrOpt));
+        }
 
         if (changed || footerChanged || modeChanged)
         {
             // Binding path: live-preview only (folded in via "Update binding"). Base metadata persists only
             // when NOT editing a binding — gate on that directly, not on whether a gear override exists
             // (an option with colour rows but no overlay descriptors has a null gear override even mid-binding).
-            if (!editingBinding) discovery.SaveMetadata(entry);
+            // A reset is the exception: it rewrites the base on purpose, so it must always land.
+            if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
             else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
@@ -1112,6 +1136,93 @@ public class StatusWindow : Window
             catch { /* the scan just keeps counting every pixel */ }
 
         });
+    }
+
+    /// <summary>
+    /// Restore ONE option's settings — its colour rows and its overlays' gear/glow/mode fields — from the
+    /// snapshot Proteus recorded before it first wrote to this mod. Other options are left alone. Pass a
+    /// null <paramref name="groupName"/> for a simple (no option-group) mod, which restores the top level.
+    /// Returns false when there's no snapshot or no matching option, so the caller skips the save.
+    /// </summary>
+    private bool ResetToDefaults(OverlayEntry entry, string? groupName, OverlayOption? option)
+    {
+        var defaults = discovery.TryLoadDefaults(entry);
+        if (defaults == null) return false;
+
+        // Resolve and validate everything BEFORE mutating anything: the binding clear below is persisted
+        // and unrecoverable, so it must never run on a path that then bails out having restored nothing.
+        if (groupName == null)
+        {
+            // Simple mod: the top-level overlays and colour rows ARE the option.
+            ReplaceRows(entry.Metadata.ColorTableRows ??= [], defaults.ColorTableRows);
+            entry.Metadata.Overlays ??= [];
+            ReplaceOverlays(entry.Metadata.Overlays, defaults.Overlays);
+        }
+        else
+        {
+            if (option == null) return false;
+            var srcOpt = defaults.OptionGroups?
+                .FirstOrDefault(g => string.Equals(g.PenumbraGroupName, groupName, StringComparison.OrdinalIgnoreCase))?
+                .Options.FirstOrDefault(o => string.Equals(o.Name, option.Name, StringComparison.OrdinalIgnoreCase));
+            if (srcOpt == null)
+            {
+                Plugin.Log.Warning("[Proteus] reset: {0} has no recorded defaults for [{1}/{2}] — nothing restored",
+                    entry.ModDirectory, groupName, option.Name);
+                return false;
+            }
+
+            ReplaceRows(option.ColorTableRows ??= [], srcOpt.ColorTableRows);
+            ReplaceOverlays(option.Overlays, srcOpt.Overlays);
+        }
+
+        // Only now that the base really was restored: a design binding keeps its OWN captured
+        // Layer/Shader/colours for this option and re-imposes them on every apply, so the restore would
+        // look like nothing happened while that override survives. Other designs keep theirs.
+        designBindings.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
+
+        // Descriptor Index paths may differ from the edited ones, so the cached row scans are stale.
+        foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
+            _indexRowCache.Remove(k);
+
+        Plugin.Log.Information("[Proteus] reset {0}{1} to recorded defaults",
+            entry.ModDirectory, groupName == null ? "" : $" [{groupName}/{option!.Name}]");
+        return true;
+    }
+
+    // Both swaps mutate the live list IN PLACE rather than reassigning: the editor captured these lists
+    // into locals before the button was drawn, and the compositor holds them too — handing back a new
+    // instance would leave every one of those references pointing at the pre-reset data.
+    // `live` is non-null by contract — callers create the list first (`??= []`) so a snapshot's overlays
+    // are never silently dropped, which would half-restore the option and then save that.
+    private static void ReplaceOverlays(List<OverlayDescriptor> live, List<OverlayDescriptor>? from)
+    {
+        live.Clear();
+        if (from != null) live.AddRange(from);
+    }
+
+    private static void ReplaceRows(List<ColorTableRowPreset> live, List<ColorTableRowPreset>? from)
+    {
+        live.Clear();
+        if (from != null) live.AddRange(from);
+    }
+
+    // Whether each mod has a defaults snapshot. Cached because ResetBlockedReason is evaluated as an
+    // argument on EVERY draw, and the uncached answer is a filesystem stat. The snapshot can only appear
+    // as a result of our own SaveMetadata, so invalidating there (InvalidateDefaultsCache) is complete.
+    private readonly Dictionary<string, bool> _hasDefaultsCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private void InvalidateDefaultsCache(OverlayEntry entry) => _hasDefaultsCache.Remove(entry.SidecarRoot);
+
+    /// <summary>Why "Reset to defaults" can't run right now, or null when it can.</summary>
+    private string? ResetBlockedReason(OverlayEntry entry)
+    {
+        if (!_hasDefaultsCache.TryGetValue(entry.SidecarRoot, out var has))
+            _hasDefaultsCache[entry.SidecarRoot] = has = discovery.HasDefaults(entry);
+
+        return has
+            ? null
+            : "No original settings recorded for this mod yet — Proteus captures them the first time\n" +
+              "it saves a change here.";
     }
 
     private HashSet<int> ScanIndexFile(string absolutePath, string? bodyType)

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
@@ -379,6 +381,11 @@ public class DesignBindingService : IDisposable
 
     private void DisableAllProteusMods()
     {
+        // Proteus is standing down, so its invisible-glasses host has nothing left to carry. Pull it now:
+        // once the mods are off, the redirect that renders it as the shell goes with them, and anything
+        // still equipped shows up as a real pair of glasses on the player's face.
+        compositor.RemoveInjectedGlasses();
+
         var collId = penumbra.GetPlayerCollectionId();
         if (collId == null) return;
         foreach (var e in discovery.DiscoverAll())
@@ -443,6 +450,77 @@ public class DesignBindingService : IDisposable
             }
             return ovr.Top ??= GearSettingsPreset.From(seed);
         }
+    }
+
+    /// <summary>
+    /// Drop ONE option's colour + gear override from the ACTIVE design's binding: from the live in-memory
+    /// copy (so the preview falls back to the mod's own metadata straight away) and from the persisted
+    /// binding (so re-applying that design doesn't bring it back). Other designs keep theirs.
+    ///
+    /// This is what makes the editor's "Reset to defaults" stick on a bound mod — restoring metadata.json
+    /// alone is invisible while a binding holds its own captured Layer/Shader/colours for that option and
+    /// re-imposes them on every apply. Returns false when no design is active or nothing was stored.
+    /// </summary>
+    public bool ClearOptionOverride(string modDir, string? group, string? option)
+    {
+        bool touched = false;
+        IReadOnlyDictionary<string, OverlayColorOverride>? colours;
+        IReadOnlyDictionary<string, OverlayGearOverride>? gears;
+
+        lock (gate)
+        {
+            if (activeDesignId is not { } id) return false;
+
+            // Live preview copies.
+            if (activeOverride != null && activeOverride.TryGetValue(modDir, out var col))
+                touched |= ClearScope(col.Options, group, option, () => { bool had = col.Top != null; col.Top = null; return had; });
+            if (activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var gear))
+                touched |= ClearScope(gear.Options, group, option, () => { bool had = gear.Top != null; gear.Top = null; return had; });
+
+            // Persisted binding, so the design stops re-applying it.
+            if (store.Bindings.TryGetValue(id, out var b))
+            {
+                var mod = b.Mods.FirstOrDefault(m =>
+                    string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+                if (mod != null)
+                {
+                    touched |= ClearScope(mod.Colors.Options, group, option,
+                        () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
+                    touched |= ClearScope(mod.Gear.Options, group, option,
+                        () => { bool had = mod.Gear.Top != null; mod.Gear.Top = null; return had; });
+                }
+            }
+
+            // Serialising must happen under the lock (a consistent `store`), but the write must not:
+            // this store reaches tens of MB and the caller is an ImGui button on the framework thread.
+            if (touched) SaveDeferred();
+            colours = activeOverride;
+            gears   = activeGearOverride;
+        }
+
+        if (!touched) return false;
+
+        // Re-publish the trimmed overrides so the next composite drops this option's override.
+        compositor.SetActiveColorOverride(colours);
+        compositor.SetActiveGearOverride(gears);
+        log.Information("[Proteus] cleared binding override for {0} [{1}/{2}] from the active design",
+            modDir, group ?? "(top)", option ?? "(top)");
+        return true;
+    }
+
+    /// <summary>Remove one group/option entry from an override map (pruning the group when it empties),
+    /// or clear the top-level entry when BOTH group and option are null. Returns whether anything was
+    /// there. A half-specified scope (one null, one not) is a caller bug: refuse it rather than fall
+    /// through to clearing Top, which would wipe the settings every option inherits.</summary>
+    private static bool ClearScope<T>(Dictionary<string, Dictionary<string, T>>? options,
+        string? group, string? option, Func<bool> clearTop)
+    {
+        if (group == null && option == null) return clearTop();
+        if (group == null || option == null) return false;
+        if (options == null || !options.TryGetValue(group, out var inner)) return false;
+        if (!inner.Remove(option)) return false;
+        if (inner.Count == 0) options.Remove(group);
+        return true;
     }
 
     /// <summary>
@@ -517,6 +595,12 @@ public class DesignBindingService : IDisposable
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
 
+        // Match against the player's OWN choices: strip anything Proteus equipped for them (today the
+        // invisible-glasses host) or nothing would ever match and every Proteus mod would be disabled.
+        state = NeutralizeProteusOwnedState(state, config.AutoInvisibleGlasses
+            ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId
+            : null);
+
         var matches = new List<(Guid id, int specificity)>();
         foreach (var id in candidateIds)
         {
@@ -584,6 +668,10 @@ public class DesignBindingService : IDisposable
     // `specificity` counts how many applied fields matched: a richer design that also matches the
     // dye/bonus/appearance scores higher than a gear-only design for the same look, so the caller can
     // prefer the most-constrained match. Any mismatch on an applied field rejects the design outright.
+    /// <remarks>
+    /// Compares the design against the player's OWN choices, so the caller must first strip anything
+    /// Proteus wrote on their behalf — see <see cref="NeutralizeProteusOwnedState"/>.
+    /// </remarks>
     internal static bool StateMatches(JObject design, JObject state, out int specificity)
     {
         specificity = 0;
@@ -667,6 +755,38 @@ public class DesignBindingService : IDisposable
     private static bool IdEquals(JToken? a, JToken? b)
         => a != null && b != null && a.ToObject<ulong>() == b.ToObject<ulong>();
 
+    /// <summary>
+    /// Blank out every part of the player's Glamourer state that PROTEUS wrote, so design matching only
+    /// ever sees the player's own choices. Returns a copy; the input is left alone.
+    ///
+    /// This is the single place that knows what Proteus injects. Without it, anything we equip on the
+    /// player's behalf makes their live state differ from every design that saved that field: no design
+    /// matches, the apply is treated as unbound, and <see cref="HandleUnboundDesign"/> disables every
+    /// Proteus mod. Keep this in step with each new injection rather than teaching the matcher about them
+    /// one at a time — the failure mode is losing the user's whole setup.
+    /// </summary>
+    /// <param name="syntheticGlassesId">
+    /// The Glasses-slot item id of the invisible-glasses host, when that feature has one equipped.
+    /// </param>
+    internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId)
+    {
+        if (syntheticGlassesId is not { } glasses) return state;   // nothing of ours in there
+        if (state["Bonus"] is not JObject bonus) return state;
+
+        JObject? copy = null;
+        foreach (var prop in bonus.Properties())
+        {
+            if (prop.Value is not JObject slot) continue;
+            if (slot["BonusId"] is not { } id || id.ToObject<ulong>() != glasses) continue;
+
+            // Ours — present it as an empty slot so a design that saved "no glasses" still matches.
+            copy ??= (JObject)state.DeepClone();
+            if (((JObject?)copy["Bonus"])?[prop.Name] is JObject target)
+                target["BonusId"] = 0;
+        }
+        return copy ?? state;
+    }
+
     // Compare whichever numeric colour fields the design entry carries against the state entry, with
     // a small tolerance to absorb float round-trip noise. A field present on the design but missing
     // from the state is treated as a mismatch.
@@ -697,6 +817,34 @@ public class DesignBindingService : IDisposable
             log.Warning(ex, "[Proteus] Failed to load design bindings; starting empty.");
             store = new();
         }
+    }
+
+    // Latest serialized store awaiting a write, and the gate that keeps writes from interleaving.
+    private readonly object writeGate = new();
+    private string? pendingJson;
+
+    /// <summary>
+    /// Serialize now (the caller holds <c>gate</c>, so <c>store</c> is consistent) but write off the
+    /// calling thread. The bindings file grows to tens of MB, so a synchronous write from a UI click
+    /// stalls the frame — and doing it inside the lock also blocks every concurrent binding operation.
+    /// Whichever flush runs first writes the newest snapshot; superseded ones find nothing and skip, so
+    /// a stale write can never land on top of a newer one.
+    /// </summary>
+    private void SaveDeferred()
+    {
+        try { Interlocked.Exchange(ref pendingJson, JsonSerializer.Serialize(store, JsonOpts)); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] Failed to serialize design bindings."); return; }
+
+        Task.Run(() =>
+        {
+            lock (writeGate)
+            {
+                var json = Interlocked.Exchange(ref pendingJson, null);
+                if (json == null) return;   // a later flush already wrote a newer snapshot
+                try { File.WriteAllText(storePath, json); }
+                catch (Exception ex) { log.Warning(ex, "[Proteus] Failed to save design bindings."); }
+            }
+        });
     }
 
     private void Save()

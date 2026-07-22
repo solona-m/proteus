@@ -864,7 +864,11 @@ public class CompositorService : IDisposable
     /// </summary>
     /// <param name="gearWanted">Gear overlays are active, so a shell is supposed to exist.</param>
     /// <param name="shellBuilt">A shell actually built this composite.</param>
-    private void ReconcileInvisibleGlasses(bool gearWanted, bool shellBuilt)
+    /// <param name="alreadyHosted">
+    /// The shell just built is already hosted on the pair we are about to equip, so the redirect is live
+    /// and the equip's own redraw shows the finished result — no follow-up recomposite needed.
+    /// </param>
+    private void ReconcileInvisibleGlasses(bool gearWanted, bool shellBuilt, bool alreadyHosted = false)
     {
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
         bool want = config.AutoInvisibleGlasses && shellBuilt;
@@ -884,9 +888,20 @@ public class CompositorService : IDisposable
                 && SetGlassesOnFramework(g.ItemId))
             {
                 _lastGlassesInjectTick = Environment.TickCount64;
-                log.Information("[Proteus] invisible glasses: equipped item #{0} (model e{1:D4}) — recompositing to host on it",
-                    g.ItemId, g.ModelSet);
-                TriggerRecomposite("invisible-glasses-equipped", delayMs: 600);
+                if (alreadyHosted)
+                {
+                    // The composite that just finished already built and redirected the shell onto this
+                    // pair, so the equip's redraw lands on it directly — recompositing would only redo
+                    // identical work and force a second redraw.
+                    log.Information("[Proteus] invisible glasses: equipped item #{0} (model e{1:D4}) — shell already hosted on it",
+                        g.ItemId, g.ModelSet);
+                }
+                else
+                {
+                    log.Information("[Proteus] invisible glasses: equipped item #{0} (model e{1:D4}) — recompositing to host on it",
+                        g.ItemId, g.ModelSet);
+                    TriggerRecomposite("invisible-glasses-equipped", delayMs: 600);
+                }
             }
         }
         else if ((!config.AutoInvisibleGlasses || !gearWanted) && IsOurGlassesWorn(g.ModelSet))
@@ -983,6 +998,13 @@ public class CompositorService : IDisposable
             if (entries.Count == 0)
             {
                 WriteManagedModJson(new Dictionary<string, string>());
+
+                // Nothing is hosted, and the line above just deleted the redirect that renders our
+                // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
+                // glasses on the player's face that they never chose, so take it off before the redraw.
+                // This early return skips the reconcile at the end of the method, hence the explicit call.
+                ReconcileInvisibleGlasses(gearWanted: false, shellBuilt: false);
+
                 ReloadAndRedraw();
                 LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
                 ResultChanged?.Invoke();
@@ -2067,6 +2089,10 @@ public class CompositorService : IDisposable
             _secondSkinActive = false;
             _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
+            // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
+            // branch). The injection below then needs no follow-up recomposite — the redirect is already
+            // in place, so the equip's own redraw lands straight on the finished shell.
+            bool glassesPreHosted = false;
             if (gearOverlays.Count > 0)
             {
                 // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
@@ -2123,6 +2149,9 @@ public class CompositorService : IDisposable
                         if (shells != null)
                         {
                             shellBuilt = true;
+                            // Mirrors ChooseHost's pending-injection branch: feature on and the "_met"
+                            // slot empty means the shell was built for glasses we are about to equip.
+                            glassesPreHosted = invisibleGlassesSet is int && metModels.Count == 0;
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
@@ -2146,7 +2175,7 @@ public class CompositorService : IDisposable
             // Reconcile the invisible-glasses injection AFTER the redirect mod is live, so when the equip's
             // redraw loads the glasses model it resolves straight to the shell (no visible frames). Passes
             // whether a shell was built this composite; the reconcile reads the current "met" state itself.
-            ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt);
+            ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt, glassesPreHosted);
 
             LastResult = new CompositorResult
             {
