@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
@@ -17,6 +18,12 @@ public class GlamourerBridge : IDisposable
     private readonly IDalamudPluginInterface pluginInterface;
 
     private readonly EventSubscriber<nint, StateChangeType>? stateChangedSub;
+    private readonly EventSubscriber<nint, StateFinalizationType>? stateFinalizedSub;
+
+    // When we last called ReapplyPlayerState, so its own finalization echo can be filtered out. The window
+    // only has to cover Glamourer raising the event for a call we just made, not any real user action.
+    private const int OwnReapplyEchoMs = 250;
+    private long lastOwnReapplyTick;
     private readonly GetDesignList getDesignList;
     private readonly GetDesignJObject getDesignJObject;
     private readonly GetState getState;
@@ -29,10 +36,13 @@ public class GlamourerBridge : IDisposable
     public event Action? LocalPlayerStateChanged;
 
     /// <summary>
-    /// Like <see cref="LocalPlayerStateChanged"/> but carries the change type so consumers can
-    /// react specifically to design applications (used by the design-binding heuristic).
+    /// The local player's state finished a Glamourer operation, carrying WHICH operation
+    /// (<see cref="StateFinalizationType.DesignApplied"/>, <c>ReapplyAutomation</c>, the <c>Revert*</c>
+    /// family, <c>Gearset</c>…). This is what design binding listens to: the per-field
+    /// <see cref="StateChangeType"/> cannot distinguish an automation design-apply from a revert (both
+    /// arrive as Reapply/Reset), and fires several times per operation where this fires once.
     /// </summary>
-    public event Action<StateChangeType>? LocalPlayerStateChangedTyped;
+    public event Action<StateFinalizationType>? LocalPlayerStateFinalized;
 
     /// <summary>
     /// Fired when the local player's character customization changes in a way that may affect
@@ -57,7 +67,8 @@ public class GlamourerBridge : IDisposable
 
         try
         {
-            stateChangedSub = StateChangedWithType.Subscriber(pluginInterface, OnStateChanged);
+            stateChangedSub   = StateChangedWithType.Subscriber(pluginInterface, OnStateChanged);
+            stateFinalizedSub = StateFinalized.Subscriber(pluginInterface, OnStateFinalized);
             IsAvailable = true;
             log.Information("[Proteus] Glamourer IPC subscribed.");
         }
@@ -121,6 +132,10 @@ public class GlamourerBridge : IDisposable
         if (!IsAvailable) return false;
         try
         {
+            // Stamp BEFORE invoking: Glamourer may raise the finalization synchronously, and
+            // OnStateFinalized uses this to recognise the echo as ours (see OwnReapplyEchoMs).
+            Interlocked.Exchange(ref lastOwnReapplyTick, Environment.TickCount64);
+
             // Equipment only: omit Customization (avoids Glamourer's customize-redraw path) and
             // Once/Lock (we don't want to fix or lock state, just trigger the in-place reload).
             var ec = reapplyState.Invoke(0, 0, ApplyFlag.Equipment);
@@ -164,10 +179,46 @@ public class GlamourerBridge : IDisposable
         }
     }
 
+    /// <summary>
+    /// Glamourer finished an operation on the local player, reported once per operation (the change-type
+    /// event fires per field). This drives design binding — see
+    /// <see cref="DesignBindingService.IsApplySignal(StateFinalizationType)"/> for why the finalization
+    /// type is the right signal and the change type is not.
+    /// </summary>
+    private void OnStateFinalized(nint address, StateFinalizationType type)
+    {
+        var localPlayer = objectTable.LocalPlayer;
+        if (localPlayer == null || localPlayer.Address != address) return;
+
+        // Proteus ends most composites by calling ReapplyPlayerState, and Glamourer reports that back as
+        // a Reapply finalization — indistinguishable from an automation-applied design. Swallow our own
+        // echo here, at the point that knows it caused it, so no subscriber re-derives state from a change
+        // Proteus itself made. Only Reapply is suppressed: it is the only type our reapply produces, so a
+        // genuine design application landing in the same window is still delivered.
+        if (type == StateFinalizationType.Reapply && WithinOwnReapplyEcho())
+        {
+            log.Debug("[Proteus] glamourer signal: finalized=Reapply (our own reapply echo, ignored)");
+            return;
+        }
+
+        log.Information("[Proteus] glamourer signal: finalized={0}", type);
+        LocalPlayerStateFinalized?.Invoke(type);
+    }
+
+    private bool WithinOwnReapplyEcho()
+    {
+        var since = unchecked(Environment.TickCount64 - Interlocked.Read(ref lastOwnReapplyTick));
+        return since >= 0 && since < OwnReapplyEchoMs;
+    }
+
     private void OnStateChanged(nint address, StateChangeType changeType)
     {
         var localPlayer = objectTable.LocalPlayer;
         if (localPlayer == null || localPlayer.Address != address) return;
+
+        // Debug-level: this no longer drives design binding (the finalized= signal does), but keeping it
+        // paired in the log makes it obvious which signals an action produced.
+        log.Debug("[Proteus] glamourer signal: changeType={0}", changeType);
 
         // Model/EntireCustomize can change race/body without touching mod settings.
         // Fire the customization event so the compositor recomposites unconditionally.
@@ -181,14 +232,12 @@ public class GlamourerBridge : IDisposable
         if (changeType is not (StateChangeType.Design or StateChangeType.Reset or StateChangeType.Reapply))
             return;
 
-        // Typed first so the design-binding heuristic can set its color override before the
-        // compositor's (debounced) recomposite reads it.
-        LocalPlayerStateChangedTyped?.Invoke(changeType);
         LocalPlayerStateChanged?.Invoke();
     }
 
     public void Dispose()
     {
         stateChangedSub?.Dispose();
+        stateFinalizedSub?.Dispose();
     }
 }

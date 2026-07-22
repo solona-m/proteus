@@ -339,19 +339,55 @@ public class DesignBindingTests
     // ── IsApplySignal ────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(StateChangeType.Design)]
-    [InlineData(StateChangeType.Reapply)] // automation apply + revert surface here
-    [InlineData(StateChangeType.Reset)]   // manual revert
-    public void IsApplySignal_StateWideChanges_AreSignals(StateChangeType type)
+    [InlineData(StateFinalizationType.DesignApplied)]     // manual design apply (observed in-game)
+    [InlineData(StateFinalizationType.Reapply)]           // automation-applied design lands here
+    [InlineData(StateFinalizationType.ReapplyAutomation)]
+    public void IsApplySignal_DesignApplications_AreSignals(StateFinalizationType type)
         => Assert.True(DesignBindingService.IsApplySignal(type));
 
+    // Measured in-game: a gearset change and a revert both arrived as Reapply/Reset on the OLD
+    // StateChangeType signal, so the heuristic ran on both — a gearset swap restored an unrelated design,
+    // and a revert reached HandleUnboundDesign and disabled every Proteus mod. The finalization type tells
+    // them apart, and neither may re-evaluate the applied design.
     [Theory]
-    [InlineData(StateChangeType.Equip)]
-    [InlineData(StateChangeType.Customize)]
-    [InlineData(StateChangeType.Stains)]
-    [InlineData(StateChangeType.MaterialValue)]
-    public void IsApplySignal_IndividualTweaks_AreNotSignals(StateChangeType type)
+    [InlineData(StateFinalizationType.Gearset)]           // gear moved, the design did not
+    [InlineData(StateFinalizationType.Revert)]
+    [InlineData(StateFinalizationType.RevertAutomation)]  // observed: previously hit the disable-all path
+    [InlineData(StateFinalizationType.RevertCustomize)]
+    [InlineData(StateFinalizationType.RevertEquipment)]
+    [InlineData(StateFinalizationType.RevertAdvanced)]
+    [InlineData(StateFinalizationType.ModelChange)]
+    public void IsApplySignal_NonApplications_AreNotSignals(StateFinalizationType type)
         => Assert.False(DesignBindingService.IsApplySignal(type));
+
+    // A revert leaves no design applied, so the active override must be dropped — otherwise the previous
+    // design's colours stay composited onto a character reverted to vanilla.
+    [Theory]
+    [InlineData(StateFinalizationType.Revert)]
+    [InlineData(StateFinalizationType.RevertCustomize)]
+    [InlineData(StateFinalizationType.RevertEquipment)]
+    [InlineData(StateFinalizationType.RevertAdvanced)]
+    public void IsRevertSignal_Reverts_ClearTheOverride(StateFinalizationType type)
+        => Assert.True(DesignBindingService.IsRevertSignal(type));
+
+    // RevertAutomation is followed by a Reapply that restores the right design, so clearing on it would
+    // only add a wasted clear-then-restore pair. Applications obviously must not be treated as reverts.
+    [Theory]
+    [InlineData(StateFinalizationType.RevertAutomation)]
+    [InlineData(StateFinalizationType.DesignApplied)]
+    [InlineData(StateFinalizationType.Reapply)]
+    [InlineData(StateFinalizationType.Gearset)]
+    public void IsRevertSignal_OthersAreNotReverts(StateFinalizationType type)
+        => Assert.False(DesignBindingService.IsRevertSignal(type));
+
+    // The two sets must never overlap: a type that both applies and clears would race itself.
+    [Fact]
+    public void ApplyAndRevertSignals_AreDisjoint()
+    {
+        foreach (StateFinalizationType t in Enum.GetValues<StateFinalizationType>())
+            Assert.False(DesignBindingService.IsApplySignal(t) && DesignBindingService.IsRevertSignal(t),
+                $"{t} is classified as both an application and a revert");
+    }
 
     // ── Store round-trip ───────────────────────────────────────────────────────
 

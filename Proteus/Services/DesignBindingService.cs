@@ -80,7 +80,6 @@ public class DesignBindingService : IDisposable
     private Dictionary<string, OverlayColorOverride>? activeOverride;
     private Dictionary<string, OverlayGearOverride>? activeGearOverride;
     private Guid? activeDesignId;
-    private bool unboundModsDisabled;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
 
@@ -100,12 +99,12 @@ public class DesignBindingService : IDisposable
         storePath = Path.Combine(pluginInterface.ConfigDirectory.FullName, "design_bindings.json");
         Load();
 
-        glamourer.LocalPlayerStateChangedTyped += OnGlamourerStateChangedTyped;
+        glamourer.LocalPlayerStateFinalized += OnGlamourerStateFinalized;
     }
 
     public void Dispose()
     {
-        glamourer.LocalPlayerStateChangedTyped -= OnGlamourerStateChangedTyped;
+        glamourer.LocalPlayerStateFinalized -= OnGlamourerStateFinalized;
     }
 
     // ── UI / accessors ─────────────────────────────────────────────────────────
@@ -202,7 +201,6 @@ public class DesignBindingService : IDisposable
                 activeDesignId       = designId;
                 activeOverride       = newOverride;
                 activeGearOverride   = CloneGear(mods);
-                unboundModsDisabled  = false;
                 Save();
             }
             compositor.SetActiveColorOverride(newOverride);
@@ -314,7 +312,6 @@ public class DesignBindingService : IDisposable
             // in via UpdateActiveBindingFromCurrentState).
             activeOverride      = CloneOverrides(b.Mods);
             activeGearOverride  = CloneGear(b.Mods);
-            unboundModsDisabled = false;
         }
         compositor.SetActiveColorOverride(activeOverride);
         compositor.SetActiveGearOverride(activeGearOverride);
@@ -354,11 +351,10 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// The currently applied design has no captured binding (never bound, or no gear match): revert
-    /// colors to metadata and disable every discovered Proteus overlay mod, so an unrecognized look
-    /// never keeps a previous design's overlays composited onto it. Idempotent via
-    /// <see cref="unboundModsDisabled"/> so repeated apply signals while sitting on the same unbound
-    /// design don't re-issue Penumbra calls every event.
+    /// The currently applied design has no captured binding (never bound, or no gear match): drop the
+    /// colour/gear overrides so everything falls back to each mod's own metadata.
+    ///
+    /// It deliberately does NOT disable the Proteus overlay mods (see <see cref="DisableAllProteusMods"/>).
     /// </summary>
     private void HandleUnboundDesign()
     {
@@ -367,18 +363,31 @@ public class DesignBindingService : IDisposable
         {
             if (activeDesignId != null) { activeDesignId = null; activeOverride = null; activeGearOverride = null; changed = true; }
         }
-        if (changed) { compositor.SetActiveColorOverride(null); compositor.SetActiveGearOverride(null); }
-
-        if (!unboundModsDisabled)
+        if (changed)
         {
-            DisableAllProteusMods();
-            unboundModsDisabled = true;
-            changed = true;
+            compositor.SetActiveColorOverride(null);
+            compositor.SetActiveGearOverride(null);
+            compositor.TriggerRecomposite("design-binding-unbound");
         }
-
-        if (changed) compositor.TriggerRecomposite("design-binding-unbound");
     }
 
+    /// <summary>
+    /// Disable every discovered Proteus overlay mod, so an unrecognised look can't keep a previous design's
+    /// overlays composited onto it.
+    ///
+    /// TEMPORARILY UNUSED — deliberately not called from <see cref="HandleUnboundDesign"/>. Its trigger is
+    /// the gear-match heuristic, which cannot reliably tell "the player applied something I don't know"
+    /// from "I failed to recognise a design I do know". A single false negative turns off the user's entire
+    /// Proteus setup, and that fired twice in one session: once because the invisible-glasses host mutated
+    /// the bonus slot the matcher compares, and once on a plain revert. Until an applied design reports its
+    /// GUID (upstream request pending), the failure is too costly to act on — an unbound design now just
+    /// falls back to metadata colours instead.
+    ///
+    /// Restore the call once binding is GUID-exact: at that point "no binding for this design" is a fact
+    /// rather than a guess. Restoring it also needs its idempotency guard back — a bool set here and
+    /// cleared in <see cref="Capture"/>/<see cref="Restore"/>, so repeated apply signals while sitting on
+    /// the same unbound design don't re-issue a Penumbra call per event.
+    /// </summary>
     private void DisableAllProteusMods()
     {
         // Proteus is standing down, so its invisible-glasses host has nothing left to carry. Pull it now:
@@ -569,14 +578,55 @@ public class DesignBindingService : IDisposable
 
     // ── Heuristic apply detection (framework thread) ────────────────────────────
 
-    // Glamourer automation never delivers Design over IPC for the local player: a Fixed-source
-    // ApplyDesign carries no actors, so the heuristic only ever sees Reapply (automation apply and
-    // revert) — and Reset (manual revert). Mirror GlamourerBridge.OnStateChanged's state-wide set.
-    internal static bool IsApplySignal(StateChangeType type)
-        => type is StateChangeType.Design or StateChangeType.Reapply or StateChangeType.Reset;
+    /// <summary>
+    /// Whether a finished Glamourer operation should re-evaluate which design is applied.
+    ///
+    /// Driven by <see cref="StateFinalizationType"/> rather than <see cref="StateChangeType"/> because the
+    /// latter can't tell these cases apart — measured in-game, a gearset change and a revert BOTH arrive as
+    /// <c>Reapply</c>/<c>Reset</c>, so the heuristic ran on both: a gearset swap restored an unrelated
+    /// design, and a revert reached <see cref="HandleUnboundDesign"/> and disabled every Proteus mod a
+    /// moment before the follow-up reapply restored the right one. The finalization type separates them
+    /// (<c>Gearset</c>, <c>RevertAutomation</c>), and fires ONCE per operation where the change type fires
+    /// per field — so this also collapses several redundant passes into one.
+    ///
+    /// Included: a real design application, and the reapply that carries an automation-applied design
+    /// (automation does not report <c>DesignApplied</c> for the local player — hence the standing request
+    /// upstream for the design's GUID).
+    /// Excluded: <c>Gearset</c> (gear moved, the design did not) and every <c>Revert*</c> (a revert is not
+    /// an application; Glamourer's own follow-up reapply restores the correct design, so acting here only
+    /// produced the destructive unbound path).
+    /// </summary>
+    internal static bool IsApplySignal(StateFinalizationType type)
+        => type is StateFinalizationType.DesignApplied
+                or StateFinalizationType.Reapply
+                or StateFinalizationType.ReapplyAutomation;
 
-    private void OnGlamourerStateChangedTyped(StateChangeType type)
+    /// <summary>
+    /// The player reverted to their game state, so no design is applied any more and the active override
+    /// must be dropped — otherwise the previous design's colours and gear settings stay composited onto a
+    /// character that was just reverted to vanilla. (The old StateChangeType.Reset signal did this; the
+    /// switch to finalization types lost it until this was added back.)
+    ///
+    /// <c>RevertAutomation</c> is deliberately NOT here: it is immediately followed by a Reapply that
+    /// restores the correct design (observed in-game), so clearing first would only add a wasted
+    /// clear-then-restore pair of recomposites.
+    /// </summary>
+    internal static bool IsRevertSignal(StateFinalizationType type)
+        => type is StateFinalizationType.Revert
+                or StateFinalizationType.RevertCustomize
+                or StateFinalizationType.RevertEquipment
+                or StateFinalizationType.RevertAdvanced;
+
+    private void OnGlamourerStateFinalized(StateFinalizationType type)
     {
+        // A revert leaves no design applied: drop the override so colours fall back to metadata. This is
+        // NOT the unbound-design case (nothing failed to match), it just has the same effect.
+        if (IsRevertSignal(type))
+        {
+            if (Environment.TickCount64 >= suppressUntilTick) HandleUnboundDesign();
+            return;
+        }
+
         if (!IsApplySignal(type)) return;
         if (Environment.TickCount64 < suppressUntilTick) return; // our own restore echo
 
