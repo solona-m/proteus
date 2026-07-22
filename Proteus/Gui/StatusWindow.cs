@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
@@ -97,6 +98,14 @@ public class StatusWindow : Window
 
     public override void Draw()
     {
+        // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
+        // padding as coverage — drop them and let this frame recompute the rows accurately.
+        if (_islandMapArrived)
+        {
+            _islandMapArrived = false;
+            _indexRowCache.Clear();
+        }
+
         // Status — not controls — so it stays outside the tabs and is visible from any of them.
         DrawStatusBanner();
 
@@ -268,6 +277,20 @@ public class StatusWindow : Window
             ImGui.SetTooltip("Refresh textures via Glamourer's in-place equipment reload instead of a full\n" +
                 "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
                 "automatically when Glamourer can't service it.");
+
+        bool autoGlasses = config.AutoInvisibleGlasses;
+        if (ImGui.Checkbox("Host on invisible glasses (keep rings free)", ref autoGlasses))
+        {
+            config.AutoInvisibleGlasses = autoGlasses;
+            config.Save();
+            // Recomposite so the injection/removal reconciles now (turning it off pulls the glasses).
+            compositor.TriggerRecomposite("auto-glasses-toggle");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When on and you have no glasses equipped, Proteus has Glamourer equip an\n" +
+                             "invisible glasses item so the second skin rides the facewear slot instead of a\n" +
+                             "ring. This writes a (hidden) bonus item to your Glamourer state; it's removed\n" +
+                             "when you disable Proteus, equip real glasses, or turn this off.");
 
         // The second skin rides on an equipped ring/bracelet (its model is redirected to our merged
         // shell). An in-place reload can't reload that .mdl, so if a shell ever gets stuck on the
@@ -1059,6 +1082,33 @@ public class StatusWindow : Window
         return null;
     }
 
+    // Body types whose transfer map we've already kicked off a background load for, so a redraw-per-frame
+    // editor can't queue the same load repeatedly.
+    private readonly HashSet<string> _islandWarmupStarted = new(StringComparer.OrdinalIgnoreCase);
+    // Set by the background load, consumed on the UI thread — index scans taken WITHOUT the island mask
+    // counted padding, so they must be recomputed once the map is available.
+    private volatile bool _islandMapArrived;
+
+    /// <summary>
+    /// Load a body type's UV transfer map off the UI thread. Opening the colour-set editor must not pay a
+    /// ~4K map load just to scan an index texture; this defers it, and flags the scan cache stale so the
+    /// row list corrects itself a moment later.
+    /// </summary>
+    private void StartIslandMaskWarmup(string bodyType)
+    {
+        if (!_islandWarmupStarted.Add(bodyType)) return;
+        Task.Run(() =>
+        {
+            try
+            {
+                uvRemap.IslandMask(bodyType, out _, out _, loadIfMissing: true);
+                _islandMapArrived = true;
+            }
+            catch { /* the scan just keeps counting every pixel */ }
+
+        });
+    }
+
     private HashSet<int> ScanIndexFile(string absolutePath, string? bodyType)
     {
         var used = new HashSet<int>();
@@ -1068,9 +1118,15 @@ public class StatusWindow : Window
             var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
             int w = img.Width, h = img.Height;
 
+            // Mask to UV islands so padding (art tools bleed colour outside the islands) isn't counted as
+            // real coverage. The ~4K transfer map must NOT be loaded synchronously here though — that would
+            // stall the first draw of the editor. So take the map only if it's already in memory, and
+            // otherwise kick off a background load; when it lands, the scan cache is dropped and the rows
+            // are recomputed accurately. Until then we simply count every pixel.
             int islandW = 0, islandH = 0;
-            bool[]? island = bodyType != null ? uvRemap.IslandMask(bodyType, out islandW, out islandH) : null;
+            bool[]? island = bodyType != null ? uvRemap.IslandMask(bodyType, out islandW, out islandH, loadIfMissing: false) : null;
             if (islandW == 0 || islandH == 0) island = null;
+            if (island == null && bodyType != null) StartIslandMaskWarmup(bodyType);
 
             var counts = new int[17];
             int total = 0;

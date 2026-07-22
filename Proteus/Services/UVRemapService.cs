@@ -94,7 +94,13 @@ public class UVRemapService
     /// islands). Returns null for body types we ship no map for, in which case callers should assume
     /// every pixel counts.
     /// </summary>
-    public bool[]? IslandMask(string bodyType, out int w, out int h)
+    /// <param name="loadIfMissing">
+    /// When false, only an ALREADY-loaded transfer map is used; a cache miss returns null instead of
+    /// loading the ~4K map from disk. The colour-set editor passes false so merely opening it (to scan an
+    /// index texture) doesn't pay the load — the maps are loaded lazily when sibling synthesis actually
+    /// remaps. Callers that get null simply treat every pixel as inside an island.
+    /// </param>
+    public bool[]? IslandMask(string bodyType, out int w, out int h, bool loadIfMissing = true)
     {
         w = h = 0;
         // gen2 (vanilla) is a right-half crop of bibo space, not a transfer-map destination —
@@ -104,7 +110,7 @@ public class UVRemapService
         foreach (var from in new[] { "bibo", "gen3" })
         {
             if (string.Equals(from, bodyType, StringComparison.OrdinalIgnoreCase)) continue;
-            var map = GetMap(from, bodyType);
+            var map = GetMap(from, bodyType, loadIfMissing);
             if (map == null) continue;
             w = map.W;
             h = map.H;
@@ -113,12 +119,13 @@ public class UVRemapService
         return null;
     }
 
-    private TransferMap? GetMap(string from, string to)
+    private TransferMap? GetMap(string from, string to, bool loadIfMissing = true)
     {
         var key = (from.ToLowerInvariant(), to.ToLowerInvariant());
         lock (cacheLock)
         {
             if (cache.TryGetValue(key, out var hit)) return hit;
+            if (!loadIfMissing) return null;   // peek-only: don't pay the disk load just to check
             var map = LoadMap(from, to);
             if (map != null) cache[key] = map;
             return map;

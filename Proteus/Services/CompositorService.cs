@@ -97,6 +97,9 @@ public class CompositorService : IDisposable
     // captured the same way as _equippedPartModels. Empty when no accessory is worn, in which case the
     // shell falls back to replacing the invisible Emperor's New Ring.
     private volatile IReadOnlyDictionary<string, string>? _equippedAccessoryModels;
+    // Every loaded head "_met" model (helmet and/or facewear glasses), sorted. A list rather than a slot
+    // entry because both slots share the "_met" path and can be worn together — see EquippedMetModelsFromModels.
+    private volatile IReadOnlyList<string>? _equippedMetModels;
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
     // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
@@ -165,6 +168,11 @@ public class CompositorService : IDisposable
 
     public void Dispose()
     {
+        // Pull our injected invisible glasses off the player before we tear down (Glamourer is disposed
+        // after us in Plugin.Dispose, so this still succeeds). Otherwise a plugin reload leaves a phantom
+        // bonus item until the next design/reset.
+        RemoveInjectedGlasses();
+
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
         penumbra.ModDeleted        -= OnModDeleted;
@@ -327,9 +335,11 @@ public class CompositorService : IDisposable
             var modelPaths = penumbra.GetActivePlayerModelPaths();
             var equipped = EquippedPartModelsFromModels(modelPaths);
             var accessories = EquippedAccessoryModelsFromModels(modelPaths);
+            var metModels = EquippedMetModelsFromModels(modelPaths);
             _equippedPartModels = equipped;
             _equippedAccessoryModels = accessories;
-            var sig = EquipSignature(equipped, accessories);
+            _equippedMetModels = metModels;
+            var sig = EquipSignature(equipped, accessories, metModels);
             equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
             _lastEquipSignature = sig;
         }
@@ -383,6 +393,10 @@ public class CompositorService : IDisposable
         // StateChanged(Reapply), which lands here. Ignore events within a short window of our call.
         var msSinceReapply = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnReapplyTick));
         if (msSinceReapply >= 0 && msSinceReapply < 250) return;
+
+        // (Invisible-glasses re-assert needs no bookkeeping here: a design that reverts our ApplyFlag.Once
+        // glasses just empties the slot, and the recomposite this triggers re-injects. Ownership is derived
+        // from the worn set, not a flag — see ReconcileInvisibleGlasses.)
 
         // Glamourer applied a design / reset / reapplied state on the local player.
         // Diff the discovered set against the last known set — only recomposite if something changed.
@@ -555,6 +569,10 @@ public class CompositorService : IDisposable
             return;
         }
 
+        // Disabling stops all hosting, so pull our injected invisible glasses off the player's Glamourer
+        // state (else they'd linger as a phantom bonus item).
+        RemoveInjectedGlasses();
+
         // If gear shells were active, a hosted accessory's model is redirected to our merged model. An
         // in-place reload won't reload that .mdl, so the shell would linger on the accessory after the
         // redirect clears — force a FULL redraw to reload the accessory's original model.
@@ -625,6 +643,7 @@ public class CompositorService : IDisposable
                 {
                     _equippedPartModels = EquippedPartModelsFromModels(equipped);
                     _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
+                    _equippedMetModels = EquippedMetModelsFromModels(equipped);
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -710,6 +729,31 @@ public class CompositorService : IDisposable
         @"chara/equipment/(e\d+)/model/c\d+e\d+_(top|dwn|glv|sho)\.mdl",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    // "_met" is BOTH the head-equipment slot and the Dawntrail facewear/glasses bonus item — the game
+    // renders glasses through this same head-equipment path (Penumbra: BonusItemFlag.Glasses ToSuffix
+    // "met", model index 16). Because a helmet and glasses can be worn together, several "_met" models can
+    // be loaded at once, so these are collected as a SORTED LIST rather than squeezed into the by-suffix
+    // part map (where one would clobber the other in hash order, flipping the shell's host between
+    // composites and forcing a rebuild + full redraw each time).
+    private static readonly System.Text.RegularExpressions.Regex MetModelRe = new(
+        @"chara/equipment/(e\d+)/model/c\d+e\d+_met\.mdl",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static List<string> EquippedMetModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var met = new List<string>();
+        if (modelPaths == null) return met;
+        foreach (var p in modelPaths)
+        {
+            var match = MetModelRe.Match(p);
+            if (!match.Success) continue;
+            if (string.Equals(match.Groups[1].Value, "e0000", StringComparison.OrdinalIgnoreCase)) continue;
+            met.Add(match.Value);
+        }
+        met.Sort(StringComparer.OrdinalIgnoreCase);   // stable order — the host must not flip run to run
+        return met;
+    }
+
     private static Dictionary<string, string> EquippedPartModelsFromModels(HashSet<string>? modelPaths)
     {
         var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -744,14 +788,104 @@ public class CompositorService : IDisposable
         return models;
     }
 
-    // Stable string of the equipped part + accessory models, for cheap change detection on redraw. A ring
-    // swap must rebuild the shell (it changes the host), so the accessory map is folded in too.
+    // ── Invisible auto-glasses (opt-in) ──────────────────────────────────────────
+    // Ownership is derived from state, not a flag: the injected glasses are "ours" exactly when the head
+    // "_met" slot currently holds our chosen invisible item's model set (InvisibleGlasses.Resolve). That
+    // needs no re-assert bookkeeping — a design that reverts our ApplyFlag.Once glasses simply leaves the
+    // slot empty, and the next recomposite re-injects.
+
+    // Don't re-equip the invisible pair within this window: the recomposite we trigger right after an inject
+    // may run before the game has loaded the model, leaving "met" still empty — without the guard that would
+    // inject → recomposite → inject → … forever.
+    private const int GlassesInjectCooldownMs = 5000;
+    private long _lastGlassesInjectTick;
+
+    /// <summary>The equipment set number from a head "_met" model path, e.g. "…/e5524/model/…_met.mdl" → 5524.</summary>
+    private static int? ParseMetSet(string metGamePath)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(metGamePath, @"/e(\d+)/");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? id : (int?)null;
+    }
+
+    /// <summary>Every head "_met" set currently loaded (a helmet and glasses can both be worn).</summary>
+    private IEnumerable<int> CurrentMetSets()
+        => (_equippedMetModels ?? []).Select(ParseMetSet).Where(s => s != null).Select(s => s!.Value);
+
+    private bool AnyMetWorn() => (_equippedMetModels?.Count ?? 0) > 0;
+
+    private bool IsOurGlassesWorn(int ourSet) => CurrentMetSets().Contains(ourSet);
+
+    /// <summary>
+    /// Keep the invisible-glasses injection in line with the current composite. When the feature is on and a
+    /// shell is being built but NO glasses/helmet are worn, have Glamourer equip our invisible pair so the
+    /// shell can ride the facewear slot (captured as "_met" and hosted like any worn glasses). Pull OUR
+    /// glasses back off (identified by set, so the player's own are never touched) only when the feature is
+    /// off or there is genuinely nothing to host — NOT when a composite merely failed to produce a shell,
+    /// which is transient and would otherwise unequip/re-equip on every retry. Idempotent: we only write to
+    /// Glamourer when the slot's occupant must change. Framework-thread game write.
+    /// </summary>
+    /// <param name="gearWanted">Gear overlays are active, so a shell is supposed to exist.</param>
+    /// <param name="shellBuilt">A shell actually built this composite.</param>
+    private void ReconcileInvisibleGlasses(bool gearWanted, bool shellBuilt)
+    {
+        if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
+        bool want = config.AutoInvisibleGlasses && shellBuilt;
+
+        if (want)
+        {
+            // Inject only when the facewear slot is empty; if any glasses are already worn (ours or the
+            // player's own), leave them — the host appends onto whatever is there.
+            //
+            // The composite that injects has ALREADY picked its host (a ring — the slot was empty when it
+            // chose), so the carrier glasses would render un-redirected, and visible, until something else
+            // happened to recomposite. Trigger one now so the shell re-hosts onto the glasses and REPLACEs
+            // their model. The tick guard stops a re-inject if that composite runs before the game has
+            // loaded/captured the model (met still null), which would otherwise ping-pong.
+            if (!AnyMetWorn()
+                && unchecked(Environment.TickCount64 - _lastGlassesInjectTick) > GlassesInjectCooldownMs
+                && SetGlassesOnFramework(g.ItemId))
+            {
+                _lastGlassesInjectTick = Environment.TickCount64;
+                log.Information("[Proteus] invisible glasses: equipped item #{0} (model e{1:D4}) — recompositing to host on it",
+                    g.ItemId, g.ModelSet);
+                TriggerRecomposite("invisible-glasses-equipped", delayMs: 600);
+            }
+        }
+        else if ((!config.AutoInvisibleGlasses || !gearWanted) && IsOurGlassesWorn(g.ModelSet))
+        {
+            // Feature off, or there is genuinely nothing to host (no gear overlays at all) — take OUR pair
+            // back off. Deliberately NOT keyed on shellBuilt: a composite that merely failed to produce a
+            // shell is transient, and unequipping there would flip the glasses off and straight back on.
+            if (SetGlassesOnFramework(0))
+                log.Information("[Proteus] invisible glasses: removed our injected glasses (e{0:D4})", g.ModelSet);
+        }
+    }
+
+    private bool SetGlassesOnFramework(ulong itemId)
+    {
+        try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetGlasses(itemId)).GetAwaiter().GetResult(); }
+        catch (Exception ex) { log.Warning("[Proteus] invisible glasses: SetGlasses({0}) failed: {1}", itemId, ex.Message); return false; }
+    }
+
+    /// <summary>Remove our injected glasses immediately (plugin disable/unload), if the worn pair is ours.
+    /// Identified by set so the player's own glasses are never touched. Best-effort, framework thread.</summary>
+    public void RemoveInjectedGlasses()
+    {
+        if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is { } g && IsOurGlassesWorn(g.ModelSet))
+            SetGlassesOnFramework(0);
+    }
+
+    // Stable string of the equipped part + accessory + head("_met") models, for cheap change detection on
+    // redraw. A ring swap must rebuild the shell (it changes the host), so the accessory map is folded in
+    // too — as is the "_met" list, since putting on/removing glasses or a helmet also changes the host.
     private static string EquipSignature(
-        IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null)
+        IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null,
+        IReadOnlyList<string>? metModels = null)
         => string.Join("|",
             (models ?? new Dictionary<string, string>()).Concat(accessories ?? new Dictionary<string, string>())
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-            .Select(kv => $"{kv.Key}={kv.Value}"));
+            .Select(kv => $"{kv.Key}={kv.Value}")
+            .Concat((metModels ?? []).Select(p => $"met={p}")));
 
     private static string? BodyTypeKey(HashSet<string> snapshot)
     {
@@ -1894,6 +2028,7 @@ public class CompositorService : IDisposable
             _needFullRedraw = false;
             _secondSkinActive = false;
             _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
+            bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             if (gearOverlays.Count > 0)
             {
                 // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
@@ -1930,17 +2065,26 @@ public class CompositorService : IDisposable
                             ?? new Dictionary<string, string>();
                         var equippedAccessories = _equippedAccessoryModels
                             ?? new Dictionary<string, string>();
-                        log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}] ({2})",
+                        var metModels = _equippedMetModels ?? [];
+                        log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}], head/met [{2}] ({3})",
                             string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             string.Join(", ", equippedAccessories.Select(kv => $"{kv.Key}={kv.Value}")),
+                            string.Join(", ", metModels),
                             _equippedPartModels == null ? "cache null" : "cached");
+
+                        // Our injected invisible-glasses set (when the feature is on) so the shell REPLACES it
+                        // — hiding the carrier item's frames — rather than appending. See ChooseHost.
+                        int? invisibleGlassesSet = config.AutoInvisibleGlasses
+                            ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet : null;
 
                         // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), allOverlays, equippedModels, equippedAccessories,
-                            modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies);
+                            modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
+                            invisibleGlassesSet, metModels);
                         if (shells != null)
                         {
+                            shellBuilt = true;
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
@@ -1960,6 +2104,11 @@ public class CompositorService : IDisposable
 
             WriteManagedModJson(redirects, manipulations);
             ReloadAndRedrawWhenReady(redirects, runId);
+
+            // Reconcile the invisible-glasses injection AFTER the redirect mod is live, so when the equip's
+            // redraw loads the glasses model it resolves straight to the shell (no visible frames). Passes
+            // whether a shell was built this composite; the reconcile reads the current "met" state itself.
+            ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt);
 
             LastResult = new CompositorResult
             {

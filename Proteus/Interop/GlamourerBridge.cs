@@ -21,6 +21,7 @@ public class GlamourerBridge : IDisposable
     private readonly GetDesignJObject getDesignJObject;
     private readonly GetState getState;
     private readonly ReapplyState reapplyState;
+    private readonly SetBonusItem setBonusItem;
 
     public bool IsAvailable { get; private set; }
 
@@ -52,6 +53,7 @@ public class GlamourerBridge : IDisposable
         getDesignJObject = new GetDesignJObject(pluginInterface);
         getState         = new GetState(pluginInterface);
         reapplyState     = new ReapplyState(pluginInterface);
+        setBonusItem     = new SetBonusItem(pluginInterface);
 
         try
         {
@@ -132,6 +134,32 @@ public class GlamourerBridge : IDisposable
         catch (Exception ex)
         {
             log.Warning("[Proteus] ReapplyState failed: {0}", ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Equip a bonus (Glasses-slot) item on the local player, or clear it with <paramref name="itemId"/> 0.
+    /// Applied with <see cref="ApplyFlag.Once"/> — it reverts on the next design/reset (caller re-asserts),
+    /// and is deliberately NOT locked so the player and other plugins keep control of the slot. MUST be
+    /// called on the framework thread (it mutates game state). Returns true only on Glamourer success.
+    /// </summary>
+    public bool SetGlasses(ulong itemId)
+    {
+        if (!IsAvailable) return false;
+        try
+        {
+            var ec = setBonusItem.Invoke(0, ApiBonusSlot.Glasses, itemId, key: 0, ApplyFlag.Once);
+            if (ec != GlamourerApiEc.Success)
+            {
+                log.Debug("[Proteus] SetBonusItem(Glasses,{0}) -> {1}", itemId, ec);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] SetBonusItem(Glasses,{0}) failed: {1}", itemId, ex.Message);
             return false;
         }
     }

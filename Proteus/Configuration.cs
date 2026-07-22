@@ -72,6 +72,15 @@ public class Configuration : IPluginConfiguration
     /// <summary>When true, saving a Glamourer design auto-captures the current Proteus state bound to it.</summary>
     public bool DesignBindingEnabled { get; set; } = true;
 
+    /// <summary>
+    /// When true and no real glasses are worn, Proteus has Glamourer equip an (invisible-rendered) glasses
+    /// item so the second-skin shell can ride the facewear slot instead of a ring/accessory. On by default;
+    /// note it writes a (hidden) bonus item to the player's Glamourer state (see <c>CompositorService</c>
+    /// reconcile). Applied with ApplyFlag.Once and re-asserted on design/reset; removed on disable, unload,
+    /// real glasses, or turning this off.
+    /// </summary>
+    public bool AutoInvisibleGlasses { get; set; } = true;
+
     /// <summary>Optional explicit path to Glamourer's designs directory; null = derive from the config dir.</summary>
     public string? GlamourerDesignDirOverride { get; set; } = null;
 

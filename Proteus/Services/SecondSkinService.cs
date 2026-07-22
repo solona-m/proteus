@@ -31,6 +31,11 @@ public sealed class SecondSkinService
     private const int CoverageSize = 256;
 
     /// <summary>The Emperor's New Ring — invisible, so a shell on it shows only our material.</summary>
+    // A head/facewear "_met" model smaller than this is treated as an invisible/degenerate item (empty
+    // frames) — the shell REPLACES it instead of appending, since a merge into a near-empty model won't
+    // render. Real glasses/helmets are tens of KB; "The Emperor's New"-style invisibles are ~1.5 KB.
+    private const int DegenerateModelBytes = 3000;
+
     private const int EmperorSetId = 53;
     private const string Accessory = "rir";
     private const string EqdpSlot = "RFinger";
@@ -188,7 +193,9 @@ public sealed class SecondSkinService
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null,
         IReadOnlyDictionary<string, string>? equippedPartModels = null,
         IReadOnlyDictionary<string, string>? equippedAccessories = null,
-        Func<string, bool>? gen2Allowed = null)
+        Func<string, bool>? gen2Allowed = null,
+        int? invisibleGlassesSet = null,
+        IReadOnlyList<string>? metModels = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -284,7 +291,7 @@ public sealed class SecondSkinService
         // Choose the accessory the shell rides on: a ring the player already wears (fewest materials, right
         // wins a tie), else a bracelet, else the invisible Emperor's New Ring. For an already-equipped host
         // the shell's meshes are APPENDED to its model; only the Emperor fallback replaces + forces a model.
-        var host = ChooseHost(charCode, equippedAccessories, gearOverlays.Count);
+        var host = ChooseHost(charCode, equippedAccessories, metModels, invisibleGlassesSet, gearOverlays.Count);
 
         // Only a shell whose bytes actually differ from what's on disk needs a full redraw.
         bool shellChanged = false;
@@ -299,11 +306,11 @@ public sealed class SecondSkinService
             // Appended materials start AFTER the host's own (indices 0..BaseMatCount-1): _a for the Emperor
             // fallback, but _b/_c… when the host already carries materials, so nothing collides.
             char letter = (char)('a' + host.BaseMatCount + i);
-            string matName = $"mt_c{charCode}a{host.SetId:D4}_{host.Slot}_{letter}.mtrl";
-            string matGamePath = $"chara/accessory/a{host.SetId:D4}/material/v0001/{matName}";
+            string matName = $"mt_c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{letter}.mtrl";
+            string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/v0001/{matName}";
 
-            // Textures live under the accessory's own path, so they collide with nothing.
-            string texPrefix = $"chara/accessory/a{host.SetId:D4}/texture/ss_{letter}_";
+            // Textures live under the host's own path, so they collide with nothing.
+            string texPrefix = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{letter}_";
 
             // Coverage is authored the same way as on the skin layer: the overlay's own alpha, SHAPED BY
             // the mod's selected "Masks" options. For a lot of mods the diffuse is opaque everywhere and
@@ -373,25 +380,29 @@ public sealed class SecondSkinService
             return null;
         }
 
-        var mdlGamePath = $"chara/accessory/a{host.SetId:D4}/model/c{charCode}a{host.SetId:D4}_{host.Slot}.mdl";
+        // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host; only the Emperor
+        // fallback (ModelPath null) rebuilds from the player's char code, which its EQDP edit makes correct.
+        var mdlGamePath = host.ModelPath
+            ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
         var mdlDisk = Path.Combine(modelsDir, "secondskin.mdl");
         shellChanged |= WriteIfChanged(mdlDisk, shell);
         redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
-        log.Information("[Proteus] second skin: redirect {0} -> {1} (host a{2:D4} {3}, append={4})",
-            mdlGamePath, Rel(outputRoot, mdlDisk), host.SetId, host.Slot, host.BaseModel != null);
+        log.Information("[Proteus] second skin: redirect {0} -> {1} (host {2}{3:D4} {4}, append={5})",
+            mdlGamePath, Rel(outputRoot, mdlDisk), host.Prefix, host.SetId, host.Slot, host.BaseModel != null);
 
         // The Emperor's New Ring is invisible and not really equipped, so it needs an EQDP entry to load a
-        // model at all (and for THIS race). A real equipped host is already loading its own model — we just
-        // redirect it — so it must NOT get an EQDP edit.
-        if (host.BaseModel == null)
+        // model at all (and for THIS race). NOTHING else does: a real equipped host (ring/bracelet/worn
+        // glasses) loads its own model (append, BaseModel != null), and the invisible auto-glasses host is a
+        // real glasses item Glamourer equips (replace, prefix 'e') that also loads natively for every race.
+        if (host.BaseModel == null && host.Prefix == 'a')
         {
             manipulations.Add(EqdpManipulation(charCode, host.EqdpSlot));
             log.Information("[Proteus] second skin: EQDP added for {0} slot (Emperor fallback)", host.EqdpSlot);
         }
         else
         {
-            log.Information("[Proteus] second skin: no EQDP (real equipped host a{0:D4} {1} already loads its model)",
-                host.SetId, host.Slot);
+            log.Information("[Proteus] second skin: no EQDP ({0} {1}{2:D4} {3} loads its model natively)",
+                host.BaseModel != null ? "equipped host" : "auto-glasses", host.Prefix, host.SetId, host.Slot);
         }
 
         log.Information(
@@ -727,41 +738,43 @@ public sealed class SecondSkinService
     /// holds its model bytes (the shell is appended into it) and <see cref="BaseMatCount"/> its material
     /// count; for the Emperor's New Ring fallback both are 0/null and an EQDP edit forces the model.
     /// </summary>
-    private readonly record struct HostAccessory(int SetId, string Slot, string EqdpSlot, byte[]? BaseModel, int BaseMatCount);
+    // ModelPath is the ACTUAL loaded game path for an equipped host (rings/bracelet/worn or injected
+    // glasses) — used as the redirect key so we match the char code the game really requested. Invisible
+    // items (Emperor accessories, invisible glasses) have no model for many races and load a fallback race
+    // (e.g. c0101 male on a female), so a path rebuilt from the player's char code would miss. Null for the
+    // Emperor fallback, whose EQDP edit forces the player-race model, making the rebuilt path correct.
+    private readonly record struct HostAccessory(
+        int SetId, string Slot, string EqdpSlot, byte[]? BaseModel, int BaseMatCount, string Tree, char Prefix,
+        string? ModelPath = null);
 
     /// <summary>
-    /// Pick the accessory to host the shell. Prefer a ring the player already wears (the one with the
-    /// FEWEST materials, right ring winning a tie), else a bracelet, else the invisible Emperor's New Ring.
-    /// A candidate is skipped — with a warning to chat AND log — when it has no room to append this many
-    /// overlays: a model carries at most <see cref="SecondSkinWriter.MaxMaterials"/> materials, so the
-    /// host's own count plus the layer count must not exceed it.
+    /// Pick the model to host the shell. Prefer equipped glasses (the head "_met" model), then a ring the
+    /// player already wears (the one with the FEWEST materials, right ring winning a tie), then a bracelet,
+    /// else the invisible Emperor's New Ring. A candidate is skipped — with a warning to chat AND log —
+    /// when it has no room to append this many overlays: a model carries at most
+    /// <see cref="SecondSkinWriter.MaxMaterials"/> materials, so the host's own count plus the layer count
+    /// must not exceed it. <paramref name="glassesModel"/> is the head "_met" model path (glasses or a real
+    /// helmet), captured separately because it lives in the equipment tree, not the accessory tree.
     /// </summary>
-    private HostAccessory ChooseHost(string charCode, IReadOnlyDictionary<string, string>? equipped, int layerCount)
+    private HostAccessory ChooseHost(string charCode, IReadOnlyDictionary<string, string>? equipped,
+        IReadOnlyList<string>? metModels, int? invisibleGlassesSet, int layerCount)
     {
         int budget = SecondSkinWriter.MaxMaterials - layerCount;   // base materials must fit under this
 
-        log.Information("[Proteus] host: choosing from equipped accessories [{0}] (budget {1} = {2} - {3} layers)",
+        log.Information("[Proteus] host: choosing from equipped accessories [{0}], head/glasses [{1}] (budget {2} = {3} - {4} layers)",
             equipped == null ? "(null)" : string.Join(", ", equipped.Select(kv => $"{kv.Key}={kv.Value}")),
+            metModels == null || metModels.Count == 0 ? "(none)" : string.Join(", ", metModels),
             budget, SecondSkinWriter.MaxMaterials, layerCount);
 
-        // Load an equipped accessory as a host candidate, or null if absent, unloadable, or over budget
-        // (in which case it warns to chat + log and is skipped).
-        HostAccessory? Consider(string slot, string eqdpSlot)
+        // Load a candidate host model: resolve through Penumbra, read its bytes, and count its materials.
+        // Returns null (having warned) when the path is unparseable, unloadable, or its material table
+        // won't parse — a host we can't understand must be SKIPPED, never guessed at, because an
+        // understated material count makes the appended material letters collide with the base's own.
+        (int SetId, byte[] Bytes, int Mats)? LoadCandidate(string slot, string gamePath, char prefix)
         {
-            if (equipped == null || !equipped.TryGetValue(slot, out var gamePath))
+            if (ParseSetId(gamePath, prefix) is not int setId)
             {
-                log.Information("[Proteus] host: {0} — none equipped", slot);
-                return null;
-            }
-
-            int setId = ParseSetId(gamePath);
-
-            // The Emperor's New Ring is invisible and only loads a model via our own EQDP edit — it is the
-            // FALLBACK, never an append host. Appending to it skips that EQDP, so its model never loads and
-            // nothing renders. Skip it here so it drops through to the replace+EQDP path below.
-            if (setId == EmperorSetId)
-            {
-                log.Information("[Proteus] host: {0} is the Emperor's ring (a{1:D4}) — reserved for fallback, skipping", slot, setId);
+                log.Warning("[Proteus] host: {0} — cannot parse a '{1}' set id from {2}, skipping", slot, prefix, gamePath);
                 return null;
             }
 
@@ -769,27 +782,107 @@ public sealed class SecondSkinService
             var bytes = textureLoader.LoadRawFile(disk, gamePath);
             if (bytes == null)
             {
-                log.Warning("[Proteus] host: {0} (a{1:D4}) model {2} not loadable (disk={3}) — skipping", slot, setId, gamePath, disk ?? "(null)");
+                log.Warning("[Proteus] host: {0} ({1}{2:D4}) model {3} not loadable (disk={4}) — skipping", slot, prefix, setId, gamePath, disk ?? "(null)");
                 return null;
             }
 
-            int mats;
-            try { mats = SecondSkinWriter.MaterialNames(bytes).Count; }
-            catch (Exception ex) { log.Warning(ex, "[Proteus] host: {0} (a{1:D4}) material parse failed — skipping", slot, setId); return null; }
-
-            if (mats > budget)
+            try { return (setId, bytes, SecondSkinWriter.MaterialNames(bytes).Count); }
+            catch (Exception ex)
             {
-                var msg = $"[Proteus] equipped {slot} accessory (a{setId:D4}) has {mats} material(s) — no room to append "
-                        + $"{layerCount} overlay(s) (max {SecondSkinWriter.MaxMaterials}); skipping it as a host.";
-                Plugin.ChatGui.Print(msg);
-                log.Warning(msg);
+                log.Warning(ex, "[Proteus] host: {0} ({1}{2:D4}) material parse failed — skipping", slot, prefix, setId);
                 return null;
             }
-            log.Information("[Proteus] host: {0} (a{1:D4}) is a candidate — {2} material(s), {3} bytes", slot, setId, mats, bytes.Length);
-            return new HostAccessory(setId, slot, eqdpSlot, bytes, mats);
         }
 
-        // Rings first: fewest materials, right (rir) wins a tie.
+        // True when the model has no real geometry to append onto — an invisible item ("The Emperor's
+        // New …"-style empty frames). A shell merged into one of those never renders, so it must be
+        // REPLACED with a standalone shell instead.
+        bool IsDegenerate(byte[] bytes) => bytes.Length < DegenerateModelBytes;
+
+        void WarnOverBudget(string what, char prefix, int setId, int mats)
+        {
+            var msg = $"[Proteus] equipped {what} ({prefix}{setId:D4}) has {mats} material(s) — no room to append "
+                    + $"{layerCount} overlay(s) (max {SecondSkinWriter.MaxMaterials}); skipping it as a host.";
+            Plugin.ChatGui.Print(msg);
+            log.Warning(msg);
+        }
+
+        // Load an equipped model (accessory or head-equipment glasses) as a host candidate, or null if
+        // absent, unloadable, or over budget (in which case it warns to chat + log and is skipped). Tree is
+        // "accessory" (prefix a — rings/bracelet) or "equipment" (prefix e — glasses/head); the shell's
+        // redirect + material game-paths are built from these so both trees resolve correctly.
+        HostAccessory? ConsiderPath(string slot, string? gamePath, string tree, char prefix, string eqdpSlot)
+        {
+            if (gamePath == null)
+            {
+                log.Information("[Proteus] host: {0} — none equipped", slot);
+                return null;
+            }
+
+            // The Emperor's New Ring is invisible and only loads a model via our own EQDP edit — it is the
+            // FALLBACK, never an append host. Appending to it skips that EQDP, so its model never loads and
+            // nothing renders. Skip it here so it drops through to the replace+EQDP path below. (Only the
+            // accessory tree has an Emperor set; the equipment/glasses tree never does.)
+            if (prefix == 'a' && ParseSetId(gamePath, prefix) == EmperorSetId)
+            {
+                log.Information("[Proteus] host: {0} is the Emperor's ring (a{1:D4}) — reserved for fallback, skipping", slot, EmperorSetId);
+                return null;
+            }
+
+            if (LoadCandidate(slot, gamePath, prefix) is not { } c) return null;
+
+            if (c.Mats > budget)
+            {
+                WarnOverBudget($"{slot} accessory", prefix, c.SetId, c.Mats);
+                return null;
+            }
+            log.Information("[Proteus] host: {0} ({1}{2:D4}) is a candidate — {3} material(s), {4} bytes", slot, prefix, c.SetId, c.Mats, c.Bytes.Length);
+            return new HostAccessory(c.SetId, slot, eqdpSlot, c.Bytes, c.Mats, tree, prefix, gamePath);
+        }
+
+        // Accessory host (ring/bracelet): look the slot up in the equipped-accessory map.
+        HostAccessory? Consider(string slot, string eqdpSlot)
+            => ConsiderPath(slot,
+                equipped != null && equipped.TryGetValue(slot, out var gp) ? gp : null,
+                "accessory", 'a', eqdpSlot);
+
+        // Facewear (glasses) / head "_met" model — the user prefers it so rings stay free. Head equipment
+        // and the facewear bonus slot BOTH render through "_met", so several candidates can be loaded at
+        // once (a helmet AND glasses); they arrive pre-sorted so the pick is deterministic, and we prefer
+        // the pair we injected ourselves. For each candidate:
+        //  • A DEGENERATE base (invisible item — empty frames) can't be appended onto: a shell merged into
+        //    a near-empty model won't render. Like the Emperor ring, REPLACE it with a standalone shell.
+        //    Ditto OUR injected pair, whose frames we never want to show.
+        //    Redirect the ACTUAL loaded path (invisible items have no per-race model, so the game loads a
+        //    fallback race — the captured path carries the real char code). No EQDP: really equipped.
+        //  • A REAL model (worn glasses with frames) is APPENDED so its frames stay visible beside the shell.
+        foreach (var metPath in OrderMetCandidates(metModels, invisibleGlassesSet))
+        {
+            if (LoadCandidate("met", metPath, 'e') is not { } c) continue;
+
+            bool ours = invisibleGlassesSet is int inv && inv == c.SetId;
+            if (ours || IsDegenerate(c.Bytes))
+            {
+                log.Information("[Proteus] host: CHOSEN glasses/head e{0:D4} (met, REPLACE — {1}, base {2} B)",
+                    c.SetId, ours ? "our injected pair" : "degenerate base", c.Bytes.Length);
+                return new HostAccessory(c.SetId, "met", "Head", null, 0, "equipment", 'e', metPath);
+            }
+            if (c.Mats <= budget)
+            {
+                log.Information("[Proteus] host: CHOSEN glasses/head e{0:D4} (met, append — {1} material(s), {2} B)",
+                    c.SetId, c.Mats, c.Bytes.Length);
+                return new HostAccessory(c.SetId, "met", "Head", c.Bytes, c.Mats, "equipment", 'e', metPath);
+            }
+            WarnOverBudget("glasses/head", 'e', c.SetId, c.Mats);
+        }
+
+        // NOTE: there is no invisible-glasses-from-nothing route. An empty head/facewear slot loads NO
+        // model (unlike body/hands, which always draw an e0000 base), so there is nothing to redirect —
+        // verified in-game: a replace-redirect of c{cc}e0000_met.mdl never rendered. A model only exists to
+        // host on when the player actually wears something in that slot (real glasses hit the "met" branch
+        // above; an equipped invisible Emperor accessory hits the fallback below).
+
+        // Rings next: fewest materials, right (rir) wins a tie.
         var right = Consider("rir", "RFinger");
         var left = Consider("ril", "LFinger");
         HostAccessory? ring =
@@ -815,15 +908,32 @@ public sealed class SecondSkinService
         // Fallback: the invisible Emperor's New Ring (replace + EQDP). Base 0 always fits when the caller's
         // layer count is within the material cap.
         log.Information("[Proteus] host: FALLBACK to Emperor's New Ring a{0:D4} ({1}) — replace + EQDP", EmperorSetId, Accessory);
-        return new HostAccessory(EmperorSetId, Accessory, EqdpSlot, null, 0);
+        return new HostAccessory(EmperorSetId, Accessory, EqdpSlot, null, 0, "accessory", 'a');
     }
 
-    /// <summary>The accessory set id from a model path, e.g. "…/a0114/model/c0201a0114_rir.mdl" → 114.</summary>
-    private static int ParseSetId(string gamePath)
+    /// <summary>The set id from a model path for the given tree prefix, e.g. ("…/a0114/model/…", 'a') → 114
+    /// or ("…/equipment/e5524/model/…", 'e') → 5524. Null when the path carries no such id — callers must
+    /// SKIP the candidate rather than substitute a default: guessing a set builds redirects for an item the
+    /// player isn't wearing, which silently never renders.</summary>
+    private static int? ParseSetId(string gamePath, char prefix)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(gamePath, @"/a(\d+)/");
-        return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? id : EmperorSetId;
+        var m = System.Text.RegularExpressions.Regex.Match(gamePath, $@"/{prefix}(\d+)/");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? id : null;
     }
+
+    /// <summary>
+    /// Head equipment and the facewear/glasses bonus slot both render through "_met", so more than one
+    /// candidate can be loaded at once. Order them deterministically — our own injected pair first (its
+    /// frames must never show), then by set id — so the chosen host can't flip between composites and
+    /// churn a shell rebuild + full redraw.
+    /// </summary>
+    private static IEnumerable<string> OrderMetCandidates(IReadOnlyList<string>? metModels, int? invisibleGlassesSet)
+        => metModels == null
+            ? []
+            : metModels
+                .OrderByDescending(p => invisibleGlassesSet is int inv && ParseSetId(p, 'e') == inv)
+                .ThenBy(p => ParseSetId(p, 'e') ?? int.MaxValue)
+                .ThenBy(p => p, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Tell the game this accessory has a model for the character's own race/gender. Char codes run
