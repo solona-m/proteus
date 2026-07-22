@@ -291,7 +291,7 @@ public sealed class SecondSkinService
         // Choose the accessory the shell rides on: a ring the player already wears (fewest materials, right
         // wins a tie), else a bracelet, else the invisible Emperor's New Ring. For an already-equipped host
         // the shell's meshes are APPENDED to its model; only the Emperor fallback replaces + forces a model.
-        var host = ChooseHost(charCode, equippedAccessories, metModels, invisibleGlassesSet, gearOverlays.Count);
+        var host = ChooseHost(charCode, equippedAccessories, metModels, invisibleGlassesSet, gearOverlays.Count, outputRoot);
 
         // Only a shell whose bytes actually differ from what's on disk needs a full redraw.
         bool shellChanged = false;
@@ -757,7 +757,7 @@ public sealed class SecondSkinService
     /// helmet), captured separately because it lives in the equipment tree, not the accessory tree.
     /// </summary>
     private HostAccessory ChooseHost(string charCode, IReadOnlyDictionary<string, string>? equipped,
-        IReadOnlyList<string>? metModels, int? invisibleGlassesSet, int layerCount)
+        IReadOnlyList<string>? metModels, int? invisibleGlassesSet, int layerCount, string outputRoot)
     {
         int budget = SecondSkinWriter.MaxMaterials - layerCount;   // base materials must fit under this
 
@@ -778,7 +778,19 @@ public sealed class SecondSkinService
                 return null;
             }
 
+            // A host's model path is one WE redirect to the shell, so Penumbra can resolve it straight back
+            // to our own previous output. Taking that as the "base" is a feedback loop: on the append path
+            // it would merge the shell into the shell again every composite, doubling the model each run.
+            // The composite clears redirects and reloads before getting here, but that's async and races —
+            // observed in the wild resolving to an 875 KB "glasses" model (our 854 KB shell). Ignore any
+            // resolved file inside our own mod directory and read the game's original instead.
             var disk = penumbra.ResolvePlayer(gamePath);
+            if (disk != null && IsInsideOutputRoot(disk, outputRoot))
+            {
+                log.Debug("[Proteus] host: {0} resolved to our own output ({1}) — reading the game's original instead", slot, disk);
+                disk = null;
+            }
+
             var bytes = textureLoader.LoadRawFile(disk, gamePath);
             if (bytes == null)
             {
@@ -927,6 +939,19 @@ public sealed class SecondSkinService
     /// frames must never show), then by set id — so the chosen host can't flip between composites and
     /// churn a shell rebuild + full redraw.
     /// </summary>
+    /// <summary>Is this resolved disk path one of OUR managed-mod files (i.e. our own composite output)?</summary>
+    private static bool IsInsideOutputRoot(string diskPath, string outputRoot)
+    {
+        try
+        {
+            var full = Path.GetFullPath(diskPath);
+            var root = Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || full.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }   // unparseable path — treat as external, the old behaviour
+    }
+
     private static IEnumerable<string> OrderMetCandidates(IReadOnlyList<string>? metModels, int? invisibleGlassesSet)
         => metModels == null
             ? []
