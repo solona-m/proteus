@@ -2315,12 +2315,17 @@ public class CompositorService : IDisposable
                             manipulations = shells.Manipulations;
                             _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
-                            // Only when the shell's .mdl/.mtrl actually changed — an in-place reload
-                            // refreshes textures but cannot see a new model or material, so those runs
-                            // need a real redraw. Colour-only or texture-only runs don't.
-                            _needFullRedraw = shells.ShellChanged;
+                            // Only new GEOMETRY forces the heavy path. A colorset edit rewrites just the
+                            // .mtrl, and treating that like a new model cost a character redraw — and its
+                            // flicker — on every colour change. Verified in-game: the in-place reload DOES
+                            // apply a gear colorset change, so materials don't need the redraw.
+                            // If a gear colour edit ever stops showing until something else redraws the
+                            // character, this is the line to put back to shells.ShellChanged.
+                            _needFullRedraw = shells.ModelChanged;
                             if (_needFullRedraw)
-                                log.Debug("[Proteus] second skin changed — forcing a full redraw");
+                                log.Debug("[Proteus] second skin model changed — forcing a full redraw");
+                            else if (shells.ShellChanged)
+                                log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
                         }
                     }

@@ -62,13 +62,20 @@ public sealed class SecondSkinService
 
     /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
-    /// <paramref name="ShellChanged"/> is true only when the model or a material actually differs from
-    /// what was already on disk. Glamourer's in-place reload can't see .mdl/.mtrl changes, so those runs
-    /// need a full redraw — but a run that rewrites identical bytes must not force one.
+    ///
+    /// <paramref name="ShellChanged"/> is true when the model, a material OR a texture differs from what
+    /// was already on disk; a run that rewrites identical bytes reports false.
+    ///
+    /// <paramref name="ModelChanged"/> narrows that to the .mdl alone, which is the only change that
+    /// forces a full redraw. Materials do NOT need one: verified in-game — a gear colorset edit applied
+    /// correctly through Glamourer's in-place reload with no redraw. (An older comment here claimed the
+    /// in-place path "cannot see a new model or material"; the material half of that was never true, and
+    /// it cost a character redraw and its flicker on every colour change.)
     /// </summary>
     public sealed record Result(
         Dictionary<string, string> Redirects, List<object> Manipulations, bool ShellChanged,
-        Dictionary<(string ModDir, string? Group, string? Option), List<string>> ShellMaterials);
+        Dictionary<(string ModDir, string? Group, string? Option), List<string>> ShellMaterials,
+        bool ModelChanged);
 
     /// <summary>Write only if the content differs; reports whether it did.</summary>
     private static bool WriteIfChanged(string path, byte[] data)
@@ -394,7 +401,10 @@ public sealed class SecondSkinService
         var mdlGamePath = host.ModelPath
             ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
         var mdlDisk = Path.Combine(modelsDir, "secondskin.mdl");
-        shellChanged |= WriteIfChanged(mdlDisk, shell);
+        // Tracked separately from shellChanged: new geometry is the one change the in-place reload
+        // definitely cannot pick up, so it alone forces a full redraw. See Result.ModelChanged.
+        var modelChanged = WriteIfChanged(mdlDisk, shell);
+        shellChanged |= modelChanged;
         redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
         log.Information("[Proteus] second skin: redirect {0} -> {1} (host {2}{3:D4} {4}, append={5})",
             mdlGamePath, Rel(outputRoot, mdlDisk), host.Prefix, host.SetId, host.Slot, host.BaseModel != null);
@@ -422,7 +432,7 @@ public sealed class SecondSkinService
             stats.TrianglesIn == 0 ? 0 : (stats.TrianglesIn - stats.TrianglesOut) * 100.0 / stats.TrianglesIn,
             shell.Length / 1024);
 
-        return new Result(redirects, manipulations, shellChanged, shellMaterials);
+        return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChanged);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
