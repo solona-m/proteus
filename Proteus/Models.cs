@@ -35,6 +35,15 @@ public class ProteusMetadata
     /// </summary>
     [JsonPropertyName("ColorTableRows")]
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+
+    /// <summary>
+    /// The single colorset shared by ALL active masks. Active masks are composited together (coverage,
+    /// relief, colour-row index) into one top layer, and this table colours it — each mask's <c>_id</c>
+    /// indexes THIS table instead of merging into the overlays beneath. Null = legacy behaviour (mask
+    /// <c>_id</c> merges into each overlay's own colorset). Written by the editor's single "Masks" tab.
+    /// </summary>
+    [JsonPropertyName("MaskColorTableRows")]
+    public List<ColorTableRowPreset>? MaskColorTableRows { get; set; }
 }
 
 /// <summary>Which surface an overlay renders on.</summary>
@@ -170,6 +179,15 @@ public class OverlayDescriptor
     /// </summary>
     [JsonPropertyName("SourceBodyType")]
     public string? SourceBodyType { get; set; }
+
+    /// <summary>
+    /// Transient (never serialized): this is the synthesized top gear shell for a mod's active masks,
+    /// coloured by <see cref="ProteusMetadata.MaskColorTableRows"/>. Its coverage/_id/relief come from the
+    /// mod's masks (not from Diffuse/Normal/Index), and SecondSkinService skips the ordinary mask merge for
+    /// it (it IS the mask). Set by the compositor when a mod has a mask colorset AND builds gear shells.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsMaskShell { get; set; }
 }
 
 /// <summary>Maps one Penumbra option group to per-option overlay sets.</summary>

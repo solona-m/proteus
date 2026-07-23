@@ -837,7 +837,12 @@ public class StatusWindow : Window
             }
         }
 
-        if (activeOptions.Count == 0) return;
+        // Masks are a layer too — one "Masks" tab, always on top, editing the shared MaskColorTableRows
+        // colorset (see below). Present whenever any active mask carries an _id (its colour-row index).
+        var maskAssets = discovery.ResolveActiveMaskAssets(entry);
+        bool anyMaskWithId = maskAssets.Any(a => a.IndexPath != null);
+
+        if (activeOptions.Count == 0 && !anyMaskWithId) return;
 
         // Show the tabs in TRUE stacking order, top-first — the same ordering the compositor applies,
         // just reversed (it composites last-on-top). Until this, the strip listed groups in metadata
@@ -863,6 +868,11 @@ public class StatusWindow : Window
                 .ToList();
         }
 
+        // Masks always render on top → one "Masks" tab at the very top (index 0) of the strip. It's a
+        // synthesized skin-layer option with no overlay descriptors; its rows live in MaskColorTableRows.
+        if (anyMaskWithId)
+            activeOptions.Insert(0, (SidecarDiscoveryService.MaskGroupName, new OverlayOption { Name = "Masks" }));
+
         static string SelKey(string g, string o) => g + "\0" + o;
 
         // Resolve the selected overlay by identity, so a reorder doesn't change what you're editing.
@@ -887,7 +897,10 @@ public class StatusWindow : Window
             {
                 if (i > 0) ImGui.SameLine();
                 var (gName, opt) = activeOptions[i];
-                var label = multiGroup ? $"{gName}: {opt.Name}" : opt.Name;
+                bool isMaskTab = string.Equals(gName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal);
+                var label = isMaskTab
+                    ? "Masks"
+                    : multiGroup ? $"{gName}: {opt.Name}" : opt.Name;
 
                 using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), i == selIdx))
                     if (ImGui.Button($"{label}##otab_{entry.ModDirectory}_{gName}_{opt.Name}"))
@@ -895,6 +908,16 @@ public class StatusWindow : Window
                         selIdx = i;
                         _colorEditorSel[entry.ModDirectory] = SelKey(gName, opt.Name);
                     }
+
+                // The Masks tab is pinned to the top (it's re-injected at index 0 every frame), so it can
+                // neither be dragged nor be a drop target — otherwise a drag would fire a pointless recomposite
+                // while the tab visibly stays put. A small divider sets it apart from the overlay tabs.
+                if (isMaskTab)
+                {
+                    ImGui.SameLine(0, 4);
+                    ImGui.TextDisabled("|");
+                    continue;
+                }
 
                 // Drag one tab onto another in the SAME group to restack (payload is a bare marker; the
                 // source identity rides in _stackDragSrc).
@@ -938,6 +961,10 @@ public class StatusWindow : Window
             if (stackKeys.Count > 1)
             {
                 int pos = selIdx;
+                // The Masks tab is pinned to the top — it can't be restacked, so both arrows are disabled
+                // while it's selected (moving it would recomposite yet leave it visibly at the top).
+                bool selIsMask = string.Equals(activeOptions[selIdx].GroupName,
+                    SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal);
 
                 void MoveTo(int np)
                 {
@@ -948,10 +975,10 @@ public class StatusWindow : Window
                     PersistStack(stackKeys);
                 }
 
-                using (ImRaii.Disabled(pos == 0))
+                using (ImRaii.Disabled(pos == 0 || selIsMask))
                     if (ImGui.SmallButton($"◀ Toward top##stackup_{entry.ModDirectory}")) MoveTo(pos - 1);
                 ImGui.SameLine();
-                using (ImRaii.Disabled(pos == stackKeys.Count - 1))
+                using (ImRaii.Disabled(pos == stackKeys.Count - 1 || selIsMask))
                     if (ImGui.SmallButton($"Toward bottom ▶##stackdn_{entry.ModDirectory}")) MoveTo(pos + 1);
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Reorder how this mod's overlays stack on your body, across groups.\n" +
@@ -977,6 +1004,10 @@ public class StatusWindow : Window
 
         var (groupName, activeOpt) = activeOptions[selIdx];
 
+        // The synthesized "Masks" tab: one shared skin-layer colorset (MaskColorTableRows) coloured by the
+        // combined mask _id, no overlay descriptors, no gear/promotion, no design-binding override.
+        bool isMask = string.Equals(groupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal);
+
         HashSet<int>? usedRows = null;
         var idxDesc = activeOpt.Overlays.FirstOrDefault(o => o.Index != null);
         if (idxDesc?.Index != null)
@@ -992,7 +1023,6 @@ public class StatusWindow : Window
         // (Masks/<Option>_id.png), overriding row selection at composite time (see
         // LoadIndexMerged in CompositorService) — union those in too, so a row referenced
         // only by a mask still gets a color picker here.
-        var maskAssets = discovery.ResolveActiveMaskAssets(entry);
         foreach (var asset in maskAssets)
         {
             if (asset.IndexPath == null) continue;
@@ -1007,6 +1037,57 @@ public class StatusWindow : Window
         bool hasAnyIndex = idxDesc?.Index != null || maskAssets.Any(a => a.IndexPath != null);
         if (usedRows == null && !hasAnyIndex)
             ImGui.TextDisabled("No index texture — only Row 16 is applied.");
+
+        // ── Masks tab: one shared skin-layer colorset for all active masks ────────────────────────────
+        // The active masks are composited together (coverage/relief/_id) into one top layer; these rows
+        // colour it. No overlay descriptors, no gear/promotion, no binding override — a mask is always a
+        // skin-layer colorset. Used-rows are the combined mask _id already unioned above.
+        if (isMask)
+        {
+            // Don't create the list just by drawing the tab — only commit it to metadata on an actual edit
+            // (below), so merely selecting the Masks tab has no persistent side effect.
+            var maskRows  = entry.Metadata.MaskColorTableRows ?? [];
+            var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
+            int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
+            bool maskChanged = false;
+
+            // When the mod has any gear layer, the mask is built as a dedicated top gear SHELL (see the
+            // compositor's mask-shell synthesis), so its Glow button targets that shell's materials via the
+            // gear highlighter. With no gear, the mask bakes into the body diffuse → the skin-glow path.
+            bool maskAsGear = activeOptions.Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
+
+            var maskShellMaterials = maskAsGear
+                ? compositor.GetShellMaterials(entry.ModDirectory, SidecarDiscoveryService.MaskGroupName, "Masks")
+                : null;
+            var maskGlowTargets = maskAsGear
+                ? null
+                : compositor.GetSkinGlowTargets(entry.ModDirectory, SidecarDiscoveryService.MaskGroupName, "Masks");
+
+            // Cold-boot warmup, same as the overlay path: the Glow-locator's backing data (shell materials or
+            // skin-glow targets) only exists after a composite has processed this mask. Fire one, once per mod.
+            bool maskLocatorMissing = maskAsGear
+                ? maskShellMaterials == null || maskShellMaterials.Count == 0
+                : maskGlowTargets == null || maskGlowTargets.Count == 0;
+            if (config.PluginEnabled && maskLocatorMissing && _glowWarmedMods.Add(entry.ModDirectory + "\0masks"))
+                compositor.TriggerRecomposite("mask-glow-warmup");
+
+            ColorTableEditor.DrawRows(maskScope, maskRows, usedRows,
+                gear: maskAsGear,
+                shader: maskAsGear ? OverlayDescriptor.DefaultGearShader : null,
+                maskShellMaterials,
+                maskGlowTargets,
+                out _, ref maskSel, ref maskChanged);
+            _rowSelection[maskScope] = maskSel;
+
+            if (maskChanged)
+            {
+                entry.Metadata.MaskColorTableRows = maskRows;   // commit the (possibly newly-created) list
+                discovery.SaveMetadata(entry);
+                InvalidateDefaultsCache(entry);
+                compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
+            }
+            return;
+        }
 
         activeOpt.ColorTableRows ??= [];
         var ovrOptRows = editingBinding

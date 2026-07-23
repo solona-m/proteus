@@ -206,7 +206,11 @@ public sealed class SecondSkinService
         IReadOnlyList<string>? metModels = null,
         // Shape keys the game currently has enabled per body-model stem (see BodyShapeReader). Used to bake
         // body morphs (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell so it follows the body.
-        IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes = null)
+        IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes = null,
+        // Mods that carry a dedicated top mask shell (OverlayDescriptor.IsMaskShell) this build. For these,
+        // the mod's OTHER shells must NOT merge the masks' _id/relief — the mask shell owns them, so merging
+        // would colour the mask twice. The mask shell itself always merges (it IS the mask).
+        IReadOnlySet<string>? maskShellMods = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -347,16 +351,30 @@ public sealed class SecondSkinService
             // the shell regardless — so without this it would spray bibo art across a gen3 body.
             var srcType = ov.Descriptor.SourceBodyType ?? InferOverlayBodyType(ov.Descriptor);
             log.Information(
-                "[Proteus] gear layer {0}: shader={1} UV {2} -> {3}{4}",
+                "[Proteus] gear layer {0}: shader={1} UV {2} -> {3}{4}{5}",
                 letter, shader, srcType ?? "(unknown)", bodyType ?? "(unknown)",
                 srcType != null && bodyType != null && !string.Equals(srcType, bodyType, StringComparison.OrdinalIgnoreCase)
-                    ? " [REMAP]" : " [no remap]");
-            var alpha = BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize, MaskAdds(entry, ov));
+                    ? " [REMAP]" : " [no remap]",
+                ov.Descriptor.IsMaskShell ? " [MASK SHELL]" : "");
+
+            // The mask shell's coverage IS the mask (its own presence), not an overlay's art shaped by masks.
+            // Its _id/relief are folded in by WriteTextures' mask merge (always on for a mask shell). Other
+            // shells of a mask-colorset mod skip that merge so the mask isn't coloured twice.
+            bool isMaskShell = ov.Descriptor.IsMaskShell;
+            bool mergeMasks  = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
+            var alpha = isMaskShell
+                ? BuildMaskCoverage(entry, srcType, bodyType, TexSize, TexSize)
+                : BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize, MaskAdds(entry, ov));
+
+            // A mask shell with no resolvable coverage must be dropped, not built: WriteTextures would
+            // default its transparency gate to fully opaque and paint the mask colour over the whole body.
+            if (isMaskShell && alpha == null) continue;
+
             var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
 
             var texPaths = WriteTextures(
                 entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, letter, alpha,
-                srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged);
+                srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks);
             if (texPaths == null) continue;
 
             // Both templates are vanilla game materials, so no mod needs to be installed.
@@ -533,6 +551,39 @@ public sealed class SecondSkinService
         return alpha;
     }
 
+    /// <summary>
+    /// Coverage for a dedicated mask shell: the union (max alpha) of the mod's active masks, remapped into
+    /// the body's UV space. Unlike <see cref="BuildAlpha"/> — which SHAPES an overlay's coverage by the masks
+    /// (absent mask ⇒ overlay stays) — here the mask IS the shape (absent mask ⇒ nothing renders). Returns
+    /// null when no mask resolves, in which case the shell would cover the whole body (so callers gate on
+    /// there being mask assets first).
+    /// </summary>
+    private byte[]? BuildMaskCoverage(OverlayEntry entry, string? srcType, string? dstType, int w, int h)
+    {
+        int n = w * h;
+        byte[]? cov = null;
+        // Combine TOP-TERRITORY-WINS, matching CombinedMaskAt (which carves the other layers the same way):
+        // at each pixel the topmost mask with territory (alpha) there decides the coverage — its grayscale.
+        // Process bottom masks first so the top one (assets are highest-priority-first) lands last and
+        // overrides. A mask that is BLACK in its territory (a=255, g=0) drives coverage to 0 — a hole — even
+        // where a LOWER mask is white. Alpha alone (a union) would instead display the black regions opaque.
+        var assets = discovery.ResolveActiveMaskAssets(entry);
+        for (int mi = assets.Count - 1; mi >= 0; mi--)
+        {
+            var m = RemapPath(assets[mi].MaskPath, srcType, dstType, w, h);   // masks share the overlay's UV space
+            if (m == null) continue;
+            cov ??= new byte[n];
+            for (int i = 0; i < n; i++)
+            {
+                int o = i * 4, a = m[o + 3];
+                if (a == 0) continue;                                          // outside this mask's territory
+                int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;     // luminance
+                cov[i] = (byte)(cov[i] * (255 - a) / 255 + g * a / 255);       // territory alpha-over
+            }
+        }
+        return cov;
+    }
+
     /// <summary>Box-downsample the coverage for triangle trimming; it only decides keep/drop.</summary>
     private static byte[]? Downsample(byte[]? src, int w, int h, int size)
     {
@@ -560,7 +611,7 @@ public sealed class SecondSkinService
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
-        ref bool texturesChanged)
+        ref bool texturesChanged, bool mergeMasks = true)
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -597,7 +648,18 @@ public sealed class SecondSkinService
         // and relief normal (Masks/<x>_n.dds). The skin layer merges both — LoadIndexMerged and the
         // masks-driven relief pass in CompositorService — so the gear layer must too, or a mask silently
         // loses its rows and its bump. (Coverage itself is already folded in by BuildAlpha.)
-        foreach (var (maskPath, maskNormalPath, maskIndexPath) in discovery.ResolveActiveMaskAssets(entry))
+        //
+        // Skipped when this mod carries a dedicated top mask shell for its OTHER overlays (mergeMasks=false):
+        // the mask shell owns the _id/relief, so merging here too would colour the mask twice. The mask
+        // shell itself passes mergeMasks=true, so its own _id/relief still land.
+        //
+        // Iterated bottom-first (assets are highest-priority-first, so reverse) — each mask overwrites the
+        // _id and REPLACES the relief where it has territory, so the TOP mask wins on overlap. That matches
+        // the coverage combine (BuildMaskCoverage / CombinedMaskAt), which is also top-territory-wins.
+        var mergeAssets = mergeMasks
+            ? Enumerable.Reverse(discovery.ResolveActiveMaskAssets(entry))
+            : Enumerable.Empty<(string MaskPath, string? NormalPath, string? IndexPath)>();
+        foreach (var (maskPath, maskNormalPath, maskIndexPath) in mergeAssets)
         {
             var maskPng = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
             if (maskPng == null) continue;

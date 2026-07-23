@@ -1345,6 +1345,15 @@ public class CompositorService : IDisposable
                 if (assets.Count > 0) maskAssetsByMod[entry.ModDirectory] = assets;
             }
 
+            // The mod's single shared "Masks" colorset (the one Masks tab). When present, its active masks
+            // are coloured by THESE rows via their combined _id in a top diffuse layer — instead of merging
+            // each mask's _id into the overlays beneath (that merge is skipped for the mod; see
+            // LoadIndexMerged). Absent ⇒ legacy behaviour (mask _id merges into each overlay's own colorset).
+            var maskRowsByMod = new Dictionary<string, Dictionary<int, ColorTableRowOverride>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+                if (entry.Metadata.MaskColorTableRows is { Count: > 0 } mr)
+                    maskRowsByMod[entry.ModDirectory] = BuildRowDict(mr);
+
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
             //
             // Within a mod the user's tab strip decides, via the mod-wide stack (index 0 = top, so sort
@@ -1487,6 +1496,11 @@ public class CompositorService : IDisposable
                 {
                     var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
                     if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
+
+                    // This mod's masks carry their own shared colorset → they're coloured in a separate top
+                    // pass (see the Masks own-colorset diffuse below), NOT merged into the overlay index here.
+                    // Merging AND painting would double-colour the mask region.
+                    if (maskRowsByMod.ContainsKey(modDir)) return idx;
 
                     // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
                     // mutation contract) — clone before writing into it, or a mask toggled off later
@@ -1711,7 +1725,7 @@ public class CompositorService : IDisposable
                 // diffuse disk path after it is written. Downsampled to bound memory (full 4K would be 16 MB
                 // each); the highlighter nearest-samples it back up.
                 const int glowMapCap = 1024;
-                var glowMaps = new List<(OverlayEntry Entry, ResolvedOverlay Resolved, byte[] Map, int W, int H)>();
+                var glowMaps = new List<(string ModDir, string? Group, string? Option, byte[] Map, int W, int H)>();
 
                 // ── Decode prefetch ───────────────────────────────────────────
                 // Overlay decode dominates a recomposite (measured: 5.1 s of a 7.1 s composite, ~96 ms
@@ -2013,7 +2027,7 @@ public class CompositorService : IDisposable
                                         gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
                                     }
                                 }
-                                glowMaps.Add((entry, resolved, gmap, gw, gh));
+                                glowMaps.Add((entry.ModDirectory, resolved.OptionGroup, resolved.Option, gmap, gw, gh));
                             }
                             else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                         }
@@ -2198,6 +2212,96 @@ public class CompositorService : IDisposable
                     }
                 }
 
+                // ── Masks own-colorset diffuse ─────────────────────────────────
+                // A mod whose single "Masks" tab has a colorset (maskRowsByMod) colours its active masks
+                // from THAT shared table, composited on top of the overlay diffuse. The mask _id is NOT merged
+                // into the overlays (skipped in LoadIndexMerged), so this is the only place it gets its colour.
+                //
+                // The active masks combine TOP-TERRITORY-WINS (matching CombinedMaskAt, which carves the other
+                // layers the same way): at each pixel the topmost mask that has territory (alpha) there decides
+                // both the coverage (its grayscale) and the colour row (its _id). So a mask that is BLACK in
+                // its territory forces coverage 0 — a hole that reveals skin — even where a LOWER mask is white.
+                foreach (var modDir in pairs.Select(p => p.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!maskRowsByMod.TryGetValue(modDir, out var maskRows)) continue;
+                    if (!maskAssetsByMod.TryGetValue(modDir, out var assets) || texPaths.Diffuse == null) continue;
+                    if (!assets.Any(a => a.IndexPath != null)) continue;
+                    lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
+
+                    if (baseD == null)
+                    {
+                        var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                        var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                        if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                        baseD ??= Array.Empty<byte>();
+                    }
+                    if (baseD.Length == 0) continue;
+
+                    // Combine the masks into ONE coverage (paint alpha) + ONE _id, top-territory-wins. Bottom
+                    // masks first so the top one (assets are highest-priority-first) lands last and overrides.
+                    int n = wD * hD;
+                    var cov = new byte[n];        // paint alpha = winning mask's grayscale in its territory
+                    var cid = new byte[n * 4];    // winning mask's _id (red = row pair, green = A/B blend)
+                    bool anyMask = false;
+                    for (int mi = assets.Count - 1; mi >= 0; mi--)
+                    {
+                        var (maskPath, _, maskIndexPath) = assets[mi];
+                        if (maskIndexPath == null) continue;
+                        var maskPng = RemapIfNeeded(LoadPng(maskPath, wD, hD), wD, hD, maskSrcBodyType, maskPath);
+                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, wD, hD), wD, hD, maskSrcBodyType, maskIndexPath);
+                        if (maskPng == null || maskIdx == null) continue;
+                        anyMask = true;
+                        ParallelPixels(0, n, 1, (from, to) =>
+                        {
+                            for (int p = from; p < to; p++)
+                            {
+                                int o = p * 4;
+                                int a = maskPng[o + 3];
+                                if (a == 0) continue;                                       // outside this mask
+                                int g = (maskPng[o] * 77 + maskPng[o + 1] * 150 + maskPng[o + 2] * 29) >> 8;
+                                // Territory alpha-over: the top mask REPLACES lower coverage in its territory,
+                                // so a=255,g=0 (black) drives cov to 0 — a hole — erasing a lower mask's white.
+                                cov[p] = (byte)(cov[p] * (255 - a) / 255 + g * a / 255);
+                                if (a >= 128) { cid[o] = maskIdx[o]; cid[o + 1] = maskIdx[o + 1]; }
+                            }
+                        });
+                    }
+                    if (!anyMask) continue;
+
+                    // Paint once from the combined coverage + _id (white "art", alpha = coverage).
+                    var art = new byte[n * 4];
+                    ParallelPixels(0, art.Length, 4, (from, to) =>
+                    {
+                        for (int i = from; i < to; i += 4)
+                        {
+                            art[i] = art[i + 1] = art[i + 2] = 255;
+                            art[i + 3] = cov[i >> 2];
+                        }
+                    });
+                    ApplyIndexedOverlay(baseD, art, cid, maskRows, false, wD, hD);
+
+                    // Glow row-map from the same combined coverage + _id. 0 = no glow (hole/outside), else
+                    // 0x80 | (A?0x40) | pairIdx — same format as overlays.
+                    int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
+                    var gmap = new byte[gw * gh];
+                    bool anyGlow = false;
+                    for (int my = 0; my < gh; my++)
+                    {
+                        int sy = gh == hD ? my : (int)((long)my * hD / gh);
+                        for (int mx = 0; mx < gw; mx++)
+                        {
+                            int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
+                            int sp = sy * wD + sx;
+                            if (cov[sp] == 0) continue;   // hole/outside = no glow
+                            int so = sp * 4;
+                            gmap[my * gw + mx] = (byte)(0x80 | (cid[so + 1] >= 128 ? 0x40 : 0) | ((cid[so] / 17) & 0x0F));
+                            anyGlow = true;
+                        }
+                    }
+                    if (anyGlow)
+                        glowMaps.Add((modDir, SidecarDiscoveryService.MaskGroupName, "Masks", gmap, gw, gh));
+                }
+
                 var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
                 var channels = new System.Text.StringBuilder();
 
@@ -2213,7 +2317,7 @@ public class CompositorService : IDisposable
                         // path (what the live texture resource reports) is known.
                         foreach (var gm in glowMaps)
                         {
-                            var list = skinGlow.GetOrAdd((gm.Entry.ModDirectory, gm.Resolved.OptionGroup, gm.Resolved.Option),
+                            var list = skinGlow.GetOrAdd((gm.ModDir, gm.Group, gm.Option),
                                 _ => new List<Proteus.Interop.SkinGlowTarget>());
                             lock (list) list.Add(new Proteus.Interop.SkinGlowTarget(outPath, gm.Map, gm.W, gm.H));
                         }
@@ -2317,6 +2421,38 @@ public class CompositorService : IDisposable
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
 
+                // ── Top mask shell ────────────────────────────────────────────
+                // A mod whose single "Masks" tab has a colorset AND builds gear shells gets a dedicated
+                // mask shell, appended AFTER the sort so it takes the highest letter = renders on top of all
+                // its other shells. Coloured by MaskColorTableRows; SecondSkinService sources its coverage,
+                // _id and relief from the mod's active masks (IsMaskShell), and skips the ordinary mask
+                // merge on the mod's OTHER shells (maskShellMods) so the mask isn't coloured twice.
+                var maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory)
+                             .Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+                {
+                    if (!maskRowsByMod.ContainsKey(mod)) continue;
+                    if (!maskAssetsByMod.TryGetValue(mod, out var mAssets)
+                        || !mAssets.Any(a => a.IndexPath != null || a.NormalPath != null)) continue;
+
+                    var gShell = gearOverlays.First(g => g.Entry.ModDirectory == mod);
+                    var maskDesc = new OverlayDescriptor
+                    {
+                        Layer          = OverlayLayer.Gear,
+                        IsMaskShell    = true,
+                        SourceBodyType = gShell.Overlay.Descriptor.SourceBodyType,
+                    };
+                    var maskResolved = gShell.Overlay with
+                    {
+                        Descriptor     = maskDesc,
+                        ColorTableRows = gShell.Entry.Metadata.MaskColorTableRows,
+                        OptionGroup    = SidecarDiscoveryService.MaskGroupName,
+                        Option         = "Masks",
+                    };
+                    gearOverlays.Add((gShell.Entry, maskResolved));
+                    maskShellMods.Add(mod);
+                }
+
                 // ── Gear-shell prefetch ──────────────────────────────────────
                 // This phase is decode-bound, not mesh-bound: its own decodes measured 803 ms of a 1050 ms
                 // phase, every one on the calling thread. Fire them all now and let the serial code below
@@ -2389,7 +2525,7 @@ public class CompositorService : IDisposable
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), allOverlays, equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
-                            invisibleGlassesSet, metModels, bodyShapes);
+                            invisibleGlassesSet, metModels, bodyShapes, maskShellMods);
                         if (shells != null)
                         {
                             shellBuilt = true;
