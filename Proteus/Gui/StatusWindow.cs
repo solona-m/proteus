@@ -84,7 +84,10 @@ public class StatusWindow : Window
         UVMapDownloadService uvMapDl,
         UVRemapService uvRemap,
         ModCreationService modCreation)
-        : base("Proteus###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
+        // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
+        // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
+        // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
+        : base($"Proteus  v{typeof(Plugin).Assembly.GetName().Version}###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
     {
         this.compositor     = compositor;
         this.discovery      = discovery;

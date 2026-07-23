@@ -147,7 +147,17 @@ public static class SecondSkinWriter
         public float Radius, ModelClip, ShadowClip;
         public byte Flags1, Flags2;
         public byte[] Lods = [];          // 3 * 60
+
+        // Shape-key morphs parsed from the .mdl (LOD0), keyed by shape name → its per-mesh index edits.
+        // A ShapeValue redirects one index-buffer entry (at BaseIdx, absolute) to a morphed replacement
+        // vertex (Replace). Enabled shapes for THIS body model (from BodyShapeReader); only these bake.
+        public Dictionary<string, List<ShapeMeshEntry>> Shapes = new(StringComparer.Ordinal);
+        public HashSet<string>? EnabledShapes;
     }
+
+    /// <summary>One mesh's index edits for a shape: for the mesh whose index range begins at
+    /// <paramref name="MeshIndexOffset"/>, each value redirects index entry <c>Base</c> → vertex <c>Replace</c>.</summary>
+    internal readonly record struct ShapeMeshEntry(uint MeshIndexOffset, (ushort Base, ushort Replace)[] Values);
 
     /// <summary>A model carries at most 4 materials — the host-selection cap (enforced in the caller).</summary>
     public const int MaxMaterials = 4;
@@ -176,12 +186,28 @@ public static class SecondSkinWriter
     /// otherwise double up on a sheer shell.
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
-        byte[]? baseModel, bool skipConnectors, out Stats stats)
+        byte[]? baseModel, bool skipConnectors, out Stats stats,
+        IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
 
         var parsed = sources.Select(Parse).ToList();
+
+        // Attach each source's enabled shape keys and (Stage 2a) verify the parse against them: does the
+        // .mdl actually contain the enabled shape, and how many of its index edits resolve to in-range
+        // positions/vertices. This confirms the format read before any geometry is mutated.
+        for (int i = 0; i < parsed.Count; i++)
+        {
+            var en = enabledShapes != null && i < enabledShapes.Count ? enabledShapes[i] : null;
+            parsed[i].EnabledShapes = en;
+            // Warn only on the failure case: an enabled shape the .mdl doesn't actually contain (nothing to
+            // bake). The success path is silent — the shell simply follows the body.
+            if (en == null || en.Count == 0 || diag == null) continue;
+            foreach (var name in en)
+                if (!parsed[i].Shapes.ContainsKey(name))
+                    diag($"shape '{name}' enabled but not present in source {i} — not baked");
+        }
         Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
         int baseMatCount = baseSrc?.MatNames.Count ?? 0;
         if (baseMatCount + layers.Count > MaxMaterials)
@@ -216,6 +242,7 @@ public static class SecondSkinWriter
         uint idxCursor = 0;
         ushort subCursor = 0;
         int triIn = 0, triOut = 0, vertOut = 0;
+        int shapedTotal = 0;   // index entries rewired to a morphed vertex by an enabled body shape key
 
         // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
         // byte copy, keep every triangle, keep the authored material index) and the shell layers
@@ -253,6 +280,35 @@ public static class SecondSkinWriter
                     out outStreams, out outStrides, out declBlock, out uv);
             }
 
+            // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
+            // ShapeValue redirects one index-buffer entry to a morphed replacement vertex that already lives
+            // in THIS mesh's vertex buffer (within vc). Rewiring the index makes the shell's triangle use the
+            // morphed vertex, and the push/compaction below treat it like any other — so the shell follows
+            // the body instead of diverging. Only for shell layers (not the host ring) and only for shapes
+            // this body has enabled. Bounds-guarded: a replacement >= vc is skipped, so a wrong assumption
+            // degrades to "morph not applied", never an out-of-range crash.
+            //
+            // BaseIndicesIndex is MESH-RELATIVE (0-based within this mesh's own index range), per
+            // xivModdingFramework's applier — indices[BaseIndex] where indices is the mesh's list. So the
+            // lookup below subtracts the mesh's absolute StartIndex from each triangle's position. (Only when
+            // StartIndex == 0 do absolute and relative coincide — that was the one tested case.)
+            uint meshStartIndex = U32(mo + 16);
+            Dictionary<int, ushort>? shapeReplace = null;
+            if (!preserve && src.EnabledShapes is { Count: > 0 })
+            {
+                foreach (var shapeName in src.EnabledShapes)
+                {
+                    if (!src.Shapes.TryGetValue(shapeName, out var entries)) continue;
+                    foreach (var e in entries)
+                    {
+                        if (e.MeshIndexOffset != meshStartIndex) continue;
+                        foreach (var (bIdx, rep) in e.Values)
+                            if (rep < vc)
+                                (shapeReplace ??= new Dictionary<int, ushort>())[bIdx] = rep;   // key = mesh-relative
+                    }
+                }
+            }
+
             // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
             var keptPerSub = new List<ushort[]>();
             var used = new bool[vc];
@@ -275,6 +331,16 @@ public static class SecondSkinWriter
                 {
                     int p = src.Ib + (int)(so + t) * 2;
                     ushort a = BitConverter.ToUInt16(s, p), b = BitConverter.ToUInt16(s, p + 2), c = BitConverter.ToUInt16(s, p + 4);
+                    // Redirect any of the triangle's three index entries whose (mesh-relative) position
+                    // carries a shape edit. so is absolute; subtract meshStartIndex to get the mesh-local
+                    // position the shape's BaseIndicesIndex keys are in.
+                    if (shapeReplace != null)
+                    {
+                        int rel = (int)(so + t - meshStartIndex);
+                        if (shapeReplace.TryGetValue(rel,     out var ra)) { a = ra; shapedTotal++; }
+                        if (shapeReplace.TryGetValue(rel + 1, out var rb)) { b = rb; shapedTotal++; }
+                        if (shapeReplace.TryGetValue(rel + 2, out var rc)) { c = rc; shapedTotal++; }
+                    }
                     triIn++;
                     if (cov != null && !AnyVisible(cov, uv[a], uv[b], uv[c])) continue;
                     keep.Add(a); keep.Add(b); keep.Add(c);
@@ -546,6 +612,8 @@ public static class SecondSkinWriter
         }
         _ = mhPos;
 
+        if (shapedTotal > 0) diag?.Invoke($"shape bake: {shapedTotal} index entries rewired to morphed vertices");
+
         stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut);
         return o;
     }
@@ -683,6 +751,41 @@ public static class SecondSkinWriter
         }
         p += boneTableCount * 4 + U16(mh + 44) * 2;                 // headers + BoneTableArrayCountTotal
 
+        // ── Shape (morph) block ──────────────────────────────────────────────
+        // Layout: Shape[shapeCount] (16 B) then ShapeMesh[shapeMeshCount] (12 B) then ShapeValue[..] (4 B).
+        //   Shape:     u32 nameOffset; u16 shapeMeshStart[3]; u16 shapeMeshCount[3]   (LOD0 = index 0)
+        //   ShapeMesh: u32 meshIndexOffset; u32 valueCount; u32 valueStart
+        //   ShapeValue:u16 baseIndicesIndex; u16 replacingVertexIndex
+        // Parse LOD0 only (the shell keeps only LOD0). Bounds-guarded: a malformed block leaves Shapes empty
+        // and the shell builds exactly as before.
+        var shapes = new Dictionary<string, List<ShapeMeshEntry>>(StringComparer.Ordinal);
+        int shapeBlock = p, shapeMeshBlock = p + shapeCount * 16, shapeValBlock = p + shapeCount * 16 + shapeMeshCount * 12;
+        if (shapeValBlock + shapeValueCount * 4 <= s.Length)
+        {
+            for (int si = 0; si < shapeCount; si++)
+            {
+                int shp = shapeBlock + si * 16;
+                string sname = Str(U32(shp));
+                ushort smStart = U16(shp + 4), smCount = U16(shp + 10);   // LOD0
+                var entries = new List<ShapeMeshEntry>(smCount);
+                for (int mi = 0; mi < smCount; mi++)
+                {
+                    int sm = shapeMeshBlock + (smStart + mi) * 12;
+                    if (sm + 12 > s.Length) break;
+                    uint meshIdxOff = U32(sm), vCount = U32(sm + 4), vStart = U32(sm + 8);
+                    if (shapeValBlock + (long)(vStart + vCount) * 4 > s.Length) continue;
+                    var vals = new (ushort, ushort)[vCount];
+                    for (int vi = 0; vi < vCount; vi++)
+                    {
+                        int sv = shapeValBlock + (int)(vStart + vi) * 4;
+                        vals[vi] = (U16(sv), U16(sv + 2));
+                    }
+                    entries.Add(new ShapeMeshEntry(meshIdxOff, vals));
+                }
+                if (entries.Count > 0) shapes[sname] = entries;
+            }
+        }
+
         p += shapeCount * 16 + shapeMeshCount * 12 + shapeValueCount * 4;
 
         uint mapBytes = U32(p); p += 4;
@@ -739,6 +842,7 @@ public static class SecondSkinWriter
             Flags1 = flags1,
             Flags2 = flags2,
             Lods = lods,
+            Shapes = shapes,
         };
     }
 

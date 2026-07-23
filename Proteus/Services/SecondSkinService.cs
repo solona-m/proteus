@@ -203,7 +203,10 @@ public sealed class SecondSkinService
         IReadOnlyDictionary<string, string>? equippedAccessories = null,
         Func<string, bool>? gen2Allowed = null,
         int? invisibleGlassesSet = null,
-        IReadOnlyList<string>? metModels = null)
+        IReadOnlyList<string>? metModels = null,
+        // Shape keys the game currently has enabled per body-model stem (see BodyShapeReader). Used to bake
+        // body morphs (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell so it follows the body.
+        IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -244,7 +247,9 @@ public sealed class SecondSkinService
         // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
         bool anyGen2Allowed = gen2Allowed == null || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
 
-        var bodies = new List<byte[]>();
+        // Each kept part carries its bytes and the shape keys enabled on THAT body model (by stem), so the
+        // writer bakes only the morphs the game is actually applying to that part.
+        var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes)>();
         string? modelType = null;   // UV space of the first kept part, from its own skin material
         foreach (var part in Parts)
         {
@@ -288,7 +293,11 @@ public sealed class SecondSkinService
                 part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024,
                 bodyDisk ?? "(game data)");
 
-            bodies.Add(bytes);
+            // Shape keys enabled on this exact body model (matched by file stem, e.g. c0201e0000_dwn).
+            HashSet<string>? partShapes = null;
+            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(bodyGamePath), out partShapes);
+
+            bodies.Add((bytes, partShapes));
             modelType ??= partType;
         }
         if (bodies.Count == 0)
@@ -389,7 +398,13 @@ public sealed class SecondSkinService
         byte[] shell;
         SecondSkinWriter.Stats stats;
         bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
-        try { shell = SecondSkinWriter.Build(bodies, layers, host.BaseModel, skipConnectors, out stats); }
+        try
+        {
+            shell = SecondSkinWriter.Build(
+                bodies.Select(b => b.Bytes).ToList(), layers, host.BaseModel, skipConnectors, out stats,
+                bodies.Select(b => b.Shapes).ToList(),
+                msg => log.Debug("[Proteus] second skin: {0}", msg));
+        }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] second skin: model build failed");

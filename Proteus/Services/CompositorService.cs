@@ -104,6 +104,14 @@ public class CompositorService : IDisposable
     // on the framework thread from the draw object's loaded models so the background build can read it
     // without an IPC. Refreshed wherever the material snapshot is.
     private volatile IReadOnlyDictionary<string, string>? _equippedPartModels;
+    // Enabled shape keys per drawn body model (normalized filename -> shape names), captured on the
+    // framework thread each redraw. Used to bake body morphs (e.g. "Remove Hip Dips") into the second-skin
+    // shell so it follows the body instead of diverging. See BodyShapeReader.
+    private volatile IReadOnlyDictionary<string, HashSet<string>>? _bodyShapeSnapshot;
+    // Signature of the enabled body shapes at the last composite, so a change forces a full redraw
+    // (an in-place reload can't pick up the rebaked geometry). Null until the first composite. Volatile:
+    // written by the composite task, read by the post-settle task (matching its _lastComposited* siblings).
+    private volatile string? _lastCompositedBodyShapeSig;
     // Which ring/bracelet the second skin appends its shell into (slot rir|ril|wrs -> .mdl game path),
     // captured the same way as _equippedPartModels. Empty when no accessory is worn, in which case the
     // shell falls back to replacing the invisible Emperor's New Ring.
@@ -696,6 +704,26 @@ public class CompositorService : IDisposable
                 }
             }
             catch (OperationCanceledException) { return; }
+
+            // Which shape keys the game has enabled on each drawn body model (e.g. "Remove Hip Dips").
+            // Read here, EVERY composite, for the same reason the equipped-models walk above is: a mod
+            // toggle changes the enabled shapes but fires no redraw when Proteus uses the in-place reload,
+            // so the redraw hook is unreliable. Must run on the framework thread (walks the draw object);
+            // GetResult() (not await) for the same reason documented below the material-snapshot walk.
+            // Stage 1: log it so toggling a body option shows the shape name it controls.
+            try
+            {
+                var shapes = Plugin.Framework.RunOnFrameworkThread(
+                    () => Interop.BodyShapeReader.ReadEnabledShapes(Plugin.ObjectTable.LocalPlayer?.Address ?? 0))
+                    .GetAwaiter().GetResult();
+                _bodyShapeSnapshot = shapes;
+                if (shapes.Count > 0)
+                    foreach (var (path, names) in shapes)
+                        log.Debug("[Proteus] body shapes enabled: {0} -> [{1}]",
+                            SanitizeName(path), string.Join(", ", names));
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) { log.Warning("[Proteus] body-shape read failed: {0}", ex.Message); }
 
             // OnLocalPlayerRedrawn only fires when the draw object is recreated, but some mods (e.g.
             // body replacers that redirect an always-loaded "smallclothes" resource in place) change
@@ -2322,11 +2350,16 @@ public class CompositorService : IDisposable
                         int? invisibleGlassesSet = config.AutoInvisibleGlasses
                             ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet : null;
 
+                        // Snapshot the volatile shape set ONCE: the shell is baked from it and its change
+                        // signature is derived from it, so both must see the same value even if a concurrent
+                        // post-settle read swaps _bodyShapeSnapshot mid-build.
+                        var bodyShapes = _bodyShapeSnapshot;
+
                         // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), allOverlays, equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
-                            invisibleGlassesSet, metModels);
+                            invisibleGlassesSet, metModels, bodyShapes);
                         if (shells != null)
                         {
                             shellBuilt = true;
@@ -2344,9 +2377,20 @@ public class CompositorService : IDisposable
                             // apply a gear colorset change, so materials don't need the redraw.
                             // If a gear colour edit ever stops showing until something else redraws the
                             // character, this is the line to put back to shells.ShellChanged.
-                            _needFullRedraw = shells.ModelChanged;
-                            if (_needFullRedraw)
+                            // A change in the body's ENABLED SHAPE KEYS (e.g. toggling "Remove Hip Dips")
+                            // rebakes the shell's geometry, but can land on a byte-identical-length build or
+                            // arrive a beat late, so ModelChanged alone let it slip through as an in-place
+                            // reload — the morph didn't show until a manual refresh. Treat a shape-set change
+                            // as a redraw trigger in its own right.
+                            var shapeSig = BodyShapeSignature(bodyShapes);
+                            bool shapesChanged = !string.Equals(shapeSig, _lastCompositedBodyShapeSig, StringComparison.Ordinal);
+                            _lastCompositedBodyShapeSig = shapeSig;
+
+                            _needFullRedraw = shells.ModelChanged || shapesChanged;
+                            if (shells.ModelChanged)
                                 log.Debug("[Proteus] second skin model changed — forcing a full redraw");
+                            else if (shapesChanged)
+                                log.Debug("[Proteus] second skin body shapes changed — forcing a full redraw");
                             else if (shells.ShellChanged)
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
@@ -2393,6 +2437,16 @@ public class CompositorService : IDisposable
     /// </summary>
     // int.MaxValue (unset stack index) prints as "-" so the log is readable.
     private static string FmtIdx(int i) => i == int.MaxValue ? "-" : i.ToString();
+
+    // Order-independent signature of the enabled body shapes (model stem → shape names), for change
+    // detection. Empty string when none, so toggling the last shape off also registers as a change.
+    private static string BodyShapeSignature(IReadOnlyDictionary<string, HashSet<string>>? shapes)
+    {
+        if (shapes == null || shapes.Count == 0) return "";
+        return string.Join("|", shapes
+            .Select(kv => $"{kv.Key}:{string.Join(",", kv.Value.OrderBy(x => x, StringComparer.Ordinal))}")
+            .OrderBy(x => x, StringComparer.Ordinal));
+    }
 
     private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount)
     {
@@ -2690,16 +2744,32 @@ public class CompositorService : IDisposable
                 bool charCodeChanged = newCharCodeKey != null &&
                     !string.Equals(newCharCodeKey, _lastCompositedCharCodes, StringComparison.OrdinalIgnoreCase);
 
-                if (bodyTypeChanged || charCodeChanged)
+                // Enabled body shapes settle AFTER the composite too: toggling "Remove Hip Dips" fires a
+                // recomposite that can read the shape state before the game applies it, so the first shell
+                // bakes the OLD shape and the morph shows only after a manual refresh. Re-read the settled
+                // shapes here and correct, exactly as for body-type/char-code above.
+                IReadOnlyDictionary<string, HashSet<string>>? settledShapes = null;
+                try
                 {
-                    log.Debug("[Proteus] Post-settle correction: bodyType={0}→{1} charCode={2}→{3}",
+                    settledShapes = Plugin.Framework.RunOnFrameworkThread(
+                        () => Interop.BodyShapeReader.ReadEnabledShapes(Plugin.ObjectTable.LocalPlayer?.Address ?? 0))
+                        .GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) { return; }
+                bool shapesChanged = !string.Equals(
+                    BodyShapeSignature(settledShapes), _lastCompositedBodyShapeSig, StringComparison.Ordinal);
+
+                if (bodyTypeChanged || charCodeChanged || shapesChanged)
+                {
+                    log.Debug("[Proteus] Post-settle correction: bodyType={0}→{1} charCode={2}→{3} shapesChanged={4}",
                         _lastCompositedBodyType ?? "none", newBodyTypeKey ?? "none",
-                        _lastCompositedCharCodes ?? "none", newCharCodeKey ?? "none");
-                    // Publish the settled snapshot so the corrective recomposite uses it directly
+                        _lastCompositedCharCodes ?? "none", newCharCodeKey ?? "none", shapesChanged);
+                    // Publish the settled snapshots so the corrective recomposite uses them directly
                     // (dirty stays false → TriggerRecomposite won't re-fetch a possibly-still-settling one).
                     _activeMtrlSnapshot = snapshot;
                     _activeMtrlSnapshotDirty = false;
                     config.CachedActiveMaterialPaths = snapshot.ToList();
+                    if (settledShapes != null) _bodyShapeSnapshot = settledShapes;
                     TriggerRecomposite("post-settle-correction");
                 }
             }
