@@ -44,6 +44,10 @@ public class StatusWindow : Window
     /// <summary>Penumbra group → ordinal per mod, memoised: the tab strip needs it every frame to show
     /// the true stacking order, and reading it walks the mod folder.</summary>
     private readonly Dictionary<string, Dictionary<string, int>> _groupOrderCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Mods for which we've already fired the cold-boot glow-recipe warmup, so it runs at most
+    /// once per mod per session. See the trigger in the colour-editor draw.</summary>
+    private readonly HashSet<string> _glowWarmedMods = new(StringComparer.OrdinalIgnoreCase);
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
     // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
@@ -1019,9 +1023,31 @@ public class StatusWindow : Window
 
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
+
+        var skinGlowTargets = compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name);
+        var shellMaterials  = compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name);
+
+        // Cold-boot: the Glow-locator button's backing data is a byproduct of a composite, so it only
+        // exists after one has processed this option. When the plugin loads after the character already
+        // exists, no model/customize event fires to trigger one, so the boot composite can leave it empty
+        // and the button missing until the user nudges something. Fire one recomposite the first time we
+        // draw an option whose data is missing — guarded per-mod so it can't loop.
+        //
+        // BOTH layers need this: skin uses the diffuse-composite glow recipe (GetSkinGlowTargets), gear
+        // uses the built shell's materials (GetShellMaterials, driving the live colour-table highlighter).
+        // Both are republished empty at the top of every composite and only filled when the work runs.
+        // (We can't cheaply build just that data: it falls out of the diffuse pass / the shell build, so
+        // isolating it would duplicate most of the composite. Lazy-firing the real one, once, is contained.)
+        bool locatorDataMissing = gear
+            ? shellMaterials  == null || shellMaterials.Count  == 0
+            : skinGlowTargets == null || skinGlowTargets.Count == 0;
+        if (config.PluginEnabled && activeOpt.Overlays.Count > 0 && locatorDataMissing
+            && _glowWarmedMods.Add(entry.ModDirectory))
+            compositor.TriggerRecomposite("glow-warmup");
+
         ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
-            compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name),
-            compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name),
+            shellMaterials,
+            skinGlowTargets,
             out var rowEdit, ref sel, ref changed);
         _rowSelection[scope] = sel;
 
