@@ -1309,6 +1309,21 @@ public class CompositorService : IDisposable
                     .ToList();
                 list.Clear();
                 list.AddRange(sorted);
+
+                // Bottom-to-top composite order for this material, with the sort keys. Debug-level: kept
+                // for diagnosing "wrong overlay on top" (mod= is the per-mod tab-stack index, grp= the
+                // Penumbra group ordinal), without spamming a normal log.
+                if (sorted.Count > 1)
+                {
+                    var parts = sorted.Select(p =>
+                    {
+                        var g = p.Overlay.OptionGroup ?? "";
+                        var o = p.Overlay.Option ?? "";
+                        var mi = FmtIdx(config.ModStackIndexOf(p.Entry.ModDirectory, g, o));
+                        return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}]";
+                    });
+                    log.Debug("[Proteus] skin stack (bottom->top): {0}", string.Join("  ->  ", parts));
+                }
             }
 
             // The mod's highest-priority group. Only it is granted a mask's forced-opacity term; see
@@ -2376,6 +2391,9 @@ public class CompositorService : IDisposable
     /// loop had to spread over its 4 workers, which is what decides whether that loop is parallel at all.
     /// Logged at Information so a user's normal log shows it without a debug build.
     /// </summary>
+    // int.MaxValue (unset stack index) prints as "-" so the log is readable.
+    private static string FmtIdx(int i) => i == int.MaxValue ? "-" : i.ToString();
+
     private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount)
     {
         var totalMs     = PhaseCounter.MsSince(runStart);

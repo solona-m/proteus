@@ -31,8 +31,11 @@ public sealed record SkinGlowTarget(string DiffuseDiskPath, byte[] RowMap, int W
 /// </summary>
 public sealed unsafe class SkinDiffuseGlow : IDisposable
 {
-    // Render.Material.TextureEntry.Id is an internal sampler slot: 0x47 = diffuse/base (verified live).
-    private const uint SamplerSlotDiffuse = 0x47u;
+    // We identify our composited body diffuse by its FILENAME, not by the material's internal sampler
+    // slot id. That id is not stable across bodies/shaders — a Bibo body was observed serving diffuse at
+    // 0x4B while the code assumed 0x47, so the walk matched nothing and the highlight silently did
+    // nothing. The composited diffuse always ends in "_d.tex" under \Proteus\textures\, which is exact.
+    private const string DiffuseSuffix = "_d.tex";
 
     private sealed class Target
     {
@@ -225,13 +228,18 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
                 if (mat == null) continue;
                 foreach (ref var entry in mat->TexturesSpan)
                 {
-                    if (entry.Id != SamplerSlotDiffuse) continue;
                     var handle = entry.Texture;
                     if (handle == null) continue;
                     var name = handle->FileName.ToString();
-                    if (string.IsNullOrEmpty(name) ||
-                        (name.IndexOf("/Proteus/textures/", StringComparison.OrdinalIgnoreCase) < 0 &&
-                         name.IndexOf("\\Proteus\\textures\\", StringComparison.OrdinalIgnoreCase) < 0))
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    // Our composited body diffuse: under \Proteus\textures\ and ending in _d.tex. The
+                    // normal (_n.tex) sits under the same folder but must NOT be swapped. Matching the
+                    // name is slot-independent (see DiffuseSuffix).
+                    bool underProteus =
+                        name.IndexOf("/Proteus/textures/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        name.IndexOf("\\Proteus\\textures\\", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (!underProteus || !name.EndsWith(DiffuseSuffix, StringComparison.OrdinalIgnoreCase))
                         continue;
                     visit((nint)(&handle->Texture), name);
                 }
