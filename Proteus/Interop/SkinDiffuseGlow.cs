@@ -64,6 +64,9 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
     private int _idRow = -1;
     private bool _idA;
 
+    /// <summary>Ghosts the gear shells above the skin so an occluded skin glow shows through. Set by Plugin.</summary>
+    public ShellNormalGhost? Ghost { get; set; }
+
     public SkinDiffuseGlow(IFramework framework, IObjectTable objects, TextureLoader textures, IPluginLog log)
     {
         this.framework = framework;
@@ -92,12 +95,15 @@ public sealed unsafe class SkinDiffuseGlow : IDisposable
             Task.Run(() => Build(tt, row, isA));
         }
         _targetByPath = map;
+        // Skin sits below every gear shell, so ghost them all while the skin glow is active.
+        Ghost?.GhostAbove(null);
     }
 
     public void Clear()
     {
         _idRow = -1;
         _targetByPath = new();
+        Ghost?.Clear();
     }
 
     public bool IsTarget(IReadOnlyList<SkinGlowTarget> targets, int row, bool isA)

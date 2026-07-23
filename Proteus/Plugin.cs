@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 159;
+    public const int BuildNumber = 161;
 
     private const string CommandName = "/proteus";
 
@@ -42,6 +42,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SphereMapPreview spherePreview;
     private readonly ColorTableHighlighter highlighter;
     private readonly SkinDiffuseGlow skinGlow;
+    private readonly ShellNormalGhost shellGhost;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -86,13 +87,17 @@ public sealed class Plugin : IDalamudPlugin
         // Glow-effect thumbnails (loaded per-file, cached by Dalamud's texture provider).
         Gui.ColorTableEditor.EffectThumbs = new Gui.EffectPreview(TextureProvider);
 
+        // Ghosts the gear shells stacked above a highlighted layer so an occluded colorset Glow shows
+        // through them (semi-transparent). Driven by both highlighters below.
+        shellGhost = new ShellNormalGhost(Framework, ObjectTable, textureLoader, Log);
+
         // Live colorset "glow / target" highlighter (framework-thread material editing).
-        highlighter = new ColorTableHighlighter(Framework, ObjectTable);
+        highlighter = new ColorTableHighlighter(Framework, ObjectTable) { Ghost = shellGhost };
         Gui.ColorTableEditor.Highlighter = highlighter;
         compositor.Highlighter = highlighter;   // so a recomposite (shell may rebuild) clears a stale glow
 
         // Live skin (body diffuse) glow via render-material texture rebind.
-        skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log);
+        skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log) { Ghost = shellGhost };
         Gui.ColorTableEditor.SkinGlow = skinGlow;
 
         var modCreation = new ModCreationService(penumbra, compositor, log);
@@ -142,6 +147,7 @@ public sealed class Plugin : IDalamudPlugin
         Gui.ColorTableEditor.SkinGlow = null;
         skinGlow.Dispose();
         highlighter.Dispose();
+        shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();

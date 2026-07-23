@@ -22,6 +22,10 @@ public sealed class ColorTableHighlighter : IDisposable
     private int _targetRow;
     private HashSet<string> _appliedLeaves = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Ghosts the shell layers stacked above the highlighted one so an occluded glow shows through.
+    /// Set by Plugin; null-safe if absent.</summary>
+    public ShellNormalGhost? Ghost { get; set; }
+
     public ColorTableHighlighter(IFramework framework, IObjectTable objects)
     {
         this.framework = framework;
@@ -35,9 +39,28 @@ public sealed class ColorTableHighlighter : IDisposable
         _targetLeaves.Clear();
         foreach (var leaf in materialLeaves) _targetLeaves.Add(leaf);
         _targetRow = gameRow;
+        // Ghost the shell layers stacked above this one so the glow shows even if an upper layer is opaque.
+        Ghost?.GhostAbove(MaxLetter(materialLeaves));
     }
 
-    public void Clear() => _targetLeaves.Clear();
+    public void Clear()
+    {
+        _targetLeaves.Clear();
+        Ghost?.Clear();
+    }
+
+    // Highest ss_{letter} among the target's shell materials — the layers ABOVE it are what must ghost.
+    private static char? MaxLetter(IReadOnlyList<string> leaves)
+    {
+        char? max = null;
+        foreach (var leaf in leaves)
+            if (leaf.Length >= 5 && leaf.StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
+            {
+                char c = char.ToLowerInvariant(leaf[3]);
+                if (c >= 'a' && c <= 'z' && (max == null || c > max)) max = c;
+            }
+        return max;
+    }
 
     public bool IsTarget(IReadOnlyList<string> materialLeaves, int gameRow)
         => _targetRow == gameRow && _targetLeaves.Count == materialLeaves.Count
