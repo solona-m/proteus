@@ -40,6 +40,10 @@ public class StatusWindow : Window
     private readonly Dictionary<string, string> _colorEditorSel = new();
     // Identity of the overlay tab currently being dragged to restack (payload carries only a marker).
     private (string Mod, string Group, string Option)? _stackDragSrc;
+
+    /// <summary>Penumbra group → ordinal per mod, memoised: the tab strip needs it every frame to show
+    /// the true stacking order, and reading it walks the mod folder.</summary>
+    private readonly Dictionary<string, Dictionary<string, int>> _groupOrderCache = new(StringComparer.OrdinalIgnoreCase);
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
     // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
@@ -828,6 +832,30 @@ public class StatusWindow : Window
 
         if (activeOptions.Count == 0) return;
 
+        // Show the tabs in TRUE stacking order, top-first — the same ordering the compositor applies,
+        // just reversed (it composites last-on-top). Until this, the strip listed groups in metadata
+        // order while the composite ranked them by Penumbra group number, so the "leftmost = on top"
+        // label could be a lie whenever two groups were active.
+        {
+            var modRoot = Path.GetDirectoryName(
+                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var gOrder))
+            {
+                gOrder = modRoot != null
+                    ? SidecarDiscoveryService.ReadGroupOrder(modRoot)
+                    : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                _groupOrderCache[entry.ModDirectory] = gOrder;
+            }
+
+            int GroupOrderOf(string g) => gOrder.TryGetValue(g, out var v) ? v : int.MaxValue;
+
+            activeOptions = activeOptions
+                .OrderBy(x => config.ModStackIndexOf(entry.ModDirectory, x.GroupName, x.Option.Name))
+                .ThenBy(x => GroupOrderOf(x.GroupName))
+                .ThenBy(x => config.StackIndexOf(entry.ModDirectory, x.GroupName, x.Option.Name))
+                .ToList();
+        }
+
         static string SelKey(string g, string o) => g + "\0" + o;
 
         // Resolve the selected overlay by identity, so a reorder doesn't change what you're editing.
@@ -844,9 +872,10 @@ public class StatusWindow : Window
         {
             bool multiGroup = activeOptions.Select(x => x.GroupName).Distinct().Count() > 1;
 
-            ImGui.TextDisabled("Editing overlay  (drag a tab to restack — leftmost in a group = on top):");
+            ImGui.TextDisabled("Editing overlay  (drag a tab to restack — leftmost = on top):");
 
-            (string Group, string Src, string Dst)? pendingReorder = null;
+            // Src/Dst are SelKey values, so a tab is identified across groups, not just within one.
+            (string Src, string Dst)? pendingReorder = null;
             for (int i = 0; i < activeOptions.Count; i++)
             {
                 if (i > 0) ImGui.SameLine();
@@ -873,57 +902,68 @@ public class StatusWindow : Window
                 if (ImGui.BeginDragDropTarget())
                 {
                     var pl = ImGui.AcceptDragDropPayload("PROTEUS_STACK", ImGuiDragDropFlags.None);
+                    // Any tab onto any other tab of the same MOD — crossing groups is the point (see
+                    // Configuration.OverlayModStackOrder); the old same-group check is what made one
+                    // group permanently outrank another.
                     if (!pl.IsNull && _stackDragSrc is { } s
-                        && s.Mod == entry.ModDirectory && s.Group == gName && s.Option != opt.Name)
-                        pendingReorder = (gName, s.Option, opt.Name);
+                        && s.Mod == entry.ModDirectory && (s.Group != gName || s.Option != opt.Name))
+                        pendingReorder = (SelKey(s.Group, s.Option), SelKey(gName, opt.Name));
                     ImGui.EndDragDropTarget();
                 }
             }
 
-            // ── ◀ ▶ arrows: restack the selected overlay within its group (drag alternative) ──
-            var selGroup = activeOptions[selIdx].GroupName;
-            var groupNames = activeOptions.Where(x => x.GroupName == selGroup)
-                .Select(x => x.Option.Name).ToList();
-            if (groupNames.Count > 1)
+            // The whole strip is one stack now, so both the arrows and the drag operate over every
+            // active option of this mod — not just the selected one's group.
+            var stackKeys = activeOptions.Select(x => SelKey(x.GroupName, x.Option.Name)).ToList();
+
+            void PersistStack(List<string> keysTopFirst)
             {
-                int pos = groupNames.IndexOf(activeOptions[selIdx].Option.Name);
+                config.SetModStackOrder(entry.ModDirectory,
+                    keysTopFirst.Select(k =>
+                    {
+                        var parts = k.Split('\0');
+                        return (Group: parts[0], Option: parts.Length > 1 ? parts[1] : "");
+                    }));
+                compositor.TriggerRecomposite("stack-reorder");
+            }
+
+            // ── ◀ ▶ arrows: restack the selected overlay (drag alternative) ──
+            if (stackKeys.Count > 1)
+            {
+                int pos = selIdx;
 
                 void MoveTo(int np)
                 {
-                    if (np < 0 || np >= groupNames.Count) return;
-                    var moved = groupNames[pos];
-                    groupNames.RemoveAt(pos);
-                    groupNames.Insert(np, moved);
-                    config.SetStackOrder(entry.ModDirectory, selGroup, groupNames);
-                    compositor.TriggerRecomposite("stack-reorder");
+                    if (np < 0 || np >= stackKeys.Count) return;
+                    var moved = stackKeys[pos];
+                    stackKeys.RemoveAt(pos);
+                    stackKeys.Insert(np, moved);
+                    PersistStack(stackKeys);
                 }
 
                 using (ImRaii.Disabled(pos == 0))
                     if (ImGui.SmallButton($"◀ Toward top##stackup_{entry.ModDirectory}")) MoveTo(pos - 1);
                 ImGui.SameLine();
-                using (ImRaii.Disabled(pos == groupNames.Count - 1))
+                using (ImRaii.Disabled(pos == stackKeys.Count - 1))
                     if (ImGui.SmallButton($"Toward bottom ▶##stackdn_{entry.ModDirectory}")) MoveTo(pos + 1);
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Reorder how this group's overlays stack on your body.\n" +
+                    ImGui.SetTooltip("Reorder how this mod's overlays stack on your body, across groups.\n" +
                                      "Leftmost tab = top of the stack (composites last, on top).");
             }
 
             // Apply a drag drop after drawing (persist + recomposite; next frame re-sorts the tabs).
             if (pendingReorder is { } pr)
             {
-                var names = activeOptions.Where(x => x.GroupName == pr.Group)
-                    .Select(x => x.Option.Name).ToList();
-                int srcIdx = names.IndexOf(pr.Src);
-                int dstIdx = names.IndexOf(pr.Dst);
+                int srcIdx = stackKeys.IndexOf(pr.Src);
+                int dstIdx = stackKeys.IndexOf(pr.Dst);
                 if (srcIdx >= 0 && dstIdx >= 0 && srcIdx != dstIdx)
                 {
                     // Insert at the target's ORIGINAL index: dragging rightward (src<dst) the removal shifts
                     // the target left one, so this lands src just AFTER it; dragging leftward it lands just
                     // BEFORE. (Recomputing IndexOf after the remove always lands before — the earlier bug.)
-                    names.RemoveAt(srcIdx);
-                    names.Insert(dstIdx, pr.Src);
-                    config.SetStackOrder(entry.ModDirectory, pr.Group, names);
-                    compositor.TriggerRecomposite("stack-reorder");
+                    stackKeys.RemoveAt(srcIdx);
+                    stackKeys.Insert(dstIdx, pr.Src);
+                    PersistStack(stackKeys);
                 }
             }
         }

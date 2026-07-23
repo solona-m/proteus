@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 
@@ -133,6 +134,39 @@ public class Configuration : IPluginConfiguration
     public void SetStackOrder(string modDir, string group, IEnumerable<string> optionsTopFirst)
     {
         OverlayStackOrder[StackKey(modDir, group)] = new List<string>(optionsTopFirst);
+        Save();
+    }
+
+    /// <summary>
+    /// One flat top-first stack per MOD, spanning every group. <see cref="OverlayStackOrder"/> above is
+    /// per group, so two overlays in different groups (say Patterns and Fabric) could never be ordered
+    /// against each other — the group's Penumbra number decided, and one group was always on top no
+    /// matter how the tabs were arranged. This is what the tab strip actually writes now.
+    ///
+    /// Entries are <see cref="ModStackEntry"/> values, since an option name is only unique within a group.
+    /// The old per-group orders are still honoured as a lower-priority tiebreak, so nothing a user already
+    /// arranged is lost — see the sort in CompositorService.
+    /// </summary>
+    public Dictionary<string, List<string>> OverlayModStackOrder { get; set; } = new();
+
+    /// <summary>Identifies one option inside a mod-wide stack. NUL-separated, same reasoning as StackKey.</summary>
+    public static string ModStackEntry(string group, string option) => group + "\u0000" + option;
+
+    /// <summary>Position in the mod-wide stack (0 = top), or <see cref="int.MaxValue"/> when unset.</summary>
+    public int ModStackIndexOf(string modDir, string group, string option)
+    {
+        if (OverlayModStackOrder.TryGetValue(modDir, out var order))
+        {
+            int i = order.FindIndex(e => string.Equals(e, ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) return i;
+        }
+        return int.MaxValue;
+    }
+
+    /// <summary>Persist the mod's full top-first stack across all groups, and save.</summary>
+    public void SetModStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
+    {
+        OverlayModStackOrder[modDir] = topFirst.Select(x => ModStackEntry(x.Group, x.Option)).ToList();
         Save();
     }
 

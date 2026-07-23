@@ -1287,16 +1287,23 @@ public class CompositorService : IDisposable
                 if (assets.Count > 0) maskAssetsByMod[entry.ModDirectory] = assets;
             }
 
-            // Within a mod, a HIGHER-priority group (lower group_NNN number) must composite LAST so it
-            // lands on top. Across mods the existing Penumbra-priority order is preserved. Options in the
-            // SAME group share a GroupOrder, so break that final tie with the user's stack order (index 0 =
-            // top): a smaller index must composite LAST, so sort it descending. Unlisted options are
-            // int.MaxValue → they sort first (bottom), and an all-unset group is a full tie → stable order
-            // unchanged (no reordering until the user actually drags one).
+            // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
+            //
+            // Within a mod the user's tab strip decides, via the mod-wide stack (index 0 = top, so sort
+            // descending; unlisted = int.MaxValue → bottom). That has to outrank GroupOrder: the per-group
+            // stack below can only order options against others in the SAME group, so with Fabric and
+            // Patterns both active the group number always won and one group sat on top no matter how the
+            // tabs were arranged.
+            //
+            // GroupOrder and the old per-group stack remain as tiebreaks, so a mod nobody has restacked
+            // still composites exactly as before, and per-group orders saved earlier keep working.
+            //
+            // Masks are NOT in this list — they come from maskPathsByMod / MaskAdds and still apply on top.
             foreach (var list in byMaterial.Values)
             {
                 var sorted = list
                     .OrderBy(p => p.Entry.Priority)
+                    .ThenByDescending(p => config.ModStackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
@@ -2232,6 +2239,7 @@ public class CompositorService : IDisposable
                 // order, so a higher-listed gear fabric layers over a lower one.
                 gearOverlays = gearOverlays
                     .OrderBy(p => p.Entry.Priority)
+                    .ThenByDescending(p => config.ModStackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
