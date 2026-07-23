@@ -1098,21 +1098,51 @@ public class CompositorService : IDisposable
                         })
                         .ToList();
 
+                // Stack rank of an overlay, top-first, matching the tab strip / composite sort keys
+                // (ModStackIndexOf, GroupOrder, StackIndexOf). Lower tuple = higher in the stack.
+                var modDir = entry.ModDirectory;
+                (int, int, int) Rank(ResolvedOverlay o) => (
+                    config.ModStackIndexOf(modDir, o.OptionGroup ?? "", o.Option ?? ""),
+                    o.GroupOrder,
+                    config.StackIndexOf(modDir, o.OptionGroup ?? "", o.Option ?? ""));
+
+                // The deepest (lowest) gear overlay in this mod. A skin overlay stacked ABOVE it can't render
+                // over the shell as skin, so — when it's on auto (not pinned) — promote it to a gear shell
+                // (character.shpk). Reverts on its own once dragged back below all gear (rank recomputed each
+                // composite). Pinned skin stays skin.
+                (int, int, int)? lowestGear = null;
+                foreach (var o in overlays)
+                    if (o.Descriptor.Layer == OverlayLayer.Gear)
+                    {
+                        var r = Rank(o);
+                        if (lowestGear == null || r.CompareTo(lowestGear.Value) > 0) lowestGear = r;
+                    }
+
                 foreach (var overlay in overlays)
                 {
-                    allOverlays.Add((entry, overlay));
-                    if (overlay.Descriptor.Layer == OverlayLayer.Gear)
+                    var ov = overlay;
+                    if (overlay.Descriptor.Layer == OverlayLayer.Skin
+                        && !overlay.Descriptor.ManualShaderLock
+                        && lowestGear.HasValue && Rank(overlay).CompareTo(lowestGear.Value) < 0)
                     {
-                        gearOverlays.Add((entry, overlay));
+                        var promoted = CloneDescriptor(overlay.Descriptor);
+                        promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
+                        ov = overlay with { Descriptor = promoted };
+                    }
+
+                    allOverlays.Add((entry, ov));
+                    if (ov.Descriptor.Layer == OverlayLayer.Gear)
+                    {
+                        gearOverlays.Add((entry, ov));
                         continue;
                     }
 
-                    foreach (var mtrlPath in overlay.Descriptor.MaterialGamePaths)
+                    foreach (var mtrlPath in ov.Descriptor.MaterialGamePaths)
                     {
                         if (string.IsNullOrEmpty(mtrlPath)) continue;
                         if (!byMaterial.TryGetValue(mtrlPath, out var list))
                             byMaterial[mtrlPath] = list = new();
-                        list.Add((entry, overlay));
+                        list.Add((entry, ov));
                     }
                 }
             }
