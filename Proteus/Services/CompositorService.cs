@@ -1354,6 +1354,17 @@ public class CompositorService : IDisposable
                 if (entry.Metadata.MaskColorTableRows is { Count: > 0 } mr)
                     maskRowsByMod[entry.ModDirectory] = BuildRowDict(mr);
 
+            // Mods that will get a dedicated top mask SHELL: a mask colorset + gear shells + mask _id/relief
+            // assets. For these the mask lives entirely on the shell (coverage, colour, relief), so the skin
+            // diffuse/relief passes below MUST skip them — otherwise the same mask relief lands on BOTH the
+            // body normal and the shell (two stacked surfaces), which reads as a doubled-height bump.
+            var maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
+                if (maskRowsByMod.ContainsKey(mod)
+                    && maskAssetsByMod.TryGetValue(mod, out var mA)
+                    && mA.Any(a => a.IndexPath != null || a.NormalPath != null))
+                    maskShellMods.Add(mod);
+
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
             //
             // Within a mod the user's tab strip decides, via the mod-wide stack (index 0 = top, so sort
@@ -2163,6 +2174,7 @@ public class CompositorService : IDisposable
                 // DIFFERENT active mask B is meant to erase — B's own shape never got a say.
                 foreach (var modDir in pairs.Select(p => p.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
                 {
+                    if (maskShellMods.Contains(modDir)) continue;   // relief lives on the mask shell instead
                     if (!maskAssetsByMod.TryGetValue(modDir, out var assets)) continue;
                     if (texPaths.Normal == null || !assets.Any(a => a.NormalPath != null)) continue;
                     lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
@@ -2179,14 +2191,19 @@ public class CompositorService : IDisposable
                         // below decides, per pixel, how much to blend back toward this.
                         var preRelief = (byte[])baseN.Clone();
 
-                        foreach (var (maskPath, normalPath, _) in assets)
+                        // Fold each active mask's trim relief into the body normal, top-first with a claim so a
+                        // higher mask's trim wins over (and suppresses) a lower one's where they run together,
+                        // while plain fill leaves the fabric normal to show. See CombineMaskReliefs.
+                        var reliefMasks = new List<(byte[] Relief, byte[] Coverage)>();
+                        foreach (var (maskPath, normalPath, _) in assets)   // top-first (highest priority first)
                         {
                             if (normalPath == null) continue;
                             var maskPng  = RemapIfNeeded(LoadPng(maskPath, wN, hN), wN, hN, maskSrcBodyType, maskPath);
                             var normalOv = RemapIfNeeded(LoadPng(normalPath, wN, hN), wN, hN, maskSrcBodyType, normalPath);
                             if (maskPng != null && normalOv != null)
-                                ReplaceNormal(baseN, normalOv, wN, hN, maskPng);   // the mask IS the surface
+                                reliefMasks.Add((normalOv, maskPng));
                         }
+                        CombineMaskReliefs(baseN, wN, hN, reliefMasks);
 
                         var msk = CombinedMaskAt(modDir, wN, hN, maskSrcBodyType);
                         if (msk != null)
@@ -2223,6 +2240,7 @@ public class CompositorService : IDisposable
                 // its territory forces coverage 0 — a hole that reveals skin — even where a LOWER mask is white.
                 foreach (var modDir in pairs.Select(p => p.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
                 {
+                    if (maskShellMods.Contains(modDir)) continue;   // mask lives on the shell, not the skin diffuse
                     if (!maskRowsByMod.TryGetValue(modDir, out var maskRows)) continue;
                     if (!maskAssetsByMod.TryGetValue(modDir, out var assets) || texPaths.Diffuse == null) continue;
                     if (!assets.Any(a => a.IndexPath != null)) continue;
@@ -2422,19 +2440,13 @@ public class CompositorService : IDisposable
                     .ToList();
 
                 // ── Top mask shell ────────────────────────────────────────────
-                // A mod whose single "Masks" tab has a colorset AND builds gear shells gets a dedicated
-                // mask shell, appended AFTER the sort so it takes the highest letter = renders on top of all
-                // its other shells. Coloured by MaskColorTableRows; SecondSkinService sources its coverage,
-                // _id and relief from the mod's active masks (IsMaskShell), and skips the ordinary mask
-                // merge on the mod's OTHER shells (maskShellMods) so the mask isn't coloured twice.
-                var maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory)
-                             .Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+                // Each mask-shell mod (computed above) gets a dedicated mask shell, appended AFTER the sort so
+                // it takes the highest letter = renders on top of all its other shells. Coloured by
+                // MaskColorTableRows; SecondSkinService sources its coverage, _id and relief from the mod's
+                // active masks (IsMaskShell), and skips the ordinary mask merge on the mod's OTHER shells
+                // (maskShellMods) so the mask isn't coloured twice.
+                foreach (var mod in maskShellMods)
                 {
-                    if (!maskRowsByMod.ContainsKey(mod)) continue;
-                    if (!maskAssetsByMod.TryGetValue(mod, out var mAssets)
-                        || !mAssets.Any(a => a.IndexPath != null || a.NormalPath != null)) continue;
-
                     var gShell = gearOverlays.First(g => g.Entry.ModDirectory == mod);
                     var maskDesc = new OverlayDescriptor
                     {
@@ -2450,7 +2462,6 @@ public class CompositorService : IDisposable
                         Option         = "Masks",
                     };
                     gearOverlays.Add((gShell.Entry, maskResolved));
-                    maskShellMods.Add(mod);
                 }
 
                 // ── Gear-shell prefetch ──────────────────────────────────────
@@ -2564,6 +2575,12 @@ public class CompositorService : IDisposable
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
             }
+
+            // Record the enabled-shape signature on EVERY composite — the gear phase above only sets it when
+            // a shell actually builds. Without this, a skin-only composite (no gear shell) on a character WITH
+            // shape keys leaves _lastCompositedBodyShapeSig stale, so SchedulePostRedrawBodyTypeCheck sees a
+            // permanent mismatch and recomposites forever. Same snapshot the composite ran against.
+            _lastCompositedBodyShapeSig = BodyShapeSignature(_bodyShapeSnapshot);
 
             // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
             if (gearOverlays.Count > 0)
@@ -3132,6 +3149,57 @@ public class CompositorService : IDisposable
                 dst[i + 1] = (byte)Math.Clamp(dst[i + 1] + (src[i + 1] - dst[i + 1]) * a, 0, 255);
             }
         });
+    }
+
+    // ── Mask trim convention ──────────────────────────────────────────────────
+    // A Proteus mask replaces the surface beneath it (its normal, and its colour) only on its TRIM — the
+    // authored seams/edges — while its plain FILL leaves the fabric/skin below to show through. A texel is
+    // the trim if EITHER of two authored signals holds:
+    //   • its relief normal deviates from flat (a real bump — the raised lip), or
+    //   • its coverage texel is near-white (the trim is painted bright over a mid-grey garment body).
+    // Neither alone covers the whole band (a flat trim centre has no bump; relief is often drawn past the
+    // coverage edge), so both are used. Shape/brightness are read from the coverage LUMINANCE — the mask
+    // PNGs' alpha channel is not a usable shape signal (it is inverted/unused on these exports).
+    internal const int MaskReliefDeadzone = 8;    // |R-128|+|G-128| below this = flat (no bump)
+    internal const int MaskTrimLuma       = 190;  // coverage luminance at/above this = bright trim band
+
+    /// <summary>True if texel <paramref name="o"/> is a mask's trim (see the convention above). RGBA arrays.</summary>
+    internal static bool IsMaskTrim(byte[] relief, byte[] coverage, int o)
+    {
+        if (Math.Abs(relief[o] - 128) + Math.Abs(relief[o + 1] - 128) >= MaskReliefDeadzone) return true;
+        int luma = (coverage[o] * 77 + coverage[o + 1] * 150 + coverage[o + 2] * 29) >> 8;
+        return luma >= MaskTrimLuma;
+    }
+
+    /// <summary>
+    /// Fold several masks' relief into <paramref name="baseNormal"/> (RGBA), TOP-FIRST with a per-texel claim:
+    /// the higher mask's TRIM owns the texel (writes its R/G, blue left alone), and a lower mask can never draw
+    /// its trim where a higher one already claimed — so overlapping/parallel trims resolve to just the top
+    /// one instead of stacking into a doubled ridge. A mask's plain fill does NOT claim, so a lower mask's
+    /// trim still shows through a higher mask's body (e.g. a neckline strap over a leotard). Shared by the skin
+    /// body normal and the gear mask-shell so the two can't drift.
+    /// </summary>
+    internal static void CombineMaskReliefs(byte[] baseNormal, int w, int h,
+        IReadOnlyList<(byte[] Relief, byte[] Coverage)> masksTopFirst)
+    {
+        if (masksTopFirst.Count == 0) return;
+        var claimed = new bool[w * h];
+        foreach (var (relief, coverage) in masksTopFirst)
+        {
+            if (relief == null || coverage == null) continue;
+            ParallelPixels(0, w * h, 1, (from, to) =>
+            {
+                for (int p = from; p < to; p++)
+                {
+                    if (claimed[p]) continue;               // a higher mask's trim already owns this texel
+                    int o = p * 4;
+                    if (!IsMaskTrim(relief, coverage, o)) continue;
+                    baseNormal[o]     = relief[o];          // R/G only — blue is unused for masks
+                    baseNormal[o + 1] = relief[o + 1];
+                    claimed[p] = true;
+                }
+            });
+        }
     }
 
     internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)

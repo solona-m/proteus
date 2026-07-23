@@ -653,44 +653,43 @@ public sealed class SecondSkinService
         // the mask shell owns the _id/relief, so merging here too would colour the mask twice. The mask
         // shell itself passes mergeMasks=true, so its own _id/relief still land.
         //
-        // Iterated bottom-first (assets are highest-priority-first, so reverse) — each mask overwrites the
-        // _id and REPLACES the relief where it has territory, so the TOP mask wins on overlap. That matches
-        // the coverage combine (BuildMaskCoverage / CombinedMaskAt), which is also top-territory-wins.
-        var mergeAssets = mergeMasks
-            ? Enumerable.Reverse(discovery.ResolveActiveMaskAssets(entry))
-            : Enumerable.Empty<(string MaskPath, string? NormalPath, string? IndexPath)>();
-        foreach (var (maskPath, maskNormalPath, maskIndexPath) in mergeAssets)
+        // _id is merged bottom-first (assets are highest-priority-first, so reverse) — each mask overwrites
+        // the _id where it is present, so the TOP mask wins on overlap. The RELIEF is folded in afterwards by
+        // the shared CombineMaskReliefs (top-first claim), the SAME combine the skin body normal uses.
+        var mergeTopFirst = mergeMasks
+            ? discovery.ResolveActiveMaskAssets(entry)
+            : new List<(string MaskPath, string? NormalPath, string? IndexPath)>();
+        foreach (var (maskPath, maskNormalPath, maskIndexPath) in Enumerable.Reverse(mergeTopFirst))
         {
+            if (maskIndexPath == null) continue;
             var maskPng = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
-            if (maskPng == null) continue;
-
-            if (maskIndexPath != null)
+            var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
+            if (maskPng == null || maskIdx == null) continue;
+            // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
+            index = index != null ? (byte[])index.Clone() : Solid(0, 0, 0, 255);
+            for (int i = 0; i < index.Length; i += 4)
             {
-                var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
-                if (maskIdx != null)
-                {
-                    // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
-                    index = index != null ? (byte[])index.Clone() : Solid(0, 0, 0, 255);
-                    for (int i = 0; i < index.Length; i += 4)
-                    {
-                        if (maskPng[i + 3] < 128) continue;   // only where the mask is actually present
-                        index[i]     = maskIdx[i];            // red   → row pair
-                        index[i + 1] = maskIdx[i + 1];        // green → sub-row
-                    }
-                }
+                if (maskPng[i + 3] < 128) continue;   // only where the mask is actually present
+                index[i]     = maskIdx[i];            // red   → row pair
+                index[i + 1] = maskIdx[i + 1];        // green → sub-row
             }
+        }
 
-            if (maskNormalPath != null)
-            {
-                var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
-                if (maskNormal != null)
-                {
-                    // The mask's relief IS the surface there — replace the base normal rather than
-                    // piling a second bump on top of it (same rule as the skin layer).
-                    normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
-                    CompositorService.ReplaceNormal(normal, maskNormal, TexSize, TexSize, maskPng);
-                }
-            }
+        // Mask relief: same top-first claim-combine as the skin body normal (CombineMaskReliefs), so the two
+        // paths can't drift. A higher mask's trim wins over a lower one's; plain fill leaves the base normal.
+        var reliefMasks = new List<(byte[] Relief, byte[] Coverage)>();
+        foreach (var (maskPath, maskNormalPath, _) in mergeTopFirst)
+        {
+            if (maskNormalPath == null) continue;
+            var maskPng    = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
+            var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
+            if (maskPng != null && maskNormal != null)
+                reliefMasks.Add((maskNormal, maskPng));
+        }
+        if (reliefMasks.Count > 0)
+        {
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+            CompositorService.CombineMaskReliefs(normal, TexSize, TexSize, reliefMasks);
         }
 
         // ── per-row opacity ──────────────────────────────────────────────────
