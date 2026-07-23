@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 180;
+    public const int BuildNumber = 181;
 
     private const string CommandName = "/proteus";
 

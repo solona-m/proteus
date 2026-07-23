@@ -923,10 +923,10 @@ public sealed class SecondSkinService
 
         void WarnOverBudget(string what, char prefix, int setId, int mats)
         {
-            var msg = $"[Proteus] equipped {what} ({prefix}{setId:D4}) has {mats} material(s) — no room to append "
-                    + $"{layerCount} overlay(s) (max {SecondSkinWriter.MaxMaterials}); skipping it as a host.";
-            Plugin.ChatGui.Print(msg);
-            log.Warning(msg);
+            // Debug, not chat/warning: this is an expected condition re-evaluated every composite (an equipped
+            // accessory simply doesn't have room to host the shell), so surfacing it to chat spammed the user.
+            log.Debug("[Proteus] equipped {0} ({1}{2:D4}) has {3} material(s) — no room to append {4} overlay(s) "
+                + "(max {5}); skipping it as a host.", what, prefix, setId, mats, layerCount, SecondSkinWriter.MaxMaterials);
         }
 
         // Load an equipped model (accessory or head-equipment glasses) as a host candidate, or null if
