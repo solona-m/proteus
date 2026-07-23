@@ -1024,6 +1024,20 @@ public class StatusWindow : Window
         var modeBefore = EffectiveMode(activeOpt.Overlays, gearOvrOpt);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
 
+        // Auto skin-above-gear promotion — mirror the compositor (CompositorService split): a skin overlay
+        // on auto (not pinned) stacked above a gear layer renders as a gear shell, so the editor must treat
+        // it as gear too. activeOptions is already sorted top-first, so any option below this one (index >
+        // selIdx) that is gear means this one sits above gear. Without this the Glow button never shows —
+        // it keys off shell materials for gear vs skin-glow targets for skin, and the compositor built the
+        // former, not the latter.
+        bool promotedToGear = false;
+        if (!gear)
+        {
+            bool pinned = gearOvrOpt?.ManualShaderLock ?? activeOpt.Overlays.FirstOrDefault()?.ManualShaderLock ?? false;
+            bool aboveGear = activeOptions.Skip(selIdx + 1).Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
+            if (!pinned && aboveGear) { gear = true; shader = OverlayDescriptor.DefaultGearShader; promotedToGear = true; }
+        }
+
         bool changed = false;
         int sel = _rowSelection.GetValueOrDefault(scope, 1);
 
@@ -1059,7 +1073,8 @@ public class StatusWindow : Window
         bool resetOpt = false;
         bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
-            resetDisabledReason: ResetBlockedReason(entry));
+            resetDisabledReason: ResetBlockedReason(entry),
+            promotedToGear: promotedToGear);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).

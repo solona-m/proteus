@@ -52,7 +52,10 @@ public static class ColorTableEditor
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
         out FeatureEdit edited,
         Func<bool>? onReset = null,
-        string? resetDisabledReason = null)
+        string? resetDisabledReason = null,
+        // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
+        // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
+        bool promotedToGear = false)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -67,6 +70,7 @@ public static class ColorTableEditor
         float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
         bool curLock = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
         var mode = RenderModeInference.ModeOf(ovr?.Layer ?? first.Layer, ovr != null ? ovr.Shader : first.Shader);
+        if (promotedToGear && mode == RenderMode.Skin) mode = RenderMode.Cloth;   // stacked above gear → renders as a shell
 
         void SetScroll(string? s)       { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
         void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
