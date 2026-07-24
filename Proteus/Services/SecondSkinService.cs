@@ -115,6 +115,15 @@ public sealed class SecondSkinService
         return h;
     }
 
+    /// <summary>True when the blue channel (byte 2 of each RGBA quad) is 255 across the whole buffer — i.e.
+    /// the normal carries no transparency gate, so BC5 (which drops blue) is lossless for it.</summary>
+    private static bool IsBlueAllWhite(byte[] rgba)
+    {
+        for (int i = 2; i < rgba.Length; i += 4)
+            if (rgba[i] != 255) return false;
+        return true;
+    }
+
     /// <summary>
     /// Build every gear shell for the character. <paramref name="charCode"/> is the human model code
     /// ("0201" = Midlander female). <paramref name="outputRoot"/> is the managed mod directory.
@@ -774,18 +783,32 @@ public sealed class SecondSkinService
 
         var order = GearMaterialWriter.TextureOrder(shader);
         var paths = new List<string>(order.Count);
+        bool compress = config.EnableCompression;
         foreach (var slot in order)
         {
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
 
-            // Skip the write when the content is byte-identical to what we last wrote — otherwise every
-            // recomposite would look like a change and force a redraw.
-            var hash = Hash(slots[slot]);
+            // Compression (opt-in). The "id" (index) slot is NEVER compressed: its red/green encode discrete
+            // colour-table row selectors (red / 17 + 1), and any lossy error crosses a bucket boundary and
+            // picks the wrong row (wrong colour/glow, seams). The normal's BLUE channel is the gear
+            // transparency gate (see WriteTextures above), which BC5 (2-channel) drops — so it only uses BC5
+            // when its blue is uniformly opaque (255 ⇒ nothing to lose), else BC7 preserves the gate.
+            // Everything else (base/mask/catc) is continuous → BC7.
+            var encoding = TexEncoding.Uncompressed;
+            if (compress && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase))
+                encoding = string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase)
+                    ? (IsBlueAllWhite(slots[slot]) ? TexEncoding.Bc5 : TexEncoding.Bc7)
+                    : TexEncoding.Bc7;
+
+            // Skip the write when the content AND its encoding match what we last wrote — otherwise every
+            // recomposite would look like a change and force a redraw. The encoding is folded into the hash
+            // so toggling compression forces a rewrite instead of a stale skip.
+            var hash = Hash(slots[slot]) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
             bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
             if (!same)
             {
-                if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk))
+                if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk, encoding))
                 {
                     log.Error("[Proteus] second skin: failed to write {0}", disk);
                     return null;

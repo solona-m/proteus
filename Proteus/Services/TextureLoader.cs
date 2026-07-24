@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using BCnEncoder.Encoder;
+using CommunityToolkit.HighPerformance;
 using Dalamud.Plugin.Services;
 using Lumina.Data;
 using Lumina.Data.Files;
@@ -13,6 +15,10 @@ using StbImageSharp;
 using StbImageWriteSharp;
 
 namespace Proteus.Services;
+
+/// <summary>How a baked .tex is encoded on disk. BC5/BC7 map to the FFXIV texture-format codes the decode
+/// path already recognises (0x6230 / 0x6432).</summary>
+public enum TexEncoding { Uncompressed, Bc5, Bc7 }
 
 /// <summary>
 /// Loads textures from disk (.tex via Lumina, .png via StbImageSharp) as raw RGBA byte arrays,
@@ -534,27 +540,66 @@ public class TextureLoader
     /// Returns true on success.
     /// </summary>
     public bool WriteTex(byte[] rgba, int width, int height, string outputPath)
+        => WriteTex(rgba, width, height, outputPath, TexEncoding.Uncompressed);
+
+    /// <summary>
+    /// Write an RGBA8 buffer as a single-surface .tex. Two transforms apply:
+    /// <list type="bullet">
+    /// <item>Flat-colour shrink (always): a buffer that is one solid colour renders identically at any size
+    /// (UVs are normalised, nothing asserts a texture size), so it collapses to a 16×16 square.</item>
+    /// <item>Block compression (<paramref name="encoding"/>): BC5 (0x6230) / BC7 (0x6432) instead of the
+    /// uncompressed B8G8R8A8 (0x1450). Requires 4-aligned dimensions; falls back to uncompressed otherwise.</item>
+    /// </list>
+    /// </summary>
+    public bool WriteTex(byte[] rgba, int width, int height, string outputPath, TexEncoding encoding)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
-            // Convert RGBA → BGRA
-            var tSwizzle = PhaseCounter.Begin();
-            var bgra = new byte[rgba.Length];
-            for (int i = 0; i < rgba.Length; i += 4)
+            // Flat-colour shrink: a 16×16 square of the one colour is enough. It needs no compression.
+            if (IsSolidColor(rgba, out byte sr, out byte sg, out byte sb, out byte sa))
             {
-                bgra[i]     = rgba[i + 2]; // B ← R
-                bgra[i + 1] = rgba[i + 1]; // G
-                bgra[i + 2] = rgba[i];     // R ← B
-                bgra[i + 3] = rgba[i + 3]; // A
+                const int n = 16;
+                var small = new byte[n * n * 4];
+                for (int i = 0; i < small.Length; i += 4)
+                {
+                    small[i] = sr; small[i + 1] = sg; small[i + 2] = sb; small[i + 3] = sa;
+                }
+                rgba = small; width = n; height = n; encoding = TexEncoding.Uncompressed;
             }
-            SwizzleStats.Stop(tSwizzle);
+
+            // Block-compressed formats are 4×4 blocks — dimensions must be 4-aligned, else write uncompressed.
+            if (encoding != TexEncoding.Uncompressed && (width % 4 != 0 || height % 4 != 0))
+                encoding = TexEncoding.Uncompressed;
+
+            byte[] payload;
+            uint formatCode;
+            if (encoding == TexEncoding.Uncompressed)
+            {
+                // Convert RGBA → BGRA
+                var tSwizzle = PhaseCounter.Begin();
+                payload = new byte[rgba.Length];
+                for (int i = 0; i < rgba.Length; i += 4)
+                {
+                    payload[i]     = rgba[i + 2]; // B ← R
+                    payload[i + 1] = rgba[i + 1]; // G
+                    payload[i + 2] = rgba[i];     // R ← B
+                    payload[i + 3] = rgba[i + 3]; // A
+                }
+                SwizzleStats.Stop(tSwizzle);
+                formatCode = 0x1450u;             // B8G8R8A8
+            }
+            else
+            {
+                payload    = EncodeBlockCompressed(rgba, width, height, encoding);
+                formatCode = encoding == TexEncoding.Bc5 ? 0x6230u : 0x6432u;
+            }
 
             // 80-byte TexHeader (StructLayout Explicit, Size=80)
             var header = new byte[80];
             BitConverter.TryWriteBytes(header.AsSpan(0), 0x00800000u);
-            BitConverter.TryWriteBytes(header.AsSpan(4), 0x1450u);
+            BitConverter.TryWriteBytes(header.AsSpan(4), formatCode);
             BitConverter.TryWriteBytes(header.AsSpan(8),  (ushort)width);
             BitConverter.TryWriteBytes(header.AsSpan(10), (ushort)height);
             BitConverter.TryWriteBytes(header.AsSpan(12), (ushort)1);
@@ -564,10 +609,10 @@ public class TextureLoader
             var tWrite = PhaseCounter.Begin();
             WriteWithRetry(outputPath, stream =>
             {
-                stream.Write(header, 0, header.Length);
-                stream.Write(bgra,   0, bgra.Length);
+                stream.Write(header,  0, header.Length);
+                stream.Write(payload, 0, payload.Length);
             });
-            WriteStats.Stop(tWrite, header.Length + bgra.Length);
+            WriteStats.Stop(tWrite, header.Length + payload.Length);
             return true;
         }
         catch (Exception ex)
@@ -575,6 +620,39 @@ public class TextureLoader
             log.Error(ex, "Failed to write .tex: {0}", outputPath);
             return false;
         }
+    }
+
+    /// <summary>True when every pixel in the RGBA buffer is the identical 4-byte colour, which is output.
+    /// Early-outs on the first mismatch, so the common non-uniform case is cheap.</summary>
+    private static bool IsSolidColor(byte[] rgba, out byte r, out byte g, out byte b, out byte a)
+    {
+        r = g = b = a = 0;
+        if (rgba.Length < 8) return false;   // 0 or 1 pixel — nothing to gain
+        r = rgba[0]; g = rgba[1]; b = rgba[2]; a = rgba[3];
+        for (int i = 4; i + 3 < rgba.Length; i += 4)
+            if (rgba[i] != r || rgba[i + 1] != g || rgba[i + 2] != b || rgba[i + 3] != a)
+                return false;
+        return true;
+    }
+
+    /// <summary>Encode an RGBA8 buffer to raw BC5/BC7 blocks (mip 0 only), linear block order — the layout
+    /// FFXIV/Lumina expect on read-back. BC5 keeps only R,G; callers pick it only where B/A carry no data.</summary>
+    private static byte[] EncodeBlockCompressed(byte[] rgba, int width, int height, TexEncoding encoding)
+    {
+        var pixels = new BCnEncoder.Shared.ColorRgba32[width * height];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = new BCnEncoder.Shared.ColorRgba32(
+                rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]);
+
+        var encoder = new BcEncoder();
+        encoder.OutputOptions.GenerateMipMaps = false;
+        encoder.OutputOptions.Quality         = CompressionQuality.Fast;
+        encoder.OutputOptions.Format          = encoding == TexEncoding.Bc5
+            ? BCnEncoder.Shared.CompressionFormat.Bc5
+            : BCnEncoder.Shared.CompressionFormat.Bc7;
+
+        var mem = new ReadOnlyMemory2D<BCnEncoder.Shared.ColorRgba32>(pixels, height, width);
+        return encoder.EncodeToRawBytes(mem, 0, out _, out _);
     }
 
     /// <summary>Write an RGBA8 buffer as PNG to disk. Returns true on success.</summary>

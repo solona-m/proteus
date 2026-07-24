@@ -2,11 +2,26 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows7.0": {
+      "BCnEncoder.Net": {
+        "type": "Direct",
+        "requested": "[2.*, )",
+        "resolved": "2.3.0",
+        "contentHash": "DJhHJiBJKXUXxlkkrv74ckzJb3wYxqIAZHjXD9G76kpsD0YyJOmqtNufHWEuJe0eH0tB1tCZn80/3JV2UVP7yQ==",
+        "dependencies": {
+          "CommunityToolkit.HighPerformance": "8.4.0"
+        }
+      },
       "BitMiracle.LibTiff.NET": {
         "type": "Direct",
         "requested": "[2.4.660, )",
         "resolved": "2.4.660",
         "contentHash": "Drd0fDFVrR3v19IJtqiDVnjgcVZoGlzFw/CYni1OQ5/xVYvjPNp18E9eu+dH/RmpIUw6Pn/JhE/H+Yc3kHI89A=="
+      },
+      "CommunityToolkit.HighPerformance": {
+        "type": "Direct",
+        "requested": "[8.*, )",
+        "resolved": "8.4.2",
+        "contentHash": "2hmtrrU18x6NL3mbuAqwy0KpnoEEJOuK6sH5RKQfD/jHijn2pqvqBUC7WGy9dgNBL9BDA7eOC0kirsNPMp2f4Q=="
       },
       "DalamudPackager": {
         "type": "Direct",

@@ -294,6 +294,19 @@ public class StatusWindow : Window
                 "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
                 "automatically when Glamourer can't service it.");
 
+        var enableCompression = config.EnableCompression;
+        if (ImGui.Checkbox("Enable Compression", ref enableCompression))
+        {
+            config.EnableCompression = enableCompression;
+            config.Save();
+            // Re-encode existing output in the new format.
+            compositor.TriggerRecomposite("compression-toggle");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Block-compress the baked textures (BC7), cutting each to about a quarter of its\n" +
+                             "uncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\n" +
+                             "its exact row values. Off = uncompressed (byte-identical to before).");
+
         bool autoGlasses = config.AutoInvisibleGlasses;
         if (ImGui.Checkbox("Host on invisible glasses (keep rings free)", ref autoGlasses))
         {
@@ -864,17 +877,11 @@ public class StatusWindow : Window
             // While a design binding is active the mod-wide order lives on the binding, not the global
             // config (the composite reads it via CompositorService.ModStackIndexFor) — so the tab strip must
             // order its buttons the same way, or a restack moves the cloth but leaves the buttons put.
-            var stackOvr = designBindings.ActiveStackOrderFor(entry.ModDirectory)?.ToList();
+            var stackOvr = designBindings.ActiveStackOrderFor(entry.ModDirectory);
             int ModStackIdx(string group, string option)
-            {
-                if (stackOvr != null)
-                {
-                    int i = stackOvr.FindIndex(e =>
-                        string.Equals(e, Configuration.ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
-                    return i >= 0 ? i : int.MaxValue;
-                }
-                return config.ModStackIndexOf(entry.ModDirectory, group, option);
-            }
+                => stackOvr != null
+                    ? Configuration.ModStackIndexIn(stackOvr, group, option)
+                    : config.ModStackIndexOf(entry.ModDirectory, group, option);
 
             activeOptions = activeOptions
                 .OrderBy(x => ModStackIdx(x.GroupName, x.Option.Name))

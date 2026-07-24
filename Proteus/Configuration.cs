@@ -44,6 +44,13 @@ public class Configuration : IPluginConfiguration
     public bool DisableAutoRedraw { get; set; } = false;
 
     /// <summary>
+    /// Block-compress the baked output textures: BC5 for normals, BC7 for everything else. Cuts each
+    /// texture to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on disk and in VRAM. Off = uncompressed
+    /// B8G8R8A8 (byte-identical to legacy output).
+    /// </summary>
+    public bool EnableCompression { get; set; } = false;
+
+    /// <summary>
     /// Prefer Glamourer's in-place equipment reload (ReapplyState) over a full Penumbra redraw when
     /// refreshing composited textures. Avoids the despawn/respawn flicker. Falls back to a full
     /// redraw automatically when Glamourer is unavailable or has no state for the player.
@@ -152,16 +159,24 @@ public class Configuration : IPluginConfiguration
     /// <summary>Identifies one option inside a mod-wide stack. NUL-separated, same reasoning as StackKey.</summary>
     public static string ModStackEntry(string group, string option) => group + "\u0000" + option;
 
-    /// <summary>Position in the mod-wide stack (0 = top), or <see cref="int.MaxValue"/> when unset.</summary>
-    public int ModStackIndexOf(string modDir, string group, string option)
+    /// <summary>Position of (group,option) in a top-first <see cref="ModStackEntry"/> list (0 = top), or
+    /// <see cref="int.MaxValue"/> when not listed. Shared by the composite sort and the tab strip so a
+    /// design-binding stack override resolves identically in both (see CompositorService.ModStackIndexFor
+    /// and StatusWindow's ModStackIdx).</summary>
+    public static int ModStackIndexIn(IReadOnlyList<string> order, string group, string option)
     {
-        if (OverlayModStackOrder.TryGetValue(modDir, out var order))
-        {
-            int i = order.FindIndex(e => string.Equals(e, ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
-            if (i >= 0) return i;
-        }
+        var key = ModStackEntry(group, option);
+        for (int i = 0; i < order.Count; i++)
+            if (string.Equals(order[i], key, StringComparison.OrdinalIgnoreCase))
+                return i;
         return int.MaxValue;
     }
+
+    /// <summary>Position in the mod-wide stack (0 = top), or <see cref="int.MaxValue"/> when unset.</summary>
+    public int ModStackIndexOf(string modDir, string group, string option)
+        => OverlayModStackOrder.TryGetValue(modDir, out var order)
+            ? ModStackIndexIn(order, group, option)
+            : int.MaxValue;
 
     /// <summary>Persist the mod's full top-first stack across all groups, and save.</summary>
     public void SetModStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)

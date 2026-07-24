@@ -1066,6 +1066,10 @@ public class CompositorService : IDisposable
                 _secondSkinActive = false;
                 _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
 
+                // Nothing is referenced now, so remove every ss_*/model/material orphan too (the up-front
+                // cleanup keeps ss_ files; with all mods off, none should survive).
+                PruneManagedOutput(new Dictionary<string, string>());
+
                 // Nothing is hosted, and the line above just deleted the redirect that renders our
                 // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
                 // glasses on the player's face that they never chose, so take it off before the redraw.
@@ -1101,15 +1105,9 @@ public class CompositorService : IDisposable
             // a design captures/restores its tab arrangement without mutating the global stack config.
             var stackOverride = _stackOverride; // snapshot the volatile reference for this run
             int ModStackIndexFor(string modDir, string group, string option)
-            {
-                if (stackOverride != null && stackOverride.TryGetValue(modDir, out var order))
-                {
-                    int i = order.FindIndex(e =>
-                        string.Equals(e, Configuration.ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
-                    return i >= 0 ? i : int.MaxValue;
-                }
-                return config.ModStackIndexOf(modDir, group, option);
-            }
+                => stackOverride != null && stackOverride.TryGetValue(modDir, out var order)
+                    ? Configuration.ModStackIndexIn(order, group, option)
+                    : config.ModStackIndexOf(modDir, group, option);
 
             // Gear overlays don't composite into a skin material — each becomes its own second-skin
             // shell with its own material and shader. Collect them separately.
@@ -2370,11 +2368,15 @@ public class CompositorService : IDisposable
                 var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
                 var channels = new System.Text.StringBuilder();
 
+                // Compression (opt-in): BC7 for every skin channel — the skin normal uses its B/A channels
+                // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
+                bool compress = config.EnableCompression;
+
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
                     var relPath = "textures/" + baseName + "_d.tex";
-                    if (textureLoader.WriteTex(baseD, wD, hD, outPath))
+                    if (textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
                         redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
 
@@ -2392,14 +2394,14 @@ public class CompositorService : IDisposable
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
                     var relPath = "textures/" + baseName + "_n.tex";
-                    if (textureLoader.WriteTex(baseN, wN, hN, outPath))
+                    if (textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal"); }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
                     var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
                     var relPath = "textures/" + baseName + "_m.tex";
-                    if (textureLoader.WriteTex(baseM, wM, hM, outPath))
+                    if (textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask"); }
                 }
 
@@ -2656,6 +2658,7 @@ public class CompositorService : IDisposable
                     PhaseCounter.MsSince(tGear), gearOverlays.Count);
 
             WriteManagedModJson(redirects, manipulations);
+            PruneManagedOutput(redirects);   // drop ss_*/model/material orphans from disabled/shrunk mods
             ReloadAndRedrawWhenReady(redirects, runId);
 
             // Reconcile the invisible-glasses injection AFTER the redirect mod is live, so when the equip's
@@ -2824,6 +2827,30 @@ public class CompositorService : IDisposable
 
         PenumbraModMeta.WriteRedirects(
             managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
+    }
+
+    /// <summary>
+    /// Delete any file under textures/ materials/ models/ that the just-written manifest doesn't reference —
+    /// orphans left by a now-disabled mod, a dropped spill host, or a shell that shed a layer. The skin
+    /// textures are already cleared up-front (they're runId-named), but the ss_*/model/material files are
+    /// deliberately kept across a run for the change-detection skip, so nothing else ever removes their
+    /// orphans. Pass the FINAL redirect map (its rel-path values are what to keep). Safe to delete a file
+    /// still tracked in SecondSkinService's hash cache: the write path re-checks File.Exists and rewrites.
+    /// </summary>
+    private void PruneManagedOutput(IDictionary<string, string> redirects)
+    {
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in redirects.Values)
+            keep.Add(rel.Replace('\\', '/'));   // Rel() emits backslashes, the skin path forward slashes
+
+        foreach (var sub in new[] { "textures", "materials", "models" })
+        {
+            var dir = Path.Combine(managedModDir, sub);
+            if (!Directory.Exists(dir)) continue;
+            foreach (var f in Directory.GetFiles(dir))
+                if (!keep.Contains(sub + "/" + Path.GetFileName(f)))
+                    try { File.Delete(f); } catch { }
+        }
     }
 
     private void ReloadAndRedraw(bool redraw = true)
