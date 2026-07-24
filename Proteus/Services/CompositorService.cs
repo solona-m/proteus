@@ -604,6 +604,17 @@ public class CompositorService : IDisposable
         => _colorOverride = overrideByMod;
 
     /// <summary>
+    /// Mod-wide overlay tab/stack order pushed by a design binding: modDir → option keys
+    /// (<see cref="Configuration.ModStackEntry"/>) top-first. Applied at composite time in place of
+    /// <see cref="Configuration.ModStackIndexOf"/>, so the global stack-order config is never mutated
+    /// (same contract as the colour/gear overrides). Null ⇒ fall back to the config order.
+    /// </summary>
+    private volatile IReadOnlyDictionary<string, List<string>>? _stackOverride;
+
+    public void SetActiveStackOverride(IReadOnlyDictionary<string, List<string>>? overrideByMod)
+        => _stackOverride = overrideByMod;
+
+    /// <summary>
     /// Apply the plugin's enabled state, both visually and in Penumbra.
     ///
     /// Turning off in the wrong order leaves the character still wearing the last composite: the mod has
@@ -849,7 +860,7 @@ public class CompositorService : IDisposable
     // stays visible), keyed by slot — chara/accessory/a0114/model/c0201a0114_rir.mdl → rir. Detect them
     // the same way as the equipment models above.
     private static readonly System.Text.RegularExpressions.Regex AccessoryModelRe = new(
-        @"chara/accessory/(a\d+)/model/c\d+a\d+_(rir|ril|wrs)\.mdl",
+        @"chara/accessory/(a\d+)/model/c\d+a\d+_(rir|ril|wrs|nek)\.mdl",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static Dictionary<string, string> EquippedAccessoryModelsFromModels(HashSet<string>? modelPaths)
@@ -1046,6 +1057,15 @@ public class CompositorService : IDisposable
             {
                 WriteManagedModJson(new Dictionary<string, string>());
 
+                // A shell hosted on an accessory redirected that accessory's .mdl; an in-place reload won't
+                // reload it, so dropping to zero enabled mods must force a FULL redraw or the shell lingers
+                // on the accessory (same reasoning as the plugin-disable path). Clear the host tracking too,
+                // so the next shell build compares against an empty set. This early return skips the normal
+                // reset/drop-detection at the end of the method, hence doing it explicitly here.
+                if (_secondSkinActive) _needFullRedraw = true;
+                _secondSkinActive = false;
+                _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+
                 // Nothing is hosted, and the line above just deleted the redirect that renders our
                 // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
                 // glasses on the player's face that they never chose, so take it off before the redraw.
@@ -1064,6 +1084,32 @@ public class CompositorService : IDisposable
 
             var colorOverride = _colorOverride; // snapshot the volatile reference for this run
             var gearOverride  = _gearOverride;
+
+            // The mod's shared "Masks" colorset, with the active design binding's override applied when it
+            // has one — so mask colours are captured/restored per-design like the overlay colorsets are
+            // (see OverlayColorOverride.Mask). Falls back to the live metadata mask rows otherwise.
+            List<ColorTableRowPreset>? MaskRowsFor(OverlayEntry e)
+            {
+                if (colorOverride != null && colorOverride.TryGetValue(e.ModDirectory, out var ov)
+                    && ov.Mask is { Count: > 0 } m)
+                    return m;
+                return e.Metadata.MaskColorTableRows;
+            }
+
+            // Mod-wide stack position of an overlay (0 = top), from the active design binding's stack
+            // override when it has one, else the global config order. Mirrors the mask/colour overrides so
+            // a design captures/restores its tab arrangement without mutating the global stack config.
+            var stackOverride = _stackOverride; // snapshot the volatile reference for this run
+            int ModStackIndexFor(string modDir, string group, string option)
+            {
+                if (stackOverride != null && stackOverride.TryGetValue(modDir, out var order))
+                {
+                    int i = order.FindIndex(e =>
+                        string.Equals(e, Configuration.ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
+                    return i >= 0 ? i : int.MaxValue;
+                }
+                return config.ModStackIndexOf(modDir, group, option);
+            }
 
             // Gear overlays don't composite into a skin material — each becomes its own second-skin
             // shell with its own material and shader. Collect them separately.
@@ -1102,7 +1148,7 @@ public class CompositorService : IDisposable
                 // (ModStackIndexOf, GroupOrder, StackIndexOf). Lower tuple = higher in the stack.
                 var modDir = entry.ModDirectory;
                 (int, int, int) Rank(ResolvedOverlay o) => (
-                    config.ModStackIndexOf(modDir, o.OptionGroup ?? "", o.Option ?? ""),
+                    ModStackIndexFor(modDir, o.OptionGroup ?? "", o.Option ?? ""),
                     o.GroupOrder,
                     config.StackIndexOf(modDir, o.OptionGroup ?? "", o.Option ?? ""));
 
@@ -1351,7 +1397,7 @@ public class CompositorService : IDisposable
             // LoadIndexMerged). Absent ⇒ legacy behaviour (mask _id merges into each overlay's own colorset).
             var maskRowsByMod = new Dictionary<string, Dictionary<int, ColorTableRowOverride>>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in entries)
-                if (entry.Metadata.MaskColorTableRows is { Count: > 0 } mr)
+                if (MaskRowsFor(entry) is { Count: > 0 } mr)
                     maskRowsByMod[entry.ModDirectory] = BuildRowDict(mr);
 
             // Mods that will get a dedicated top mask SHELL: any mod with GEAR shells + mask _id/relief assets.
@@ -1382,7 +1428,7 @@ public class CompositorService : IDisposable
             {
                 var sorted = list
                     .OrderBy(p => p.Entry.Priority)
-                    .ThenByDescending(p => config.ModStackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
+                    .ThenByDescending(p => ModStackIndexFor(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
@@ -1398,7 +1444,7 @@ public class CompositorService : IDisposable
                     {
                         var g = p.Overlay.OptionGroup ?? "";
                         var o = p.Overlay.Option ?? "";
-                        var mi = FmtIdx(config.ModStackIndexOf(p.Entry.ModDirectory, g, o));
+                        var mi = FmtIdx(ModStackIndexFor(p.Entry.ModDirectory, g, o));
                         return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}]";
                     });
                     log.Debug("[Proteus] skin stack (bottom->top): {0}", string.Join("  ->  ", parts));
@@ -2435,7 +2481,7 @@ public class CompositorService : IDisposable
                 // order, so a higher-listed gear fabric layers over a lower one.
                 gearOverlays = gearOverlays
                     .OrderBy(p => p.Entry.Priority)
-                    .ThenByDescending(p => config.ModStackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
+                    .ThenByDescending(p => ModStackIndexFor(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ToList();
@@ -2460,7 +2506,7 @@ public class CompositorService : IDisposable
                         Descriptor     = maskDesc,
                         // Its own Masks colorset if set, else inherit the fabric/overlay colorset the legacy
                         // merge would have used — so a mask with no colours of its own still shows (the fabric's).
-                        ColorTableRows = gShell.Entry.Metadata.MaskColorTableRows ?? gShell.Overlay.ColorTableRows,
+                        ColorTableRows = MaskRowsFor(gShell.Entry) ?? gShell.Overlay.ColorTableRows,
                         OptionGroup    = SidecarDiscoveryService.MaskGroupName,
                         Option         = "Masks",
                     };
@@ -2566,17 +2612,36 @@ public class CompositorService : IDisposable
                             bool shapesChanged = !string.Equals(shapeSig, _lastCompositedBodyShapeSig, StringComparison.Ordinal);
                             _lastCompositedBodyShapeSig = shapeSig;
 
-                            _needFullRedraw = shells.ModelChanged || shapesChanged;
+                            // A spill host being added or (crucially) dropped as the layer count changes needs
+                            // a full redraw so the vacated accessory reloads its real model — the in-place
+                            // reload never re-fetches an accessory .mdl. ModelChanged catches added/changed
+                            // hosts; this catches a host that simply vanished from the set.
+                            var hostPaths = new HashSet<string>(shells.HostModelPaths, StringComparer.OrdinalIgnoreCase);
+                            bool hostsChanged = !hostPaths.SetEquals(_lastShellHostPaths);
+                            _lastShellHostPaths = hostPaths;
+
+                            _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged;
                             if (shells.ModelChanged)
                                 log.Debug("[Proteus] second skin model changed — forcing a full redraw");
                             else if (shapesChanged)
                                 log.Debug("[Proteus] second skin body shapes changed — forcing a full redraw");
+                            else if (hostsChanged)
+                                log.Debug("[Proteus] second skin host set changed — forcing a full redraw");
                             else if (shells.ShellChanged)
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
+            }
+
+            // No shell built this composite (no gear, or build failed) but hosts were redirected last time —
+            // they've been dropped, so force a full redraw to reload the vacated accessories' real models.
+            if (!shellBuilt && _lastShellHostPaths.Count > 0)
+            {
+                _needFullRedraw = true;
+                _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+                log.Debug("[Proteus] second skin removed — forcing a full redraw to restore host accessories");
             }
 
             // Record the enabled-shape signature on EVERY composite — the gear phase above only sets it when
@@ -2791,6 +2856,11 @@ public class CompositorService : IDisposable
     /// an accessory's .mdl. Used to decide whether disabling must force a full redraw.
     /// </summary>
     private volatile bool _secondSkinActive;
+
+    /// <summary>The shell host model paths redirected last composite. When the set changes — a spill host was
+    /// added or (crucially) dropped as the layer count fell — the vacated accessory must reload its real model,
+    /// which only a full redraw does. Compared each composite to force one; an in-place reload can't do it.</summary>
+    private HashSet<string> _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Restore any accessory whose model the second skin replaced back to its original geometry, by

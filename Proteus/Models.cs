@@ -328,6 +328,14 @@ public class OverlayColorOverride
     public Dictionary<string, Dictionary<string, List<ColorTableRowPreset>>>? Options { get; set; }
 
     /// <summary>
+    /// The mod's shared "Masks" colorset (<see cref="ProteusMetadata.MaskColorTableRows"/>). Captured
+    /// separately because the synthesized Masks tab isn't a real option group — it has no entry in
+    /// <see cref="Options"/>. Null ⇒ fall back to the live metadata mask colours at composite time.
+    /// </summary>
+    [JsonPropertyName("Mask")]
+    public List<ColorTableRowPreset>? Mask { get; set; }
+
+    /// <summary>
     /// Resolve the rows for an overlay: the matching option's rows if present, else the top-level rows.
     /// Returns null when nothing is stored, so callers can fall back to the live metadata colors.
     /// </summary>

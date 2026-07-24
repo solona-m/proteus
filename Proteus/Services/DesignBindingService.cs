@@ -45,6 +45,12 @@ public class ProteusModBinding
     /// <summary>Effective gear-layer settings at capture time — layer, shader, effect, scroll speed and
     /// tiling. Same contract as Colors: applied as an in-memory override, metadata.json is untouched.</summary>
     public OverlayGearOverride Gear { get; set; } = new();
+
+    /// <summary>The mod-wide overlay tab/stack order top-first at capture time
+    /// (<see cref="Configuration.ModStackEntry"/> keys). Same contract as Colors/Gear: applied as an
+    /// in-memory override at composite time, the global stack-order config is untouched. Empty ⇒ nothing
+    /// captured (the mod was never restacked), so the composite keeps the global order.</summary>
+    public List<string> StackOrder { get; set; } = new();
 }
 
 /// <summary>
@@ -79,6 +85,7 @@ public class DesignBindingService : IDisposable
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
     private Dictionary<string, OverlayColorOverride>? activeOverride;
     private Dictionary<string, OverlayGearOverride>? activeGearOverride;
+    private Dictionary<string, List<string>>? activeStackOverride;
     private Guid? activeDesignId;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
@@ -126,7 +133,7 @@ public class DesignBindingService : IDisposable
             if (!store.Bindings.Remove(id)) return;
             designCache.Remove(id);
             wasActive = activeDesignId == id;
-            if (wasActive) { activeDesignId = null; activeOverride = null; activeGearOverride = null; }
+            if (wasActive) { activeDesignId = null; activeOverride = null; activeGearOverride = null; activeStackOverride = null; }
             Save();
         }
         if (wasActive)
@@ -201,10 +208,12 @@ public class DesignBindingService : IDisposable
                 activeDesignId       = designId;
                 activeOverride       = newOverride;
                 activeGearOverride   = CloneGear(mods);
+                activeStackOverride  = CloneStack(mods);
                 Save();
             }
             compositor.SetActiveColorOverride(newOverride);
             compositor.SetActiveGearOverride(activeGearOverride);
+            compositor.SetActiveStackOverride(activeStackOverride);
             compositor.TriggerRecomposite($"design-capture:{designId}");
 
             log.Information("[Proteus] Captured Proteus state for design {0} ({1} mods).", name ?? designId.ToString(), mods.Count);
@@ -225,7 +234,8 @@ public class DesignBindingService : IDisposable
 
         var result = new OverlayColorOverride
         {
-            Top = CloneRows(active?.Top ?? e.Metadata.ColorTableRows),
+            Top  = CloneRows(active?.Top ?? e.Metadata.ColorTableRows),
+            Mask = CloneRows(active?.Mask ?? e.Metadata.MaskColorTableRows),
         };
 
         if (e.Metadata.OptionGroups is { } groups)
@@ -274,9 +284,22 @@ public class DesignBindingService : IDisposable
                 Options      = options,
                 Colors       = CaptureColors(e),
                 Gear         = CaptureGear(e),
+                StackOrder   = CaptureStackOrder(e.ModDirectory),
             });
         }
         return mods;
+    }
+
+    // The mod-wide tab/stack order to record: the live override for this mod if a design is active (so an
+    // in-progress restack is captured), else the global config order. Empty when neither has one.
+    private List<string> CaptureStackOrder(string modDir)
+    {
+        lock (gate)
+            if (activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var live))
+                return new List<string>(live);
+        return config.OverlayModStackOrder.TryGetValue(modDir, out var cfg)
+            ? new List<string>(cfg)
+            : new List<string>();
     }
 
     // Build a live color override keyed by mod dir, cloned so editing it (live preview) never mutates
@@ -286,6 +309,12 @@ public class DesignBindingService : IDisposable
 
     private static OverlayColorOverride CloneOverride(OverlayColorOverride o)
         => JsonSerializer.Deserialize<OverlayColorOverride>(JsonSerializer.Serialize(o)) ?? new();
+
+    // Live stack override keyed by mod dir, cloned so an in-progress restack (live preview) never mutates
+    // the persisted binding. Only mods that actually captured an order contribute an entry.
+    private static Dictionary<string, List<string>> CloneStack(IEnumerable<ProteusModBinding> mods)
+        => mods.Where(m => m.StackOrder.Count > 0)
+               .ToDictionary(m => m.ModDirectory, m => new List<string>(m.StackOrder), StringComparer.OrdinalIgnoreCase);
 
     // ── Restore / clear (framework thread) ──────────────────────────────────────
 
@@ -312,9 +341,11 @@ public class DesignBindingService : IDisposable
             // in via UpdateActiveBindingFromCurrentState).
             activeOverride      = CloneOverrides(b.Mods);
             activeGearOverride  = CloneGear(b.Mods);
+            activeStackOverride = CloneStack(b.Mods);
         }
         compositor.SetActiveColorOverride(activeOverride);
         compositor.SetActiveGearOverride(activeGearOverride);
+        compositor.SetActiveStackOverride(activeStackOverride);
 
         if (collId != null)
         {
@@ -344,9 +375,10 @@ public class DesignBindingService : IDisposable
     /// <summary>Drop the active color override (revert to metadata colors) and recomposite.</summary>
     public void ClearColorOverride()
     {
-        lock (gate) { activeDesignId = null; activeOverride = null; activeGearOverride = null; }
+        lock (gate) { activeDesignId = null; activeOverride = null; activeGearOverride = null; activeStackOverride = null; }
         compositor.SetActiveColorOverride(null);
         compositor.SetActiveGearOverride(null);
+        compositor.SetActiveStackOverride(null);
         compositor.TriggerRecomposite("design-override-clear");
     }
 
@@ -361,12 +393,13 @@ public class DesignBindingService : IDisposable
         bool changed = false;
         lock (gate)
         {
-            if (activeDesignId != null) { activeDesignId = null; activeOverride = null; activeGearOverride = null; changed = true; }
+            if (activeDesignId != null) { activeDesignId = null; activeOverride = null; activeGearOverride = null; activeStackOverride = null; changed = true; }
         }
         if (changed)
         {
             compositor.SetActiveColorOverride(null);
             compositor.SetActiveGearOverride(null);
+            compositor.SetActiveStackOverride(null);
             compositor.TriggerRecomposite("design-binding-unbound");
         }
     }
@@ -433,6 +466,61 @@ public class DesignBindingService : IDisposable
             }
             return ovr.Top ??= CloneRows(seedRows) ?? new();
         }
+    }
+
+    /// <summary>
+    /// The mutable mask colorset the Masks tab should bind to when an override is active for this mod, or
+    /// null if none. Mirrors <see cref="GetEditableOverrideRows"/> for the mod's single shared Masks tab —
+    /// seeds (clones) from the metadata mask rows when the override has nothing stored yet.
+    /// </summary>
+    public List<ColorTableRowPreset>? GetEditableMaskRows(string modDir, List<ColorTableRowPreset>? seedRows)
+    {
+        lock (gate)
+        {
+            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr))
+                return null;
+            return ovr.Mask ??= CloneRows(seedRows) ?? new();
+        }
+    }
+
+    /// <summary>
+    /// Record a mod-wide tab restack while a design binding is active: into the live stack override (live
+    /// preview, folded into the binding on "Update binding"), NOT the global stack config — mirroring how
+    /// colour/gear edits stay on the binding. Returns false when no binding is active, so the caller
+    /// persists to the global config instead. Republishes to the compositor on success.
+    /// </summary>
+    /// <summary>
+    /// The active design binding's mod-wide tab order for this mod (<see cref="Configuration.ModStackEntry"/>
+    /// keys, top-first), or null when no binding overrides it — so the tab strip orders its buttons by the
+    /// same source the composite does (see CompositorService.ModStackIndexFor). Falls back to the global
+    /// stack config when this returns null.
+    /// </summary>
+    public IReadOnlyList<string>? ActiveStackOrderFor(string modDir)
+    {
+        lock (gate)
+            return activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var o)
+                ? new List<string>(o)
+                : null;
+    }
+
+    public bool SetEditableStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
+    {
+        IReadOnlyDictionary<string, List<string>>? published;
+        lock (gate)
+        {
+            if (activeDesignId == null || activeStackOverride == null) return false;
+            // Copy-on-write: the compositor reads the published dictionary on its background thread, so
+            // adding a key in place would be a structural mutation racing that read. Publish a fresh dict
+            // instead (the colour/gear overrides only ever mutate nested lists, never the dict shape).
+            var next = new Dictionary<string, List<string>>(activeStackOverride, StringComparer.OrdinalIgnoreCase)
+            {
+                [modDir] = topFirst.Select(x => Configuration.ModStackEntry(x.Group, x.Option)).ToList(),
+            };
+            activeStackOverride = next;
+            published = next;
+        }
+        compositor.SetActiveStackOverride(published);
+        return true;
     }
 
     /// <summary>
@@ -566,11 +654,13 @@ public class DesignBindingService : IDisposable
                 CapturedUtc = DateTime.UtcNow,
                 Mods        = mods,
             };
-            newOverride    = CloneOverrides(mods);
-            activeOverride = newOverride;
+            newOverride         = CloneOverrides(mods);
+            activeOverride      = newOverride;
+            activeStackOverride = CloneStack(mods);
             Save();
         }
         compositor.SetActiveColorOverride(newOverride);
+        compositor.SetActiveStackOverride(activeStackOverride);
         compositor.TriggerRecomposite($"design-binding-update:{id}");
         log.Information("[Proteus] Updated binding for design {0} from current state.", name ?? id.ToString());
         return true;

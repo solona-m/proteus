@@ -861,8 +861,23 @@ public class StatusWindow : Window
 
             int GroupOrderOf(string g) => gOrder.TryGetValue(g, out var v) ? v : int.MaxValue;
 
+            // While a design binding is active the mod-wide order lives on the binding, not the global
+            // config (the composite reads it via CompositorService.ModStackIndexFor) — so the tab strip must
+            // order its buttons the same way, or a restack moves the cloth but leaves the buttons put.
+            var stackOvr = designBindings.ActiveStackOrderFor(entry.ModDirectory)?.ToList();
+            int ModStackIdx(string group, string option)
+            {
+                if (stackOvr != null)
+                {
+                    int i = stackOvr.FindIndex(e =>
+                        string.Equals(e, Configuration.ModStackEntry(group, option), StringComparison.OrdinalIgnoreCase));
+                    return i >= 0 ? i : int.MaxValue;
+                }
+                return config.ModStackIndexOf(entry.ModDirectory, group, option);
+            }
+
             activeOptions = activeOptions
-                .OrderBy(x => config.ModStackIndexOf(entry.ModDirectory, x.GroupName, x.Option.Name))
+                .OrderBy(x => ModStackIdx(x.GroupName, x.Option.Name))
                 .ThenBy(x => GroupOrderOf(x.GroupName))
                 .ThenBy(x => config.StackIndexOf(entry.ModDirectory, x.GroupName, x.Option.Name))
                 .ToList();
@@ -948,12 +963,17 @@ public class StatusWindow : Window
 
             void PersistStack(List<string> keysTopFirst)
             {
-                config.SetModStackOrder(entry.ModDirectory,
-                    keysTopFirst.Select(k =>
-                    {
-                        var parts = k.Split('\0');
-                        return (Group: parts[0], Option: parts.Length > 1 ? parts[1] : "");
-                    }));
+                var topFirst = keysTopFirst.Select(k =>
+                {
+                    var parts = k.Split('\0');
+                    return (Group: parts[0], Option: parts.Length > 1 ? parts[1] : "");
+                }).ToList();
+
+                // While a design binding is being edited the restack is a live-preview override on the
+                // binding (folded in via "Update binding"), like colour/gear edits — the global stack
+                // config is left untouched. Falls back to the global config when no binding is active.
+                if (!(editingBinding && designBindings.SetEditableStackOrder(entry.ModDirectory, topFirst)))
+                    config.SetModStackOrder(entry.ModDirectory, topFirst);
                 compositor.TriggerRecomposite("stack-reorder");
             }
 
@@ -1045,8 +1065,14 @@ public class StatusWindow : Window
         if (isMask)
         {
             // Don't create the list just by drawing the tab — only commit it to metadata on an actual edit
-            // (below), so merely selecting the Masks tab has no persistent side effect.
-            var maskRows  = entry.Metadata.MaskColorTableRows ?? [];
+            // (below), so merely selecting the Masks tab has no persistent side effect. While a design
+            // binding is being edited the rows come from (and mutate) the binding's mask override instead,
+            // so mask colours are captured per-design like the overlay tabs' rows (live preview until
+            // "Update binding"); metadata is left untouched.
+            var baseMaskRows = entry.Metadata.MaskColorTableRows ?? [];
+            var maskRows  = (editingBinding
+                ? designBindings.GetEditableMaskRows(entry.ModDirectory, baseMaskRows)
+                : null) ?? baseMaskRows;
             var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
             int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
             bool maskChanged = false;
@@ -1086,9 +1112,15 @@ public class StatusWindow : Window
 
             if (maskChanged)
             {
-                entry.Metadata.MaskColorTableRows = maskRows;   // commit the (possibly newly-created) list
-                discovery.SaveMetadata(entry);
-                InvalidateDefaultsCache(entry);
+                // Binding path: the edit already landed in the override list (live preview, folded in via
+                // "Update binding"); base metadata persists only when NOT editing a binding — same split as
+                // the overlay tabs.
+                if (!editingBinding)
+                {
+                    entry.Metadata.MaskColorTableRows = maskRows;   // commit the (possibly newly-created) list
+                    discovery.SaveMetadata(entry);
+                    InvalidateDefaultsCache(entry);
+                }
                 compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
             }
             return;
