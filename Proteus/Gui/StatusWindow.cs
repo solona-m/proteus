@@ -1097,11 +1097,14 @@ public class StatusWindow : Window
                 : compositor.GetSkinGlowTargets(entry.ModDirectory, SidecarDiscoveryService.MaskGroupName, "Masks");
 
             // Cold-boot warmup, same as the overlay path: the Glow-locator's backing data (shell materials or
-            // skin-glow targets) only exists after a composite has processed this mask. Fire one, once per mod.
+            // skin-glow targets) only exists after a composite has processed this mask. Guard the one-shot by
+            // the mask LAYER too — the mod gaining/losing gear flips the mask between a skin bake and a shell,
+            // changing which locator data it needs, so a per-mod guard would leave the button missing.
             bool maskLocatorMissing = maskAsGear
                 ? maskShellMaterials == null || maskShellMaterials.Count == 0
                 : maskGlowTargets == null || maskGlowTargets.Count == 0;
-            if (config.PluginEnabled && maskLocatorMissing && _glowWarmedMods.Add(entry.ModDirectory + "\0masks"))
+            if (config.PluginEnabled && maskLocatorMissing
+                && _glowWarmedMods.Add($"{entry.ModDirectory}\0masks\0{(maskAsGear ? 'g' : 's')}"))
                 compositor.TriggerRecomposite("mask-glow-warmup");
 
             ColorTableEditor.DrawRows(maskScope, maskRows, usedRows,
@@ -1183,8 +1186,12 @@ public class StatusWindow : Window
         bool locatorDataMissing = gear
             ? shellMaterials  == null || shellMaterials.Count  == 0
             : skinGlowTargets == null || skinGlowTargets.Count == 0;
+        // Guard the one-shot per (mod, group, option, LAYER): switching an option Skin↔Cloth changes which
+        // locator data it needs (skin-glow targets vs the shell's materials), and the freshly-needed one
+        // hasn't been built yet. A per-mod guard would have spent its single warmup on the old layer and
+        // never fire for the new one, leaving the Glow button missing after the switch.
         if (config.PluginEnabled && activeOpt.Overlays.Count > 0 && locatorDataMissing
-            && _glowWarmedMods.Add(entry.ModDirectory))
+            && _glowWarmedMods.Add($"{entry.ModDirectory}\0{groupName}\0{activeOpt.Name}\0{(gear ? 'g' : 's')}"))
             compositor.TriggerRecomposite("glow-warmup");
 
         ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
