@@ -1079,6 +1079,11 @@ public class StatusWindow : Window
                 out _, ref maskSel, ref maskChanged);
             _rowSelection[maskScope] = maskSel;
 
+            // Match the overlay tabs' footer: show what this layer renders as. A mask over gear becomes a
+            // Cloth shell; otherwise it bakes into the skin. (No mode pin — a mask's layer isn't user-chosen.)
+            ImGui.Separator();
+            ColorTableEditor.DrawRenderingAsBadge(maskAsGear ? RenderMode.Cloth : RenderMode.Skin);
+
             if (maskChanged)
             {
                 entry.Metadata.MaskColorTableRows = maskRows;   // commit the (possibly newly-created) list

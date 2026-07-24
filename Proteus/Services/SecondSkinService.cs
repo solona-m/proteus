@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
 
@@ -98,6 +99,10 @@ public sealed class SecondSkinService
     /// reload either, because the texture belongs to an accessory rather than the body.
     /// </summary>
     private readonly Dictionary<string, ulong> _texHashes = new(StringComparer.OrdinalIgnoreCase);
+
+    // Layer count last warned about as over the host's material budget — so the chat guidance prints once
+    // per changed situation, not every composite. -1 = not currently over budget.
+    private int _lastOverBudgetLayers = -1;
 
     private static ulong Hash(byte[] data)
     {
@@ -326,6 +331,7 @@ public sealed class SecondSkinService
         bool shellChanged = false;
 
         var layers = new List<SecondSkinLayer>();
+        int maskLayers = 0;   // of the built layers, how many are the mask shell (vs cloth) — for messaging
         for (int i = 0; i < gearOverlays.Count; i++)
         {
             var (entry, ov) = gearOverlays[i];
@@ -410,8 +416,31 @@ public sealed class SecondSkinService
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
             });
+            if (ov.Descriptor.IsMaskShell) maskLayers++;
         }
         if (layers.Count == 0) return null;
+
+        // A single hosting accessory carries at most MaxMaterials materials; the shell appends one per layer
+        // after the host's own. When they don't fit, guide the user instead of throwing a raw ERR with no
+        // explanation (deduped by layer count so it isn't spammed every composite). TODO: spread the layers
+        // across several host items (a second ring / bracelet / the auto-glasses) before giving up.
+        int hostCapacity = SecondSkinWriter.MaxMaterials - host.BaseMatCount;
+        if (layers.Count > hostCapacity)
+        {
+            if (_lastOverBudgetLayers != layers.Count)
+            {
+                _lastOverBudgetLayers = layers.Count;
+                int clothLayers = layers.Count - maskLayers;
+                var msg =
+                    $"[Proteus] This look has {layers.Count} layers ({maskLayers} Mask, {clothLayers} Cloth), "
+                  + $"but the accessory hosting them fits only {hostCapacity}. Turn off some layers, or equip a "
+                  + $"plain ring/bracelet, so they fit — hosting layers across several items isn't supported yet.";
+                Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build());   // 25 = yellow
+            }
+            log.Warning("[Proteus] second skin: {0} layers exceed host capacity {1} — shell skipped", layers.Count, hostCapacity);
+            return null;
+        }
+        _lastOverBudgetLayers = -1;
 
         byte[] shell;
         SecondSkinWriter.Stats stats;

@@ -1354,14 +1354,15 @@ public class CompositorService : IDisposable
                 if (entry.Metadata.MaskColorTableRows is { Count: > 0 } mr)
                     maskRowsByMod[entry.ModDirectory] = BuildRowDict(mr);
 
-            // Mods that will get a dedicated top mask SHELL: a mask colorset + gear shells + mask _id/relief
-            // assets. For these the mask lives entirely on the shell (coverage, colour, relief), so the skin
-            // diffuse/relief passes below MUST skip them — otherwise the same mask relief lands on BOTH the
-            // body normal and the shell (two stacked surfaces), which reads as a doubled-height bump.
+            // Mods that will get a dedicated top mask SHELL: any mod with GEAR shells + mask _id/relief assets.
+            // A mask colorset is OPTIONAL — with one the shell uses it, without one it inherits the fabric's
+            // colours (see the shell synthesis). A mask mod with ONLY skin layers stays on the skin instead
+            // (not here). For a shell mod the mask lives entirely on the shell (coverage, colour, relief), so
+            // the skin diffuse/relief passes and LoadIndexMerged below MUST skip it — otherwise the same mask
+            // lands on BOTH the body and the shell (two stacked surfaces = a doubled-height bump).
             var maskShellMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var mod in gearOverlays.Select(g => g.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
-                if (maskRowsByMod.ContainsKey(mod)
-                    && maskAssetsByMod.TryGetValue(mod, out var mA)
+                if (maskAssetsByMod.TryGetValue(mod, out var mA)
                     && mA.Any(a => a.IndexPath != null || a.NormalPath != null))
                     maskShellMods.Add(mod);
 
@@ -1508,10 +1509,10 @@ public class CompositorService : IDisposable
                     var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
                     if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
 
-                    // This mod's masks carry their own shared colorset → they're coloured in a separate top
-                    // pass (see the Masks own-colorset diffuse below), NOT merged into the overlay index here.
-                    // Merging AND painting would double-colour the mask region.
-                    if (maskRowsByMod.ContainsKey(modDir)) return idx;
+                    // This mod's masks are handled elsewhere, NOT merged into the overlay index here (merging
+                    // AND painting/shelling would double them): a mask colorset ⇒ the separate top diffuse pass
+                    // below; a mask SHELL mod ⇒ the shell owns the mask entirely.
+                    if (maskRowsByMod.ContainsKey(modDir) || maskShellMods.Contains(modDir)) return idx;
 
                     // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
                     // mutation contract) — clone before writing into it, or a mask toggled off later
@@ -2457,7 +2458,9 @@ public class CompositorService : IDisposable
                     var maskResolved = gShell.Overlay with
                     {
                         Descriptor     = maskDesc,
-                        ColorTableRows = gShell.Entry.Metadata.MaskColorTableRows,
+                        // Its own Masks colorset if set, else inherit the fabric/overlay colorset the legacy
+                        // merge would have used — so a mask with no colours of its own still shows (the fabric's).
+                        ColorTableRows = gShell.Entry.Metadata.MaskColorTableRows ?? gShell.Overlay.ColorTableRows,
                         OptionGroup    = SidecarDiscoveryService.MaskGroupName,
                         Option         = "Masks",
                     };

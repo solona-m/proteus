@@ -121,16 +121,8 @@ public static class ColorTableEditor
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
         bool advOpen = ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
 
-        var badgeColor = mode switch
-        {
-            RenderMode.Cloth => new Vector4(0.60f, 0.80f, 1.00f, 1f),   // cool blue
-            RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
-            _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
-        };
         ImGui.SameLine(0f, 24f);
-        ImGui.TextUnformatted("Rendering as:");
-        ImGui.SameLine();
-        ImGui.TextColored(badgeColor, ModeName(mode));
+        DrawRenderingAsBadge(mode);
         ImGui.SameLine();
         ImGui.TextDisabled(curLock ? "(pinned)" : "(auto)");
         if (ImGui.IsItemHovered())
@@ -277,6 +269,20 @@ public static class ColorTableEditor
         RenderMode.Cloth => "Cloth",
         _                => "Animated glow",
     };
+
+    /// <summary>Draws the "Rendering as: &lt;mode&gt;" badge (same colours as the footer) on the current line.</summary>
+    public static void DrawRenderingAsBadge(RenderMode mode)
+    {
+        var badgeColor = mode switch
+        {
+            RenderMode.Cloth => new Vector4(0.60f, 0.80f, 1.00f, 1f),   // cool blue
+            RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
+            _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
+        };
+        ImGui.TextUnformatted("Rendering as:");
+        ImGui.SameLine();
+        ImGui.TextColored(badgeColor, ModeName(mode));
+    }
 
     /// <summary>Point the descriptors' (or the live design-binding override's) Layer+Shader at
     /// <paramref name="mode"/> — how the inference result and the Advanced picker are both applied.</summary>
