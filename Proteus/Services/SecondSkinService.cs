@@ -167,17 +167,9 @@ public sealed class SecondSkinService
     private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h)
     {
         if (rel == null) return null;
+        // Extension tolerance (metadata says diffuse.dds but the file is diffuse.png, etc.) is handled
+        // centrally in TextureLoader.LoadPngAsRgba, so skin and gear resolve identically.
         var path = Path.Combine(sidecarRoot, rel);
-        // Tolerate an extension mismatch between the metadata reference and the file actually on disk
-        // (e.g. metadata says diffuse.dds but the author shipped diffuse.png). Resolve by sibling extension
-        // — the same fallback masks already use (ResolveMaskAsset). Without this a wrong extension makes the
-        // art fail to load, which drops coverage and renders the whole shell fully opaque.
-        if (!File.Exists(path))
-        {
-            var stem = Path.Combine(Path.GetDirectoryName(path) ?? sidecarRoot, Path.GetFileNameWithoutExtension(path));
-            var resolved = SidecarDiscoveryService.ResolveMaskAsset(stem);
-            if (resolved != null) path = resolved;
-        }
         return RemapPath(path, srcType, dstType, w, h);
     }
 

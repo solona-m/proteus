@@ -525,6 +525,21 @@ public class TextureLoader
     /// </summary>
     public byte[]? LoadPngAsRgba(string path, int targetW, int targetH)
     {
+        // Extension tolerance: a mod may ship diffuse.png while its metadata references diffuse.dds (or vice
+        // versa). If the exact file is absent, resolve a sibling extension (.png/.dds/.tex) — the same fallback
+        // masks already use. Central here so every consumer (skin overlays, gear shells, effects) benefits and
+        // a wrong extension can't silently fail to load. Only a miss pays the extra lookups.
+        if (!File.Exists(path))
+        {
+            var dir = Path.GetDirectoryName(path) ?? string.Empty;
+            var stem = Path.GetFileNameWithoutExtension(path);
+            foreach (var ext in new[] { ".png", ".dds", ".tex" })
+            {
+                var cand = Path.Combine(dir, stem + ext);
+                if (File.Exists(cand)) { path = cand; break; }
+            }
+        }
+
         bool isTex = path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase);
         bool isDds = path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase);
 
