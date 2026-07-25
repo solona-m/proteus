@@ -1472,15 +1472,12 @@ public class CompositorService : IDisposable
                 }
             }
 
-            // The mod's highest-priority group. Only it is granted a mask's forced-opacity term; see
-            // ApplyCoverageMask. Mods with no groups (top-level Overlays) all sit at int.MaxValue, so
-            // every overlay qualifies and the old behaviour stands.
-            var topGroupByMod = byMaterial.Values.SelectMany(l => l)
-                .GroupBy(p => p.Entry.ModDirectory, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.Min(p => p.Overlay.GroupOrder), StringComparer.OrdinalIgnoreCase);
-
-            bool MaskAdds(OverlayEntry e, ResolvedOverlay o)
-                => !topGroupByMod.TryGetValue(e.ModDirectory, out var top) || o.GroupOrder <= top;
+            // A mask OCCLUDES everything beneath it. In a mask's territory every overlay group — including the
+            // mod's highest-priority one — is erased to skin (coverage = cov·W, and W=0 where the mask is
+            // opaque), so only the mask's own colorset renders there. Lowering the mask's opacity then fades
+            // it toward BARE SKIN, never revealing the layers underneath. (Masks no longer ADD coverage to a
+            // sheer top group — a mask is a garment in its own right, not a coverage patch for another layer.)
+            static bool MaskAdds(OverlayEntry e, ResolvedOverlay o) => false;
 
             // Decode a file on a background thread purely to warm the cache; callers never await it.
             // Marking the thread keeps its time out of the critical-path decode figure (see DecodeWaitStats).
@@ -2623,7 +2620,7 @@ public class CompositorService : IDisposable
 
                         // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
-                            discovery.EffectsLibraryPath(), allOverlays, equippedModels, equippedAccessories,
+                            discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods);
                         if (shells != null)

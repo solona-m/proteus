@@ -216,7 +216,6 @@ public sealed class SecondSkinService
         string outputRoot,
         string? bodyType,
         string? effectsFolder,
-        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)>? allOverlays = null,
         IReadOnlyDictionary<string, string>? equippedPartModels = null,
         IReadOnlyDictionary<string, string>? equippedAccessories = null,
         Func<string, bool>? gen2Allowed = null,
@@ -232,18 +231,12 @@ public sealed class SecondSkinService
     {
         if (gearOverlays.Count == 0) return null;
 
-        // A mask's forced-opacity term belongs to the mod's HIGHEST-priority group alone (see
-        // CompositorService.ApplyCoverageMask — same rule, and the two must agree). A gear overlay in a
-        // lower group must not be handed coverage inside a mask's territory: it becomes a SHELL, so it
-        // would render its art, its relief and its color rows straight over whatever the mask is meant to
-        // be. The ranking spans BOTH layers — a skin-layer group can outrank a gear one — so it has to be
-        // taken over every active overlay of the mod, not just the gear ones.
-        var topGroupByMod = (allOverlays ?? gearOverlays)
-            .GroupBy(p => p.Entry.ModDirectory, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.Min(p => p.Overlay.GroupOrder), StringComparer.OrdinalIgnoreCase);
-
-        bool MaskAdds(OverlayEntry e, ResolvedOverlay o)
-            => !topGroupByMod.TryGetValue(e.ModDirectory, out var top) || o.GroupOrder <= top;
+        // A mask OCCLUDES everything beneath it (matches CompositorService.MaskAdds): in a mask's territory
+        // every gear overlay — top group included — is erased (its coverage drops to cov·W, and W=0 where the
+        // mask is opaque), so the fabric shells go transparent to skin under the mask and only the mask shell
+        // renders there. A mask no longer hands its coverage to a lower shell, which would otherwise draw its
+        // art/relief/colour straight over the mask.
+        static bool MaskAdds(OverlayEntry e, ResolvedOverlay o) => false;
 
         var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var manipulations = new List<object>();
