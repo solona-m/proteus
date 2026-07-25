@@ -1065,17 +1065,17 @@ public class StatusWindow : Window
         if (usedRows == null && !hasAnyIndex)
             ImGui.TextDisabled("No index texture — only Row 16 is applied.");
 
-        // ── Masks tab: one shared skin-layer colorset for all active masks ────────────────────────────
+        // ── Masks tab: one shared colorset for all active masks ───────────────────────────────────────
         // The active masks are composited together (coverage/relief/_id) into one top layer; these rows
-        // colour it. No overlay descriptors, no gear/promotion, no binding override — a mask is always a
-        // skin-layer colorset. Used-rows are the combined mask _id already unioned above.
+        // colour it. When the mod has gear the mask is forced to a Cloth shell; when it's ALL SKIN the mask
+        // gets its own Skin/Cloth/Glow mode (same auto-detection + Advanced as an overlay tab), stored in
+        // MaskDescriptor. Used-rows are the combined mask _id already unioned above.
         if (isMask)
         {
             // Don't create the list just by drawing the tab — only commit it to metadata on an actual edit
             // (below), so merely selecting the Masks tab has no persistent side effect. While a design
-            // binding is being edited the rows come from (and mutate) the binding's mask override instead,
-            // so mask colours are captured per-design like the overlay tabs' rows (live preview until
-            // "Update binding"); metadata is left untouched.
+            // binding is being edited the rows/mode come from (and mutate) the binding's mask overrides
+            // instead, so they're captured per-design (live preview until "Update binding").
             var baseMaskRows = entry.Metadata.MaskColorTableRows ?? [];
             var maskRows  = (editingBinding
                 ? designBindings.GetEditableMaskRows(entry.ModDirectory, baseMaskRows)
@@ -1084,10 +1084,26 @@ public class StatusWindow : Window
             int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
             bool maskChanged = false;
 
-            // When the mod has any gear layer, the mask is built as a dedicated top gear SHELL (see the
-            // compositor's mask-shell synthesis), so its Glow button targets that shell's materials via the
-            // gear highlighter. With no gear, the mask bakes into the body diffuse → the skin-glow path.
-            bool maskAsGear = activeOptions.Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
+            // When the mod has any gear layer, the mask is FORCED to a top Cloth shell (it stacks over gear),
+            // so no mode choice is offered. When it's all skin, the mask carries its own mode descriptor and
+            // gets the full auto-detection + Advanced, exactly like an overlay option.
+            bool modHasGear = activeOptions.Any(x =>
+                !string.Equals(x.GroupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal)
+                && x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
+
+            // The mask's working descriptor: its stored mode, or a fresh Skin default. Mutated in place by
+            // ReconcileMode/DrawGlowFooter when not editing a binding; the binding's gear override is mutated
+            // instead when one is active.
+            var maskDesc = entry.Metadata.MaskDescriptor ?? new OverlayDescriptor { Layer = OverlayLayer.Skin };
+            var maskGearOvr = editingBinding
+                ? designBindings.GetEditableMaskGearOverride(entry.ModDirectory, maskDesc)
+                : null;
+
+            var maskModeBefore = EffectiveMode([maskDesc], maskGearOvr);
+            bool maskGear; string? maskShader;
+            if (modHasGear) { maskGear = true; maskShader = OverlayDescriptor.DefaultGearShader; }
+            else (maskGear, maskShader) = ColorTableEditor.EffectiveLayerShader([maskDesc], maskGearOvr);
+            bool maskAsGear = maskGear;
 
             var maskShellMaterials = maskAsGear
                 ? compositor.GetShellMaterials(entry.ModDirectory, SidecarDiscoveryService.MaskGroupName, "Masks")
@@ -1098,8 +1114,8 @@ public class StatusWindow : Window
 
             // Cold-boot warmup, same as the overlay path: the Glow-locator's backing data (shell materials or
             // skin-glow targets) only exists after a composite has processed this mask. Guard the one-shot by
-            // the mask LAYER too — the mod gaining/losing gear flips the mask between a skin bake and a shell,
-            // changing which locator data it needs, so a per-mod guard would leave the button missing.
+            // the mask LAYER too — flipping the mask between a skin bake and a shell changes which locator data
+            // it needs, so a per-mod guard would leave the button missing.
             bool maskLocatorMissing = maskAsGear
                 ? maskShellMaterials == null || maskShellMaterials.Count == 0
                 : maskGlowTargets == null || maskGlowTargets.Count == 0;
@@ -1107,31 +1123,44 @@ public class StatusWindow : Window
                 && _glowWarmedMods.Add($"{entry.ModDirectory}\0masks\0{(maskAsGear ? 'g' : 's')}"))
                 compositor.TriggerRecomposite("mask-glow-warmup");
 
-            ColorTableEditor.DrawRows(maskScope, maskRows, usedRows,
-                gear: maskAsGear,
-                shader: maskAsGear ? OverlayDescriptor.DefaultGearShader : null,
+            ColorTableEditor.DrawRows(maskScope, maskRows, usedRows, maskAsGear, maskShader,
                 maskShellMaterials,
                 maskGlowTargets,
-                out _, ref maskSel, ref maskChanged);
+                out var maskRowEdit, ref maskSel, ref maskChanged);
             _rowSelection[maskScope] = maskSel;
 
-            // Match the overlay tabs' footer: show what this layer renders as. A mask over gear becomes a
-            // Cloth shell; otherwise it bakes into the skin. (No mode pin — a mask's layer isn't user-chosen.)
             ImGui.Separator();
-            ColorTableEditor.DrawRenderingAsBadge(maskAsGear ? RenderMode.Cloth : RenderMode.Skin);
-
-            if (maskChanged)
+            bool maskFooterChanged = false, maskModeChanged = false;
+            if (modHasGear)
             {
-                // Binding path: the edit already landed in the override list (live preview, folded in via
-                // "Update binding"); base metadata persists only when NOT editing a binding — same split as
-                // the overlay tabs.
+                // Forced Cloth shell — the mask's layer isn't user-chosen when it stacks over gear.
+                ColorTableEditor.DrawRenderingAsBadge(RenderMode.Cloth);
+            }
+            else
+            {
+                // Same footer as the overlay tabs: the "Rendering as" badge + Advanced force-mode radios +
+                // glow-effect picker. No per-option reset (the mask has no defaults cache) → onReset null.
+                maskFooterChanged = ColorTableEditor.DrawGlowFooter(maskScope, [maskDesc], maskGearOvr, effects,
+                    out var maskFooterEdit, onReset: null);
+                maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
+                    maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
+                ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
+            }
+
+            if (maskChanged || maskFooterChanged || maskModeChanged)
+            {
+                // Binding path: edits already landed in the overrides (live preview, folded in via "Update
+                // binding"); base metadata persists only when NOT editing a binding — same split as the
+                // overlay tabs. The mode descriptor is written only when the mode/footer actually changed.
                 if (!editingBinding)
                 {
-                    entry.Metadata.MaskColorTableRows = maskRows;   // commit the (possibly newly-created) list
+                    entry.Metadata.MaskColorTableRows = maskRows;
+                    if (maskFooterChanged || maskModeChanged) entry.Metadata.MaskDescriptor = maskDesc;
                     discovery.SaveMetadata(entry);
                     InvalidateDefaultsCache(entry);
                 }
-                compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
+                if (maskFooterChanged || maskModeChanged) compositor.TriggerRecomposite("mask-mode-change");
+                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
             }
             return;
         }

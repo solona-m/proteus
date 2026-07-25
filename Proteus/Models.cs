@@ -44,6 +44,15 @@ public class ProteusMetadata
     /// </summary>
     [JsonPropertyName("MaskColorTableRows")]
     public List<ColorTableRowPreset>? MaskColorTableRows { get; set; }
+
+    /// <summary>
+    /// The mask layer's render mode, when the mod is all-skin (no other gear) and the user has given the
+    /// Masks tab its own Skin/Cloth/Glow mode. Carries Layer/Shader/Scroll/ManualShaderLock like any overlay
+    /// descriptor. Null = Skin (the mask bakes into the body diffuse, the default). When the mod already has
+    /// gear the mask is forced to a Cloth shell regardless of this.
+    /// </summary>
+    [JsonPropertyName("MaskDescriptor")]
+    public OverlayDescriptor? MaskDescriptor { get; set; }
 }
 
 /// <summary>Which surface an overlay renders on.</summary>
@@ -419,6 +428,15 @@ public class OverlayGearOverride
     /// <summary>group → option → settings.</summary>
     [JsonPropertyName("Options")]
     public Dictionary<string, Dictionary<string, GearSettingsPreset>>? Options { get; set; }
+
+    /// <summary>
+    /// The mod's shared "Masks" tab gear settings (<see cref="ProteusMetadata.MaskDescriptor"/>). Captured
+    /// separately because the synthesized Masks tab isn't a real option group — it has no entry in
+    /// <see cref="Options"/>. Null ⇒ fall back to the live metadata mask descriptor at composite time.
+    /// Mirrors <see cref="OverlayColorOverride.Mask"/>.
+    /// </summary>
+    [JsonPropertyName("Mask")]
+    public GearSettingsPreset? Mask { get; set; }
 
     public GearSettingsPreset? Resolve(string? group, string? option)
     {

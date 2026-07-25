@@ -550,6 +550,21 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
+    /// The mutable gear-settings preset the Masks tab should bind to when a design is active for this mod, or
+    /// null if none. Mirrors <see cref="GetEditableMaskRows"/> for the mod's single shared Masks tab — seeds
+    /// from the descriptor's own gear settings when the override has nothing stored yet.
+    /// </summary>
+    public GearSettingsPreset? GetEditableMaskGearOverride(string modDir, OverlayDescriptor seed)
+    {
+        lock (gate)
+        {
+            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
+                return null;
+            return ovr.Mask ??= GearSettingsPreset.From(seed);
+        }
+    }
+
+    /// <summary>
     /// Drop ONE option's colour + gear override from the ACTIVE design's binding: from the live in-memory
     /// copy (so the preview falls back to the mod's own metadata straight away) and from the persisted
     /// binding (so re-applying that design doesn't bring it back). Other designs keep theirs.
@@ -1025,6 +1040,11 @@ public class DesignBindingService : IDisposable
         var top = (e.Metadata.Overlays ?? []).FirstOrDefault();
         if (active?.Top != null) result.Top = CloneGearPreset(active.Top);
         else if (top != null) result.Top = GearSettingsPreset.From(top);
+
+        // The Masks tab's own gear settings (its render mode), captured separately like the mask colours —
+        // the synthesized Masks tab isn't a real option group. Live override first, else the metadata.
+        if (active?.Mask != null) result.Mask = CloneGearPreset(active.Mask);
+        else if (e.Metadata.MaskDescriptor is { } md) result.Mask = GearSettingsPreset.From(md);
 
         if (e.Metadata.OptionGroups is { } groups)
         {

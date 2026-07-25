@@ -351,29 +351,48 @@ public sealed class SecondSkinService
         var perHostLayers = new List<SecondSkinLayer>[hosts.Count];
         for (int h = 0; h < hosts.Count; h++) perHostLayers[h] = new List<SecondSkinLayer>();
 
-        int hostIdx = 0, inHost = 0, diskLetter = 0;
+        int diskLetter = 0;
         int maskLayers = 0, clothLayers = 0;    // successfully placed
         int overBudget = 0, overBudgetMask = 0; // real layers that ran out of accessory capacity
 
-        for (int i = 0; i < gearOverlays.Count; i++)
+        // ── Layer → host distribution ──────────────────────────────────────────
+        // Layers arrive bottom-first with the mask LAST (it must render on top). Accessory hosts draw in the
+        // order ChooseHosts returns them, the FIRST drawing IN FRONT. So the TOP layers (including the mask)
+        // fill the first host and lower layers spill to the hosts behind it — otherwise the mask, being last,
+        // would spill onto the rearmost host (e.g. the Emperor fallback ring) and render BEHIND the fabric.
+        // Within a host the layers stay in stack order so the topmost gets the highest material index (= drawn
+        // last = on top). If the look exceeds total capacity the BOTTOM layers drop, never the mask. A look
+        // that fits on ONE host is unchanged (same order as before).
+        int layerCount = gearOverlays.Count;
+        int placeable   = Math.Min(layerCount, totalCapacity);
+        int dropCount   = layerCount - placeable;   // bottom layers with no room
+
+        var work = new List<(int LayerIdx, int HostIdx)>(placeable);
+        int cursor = layerCount - 1;                  // the TOP layer (mask)
+        for (int h = 0; h < hosts.Count && cursor >= dropCount; h++)
+        {
+            int cap  = SecondSkinWriter.MaxMaterials - hosts[h].BaseMatCount;
+            int take = Math.Min(cap, cursor - dropCount + 1);
+            for (int k = cursor - take + 1; k <= cursor; k++)   // ascending → topmost lands last (highest idx)
+                work.Add((k, h));
+            cursor -= take;
+        }
+        for (int k = 0; k < dropCount; k++)          // the dropped bottom layers = over budget
+        {
+            overBudget++;
+            if (gearOverlays[k].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
+        }
+
+        var inHost = new int[hosts.Count];
+        foreach (var (i, hIdx) in work)
         {
             var (entry, ov) = gearOverlays[i];
             bool isMaskShell = ov.Descriptor.IsMaskShell;
-
-            // Advance to the next host that still has room.
-            while (hostIdx < hosts.Count && inHost >= SecondSkinWriter.MaxMaterials - hosts[hostIdx].BaseMatCount)
-            { hostIdx++; inHost = 0; }
-            if (hostIdx >= hosts.Count)
-            {
-                overBudget++;                       // no accessory room left — guidance below
-                if (isMaskShell) overBudgetMask++;
-                continue;
-            }
-            var host = hosts[hostIdx];
+            var host = hosts[hIdx];
 
             string shader = ov.Descriptor.ShaderPackage;
-            char matLetter = (char)('a' + host.BaseMatCount + inHost);   // in-model material index
-            char diskChar  = (char)('a' + diskLetter);                   // globally-unique disk id
+            char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);   // in-model material index
+            char diskChar  = (char)('a' + diskLetter);                         // globally-unique disk id
             string matName = $"mt_c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/v0001/{matName}";
             string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
@@ -421,14 +440,14 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
-            perHostLayers[hostIdx].Add(new SecondSkinLayer
+            perHostLayers[hIdx].Add(new SecondSkinLayer
             {
                 MaterialName = "/" + matName,   // the model stores material names with a leading slash
                 Coverage = coverage,
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
             });
-            inHost++; diskLetter++;             // slot consumed
+            inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;
         }
 
@@ -829,17 +848,25 @@ public sealed class SecondSkinService
         if (presets == null || presets.Count == 0) return null;
         var rows = new Dictionary<int, GearColorRow>();
 
+        // Initialize EVERY color-table row to neutral white first, so no row keeps the gear template's default
+        // (often dark) colour. The index can select ANY pair — one the colorset never defined, or the
+        // undefined sub-row of a pair that set only the other — and it must show the base diffuse there
+        // (base × white = base), exactly as the skin layer defaults its rows to white. The presets below
+        // overwrite the rows they define. (16 colour-table pairs = 32 sub-rows.)
+        for (int r = 0; r < 32; r++)
+            rows[r] = new GearColorRow { Diffuse = (1f, 1f, 1f), Emissive = (0f, 0f, 0f) };
+
         foreach (var p in presets)
         {
             if (p.Row is < 1 or > 16) continue;
             Add((p.Row - 1) * 2, p.SubRowA);
             Add((p.Row - 1) * 2 + 1, p.SubRowB);
         }
-        return rows.Count == 0 ? null : rows;
+        return rows;
 
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
-            if (sub == null) return;
+            if (sub == null) return;   // leaves the neutral-white row from the init above
             var rgb = ParseHex(sub.Diffuse);
             // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
             // with a white emissive), falling back to the diffuse when not given.

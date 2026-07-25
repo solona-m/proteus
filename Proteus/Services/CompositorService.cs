@@ -1100,6 +1100,20 @@ public class CompositorService : IDisposable
                 return e.Metadata.MaskColorTableRows;
             }
 
+            // The Masks tab's effective render-mode descriptor: the metadata MaskDescriptor with the active
+            // binding's mask gear override applied (so a design captures/restores the mask's Cloth/Glow mode),
+            // or null when the mask is plain Skin (bakes into the diffuse). Mirrors MaskRowsFor.
+            OverlayDescriptor? MaskDescriptorFor(OverlayEntry e)
+            {
+                var baseDesc = e.Metadata.MaskDescriptor;
+                var ovr = gearOverride != null && gearOverride.TryGetValue(e.ModDirectory, out var g)
+                    ? g.Mask : null;
+                if (baseDesc == null && ovr == null) return null;
+                var desc = baseDesc != null ? CloneDescriptor(baseDesc) : new OverlayDescriptor();
+                ovr?.ApplyTo(desc);
+                return desc;
+            }
+
             // Mod-wide stack position of an overlay (0 = top), from the active design binding's stack
             // override when it has one, else the global config order. Mirrors the mask/colour overrides so
             // a design captures/restores its tab arrangement without mutating the global stack config.
@@ -1409,6 +1423,15 @@ public class CompositorService : IDisposable
                 if (maskAssetsByMod.TryGetValue(mod, out var mA)
                     && mA.Any(a => a.IndexPath != null || a.NormalPath != null))
                     maskShellMods.Add(mod);
+
+            // Also promote an ALL-SKIN mod whose Masks tab was given its own Cloth/Glow mode
+            // (MaskDescriptor.Layer == Gear): the mask becomes a dedicated shell even with no other gear
+            // overlay to ride over. The synthesis below seeds it without a sibling gear overlay.
+            foreach (var entry in entries)
+                if (maskAssetsByMod.TryGetValue(entry.ModDirectory, out var mA2)
+                    && mA2.Any(a => a.IndexPath != null || a.NormalPath != null)
+                    && MaskDescriptorFor(entry)?.Layer == OverlayLayer.Gear)
+                    maskShellMods.Add(entry.ModDirectory);
 
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
             //
@@ -2496,23 +2519,38 @@ public class CompositorService : IDisposable
                 // (maskShellMods) so the mask isn't coloured twice.
                 foreach (var mod in maskShellMods)
                 {
-                    var gShell = gearOverlays.First(g => g.Entry.ModDirectory == mod);
+                    // Seed from a sibling gear overlay when the mod has one, else ANY of the mod's overlays
+                    // (an all-skin mod whose mask was promoted to Cloth/Glow on its own). Only SourceBodyType
+                    // and GroupOrder are read off the seed; everything else is overridden below.
+                    var seed = gearOverlays.FirstOrDefault(g => g.Entry.ModDirectory == mod);
+                    if (seed.Entry == null) seed = allOverlays.FirstOrDefault(g => g.Entry.ModDirectory == mod);
+                    if (seed.Entry == null) continue;   // no overlay to source a body type from
+
+                    // The mask's own render mode: Cloth (character.shpk) by default, or the shader/scroll it
+                    // was given (Glow ⇒ characterscroll.shpk). Null descriptor ⇒ plain Cloth, as before.
+                    var md = MaskDescriptorFor(seed.Entry);
                     var maskDesc = new OverlayDescriptor
                     {
                         Layer          = OverlayLayer.Gear,
                         IsMaskShell    = true,
-                        SourceBodyType = gShell.Overlay.Descriptor.SourceBodyType,
+                        SourceBodyType = seed.Overlay.Descriptor.SourceBodyType,
+                        Shader         = md?.Shader,
+                        Scroll         = md?.Scroll,
+                        ScrollSpeedX   = md?.ScrollSpeedX,
+                        ScrollSpeedY   = md?.ScrollSpeedY,
+                        ScrollTilingX  = md?.ScrollTilingX,
+                        ScrollTilingY  = md?.ScrollTilingY,
                     };
-                    var maskResolved = gShell.Overlay with
+                    var maskResolved = seed.Overlay with
                     {
                         Descriptor     = maskDesc,
                         // Its own Masks colorset if set, else inherit the fabric/overlay colorset the legacy
                         // merge would have used — so a mask with no colours of its own still shows (the fabric's).
-                        ColorTableRows = MaskRowsFor(gShell.Entry) ?? gShell.Overlay.ColorTableRows,
+                        ColorTableRows = MaskRowsFor(seed.Entry) ?? seed.Overlay.ColorTableRows,
                         OptionGroup    = SidecarDiscoveryService.MaskGroupName,
                         Option         = "Masks",
                     };
-                    gearOverlays.Add((gShell.Entry, maskResolved));
+                    gearOverlays.Add((seed.Entry, maskResolved));
                 }
 
                 // ── Gear-shell prefetch ──────────────────────────────────────
