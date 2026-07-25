@@ -168,6 +168,16 @@ public sealed class SecondSkinService
     {
         if (rel == null) return null;
         var path = Path.Combine(sidecarRoot, rel);
+        // Tolerate an extension mismatch between the metadata reference and the file actually on disk
+        // (e.g. metadata says diffuse.dds but the author shipped diffuse.png). Resolve by sibling extension
+        // — the same fallback masks already use (ResolveMaskAsset). Without this a wrong extension makes the
+        // art fail to load, which drops coverage and renders the whole shell fully opaque.
+        if (!File.Exists(path))
+        {
+            var stem = Path.Combine(Path.GetDirectoryName(path) ?? sidecarRoot, Path.GetFileNameWithoutExtension(path));
+            var resolved = SidecarDiscoveryService.ResolveMaskAsset(stem);
+            if (resolved != null) path = resolved;
+        }
         return RemapPath(path, srcType, dstType, w, h);
     }
 
@@ -376,6 +386,35 @@ public sealed class SecondSkinService
             if (gearOverlays[k].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
         }
 
+        // ── Sibling-relief pre-pass ──────────────────────────────────────────────
+        // Each cloth overlay keeps its own shell, but two opaque shells at the same body position OCCLUDE
+        // rather than blend — so a ribbing/relief hidden behind a sibling fabric never shows. Fix: additively
+        // compound every overlay's normal into its SAME-MOD sibling shells, gated by that overlay's own
+        // coverage (baked into the normal's alpha lane so CompoundNormal's src-alpha gate masks it). Whichever
+        // shell wins the depth test then carries the combined relief. Only R/G is written, so blue (each
+        // shell's own coverage gate) is untouched — the diffuse and index are never affected.
+        //
+        // Coverage (BuildAlpha) is computed here ONCE per non-mask overlay and reused as the shell's own alpha
+        // below, so it isn't computed — or logged — twice.
+        byte[]?[] alphaByLayer = new byte[gearOverlays.Count][];
+        var reliefContribs = new List<(string ModDir, int LayerIdx, byte[] Normal)>();
+        for (int i = 0; i < gearOverlays.Count; i++)
+        {
+            var (rEntry, rOv) = gearOverlays[i];
+            var rd = rOv.Descriptor;
+            if (rd.IsMaskShell) continue;   // mask coverage/relief is handled by BuildMaskCoverage
+            var rSrc = rd.SourceBodyType ?? InferOverlayBodyType(rd);
+            var rAlpha = BuildAlpha(rd, rEntry, rSrc, bodyType, TexSize, TexSize, MaskAdds(rEntry, rOv));
+            alphaByLayer[i] = rAlpha;
+            if (rd.Normal == null || rAlpha == null) continue;
+            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, bodyType, TexSize, TexSize);
+            if (rNormal == null) continue;
+            rNormal = (byte[])rNormal.Clone();   // LoadRemapped may hand back a shared cached buffer
+            int nn = Math.Min(rAlpha.Length, rNormal.Length / 4);
+            for (int p = 0; p < nn; p++) rNormal[p * 4 + 3] = rAlpha[p];   // coverage → alpha lane (the gate)
+            reliefContribs.Add((rEntry.ModDirectory, i, rNormal));
+        }
+
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
         {
@@ -402,14 +441,25 @@ public sealed class SecondSkinService
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
             var alpha = isMaskShell
                 ? BuildMaskCoverage(entry, srcType, bodyType, TexSize, TexSize)
-                : BuildAlpha(ov.Descriptor, entry, srcType, bodyType, TexSize, TexSize, MaskAdds(entry, ov));
+                : alphaByLayer[i];   // computed once in the sibling-relief pre-pass above
 
             // Error-drops (below) don't consume a host slot — inHost/diskLetter only advance on a full success.
-            if (isMaskShell && alpha == null) continue;
+            // A null coverage means the art failed to load or the overlay is empty (BuildAlpha logged why).
+            // Drop the shell rather than render it fully opaque — a fabric with no coverage gate covers the
+            // WHOLE body and the masks never carve it (this masked a diffuse.dds/.png extension mismatch).
+            if (alpha == null) continue;
             var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
 
+            // Same-mod siblings' relief compounds into this fabric shell (never into a mask shell — its normal
+            // IS the mask relief). Self is excluded so a shell doesn't double-stamp its own normal.
+            var siblingReliefs = isMaskShell
+                ? null
+                : reliefContribs.Where(c => c.LayerIdx != i &&
+                        string.Equals(c.ModDir, entry.ModDirectory, StringComparison.OrdinalIgnoreCase))
+                    .Select(c => c.Normal).ToList();
+
             var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks);
+                alpha, srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs);
             if (texPaths == null) continue;
 
             var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
@@ -534,7 +584,8 @@ public sealed class SecondSkinService
     {
         var artPath = d.Diffuse ?? d.Normal ?? d.Mask;
         var masks = discovery.ResolveActiveMasks(entry);
-        if (artPath == null && masks.Count == 0) return null;
+        if (artPath == null && masks.Count == 0)
+            return null;   // empty overlay (no art, no masks) — caller drops the shell
 
         int n = w * h;
         var alpha = new byte[n];
@@ -542,7 +593,12 @@ public sealed class SecondSkinService
         if (artPath != null)
         {
             var art = LoadRemapped(artPath, entry.SidecarRoot, srcType, dstType, w, h);
-            if (art == null) return null;
+            if (art == null)
+            {
+                log.Warning("[Proteus] gear art failed to load: {0} (mod {1}) — dropping this shell",
+                    artPath, entry.ModDirectory);
+                return null;
+            }
             for (int i = 0; i < n; i++) alpha[i] = art[i * 4 + 3];
         }
         else
@@ -660,7 +716,8 @@ public sealed class SecondSkinService
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
-        ref bool texturesChanged, bool mergeMasks = true)
+        ref bool texturesChanged, bool mergeMasks = true,
+        IReadOnlyList<byte[]>? siblingReliefs = null)   // each: a normal RGBA with coverage in its alpha lane
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -739,6 +796,18 @@ public sealed class SecondSkinService
         {
             normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
             CompositorService.CombineMaskReliefs(normal, TexSize, TexSize, reliefMasks);
+        }
+
+        // Sibling relief: additively fold each same-mod sibling overlay's normal into this shell's normal so a
+        // relief hidden behind this fabric (occluded shell) still shows here. ADDITIVE (CompoundNormal), not
+        // claim-replace — ribbing bumps stack ON the fabric weave rather than flattening it. Each sibling
+        // carries its own coverage in its alpha lane, so CompoundNormal's src-alpha gate lands it only where
+        // that sibling is visible. R/G only — blue stays this shell's coverage gate, so it rides this fabric.
+        if (siblingReliefs is { Count: > 0 })
+        {
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+            foreach (var sib in siblingReliefs)
+                CompositorService.CompoundNormal(normal, sib, TexSize, TexSize);
         }
 
         // ── per-row opacity ──────────────────────────────────────────────────
