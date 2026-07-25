@@ -181,6 +181,40 @@ public class TextureLoader
         return entry;
     }
 
+    /// <summary>
+    /// Drop every cached decode whose source file lives under the given mod directory. The cache keys
+    /// files by path + last-write-time + length; a mod reinstall or edit that preserves the timestamp
+    /// or keeps the same byte length (common with archive-preserving extractors and same-size re-exports)
+    /// would otherwise keep serving the STALE decode until a plugin restart. Called when a mod's enable
+    /// state or files change so the next composite re-reads that mod's textures. Returns the count removed.
+    /// </summary>
+    public int EvictMod(string modDir)
+    {
+        if (string.IsNullOrEmpty(modDir)) return 0;
+        // Disk paths are "<modsRoot>\<modDir>\..." (SidecarRoot and Penumbra-resolved alike), so the mod
+        // folder always appears as a bounded path segment. Match with separators on both sides so a mod
+        // named "Bone" can't evict "Boney"'s entries.
+        var needle = string.Concat(Path.DirectorySeparatorChar, modDir, Path.DirectorySeparatorChar);
+        int removed = 0;
+        foreach (var key in decodeCache.Keys)   // Keys is a snapshot; safe to remove while iterating
+            if (key.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 &&
+                decodeCache.TryRemove(key, out _))
+                removed++;
+        return removed;
+    }
+
+    /// <summary>
+    /// Drop the entire decode cache — a manual escape hatch for when a texture edit isn't reflected
+    /// (e.g. a same-size, timestamp-preserving overwrite the mtime+length key can't distinguish).
+    /// Returns the count removed.
+    /// </summary>
+    public int ClearCache()
+    {
+        int n = decodeCache.Count;
+        decodeCache.Clear();
+        return n;
+    }
+
     // Evict least-recently-accessed materialized entries until under the byte budget.
     // O(n) over the cache, but n is small (tens of entries) so this stays cheap.
     private void TrimCache()

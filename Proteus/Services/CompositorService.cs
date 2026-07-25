@@ -279,6 +279,9 @@ public class CompositorService : IDisposable
 
         if (sidecar)
         {
+            // The mod's files may have changed underneath a cached decode (a reinstall/edit that kept the
+            // same timestamp or byte length); drop this mod's cached textures so the composite re-reads them.
+            textureLoader.EvictMod(modDir);
             TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
             return;
         }
@@ -291,6 +294,8 @@ public class CompositorService : IDisposable
 
     private void OnModAdded(string modDir)
     {
+        // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
+        textureLoader.EvictMod(modDir);
         if (HasSidecar(modDir))
         {
             TriggerRecomposite($"ModAdded:{modDir}");
@@ -332,6 +337,7 @@ public class CompositorService : IDisposable
             try
             {
                 if (!IsBodyMod(modDir)) return;
+                textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
                 _activeMtrlSnapshotDirty = true;
                 TriggerRecomposite(reason);
             }
@@ -670,6 +676,19 @@ public class CompositorService : IDisposable
 
     /// <summary>Colorset "glow" highlighter, cleared on recomposite (the shell may rebuild with a new letter).</summary>
     public Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
+
+    /// <summary>
+    /// Manual escape hatch: drop every cached decoded texture, then recomposite immediately. For the rare
+    /// case where a texture edit isn't reflected because the file kept the same timestamp and byte length —
+    /// something the decode cache's key can't see. Returns the number of cache entries dropped.
+    /// </summary>
+    public int ClearTextureCacheAndRecomposite()
+    {
+        int dropped = textureLoader.ClearCache();
+        log.Information("[Proteus] Texture cache cleared manually ({0} entries) — recompositing.", dropped);
+        TriggerRecomposite("clear-texture-cache", 0);
+        return dropped;
+    }
 
     /// <summary>
     /// Schedule a recomposite on a background thread.

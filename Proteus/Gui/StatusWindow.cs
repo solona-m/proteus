@@ -331,6 +331,17 @@ public class StatusWindow : Window
                 "restoring it to its original model. Use if a gear shell stays stuck on an\n" +
                 "accessory after disabling or swapping.");
 
+        // Escape hatch for a stale texture: Proteus caches decoded textures keyed by file
+        // timestamp + size, so a mod edit that preserves both can keep showing the old image
+        // until this drops the cache and recomposites. Mod toggles/reinstalls evict automatically.
+        ImGui.SameLine();
+        if (ImGui.Button("Clear texture cache"))
+            compositor.ClearTextureCacheAndRecomposite();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Drop all cached decoded textures and recomposite now. Use if a texture edit\n" +
+                "isn't showing up — e.g. you re-exported an overlay at the same size and the\n" +
+                "change won't appear without restarting the plugin.");
+
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure.
         var lib = discovery.EffectsLibraryPath();
         if (lib != null)
