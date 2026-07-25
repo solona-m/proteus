@@ -66,6 +66,10 @@ public sealed class ColorTableHighlighter : IDisposable
         => _targetRow == gameRow && _targetLeaves.Count == materialLeaves.Count
         && _targetLeaves.SetEquals(materialLeaves);
 
+    /// <summary>True while this shell material leaf is being actively glow-highlighted, so another live
+    /// colour-table writer (ShellColorsetApplier) can leave its slot alone and not fight the glow.</summary>
+    public bool IsHighlighting(string leaf) => _targetLeaves.Contains(leaf);
+
     private void OnFramework(IFramework fw) => Apply(objects.LocalPlayer?.Address ?? 0);
 
     private void Apply(nint addr)

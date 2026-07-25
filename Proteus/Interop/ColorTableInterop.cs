@@ -36,6 +36,11 @@ internal static unsafe class ColorTableInterop
     /// (a <c>Texture**</c> as an address), and a copy of its baseline table (from the material's DataSet).</summary>
     public readonly record struct Located(string Leaf, nint Slot, byte[] Baseline);
 
+    /// <summary>A colour-table slot WITHOUT copying its baseline: the leaf, the texture slot address, the
+    /// texture pointer currently in that slot, and the material's raw DataSet pointer (valid for this frame
+    /// only). Lets a caller decide whether an upload is needed before paying for the 2 KB DataSet copy.</summary>
+    public readonly record struct SlotRef(string Leaf, nint Slot, nint CurrentTex, nint DataSet);
+
     /// <summary>
     /// Walk the character's materials ONCE and return every colour-table material whose file-name leaf
     /// satisfies <paramref name="leafWanted"/>. Only materials that actually carry a colour table are
@@ -79,6 +84,56 @@ internal static unsafe class ColorTableInterop
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Like <see cref="FindColorTableMaterials"/> but returns each slot's current texture pointer and raw
+    /// DataSet pointer WITHOUT copying the baseline — so a caller that usually skips (its texture is already
+    /// current) doesn't allocate a 2 KB table every frame. Read the table lazily via <see cref="ReadTable"/>
+    /// using the returned <c>DataSet</c> (same-frame only). Framework thread.
+    /// </summary>
+    public static List<SlotRef> FindColorTableSlots(nint characterAddress, Func<string, bool> leafWanted)
+    {
+        var result = new List<SlotRef>();
+        if (characterAddress == 0)
+            return result;
+
+        var chara = (Character*)characterAddress;
+        var draw  = chara->GameObject.DrawObject;
+        if (draw == null || draw->GetObjectType() != ObjectType.CharacterBase)
+            return result;
+
+        var cb = (CharacterBase*)draw;
+        int slots = cb->SlotCount;
+        for (int s = 0; s < slots; s++)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                int idx = s * 10 + j;
+                var mat = (MaterialResourceHandle*)cb->Materials[idx];
+                if (mat == null || !mat->HasColorTable || mat->DataSet == null || mat->DataSetSize < TableBytes
+                    || idx >= cb->ColorTableTexturesSpan.Length)
+                    continue;
+
+                var leaf = Path.GetFileName(mat->FileName.ToString());
+                if (string.IsNullOrEmpty(leaf) || !leafWanted(leaf))
+                    continue;
+
+                var slot = (nint)Unsafe.AsPointer(ref cb->ColorTableTexturesSpan[idx]);
+                result.Add(new SlotRef(leaf, slot, *(nint*)slot, (nint)mat->DataSet));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Copy a material's 2048-byte colour table out of its raw DataSet pointer (same-frame only).</summary>
+    public static byte[] ReadTable(nint dataSet)
+    {
+        var table = new byte[TableBytes];
+        if (dataSet != 0)
+            fixed (byte* dst = table)
+                Buffer.MemoryCopy((void*)dataSet, dst, TableBytes, TableBytes);
+        return table;
     }
 
     /// <summary>

@@ -769,7 +769,19 @@ public class DesignBindingService : IDisposable
 
         if (matches.Count == 0)
         {
-            // An unbound/unrecognized design was applied.
+            // No binding matched, so overrides get dropped and gear dyes revert to metadata. This is the
+            // apply-match false-negative that silently clears a correctly-dyed design on a redraw, so log
+            // the FIRST field that rejected each candidate — the usual culprit and hard to spot otherwise.
+            foreach (var id in candidateIds)
+            {
+                var d = GetDesignCached(id);
+                if (d == null) continue;
+                string name;
+                lock (gate) name = (store.Bindings.TryGetValue(id, out var b) ? b.DesignName : null) ?? id.ToString()[..8];
+                StateMatches(d, state, out _, why =>
+                    log.Warning("[Proteus] design match REJECTED '{0}': {1}", name, why));
+            }
+            log.Warning("[Proteus] design-binding: NO binding matched the applied state — dropping colour/gear overrides (dyes revert to metadata white).");
             HandleUnboundDesign();
             return;
         }
@@ -831,10 +843,17 @@ public class DesignBindingService : IDisposable
     /// Proteus wrote on their behalf — see <see cref="NeutralizeProteusOwnedState"/>.
     /// </remarks>
     internal static bool StateMatches(JObject design, JObject state, out int specificity)
+        => StateMatches(design, state, out specificity, null);
+
+    // onMismatch: when non-null, called with the reason the design was rejected (the FIRST failing field),
+    // for diagnosing why a correctly-applied design fails to match and its overrides get dropped.
+    internal static bool StateMatches(JObject design, JObject state, out int specificity, Action<string>? onMismatch)
     {
         specificity = 0;
+        bool Fail(string why) { onMismatch?.Invoke(why); return false; }
+
         if (design["Equipment"] is not JObject dEquip || state["Equipment"] is not JObject sEquip)
-            return false;
+            return Fail("no Equipment object on design or state");
 
         int gearSlots = 0;
         foreach (var prop in dEquip.Properties())
@@ -846,8 +865,9 @@ public class DesignBindingService : IDisposable
             // Equipment item id. Meta entries (Hat/Visor/Weapon/VieraEars) have no ItemId → skipped.
             if (dSlot["ItemId"] is { } dItem && dSlot["Apply"]?.ToObject<bool>() == true)
             {
-                if (sSlot?["ItemId"] is not { } sItem) return false;                 // state lacks the slot
-                if (dItem.ToObject<ulong>() != sItem.ToObject<ulong>()) return false; // different item
+                if (sSlot?["ItemId"] is not { } sItem) return Fail($"{prop.Name}: state has no item");
+                if (dItem.ToObject<ulong>() != sItem.ToObject<ulong>())
+                    return Fail($"{prop.Name}: item {dItem.ToObject<ulong>()} != state {sItem.ToObject<ulong>()}");
                 gearSlots++;
                 specificity++;
             }
@@ -855,14 +875,14 @@ public class DesignBindingService : IDisposable
             // Dye/stain, compared independently of the item (a re-dye is a different look).
             if (dSlot["ApplyStain"]?.ToObject<bool>() == true)
             {
-                if (sSlot == null) return false;
-                if (!IdEquals(dSlot["Stain"],  sSlot["Stain"]))  return false;
-                if (!IdEquals(dSlot["Stain2"], sSlot["Stain2"])) return false;
+                if (sSlot == null) return Fail($"{prop.Name}: state has no slot for stain");
+                if (!IdEquals(dSlot["Stain"],  sSlot["Stain"]))  return Fail($"{prop.Name}: Stain {dSlot["Stain"]} != state {sSlot["Stain"]}");
+                if (!IdEquals(dSlot["Stain2"], sSlot["Stain2"])) return Fail($"{prop.Name}: Stain2 {dSlot["Stain2"]} != state {sSlot["Stain2"]}");
                 specificity++;
             }
         }
 
-        if (gearSlots < MinGearSlots) return false; // appearance-only designs never match (safe abstain)
+        if (gearSlots < MinGearSlots) return Fail($"only {gearSlots} gear slot(s) applied (< {MinGearSlots})");
 
         // Bonus items (glasses / facewear).
         if (design["Bonus"] is JObject dBonus && state["Bonus"] is JObject sBonus)
@@ -871,8 +891,8 @@ public class DesignBindingService : IDisposable
             {
                 if (prop.Value is not JObject dItem) continue;
                 if (dItem["Apply"]?.ToObject<bool>() != true) continue;
-                if (sBonus[prop.Name] is not JObject sItem) return false;
-                if (!IdEquals(dItem["BonusId"], sItem["BonusId"])) return false;
+                if (sBonus[prop.Name] is not JObject sItem) return Fail($"Bonus/{prop.Name}: state has no bonus item");
+                if (!IdEquals(dItem["BonusId"], sItem["BonusId"])) return Fail($"Bonus/{prop.Name}: BonusId {dItem["BonusId"]} != state {sItem["BonusId"]}");
                 specificity++;
             }
         }
@@ -888,8 +908,8 @@ public class DesignBindingService : IDisposable
                 if (prop.Value is not JObject dEntry) continue;     // ModelId scalar / Array form → skipped
                 if (dEntry["Apply"]?.ToObject<bool>() != true) continue;
                 if (dEntry["Value"] is not { } dVal) continue;
-                if (sCust[prop.Name] is not JObject sEntry || sEntry["Value"] is not { } sVal) return false;
-                if (dVal.ToObject<long>() != sVal.ToObject<long>()) return false;
+                if (sCust[prop.Name] is not JObject sEntry || sEntry["Value"] is not { } sVal) return Fail($"Customize/{prop.Name}: state missing");
+                if (dVal.ToObject<long>() != sVal.ToObject<long>()) return Fail($"Customize/{prop.Name}: {dVal} != state {sVal}");
                 specificity++;
             }
         }
@@ -901,8 +921,8 @@ public class DesignBindingService : IDisposable
             {
                 if (prop.Value is not JObject dEntry) continue;
                 if (dEntry["Apply"]?.ToObject<bool>() != true) continue;
-                if (sParams[prop.Name] is not JObject sEntry) return false;
-                if (!ParameterEquals(dEntry, sEntry)) return false;
+                if (sParams[prop.Name] is not JObject sEntry) return Fail($"Parameters/{prop.Name}: state missing");
+                if (!ParameterEquals(dEntry, sEntry)) return Fail($"Parameters/{prop.Name}: value differs");
                 specificity++;
             }
         }

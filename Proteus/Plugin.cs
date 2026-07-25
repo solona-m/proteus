@@ -21,7 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 215;
+    public const int BuildNumber = 225;
 
     private const string CommandName = "/proteus";
 
@@ -43,6 +43,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ColorTableHighlighter highlighter;
     private readonly SkinDiffuseGlow skinGlow;
     private readonly ShellNormalGhost shellGhost;
+    private readonly ShellColorsetApplier shellColorset;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -100,6 +101,11 @@ public sealed class Plugin : IDalamudPlugin
         skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log) { Ghost = shellGhost };
         Gui.ColorTableEditor.SkinGlow = skinGlow;
 
+        // Re-asserts each shell's colorset onto the live material after the game rebuilds it (redraw), so a
+        // dyed cloth shell shows its colour — the game's load-time colour-table cook drops the diffuse tint.
+        // Takes the highlighter so it leaves a glow-highlighted shell's slot alone instead of fighting it.
+        shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter);
+
         var modCreation = new ModCreationService(penumbra, compositor, log);
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
 
@@ -146,6 +152,7 @@ public sealed class Plugin : IDalamudPlugin
         Gui.ColorTableEditor.Highlighter = null;
         Gui.ColorTableEditor.SkinGlow = null;
         skinGlow.Dispose();
+        shellColorset.Dispose();   // before the highlighter it references
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
