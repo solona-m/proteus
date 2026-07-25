@@ -51,6 +51,14 @@ public class Configuration : IPluginConfiguration
     public bool EnableCompression { get; set; } = false;
 
     /// <summary>
+    /// Render shell coverage as a HARD alpha-test cutout (g_AlphaThreshold left at the template's 0) instead
+    /// of smooth alpha blending (threshold 1). Cutout renders more like opaque geometry, which lets sphere
+    /// maps and metalness survive gpose's transparent pass — at the cost of hard/aliased sheer edges. Off
+    /// (default) keeps the smooth transparency that sheer fabrics need. Experimental gpose-reflection lever.
+    /// </summary>
+    public bool GearCutoutAlpha { get; set; } = false;
+
+    /// <summary>
     /// Prefer Glamourer's in-place equipment reload (ReapplyState) over a full Penumbra redraw when
     /// refreshing composited textures. Avoids the despawn/respawn flicker. Falls back to a full
     /// redraw automatically when Glamourer is unavailable or has no state for the player.

@@ -307,6 +307,20 @@ public class StatusWindow : Window
                              "uncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\n" +
                              "its exact row values. Off = uncompressed (byte-identical to before).");
 
+        var cutoutAlpha = config.GearCutoutAlpha;
+        if (ImGui.Checkbox("Sharp alpha (gpose sphere/metal)", ref cutoutAlpha))
+        {
+            config.GearCutoutAlpha = cutoutAlpha;
+            config.Save();
+            compositor.TriggerRecomposite("cutout-alpha-toggle");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "EXPERIMENTAL. Renders shell coverage as a hard alpha-test cutout instead of smooth\n" +
+                "transparency, so sphere maps and metalness survive gpose (which drops them on\n" +
+                "transparent surfaces). Trade-off: sheer edges become hard/aliased. Best for\n" +
+                "mostly-opaque fabrics; a very sheer fabric will look coarse. Recomposite after toggling.");
+
         bool autoGlasses = config.AutoInvisibleGlasses;
         if (ImGui.Checkbox("Host on invisible glasses (keep rings free)", ref autoGlasses))
         {

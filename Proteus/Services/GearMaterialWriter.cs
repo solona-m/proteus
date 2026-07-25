@@ -162,7 +162,8 @@ public static class GearMaterialWriter
         byte[] template,
         IReadOnlyList<string> texturePaths,
         IReadOnlyDictionary<int, GearColorRow>? rows,
-        ScrollSettings? scroll = null)
+        ScrollSettings? scroll = null,
+        bool cutoutAlpha = false)
     {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
@@ -249,9 +250,14 @@ public static class GearMaterialWriter
             BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
         }
 
-        // Without this the blue-channel alpha is a binary cutout and a sheer overlay renders solid.
-        var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
-        if (found) r = withAlpha;
+        // g_AlphaThreshold 1 turns on real alpha blending (smooth sheer transparency). Left at the template's
+        // 0 it's a hard alpha-test cutout — which renders more like opaque geometry, letting sphere/metal
+        // survive gpose's transparent pass, at the cost of aliased sheer edges. Opt-in via cutoutAlpha.
+        if (!cutoutAlpha)
+        {
+            var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
+            if (found) r = withAlpha;
+        }
 
         // Let the scroll map's own colour through, instead of a flat emissive-tinted white.
         if (isScroll)

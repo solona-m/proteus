@@ -464,7 +464,7 @@ public sealed class SecondSkinService
                 ov.Descriptor.ScrollTilingY ?? ScrollSettings.Default.TilingY);
 
             byte[] mtrl;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll); }
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll, config.GearCutoutAlpha); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
