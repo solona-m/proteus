@@ -2528,6 +2528,7 @@ public class CompositorService : IDisposable
                         bool hasMasks = maskPathsByMod.ContainsKey(modDir);
                         bool hasGear  = gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
                         if (!hasMasks && !hasGear) continue;
+                        if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
                         lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
 
                         // Computed at the diffuse resolution; reused for the normal indent when the normal

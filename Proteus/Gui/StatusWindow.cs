@@ -598,12 +598,13 @@ public class StatusWindow : Window
         }
         else
         {
-            ImGui.BeginTable("##mods", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+            ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
             ImGui.TableSetupColumn("##en",   ImGuiTableColumnFlags.WidthFixed, 20);
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Bodies", ImGuiTableColumnFlags.WidthFixed, 110);
+            ImGui.TableSetupColumn("AO",     ImGuiTableColumnFlags.WidthFixed, 26);
             ImGui.TableHeadersRow();
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
@@ -685,6 +686,21 @@ public class StatusWindow : Window
                         "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
                         "bibo+gen3 = bake to the sibling body only (default)\n" +
                         "Off = no synthesis");
+
+                // Ambient occlusion + Skindenting for this mod's straps/garment (on by default).
+                ImGui.TableNextColumn();
+                bool aoOn = config.AmbientOcclusionEnabledFor(entry.ModDirectory);
+                if (ImGui.Checkbox($"##ao_{entry.ModDirectory}", ref aoOn))
+                {
+                    if (aoOn) config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
+                    else      config.AmbientOcclusionDisabledMods.Add(entry.ModDirectory);
+                    config.Save();
+                    compositor.TriggerRecomposite("ambient-occlusion-mod");
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Ambient-occlusion shadow + Skindenting normal indent for this mod's\n" +
+                        "straps/garment edges. On by default; uncheck to disable for this mod.\n" +
+                        "(The global strength sliders are in Settings.)");
             }
 
             ImGui.EndTable();

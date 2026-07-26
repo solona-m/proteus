@@ -126,6 +126,15 @@ public class Configuration : IPluginConfiguration
     /// Absent = BiboGen3Only (default, = legacy behavior: gen3 bake, no vanilla).</summary>
     public Dictionary<string, SiblingSynthesisMode> SiblingSynthesis { get; set; } = new();
 
+    /// <summary>Mods for which the ambient-occlusion shadow + Skindenting normal indent are DISABLED,
+    /// keyed by Penumbra mod directory. Absent = enabled (the default), so only opt-outs are stored.
+    /// OrdinalIgnoreCase to match how mod directories are compared everywhere else (Newtonsoft populates
+    /// the existing instance in place on deserialize, so the comparer survives the config round-trip).</summary>
+    public HashSet<string> AmbientOcclusionDisabledMods { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether AO / Skindenting is enabled for a mod, applying the absent-default (on).</summary>
+    public bool AmbientOcclusionEnabledFor(string modDir) => !AmbientOcclusionDisabledMods.Contains(modDir);
+
     /// <summary>Sibling-synthesis mode for a mod, applying the absent-default.</summary>
     public SiblingSynthesisMode SiblingModeFor(string modDir) =>
         SiblingSynthesis.TryGetValue(modDir, out var m) ? m : SiblingSynthesisMode.BiboGen3Only;
