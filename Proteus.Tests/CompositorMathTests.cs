@@ -925,6 +925,66 @@ public class CompositorMathTests
         Assert.Equal(new byte[] { 200, 150, 100, 255 }, baseD);
     }
 
+    // ── ApplyNormalIndent ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void ApplyNormalIndent_LeansNormalTowardStrap_OnSkinSideOnly()
+    {
+        // 4×1 row: strap on the left two texels, skin on the right two. The blurred coverage ramps down
+        // left→right. On the skin side the surface should lean toward the strap (−X → R below neutral 128);
+        // texels under the strap (edge==0) are untouched. Blue (skin-color) and G stay neutral (h=1 → gy=0).
+        int w = 4, h = 1;
+        var baseN = new byte[]
+        {
+            128, 128, 255, 128,   // x0 under strap
+            128, 128, 255, 128,   // x1 under strap
+            128, 128, 255, 128,   // x2 skin
+            128, 128, 255, 128,   // x3 skin
+        };
+        var strap   = new byte[] { 255, 255, 0, 0 };
+        var blurred = new byte[] { 255, 192, 64, 0 };
+
+        CompositorService.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 0.5f);
+
+        Assert.Equal(128, baseN[0]);        // x0: under strap, untouched
+        Assert.Equal(128, baseN[4]);        // x1: under strap, untouched
+        Assert.True(baseN[8]  < 128);       // x2: skin leans −X toward the strap
+        Assert.True(baseN[12] < 128);       // x3: skin leans −X toward the strap
+        Assert.Equal(255, baseN[10]);       // blue untouched
+        Assert.Equal(255, baseN[14]);
+        Assert.Equal(128, baseN[9]);        // green untouched (single row → no vertical gradient)
+        Assert.Equal(128, baseN[13]);
+    }
+
+    [Fact]
+    public void ApplyNormalIndent_FlatCoverage_NoChange()
+    {
+        // No edges (flat blurred plane, no strap) → zero gradient → normal unchanged.
+        int w = 4, h = 4;
+        var baseN = new byte[w * h * 4];
+        for (int p = 0; p < w * h; p++) { baseN[p * 4] = 128; baseN[p * 4 + 1] = 128; baseN[p * 4 + 2] = 255; }
+        var expected = (byte[])baseN.Clone();
+        var strap   = new byte[w * h];               // all skin
+        var blurred = new byte[w * h];
+        Array.Fill(blurred, (byte)128);              // flat
+
+        CompositorService.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 1f);
+
+        Assert.Equal(expected, baseN);
+    }
+
+    [Fact]
+    public void ApplyNormalIndent_ZeroDepth_NoChange()
+    {
+        var baseN   = RGBA(128, 128, 255, 128);
+        var strap   = new byte[] { 0 };
+        var blurred = new byte[] { 200 };
+
+        CompositorService.ApplyNormalIndent(baseN, blurred, strap, 1, 1, strength: 0f);
+
+        Assert.Equal(new byte[] { 128, 128, 255, 128 }, baseN);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static byte[] RGBA(byte r, byte g, byte b, byte a) => [r, g, b, a];

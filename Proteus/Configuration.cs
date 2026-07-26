@@ -85,9 +85,18 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// How far the ambient-occlusion shadow spreads from an edge, as a fraction of the skin texture width
-    /// (blur radius = width × this). UI range 0.001–0.005 (~4–20 px at 4K). Larger = wider/softer.
+    /// (blur radius = width × this). UI range 0.001–0.005 (~4–20 px at 4K). Larger = wider/softer. Shared
+    /// by the shadow and the normal indent.
     /// </summary>
     public float AmbientOcclusionSoftness { get; set; } = 0.003f;
+
+    /// <summary>
+    /// Depth of the normal-map indentation ("Skindenting") baked at strap / garment edges, so the skin reads
+    /// as pressed in under the strap (0–10). 0 = off. Uses the same edge silhouette and softness as the AO
+    /// shadow; tilts the skin normal toward the strap (a concave groove). FFXIV uses OpenGL-style green-up
+    /// normals.
+    /// </summary>
+    public float AmbientOcclusionNormalDepth { get; set; } = 5f;
 
     /// <summary>
     /// Skip a body's redundant connector rings when building the second-skin shell. Some bodies

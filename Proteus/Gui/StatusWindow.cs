@@ -417,7 +417,21 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(
                 "How far the ambient-occlusion shadow spreads from a strap edge (fraction of texture width).\n" +
-                "Larger = wider, softer shadow. Only matters when Ambient occlusion > 0.");
+                "Larger = wider, softer shadow. Shared by the shadow and the strap indent.");
+
+        ImGui.SetNextItemWidth(140);
+        float aoNrm = config.AmbientOcclusionNormalDepth;
+        if (ImGui.SliderFloat("Skindenting", ref aoNrm, 0f, 10f, "%.2f"))
+            config.AmbientOcclusionNormalDepth = Math.Clamp(aoNrm, 0f, 10f);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            config.Save();
+            compositor.TriggerRecomposite("ambient-occlusion-normal");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "Indents the skin normal at strap/garment edges so straps look pressed into the skin.\n" +
+                "0.00 disables it (skin normal unchanged). Uses the same edges/softness as the shadow.");
 
         // Hide a body's redundant connector meshes on the gear shell (see Configuration).
         var connMode = config.HideConnectorMeshes;

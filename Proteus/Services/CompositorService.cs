@@ -1775,6 +1775,13 @@ public class CompositorService : IDisposable
                     return sil;
                 }
 
+                // A mod's strap/garment silhouette at (w,h): its mask when it ships one, else the garment's
+                // own gear coverage. Shared by the AO shadow (diffuse) and the indent (normal), which may
+                // run at different resolutions (wD/hD vs wN/hN).
+                byte[]? StrapSilhouette(string modDir, int w, int h, bool hasMasks, string? srcType)
+                    => (hasMasks ? CombinedMaskAt(modDir, w, h, srcType)?.T : null)
+                       ?? GarmentSilhouette(modDir, w, h);
+
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
@@ -2507,9 +2514,10 @@ public class CompositorService : IDisposable
                 // bralette cast a shadow too). The shadow is on skin either way — including straps promoted
                 // to gear shells. Multiplies into the shared baseD, so overlapping mods each add a shadow.
                 float aoStrength = config.AmbientOcclusionStrength;
-                if (aoStrength > 0f)
+                float aoNormal   = config.AmbientOcclusionNormalDepth;
+                if (aoStrength > 0f || aoNormal > 0f)
                 {
-                    int aoRadius = Math.Max(1, (int)(wD * config.AmbientOcclusionSoftness));
+                    float aoSoftness = config.AmbientOcclusionSoftness;
                     // Every mod that contributes a mask OR a gear garment to this body. A masked strap
                     // traces its mask; a non-masked garment (bralette, etc.) traces its own coverage.
                     var aoMods = pairs.Select(p => p.Entry.ModDirectory)
@@ -2522,24 +2530,60 @@ public class CompositorService : IDisposable
                         if (!hasMasks && !hasGear) continue;
                         lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
 
-                        if (baseD == null || baseD.Length == 0)
+                        // Computed at the diffuse resolution; reused for the normal indent when the normal
+                        // shares that size (the common case — skin diffuse and normal are usually equal),
+                        // so the silhouette + blur are built once, not once per effect.
+                        byte[]? strapD = null, blurredD = null;
+
+                        // ── Diffuse: soft contact shadow on the skin just outside the edge ──
+                        if (aoStrength > 0f)
                         {
-                            // Lazy-load the base body diffuse (same as the mask-colorset pass above), so a
-                            // garment/strap with no skin overlay still casts a shadow. Skip if no diffuse.
-                            if (texPaths.Diffuse == null) continue;
-                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
-                            if (!loaded.HasValue) continue;
-                            baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height;
-                            aoRadius = Math.Max(1, (int)(wD * config.AmbientOcclusionSoftness));
+                            if (baseD == null || baseD.Length == 0)
+                            {
+                                // Lazy-load the base body diffuse (same as the mask-colorset pass above), so a
+                                // garment/strap with no skin overlay still casts a shadow. Skip if no diffuse.
+                                if (texPaths.Diffuse != null)
+                                {
+                                    var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
+                                    if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                                }
+                            }
+                            if (baseD is { Length: > 0 })
+                            {
+                                strapD = StrapSilhouette(modDir, wD, hD, hasMasks, aoSrcBodyType);
+                                if (strapD != null)
+                                {
+                                    blurredD = BlurCoverage(strapD, wD, hD, Math.Max(1, (int)(wD * aoSoftness)));
+                                    ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength);
+                                }
+                            }
                         }
 
-                        // Mask straps trace their mask; fall back to the garment's own coverage otherwise.
-                        var strap = hasMasks ? CombinedMaskAt(modDir, wD, hD, aoSrcBodyType)?.T : null;
-                        strap ??= GarmentSilhouette(modDir, wD, hD);
-                        if (strap == null) continue;
-
-                        var blurred = BlurCoverage(strap, wD, hD, aoRadius);
-                        ApplyAmbientOcclusion(baseD, strap, blurred, wD, hD, aoStrength);
+                        // ── Normal: indent the skin at the edge so the strap looks pressed in ──
+                        if (aoNormal > 0f && texPaths.Normal != null)
+                        {
+                            if (baseN == null)
+                            {
+                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                                if (anyEmissive && baseN.Length > 0)
+                                    for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
+                            }
+                            if (baseN.Length > 0)
+                            {
+                                byte[]? strapN, blurredN;
+                                if (strapD != null && blurredD != null && wN == wD && hN == hD)
+                                {
+                                    strapN = strapD; blurredN = blurredD;   // reuse the diffuse-resolution buffers
+                                }
+                                else
+                                {
+                                    strapN = StrapSilhouette(modDir, wN, hN, hasMasks, aoSrcBodyType);
+                                    blurredN = strapN != null ? BlurCoverage(strapN, wN, hN, Math.Max(1, (int)(wN * aoSoftness))) : null;
+                                }
+                                if (strapN != null && blurredN != null)
+                                    ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal);
+                            }
+                        }
                     }
                 }
 
@@ -3648,6 +3692,47 @@ public class CompositorService : IDisposable
                 baseD[o]     = (byte)(baseD[o]     * k);
                 baseD[o + 1] = (byte)(baseD[o + 1] * k);
                 baseD[o + 2] = (byte)(baseD[o + 2] * k);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Perturb the skin normal at strap / garment edges so the skin reads as pressed IN under the strap.
+    /// The tilt is the gradient of the blurred coverage (edge-concentrated: zero on flat interior/skin),
+    /// gated to the skin OUTSIDE the strap — the same band the AO shadow darkens — so the two effects line
+    /// up. The surface leans toward increasing coverage (toward the strap), i.e. the skin slopes down into
+    /// the strap, giving a concave groove.
+    ///
+    /// FFXIV uses OpenGL-style tangent normals: the green channel is +Y pointing "up", whereas texture rows
+    /// increase downward — so the green offset negates the row-space gradient (gy). If the vertical edges of
+    /// a strap ever look inverted (bulging out instead of pressed in) this single sign is what to flip.
+    /// Writes R/G only (X/Y); blue (skin-color influence) and alpha (emissive) are left untouched, exactly
+    /// like <see cref="CompoundNormal"/>. Reads neighbours, so it parallelises over independent rows.
+    /// </summary>
+    internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength)
+    {
+        if (strength <= 0f) return;
+        Parallel.For(0, h, y =>
+        {
+            int row     = y * w;
+            int rowUp   = (y > 0 ? y - 1 : 0) * w;
+            int rowDown = (y < h - 1 ? y + 1 : h - 1) * w;
+            for (int x = 0; x < w; x++)
+            {
+                float edge = 1f - strap[row + x] / 255f;   // skin side of the edge only
+                if (edge <= 0f) continue;
+                int xm = x > 0 ? x - 1 : 0;
+                int xp = x < w - 1 ? x + 1 : w - 1;
+                float gx = (blurred[row + xp]     - blurred[row + xm])   / 255f;   // +x = toward the strap
+                float gy = (blurred[rowDown + x]  - blurred[rowUp + x])  / 255f;   // rows increase downward
+                if (gx == 0f && gy == 0f) continue;
+                int i = (row + x) * 4;
+                float bx = baseN[i]     / 127.5f - 1f;
+                float by = baseN[i + 1] / 127.5f - 1f;
+                bx += strength * gx * edge;        // lean X toward the strap
+                by -= strength * gy * edge;        // green = +Y up (OpenGL); rows go down → negate
+                baseN[i]     = (byte)Math.Clamp((bx + 1f) * 127.5f, 0, 255);
+                baseN[i + 1] = (byte)Math.Clamp((by + 1f) * 127.5f, 0, 255);
             }
         });
     }
