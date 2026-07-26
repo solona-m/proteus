@@ -390,6 +390,35 @@ public class StatusWindow : Window
                 "skin tone (slightly shinier), dark dyes stay skin-tinted and matte automatically.\n" +
                 "0.00 disables it entirely (original look).");
 
+        // Ambient-occlusion contact shadow baked onto the skin around masked strap edges.
+        ImGui.SetNextItemWidth(140);
+        float aoStr = config.AmbientOcclusionStrength;
+        if (ImGui.SliderFloat("Ambient occlusion", ref aoStr, 0f, 2f, "%.2f"))
+            config.AmbientOcclusionStrength = Math.Clamp(aoStr, 0f, 2f);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            config.Save();
+            compositor.TriggerRecomposite("ambient-occlusion");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "Soft contact shadow on the skin just outside masked strap edges, giving straps depth.\n" +
+                "0.00 disables it entirely (skin diffuse unchanged).");
+
+        ImGui.SetNextItemWidth(140);
+        float aoSoft = config.AmbientOcclusionSoftness;
+        if (ImGui.SliderFloat("Shadow softness", ref aoSoft, 0.001f, 0.005f, "%.3f"))
+            config.AmbientOcclusionSoftness = Math.Clamp(aoSoft, 0.001f, 0.005f);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            config.Save();
+            compositor.TriggerRecomposite("ambient-occlusion-softness");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "How far the ambient-occlusion shadow spreads from a strap edge (fraction of texture width).\n" +
+                "Larger = wider, softer shadow. Only matters when Ambient occlusion > 0.");
+
         // Hide a body's redundant connector meshes on the gear shell (see Configuration).
         var connMode = config.HideConnectorMeshes;
         ImGui.SetNextItemWidth(140);

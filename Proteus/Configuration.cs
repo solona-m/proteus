@@ -77,6 +77,19 @@ public class Configuration : IPluginConfiguration
     public float SkinColorSuppression { get; set; } = 1f;
 
     /// <summary>
+    /// Strength of the ambient-occlusion contact shadow baked onto the skin diffuse just outside strap /
+    /// garment edges (0–2). 0 = off. Applied per mod from its mask, or from the garment's own coverage
+    /// when it ships no mask (so non-masked straps like a bralette cast a shadow too).
+    /// </summary>
+    public float AmbientOcclusionStrength { get; set; } = 1f;
+
+    /// <summary>
+    /// How far the ambient-occlusion shadow spreads from an edge, as a fraction of the skin texture width
+    /// (blur radius = width × this). UI range 0.001–0.005 (~4–20 px at 4K). Larger = wider/softer.
+    /// </summary>
+    public float AmbientOcclusionSoftness { get; set; } = 0.003f;
+
+    /// <summary>
     /// Skip a body's redundant connector rings when building the second-skin shell. Some bodies
     /// (Neolithe) reinforce each joint (wrist/ankle/…) with a small extra submesh that overlaps an
     /// already-complete main body; on a semi-transparent gear shell that overlap doubles the alpha and

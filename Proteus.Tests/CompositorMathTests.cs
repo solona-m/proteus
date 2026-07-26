@@ -852,6 +852,79 @@ public class CompositorMathTests
         Assert.Null(CompositorService.BodyCodeFromCustomize(9,  1, 0));
     }
 
+    // ── BlurCoverage ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BlurCoverage_FlatPlane_StaysFlat()
+    {
+        // A uniform plane must be unchanged by a box blur (edge clamping preserves the constant).
+        int w = 64, h = 64;
+        var src = new byte[w * h];
+        Array.Fill(src, (byte)200);
+
+        var blurred = CompositorService.BlurCoverage(src, w, h, radius: 4);
+
+        Assert.All(blurred, v => Assert.Equal(200, v));
+    }
+
+    [Fact]
+    public void BlurCoverage_SingleWhiteSquare_BleedsIntoSurroundingRing()
+    {
+        // A small white square on black: after the blur, pixels just outside the square (previously 0)
+        // must become non-zero (the coverage bled outward), while a far-away corner stays black.
+        int w = 64, h = 64;
+        var src = new byte[w * h];
+        for (int y = 28; y < 36; y++)
+            for (int x = 28; x < 36; x++)
+                src[y * w + x] = 255;
+
+        var blurred = CompositorService.BlurCoverage(src, w, h, radius: 4);
+
+        Assert.True(blurred[27 * w + 30] > 0, "pixel just outside the square should receive bled coverage");
+        Assert.True(blurred[30 * w + 27] > 0, "pixel just left of the square should receive bled coverage");
+        Assert.Equal(0, blurred[0]);                  // far corner untouched
+        Assert.True(blurred[31 * w + 31] > 0);        // interior still lit
+    }
+
+    // ── ApplyAmbientOcclusion ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ApplyAmbientOcclusion_DarkensOutsideStrapOnly_AlphaUntouched()
+    {
+        // 3 pixels: [0] under the strap interior, [1] just outside (blurred spread present),
+        // [2] far away (no spread). Only [1] should darken; alpha never changes.
+        int w = 3, h = 1;
+        var baseD = new byte[]
+        {
+            200, 200, 200, 255,   // p0: under strap
+            200, 200, 200, 255,   // p1: outside, in the halo
+            200, 200, 200, 255,   // p2: far away
+        };
+        var strap   = new byte[] { 255, 0,   0   };  // p0 is the strap; p1/p2 are skin
+        var blurred = new byte[] { 255, 200, 0   };  // spread reaches p1 but not p2
+
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f);
+
+        Assert.Equal(200, baseD[0]);   // under strap (s=1 → halo 0): unchanged
+        Assert.True(baseD[4] < 200);   // outside, in halo: darkened
+        Assert.Equal(200, baseD[8]);   // far away (blur 0): unchanged
+        Assert.Equal(255, baseD[3]);   // alpha untouched
+        Assert.Equal(255, baseD[7]);
+        Assert.Equal(255, baseD[11]);
+    }
+
+    [Fact]
+    public void ApplyAmbientOcclusion_ZeroStrength_NoChange()
+    {
+        var baseD   = RGBA(200, 150, 100, 255);
+        var strap   = new byte[] { 0 };
+        var blurred = new byte[] { 255 };
+
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, 1, 1, strength: 0f);
+
+        Assert.Equal(new byte[] { 200, 150, 100, 255 }, baseD);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static byte[] RGBA(byte r, byte g, byte b, byte a) => [r, g, b, a];

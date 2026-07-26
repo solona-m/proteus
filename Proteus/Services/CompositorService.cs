@@ -1737,6 +1737,44 @@ public class CompositorService : IDisposable
                     });
                 }
 
+                // Garment silhouette for a mod at (w,h) in body UV: the union of its GEAR overlays' diffuse
+                // alpha, remapped to the body UV. Lets a non-masked garment (e.g. a bralette whose straps
+                // are the shell's own shape, not a mask) cast an AO shadow the same way a masked strap does.
+                // Diffuse alpha is self-protecting: a garment that's opaque across the whole UV yields
+                // strap≈1 everywhere, so halo = blur·(1−strap) → 0 (no false shadow); only real edges cast.
+                // Returns null if the mod has no gear overlay with a diffuse.
+                byte[]? GarmentSilhouette(string modDir, int w, int h)
+                {
+                    byte[]? sil = null;
+                    foreach (var (gEntry, gOverlay) in gearOverlays)
+                    {
+                        if (!string.Equals(gEntry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)) continue;
+                        var gd = gOverlay.Descriptor;
+                        if (gd.IsMaskShell || gd.Diffuse == null) continue;   // mask shells trace their mask, not this
+
+                        var gSrc = gd.SourceBodyType;
+                        if (gSrc == null)
+                        {
+                            if (gd.MaterialGamePaths.Any(p => p.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)))
+                                gSrc = "bibo";
+                            else if (gd.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3"))
+                                gSrc = "gen3";
+                        }
+                        var dp = Path.Combine(gEntry.SidecarRoot, gd.Diffuse);
+                        var img = RemapIfNeeded(LoadPng(dp, w, h), w, h, gSrc, dp);
+                        if (img == null) continue;
+
+                        sil ??= new byte[w * h];
+                        var s = sil; var src = img;
+                        ParallelPixels(0, w * h, 1, (from, to) =>
+                        {
+                            for (int p = from; p < to; p++)
+                                if (src[p * 4 + 3] > s[p]) s[p] = src[p * 4 + 3];   // union of diffuse alpha
+                        });
+                    }
+                    return sil;
+                }
+
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
@@ -2460,6 +2498,49 @@ public class CompositorService : IDisposable
                     }
                     if (anyGlow)
                         glowMaps.Add((modDir, SidecarDiscoveryService.MaskGroupName, "Masks", gmap, gw, gh));
+                }
+
+                // ── Ambient occlusion: soft contact-shadow on skin around strap / garment edges ──
+                // Each mod spreads its silhouette into the surrounding skin and darkens the diffuse just
+                // outside the edge, so straps/garments read with depth. The silhouette is the mod's mask
+                // when it has one, otherwise the garment's own gear coverage (so non-masked straps like a
+                // bralette cast a shadow too). The shadow is on skin either way — including straps promoted
+                // to gear shells. Multiplies into the shared baseD, so overlapping mods each add a shadow.
+                float aoStrength = config.AmbientOcclusionStrength;
+                if (aoStrength > 0f)
+                {
+                    int aoRadius = Math.Max(1, (int)(wD * config.AmbientOcclusionSoftness));
+                    // Every mod that contributes a mask OR a gear garment to this body. A masked strap
+                    // traces its mask; a non-masked garment (bralette, etc.) traces its own coverage.
+                    var aoMods = pairs.Select(p => p.Entry.ModDirectory)
+                        .Concat(gearOverlays.Select(g => g.Entry.ModDirectory))
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+                    foreach (var modDir in aoMods)
+                    {
+                        bool hasMasks = maskPathsByMod.ContainsKey(modDir);
+                        bool hasGear  = gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+                        if (!hasMasks && !hasGear) continue;
+                        lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
+
+                        if (baseD == null || baseD.Length == 0)
+                        {
+                            // Lazy-load the base body diffuse (same as the mask-colorset pass above), so a
+                            // garment/strap with no skin overlay still casts a shadow. Skip if no diffuse.
+                            if (texPaths.Diffuse == null) continue;
+                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
+                            if (!loaded.HasValue) continue;
+                            baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height;
+                            aoRadius = Math.Max(1, (int)(wD * config.AmbientOcclusionSoftness));
+                        }
+
+                        // Mask straps trace their mask; fall back to the garment's own coverage otherwise.
+                        var strap = hasMasks ? CombinedMaskAt(modDir, wD, hD, aoSrcBodyType)?.T : null;
+                        strap ??= GarmentSilhouette(modDir, wD, hD);
+                        if (strap == null) continue;
+
+                        var blurred = BlurCoverage(strap, wD, hD, aoRadius);
+                        ApplyAmbientOcclusion(baseD, strap, blurred, wD, hD, aoStrength);
+                    }
                 }
 
                 var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
@@ -3478,6 +3559,95 @@ public class CompositorService : IDisposable
                     if (a <= 0f) continue;
                 }
                 baseN[i + 2] = (byte)(baseN[i + 2] * (1f - a));
+            }
+        });
+    }
+
+    /// <summary>
+    /// Separable box blur of a single-channel (1 byte/pixel) plane. Two box passes per iteration
+    /// (horizontal then vertical) approximate a smooth Gaussian falloff — used to spread a strap's
+    /// coverage into the surrounding skin for the ambient-occlusion halo. Unlike the ParallelPixels
+    /// kernels this reads neighbours, so it parallelises over independent rows/columns instead.
+    /// </summary>
+    internal static byte[] BlurCoverage(byte[] src, int w, int h, int radius, int iterations = 2)
+    {
+        if (radius < 1 || w <= 0 || h <= 0 || src.Length < w * h) return (byte[])src.Clone();
+        var a = (byte[])src.Clone();
+        var b = new byte[a.Length];
+        for (int it = 0; it < iterations; it++)
+        {
+            BoxBlurH(a, b, w, h, radius);   // a -> b (rows)
+            BoxBlurV(b, a, w, h, radius);   // b -> a (columns)
+        }
+        return a;
+    }
+
+    // Horizontal running-sum box blur, one row per worker (rows are independent, so this is safe to
+    // parallelise even though it reads neighbours — which ParallelPixels forbids).
+    private static void BoxBlurH(byte[] src, byte[] dst, int w, int h, int radius)
+    {
+        int window = radius * 2 + 1;
+        Parallel.For(0, h, y =>
+        {
+            int row = y * w;
+            int sum = 0;
+            // Seed the window at x = 0: clamp samples off the left edge to column 0.
+            for (int k = -radius; k <= radius; k++)
+                sum += src[row + Math.Clamp(k, 0, w - 1)];
+            for (int x = 0; x < w; x++)
+            {
+                dst[row + x] = (byte)(sum / window);
+                int add = Math.Clamp(x + radius + 1, 0, w - 1);
+                int sub = Math.Clamp(x - radius, 0, w - 1);
+                sum += src[row + add] - src[row + sub];
+            }
+        });
+    }
+
+    // Vertical running-sum box blur, one column per worker.
+    private static void BoxBlurV(byte[] src, byte[] dst, int w, int h, int radius)
+    {
+        int window = radius * 2 + 1;
+        Parallel.For(0, w, x =>
+        {
+            int sum = 0;
+            for (int k = -radius; k <= radius; k++)
+                sum += src[Math.Clamp(k, 0, h - 1) * w + x];
+            for (int y = 0; y < h; y++)
+            {
+                dst[y * w + x] = (byte)(sum / window);
+                int add = Math.Clamp(y + radius + 1, 0, h - 1);
+                int sub = Math.Clamp(y - radius, 0, h - 1);
+                sum += src[add * w + x] - src[sub * w + x];
+            }
+        });
+    }
+
+    /// <summary>
+    /// Bake a soft contact-shadow onto the skin diffuse hugging the OUTSIDE edge of each strap.
+    /// <paramref name="strap"/> is the sharp coverage (≈255 under the strap, 0 on skin); <paramref name="blurred"/>
+    /// is that coverage spread by <see cref="BlurCoverage"/>. The halo = blurred·(1−strap) keeps only the
+    /// spread that lands OUTSIDE the strap, so the interior isn't darkened and the shadow fades with
+    /// distance. RGB is multiplied down by (1 − strength·halo); alpha is untouched. Per-pixel, so it
+    /// satisfies the ParallelPixels contract (the neighbour work happened in the blur).
+    /// </summary>
+    internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength)
+    {
+        if (strength <= 0f) return;
+        ParallelPixels(0, w * h, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++)
+            {
+                float s = strap[p] / 255f;
+                float halo = (blurred[p] / 255f) * (1f - s);
+                if (halo <= 0f) continue;
+                float k = 1f - strength * halo;
+                if (k >= 1f) continue;
+                if (k < 0f) k = 0f;
+                int o = p * 4;
+                baseD[o]     = (byte)(baseD[o]     * k);
+                baseD[o + 1] = (byte)(baseD[o + 1] * k);
+                baseD[o + 2] = (byte)(baseD[o + 2] * k);
             }
         });
     }
