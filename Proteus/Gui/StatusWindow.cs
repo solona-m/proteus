@@ -60,6 +60,11 @@ public class StatusWindow : Window
     // Key: modDir → priority value being dragged; committed to Penumbra on edit-end.
     private readonly Dictionary<string, int> _priorityEdits = new();
 
+    // Mods-tab column sort (display only; the compositor orders by priority independently).
+    private enum ModSort { Enabled, Name, Priority }
+    private ModSort _modSort = ModSort.Priority;
+    private bool _modSortDesc = true;   // Priority descending = default
+
     // ── Create tab state ──
     private readonly FileDialogManager _fileDialog = new();
     private string _createName = "";
@@ -599,19 +604,50 @@ public class StatusWindow : Window
         else
         {
             ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
-            ImGui.TableSetupColumn("##en",   ImGuiTableColumnFlags.WidthFixed, 20);
+            ImGui.TableSetupColumn("On",     ImGuiTableColumnFlags.WidthFixed, 32);
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Bodies", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("AO",     ImGuiTableColumnFlags.WidthFixed, 26);
-            ImGui.TableHeadersRow();
+
+            // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
+            // column flips direction; switching column picks a sensible default direction.
+            void SortableHeader(string label, ModSort col)
+            {
+                ImGui.TableNextColumn();
+                var arrow = _modSort == col ? (_modSortDesc ? " ▼" : " ▲") : "";
+                ImGui.TableHeader(label + arrow);
+                if (ImGui.IsItemClicked())
+                {
+                    if (_modSort == col) _modSortDesc = !_modSortDesc;
+                    else { _modSort = col; _modSortDesc = col != ModSort.Name; }   // Name asc, others desc
+                }
+            }
+            ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+            SortableHeader("On",  ModSort.Enabled);
+            SortableHeader("Mod", ModSort.Name);
+            SortableHeader("Pri", ModSort.Priority);
+            ImGui.TableNextColumn(); ImGui.TableHeader("Colors");
+            ImGui.TableNextColumn(); ImGui.TableHeader("Bodies");
+            ImGui.TableNextColumn(); ImGui.TableHeader("AO");
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
             // override state of its own); both reflect the mod's live Penumbra values.
             var collId = penumbra.GetPlayerCollectionId();
 
-            foreach (var entry in mods)
+            // Display-only sort of a COPY (never mutate LastDiscovered). Sorts by the committed
+            // entry.Priority, not the in-progress _priorityEdits value, so a row won't jump mid-drag.
+            IOrderedEnumerable<OverlayEntry> ordered = _modSort switch
+            {
+                ModSort.Enabled => _modSortDesc ? mods.OrderByDescending(e => e.Enabled) : mods.OrderBy(e => e.Enabled),
+                ModSort.Name    => _modSortDesc ? mods.OrderByDescending(e => e.ModName, StringComparer.OrdinalIgnoreCase)
+                                                : mods.OrderBy(e => e.ModName, StringComparer.OrdinalIgnoreCase),
+                _               => _modSortDesc ? mods.OrderByDescending(e => e.Priority) : mods.OrderBy(e => e.Priority),
+            };
+            var displayMods = ordered.ThenBy(e => e.ModName, StringComparer.OrdinalIgnoreCase).ToList();
+
+            foreach (var entry in displayMods)
             {
                 ImGui.TableNextRow();
 
