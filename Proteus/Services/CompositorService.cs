@@ -2181,6 +2181,10 @@ public class CompositorService : IDisposable
                         }
                         else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                     }
+                    // Normal-only (and mask-only) overlays no longer synthesize a diffuse tint: the author
+                    // wants just the normal (and any mask) applied, leaving the skin diffuse untouched. The
+                    // Row-16-colour synthesis below is disabled per request — kept for reference.
+                    /*
                     else if (desc.Diffuse == null && normalOv != null && texPaths.Diffuse != null && desc.GenerateDiffuse)
                     {
                         // Normal-only overlay: apply synthesized tint (Row 16 color) to the diffuse
@@ -2199,6 +2203,7 @@ public class CompositorService : IDisposable
                             if (tint != null) ApplyFlatOverlay(baseD, tint, row16A, wD, hD);
                         }
                     }
+                    */
 
                     // ── Phase B: normal composite ─────────────────────────────
                     if (normalOv != null && baseN is { Length: > 0 })
