@@ -149,6 +149,17 @@ public class CompositorService : IDisposable
     private int _discoverProbeRunning;
     private long _lastDiscoverProbeTick;
 
+    // Boot composite. At game start no event reliably fires a composite once BOTH Penumbra's mod list is
+    // readable AND the local player's draw object exists: PenumbraReady can beat the player, the first
+    // redraw can beat discovery (or never fire if the character was drawn before we loaded), the glamourer
+    // design-apply gets echo-suppressed, and the discovery probe only runs while the status window is open.
+    // This framework poll waits for both preconditions and fires once per login (re-armed when the draw
+    // object goes away, so logging into another character composites again).
+    private int _bootComposited;      // 1 once the boot composite has fired this login; reset on logout
+    private int _bootProbeRunning;    // one off-thread discovery check at a time
+    private long _lastBootPollTick;
+    private volatile bool _disposed;  // set in Dispose so an in-flight probe task bails
+
     /// <summary>
     /// Populate <see cref="LastDiscovered"/> for the UI WITHOUT compositing. That list is otherwise only
     /// filled deep inside a full recomposite, and at game boot none runs (Penumbra isn't up yet when the
@@ -221,6 +232,45 @@ public class CompositorService : IDisposable
         penumbra.LocalPlayerRedrawn            += OnLocalPlayerRedrawn;
         glamourer.LocalPlayerStateChanged      += OnGlamourerStateChanged;
         glamourer.LocalPlayerCustomizationChanged += OnGlamourerCustomizationChanged;
+        Plugin.Framework.Update += OnBootPoll;
+    }
+
+    // Framework-thread poll that fires the boot composite once the player and Penumbra are both ready.
+    // Only the cheap checks (player address, Penumbra availability) run on the framework thread; the
+    // potentially-slow discovery scan runs off-thread, throttled and single-flighted, so no frame hitches.
+    private void OnBootPoll(IFramework fw)
+    {
+        // Re-arm across logout: with no draw object there's nothing to composite, and clearing the flag
+        // lets the next login run its own boot composite (character swaps don't otherwise reach here).
+        if ((Plugin.ObjectTable.LocalPlayer?.Address ?? 0) == 0)
+        {
+            Volatile.Write(ref _bootComposited, 0);
+            return;
+        }
+        if (Volatile.Read(ref _bootComposited) == 1) return;        // already composited this login
+        if (!config.PluginEnabled || !penumbra.IsAvailable) return; // wait for Penumbra IPC
+
+        var now = Environment.TickCount64;
+        if (unchecked(now - _lastBootPollTick) < 500) return;
+        _lastBootPollTick = now;
+        if (Interlocked.Exchange(ref _bootProbeRunning, 1) == 1) return;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                if (_disposed) return;
+                // Penumbra's mod list can still be unreadable for a moment after the player draws;
+                // an empty result just means "not yet", so leave the flag clear and try again next tick.
+                if (discovery.DiscoverEnabled().Count == 0) return;
+                log.Debug("[Proteus] boot composite: player + discovery ready");
+                TriggerRecomposite("boot-ready");
+                // Only latch AFTER the trigger, so a throw above leaves the poll armed to retry.
+                Volatile.Write(ref _bootComposited, 1);
+            }
+            catch (Exception ex) { log.Debug("[Proteus] boot composite probe failed: {0}", ex.Message); }
+            finally { Interlocked.Exchange(ref _bootProbeRunning, 0); }
+        });
     }
 
     public void Dispose()
@@ -230,6 +280,8 @@ public class CompositorService : IDisposable
         // bonus item until the next design/reset.
         RemoveInjectedGlasses();
 
+        _disposed = true;   // an in-flight boot-probe task bails instead of touching torn-down bridges
+
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
         penumbra.ModDeleted        -= OnModDeleted;
@@ -238,6 +290,7 @@ public class CompositorService : IDisposable
         penumbra.LocalPlayerRedrawn              -= OnLocalPlayerRedrawn;
         glamourer.LocalPlayerStateChanged        -= OnGlamourerStateChanged;
         glamourer.LocalPlayerCustomizationChanged -= OnGlamourerCustomizationChanged;
+        Plugin.Framework.Update -= OnBootPoll;
 
         currentCts?.Cancel();
         currentCts?.Dispose();
