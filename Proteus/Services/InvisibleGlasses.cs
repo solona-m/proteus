@@ -17,7 +17,38 @@ public static class InvisibleGlasses
 
     private static readonly object Gate = new();
     private static Identity? cached;
+    private static System.Collections.Generic.HashSet<int>? cachedSets;
     private static bool warned;
+
+    /// <summary>
+    /// Every facewear/glasses MODEL SET (the e#### the game loads as c{cc}e{set}_met.mdl), from the Glasses
+    /// sheet. Head equipment (helmets/hats) share the "_met" model path but are a different slot and are NOT
+    /// in this sheet — so this set is how the second skin tells a facewear "_met" (a valid host) from a head
+    /// one (which it must ignore, hosting on the facewear slot instead). Returns null if the sheet isn't
+    /// readable yet, so the caller skips filtering rather than dropping every candidate. Cached (static data).
+    /// </summary>
+    public static System.Collections.Generic.HashSet<int>? FacewearModelSets(IDataManager data)
+    {
+        lock (Gate)
+        {
+            if (cachedSets != null) return cachedSets;
+            try
+            {
+                var sheet = data.GetExcelSheet<Glasses>();
+                if (sheet == null) return null;
+                var sets = new System.Collections.Generic.HashSet<int>();
+                foreach (var row in sheet)
+                {
+                    int set = (int)row.Model & 0xFFFF;   // Model packs set | variant<<16
+                    if (set > 0) sets.Add(set);
+                }
+                if (sets.Count == 0) return null;
+                cachedSets = sets;
+                return cachedSets;
+            }
+            catch { return null; }
+        }
+    }
 
     /// <summary>
     /// The chosen (item id, model set), or null if the Glasses sheet is unavailable/empty. Called from both

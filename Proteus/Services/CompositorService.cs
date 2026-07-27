@@ -116,8 +116,9 @@ public class CompositorService : IDisposable
     // captured the same way as _equippedPartModels. Empty when no accessory is worn, in which case the
     // shell falls back to replacing the invisible Emperor's New Ring.
     private volatile IReadOnlyDictionary<string, string>? _equippedAccessoryModels;
-    // Every loaded head "_met" model (helmet and/or facewear glasses), sorted. A list rather than a slot
-    // entry because both slots share the "_met" path and can be worn together — see EquippedMetModelsFromModels.
+    // Every loaded FACEWEAR/glasses "_met" model, sorted. Head equipment (helmets/hats) shares the "_met"
+    // path but is a different slot and is filtered OUT (see EquippedMetModelsFromModels) — only facewear can
+    // host the shell. A list because real glasses + our injected pair are both facewear and could coexist.
     private volatile IReadOnlyList<string>? _equippedMetModels;
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
@@ -451,7 +452,7 @@ public class CompositorService : IDisposable
             var modelPaths = penumbra.GetActivePlayerModelPaths();
             var equipped = EquippedPartModelsFromModels(modelPaths);
             var accessories = EquippedAccessoryModelsFromModels(modelPaths);
-            var metModels = EquippedMetModelsFromModels(modelPaths);
+            var metModels = EquippedMetModelsFromModels(modelPaths, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
             _equippedPartModels = equipped;
             _equippedAccessoryModels = accessories;
             _equippedMetModels = metModels;
@@ -783,7 +784,7 @@ public class CompositorService : IDisposable
                 {
                     _equippedPartModels = EquippedPartModelsFromModels(equipped);
                     _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
-                    _equippedMetModels = EquippedMetModelsFromModels(equipped);
+                    _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -899,7 +900,7 @@ public class CompositorService : IDisposable
         @"chara/equipment/(e\d+)/model/c\d+e\d+_met\.mdl",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    private static List<string> EquippedMetModelsFromModels(HashSet<string>? modelPaths)
+    private static List<string> EquippedMetModelsFromModels(HashSet<string>? modelPaths, HashSet<int>? facewearSets)
     {
         var met = new List<string>();
         if (modelPaths == null) return met;
@@ -908,6 +909,15 @@ public class CompositorService : IDisposable
             var match = MetModelRe.Match(p);
             if (!match.Success) continue;
             if (string.Equals(match.Groups[1].Value, "e0000", StringComparison.OrdinalIgnoreCase)) continue;
+            // Head equipment (helmets/hats) and facewear glasses share the "_met" path but are different
+            // slots. Only facewear can host the shell — a head item (e.g. the Emperor's New Hat) must be
+            // ignored so the shell rides the facewear slot (real glasses or our synthesized invisible pair)
+            // instead. facewearSets == null (sheet not readable yet) means don't filter, so we never drop
+            // a real host by mistake before the game data is up.
+            if (facewearSets != null
+                && int.TryParse(match.Groups[1].Value.AsSpan(1), out var set)
+                && !facewearSets.Contains(set))
+                continue;
             met.Add(match.Value);
         }
         met.Sort(StringComparer.OrdinalIgnoreCase);   // stable order — the host must not flip run to run
