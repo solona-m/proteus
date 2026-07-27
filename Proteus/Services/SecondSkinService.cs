@@ -475,7 +475,10 @@ public sealed class SecondSkinService
                 ov.Descriptor.ScrollTilingY ?? ScrollSettings.Default.TilingY);
 
             byte[] mtrl;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll, config.GearCutoutAlpha); }
+            // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
+            // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
+            // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");

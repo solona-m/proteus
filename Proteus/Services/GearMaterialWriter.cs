@@ -158,13 +158,20 @@ public static class GearMaterialWriter
     /// the shader's slot order — see <see cref="TextureOrder"/>), and apply <paramref name="rows"/>
     /// (keyed by 0-based color table row; absent rows keep the template's values).
     /// </summary>
+    // sRGB → linear (the standard curve the game applies to an sRGB diffuse TEXTURE). The color table's
+    // diffuse half-floats are consumed as LINEAR, so a colour authored in sRGB (as the editor shows it,
+    // and as the skin path bakes it into an sRGB texture) must be converted or it renders too bright.
+    private static float SrgbToLinear(float c)
+        => c <= 0.04045f ? c / 12.92f : MathF.Pow((c + 0.055f) / 1.055f, 2.4f);
+
     public static byte[] Build(
         byte[] template,
         IReadOnlyList<string> texturePaths,
         IReadOnlyDictionary<int, GearColorRow>? rows,
         ScrollSettings? scroll = null,
-        bool cutoutAlpha = false)
-    {
+        bool cutoutAlpha = false,
+        bool linearizeDiffuse = false)   // convert the colorset diffuse sRGB→linear (mask shells: colour lives
+    {                                    // in the colorset over a white base, so it must match the skin bake)
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
 
@@ -301,7 +308,13 @@ public static class GearMaterialWriter
                 int b = csStart + row * RowBytes;
                 void WH(int half, float v) => BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)v)).CopyTo(r, b + half * 2);
 
-                if (def.Diffuse is { } d) { WH(HDiffuse, d.R); WH(HDiffuse + 1, d.G); WH(HDiffuse + 2, d.B); }
+                if (def.Diffuse is { } d)
+                {
+                    float dr = linearizeDiffuse ? SrgbToLinear(d.R) : d.R;
+                    float dg = linearizeDiffuse ? SrgbToLinear(d.G) : d.G;
+                    float db = linearizeDiffuse ? SrgbToLinear(d.B) : d.B;
+                    WH(HDiffuse, dr); WH(HDiffuse + 1, dg); WH(HDiffuse + 2, db);
+                }
                 if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
                 if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
                 if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
