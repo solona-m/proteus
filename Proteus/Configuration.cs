@@ -96,7 +96,7 @@ public class Configuration : IPluginConfiguration
     /// shadow; tilts the skin normal toward the strap (a concave groove). FFXIV uses OpenGL-style green-up
     /// normals.
     /// </summary>
-    public float AmbientOcclusionNormalDepth { get; set; } = 5f;
+    public float AmbientOcclusionNormalDepth { get; set; } = 7f;
 
     /// <summary>
     /// Skip a body's redundant connector rings when building the second-skin shell. Some bodies
