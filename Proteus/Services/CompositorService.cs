@@ -1747,20 +1747,28 @@ public class CompositorService : IDisposable
                     });
                 }
 
-                // Garment silhouette for a mod at (w,h) in body UV: the union of its GEAR overlays' diffuse
-                // alpha, remapped to the body UV. Lets a non-masked garment (e.g. a bralette whose straps
-                // are the shell's own shape, not a mask) cast an AO shadow the same way a masked strap does.
-                // Diffuse alpha is self-protecting: a garment that's opaque across the whole UV yields
-                // strap≈1 everywhere, so halo = blur·(1−strap) → 0 (no false shadow); only real edges cast.
-                // Returns null if the mod has no gear overlay with a diffuse.
+                // Garment silhouette for a mod at (w,h) in body UV: the union of its overlays' diffuse alpha
+                // (GEAR shells AND skin-painted garments), remapped to the body UV. Lets a non-masked garment
+                // — a cloth bralette (its shell's shape) OR a skin-painted one (e.g. "Ala Mhigan", whose straps
+                // are just its diffuse) — cast an AO shadow / indent the same way a masked strap does. Diffuse
+                // alpha is self-protecting: a garment opaque across the whole UV yields strap≈1 everywhere, so
+                // halo = blur·(1−strap) → 0 (no false shadow); only real edges cast. Returns null if the mod
+                // has no overlay with a diffuse. (allOverlays holds skin + gear; mask shells aren't in it.)
                 byte[]? GarmentSilhouette(string modDir, int w, int h)
                 {
                     byte[]? sil = null;
-                    foreach (var (gEntry, gOverlay) in gearOverlays)
+                    foreach (var (gEntry, gOverlay) in allOverlays)
                     {
                         if (!string.Equals(gEntry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)) continue;
                         var gd = gOverlay.Descriptor;
                         if (gd.IsMaskShell || gd.Diffuse == null) continue;   // mask shells trace their mask, not this
+                        // A SKIN overlay is baked into ONE material, so only trace it for the material being
+                        // composited now — otherwise a face overlay (face UV) would remap into the body
+                        // silhouette as garbage. Gear shells aren't material-bound (cut from the body), so
+                        // they always trace regardless of mtrlGamePath.
+                        if (gd.Layer == OverlayLayer.Skin
+                            && !gd.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase))
+                            continue;
 
                         var gSrc = gd.SourceBodyType;
                         if (gSrc == null)
@@ -2528,8 +2536,9 @@ public class CompositorService : IDisposable
                 if (aoStrength > 0f || aoNormal > 0f)
                 {
                     float aoSoftness = config.AmbientOcclusionSoftness;
-                    // Every mod that contributes a mask OR a gear garment to this body. A masked strap
-                    // traces its mask; a non-masked garment (bralette, etc.) traces its own coverage.
+                    // Every mod that contributes a mask, a gear garment, OR a skin-painted garment to this
+                    // body. A masked strap traces its mask; a non-masked garment (gear shell OR skin overlay
+                    // like a bralette) traces its own diffuse coverage.
                     var aoMods = pairs.Select(p => p.Entry.ModDirectory)
                         .Concat(gearOverlays.Select(g => g.Entry.ModDirectory))
                         .Distinct(StringComparer.OrdinalIgnoreCase);
@@ -2537,7 +2546,12 @@ public class CompositorService : IDisposable
                     {
                         bool hasMasks = maskPathsByMod.ContainsKey(modDir);
                         bool hasGear  = gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-                        if (!hasMasks && !hasGear) continue;
+                        // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent — their
+                        // coverage is traced by GarmentSilhouette. Flat full-coverage overlays are self-gating
+                        // (no edges → no effect); the per-mod AO checkbox opts out anything unwanted (tattoos).
+                        bool hasSkin  = allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
+                            && o.Overlay.Descriptor.Layer == OverlayLayer.Skin && o.Overlay.Descriptor.Diffuse != null);
+                        if (!hasMasks && !hasGear && !hasSkin) continue;
                         if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
                         lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
 
