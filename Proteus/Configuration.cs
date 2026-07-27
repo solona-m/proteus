@@ -48,7 +48,7 @@ public class Configuration : IPluginConfiguration
     /// texture to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on disk and in VRAM. Off = uncompressed
     /// B8G8R8A8 (byte-identical to legacy output).
     /// </summary>
-    public bool EnableCompression { get; set; } = false;
+    public bool EnableCompression { get; set; } = true;
 
     /// <summary>
     /// Render shell coverage as a HARD alpha-test cutout (g_AlphaThreshold left at the template's 0) instead
