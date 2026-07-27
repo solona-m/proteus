@@ -32,6 +32,14 @@ public sealed class SecondSkinService
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
 
+    /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
+    /// so an id never runs past 'z'.</summary>
+    private const int DiskIdSpace = 36;
+
+    /// <summary>Encode a layer's global index as a base-36 disk id char (0-9 then a-z). Digits-first keeps it
+    /// ASCII-monotonic ('0'&lt;'9'&lt;'a'&lt;'z'), so the ghost/highlighter's char comparison still orders the stack.</summary>
+    private static char DiskId(int d) => (char)(d < 10 ? '0' + d : 'a' + (d - 10));
+
     /// <summary>The Emperor's New Ring — invisible, so a shell on it shows only our material.</summary>
     // A head/facewear "_met" model smaller than this is treated as an invisible/degenerate item (empty
     // frames) — the shell REPLACES it instead of appending, since a merge into a near-empty model won't
@@ -334,7 +342,10 @@ public sealed class SecondSkinService
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
         var hosts = ChooseHosts(charCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot);
-        int totalCapacity = hosts.Sum(h => SecondSkinWriter.MaxMaterials - h.BaseMatCount);
+        // Cap total placeable layers at the single-char base-36 disk-id space (0-9a-z = 36). Any excess
+        // folds into the over-budget drop path below, so a disk id can never run past 'z' into filesystem-
+        // reserved chars. 36 is far beyond the practical geometric limit (~15 stacked shells).
+        int totalCapacity = Math.Min(hosts.Sum(h => SecondSkinWriter.MaxMaterials - h.BaseMatCount), DiskIdSpace);
 
         // Only a shell whose bytes actually differ from what's on disk needs a full redraw.
         bool shellChanged = false;
@@ -415,8 +426,8 @@ public sealed class SecondSkinService
             var host = hosts[hIdx];
 
             string shader = ov.Descriptor.ShaderPackage;
-            char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);   // in-model material index
-            char diskChar  = (char)('a' + diskLetter);                         // globally-unique disk id
+            char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);   // in-model material index (per-host, <= 'j')
+            char diskChar  = DiskId(diskLetter);                               // globally-unique disk id (base-36, 0-9a-z)
             string matName = $"mt_c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/v0001/{matName}";
             string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";

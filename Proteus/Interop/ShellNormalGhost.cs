@@ -61,7 +61,8 @@ public sealed unsafe class ShellNormalGhost : IDisposable
     /// highlighted gear layer); pass null for a skin target (below all shells → ghost every layer).</summary>
     public void GhostAbove(char? targetLetter)
     {
-        _aboveLetter = targetLetter ?? (char)('a' - 1);
+        // Sentinel must sort BELOW the lowest disk id ('0'), so a skin/no target ghosts every shell.
+        _aboveLetter = targetLetter ?? (char)('0' - 1);
         _active = true;
     }
 
@@ -200,7 +201,7 @@ public sealed unsafe class ShellNormalGhost : IDisposable
                         || !baseName.EndsWith("_norm.tex", StringComparison.OrdinalIgnoreCase))
                         continue;
                     char letter = char.ToLowerInvariant(baseName[3]);
-                    if (letter < 'a' || letter > 'z') continue;
+                    if (!((letter >= '0' && letter <= '9') || (letter >= 'a' && letter <= 'z'))) continue;   // base-36 disk id
 
                     visit((nint)(&handle->Texture), name, letter);
                 }

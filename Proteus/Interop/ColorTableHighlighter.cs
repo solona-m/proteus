@@ -57,7 +57,8 @@ public sealed class ColorTableHighlighter : IDisposable
             if (leaf.Length >= 5 && leaf.StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
             {
                 char c = char.ToLowerInvariant(leaf[3]);
-                if (c >= 'a' && c <= 'z' && (max == null || c > max)) max = c;
+                // base-36 disk id (0-9a-z); ASCII-monotonic so the '> max' ordering still tracks the stack.
+                if (((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) && (max == null || c > max)) max = c;
             }
         return max;
     }

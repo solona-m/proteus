@@ -159,8 +159,9 @@ public static class SecondSkinWriter
     /// <paramref name="MeshIndexOffset"/>, each value redirects index entry <c>Base</c> → vertex <c>Replace</c>.</summary>
     internal readonly record struct ShapeMeshEntry(uint MeshIndexOffset, (ushort Base, ushort Replace)[] Values);
 
-    /// <summary>A model carries at most 4 materials — the host-selection cap (enforced in the caller).</summary>
-    public const int MaxMaterials = 4;
+    /// <summary>A model carries at most 10 materials — the game/Penumbra ceiling (Penumbra's own model
+    /// importer caps at 10, ModelImporter.MaterialLimit). Host-selection cap, enforced in the caller.</summary>
+    public const int MaxMaterials = 10;
 
     /// <summary>
     /// Build the merged shell. <paramref name="sources"/> are the body models the character is currently
