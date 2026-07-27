@@ -3,8 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using BCnEncoder.Encoder;
 using CommunityToolkit.HighPerformance;
 using Dalamud.Plugin.Services;
@@ -39,6 +41,62 @@ public class TextureLoader
     {
         this.dataManager = dataManager;
         this.log = log;
+        EnsureNativeCompressor(log);
+    }
+
+    // ── Native SIMD block compressor (proteus_bcn.dll = bc7enc + rgbcx) ─────────────
+    // BC7/BC5 encoding in managed BCnEncoder.Net is scalar C# and painfully slow (a compressed composite
+    // could take a minute). The native shim does the same encode with fast, multi-threadable native code
+    // (bc7enc modes 1/6, rgbcx BC5). Each call encodes a range of 4x4 block-rows, so we fan out across
+    // cores. Falls back to the managed encoder if the DLL is missing or a call ever throws.
+    private const string NativeLib = "proteus_bcn";
+    private static int _nativeProbed;
+    private static volatile bool _nativeAvailable;
+
+    [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void proteus_encode_bc7(IntPtr rgba, int width, int height, int blockRowStart, int blockRowCount, IntPtr outPtr);
+
+    [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void proteus_encode_bc5(IntPtr rgba, int width, int height, int blockRowStart, int blockRowCount, IntPtr outPtr);
+
+    // Load proteus_bcn.dll from the plugin's own directory — Dalamud's assembly load context doesn't add
+    // it to the native search path, so a plain DllImport("proteus_bcn") wouldn't find it. Runs once.
+    private static void EnsureNativeCompressor(IPluginLog log)
+    {
+        if (Interlocked.Exchange(ref _nativeProbed, 1) == 1) return;
+
+        // The plugin's real on-disk folder. PluginInterface.AssemblyLocation is Dalamud's authoritative path
+        // (Assembly.Location can be empty under the plugin load context); fall back to it only if needed.
+        string? dir = null;
+        try { dir = Plugin.PluginInterface.AssemblyLocation.DirectoryName; } catch { }
+        if (string.IsNullOrEmpty(dir))
+            dir = Path.GetDirectoryName(typeof(TextureLoader).Assembly.Location);
+        var dll = string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, NativeLib + ".dll");
+
+        // Resolver so DllImport("proteus_bcn") at call time finds the DLL by full path.
+        NativeLibrary.SetDllImportResolver(typeof(TextureLoader).Assembly, (name, _, _) =>
+            (string.Equals(name, NativeLib, StringComparison.OrdinalIgnoreCase) && dll != null
+                && File.Exists(dll) && NativeLibrary.TryLoad(dll, out var h)) ? h : IntPtr.Zero);
+
+        // Probe once with the DETAILED loader (NativeLibrary.Load throws with the real reason — missing file
+        // vs missing dependency — so a failure is diagnosable in the log instead of a silent fallback).
+        try
+        {
+            if (dll == null || !File.Exists(dll))
+            {
+                log.Warning("[Proteus] native block compressor not found at \"{0}\" — using managed BCnEncoder", dll ?? "(plugin dir unknown)");
+                return;
+            }
+            var h = NativeLibrary.Load(dll);
+            NativeLibrary.Free(h);
+            _nativeAvailable = true;
+            log.Information("[Proteus] native block compressor: loaded \"{0}\"", dll);
+        }
+        catch (Exception ex)
+        {
+            _nativeAvailable = false;
+            log.Warning("[Proteus] native block compressor failed to load ({0}) — using managed BCnEncoder", ex.Message);
+        }
     }
 
     // ── Recomposite instrumentation ────────────────────────────────────────────
@@ -685,8 +743,59 @@ public class TextureLoader
     }
 
     /// <summary>Encode an RGBA8 buffer to raw BC5/BC7 blocks (mip 0 only), linear block order — the layout
-    /// FFXIV/Lumina expect on read-back. BC5 keeps only R,G; callers pick it only where B/A carry no data.</summary>
-    private static byte[] EncodeBlockCompressed(byte[] rgba, int width, int height, TexEncoding encoding)
+    /// FFXIV/Lumina expect on read-back. BC5 keeps only R,G; callers pick it only where B/A carry no data.
+    /// Uses the native SIMD shim when available; falls back to managed BCnEncoder.Net otherwise.</summary>
+    private byte[] EncodeBlockCompressed(byte[] rgba, int width, int height, TexEncoding encoding)
+    {
+        if (_nativeAvailable)
+        {
+            try { return EncodeBlockCompressedNative(rgba, width, height, encoding); }
+            catch (Exception ex)
+            {
+                _nativeAvailable = false;   // don't keep retrying a broken native path this session
+                log.Warning("[Proteus] native BC encode failed ({0}) — falling back to managed", ex.Message);
+            }
+        }
+        return EncodeBlockCompressedManaged(rgba, width, height, encoding);
+    }
+
+    /// <summary>Native encode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows.</summary>
+    private static byte[] EncodeBlockCompressedNative(byte[] rgba, int width, int height, TexEncoding encoding)
+    {
+        // The native code reads width*height*4 bytes of pinned memory with no managed bounds check — an
+        // undersized buffer would be an AccessViolation (uncatchable, crashes the game), not the graceful
+        // managed fallback. Guard with a MANAGED throw before pinning so the caller's catch absorbs it.
+        if ((long)rgba.Length < (long)width * height * 4)
+            throw new ArgumentException($"rgba buffer too small: {rgba.Length} < {(long)width * height * 4} for {width}x{height}");
+
+        int bw = width / 4, bh = height / 4;
+        var outBuf = new byte[bw * bh * 16];
+        var hIn = GCHandle.Alloc(rgba, GCHandleType.Pinned);
+        var hOut = GCHandle.Alloc(outBuf, GCHandleType.Pinned);
+        try
+        {
+            long inPtr = hIn.AddrOfPinnedObject().ToInt64();
+            long outPtr = hOut.AddrOfPinnedObject().ToInt64();
+            bool bc7 = encoding == TexEncoding.Bc7;
+            int workers   = Math.Min(Environment.ProcessorCount, 16);
+            int chunkRows = Math.Max(1, (bh + workers - 1) / workers);   // block-rows per worker
+            int chunks    = (bh + chunkRows - 1) / chunkRows;
+            Parallel.For(0, chunks, ci =>
+            {
+                int start = ci * chunkRows;
+                int count = Math.Min(chunkRows, bh - start);
+                if (count <= 0) return;
+                var rgbaP = new IntPtr(inPtr);
+                var chunkO = new IntPtr(outPtr + (long)start * bw * 16);   // this worker's slice of the output
+                if (bc7) proteus_encode_bc7(rgbaP, width, height, start, count, chunkO);
+                else     proteus_encode_bc5(rgbaP, width, height, start, count, chunkO);
+            });
+        }
+        finally { hIn.Free(); hOut.Free(); }
+        return outBuf;
+    }
+
+    private static byte[] EncodeBlockCompressedManaged(byte[] rgba, int width, int height, TexEncoding encoding)
     {
         var pixels = new BCnEncoder.Shared.ColorRgba32[width * height];
         for (int i = 0; i < pixels.Length; i++)

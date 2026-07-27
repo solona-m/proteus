@@ -38,6 +38,12 @@
 <Content Include="..\THIRD_PARTY_NOTICES.txt" Link="THIRD_PARTY_NOTICES.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- Native SIMD block-compressor (bc7enc + rgbcx, built via native\src\build.bat). Ships next to the
+         plugin DLL; TextureLoader P/Invokes it for fast BC7/BC5 and falls back to BCnEncoder.Net if absent. -->
+    <Content Include="native\proteus_bcn.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>proteus_bcn.dll</Link>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
