@@ -1,7 +1,7 @@
 [submodule "Penumbra.Api"]
 	path = Penumbra.Api
-	url = https://github.com/MeowZWR/Penumbra.Api.git
-	branch = cn
+	url = https://github.com/Ottermandias/Penumbra.Api.git
+	branch = main
 [submodule "Glamourer"]
 	path = Glamourer
 	url = https://github.com/Ottermandias/Glamourer.git
