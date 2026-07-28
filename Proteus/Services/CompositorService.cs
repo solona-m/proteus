@@ -1793,13 +1793,6 @@ public class CompositorService : IDisposable
                     return sil;
                 }
 
-                // A mod's strap/garment silhouette at (w,h): its mask when it ships one, else the garment's
-                // own gear coverage. Shared by the AO shadow (diffuse) and the indent (normal), which may
-                // run at different resolutions (wD/hD vs wN/hN).
-                byte[]? StrapSilhouette(string modDir, int w, int h, bool hasMasks, string? srcType)
-                    => (hasMasks ? CombinedMaskAt(modDir, w, h, srcType)?.T : null)
-                       ?? GarmentSilhouette(modDir, w, h);
-
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
@@ -2537,50 +2530,75 @@ public class CompositorService : IDisposable
                 {
                     float aoSoftness = config.AmbientOcclusionSoftness;
                     // Every mod that contributes a mask, a gear garment, OR a skin-painted garment to this
-                    // body. A masked strap traces its mask; a non-masked garment (gear shell OR skin overlay
-                    // like a bralette) traces its own diffuse coverage.
-                    var aoMods = pairs.Select(p => p.Entry.ModDirectory)
+                    // body, in composite order (bottom→top).
+                    var aoModsList = pairs.Select(p => p.Entry.ModDirectory)
                         .Concat(gearOverlays.Select(g => g.Entry.ModDirectory))
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-                    foreach (var modDir in aoMods)
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                    // The base body diffuse — needed for the shadow AND for the shared "covered above" mask's
+                    // dimensions, so load it up front even when only the normal indent is enabled.
+                    if ((baseD == null || baseD.Length == 0) && texPaths.Diffuse != null)
                     {
+                        var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
+                        if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                    }
+
+                    // Union of the opaque coverage of every garment ABOVE the one being processed: a lower
+                    // garment's contact shadow / indent is suppressed where a higher garment already covers the
+                    // skin. Process TOP→BOTTOM — gate each garment by what's accumulated, then add its own
+                    // coverage. Uses the FULL garment coverage (GarmentSilhouette), even for a masked garment
+                    // whose AO silhouette is only its trim, so the whole fabric occludes what's under it.
+                    byte[]? coveredAbove = baseD is { Length: > 0 } ? new byte[wD * hD] : null;
+
+                    for (int mi = aoModsList.Count - 1; mi >= 0; mi--)
+                    {
+                        var modDir = aoModsList[mi];
                         bool hasMasks = maskPathsByMod.ContainsKey(modDir);
                         bool hasGear  = gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-                        // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent — their
-                        // coverage is traced by GarmentSilhouette. Flat full-coverage overlays are self-gating
-                        // (no edges → no effect); the per-mod AO checkbox opts out anything unwanted (tattoos).
+                        // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent. Flat
+                        // full-coverage overlays are self-gating (no edges → no effect); the per-mod AO
+                        // checkbox opts out anything unwanted (tattoos).
                         bool hasSkin  = allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
                             && o.Overlay.Descriptor.Layer == OverlayLayer.Skin && o.Overlay.Descriptor.Diffuse != null);
                         if (!hasMasks && !hasGear && !hasSkin) continue;
                         if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
                         lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
 
-                        // Computed at the diffuse resolution; reused for the normal indent when the normal
-                        // shares that size (the common case — skin diffuse and normal are usually equal),
-                        // so the silhouette + blur are built once, not once per effect.
+                        // This garment's coverage at the diffuse res — occludes LOWER garments' effects. Carve
+                        // it by the mod's OWN masks: a masked garment does NOT cover its cutout holes, so a
+                        // garment below (visible through the hole) must still get its shadow/indent there.
+                        // Carved coverage = fabric·(mask keep) + trim, so cutouts → 0, fabric/trim → opaque.
+                        byte[]? garmentCov = baseD is { Length: > 0 } ? GarmentSilhouette(modDir, wD, hD) : null;
+                        if (hasMasks && baseD is { Length: > 0 } && CombinedMaskAt(modDir, wD, hD, aoSrcBodyType) is { } gm)
+                        {
+                            var mW = gm.W; var mT = gm.T;
+                            if (garmentCov == null) garmentCov = (byte[])mT.Clone();   // mask-only: its trim is the coverage
+                            else
+                            {
+                                var gc = garmentCov;
+                                ParallelPixels(0, wD * hD, 1, (from, to) =>
+                                {
+                                    for (int p = from; p < to; p++)
+                                    {
+                                        int v = gc[p] * mW[p] / 255 + mT[p];
+                                        gc[p] = (byte)(v > 255 ? 255 : v);
+                                    }
+                                });
+                            }
+                        }
+
+                        // The AO silhouette (mask if the mod has one, else the garment coverage). Computed at
+                        // the diffuse res; reused for the normal indent when the normal shares that size.
                         byte[]? strapD = null, blurredD = null;
 
                         // ── Diffuse: soft contact shadow on the skin just outside the edge ──
-                        if (aoStrength > 0f)
+                        if (aoStrength > 0f && baseD is { Length: > 0 })
                         {
-                            if (baseD == null || baseD.Length == 0)
+                            strapD = hasMasks ? (CombinedMaskAt(modDir, wD, hD, aoSrcBodyType)?.T ?? garmentCov) : garmentCov;
+                            if (strapD != null)
                             {
-                                // Lazy-load the base body diffuse (same as the mask-colorset pass above), so a
-                                // garment/strap with no skin overlay still casts a shadow. Skip if no diffuse.
-                                if (texPaths.Diffuse != null)
-                                {
-                                    var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
-                                    if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                                }
-                            }
-                            if (baseD is { Length: > 0 })
-                            {
-                                strapD = StrapSilhouette(modDir, wD, hD, hasMasks, aoSrcBodyType);
-                                if (strapD != null)
-                                {
-                                    blurredD = BlurCoverage(strapD, wD, hD, Math.Max(1, (int)(wD * aoSoftness)));
-                                    ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength);
-                                }
+                                blurredD = BlurCoverage(strapD, wD, hD, Math.Max(1, (int)(wD * aoSoftness)));
+                                ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
                             }
                         }
 
@@ -2602,12 +2620,24 @@ public class CompositorService : IDisposable
                                 }
                                 else
                                 {
-                                    strapN = StrapSilhouette(modDir, wN, hN, hasMasks, aoSrcBodyType);
+                                    strapN = hasMasks ? (CombinedMaskAt(modDir, wN, hN, aoSrcBodyType)?.T ?? GarmentSilhouette(modDir, wN, hN))
+                                                      : GarmentSilhouette(modDir, wN, hN);
                                     blurredN = strapN != null ? BlurCoverage(strapN, wN, hN, Math.Max(1, (int)(wN * aoSoftness))) : null;
                                 }
+                                // Gate by covered-above only when the normal shares the diffuse res it was built
+                                // at (the common case — skin diffuse and normal are usually equal); else ungated.
                                 if (strapN != null && blurredN != null)
-                                    ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal);
+                                    ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
+                                        wN == wD && hN == hD ? coveredAbove : null);
                             }
+                        }
+
+                        // Add this garment's coverage so LOWER garments' effects are suppressed where it covers.
+                        if (garmentCov != null && coveredAbove != null)
+                        {
+                            var acc = coveredAbove; var src = garmentCov;
+                            ParallelPixels(0, wD * hD, 1, (from, to) =>
+                            { for (int p = from; p < to; p++) if (src[p] > acc[p]) acc[p] = src[p]; });
                         }
                     }
                 }
@@ -3700,7 +3730,9 @@ public class CompositorService : IDisposable
     /// distance. RGB is multiplied down by (1 − strength·halo); alpha is untouched. Per-pixel, so it
     /// satisfies the ParallelPixels contract (the neighbour work happened in the blur).
     /// </summary>
-    internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength)
+    // coveredAbove (optional, single-channel w*h): where a HIGHER-stacked garment is opaque the shadow is
+    // suppressed — a lower garment's contact shadow can't fall on skin that another layer covers.
+    internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength, byte[]? coveredAbove = null)
     {
         if (strength <= 0f) return;
         ParallelPixels(0, w * h, 1, (from, to) =>
@@ -3709,6 +3741,7 @@ public class CompositorService : IDisposable
             {
                 float s = strap[p] / 255f;
                 float halo = (blurred[p] / 255f) * (1f - s);
+                if (coveredAbove != null) halo *= 1f - coveredAbove[p] / 255f;   // hidden under a higher layer
                 if (halo <= 0f) continue;
                 float k = 1f - strength * halo;
                 if (k >= 1f) continue;
@@ -3734,7 +3767,7 @@ public class CompositorService : IDisposable
     /// Writes R/G only (X/Y); blue (skin-color influence) and alpha (emissive) are left untouched, exactly
     /// like <see cref="CompoundNormal"/>. Reads neighbours, so it parallelises over independent rows.
     /// </summary>
-    internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength)
+    internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength, byte[]? coveredAbove = null)
     {
         if (strength <= 0f) return;
         Parallel.For(0, h, y =>
@@ -3745,6 +3778,7 @@ public class CompositorService : IDisposable
             for (int x = 0; x < w; x++)
             {
                 float edge = 1f - strap[row + x] / 255f;   // skin side of the edge only
+                if (coveredAbove != null) edge *= 1f - coveredAbove[row + x] / 255f;   // hidden under a higher layer
                 if (edge <= 0f) continue;
                 int xm = x > 0 ? x - 1 : 0;
                 int xp = x < w - 1 ? x + 1 : w - 1;
