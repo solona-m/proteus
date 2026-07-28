@@ -2614,21 +2614,26 @@ public class CompositorService : IDisposable
                             if (baseN.Length > 0)
                             {
                                 byte[]? strapN, blurredN;
+                                // The radius the indent's gradient must be normalised against — it sets the
+                                // width of the coverage ramp, and so the per-pixel slope the indent reads.
+                                int radiusN;
                                 if (strapD != null && blurredD != null && wN == wD && hN == hD)
                                 {
                                     strapN = strapD; blurredN = blurredD;   // reuse the diffuse-resolution buffers
+                                    radiusN = Math.Max(1, (int)(wD * aoSoftness));
                                 }
                                 else
                                 {
                                     strapN = hasMasks ? (CombinedMaskAt(modDir, wN, hN, aoSrcBodyType)?.T ?? GarmentSilhouette(modDir, wN, hN))
                                                       : GarmentSilhouette(modDir, wN, hN);
-                                    blurredN = strapN != null ? BlurCoverage(strapN, wN, hN, Math.Max(1, (int)(wN * aoSoftness))) : null;
+                                    radiusN = Math.Max(1, (int)(wN * aoSoftness));
+                                    blurredN = strapN != null ? BlurCoverage(strapN, wN, hN, radiusN) : null;
                                 }
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
                                 if (strapN != null && blurredN != null)
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
-                                        wN == wD && hN == hD ? coveredAbove : null);
+                                        wN == wD && hN == hD ? coveredAbove : null, radiusN);
                             }
                         }
 
@@ -3766,10 +3771,31 @@ public class CompositorService : IDisposable
     /// a strap ever look inverted (bulging out instead of pressed in) this single sign is what to flip.
     /// Writes R/G only (X/Y); blue (skin-color influence) and alpha (emissive) are left untouched, exactly
     /// like <see cref="CompoundNormal"/>. Reads neighbours, so it parallelises over independent rows.
+    ///
+    /// Two things keep the tilt physical, and both exist because their absence showed up as a thin BLOWN-OUT
+    /// WHITE rim tracing every garment edge:
+    /// <list type="number">
+    /// <item>The tilted (x, y) is clamped by VECTOR LENGTH, not per component. A tangent normal implies
+    /// z = sqrt(1 − x² − y²); once x² + y² exceeds 1 that is imaginary, the shader's z collapses to 0, and the
+    /// surface becomes a mirror-edge slab that blows out to white. Clamping x and y separately (as the byte
+    /// conversion alone does) never catches this — it only bites on diagonal and curved edges, where BOTH
+    /// gradients are large at once, which is exactly where the rim appeared.</item>
+    /// <item>The gradient is normalised by the blur <paramref name="radius"/>. It is a per-PIXEL difference
+    /// across a ramp whose width is set by that radius, so its magnitude scales as 1/radius: the very same
+    /// depth setting was a gentle slope on a 4K skin map and a saturated wall on a 1K one.</item>
+    /// </list>
     /// </summary>
-    internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength, byte[]? coveredAbove = null)
+    /// <param name="radius">
+    /// The blur radius used to build <paramref name="blurred"/>. Defaults to <see cref="IndentRefRadius"/>,
+    /// which leaves the tilt exactly as it was at the resolution the depth default was tuned against.
+    /// </param>
+    internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength,
+        byte[]? coveredAbove = null, int radius = IndentRefRadius)
     {
         if (strength <= 0f) return;
+        // Depth was tuned on a 2048-wide skin map at the 0.003 default softness ⇒ radius 6. Scaling by
+        // radius/6 makes the setting mean the same slope everywhere, and a no-op at that reference.
+        float gScale = radius > 0 ? radius / (float)IndentRefRadius : 1f;
         Parallel.For(0, h, y =>
         {
             int row     = y * w;
@@ -3788,12 +3814,122 @@ public class CompositorService : IDisposable
                 int i = (row + x) * 4;
                 float bx = baseN[i]     / 127.5f - 1f;
                 float by = baseN[i + 1] / 127.5f - 1f;
-                bx += strength * gx * edge;        // lean X toward the strap
-                by -= strength * gy * edge;        // green = +Y up (OpenGL); rows go down → negate
+                bx += strength * gx * edge * gScale;        // lean X toward the strap
+                by -= strength * gy * edge * gScale;        // green = +Y up (OpenGL); rows go down → negate
+
+                // Keep (x, y) inside the unit disc so the implied z stays real. Scaling both by the same
+                // factor preserves the tilt DIRECTION (the groove still points into the strap) and only
+                // caps how steep it gets.
+                float len2 = bx * bx + by * by;
+                if (len2 > MaxIndentTilt * MaxIndentTilt)
+                {
+                    float k = MaxIndentTilt / MathF.Sqrt(len2);
+                    bx *= k;
+                    by *= k;
+                }
+
                 baseN[i]     = (byte)Math.Clamp((bx + 1f) * 127.5f, 0, 255);
                 baseN[i + 1] = (byte)Math.Clamp((by + 1f) * 127.5f, 0, 255);
             }
         });
+    }
+
+    /// <summary>Blur radius the Skindenting depth default was tuned against (2048-wide skin map × the 0.003
+    /// default softness). <see cref="ApplyNormalIndent"/> normalises its gradient against this.</summary>
+    private const int IndentRefRadius = 6;
+
+    /// <summary>Steepest tangent-space tilt <see cref="ApplyNormalIndent"/> will produce, as the length of
+    /// (x, y). Below 1 by a real margin: at exactly 1 the implied z is 0 (a wall seen edge-on, which is what
+    /// blows out to white), so 0.9 leaves z ≈ 0.44 — a deep groove that still shades like a surface.</summary>
+    private const float MaxIndentTilt = 0.9f;
+
+    /// <summary>
+    /// Repair an index texture's RED channel — the colour-table row selector, read as <c>red / 17 + 1</c> —
+    /// so it only ever names a row that actually HAS a preset.
+    ///
+    /// Row selection is discrete; the art is not. An exported _id is antialiased, so every edge texel ramps
+    /// through the full range (255 → 238 → … → 0) and on the way names rows nobody configured. The skin layer
+    /// gets away with it — an unconfigured row is simply skipped — but a gear shell hands this texture
+    /// straight to the shader, which resolves it against the TEMPLATE's colorset and paints the template's
+    /// colours as a one-texel fringe tracing every edge (the "white border" symptom).
+    ///
+    /// The repair is SPATIAL, not a nearest-row-number snap: an ambiguous texel takes the row of a nearby
+    /// texel that is already valid, so an edge inherits the row of the region it belongs to. Snapping by row
+    /// NUMBER instead would send the antialiased skirt of a row-16 region to row 15 (the numerically closest
+    /// configured row) and just trade a white fringe for a row-15 one.
+    ///
+    /// Note what this deliberately leaves alone:
+    /// <list type="bullet">
+    /// <item>Texels already naming a configured row — including the whole blend band between two adjacent
+    /// configured rows (with 15 and 16 set, every value from 239 to 254 already reads as row 15), so
+    /// boundaries between real rows keep their current appearance.</item>
+    /// <item>GREEN, the A/B sub-row weight. That one is a genuine continuous blend.</item>
+    /// <item>Coverage/alpha. Edges stay antialiased — only the row they name is corrected.</item>
+    /// </list>
+    /// Texels the spread never reaches are left EXACTLY as they are. That is deliberate: assigning them the
+    /// numerically nearest configured row instead would repaint the whole background (with rows 15 and 16
+    /// set, every `red = 0` texel becomes row 15), and the shell's transparency gate lives in a SEPARATE
+    /// texture — `norm`'s blue — which bleeds outward at edges through block compression and plain bilinear
+    /// filtering. Under that bleed a repainted background paints its row just OUTSIDE the garment: the inner
+    /// white fringe would simply become an outer coloured one. <paramref name="dilate"/> is sized to cover
+    /// the bleed band instead, so anything the gate can actually reveal already carries the right row, and
+    /// everything past it stays unmapped and is never drawn.
+    /// </summary>
+    /// <param name="index">RGBA index texture, modified in place.</param>
+    /// <param name="definedRows">1-based rows that have presets. Empty ⇒ no-op (nothing to snap to).</param>
+    /// <param name="dilate">How many texels a valid row may spread outward. It has to cover the antialiased
+    /// band (1–2 texels) PLUS however far the separate transparency gate can bleed past the edge — a BC7
+    /// block is 4 texels, and mip sampling widens that — so the budget is deliberately larger than the band
+    /// alone. Past this the row is left unmapped; more only costs time.</param>
+    internal static void SnapIndexRowsToDefined(byte[] index, int w, int h,
+        IReadOnlyCollection<int> definedRows, int dilate = 8)
+    {
+        if (index.Length < w * h * 4 || definedRows.Count == 0 || w <= 0 || h <= 0) return;
+
+        var isDefined = new bool[17];
+        foreach (var r in definedRows)
+            if (r >= 1 && r <= 16) isDefined[r] = true;
+
+        int n = w * h;
+        var valid = new bool[n];
+        ParallelPixels(0, n, 1, (from, to) =>
+        { for (int p = from; p < to; p++) valid[p] = isDefined[index[p * 4] / 17 + 1]; });
+
+        // One scratch buffer reused by every pass rather than a fresh clone per pass: `valid` is w×h bytes
+        // (4 MB on a 2048² map), and cloning it each pass churned ~16 MB per texture per composite — on a
+        // path that reruns for every shell on every colour edit.
+        var snapshotValid = new bool[n];
+
+        // Spread valid rows outward one texel per pass. Each pass reads the PREVIOUS pass's validity
+        // snapshot, so the result doesn't depend on which texel a worker reaches first.
+        for (int it = 0; it < dilate; it++)
+        {
+            Array.Copy(valid, snapshotValid, n);
+            int filled = 0;
+            Parallel.For(0, h, () => 0, (y, _, local) =>
+            {
+                int row = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    int p = row + x;
+                    if (snapshotValid[p]) continue;
+                    // 4-neighbourhood; first valid neighbour wins. Diagonals add nothing here — the band is
+                    // contiguous, so an extra pass reaches anything a diagonal would.
+                    int src = -1;
+                    if (x > 0     && snapshotValid[p - 1]) src = p - 1;
+                    else if (x < w - 1 && snapshotValid[p + 1]) src = p + 1;
+                    else if (y > 0     && snapshotValid[p - w]) src = p - w;
+                    else if (y < h - 1 && snapshotValid[p + w]) src = p + w;
+                    if (src < 0) continue;
+                    index[p * 4]     = index[src * 4];       // row selector
+                    index[p * 4 + 1] = index[src * 4 + 1];   // and its sub-row weight, so the pair stays coherent
+                    valid[p] = true;
+                    local++;
+                }
+                return local;
+            }, local => Interlocked.Add(ref filled, local));
+            if (filled == 0) break;   // nothing left adjacent to a valid row
+        }
     }
 
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)

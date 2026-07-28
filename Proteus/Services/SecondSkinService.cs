@@ -816,6 +816,29 @@ public sealed class SecondSkinService
                 CompositorService.CompoundNormal(normal, sib, TexSize, TexSize);
         }
 
+        // ── row-selector repair ──────────────────────────────────────────────
+        // Runs after every mask _id merge, so it sees the final row assignment.
+        //
+        // An exported _id is antialiased art, but red/17+1 is a discrete row lookup: each edge texel ramps
+        // down through rows nobody configured, and the shell's shader resolves those against the TEMPLATE
+        // colorset, painting a one-texel template-coloured fringe just inside every edge. The skin layer
+        // never showed this because it skips rows with no preset; a shell can't skip — it hands the texture
+        // to the GPU. See CompositorService.SnapIndexRowsToDefined.
+        //
+        // The repair goes to a SEPARATE buffer that only the shader's "id" slot uses. The opacity pass below
+        // deliberately keeps reading the unrepaired index: it skips texels whose row has no preset, so
+        // repairing them first would newly apply the row's Opacity across the whole antialiased band and
+        // push every edge toward opaque (or transparent), visibly fattening or thinning the garment. The
+        // fringe is a shader-side problem; opacity behaviour has no reason to move with it.
+        var shaderIndex = index;
+        if (index != null && rows is { Count: > 0 })
+        {
+            // LoadPngAsRgba hands back a shared cached array; the mask merge above clones only when it
+            // actually merged, so clone here too rather than writing through to the cache.
+            shaderIndex = (byte[])index.Clone();
+            CompositorService.SnapIndexRowsToDefined(shaderIndex, TexSize, TexSize, rows.Select(p => p.Row).ToList());
+        }
+
         // ── per-row opacity ──────────────────────────────────────────────────
         // Each color table row carries an Opacity (-100..100), and the index texture says which row a
         // pixel uses — so opacity is per-region, not global. Same blend the skin layer applies
@@ -862,7 +885,7 @@ public sealed class SecondSkinService
             // (it applies row16A as a flat tint when desc.Index == null). red 255 → row pair 16, green 255
             // → sub-row A. Defaulting to black (row 1) instead picked up the template's default row — which
             // renders the shell a flat red — and ignored the Row 16 tint the overlay actually carries.
-            ["id"]   = index ?? Solid(255, 255, 0, 255),
+            ["id"]   = shaderIndex ?? Solid(255, 255, 0, 255),
 
             ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
             ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
