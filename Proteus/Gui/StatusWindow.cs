@@ -1207,9 +1207,20 @@ public class StatusWindow : Window
             // When the mod has any gear layer, the mask is FORCED to a top Cloth shell (it stacks over gear),
             // so no mode choice is offered. When it's all skin, the mask carries its own mode descriptor and
             // gets the full auto-detection + Advanced, exactly like an overlay option.
+            // EFFECTIVE layer, not the stored one: an active design binding can flip an option to Skin
+            // (captured per-design), and the compositor honours that when deciding whether the mask rides a
+            // shell. Reading the raw descriptor here left the badge claiming Cloth — and hid Advanced — for a
+            // mod whose only "gear" option the design had overridden back to Skin.
             bool modHasGear = activeOptions.Any(x =>
-                !string.Equals(x.GroupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal)
-                && x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
+            {
+                if (string.Equals(x.GroupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal))
+                    return false;
+                var ovr = designBindings.PeekGearOverride(entry.ModDirectory, x.GroupName, x.Option.Name);
+                // Tested per DESCRIPTOR, not just the option's first: the compositor turns EVERY Gear
+                // descriptor into its own shell, so one gear descriptor anywhere in the option is enough to
+                // put the mask on a shell. (EffectiveLayerShader alone reads only overlays[0].)
+                return x.Option.Overlays.Any(d => ColorTableEditor.EffectiveLayerShader([d], ovr).Gear);
+            });
 
             // The mask's working descriptor: its stored mode, or a fresh Skin default. Mutated in place by
             // ReconcileMode/DrawGlowFooter when not editing a binding; the binding's gear override is mutated
@@ -1255,6 +1266,13 @@ public class StatusWindow : Window
             {
                 // Forced Cloth shell — the mask's layer isn't user-chosen when it stacks over gear.
                 ColorTableEditor.DrawRenderingAsBadge(RenderMode.Cloth);
+                ImGui.SameLine();
+                ImGui.TextDisabled("(forced)");
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(
+                        "Another active option in this mod renders as gear, so the mask has to sit on that\n" +
+                        "shell — it can't be painted into the skin underneath it. Switch those options to\n" +
+                        "Skin (Advanced on their tabs) and the mask gets its own mode choice back.");
             }
             else
             {

@@ -550,6 +550,26 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
+    /// Read-only peek at the active design's captured gear settings for one option. Unlike
+    /// <see cref="GetEditableGearOverride"/> this creates nothing, so callers can ask about options the user
+    /// hasn't opened — needed when surveying every active option's effective layer. Null when no design is
+    /// active or that option has nothing captured (i.e. the mod's own descriptor still rules).
+    ///
+    /// Resolution goes through <see cref="OverlayGearOverride.Resolve"/> — the SAME call the compositor
+    /// makes — so the per-option entry and its top-level fallback are honoured identically. Looking only in
+    /// <c>Options</c> here would diverge for any active option the binding never captured (one added to the
+    /// mod after the design was saved, or one whose descriptors were empty at capture time): the composite
+    /// would apply <c>Top</c> while the editor read the raw descriptor.
+    /// </summary>
+    public GearSettingsPreset? PeekGearOverride(string modDir, string group, string option)
+    {
+        lock (gate)
+            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
+                ? ovr.Resolve(group, option)
+                : null;
+    }
+
+    /// <summary>
     /// The mutable gear-settings preset the Masks tab should bind to when a design is active for this mod, or
     /// null if none. Mirrors <see cref="GetEditableMaskRows"/> for the mod's single shared Masks tab — seeds
     /// from the descriptor's own gear settings when the override has nothing stored yet.
