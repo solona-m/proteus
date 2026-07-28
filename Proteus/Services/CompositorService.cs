@@ -1764,10 +1764,15 @@ public class CompositorService : IDisposable
                         if (gd.IsMaskShell || gd.Diffuse == null) continue;   // mask shells trace their mask, not this
                         // A SKIN overlay is baked into ONE material, so only trace it for the material being
                         // composited now — otherwise a face overlay (face UV) would remap into the body
-                        // silhouette as garbage. Gear shells aren't material-bound (cut from the body), so
-                        // they always trace regardless of mtrlGamePath.
+                        // silhouette as garbage.
                         if (gd.Layer == OverlayLayer.Skin
                             && !gd.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase))
+                            continue;
+                        // A GEAR shell isn't bound to a material, but its art still lives in BODY UV (the
+                        // shell is cut from the body mesh) — so it describes a garment only on a body-UV
+                        // material. Without this it traced onto the face/hair material too, sampling body
+                        // coverage in face UV and scribbling AO shadows + Skindenting grooves over the face.
+                        if (gd.Layer == OverlayLayer.Gear && !IsBodyUvMaterial(mtrlGamePath))
                             continue;
 
                         var gSrc = gd.SourceBodyType;
@@ -2535,9 +2540,52 @@ public class CompositorService : IDisposable
                         .Concat(gearOverlays.Select(g => g.Entry.ModDirectory))
                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+                    // Gear shells and Masks-group coverage are authored in BODY UV — a shell is literally cut
+                    // from the body mesh — so they only describe a garment when the material being composited
+                    // shares that UV space. See GarmentSilhouette, which gates gear the same way.
+                    bool bodyUvMaterial = IsBodyUvMaterial(mtrlGamePath);
+
+                    // What a mod casts onto THIS material. ONE definition, used both to decide whether any
+                    // base texture needs loading at all and by the loop below — they qualified separately
+                    // before, and a change to either would have silently desynced them.
+                    //
+                    // Every source is scoped to the material being composited. Masks and gear by UV space
+                    // (above); SKIN by the material it was painted for — that one is the subtle case, because
+                    // a mod's skin overlays live on the body while the mod itself reaches this loop through
+                    // ANY gear shell it owns. Unscoped, a bodysuit's body-painted Pattern kept the pass alive
+                    // while compositing the face, which loaded and republished the face's diffuse and normal
+                    // (re-encoded, unmodified) even though nothing could possibly draw there.
+                    (bool Masks, bool Gear, bool Skin) AoSources(string modDir) => (
+                        bodyUvMaterial && maskPathsByMod.ContainsKey(modDir),
+                        bodyUvMaterial && gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)),
+                        // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent. Flat
+                        // full-coverage overlays are self-gating (no edges → no effect); the per-mod AO
+                        // checkbox opts out anything unwanted (tattoos).
+                        allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
+                            && o.Overlay.Descriptor.Layer == OverlayLayer.Skin
+                            && o.Overlay.Descriptor.Diffuse != null
+                            && o.Overlay.Descriptor.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase)));
+
+                    // Qualify every mod ONCE, keeping the only flag the loop still needs (masks pick the
+                    // silhouette: a masked garment traces its trim, everything else its own coverage). The
+                    // Skin term walks allOverlays, so evaluating this per mod per use — the load gate, the
+                    // loop's continue, and the mask flag — swept it three times for nothing.
+                    var aoQualified = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var modDir in aoModsList)
+                    {
+                        if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
+                        var (m, g, s) = AoSources(modDir);
+                        if (m || g || s) aoQualified[modDir] = m;
+                    }
+
                     // The base body diffuse — needed for the shadow AND for the shared "covered above" mask's
                     // dimensions, so load it up front even when only the normal indent is enabled.
-                    if ((baseD == null || baseD.Length == 0) && texPaths.Diffuse != null)
+                    //
+                    // Only when some mod actually qualifies, though. Loading it unconditionally left baseD
+                    // non-empty for every material this pass touched, and the writer at the end of the
+                    // composite republishes (and re-encodes) any non-empty buffer — so a face material whose
+                    // mod supplies nothing but a mask still got a Proteus-written, BC7-recompressed _d.
+                    if ((baseD == null || baseD.Length == 0) && texPaths.Diffuse != null && aoQualified.Count > 0)
                     {
                         var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
                         if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
@@ -2550,18 +2598,17 @@ public class CompositorService : IDisposable
                     // whose AO silhouette is only its trim, so the whole fabric occludes what's under it.
                     byte[]? coveredAbove = baseD is { Length: > 0 } ? new byte[wD * hD] : null;
 
+                    // Tracked across the WHOLE sweep, not per mod: whether this pass was the one to load the
+                    // skin normal, and whether any garment actually indented it. LoadBaseTexture hands back a
+                    // buffer upscaled to 4K (~64 MB), so loading and dropping it per mod would churn that
+                    // repeatedly — and dropping a FAILED load (Array.Empty) would re-attempt the resolve, and
+                    // re-log its warning, once per qualifying mod. Load at most once, hand back at most once.
+                    bool aoLoadedNormal = false, aoIndentedNormal = false;
+
                     for (int mi = aoModsList.Count - 1; mi >= 0; mi--)
                     {
                         var modDir = aoModsList[mi];
-                        bool hasMasks = maskPathsByMod.ContainsKey(modDir);
-                        bool hasGear  = gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-                        // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent. Flat
-                        // full-coverage overlays are self-gating (no edges → no effect); the per-mod AO
-                        // checkbox opts out anything unwanted (tattoos).
-                        bool hasSkin  = allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
-                            && o.Overlay.Descriptor.Layer == OverlayLayer.Skin && o.Overlay.Descriptor.Diffuse != null);
-                        if (!hasMasks && !hasGear && !hasSkin) continue;
-                        if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
+                        if (!aoQualified.TryGetValue(modDir, out bool hasMasks)) continue;
                         lastSrcBodyTypeByMod.TryGetValue(modDir, out var aoSrcBodyType);
 
                         // This garment's coverage at the diffuse res — occludes LOWER garments' effects. Carve
@@ -2605,8 +2652,15 @@ public class CompositorService : IDisposable
                         // ── Normal: indent the skin at the edge so the strap looks pressed in ──
                         if (aoNormal > 0f && texPaths.Normal != null)
                         {
+                            // Building the silhouette needs the normal's dimensions, which only the load
+                            // reports — so the load can't be deferred past the decision to use it. Instead
+                            // note that WE loaded it (see aoLoadedNormal above) and hand it back after the
+                            // sweep if nothing indented it: any non-empty baseN is republished, and
+                            // re-encoded, at the end of the composite, so a speculative load on its own
+                            // rewrites an untouched normal.
                             if (baseN == null)
                             {
+                                aoLoadedNormal = true;
                                 baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                                 if (anyEmissive && baseN.Length > 0)
                                     for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
@@ -2632,8 +2686,11 @@ public class CompositorService : IDisposable
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
                                 if (strapN != null && blurredN != null)
+                                {
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
                                         wN == wD && hN == hD ? coveredAbove : null, radiusN);
+                                    aoIndentedNormal = true;
+                                }
                             }
                         }
 
@@ -2645,6 +2702,12 @@ public class CompositorService : IDisposable
                             { for (int p = from; p < to; p++) if (src[p] > acc[p]) acc[p] = src[p]; });
                         }
                     }
+
+                    // This pass loaded the normal and no garment ended up indenting it — hand it back so the
+                    // writer doesn't republish (and re-encode) an untouched texture. Only a buffer with real
+                    // content: a failed load left Array.Empty behind, which must STAY as the memo that the
+                    // load was already tried and failed.
+                    if (aoLoadedNormal && !aoIndentedNormal && baseN is { Length: > 0 }) baseN = null;
                 }
 
                 var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
@@ -3833,6 +3896,20 @@ public class CompositorService : IDisposable
             }
         });
     }
+
+    /// <summary>
+    /// Whether a material is painted in the BODY's UV space — the layout gear shells (cut from the body
+    /// mesh) and Masks-group coverage art are authored in. Anything else (face, hair, tail, and equipment
+    /// meshes with their own layout) would sample that art as arbitrary shapes.
+    ///
+    /// <see cref="UVRemapService.InferBodyType"/> is the primary test: it recognises the body-UV suffixes
+    /// (<c>_bibo</c>, <c>_eve</c>) wherever they live, which matters because body mods do route body-UV skin
+    /// through <c>chara/equipment/</c> slots. The <c>/obj/body/</c> fallback then catches body materials
+    /// whose suffix it can't classify — a mod's custom <c>_nails</c> / <c>_piercings</c> naming, say.
+    /// </summary>
+    internal static bool IsBodyUvMaterial(string mtrlGamePath)
+        => UVRemapService.InferBodyType(mtrlGamePath) != null
+        || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Blur radius the Skindenting depth default was tuned against (2048-wide skin map × the 0.003
     /// default softness). <see cref="ApplyNormalIndent"/> normalises its gradient against this.</summary>
