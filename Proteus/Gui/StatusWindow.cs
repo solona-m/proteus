@@ -80,6 +80,13 @@ public class StatusWindow : Window
     private string? _createStatus;        // last create result message
     private bool _createStatusOk;
 
+    // ── Material-target picker ──
+    // Built ONCE on the frame the picker opens. BeginCombo returns true on EVERY frame it stays open, so
+    // querying there unguarded would run a multi-ms Penumbra resource walk at frame rate. Null = not built.
+    private List<(string Path, string Label, bool Skin)>? _matPickerItems;
+    private bool _matPickerWasOpen;   // last frame's open state — gives the rising edge for the rebuild
+    private bool _matPickerStale;     // list came from the cached snapshot, not a live query
+
     public StatusWindow(
         CompositorService compositor,
         SidecarDiscoveryService discovery,
@@ -494,21 +501,80 @@ public class StatusWindow : Window
                 }
                 else if (_createMaterial.Length == 0)
                 {
-                    _createMaterial = _createMaterialAuto = ModCreationService.DefaultBodyMaterial;
+                    // Placeholder only — still NOT locked, so the live detect above wins once the character
+                    // draws. The cached body beats the hardcoded default: it's the user's actual body.
+                    _createMaterial = _createMaterialAuto =
+                        modCreation.CachedBodyMaterial() ?? ModCreationService.DefaultBodyMaterial;
                 }
             }
         }
         ImGui.SetNextItemWidth(560);
         ImGui.InputText("Material target", ref _createMaterial, 256);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("The material this overlay composites onto. Auto-filled from the body you're\n" +
+                "currently wearing; pick one you have equipped from the list, or type a path by hand to\n" +
+                "target a body/race you aren't wearing right now.");
+
+        // Equipped-material picker. NoPreview renders just the arrow, so this reads as a companion to the
+        // text box above rather than a second, competing field — ImGui has no editable combo.
+        ImGui.SameLine();
+        // The width constraint is required BECAUSE of NoPreview: the popup would otherwise inherit the
+        // arrow's width and clip every label to nothing. The height has to be capped here too — BeginCombo
+        // applies its own constraint (and with it the ImGuiComboFlags.Height* row cap) ONLY when the caller
+        // supplied none, so passing a width constraint silently disables that path. Without this the popup
+        // grows one row per equipped material, past the window on a full wardrobe.
+        var pickerMaxH = ImGui.GetTextLineHeightWithSpacing() * 20 + ImGui.GetStyle().WindowPadding.Y * 2;
+        ImGui.SetNextWindowSizeConstraints(new Vector2(460, 0), new Vector2(760, pickerMaxH));
+        bool pickerOpen = ImGui.BeginCombo("##matpick", "", ImGuiComboFlags.NoPreview);
+        // Rising edge only. BeginCombo is true every frame the popup is open, so rebuilding unguarded would
+        // run the Penumbra resource walk at frame rate. Assign after the test so the flag also falls on close.
+        if (pickerOpen && !_matPickerWasOpen) RebuildMaterialPicker();
+        _matPickerWasOpen = pickerOpen;
+        if (pickerOpen)
+        {
+            var items = _matPickerItems;
+            // Only when there IS a last-known list to show: the live query also reports "from cache" when
+            // the cache is itself empty, and the two notices stacked would promise a list and then deny it.
+            if (_matPickerStale && items is { Count: > 0 })
+                ImGui.TextDisabled("Showing the last known list — character isn't drawn.");
+
+            if (items == null || items.Count == 0)
+            {
+                ImGui.TextDisabled("No equipped materials known yet.\nZone in or redraw, then reopen this list.");
+            }
+            else
+            {
+                if (items[0].Skin) ImGui.TextDisabled("Skin");
+                // Starts true when nothing is skin, so a separator never leads the list.
+                bool separated = !items[0].Skin;
+                foreach (var it in items)
+                {
+                    if (!it.Skin && !separated) { ImGui.Separator(); separated = true; }
+                    // ##path: two races can produce identical labels, and duplicate ImGui ids would route
+                    // the click to the wrong row.
+                    if (ImGui.Selectable($"{it.Label}##{it.Path}",
+                            string.Equals(it.Path, _createMaterial, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        // Same idiom as auto-detect and Re-detect: set both, then lock, so the 500 ms poll
+                        // can't overwrite the choice and no later unlock reads a spurious "user edited".
+                        _createMaterial = _createMaterialAuto = it.Path;
+                        _createMaterialLocked = true;
+                    }
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(it.Path);
+                }
+            }
+            ImGui.EndCombo();
+        }
+
         ImGui.SameLine();
         if (ImGui.SmallButton("Re-detect"))
         {
-            _createMaterial = _createMaterialAuto = modCreation.DetectBodyMaterial() ?? ModCreationService.DefaultBodyMaterial;
+            _createMaterial = _createMaterialAuto = modCreation.DetectBodyMaterial()
+                ?? modCreation.CachedBodyMaterial() ?? ModCreationService.DefaultBodyMaterial;
             _createMaterialLocked = true;   // explicit request — take this value and stop polling
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("The body material this overlay composites onto. Auto-filled from the body\n" +
-                "you're currently wearing; edit it to target a different body/race.");
+            ImGui.SetTooltip("Re-run body detection and overwrite the field.");
 
         ImGui.Spacing();
         DrawTextureRow("Diffuse", ref _createDiffuse);
@@ -581,6 +647,69 @@ public class StatusWindow : Window
     }
 
     private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    /// <summary>
+    /// Is this a material an overlay would paint skin onto — the player's body or face?
+    /// <para/>
+    /// Deliberately NOT <see cref="CompositorService.IsBodyUvMaterial"/>, which tests for <c>/obj/body/</c>
+    /// anywhere in the path. Weapons carry that segment too —
+    /// <c>chara/weapon/w0801/obj/body/b0006/material/v0001/mt_w0801b0006_a.mtrl</c> is a real path off a
+    /// live character — so reusing it would file the equipped greatsword under "Skin". Anchoring on the
+    /// <c>chara/human/</c> prefix is what keeps this to actual character skin.
+    /// </summary>
+    private static bool IsSkinMaterial(string p)
+        => p.StartsWith("chara/human/", StringComparison.OrdinalIgnoreCase)
+        && (p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)
+         || p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Short "what is this" tag for a material path, the picker's left column. Path-derived only —
+    /// no game data, so it's free to call while drawing.</summary>
+    private static string SlotHint(string p)
+    {
+        // Weapons FIRST: chara/weapon/w0801/obj/body/b0006/... carries an /obj/body/ segment of its own, so
+        // testing that first would tag an equipped greatsword "Body" — and it sorts into the non-skin group,
+        // making a "Body" row appear below the Skin separator.
+        if (p.Contains("chara/weapon/", StringComparison.OrdinalIgnoreCase)) return "Weapon";
+        // Then /obj/<slot>/ ahead of chara/equipment/: a body mod can route body-UV skin through an
+        // equipment slot, and that should still read as Body rather than Gear.
+        if (p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)) return "Body";
+        if (p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase)) return "Face";
+        if (p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase)) return "Hair";
+        if (p.Contains("/obj/tail/", StringComparison.OrdinalIgnoreCase)) return "Tail";
+        if (p.Contains("/obj/zear/", StringComparison.OrdinalIgnoreCase)) return "Ear";
+        if (p.Contains("chara/equipment/", StringComparison.OrdinalIgnoreCase)) return "Gear";
+        if (p.Contains("chara/accessory/", StringComparison.OrdinalIgnoreCase)) return "Accessory";
+        return "Other";
+    }
+
+    /// <summary>Picker row text: the slot tag plus the file name — the tail is what distinguishes two
+    /// materials, and the full path (60–100 chars) goes in the row's tooltip instead. Skin rows also carry
+    /// the body type, since two bodies can otherwise differ only by a race code buried mid-path.</summary>
+    /// <param name="skin">The caller's already-computed classification — passed in rather than recomputed,
+    /// since the projection that builds the rows needs it for grouping anyway.</param>
+    private static string PickerLabel(string p, bool skin)
+    {
+        var name = Path.GetFileName(p);
+        var body = skin ? UVRemapService.InferBodyType(p) : null;
+        return body != null
+            ? $"{SlotHint(p)}  ·  {name}  ({body})"
+            : $"{SlotHint(p)}  ·  {name}";
+    }
+
+    /// <summary>
+    /// Snapshot the player's equipped materials for the picker, skin first. Called only on the frame the
+    /// picker opens — <see cref="ModCreationService.ListActiveMaterials"/> walks the character's resources
+    /// and costs several ms, which is a dropped frame if it runs while the popup is merely open.
+    /// </summary>
+    private void RebuildMaterialPicker()
+    {
+        var src = modCreation.ListActiveMaterials(out _matPickerStale);
+        _matPickerItems = src
+            .Select(p => { bool skin = IsSkinMaterial(p); return (Path: p, Label: PickerLabel(p, skin), Skin: skin); })
+            .OrderByDescending(e => e.Skin)                          // skin group on top
+            .ThenBy(e => e.Label, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     private void DrawModsTab()
     {

@@ -21,6 +21,7 @@ public sealed class ModCreationService
 {
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
+    private readonly Configuration config;
     private readonly IPluginLog log;
 
     /// <summary>Common target when nothing is detected: the Bibo+ Midlander female body skin material.</summary>
@@ -37,10 +38,11 @@ public sealed class ModCreationService
     private const string DummySwapPath =
         "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl";
 
-    public ModCreationService(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log)
+    public ModCreationService(PenumbraBridge penumbra, CompositorService compositor, Configuration config, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
+        this.config = config;
         this.log = log;
     }
 
@@ -56,25 +58,75 @@ public sealed class ModCreationService
         var loaded = penumbra.GetActivePlayerMaterialPaths();
         if (loaded == null) return null;
 
-        var bodyMats = loaded
-            .Where(p => p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)
-                     && p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
-                     && UVRemapService.InferBodyType(p) != null)
-            .ToList();
-
-        // A character usually has ONE real body, but a vanilla (gen2) skin material can ride along —
-        // gear that exposes skin carries its own mt_…b….a.mtrl. If the wearer is on bibo/gen3, that
-        // vanilla one is NOT the body they want the overlay on, so rank the modded bodies first.
-        var chosen = bodyMats
-            .OrderBy(p => UVRemapService.InferBodyType(p) == "gen2" ? 1 : 0)
-            .ThenBy(p => p, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        var bodyMats = RankBodyMaterials(loaded);
+        var chosen = bodyMats.FirstOrDefault();
 
         // Only when we actually resolve one — the Create tab polls this until the character is drawn, so
         // logging the empty case every frame would flood the log.
         if (chosen != null)
             log.Information("[Proteus] create: body materials [{0}] -> {1}", string.Join(", ", bodyMats), chosen);
         return chosen;
+    }
+
+    /// <summary>
+    /// The body material from the LAST KNOWN snapshot — a placeholder for the Create tab while the
+    /// character isn't drawn, in place of the hardcoded <see cref="DefaultBodyMaterial"/> (a Bibo+
+    /// Midlander path that may be nothing like the user's body).
+    /// <para/>
+    /// Deliberately separate from <see cref="DetectBodyMaterial"/> rather than folded in as a fallback:
+    /// the Create tab treats a non-null detect as authoritative and stops polling, so answering from the
+    /// cache there would lock in a possibly-stale body and never pick up the real one. The caller must
+    /// keep polling after using this.
+    /// </summary>
+    public string? CachedBodyMaterial()
+    {
+        var cached = config.CachedActiveMaterialPaths;   // reference-swapped off-thread: read once
+        return cached == null ? null : RankBodyMaterials(cached).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Body materials out of a set of loaded paths, best candidate first.
+    /// <para/>
+    /// A character usually has ONE real body, but a vanilla (gen2) skin material can ride along — gear that
+    /// exposes skin carries its own mt_…b….a.mtrl. If the wearer is on bibo/gen3, that vanilla one is NOT
+    /// the body they want the overlay on, so rank the modded bodies first.
+    /// </summary>
+    private static List<string> RankBodyMaterials(IEnumerable<string> loaded)
+        => loaded
+            .Where(p => p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)
+                     && p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
+                     && UVRemapService.InferBodyType(p) != null)
+            .OrderBy(p => UVRemapService.InferBodyType(p) == "gen2" ? 1 : 0)
+            .ThenBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>
+    /// Every material the player currently has loaded — the Create tab's picker lists these so the author
+    /// can select a target instead of typing a 60–100 character game path. Unfiltered on purpose: the
+    /// picker groups skin first but still offers gear, accessories, hair and weapon.
+    /// <para/>
+    /// <paramref name="fromCache"/> is true when the character wasn't drawable and this fell back to the
+    /// last known set, so the caller can say so rather than presenting stale data as current. Returns an
+    /// empty list when neither source has anything (fresh config at the title screen).
+    /// <para/>
+    /// The live query costs several ms and must run on the framework thread — call it on a user action
+    /// (opening the picker), never per frame. <see cref="DetectBodyMaterial"/> has the same constraints.
+    /// </summary>
+    public IReadOnlyList<string> ListActiveMaterials(out bool fromCache)
+    {
+        var live = penumbra.GetActivePlayerMaterialPaths();
+        fromCache = live == null;
+
+        // The cached list is reference-swapped from both the framework thread and background pool threads
+        // without a lock, so read it into a local ONCE and enumerate that.
+        IEnumerable<string> src = live ?? (IEnumerable<string>?)config.CachedActiveMaterialPaths ?? [];
+
+        // .mtrl filtering and de-duplication are redundant for the live set (already a filtered HashSet)
+        // but not for the cached List, which carries no set semantics.
+        return src
+            .Where(p => p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>
