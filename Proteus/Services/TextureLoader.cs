@@ -36,6 +36,11 @@ public class TextureLoader
     private const uint SamplerIdColorMap0  = 0x115306BEu; // Bibo+ / custom body shaders
     private const uint SamplerIdNormal     = 0x0C5EC1F1u;
     private const uint SamplerIdMask       = 0x8A4E82B6u;
+    // The material's own colour-table row selector (_id). Gear and accessories declare one almost always;
+    // body and face skin materials never do.
+    private const uint SamplerIdIndex      = 0x565F8FD8u;
+    /// <summary>Bytes per entry in a material's sampler table: id, flags, texture index, padding.</summary>
+    private const int SamplerStride = 12;
 
     public TextureLoader(IDataManager dataManager, IPluginLog log)
     {
@@ -297,53 +302,97 @@ public class TextureLoader
         }
     }
 
-    /// <summary>Parse an on-disk .mtrl file and return the game paths of its textures.</summary>
-    public MtrlTexturePaths ResolveMtrlTextures(string mtrlDiskPath)
+    /// <summary>
+    /// Texture game paths from a material's RAW bytes — mod redirect first, else the game's own data (see
+    /// <see cref="LoadRawFile"/>, which handles that fallback).
+    /// <para/>
+    /// This is the ONLY way to read a material's texture paths. Two Lumina-typed wrappers used to sit here
+    /// (one for disk, one for SqPack) and both were deleted rather than left as a shorter-named trap:
+    /// Lumina reports zero samplers for real Dawntrail materials even when it reads their texture table
+    /// correctly, so they returned all-null on vanilla materials. That looks exactly like "this material has
+    /// no textures", and it silently stopped overlays targeting vanilla materials from compositing at all.
+    /// Walking the bytes ourselves sidesteps the typed reader entirely.
+    /// </summary>
+    public MtrlTexturePaths ResolveMtrlTexturesRaw(string? diskPath, string gamePath)
     {
         try
         {
-            var mtrl = LoadLuminaFile<MtrlFile>(mtrlDiskPath);
-            if (mtrl == null) return new MtrlTexturePaths(null, null, null);
-            return ParseMtrl(mtrl);
+            var bytes = LoadRawFile(diskPath, gamePath);
+            return bytes == null ? new MtrlTexturePaths(null, null, null) : ParseMtrlBytes(bytes);
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to parse mtrl from disk: {0}", mtrlDiskPath);
+            log.Error(ex, "Failed to parse mtrl bytes: {0}", gamePath);
             return new MtrlTexturePaths(null, null, null);
         }
     }
 
-    /// <summary>Read a .mtrl directly from the game's SqPack and return its texture game paths.</summary>
-    public MtrlTexturePaths ResolveMtrlTexturesFromGame(string gamePath)
+    /// <summary>
+    /// Walk a .mtrl's header → sampler table by hand. Layout (v1.3): header, texture offsets, UV-set and
+    /// colour-set offsets, string table, additional data, the data set, then the shader block whose tail is
+    /// the sampler array. Each sampler names a texture by index into the offset table.
+    /// <para/>
+    /// Every step is bounds-checked and bails to "nothing found" rather than throwing — a truncated or
+    /// unexpected file must degrade to the caller's fail-open path, not take down the draw loop.
+    /// </summary>
+    internal static MtrlTexturePaths ParseMtrlBytes(byte[] b)
     {
-        try
-        {
-            var mtrl = dataManager.GetFile<MtrlFile>(gamePath);
-            if (mtrl == null) return new MtrlTexturePaths(null, null, null);
-            return ParseMtrl(mtrl);
-        }
-        catch (Exception ex)
-        {
-            log.Error(ex, "Failed to load mtrl from game data: {0}", gamePath);
-            return new MtrlTexturePaths(null, null, null);
-        }
-    }
+        const int HeaderSize = 0x10;
+        if (b.Length < HeaderSize) return new MtrlTexturePaths(null, null, null);
 
-    private MtrlTexturePaths ParseMtrl(MtrlFile mtrl)
-    {
-        string? diffuse = null, normal = null, mask = null;
-        foreach (var sampler in mtrl.Samplers)
+        ushort dataSetSize     = BitConverter.ToUInt16(b, 0x06);
+        ushort stringTableSize = BitConverter.ToUInt16(b, 0x08);
+        byte   textureCount    = b[0x0C];
+        byte   uvSetCount      = b[0x0D];
+        byte   colorSetCount   = b[0x0E];
+        byte   additionalSize  = b[0x0F];
+
+        int o = HeaderSize;
+        int texTableEnd = o + textureCount * 4;
+        if (texTableEnd > b.Length) return new MtrlTexturePaths(null, null, null);
+        var texOffsets = new ushort[textureCount];
+        for (int i = 0; i < textureCount; i++) texOffsets[i] = BitConverter.ToUInt16(b, o + i * 4);
+
+        o = texTableEnd + uvSetCount * 4 + colorSetCount * 4;
+        int stringsAt = o;
+        if (stringsAt + stringTableSize > b.Length) return new MtrlTexturePaths(null, null, null);
+
+        o = stringsAt + stringTableSize + additionalSize + dataSetSize;
+        if (o + 12 > b.Length) return new MtrlTexturePaths(null, null, null);
+        ushort shaderKeyCount = BitConverter.ToUInt16(b, o + 2);
+        ushort constantCount  = BitConverter.ToUInt16(b, o + 4);
+        ushort samplerCount   = BitConverter.ToUInt16(b, o + 6);
+
+        o += 12 + shaderKeyCount * 8 + constantCount * 8;   // header + flags, then the two preceding tables
+        if (o + samplerCount * SamplerStride > b.Length) return new MtrlTexturePaths(null, null, null);
+
+        string? diffuse = null, normal = null, mask = null, index = null;
+        for (int i = 0; i < samplerCount; i++)
         {
-            var texIndex = sampler.TextureIndex;
-            if (texIndex >= mtrl.TextureOffsets.Length) continue;
-            var path = ReadNullTerminatedString(mtrl.Strings, mtrl.TextureOffsets[texIndex].Offset);
-            if (string.IsNullOrEmpty(path)) continue;
+            int s = o + i * SamplerStride;
+            uint samplerId = BitConverter.ToUInt32(b, s);
+            byte texIndex  = b[s + 8];
+            if (texIndex >= texOffsets.Length) continue;
+
+            int at = stringsAt + texOffsets[texIndex];
+            if (at >= stringsAt + stringTableSize) continue;
+            int end = at;
+            while (end < stringsAt + stringTableSize && b[end] != 0) end++;
+            var path = Encoding.UTF8.GetString(b, at, end - at);
+            if (path.Length == 0) continue;
+            // Strips the marker only when it leads the whole string. In practice it almost never does —
+            // real files carry it on the FILE NAME instead (chara/.../texture/--c1401b0001_c_n.tex), and
+            // those are left verbatim ON PURPOSE: these paths become the compositor's redirect keys, so
+            // rewriting them would change which resource Penumbra is asked to replace. Don't "fix" this to
+            // strip mid-path without first confirming in game which form the game actually requests.
             if (path.StartsWith("--", StringComparison.Ordinal)) path = path[2..];
-            if      (sampler.SamplerId == SamplerIdDiffuse   || sampler.SamplerId == SamplerIdColorMap0) diffuse = path;
-            else if (sampler.SamplerId == SamplerIdNormal)  normal  = path;
-            else if (sampler.SamplerId == SamplerIdMask)    mask    = path;
+
+            if      (samplerId is SamplerIdDiffuse or SamplerIdColorMap0) diffuse = path;
+            else if (samplerId == SamplerIdNormal)                        normal  = path;
+            else if (samplerId == SamplerIdMask)                          mask    = path;
+            else if (samplerId == SamplerIdIndex)                         index   = path;
         }
-        return new MtrlTexturePaths(diffuse, normal, mask);
+        return new MtrlTexturePaths(diffuse, normal, mask, index);
     }
 
     /// <summary>Load an on-disk .tex file as RGBA8. Returns null on failure.</summary>
@@ -836,13 +885,9 @@ public class TextureLoader
     private static readonly PropertyInfo PropData   = typeof(FileResource).GetProperty("Data",   BindingFlags.Public | BindingFlags.Instance)!;
     private static readonly PropertyInfo PropReader = typeof(FileResource).GetProperty("Reader", BindingFlags.Public | BindingFlags.Instance)!;
 
-    private static T? LoadLuminaFile<T>(string diskPath) where T : FileResource
-    {
-        if (!File.Exists(diskPath)) return null;
-        return LoadLuminaFileFromBytes<T>(File.ReadAllBytes(diskPath));
-    }
-
-    private static T? LoadLuminaFileFromBytes<T>(byte[] bytes) where T : FileResource
+    // The disk-path variant went with the Lumina-typed mtrl wrappers — nothing loads a typed file straight
+    // off disk any more. Callers that want raw bytes use LoadRawFile.
+    internal static T? LoadLuminaFileFromBytes<T>(byte[] bytes) where T : FileResource
     {
         var file = Activator.CreateInstance<T>();
         PropData.SetValue(file, bytes);

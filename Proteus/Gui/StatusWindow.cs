@@ -65,6 +65,12 @@ public class StatusWindow : Window
     private ModSort _modSort = ModSort.Priority;
     private bool _modSortDesc = true;   // Priority descending = default
 
+    // Bindings-tab column sort (display only). Defaults to newest-first, which is the order
+    // DesignBindingService.Bindings already hands back — so the tab looks unchanged until sorted.
+    private enum BindingSort { Design, Captured }
+    private BindingSort _bindingSort = BindingSort.Captured;
+    private bool _bindingSortDesc = true;
+
     // ── Create tab state ──
     private readonly FileDialogManager _fileDialog = new();
     private string _createName = "";
@@ -86,6 +92,16 @@ public class StatusWindow : Window
     private List<(string Path, string Label, bool Skin)>? _matPickerItems;
     private bool _matPickerWasOpen;   // last frame's open state — gives the rising edge for the rebuild
     private bool _matPickerStale;     // list came from the cached snapshot, not a live query
+
+    // ── Texture slots the picked material declares ──
+    // null = not read (or unreadable) ⇒ FAIL OPEN, offer every row. A hand-typed path for a body the
+    // player doesn't have installed can't resolve, and that must not lock the author out of Create.
+    private MtrlTexturePaths? _createSlots;
+    private string _createSlotsFor = "";    // the material _createSlots was resolved for
+    // Throttle, not a debounce: armed on the first change and not re-armed while typing continues, so it
+    // fires DURING typing rather than after it stops. That's the intent — it caps the .mtrl re-reads at
+    // roughly four a second instead of one per keystroke. Programmatic changes bypass it entirely.
+    private long _createSlotsNextTick;
 
     public StatusWindow(
         CompositorService compositor,
@@ -576,26 +592,53 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Re-run body detection and overwrite the field.");
 
+        // Which rows the picked material can actually consume.
+        if (_createMaterial != _createSlotsFor)
+        {
+            // A PROGRAMMATIC change — picker, Re-detect, auto-detect — keeps _createMaterialAuto in step and
+            // is one deliberate event, so resolve at once: the rows must never lag a selection the user just
+            // made. TYPING is throttled instead, since each resolve is a Penumbra lookup plus a file read
+            // and the field changes on every keystroke.
+            if (_createMaterial == _createMaterialAuto) ResolveCreateSlots();
+            else if (_createSlotsNextTick == 0) _createSlotsNextTick = Environment.TickCount64 + 250;
+            else if (Environment.TickCount64 >= _createSlotsNextTick) ResolveCreateSlots();
+        }
+        else _createSlotsNextTick = 0;
+
         ImGui.Spacing();
-        DrawTextureRow("Diffuse", ref _createDiffuse);
-        DrawTextureRow("Mask", ref _createMask);
-        DrawTextureRow("Normal", ref _createNormal);
-        DrawTextureRow("Index", ref _createIndex);
+        DrawTextureRow("Diffuse", ref _createDiffuse, SlotEnabled("Diffuse"), "This material has no diffuse texture.");
+        DrawTextureRow("Mask", ref _createMask, SlotEnabled("Mask"), "This material has no mask texture.");
+        DrawTextureRow("Normal", ref _createNormal, SlotEnabled("Normal"), "This material has no normal texture.");
+        DrawTextureRow("Index", ref _createIndex, SlotEnabled("Index"),
+            "This material has no index texture, and it isn't skin or face — nothing here\n" +
+            "would read a colour-table row selector.");
+        // Only once a read has actually been ATTEMPTED for this exact material (_createSlotsFor tracks
+        // that). Testing _createSlots alone announced a failure during the window before the read ran,
+        // so the note flashed on every material change and then corrected itself.
+        if (_createSlots == null && _createSlotsFor == _createMaterial && _createMaterial.Length > 0)
+            ImGui.TextDisabled("Couldn't read this material — offering every slot.");
 
         ImGui.Separator();
 
+        // Only ENABLED slots count. The clearing above already empties disabled ones; this keeps the
+        // button honest if that ever misses.
+        bool anyTexture = (SlotEnabled("Diffuse") && _createDiffuse.Length > 0)
+            || (SlotEnabled("Mask") && _createMask.Length > 0)
+            || (SlotEnabled("Normal") && _createNormal.Length > 0)
+            || (SlotEnabled("Index") && _createIndex.Length > 0);
         bool valid = !string.IsNullOrWhiteSpace(_createName)
             && !string.IsNullOrWhiteSpace(_createMaterial)
-            && (_createDiffuse.Length > 0 || _createMask.Length > 0
-                || _createNormal.Length > 0 || _createIndex.Length > 0);
+            && anyTexture;
 
         using (ImRaii.Disabled(!valid))
             if (ImGui.Button("Create"))
             {
                 var r = modCreation.Create(
                     _createName, _createAuthor, _createMaterial,
-                    NullIfEmpty(_createDiffuse), NullIfEmpty(_createMask),
-                    NullIfEmpty(_createNormal), NullIfEmpty(_createIndex));
+                    SlotEnabled("Diffuse") ? NullIfEmpty(_createDiffuse) : null,
+                    SlotEnabled("Mask")    ? NullIfEmpty(_createMask)    : null,
+                    SlotEnabled("Normal")  ? NullIfEmpty(_createNormal)  : null,
+                    SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null);
                 _createStatus = r.Message;
                 _createStatusOk = r.Ok;
                 if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
@@ -610,35 +653,105 @@ public class StatusWindow : Window
                 _createStatus);
     }
 
-    /// <summary>One texture slot: current file name, a Browse button, and a Clear button.</summary>
-    private void DrawTextureRow(string label, ref string path)
+    /// <summary>
+    /// Read the picked material and narrow the texture rows to what it can consume, dropping any file
+    /// browsed into a row that just lost its slot so nothing invisible reaches Create.
+    /// </summary>
+    private void ResolveCreateSlots()
     {
+        _createSlotsFor = _createMaterial;
+        _createSlotsNextTick = 0;
+        var slots = modCreation.ResolveMaterialSlots(_createMaterial);
+        // All-null means UNREADABLE, not "has no textures" — keep null so every row stays live.
+        _createSlots = slots.Diffuse == null && slots.Normal == null
+                    && slots.Mask == null && slots.Index == null
+            ? null : slots;
+        if (!SlotEnabled("Diffuse")) _createDiffuse = "";
+        if (!SlotEnabled("Mask"))    _createMask = "";
+        if (!SlotEnabled("Normal"))  _createNormal = "";
+        if (!SlotEnabled("Index"))   _createIndex = "";
+    }
+
+    /// <summary>
+    /// Can the picked material consume this slot? Diffuse/Normal/Mask come straight from the material.
+    /// <para/>
+    /// Index is a union of two independent reasons, because neither covers the other:
+    /// <list type="bullet">
+    /// <item>The material declares its own <c>_id</c> sampler — gear and accessories nearly always do.</item>
+    /// <item>It's skin or face. Those NEVER declare an index sampler (verified across ~1,400 body and face
+    /// materials: not one), so this can't be read off the material — a Proteus index on skin is Proteus's
+    /// own colour-table concept. Testing only the sampler would grey Index out on exactly the surfaces it
+    /// was built for.</item>
+    /// </list>
+    /// <c>_createSlots == null</c> means the material couldn't be read, and everything stays enabled: the
+    /// field accepts hand-typed paths for bodies the player isn't wearing, which don't resolve.
+    /// </summary>
+    private bool SlotEnabled(string label) => _createSlots == null || label switch
+    {
+        "Diffuse" => _createSlots.Diffuse != null,
+        "Mask"    => _createSlots.Mask    != null,
+        "Normal"  => _createSlots.Normal  != null,
+        "Index"   => _createSlots.Index != null || IsSkinMaterial(_createMaterial),
+        _         => true,
+    };
+
+    /// <summary>
+    /// One texture slot: current file name, a Browse button, and a Clear button. A slot the material can't
+    /// consume is dimmed and inert, with <paramref name="disabledReason"/> on hover.
+    /// </summary>
+    private void DrawTextureRow(string label, ref string path, bool enabled = true, string? disabledReason = null)
+    {
+        // Dims the row's TEXT, which ImRaii.Disabled alone wouldn't reach — the label and file name sit
+        // outside the disabled scope so their tooltips stay hoverable. The Browse button below is disabled
+        // properly; this is presentation only.
+        using var dim = ImRaii.PushStyle(ImGuiStyleVar.Alpha,
+            ImGui.GetStyle().Alpha * (enabled ? 1f : 0.5f));
+
+        // A disabled item reports no hover under the default flags, so every "why is this off" tooltip
+        // below asks with AllowWhenDisabled — otherwise the explanation is unreachable precisely when it
+        // is needed.
+        void ReasonTooltip()
+        {
+            if (!enabled && disabledReason != null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(disabledReason);
+        }
+
         var shown = path.Length == 0 ? "(none)" : Path.GetFileName(path);
         ImGui.TextUnformatted($"{label}:");
+        ReasonTooltip();
         ImGui.SameLine(90);
-        ImGui.TextUnformatted(shown);
+        ImGui.TextUnformatted(enabled ? shown : "(not used by this material)");
 
         ImGui.SameLine(360);
-        // Capture the field by a local setter — ref can't cross the dialog callback.
+        // Capture the field by a local setter — ref can't cross the dialog callback. The label string is
+        // load-bearing here: this switch is how the picked path reaches the field. Don't rename them.
         var captured = label;
-        if (ImGui.SmallButton($"Browse##{label}"))
+        // ImRaii.Disabled, NOT `enabled && SmallButton(...)`: the short-circuit would skip submitting the
+        // button entirely, and an unsubmitted item can't be hovered, so the reason tooltip would vanish.
+        // This keeps the item in the layout, blocks the click properly, and still reads as pressable-off
+        // rather than swallowing a press that looks like it landed.
+        using (ImRaii.Disabled(!enabled))
         {
-            _fileDialog.OpenFileDialog(
-                $"Select {label} texture", "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
-                (ok, paths) =>
-                {
-                    if (!ok) return;
-                    var picked = paths.FirstOrDefault() ?? "";
-                    switch (captured)
+            if (ImGui.SmallButton($"Browse##{label}"))
+            {
+                _fileDialog.OpenFileDialog(
+                    $"Select {label} texture", "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
+                    (ok, paths) =>
                     {
-                        case "Diffuse": _createDiffuse = picked; break;
-                        case "Mask":    _createMask = picked; break;
-                        case "Normal":  _createNormal = picked; break;
-                        case "Index":   _createIndex = picked; break;
-                    }
-                }, 1);
+                        if (!ok) return;
+                        var picked = paths.FirstOrDefault() ?? "";
+                        switch (captured)
+                        {
+                            case "Diffuse": _createDiffuse = picked; break;
+                            case "Mask":    _createMask = picked; break;
+                            case "Normal":  _createNormal = picked; break;
+                            case "Index":   _createIndex = picked; break;
+                        }
+                    }, 1);
+            }
         }
-        if (path.Length > 0)
+        ReasonTooltip();
+        if (enabled && path.Length > 0)
         {
             ImGui.SameLine();
             if (ImGui.SmallButton($"Clear##{label}"))
@@ -732,7 +845,11 @@ public class StatusWindow : Window
         }
         else
         {
-            ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+            // EndTable is only legal when BeginTable returned true — it returns false when the table is
+            // skipped (clipped away, or the host window isn't rendering), and calling EndTable anyway
+            // trips an ImGui assertion in debug and corrupts table state in release.
+            if (!ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
+                return;
             ImGui.TableSetupColumn("On",     ImGuiTableColumnFlags.WidthFixed, 32);
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
@@ -909,14 +1026,49 @@ public class StatusWindow : Window
             return;
         }
 
-        ImGui.BeginTable("##bindings", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV);
+        // See the note in DrawModsTab: EndTable is only legal when BeginTable returned true. Returning here
+        // also skips the deferred Apply/Unbind dispatch below, which is correct — no row was drawn, so
+        // neither button can have been clicked.
+        if (!ImGui.BeginTable("##bindings", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
+            return;
         ImGui.TableSetupColumn("Design",   ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("Captured", ImGuiTableColumnFlags.WidthFixed, 90);
-        ImGui.TableSetupColumn("##rm",     ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableHeadersRow();
+        ImGui.TableSetupColumn("##act",    ImGuiTableColumnFlags.WidthFixed, 120);
 
-        Guid? toRemove = null;
-        foreach (var b in bindings)
+        // Clickable sort headers, same idiom as the Mods tab: clicking the active column flips direction,
+        // switching column picks the sensible default for that column.
+        void SortableHeader(string label, BindingSort col)
+        {
+            ImGui.TableNextColumn();
+            var arrow = _bindingSort == col ? (_bindingSortDesc ? " ▼" : " ▲") : "";
+            ImGui.TableHeader(label + arrow);
+            if (ImGui.IsItemClicked())
+            {
+                if (_bindingSort == col) _bindingSortDesc = !_bindingSortDesc;
+                else { _bindingSort = col; _bindingSortDesc = col != BindingSort.Design; }   // name asc, dates desc
+            }
+        }
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+        SortableHeader("Design",   BindingSort.Design);
+        SortableHeader("Captured", BindingSort.Captured);
+        ImGui.TableNextColumn(); ImGui.TableHeader("##act");
+
+        // Sort a COPY. Falls back to the design label so equal timestamps — a batch capture writes several
+        // in the same second — keep a stable, readable order instead of shuffling frame to frame.
+        string Label(DesignBinding x) => x.DesignName ?? x.DesignId.ToString();
+        var ordered = _bindingSort switch
+        {
+            BindingSort.Design => _bindingSortDesc
+                ? bindings.OrderByDescending(Label, StringComparer.OrdinalIgnoreCase)
+                : bindings.OrderBy(Label, StringComparer.OrdinalIgnoreCase),
+            _ => _bindingSortDesc
+                ? bindings.OrderByDescending(x => x.CapturedUtc)
+                : bindings.OrderBy(x => x.CapturedUtc),
+        };
+        var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
+
+        Guid? toApply = null, toRemove = null;
+        foreach (var b in shown)
         {
             ImGui.TableNextRow();
 
@@ -943,11 +1095,25 @@ public class StatusWindow : Window
                 : $"{ago.TotalHours:F0}h ago");
 
             ImGui.TableNextColumn();
+            if (ImGui.SmallButton($"Apply##{b.DesignId}"))
+                toApply = b.DesignId;
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(
+                    "Restore this design's Proteus state now, without going through Glamourer —\n" +
+                    "enable / priority / options / colours for every mod it captured.\n\n" +
+                    "Proteus mods NOT in the binding are switched off, so this replaces the current\n" +
+                    "look rather than adding to it.");
+            ImGui.SameLine();
             if (ImGui.SmallButton($"Unbind##{b.DesignId}"))
                 toRemove = b.DesignId;
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Forget this binding. The Glamourer design itself is untouched.");
         }
         ImGui.EndTable();
 
+        // Both deferred past the loop: each mutates the binding state the rows are drawn from.
+        if (toApply.HasValue)
+            designBindings.Restore(toApply.Value);
         if (toRemove.HasValue)
             designBindings.RemoveBinding(toRemove.Value);
     }

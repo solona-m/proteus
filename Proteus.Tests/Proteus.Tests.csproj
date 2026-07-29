@@ -30,6 +30,10 @@
     <Reference Include="FFXIVClientStructs">
       <HintPath>$(DalamudLibPath)FFXIVClientStructs.dll</HintPath>
     </Reference>
+    <!-- MtrlParseTests compares the hand-rolled .mtrl reader against Lumina's typed one. -->
+    <Reference Include="Lumina">
+      <HintPath>$(DalamudLibPath)Lumina.dll</HintPath>
+    </Reference>
     <Reference Include="InteropGenerator.Runtime">
       <HintPath>$(DalamudLibPath)InteropGenerator.Runtime.dll</HintPath>
     </Reference>
@@ -54,6 +58,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Proteus\Proteus.csproj" />
+  </ItemGroup>
+
+  <!-- Real .mtrl used by MtrlParseTests to check the parser against the actual file format rather than
+       against the test's own byte builder. Its colour table is zeroed; every count, offset and table the
+       parser walks is untouched. -->
+  <!-- Update, not Include: the SDK's default globs already sweep these in, so Include risks a duplicate
+       item (NETSDK1022). This only adds the copy-to-output metadata. -->
+  <ItemGroup>
+    <None Update="Fixtures\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

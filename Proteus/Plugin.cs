@@ -106,7 +106,7 @@ public sealed class Plugin : IDalamudPlugin
         // Takes the highlighter so it leaves a glow-highlighted shell's slot alone instead of fighting it.
         shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter);
 
-        var modCreation = new ModCreationService(penumbra, compositor, config, log);
+        var modCreation = new ModCreationService(penumbra, compositor, config, textureLoader, log);
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
 
         windowSystem = new WindowSystem("Proteus");

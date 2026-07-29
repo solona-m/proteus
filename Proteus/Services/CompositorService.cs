@@ -1801,9 +1801,12 @@ public class CompositorService : IDisposable
                 if (ct.IsCancellationRequested) return;
 
                 var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
-                var texPaths = (mtrlDisk != null && File.Exists(mtrlDisk))
-                    ? textureLoader.ResolveMtrlTextures(mtrlDisk)
-                    : textureLoader.ResolveMtrlTexturesFromGame(mtrlGamePath);
+                // RAW parse. The disk/game split this used to do by hand lives inside ResolveMtrlTexturesRaw
+                // now, and more importantly it skips Lumina's typed MtrlFile — which misreads some Dawntrail
+                // layouts. A modded material (older TexTools layout) read fine while the stock game file came
+                // back empty, so an overlay targeting a VANILLA material hit the "no textures" bail below and
+                // silently never composited.
+                var texPaths = textureLoader.ResolveMtrlTexturesRaw(mtrlDisk, mtrlGamePath);
 
                 if (texPaths.Diffuse == null && texPaths.Normal == null && texPaths.Mask == null)
                 {

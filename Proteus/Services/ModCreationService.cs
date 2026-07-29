@@ -22,6 +22,7 @@ public sealed class ModCreationService
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
     private readonly Configuration config;
+    private readonly TextureLoader textureLoader;
     private readonly IPluginLog log;
 
     /// <summary>Common target when nothing is detected: the Bibo+ Midlander female body skin material.</summary>
@@ -38,11 +39,13 @@ public sealed class ModCreationService
     private const string DummySwapPath =
         "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl";
 
-    public ModCreationService(PenumbraBridge penumbra, CompositorService compositor, Configuration config, IPluginLog log)
+    public ModCreationService(PenumbraBridge penumbra, CompositorService compositor, Configuration config,
+        TextureLoader textureLoader, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
         this.config = config;
+        this.textureLoader = textureLoader;
         this.log = log;
     }
 
@@ -127,6 +130,32 @@ public sealed class ModCreationService
             .Where(p => p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>
+    /// Which texture slots a material actually declares, so the Create tab can offer only the rows that
+    /// will be consumed. Penumbra-resolved disk file first, game SqPack second — the same two-step the
+    /// compositor uses, because a modded body's material only exists on disk.
+    /// <para/>
+    /// An all-null result means the material could NOT be read (path not installed, mod disabled, Penumbra
+    /// down) — NOT that it has no textures. Callers must fail open on that and offer everything; the
+    /// Create tab deliberately accepts hand-typed paths for bodies the player isn't wearing, and those
+    /// routinely don't resolve.
+    /// <para/>
+    /// <see cref="MtrlTexturePaths.Index"/> is the material's OWN <c>_id</c> sampler — gear and accessories
+    /// declare one almost universally. Body and face skin materials never do, so a caller wanting to offer
+    /// a Proteus index on skin has to decide that from the material's kind; the material won't say.
+    /// <para/>
+    /// Re-reads and re-parses the file on every call — cheap, but blocking I/O. Call it when the material
+    /// changes, never per frame.
+    /// </summary>
+    public MtrlTexturePaths ResolveMaterialSlots(string materialGamePath)
+    {
+        if (string.IsNullOrWhiteSpace(materialGamePath)) return new MtrlTexturePaths(null, null, null);
+        // RAW parse, not the Lumina-typed one. Most materials the picker offers are VANILLA, and Lumina
+        // misreads some Dawntrail layouts — which surfaced as every non-skin material reporting "couldn't
+        // read", because a modded body/face (older TexTools layout) parsed while stock gear did not.
+        return textureLoader.ResolveMtrlTexturesRaw(penumbra.ResolvePlayer(materialGamePath), materialGamePath);
     }
 
     /// <summary>

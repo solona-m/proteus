@@ -226,11 +226,19 @@ public class OverlayOption
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
 }
 
-/// <summary>Resolved texture game paths extracted from a parsed .mtrl file.</summary>
+/// <summary>
+/// Resolved texture game paths extracted from a parsed .mtrl file.
+/// <para/>
+/// <paramref name="Index"/> is the material's own colour-table row selector (the <c>_id</c> sampler).
+/// Gear and accessories carry one almost universally; body and face skin materials NEVER do — a Proteus
+/// index on skin is Proteus's own concept, not something the material declares. Defaulted so the older
+/// three-argument construction sites keep working.
+/// </summary>
 public record MtrlTexturePaths(
     string? Diffuse,
     string? Normal,
-    string? Mask
+    string? Mask,
+    string? Index = null
 );
 
 // ── Color table types ────────────────────────────────────────────────────────
