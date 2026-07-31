@@ -148,6 +148,7 @@ public class TextureLoader
         PrefetchWaitStats.Reset();
         SwizzleStats.Reset();
         WriteStats.Reset();
+        Volatile.Write(ref evictions, 0);
     }
 
     // ── Decode cache ───────────────────────────────────────────────────────────
@@ -172,13 +173,71 @@ public class TextureLoader
 
     private readonly ConcurrentDictionary<string, Lazy<DecodedTex?>> decodeCache = new();
     private long accessClock;
-    // Sized to hold the compositor's *in-flight* set, not a whole material's working set. One 4K RGBA
-    // entry is 64 MB, so a material with ~50 overlay textures would need gigabytes to cache outright —
-    // at 512 MB the cache held 8 entries against a 65-entry run and thrashed to a 100% miss rate
-    // (measured: 53 miss / 12 hit, 5.1 s of a 7.1 s composite). The compositor now prefetches a bounded
-    // window ahead of the blend instead, so this only has to cover that window (PrefetchDepth × 2 files)
-    // plus the three base textures, with headroom.
-    private const long DecodeCacheBudgetBytes = 1024L * 1024 * 1024; // 1 GB
+    private long lastTouchTick = Environment.TickCount64;
+    private int evictions;
+
+    /// <summary>
+    /// Ceiling on decoded bytes held. One 4K RGBA entry is 64 MB, so this is really a count: 2 GB ≈ 30
+    /// textures.
+    /// <para/>
+    /// It has to exceed the composite's whole working set or it buys nothing. The access pattern is a
+    /// cyclic scan — the same files in the same order every composite — which is the pathological case for
+    /// LRU: whatever the next run asks for first was the first evicted. Measured at 1 GB against an 18-file
+    /// (~1.2 GB) run, that produced 18 misses on EVERY composite rather than 18 once, and 1420 ms of a
+    /// 3244 ms composite. Settable (see Configuration.DecodeCacheBudgetMb) because the right number is a
+    /// property of the user's outfit and their RAM, not something to hard-code.
+    /// <para/>
+    /// LOWERING it reclaims immediately. The trim otherwise only runs off the back of a decode, so someone
+    /// who drops the budget because the game is paging would get nothing back until they next composited —
+    /// precisely the moment they can least afford to wait for it.
+    /// </summary>
+    public long DecodeCacheBudgetBytes
+    {
+        get => Volatile.Read(ref decodeCacheBudgetBytes);
+        set
+        {
+            Volatile.Write(ref decodeCacheBudgetBytes, value);
+            TrimCache();   // no-op when raising (the scan early-outs under budget); reclaims when lowering
+        }
+    }
+
+    private long decodeCacheBudgetBytes = 2048L * 1024 * 1024;
+
+    /// <summary>Entries currently materialized, and the bytes they hold. For the phases log — the number
+    /// that says whether the budget actually covers the working set.</summary>
+    public (int Entries, long Bytes) CacheState()
+    {
+        int n = 0; long b = 0;
+        foreach (var kv in decodeCache)
+            if (kv.Value.IsValueCreated && kv.Value.Value is { } d) { n++; b += d.Rgba.Length; }
+        return (n, b);
+    }
+
+    /// <summary>Entries dropped by the budget since the last <see cref="ResetStats"/>.</summary>
+    public int Evictions => Volatile.Read(ref evictions);
+
+    /// <summary>
+    /// Drop everything if nothing has touched the cache for <paramref name="idle"/>. Returns the number of
+    /// entries released, 0 when still warm.
+    /// <para/>
+    /// Without this the plugin holds the full budget for its entire lifetime — the cache is only trimmed
+    /// when it EXCEEDS the budget, so it never shrinks on its own. The trade is that the first composite
+    /// after a gap pays the decode again; that's the right side of it, because the cache exists for the
+    /// burst of recomposites while editing, not for holding gigabytes overnight.
+    /// <para/>
+    /// Note this makes the arrays collectable, not necessarily returned to the OS: they are Large Object
+    /// Heap allocations and the CLR neither compacts nor releases LOH segments by default, so the process's
+    /// working set may not drop straight away. Forcing that needs LOH compaction plus a blocking collect,
+    /// which is a multi-hundred-millisecond stall and deliberately not done here.
+    /// </summary>
+    public int ReleaseIfIdle(TimeSpan idle)
+    {
+        if (Environment.TickCount64 - Volatile.Read(ref lastTouchTick) < idle.TotalMilliseconds) return 0;
+        int n = decodeCache.Count;
+        if (n == 0) return 0;
+        decodeCache.Clear();
+        return n;
+    }
 
     // Cache key for an on-disk file: prefix + path + write-time + length. Returns null
     // (→ bypass the cache) if the file is missing or its metadata can't be read.
@@ -240,6 +299,7 @@ public class TextureLoader
         if (!decoded) DecodeHitStats.Count();
 
         entry.LastAccess = Interlocked.Increment(ref accessClock);
+        Volatile.Write(ref lastTouchTick, Environment.TickCount64);   // keeps ReleaseIfIdle off a live cache
         TrimCache();
         return entry;
     }
@@ -298,7 +358,10 @@ public class TextureLoader
         {
             if (total <= DecodeCacheBudgetBytes) break;
             if (decodeCache.TryRemove(new KeyValuePair<string, Lazy<DecodedTex?>>(k, lz)))
+            {
                 total -= d.Rgba.Length;
+                Interlocked.Increment(ref evictions);
+            }
         }
     }
 

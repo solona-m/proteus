@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
@@ -73,7 +74,10 @@ public sealed class Plugin : IDalamudPlugin
 
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
-        textureLoader = new TextureLoader(DataManager, log);
+        textureLoader = new TextureLoader(DataManager, log)
+        {
+            DecodeCacheBudgetBytes = Math.Max(256, config.DecodeCacheBudgetMb) * 1024L * 1024,
+        };
         discovery = new SidecarDiscoveryService(penumbra, log)
         {
             AssemblyDir = pluginInterface.AssemblyLocation.DirectoryName,

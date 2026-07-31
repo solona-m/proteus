@@ -461,6 +461,25 @@ public class StatusWindow : Window
                 "Indents the skin normal at strap/garment edges so straps look pressed into the skin.\n" +
                 "0.00 disables it (skin normal unchanged). Uses the same edges/softness as the shadow.");
 
+        ImGui.SetNextItemWidth(140);
+        int cacheMb = config.DecodeCacheBudgetMb;
+        if (ImGui.SliderInt("Texture cache (MB)", ref cacheMb, 512, 4096))
+            config.DecodeCacheBudgetMb = Math.Clamp(cacheMb, 512, 4096);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            config.Save();
+            compositor.ApplyDecodeCacheBudget();   // live — lowering it reclaims on the spot, no restart
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "How much decoded texture data Proteus keeps in memory between composites.\n\n" +
+                "A 4K texture costs 64 MB decoded, so this is really a count: 2048 MB ≈ 30 of them.\n" +
+                "It only helps if it covers a whole composite's worth — below that, every run evicts\n" +
+                "what the next one needs and nothing is reused.\n\n" +
+                "Check the \"cache N entries, M MB\" figure in the recomposite log: if a SECOND\n" +
+                "composite with nothing changed still reports misses, raise this. Lower it if the\n" +
+                "game starts paging. Released automatically after 60s idle.");
+
         // Hide a body's redundant connector meshes on the gear shell (see Configuration).
         var connMode = config.HideConnectorMeshes;
         ImGui.SetNextItemWidth(140);

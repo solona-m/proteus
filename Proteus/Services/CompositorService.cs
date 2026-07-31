@@ -236,7 +236,34 @@ public class CompositorService : IDisposable
         glamourer.LocalPlayerStateChanged      += OnGlamourerStateChanged;
         glamourer.LocalPlayerCustomizationChanged += OnGlamourerCustomizationChanged;
         Plugin.Framework.Update += OnBootPoll;
+
+        // The decode cache is only ever trimmed when it EXCEEDS its budget, so left alone it holds the full
+        // budget for the plugin's lifetime — a couple of GB sitting there long after the last composite.
+        // Poll on a timer rather than the framework tick: this is a 30s cadence and has no business running
+        // per frame, and clearing a ConcurrentDictionary needs no particular thread.
+        idleCacheTimer = new Timer(_ =>
+        {
+            try
+            {
+                int dropped = textureLoader.ReleaseIfIdle(DecodeCacheIdleRelease);
+                if (dropped > 0)
+                    log.Debug("[Proteus] decode cache: released {0} entries after {1:F0}s idle",
+                              dropped, DecodeCacheIdleRelease.TotalSeconds);
+            }
+            catch (Exception ex) { log.Warning(ex, "[Proteus] decode cache idle release failed"); }
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
+
+    /// <summary>How long the decode cache may sit untouched before it is dropped. Long enough to cover a
+    /// burst of recomposites while editing colours, short enough that idling in a city doesn't hold GBs.</summary>
+    private static readonly TimeSpan DecodeCacheIdleRelease = TimeSpan.FromSeconds(60);
+    private readonly Timer idleCacheTimer;
+
+    /// <summary>Push the configured decode-cache budget onto the loader. The Settings slider calls this —
+    /// the UI has no reference to the loader. Takes effect at once: the loader trims on assignment, so
+    /// lowering the budget releases the excess immediately rather than at the next composite.</summary>
+    public void ApplyDecodeCacheBudget()
+        => textureLoader.DecodeCacheBudgetBytes = Math.Max(256, config.DecodeCacheBudgetMb) * 1024L * 1024;
 
     // Framework-thread poll that fires the boot composite once the player and Penumbra are both ready.
     // Only the cheap checks (player address, Penumbra availability) run on the framework thread; the
@@ -284,6 +311,8 @@ public class CompositorService : IDisposable
         RemoveInjectedGlasses();
 
         _disposed = true;   // an in-flight boot-probe task bails instead of touching torn-down bridges
+
+        idleCacheTimer.Dispose();
 
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
@@ -3223,14 +3252,21 @@ public class CompositorService : IDisposable
         // workers, so the split is only exact for the single-material case (the usual one).
         var blendMs = compositeMs - (wait.Ms + remap.Ms + swizzle.Ms + write.Ms);
 
+        // Cache state alongside the miss count: a repeat composite that still misses means the budget is
+        // under the working set, and these two numbers say by how much.
+        var (cacheEntries, cacheBytes) = textureLoader.CacheState();
+
         log.Information(
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit) | " +
             "prefetch {4:F0}ms bg (decode work {5:F0}ms) | remap {6:F0}ms ({7}) | blend {8:F0}ms | swizzle {9:F0}ms | " +
-            "write {10:F0}ms ({11} files, {12:F0} MB) | composite {13:F0}ms | total {14:F0}ms | {15} material(s)",
+            "write {10:F0}ms ({11} files, {12:F0} MB) | composite {13:F0}ms | total {14:F0}ms | {15} material(s) | " +
+            "cache {16} entries, {17:F0} MB, {18} evicted (budget {19:F0} MB)",
             setupMs, wait.Ms, decode.Calls, hits.Calls,
             prefetch.Ms, decode.Ms, remap.Ms, remap.Calls,
             blendMs, swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
-            compositeMs, totalMs, materialCount);
+            compositeMs, totalMs, materialCount,
+            cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
+            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0));
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────

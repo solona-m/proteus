@@ -126,6 +126,17 @@ public class Configuration : IPluginConfiguration
     /// Absent = BiboGen3Only (default, = legacy behavior: gen3 bake, no vanilla).</summary>
     public Dictionary<string, SiblingSynthesisMode> SiblingSynthesis { get; set; } = new();
 
+    /// <summary>
+    /// Ceiling on decoded-texture memory, in MB. One 4K RGBA texture is 64 MB, so this is effectively a
+    /// count of textures: 2048 ≈ 30 of them.
+    /// <para/>
+    /// It only pays off above the composite's whole working set. The compositor reads the same files in the
+    /// same order every run, which is the worst case for LRU — at 1 GB against an 18-file (~1.2 GB) outfit
+    /// every file missed on every composite, costing 1420 ms of a 3244 ms run. Raise it if the phases log
+    /// still shows misses on a repeat composite; lower it if the game starts paging.
+    /// </summary>
+    public int DecodeCacheBudgetMb { get; set; } = 2048;
+
     /// <summary>LEGACY, read-only now: mods the user had explicitly switched AO off for under the old
     /// "on unless opted out" rule. Still consulted by <see cref="AmbientOcclusionEnabledFor"/> so an
     /// existing opt-out keeps working, but nothing writes to it any more — new choices go to
