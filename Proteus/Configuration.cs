@@ -137,14 +137,30 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AoDiagnosticDump { get; set; } = false;
 
-    /// <summary>Mods for which the ambient-occlusion shadow + Skindenting normal indent are DISABLED,
-    /// keyed by Penumbra mod directory. Absent = enabled (the default), so only opt-outs are stored.
-    /// OrdinalIgnoreCase to match how mod directories are compared everywhere else (Newtonsoft populates
-    /// the existing instance in place on deserialize, so the comparer survives the config round-trip).</summary>
+    /// <summary>LEGACY, read-only now: mods the user had explicitly switched AO off for under the old
+    /// "on unless opted out" rule. Still consulted by <see cref="AmbientOcclusionEnabledFor"/> so an
+    /// existing opt-out keeps working, but nothing writes to it any more — new choices go to
+    /// <see cref="AmbientOcclusionOverrides"/>. OrdinalIgnoreCase to match how mod directories are compared
+    /// everywhere else (Newtonsoft populates the existing instance in place on deserialize, so the comparer
+    /// survives the config round-trip).</summary>
     public HashSet<string> AmbientOcclusionDisabledMods { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether AO / Skindenting is enabled for a mod, applying the absent-default (on).</summary>
-    public bool AmbientOcclusionEnabledFor(string modDir) => !AmbientOcclusionDisabledMods.Contains(modDir);
+    /// <summary>Explicit per-mod AO/Skindenting choices made by the USER, keyed by Penumbra mod directory.
+    /// Absent means the user has no opinion and the mod pack's own declaration decides. Present wins over
+    /// the pack either way — a user who turns it on for a pack that never asked gets it.</summary>
+    public Dictionary<string, bool> AmbientOcclusionOverrides { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether AO / Skindenting applies to a mod. The user's explicit choice first, then the legacy opt-out,
+    /// then what the pack itself declared — and OFF if nobody said anything.
+    /// <para/>
+    /// Off is the default because the effect treats a mod's coverage as a garment pressed into skin. That
+    /// suits straps and trim and actively damages flat artwork (tattoos, skin details, makeup), which is the
+    /// larger share of packs — so it is opt-in, per <see cref="ProteusMetadata.AmbientOcclusion"/>.
+    /// </summary>
+    public bool AmbientOcclusionEnabledFor(string modDir, bool? packDeclared)
+        => AmbientOcclusionOverrides.TryGetValue(modDir, out var user) ? user
+         : !AmbientOcclusionDisabledMods.Contains(modDir) && (packDeclared ?? false);
 
     /// <summary>Sibling-synthesis mode for a mod, applying the absent-default.</summary>
     public SiblingSynthesisMode SiblingModeFor(string modDir) =>

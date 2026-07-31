@@ -871,7 +871,7 @@ public class StatusWindow : Window
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Bodies", ImGuiTableColumnFlags.WidthFixed, 110);
-            ImGui.TableSetupColumn("AO",     ImGuiTableColumnFlags.WidthFixed, 26);
+            ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, 78);
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
             // column flips direction; switching column picks a sensible default direction.
@@ -892,7 +892,7 @@ public class StatusWindow : Window
             SortableHeader("Pri", ModSort.Priority);
             ImGui.TableNextColumn(); ImGui.TableHeader("Colors");
             ImGui.TableNextColumn(); ImGui.TableHeader("Bodies");
-            ImGui.TableNextColumn(); ImGui.TableHeader("AO");
+            ImGui.TableNextColumn(); ImGui.TableHeader("Skindent");
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
             // override state of its own); both reflect the mod's live Penumbra values.
@@ -985,19 +985,42 @@ public class StatusWindow : Window
                         "bibo+gen3 = bake to the sibling body only (default)\n" +
                         "Off = no synthesis");
 
-                // Ambient occlusion + Skindenting for this mod's straps/garment (on by default).
+                // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
+                // "the pack decides", "forced on", "forced off" — so this is a combo, like the Bodies column
+                // beside it, and not a checkbox: a checkbox can't show the difference between "ticked
+                // because the pack asked" and "ticked because you said so", and offers nowhere to put the
+                // third state except a hidden modifier gesture.
                 ImGui.TableNextColumn();
-                bool aoOn = config.AmbientOcclusionEnabledFor(entry.ModDirectory);
-                if (ImGui.Checkbox($"##ao_{entry.ModDirectory}", ref aoOn))
+                bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
+                // The user's stored opinion: the new override, else a legacy opt-out, else none.
+                bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
+                    ? aoUser
+                    : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
+                string aoPackLabel = $"Pack ({(aoDeclared == true ? "on" : "off")})";
+                ImGui.SetNextItemWidth(74);
+                if (ImGui.BeginCombo($"##ao_{entry.ModDirectory}",
+                        aoChoice == null ? aoPackLabel : aoChoice.Value ? "On" : "Off"))
                 {
-                    if (aoOn) config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
-                    else      config.AmbientOcclusionDisabledMods.Add(entry.ModDirectory);
-                    config.Save();
-                    compositor.TriggerRecomposite("ambient-occlusion-mod");
+                    foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), ("On", true), ("Off", false) })
+                    {
+                        if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
+                        if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
+                        else                config.AmbientOcclusionOverrides[entry.ModDirectory] = choice.Value;
+                        // The legacy opt-out set is read-only now, and any of these three choices replaces
+                        // it — leaving it would let it contradict the selection the user just made.
+                        config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
+                        config.Save();
+                        compositor.TriggerRecomposite("ambient-occlusion-mod");
+                    }
+                    ImGui.EndCombo();
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Ambient-occlusion shadow + Skindenting normal indent for this mod's\n" +
-                        "straps/garment edges. On by default; uncheck to disable for this mod.\n" +
+                        "straps/garment edges. It treats coverage as cloth pressed into skin, which is\n" +
+                        "wrong for tattoos and skin details — so it is off unless asked for.\n\n" +
+                        $"{aoPackLabel} = whatever the pack declares (\"AmbientOcclusion\" in its\n" +
+                        "metadata.json; absent means off).\n" +
+                        "On / Off = your own setting for this mod, overriding the pack.\n\n" +
                         "(The global strength sliders are in Settings.)");
             }
 
@@ -1168,11 +1191,13 @@ public class StatusWindow : Window
         // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
         if (entry.Metadata.OptionGroups is not { Count: > 0 })
         {
-            var metaRows = entry.Metadata.ColorTableRows ??= [];
-            var ovrRows  = editingBinding
-                ? designBindings.GetEditableOverrideRows(entry.ModDirectory, null, null, metaRows)
-                : null;
-            var rows = ovrRows ?? metaRows;
+            var metaRows = entry.Metadata.ColorTableRows ?? [];
+            // Preview live without touching the binding until something is actually edited — see the Masks
+            // tab below for why creating the override on read is wrong. While editing a binding this ALWAYS
+            // works on a copy, even when an override already exists: the override is what the compositor
+            // reads from another thread, so the draw loop must never be writing into it.
+            var ovrRows  = editingBinding ? designBindings.PeekOverrideRows(entry.ModDirectory, null, null) : null;
+            var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? metaRows) : metaRows;
 
             var usedRowsSimple = new HashSet<int>();
             bool hasIdxSimple  = false;
@@ -1241,9 +1266,17 @@ public class StatusWindow : Window
 
             if (changedSimple || footerChangedSimple || modeChangedSimple)
             {
-                // Binding path: live-preview only — edits stay in the in-memory overrides and fold into the
-                // binding via "Update binding". Base metadata persists only when NOT editing a binding —
-                // except a reset, which exists precisely to rewrite the base and must always land.
+                // Binding path: live-preview only — install the edit into the in-memory override now (the
+                // first point we know one happened, so drawing alone never changes the binding) and fold it
+                // into the stored binding on "Update binding". Base metadata persists only when NOT editing
+                // a binding — except a reset, which exists precisely to rewrite the base and must land.
+                if (editingBinding && !resetSimple)
+                    designBindings.SetOverrideRows(entry.ModDirectory, null, null, rows);
+                // NOT on a reset: ResetToDefaults has already restored entry.Metadata in place, and `rows`
+                // is a working copy taken BEFORE it ran — writing that back would undo the restore and then
+                // save the undone state over the mod's own settings.
+                if (!editingBinding && !resetSimple)
+                    entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
                 if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
@@ -1508,9 +1541,16 @@ public class StatusWindow : Window
             // binding is being edited the rows/mode come from (and mutate) the binding's mask overrides
             // instead, so they're captured per-design (live preview until "Update binding").
             var baseMaskRows = entry.Metadata.MaskColorTableRows ?? [];
-            var maskRows  = (editingBinding
-                ? designBindings.GetEditableMaskRows(entry.ModDirectory, baseMaskRows)
-                : null) ?? baseMaskRows;
+            // While a binding is being edited, preview live WITHOUT touching it until something is actually
+            // edited: take the override only when one already exists, otherwise work on a COPY of the
+            // metadata and install it below the moment a change happens. Materialising on read (which is
+            // what the old GetEditableMaskRows did) snapshotted the metadata just for drawing the tab, and
+            // that snapshot then shadowed every later metadata edit for as long as the design stayed
+            // applied — the editor showed the new colour while the composite kept painting the old one.
+            var storedMaskRows = editingBinding ? designBindings.PeekMaskRows(entry.ModDirectory) : null;
+            var maskRows = editingBinding
+                ? DesignBindingService.CopyRows(storedMaskRows ?? baseMaskRows)
+                : baseMaskRows;
             var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
             int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
             bool maskChanged = false;
@@ -1598,10 +1638,15 @@ public class StatusWindow : Window
 
             if (maskChanged || maskFooterChanged || maskModeChanged)
             {
-                // Binding path: edits already landed in the overrides (live preview, folded in via "Update
-                // binding"); base metadata persists only when NOT editing a binding — same split as the
-                // overlay tabs. The mode descriptor is written only when the mode/footer actually changed.
-                if (!editingBinding)
+                // Binding path: install the edited rows as the binding's LIVE override now — this is the
+                // first point at which we know an edit actually happened, so the binding never changes just
+                // from being looked at. Still preview-only; the stored binding on disk is untouched until
+                // "Update binding". Base metadata persists only when NOT editing a binding.
+                if (editingBinding)
+                {
+                    designBindings.SetMaskRows(entry.ModDirectory, maskRows);
+                }
+                else
                 {
                     entry.Metadata.MaskColorTableRows = maskRows;
                     if (maskFooterChanged || maskModeChanged) entry.Metadata.MaskDescriptor = maskDesc;
@@ -1614,11 +1659,11 @@ public class StatusWindow : Window
             return;
         }
 
-        activeOpt.ColorTableRows ??= [];
+        var optRows = activeOpt.ColorTableRows ?? [];
         var ovrOptRows = editingBinding
-            ? designBindings.GetEditableOverrideRows(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.ColorTableRows)
+            ? designBindings.PeekOverrideRows(entry.ModDirectory, groupName, activeOpt.Name)
             : null;
-        var editRows = ovrOptRows ?? activeOpt.ColorTableRows;
+        var editRows = editingBinding ? DesignBindingService.CopyRows(ovrOptRows ?? optRows) : optRows;
 
         var scope = $"{entry.ModDirectory}_{groupName}_{activeOpt.Name}";
 
@@ -1705,6 +1750,14 @@ public class StatusWindow : Window
             // when NOT editing a binding — gate on that directly, not on whether a gear override exists
             // (an option with colour rows but no overlay descriptors has a null gear override even mid-binding).
             // A reset is the exception: it rewrites the base on purpose, so it must always land.
+            // Install the edited rows as the binding's live override at the first point we know an edit
+            // happened, so the binding never changes just from being drawn. Preview only — the stored
+            // binding is written on "Update binding".
+            if (editingBinding && !resetOpt)
+                designBindings.SetOverrideRows(entry.ModDirectory, groupName, activeOpt.Name, editRows);
+            // NOT on a reset — see the simple-mod path: the reset already rewrote activeOpt in place.
+            if (!editingBinding && !resetOpt)
+                activeOpt.ColorTableRows = editRows;
             if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");

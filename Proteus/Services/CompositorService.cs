@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -2545,6 +2545,13 @@ public class CompositorService : IDisposable
                         .Concat(gearOverlays.Select(g => g.Entry.ModDirectory))
                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+                    // What each pack itself declares about AO. Absent means it never asked, and the answer
+                    // is no — see ProteusMetadata.AmbientOcclusion. Collected from the same two sources
+                    // aoModsList is built from, so every mod in that list has an entry here.
+                    var aoDeclaredBy = new Dictionary<string, bool?>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var e in pairs.Select(p => p.Entry).Concat(gearOverlays.Select(g => g.Entry)))
+                        aoDeclaredBy.TryAdd(e.ModDirectory, e.Metadata?.AmbientOcclusion);
+
                     // Gear shells and Masks-group coverage are authored in BODY UV — a shell is literally cut
                     // from the body mesh — so they only describe a garment when the material being composited
                     // shares that UV space. See GarmentSilhouette, which gates gear the same way.
@@ -2666,7 +2673,8 @@ public class CompositorService : IDisposable
                         bodyUvMaterial && gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)),
                         // Skin-layer overlays with a diffuse (a painted garment) also cast AO/indent. Flat
                         // full-coverage overlays are self-gating (no edges → no effect); the per-mod AO
-                        // checkbox opts out anything unwanted (tattoos).
+                        // checkbox, or the pack's own AmbientOcclusion declaration, opts anything unwanted
+                        // (tattoos, skin details) back out — and since AO is opt-IN they are off by default.
                         allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
                             && o.Overlay.Descriptor.Layer == OverlayLayer.Skin
                             && o.Overlay.Descriptor.Diffuse != null
@@ -2679,7 +2687,9 @@ public class CompositorService : IDisposable
                     var aoQualified = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
                     foreach (var modDir in aoModsList)
                     {
-                        if (!config.AmbientOcclusionEnabledFor(modDir)) continue;   // per-mod opt-out
+                        // Opt-IN: the user's explicit choice, else what the pack declared, else off.
+                        aoDeclaredBy.TryGetValue(modDir, out bool? declared);
+                        if (!config.AmbientOcclusionEnabledFor(modDir, declared)) continue;
                         var (m, g, s) = AoSources(modDir);
                         if (m || g || s) aoQualified[modDir] = m;
                     }

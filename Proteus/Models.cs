@@ -53,6 +53,18 @@ public class ProteusMetadata
     /// </summary>
     [JsonPropertyName("MaskDescriptor")]
     public OverlayDescriptor? MaskDescriptor { get; set; }
+
+    /// <summary>
+    /// Whether this pack wants the ambient-occlusion shadow and Skindenting normal indent applied to its
+    /// coverage. Absent (null) means NO.
+    /// <para/>
+    /// Off by default because the effect reads a mod's coverage as a physical garment pressed into skin:
+    /// right for straps and trim, wrong for a tattoo, a skin detail, or a makeup overlay, where it prints a
+    /// shadow and a crease around flat artwork. A pack that wants it has to ask. The user can still override
+    /// either way per mod in the Mods tab, and that override wins.
+    /// </summary>
+    [JsonPropertyName("AmbientOcclusion")]
+    public bool? AmbientOcclusion { get; set; }
 }
 
 /// <summary>Which surface an overlay renders on.</summary>
@@ -257,6 +269,10 @@ public class ColorTableRowPreset
 
     [JsonPropertyName("SubRowB")]
     public ColorTableSubRowPreset? SubRowB { get; set; }
+
+    /// <summary>Deep copy. Used by the editor to work on rows without writing through to the metadata or to
+    /// a design binding until it decides where the edit belongs.</summary>
+    public ColorTableRowPreset Clone() => new() { Row = Row, SubRowA = SubRowA?.Clone(), SubRowB = SubRowB?.Clone() };
 }
 
 public class ColorTableSubRowPreset
@@ -311,6 +327,11 @@ public class ColorTableSubRowPreset
     /// <summary>Gear layer only. Metalness (0–1). Null keeps the shader default.</summary>
     [JsonPropertyName("Metalness")]
     public float? Metalness { get; set; }
+
+    /// <summary>Copy. Every member is a value type or an immutable string, so the shallow copy IS a deep
+    /// one — and MemberwiseClone keeps that true automatically when a property is added later, which a
+    /// hand-written field list would not.</summary>
+    public ColorTableSubRowPreset Clone() => (ColorTableSubRowPreset)MemberwiseClone();
 }
 
 /// <summary>Runtime (0-based) representation of a single color table sub-row.</summary>

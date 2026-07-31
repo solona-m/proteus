@@ -9,6 +9,18 @@
 
   <Import Project="Sdk.props" Sdk="Dalamud.NET.Sdk" />
 
+  <!-- Stamp the compile time into the assembly so the chat line on load can prove WHICH build is
+       running. Dalamud loads plugins from a stream, so Assembly.Location is empty at runtime and the
+       DLL's file timestamp is unreachable — this has to be baked in at compile time. Re-evaluated on
+       every build; when MSBuild skips the compile because nothing changed, the old stamp is retained,
+       which is correct because the assembly genuinely didn't change. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BuildStamp</_Parameter1>
+      <_Parameter2>$([System.DateTime]::Now.ToString('MM-dd HH:mm:ss'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <PropertyGroup>
     <Version>$(ProteusVersion)</Version>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

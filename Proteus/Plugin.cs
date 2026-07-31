@@ -1,3 +1,4 @@
+using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -20,8 +21,24 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
-    /// <summary>Bumped every dev build so a reload is unmistakable in chat.</summary>
-    public const int BuildNumber = 254;
+    /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
+    /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
+    /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
+    public const int BuildNumber = 255;
+
+    /// <summary>
+    /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
+    /// attribute) rather than read from the file, because Dalamud loads plugins from a stream — so
+    /// <c>Assembly.Location</c> is empty and there is no DLL path to stat at runtime.
+    /// <para/>
+    /// This is the value to trust when asking "did my rebuild actually load?": it moves on every compile
+    /// whether or not anyone remembered to touch <see cref="BuildNumber"/>.
+    /// </summary>
+    public static string BuildStamp { get; } =
+        System.Reflection.Assembly.GetExecutingAssembly()
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "BuildStamp")?.Value ?? "?";
 
     private const string CommandName = "/proteus";
 
@@ -129,7 +146,7 @@ public sealed class Plugin : IDalamudPlugin
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
-        ChatGui.Print($"[Proteus] loaded — build #{BuildNumber}");
+        ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
     }
 
     private void DrawUi() => windowSystem.Draw();

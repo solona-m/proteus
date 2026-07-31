@@ -443,43 +443,60 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// The mutable rows list the editor should bind to when an override is active for this mod,
-    /// or null if none. group/option=null targets the top-level rows; otherwise the option's rows.
-    /// Seeds (clones) from seedRows (the mod's metadata rows for the same scope) when the override
-    /// has nothing stored yet, so editing starts from what was on screen.
+    /// The mod's stored mask override — the single shared Masks tab's colorset — or null when the binding
+    /// has none. NEVER creates one.
+    /// <para/>
+    /// Creating on read is what made an edit invisible: merely drawing the Masks tab snapshotted the
+    /// metadata into the live override, and from then on that snapshot shadowed the metadata for as long as
+    /// the design stayed applied — so the editor showed the value you had just typed while the composite
+    /// kept using the snapshot. A binding must not change because you looked at it.
     /// </summary>
-    public List<ColorTableRowPreset>? GetEditableOverrideRows(
-        string modDir, string? group, string? option, List<ColorTableRowPreset>? seedRows)
+    public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
     {
         lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            if (group != null && option != null)
-            {
-                ovr.Options ??= new();
-                if (!ovr.Options.TryGetValue(group, out var inner))
-                    ovr.Options[group] = inner = new();
-                if (!inner.TryGetValue(option, out var rows))
-                    inner[option] = rows = CloneRows(seedRows) ?? new();
-                return rows;
-            }
-            return ovr.Top ??= CloneRows(seedRows) ?? new();
-        }
+            return activeOverride != null && activeOverride.TryGetValue(modDir, out var ovr) ? ovr.Mask : null;
     }
 
     /// <summary>
-    /// The mutable mask colorset the Masks tab should bind to when an override is active for this mod, or
-    /// null if none. Mirrors <see cref="GetEditableOverrideRows"/> for the mod's single shared Masks tab —
-    /// seeds (clones) from the metadata mask rows when the override has nothing stored yet.
+    /// Install the mask rows as this binding's LIVE override, on an actual edit. Live preview only — the
+    /// stored binding on disk is untouched until "Update binding". Returns false when no binding is active,
+    /// so the caller persists to the metadata instead.
     /// </summary>
-    public List<ColorTableRowPreset>? GetEditableMaskRows(string modDir, List<ColorTableRowPreset>? seedRows)
+    public bool SetMaskRows(string modDir, List<ColorTableRowPreset> rows)
     {
         lock (gate)
         {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            return ovr.Mask ??= CloneRows(seedRows) ?? new();
+            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
+            ovr.Mask = rows;
+            return true;
+        }
+    }
+
+    /// <summary>The stored colour override for a mod's top-level rows, or one option's, or null when the
+    /// binding has none. NEVER creates one — same reason as <see cref="PeekMaskRows"/>.</summary>
+    public List<ColorTableRowPreset>? PeekOverrideRows(string modDir, string? group, string? option)
+    {
+        lock (gate)
+        {
+            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return null;
+            if (group == null || option == null) return ovr.Top;
+            return ovr.Options != null && ovr.Options.TryGetValue(group, out var inner)
+                && inner.TryGetValue(option, out var rows) ? rows : null;
+        }
+    }
+
+    /// <summary>Install rows as this binding's LIVE override, on an actual edit. Preview only — the stored
+    /// binding is untouched until "Update binding". False when no binding is active.</summary>
+    public bool SetOverrideRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
+    {
+        lock (gate)
+        {
+            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
+            if (group == null || option == null) { ovr.Top = rows; return true; }
+            ovr.Options ??= new();
+            if (!ovr.Options.TryGetValue(group, out var inner)) ovr.Options[group] = inner = new();
+            inner[option] = rows;
+            return true;
         }
     }
 
@@ -525,7 +542,7 @@ public class DesignBindingService : IDisposable
 
     /// <summary>
     /// The mutable gear-settings preset the layer/shader editor should bind to when an override is active
-    /// for this mod, or null if none. Mirrors <see cref="GetEditableOverrideRows"/>: group/option=null
+    /// for this mod, or null if none. Mirrors <see cref="PeekOverrideRows"/>: group/option=null
     /// targets the top-level overlay; otherwise the option's. Seeds from the metadata descriptor's own
     /// gear settings when the override has nothing stored yet, so editing starts from what's on screen.
     /// </summary>
@@ -1117,4 +1134,18 @@ public class DesignBindingService : IDisposable
 
     private static List<ColorTableRowPreset>? CloneRows(List<ColorTableRowPreset>? rows)
         => rows == null ? null : JsonSerializer.Deserialize<List<ColorTableRowPreset>>(JsonSerializer.Serialize(rows));
+
+    /// <summary>
+    /// Deep copy of a row list, for an editor that must preview edits without writing them into either the
+    /// metadata or the binding until it decides where they belong.
+    /// <para/>
+    /// Per-element <see cref="ColorTableRowPreset.Clone"/> rather than the JSON round-trip
+    /// <see cref="CloneRows"/> uses: this one runs in the ImGui draw path, once per frame per open tab.
+    /// </summary>
+    public static List<ColorTableRowPreset> CopyRows(List<ColorTableRowPreset>? rows)
+    {
+        var copy = new List<ColorTableRowPreset>(rows?.Count ?? 0);
+        if (rows != null) foreach (var r in rows) copy.Add(r.Clone());
+        return copy;
+    }
 }
