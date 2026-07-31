@@ -1516,6 +1516,71 @@ public class CompositorService : IDisposable
                 if (assets.Count > 0) maskAssetsByMod[entry.ModDirectory] = assets;
             }
 
+            // ── Body materials for a gear-only / masks-only look ─────────────
+            // byMaterial is built from SKIN-layer overlays alone — a Gear-layer overlay is diverted into
+            // gearOverlays before it can add a material. So with no skin overlay the body material never
+            // enters the set, the composite loop never visits it, and the AO/Skindenting block inside that
+            // loop never runs: straps rendered, skin beneath them flat.
+            //
+            // But AO and the indent are cast BY the garment ONTO the skin, so they belong on the body
+            // material whether or not any mod paints there. Add the character's own body materials with an
+            // EMPTY overlay list; the AO pass reads gearOverlays/maskPathsByMod directly, not `pairs`, so
+            // an empty list costs nothing and changes nothing for materials already present.
+            //
+            // Two gates. The effect must be on globally AND opted in for at least one mod that actually
+            // contributes gear or masks — the same test the loop itself applies, so the two can't disagree.
+            // And a body that is NOT the caster's own is a sibling, so it obeys that mod's sibling-synthesis
+            // setting: without that, a mod set to Off still got its shadow baked onto the vanilla body the
+            // user had excluded, and paid two ~16 MB writes to do it.
+            if ((config.AmbientOcclusionStrength > 0f || config.AmbientOcclusionNormalDepth > 0f)
+                && activeMtrl != null)
+            {
+                // Each caster with the body type(s) it is authored for, so a SIBLING body can be judged
+                // against that mod's sibling-synthesis setting below.
+                var casters = entries
+                    .Where(e => (gearOverlays.Any(g => string.Equals(g.Entry.ModDirectory, e.ModDirectory, StringComparison.OrdinalIgnoreCase))
+                                 || maskPathsByMod.ContainsKey(e.ModDirectory))
+                                && config.AmbientOcclusionEnabledFor(e.ModDirectory, e.Metadata?.AmbientOcclusion))
+                    .Select(e => (
+                        Mod: e.ModDirectory,
+                        Types: allOverlays
+                            .Where(o => string.Equals(o.Entry.ModDirectory, e.ModDirectory, StringComparison.OrdinalIgnoreCase))
+                            .Select(o => o.Overlay.Descriptor.SourceBodyType
+                                         ?? o.Overlay.Descriptor.MaterialGamePaths
+                                              .Select(UVRemapService.InferBodyType).FirstOrDefault(t => t != null))
+                            .Where(t => t != null)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase)))
+                    .ToList();
+
+                if (casters.Count > 0)
+                {
+                    int added = 0;
+                    foreach (var m in activeMtrl)
+                    {
+                        // BOTH predicates: InferBodyType alone also matches chara/weapon/…/obj/body/…,
+                        // and ExtractHumanCharCode is what excludes it. Never overwrite a real list.
+                        if (ExtractHumanCharCode(m) == null) continue;
+                        var dstType = UVRemapService.InferBodyType(m);
+                        if (dstType == null || byMaterial.ContainsKey(m)) continue;
+
+                        // A caster's OWN body always qualifies. Any OTHER loaded body is a sibling, and
+                        // touching it is the user's call — the same gate sibling synthesis applies above, so
+                        // a mod set to Off doesn't get its shadow baked onto a body the user excluded.
+                        bool vanilla = string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase);
+                        if (!casters.Any(c => c.Types.Contains(dstType)
+                                || (vanilla ? config.SiblingModeFor(c.Mod) == SiblingSynthesisMode.AllBodies
+                                            : config.SiblingModeFor(c.Mod) != SiblingSynthesisMode.Off)))
+                            continue;
+
+                        byMaterial[m] = new();
+                        added++;
+                    }
+                    if (added > 0)
+                        log.Debug("[Proteus] AO: added {0} body material(s) with no skin overlay so the "
+                                + "shadow/indent from gear or masks has somewhere to land", added);
+                }
+            }
+
             // The mod's single shared "Masks" colorset (the one Masks tab). When present, its active masks
             // are coloured by THESE rows via their combined _id in a top diffuse layer — instead of merging
             // each mask's _id into the overlays beneath (that merge is skipped for the mod; see
