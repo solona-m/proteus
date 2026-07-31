@@ -461,6 +461,22 @@ public class StatusWindow : Window
                 "Indents the skin normal at strap/garment edges so straps look pressed into the skin.\n" +
                 "0.00 disables it (skin normal unchanged). Uses the same edges/softness as the shadow.");
 
+        // TEMPORARY DIAGNOSTIC — remove with Configuration.AoDiagnosticDump.
+        bool aoDump = config.AoDiagnosticDump;
+        if (ImGui.Checkbox("Dump AO/Skindenting planes", ref aoDump))
+        {
+            config.AoDiagnosticDump = aoDump;
+            config.Save();
+            compositor.TriggerRecomposite("ao-diagnostic-dump");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(
+                "Diagnostic. Writes the planes these two passes work from — the strap silhouette, its\n" +
+                "blur, the covered-above mask, and the indent's own gradient — as PNGs under the\n" +
+                "Proteus mod folder's ao_debug/, one set per mod per composite.\n\n" +
+                "For tracking down where a seam or crease actually originates. Leave off otherwise:\n" +
+                "it writes several full-size PNGs on every recomposite.");
+
         // Hide a body's redundant connector meshes on the gear shell (see Configuration).
         var connMode = config.HideConnectorMeshes;
         ImGui.SetNextItemWidth(140);

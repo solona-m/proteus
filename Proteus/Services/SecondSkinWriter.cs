@@ -81,6 +81,90 @@ public static class SecondSkinWriter
     /// </summary>
     public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
 
+    /// <summary>
+    /// LOD0 triangle geometry — object-space position and uv0 per vertex, plus triangle indices — for UV
+    /// seam analysis (see <see cref="UvSeamMapService"/>). Every LOD0 mesh is concatenated into one vertex
+    /// array with its indices rebased, so a seam BETWEEN two meshes is found exactly like one inside a
+    /// mesh; that matters because a body's torso and legs are frequently separate meshes.
+    /// <para/>
+    /// Returns false rather than throwing on a model this can't read — a missing position or uv0 element,
+    /// a truncated buffer, anything Parse rejects. The caller treats that as "no seam data" and falls back.
+    /// </summary>
+    public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs, out int[] triangles)
+    {
+        positions = []; uvs = []; triangles = [];
+        Source src;
+        try { src = Parse(mdl); }
+        catch { return false; }
+
+        var s = src.S;
+
+        // SKIN MESHES ONLY. A body model is not all skin: it carries the smallclothes/undies mesh, nails,
+        // piercings and pubes, and each of those is authored in its OWN UV layout (gear space, not body
+        // space). Including them lands their triangles at unrelated places in the body atlas — which bridges
+        // the gap between genuinely separate islands and invents seam edges between surfaces that never
+        // touch. Same filter, and the same reason, as the shell builder's.
+        var matNames = ReadMaterialNames(s, src);
+        var pos = new List<float>();
+        var uv  = new List<float>();
+        var tri = new List<int>();
+        Span<float> tmp = stackalloc float[4];
+
+        int end = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        for (int m = src.Lod0MeshIndex; m < end; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (mo + 36 > s.Length) break;
+            ushort vc = BitConverter.ToUInt16(s, mo);
+            uint ic = BitConverter.ToUInt32(s, mo + 4);
+            uint startIndex = BitConverter.ToUInt32(s, mo + 16);
+            if (vc == 0 || ic < 3) continue;
+
+            ushort matIdx = BitConverter.ToUInt16(s, mo + 8);
+            if (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null) continue;
+
+            var decl = m < src.Decls.Length ? src.Decls[m] : [];
+            VElem? posEl = null, uvEl = null;
+            foreach (var el in decl)
+            {
+                if (el.Usage == UsePosition) posEl ??= el;
+                else if (el.Usage == UseUV && el.UsageIndex == 0) uvEl ??= el;
+            }
+            if (posEl is not { } pe || uvEl is not { } ue) continue;
+
+            uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24), BitConverter.ToUInt32(s, mo + 28) };
+            byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+            if (pe.Stream > 2 || ue.Stream > 2 || bs[pe.Stream] == 0 || bs[ue.Stream] == 0) continue;
+
+            int baseVertex = pos.Count / 3;
+            bool ok = true;
+            for (int k = 0; k < vc && ok; k++)
+            {
+                int pa = (int)(src.Vb + vbo[pe.Stream]) + k * bs[pe.Stream] + pe.Offset;
+                int ua = (int)(src.Vb + vbo[ue.Stream]) + k * bs[ue.Stream] + ue.Offset;
+                // 16 bytes is the widest element ReadTyped touches (Float4).
+                if (pa < 0 || ua < 0 || pa + 16 > s.Length || ua + 16 > s.Length) { ok = false; break; }
+                ReadTyped(s, pa, pe.Type, tmp); pos.Add(tmp[0]); pos.Add(tmp[1]); pos.Add(tmp[2]);
+                ReadTyped(s, ua, ue.Type, tmp); uv.Add(tmp[0]); uv.Add(tmp[1]);
+            }
+            if (!ok) { pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3);
+                       uv.RemoveRange(baseVertex * 2, uv.Count - baseVertex * 2); continue; }
+
+            for (uint i = 0; i + 2 < ic; i += 3)
+            {
+                int ia = (int)(src.Ib + (startIndex + i) * 2);
+                if (ia < 0 || ia + 6 > s.Length) break;
+                int a = BitConverter.ToUInt16(s, ia), b = BitConverter.ToUInt16(s, ia + 2), c = BitConverter.ToUInt16(s, ia + 4);
+                if (a >= vc || b >= vc || c >= vc) continue;    // a stale index must not reach another mesh
+                tri.Add(baseVertex + a); tri.Add(baseVertex + b); tri.Add(baseVertex + c);
+            }
+        }
+
+        if (tri.Count == 0) return false;
+        positions = pos.ToArray(); uvs = uv.ToArray(); triangles = tri.ToArray();
+        return true;
+    }
+
     private static List<string> ReadMaterialNames(byte[] s, Source src)
     {
         var names = new List<string>();

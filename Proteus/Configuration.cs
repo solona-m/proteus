@@ -126,6 +126,17 @@ public class Configuration : IPluginConfiguration
     /// Absent = BiboGen3Only (default, = legacy behavior: gen3 bake, no vanilla).</summary>
     public Dictionary<string, SiblingSynthesisMode> SiblingSynthesis { get; set; } = new();
 
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC. Dumps the intermediate planes the AO / Skindenting passes work from —
+    /// the silhouette, its blur, and the indent's gradient — as PNGs under the managed mod's
+    /// <c>ao_debug/</c> folder, one set per mod per composite.
+    /// <para/>
+    /// Exists because the UV-seam crease resisted four separate diagnoses reasoned from the code: the
+    /// point is to look at the planes the compositor ACTUALLY builds rather than a reconstruction of
+    /// them. Delete this and its plumbing once that question is settled.
+    /// </summary>
+    public bool AoDiagnosticDump { get; set; } = false;
+
     /// <summary>Mods for which the ambient-occlusion shadow + Skindenting normal indent are DISABLED,
     /// keyed by Penumbra mod directory. Absent = enabled (the default), so only opt-outs are stored.
     /// OrdinalIgnoreCase to match how mod directories are compared everywhere else (Newtonsoft populates

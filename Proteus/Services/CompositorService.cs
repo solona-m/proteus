@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -58,6 +58,7 @@ public class CompositorService : IDisposable
 
     private CancellationTokenSource? currentCts;
     private readonly SecondSkinService secondSkin;
+    private readonly UvSeamMapService seamMaps;
 
     private readonly object triggerLock = new();
     private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
@@ -211,6 +212,7 @@ public class CompositorService : IDisposable
         this.log = log;
         this.uvRemap = uvRemap;
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log);
+        this.seamMaps  = new UvSeamMapService(log);
 
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
@@ -2548,6 +2550,107 @@ public class CompositorService : IDisposable
                     // shares that UV space. See GarmentSilhouette, which gates gear the same way.
                     bool bodyUvMaterial = IsBodyUvMaterial(mtrlGamePath);
 
+                    // TEMPORARY DIAGNOSTIC (config.AoDiagnosticDump). Writes the planes these passes actually
+                    // work from, so the UV-seam crease can be traced in real data instead of a reconstruction.
+                    // Grayscale expanded to RGBA because WritePng takes RGBA. Remove with the config flag.
+                    void DumpPlane(string modDir, string what, byte[] plane, int w, int h)
+                    {
+                        if (!config.AoDiagnosticDump || plane.Length < w * h) return;
+                        try
+                        {
+                            var dir = Path.Combine(managedModDir, "ao_debug");
+                            Directory.CreateDirectory(dir);
+                            var rgba = new byte[w * h * 4];
+                            for (int p = 0; p < w * h; p++)
+                            {
+                                byte v = plane[p];
+                                rgba[p * 4] = rgba[p * 4 + 1] = rgba[p * 4 + 2] = v;
+                                rgba[p * 4 + 3] = 255;
+                            }
+                            var name = $"{SanitizeName(mtrlGamePath)}_{SanitizeName(modDir)}_{what}.png";
+                            textureLoader.WritePng(rgba, w, h, Path.Combine(dir, name));
+                        }
+                        catch (Exception ex) { log.Warning(ex, "[Proteus] AO dump failed for {0}/{1}", modDir, what); }
+                    }
+
+                    // The UV islands at the diffuse resolution: a 0/255 plane to tell body from padding, plus
+                    // the per-island labelling BlurCoverageWithinIslands needs to keep each blur window on
+                    // one island. Null when this body has no transfer map to derive them from (gen2), in
+                    // which case the silhouettes are blurred plainly, exactly as before.
+                    byte[]? insidePlane = null;
+                    int[]? islandLabels = null, islandOwner = null;
+                    int islandCount = 0;
+                    if (dstBodyType != null && baseD is { Length: > 0 })
+                    {
+                        var isl = uvRemap.IslandMask(dstBodyType, out int islW, out int islH);
+                        if (isl != null && islW > 0 && islH > 0)
+                        {
+                            insidePlane = new byte[wD * hD];
+                            var ip = insidePlane;
+                            Parallel.For(0, hD, y =>
+                            {
+                                int srow = (int)((long)y * islH / hD) * islW;
+                                int row = y * wD;
+                                for (int x = 0; x < wD; x++)
+                                {
+                                    int si = srow + (int)((long)x * islW / wD);
+                                    ip[row + x] = (byte)(si < isl.Length && isl[si] ? 255 : 0);
+                                }
+                            });
+                            (islandLabels, islandOwner, islandCount) = IslandLabelsFor(dstBodyType, insidePlane, wD, hD);
+                        }
+                    }
+
+                    // The mesh that owns this UV layout. Its seams are the only statement of which island
+                    // edge continues into which other — the texture can't say, and the transfer maps
+                    // describe a different body's layout, not this one's topology. Loaded once per
+                    // composite; the seam map itself is cached by model content inside the service.
+                    List<byte[]?>? bodyMdls = null;
+                    if (islandLabels != null)
+                    {
+                        if (BodyModelPathsFor(mtrlGamePath) is { } bodyMdlPaths)
+                        {
+                            bodyMdls = new List<byte[]?>(bodyMdlPaths.Length);
+                            int got = 0;
+                            foreach (var mp in bodyMdlPaths)
+                            {
+                                var b = textureLoader.LoadRawFile(penumbra.ResolvePlayer(mp), mp);
+                                if (b != null) got++;
+                                bodyMdls.Add(b);
+                            }
+                            log.Debug("[Proteus] seam map: {0}/{1} body part models loaded for {2}",
+                                      got, bodyMdlPaths.Length, mtrlGamePath);
+                        }
+                        else
+                        {
+                            log.Debug("[Proteus] seam map: {0} is not a human body material — no seam data",
+                                      mtrlGamePath);
+                        }
+                    }
+
+                    // NOTE — the "seam / crease along a UV border" hunt, and what it actually turned out
+                    // to be, so none of it is retried. TWO real causes, both now fixed:
+                    //  1. TryReadLod0Geometry was reading the WHOLE model. A body model also carries the
+                    //     undies, nails and pubes meshes, which are authored in GEAR UV space — their
+                    //     triangles landed at unrelated places in the body atlas, welding separate islands
+                    //     together and inventing seam correspondences between surfaces that never touch.
+                    //     Filtering to skin materials took the seam build 5.8s -> 258ms and the mapped
+                    //     texels 12M -> 1.67M.
+                    //  2. ApplyNormalIndent took a CENTRAL difference across the island border, so one
+                    //     sample landed in padding whose value comes from a different computation. The
+                    //     one-texel step read as a slope ~4x the interior (2.93 against 0.74 measured over
+                    //     the whole body) and got carved into a crease tracing every island outline.
+                    // Rejected along the way, all against this same artefact: fading AO/indent out near
+                    // borders (the ridges sit ~90% inside an island, so the fade is ~1 where they are);
+                    // clipping the silhouette to IslandMask (kills the seam but substitutes an equal step
+                    // the other way, reported as "AO near mask edges is gone"); scaling the blur radius to
+                    // the trim's feature size (removes the seam but loses the effect — a filament mask
+                    // wants radius ~4 where the look wants ~12).
+                    // SEPARATELY, and not a compositor bug: the mask art itself can carry one-row cliffs
+                    // (0 -> 255 across 2px where that file's own edges ramp over ~32px). The blur turns
+                    // those into ~24px bands. They are distinguishable — a 200-texel axis-aligned run in a
+                    // single row is not a real strap edge — but nothing here filters them today.
+
                     // What a mod casts onto THIS material. ONE definition, used both to decide whether any
                     // base texture needs loading at all and by the loop below — they qualified separately
                     // before, and a change to either would have silently desynced them.
@@ -2580,6 +2683,10 @@ public class CompositorService : IDisposable
                         var (m, g, s) = AoSources(modDir);
                         if (m || g || s) aoQualified[modDir] = m;
                     }
+
+                    log.Debug("[Proteus] AO on {0}: strength={1:F3} normal={2:F4} softness={3:F4} — {4}/{5} mod(s) qualified [{6}]",
+                              mtrlGamePath, aoStrength, aoNormal, aoSoftness,
+                              aoQualified.Count, aoModsList.Count, string.Join(", ", aoQualified.Keys));
 
                     // The base body diffuse — needed for the shadow AND for the shared "covered above" mask's
                     // dimensions, so load it up front even when only the normal indent is enabled.
@@ -2639,7 +2746,10 @@ public class CompositorService : IDisposable
 
                         // The AO silhouette (mask if the mod has one, else the garment coverage). Computed at
                         // the diffuse res; reused for the normal indent when the normal shares that size.
+                        // radiusD is remembered so the indent normalises against the radius the blur it reads
+                        // was ACTUALLY built with — the feature-scaled one, not the raw softness setting.
                         byte[]? strapD = null, blurredD = null;
+                        int radiusD = 0;
 
                         // ── Diffuse: soft contact shadow on the skin just outside the edge ──
                         if (aoStrength > 0f && baseD is { Length: > 0 })
@@ -2647,7 +2757,18 @@ public class CompositorService : IDisposable
                             strapD = hasMasks ? (CombinedMaskAt(modDir, wD, hD, aoSrcBodyType)?.T ?? garmentCov) : garmentCov;
                             if (strapD != null)
                             {
-                                blurredD = BlurCoverage(strapD, wD, hD, Math.Max(1, (int)(wD * aoSoftness)));
+                                radiusD = Math.Max(1, (int)(wD * aoSoftness));
+                                // Keep every blur window on one UV island, so the halo comes from the mask
+                                // and not from padding or from the island across the gutter. The silhouette
+                                // itself is left exactly as authored — it is also the gate, and on-model
+                                // texels are the same either way. See BlurCoverageWithinIslands.
+                                blurredD = insidePlane != null && islandLabels != null && islandOwner != null
+                                    ? BlurCoverageWithinIslands(strapD, islandLabels, islandOwner, islandCount, insidePlane,
+                                                                bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD)
+                                    : BlurCoverage(strapD, wD, hD, radiusD);
+                                DumpPlane(modDir, "silhouette", strapD, wD, hD);
+                                DumpPlane(modDir, "blurred", blurredD, wD, hD);
+                                if (coveredAbove != null) DumpPlane(modDir, "coveredAbove", coveredAbove, wD, hD);
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
                             }
                         }
@@ -2677,21 +2798,35 @@ public class CompositorService : IDisposable
                                 if (strapD != null && blurredD != null && wN == wD && hN == hD)
                                 {
                                     strapN = strapD; blurredN = blurredD;   // reuse the diffuse-resolution buffers
-                                    radiusN = Math.Max(1, (int)(wD * aoSoftness));
+                                    radiusN = radiusD;                      // the radius that blur was built with
                                 }
                                 else
                                 {
                                     strapN = hasMasks ? (CombinedMaskAt(modDir, wN, hN, aoSrcBodyType)?.T ?? GarmentSilhouette(modDir, wN, hN))
                                                       : GarmentSilhouette(modDir, wN, hN);
                                     radiusN = Math.Max(1, (int)(wN * aoSoftness));
-                                    blurredN = strapN != null ? BlurCoverage(strapN, wN, hN, radiusN) : null;
+                                    // Island-restricted only when the normal shares the diffuse's size —
+                                    // insidePlane and the labels are built at wD/hD, the same guard
+                                    // coveredAbove uses. Otherwise a plain blur, as before.
+                                    blurredN = strapN == null ? null
+                                        : insidePlane != null && islandLabels != null && islandOwner != null && wN == wD && hN == hD
+                                            ? BlurCoverageWithinIslands(strapN, islandLabels, islandOwner, islandCount, insidePlane,
+                                                                        bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wN, hN, SeamReach(radiusN)), wN, hN, radiusN)
+                                            : BlurCoverage(strapN, wN, hN, radiusN);
                                 }
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
                                 if (strapN != null && blurredN != null)
                                 {
+                                    // The plane the crease actually comes from: gate × |gradient of blurred|,
+                                    // i.e. exactly what ApplyNormalIndent turns into a normal tilt.
+                                    if (config.AoDiagnosticDump)
+                                        DumpPlane(modDir, "indent", IndentMagnitude(blurredN, strapN, wN, hN,
+                                            wN == wD && hN == hD ? coveredAbove : null,
+                                            wN == wD && hN == hD ? insidePlane : null), wN, hN);
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
-                                        wN == wD && hN == hD ? coveredAbove : null, radiusN);
+                                        wN == wD && hN == hD ? coveredAbove : null, radiusN,
+                                        wN == wD && hN == hD ? insidePlane : null);
                                     aoIndentedNormal = true;
                                 }
                             }
@@ -3803,7 +3938,8 @@ public class CompositorService : IDisposable
     /// </summary>
     // coveredAbove (optional, single-channel w*h): where a HIGHER-stacked garment is opaque the shadow is
     // suppressed — a lower garment's contact shadow can't fall on skin that another layer covers.
-    internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength, byte[]? coveredAbove = null)
+    internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength,
+        byte[]? coveredAbove = null)
     {
         if (strength <= 0f) return;
         ParallelPixels(0, w * h, 1, (from, to) =>
@@ -3856,9 +3992,10 @@ public class CompositorService : IDisposable
     /// which leaves the tilt exactly as it was at the resolution the depth default was tuned against.
     /// </param>
     internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength,
-        byte[]? coveredAbove = null, int radius = IndentRefRadius)
+        byte[]? coveredAbove = null, int radius = IndentRefRadius, byte[]? inside = null)
     {
         if (strength <= 0f) return;
+        if (inside != null && inside.Length < w * h) inside = null;
         // Depth was tuned on a 2048-wide skin map at the 0.003 default softness ⇒ radius 6. Scaling by
         // radius/6 makes the setting mean the same slope everywhere, and a no-op at that reference.
         float gScale = radius > 0 ? radius / (float)IndentRefRadius : 1f;
@@ -3874,8 +4011,33 @@ public class CompositorService : IDisposable
                 if (edge <= 0f) continue;
                 int xm = x > 0 ? x - 1 : 0;
                 int xp = x < w - 1 ? x + 1 : w - 1;
-                float gx = (blurred[row + xp]     - blurred[row + xm])   / 255f;   // +x = toward the strap
-                float gy = (blurred[rowDown + x]  - blurred[rowUp + x])  / 255f;   // rows increase downward
+
+                // Never differentiate ACROSS a UV-island border. Padding is not surface — its value comes
+                // from a different computation than the island's own blur, so a central difference that
+                // straddles the border sees a one-texel step and reports a gradient ~3x the interior
+                // (measured: 6.9 against 2.2). ApplyNormalIndent then carves that into a crease following
+                // the island outline, which is the faint shadow cutoff along a seam. Dropping to a one-sided
+                // difference there keeps the real slope and loses the phantom step.
+                //
+                // The scale-up is relative to the span this texel WOULD have had, not to a fixed 2 — at the
+                // texture's own outer row/column the difference was already one-sided before this change,
+                // and normalising against 2 there would silently double the indent on a path this fix isn't
+                // about. Comparing against baseSpan makes the correction apply only where the island mask
+                // actually shortened the difference.
+                int rUp = rowUp, rDn = rowDown;                 // per-texel copies: the row bases must not move
+                int baseSpanX = xp - xm, baseSpanY = (rDn - rUp) / w;
+                int spanX = baseSpanX, spanY = baseSpanY;
+                if (inside != null)
+                {
+                    if (inside[row + xm] == 0) xm = x;
+                    if (inside[row + xp] == 0) xp = x;
+                    if (inside[rUp + x] == 0) rUp = row;
+                    if (inside[rDn + x] == 0) rDn = row;
+                    spanX = xp - xm;
+                    spanY = (rDn - rUp) / w;
+                }
+                float gx = spanX == 0 ? 0f : (blurred[row + xp] - blurred[row + xm]) / 255f * ((float)baseSpanX / spanX);
+                float gy = spanY == 0 ? 0f : (blurred[rDn + x] - blurred[rUp + x]) / 255f * ((float)baseSpanY / spanY);
                 if (gx == 0f && gy == 0f) continue;
                 int i = (row + x) * 4;
                 float bx = baseN[i]     / 127.5f - 1f;
@@ -3913,6 +4075,448 @@ public class CompositorService : IDisposable
     internal static bool IsBodyUvMaterial(string mtrlGamePath)
         => UVRemapService.InferBodyType(mtrlGamePath) != null
         || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC companion to <see cref="ApplyNormalIndent"/>: the magnitude of the tilt it would
+    /// apply, per pixel, scaled to 0-255. Mirrors that method's gate and gradient EXACTLY (same neighbour
+    /// sampling, same covered-above factor) so the dump shows where the crease comes from rather than an
+    /// approximation of it. Remove with <see cref="Configuration.AoDiagnosticDump"/>.
+    /// </summary>
+    internal static byte[] IndentMagnitude(byte[] blurred, byte[] strap, int w, int h, byte[]? coveredAbove,
+        byte[]? inside = null)
+    {
+        if (inside != null && inside.Length < w * h) inside = null;
+        var outp = new byte[w * h];
+        Parallel.For(0, h, y =>
+        {
+            int row = y * w, rowUp = (y > 0 ? y - 1 : 0) * w, rowDown = (y < h - 1 ? y + 1 : h - 1) * w;
+            for (int x = 0; x < w; x++)
+            {
+                float edge = 1f - strap[row + x] / 255f;
+                if (coveredAbove != null) edge *= 1f - coveredAbove[row + x] / 255f;
+                if (edge <= 0f) continue;
+                int xm = x > 0 ? x - 1 : 0, xp = x < w - 1 ? x + 1 : w - 1;
+                // Same border-aware difference as ApplyNormalIndent — the dump is worthless if it shows a
+                // phantom border spike the real pass no longer produces.
+                int rUp = rowUp, rDn = rowDown;
+                int baseSpanX = xp - xm, baseSpanY = (rDn - rUp) / w;
+                int spanX = baseSpanX, spanY = baseSpanY;
+                if (inside != null)
+                {
+                    if (inside[row + xm] == 0) xm = x;
+                    if (inside[row + xp] == 0) xp = x;
+                    if (inside[rUp + x] == 0) rUp = row;
+                    if (inside[rDn + x] == 0) rDn = row;
+                    spanX = xp - xm;
+                    spanY = (rDn - rUp) / w;
+                }
+                float gx = spanX == 0 ? 0f : (blurred[row + xp] - blurred[row + xm]) / 255f * ((float)baseSpanX / spanX);
+                float gy = spanY == 0 ? 0f : (blurred[rDn + x] - blurred[rUp + x]) / 255f * ((float)baseSpanY / spanY);
+                float mag = MathF.Sqrt(gx * gx + gy * gy) * edge;
+                outp[row + x] = (byte)Math.Clamp(mag * 255f * 4f, 0, 255);   // ×4 so faint ridges are visible
+            }
+        });
+        return outp;
+    }
+
+    /// <summary>
+    /// Replace an AO silhouette's values OUTSIDE the UV islands with a smooth extension of the values just
+    /// inside, so the blur that follows sees no step at an island border.
+    /// <para/>
+    /// Why: texture space between islands is padding, and art tools dilate into it — but they fill it with
+    /// whatever suits the DIFFUSE, not with something consistent with a coverage mask. Measured on a real
+    /// mask, the padding is 90% covered at a mean of 40 (and ~127 across the torso/leg gutter) while the body
+    /// either side is 94% EMPTY. <see cref="BlurCoverage"/> then drags that plateau inward and
+    /// <see cref="ApplyNormalIndent"/> carves its gradient into a crease that follows the UV seam across bare
+    /// skin — which is what it looks like in game.
+    /// <para/>
+    /// Two things were tried first and both were wrong, for the same reason — they treat the symptom at the
+    /// border instead of the padding behind it:
+    /// <list type="bullet">
+    /// <item>ZEROING the padding. Kills the seam, but substitutes an equal step in the other direction, so AO
+    /// weakens within a blur-reach of every island border — and on a body UV that's most of the skin. Reported
+    /// as "AO near mask edges is gone".</item>
+    /// <item>FADING the effect out near borders. Only halves the artefact: the padding still bleeds inward,
+    /// and the fade is already back to ~1 by the time the bled gradient peaks.</item>
+    /// </list>
+    /// Extending instead means the padding AGREES with the island edge, so there is no discontinuity to blur
+    /// and nothing near a border is weakened.
+    /// <para/>
+    /// The extension is a normalised (masked) blur: average the in-island values over the window and divide
+    /// by how much of the window was in-island. Where too little of the window is in-island to average
+    /// meaningfully — deep padding, far from any island — it falls to 0, which is harmless because the blur
+    /// can't reach the island from there. Valid texels are copied through EXACTLY; only padding is rewritten.
+    /// </summary>
+    internal static byte[] ExtendIntoPadding(byte[] plane, byte[] inside, int w, int h, int radius)
+    {
+        if (plane.Length < w * h || inside.Length < w * h || w <= 0 || h <= 0) return plane;
+
+        // Masked sums: numerator over in-island values, denominator over in-island weight.
+        var masked = new byte[w * h];
+        ParallelPixels(0, w * h, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++) masked[p] = inside[p] != 0 ? plane[p] : (byte)0;
+        });
+        var num = BlurCoverage(masked, w, h, radius);
+        var den = BlurCoverage(inside, w, h, radius);
+
+        // Below this share of the window being in-island the average is noise, not an extension.
+        const int MinWeight = 8;   // ~3% of a full window
+        var outp = (byte[])plane.Clone();
+        ParallelPixels(0, w * h, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++)
+            {
+                if (inside[p] != 0) continue;                       // on the body — leave exactly as authored
+                outp[p] = den[p] >= MinWeight
+                    ? (byte)Math.Clamp(num[p] * 255 / den[p], 0, 255)
+                    : (byte)0;
+            }
+        });
+        return outp;
+    }
+
+    /// <summary>
+    /// The models that own a skin material's UV layout — the meshes whose seams say which island edge
+    /// continues into which. A skin material names its race, and the body is DRAWN as the four bare-body
+    /// equipment parts, so "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl"
+    /// becomes the c0201e0000 top / dwn / glv / sho set.
+    /// <para/>
+    /// NOT chara/human/…/c0201b0001.mdl, which is what the material path looks like it points at: body
+    /// replacers (Bibo+, gen3) ship their mesh as the e0000 equipment parts and leave that model vanilla,
+    /// so reading it would hand back a different body's topology and UVs entirely. The seams must come from
+    /// the mesh actually being drawn — the same set <see cref="SecondSkinService"/> shells.
+    /// <para/>
+    /// Null for anything that isn't a human body material; gear and face have their own layouts.
+    /// </summary>
+    internal static string[]? BodyModelPathsFor(string mtrlGamePath)
+    {
+        if (string.IsNullOrEmpty(mtrlGamePath)) return null;
+        var m = BodyMaterialPath.Match(mtrlGamePath.Replace('\\', '/'));
+        if (!m.Success) return null;
+        string code = m.Groups[1].Value;
+        return [$"chara/equipment/e0000/model/c{code}e0000_top.mdl",
+                $"chara/equipment/e0000/model/c{code}e0000_dwn.mdl",
+                $"chara/equipment/e0000/model/c{code}e0000_glv.mdl",
+                $"chara/equipment/e0000/model/c{code}e0000_sho.mdl"];
+    }
+
+    private static readonly Regex BodyMaterialPath =
+        new(@"^chara/human/c(\d{4})/obj/body/b(\d{4})/material/", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Connected-component labels of a UV-island mask: 0 for padding, 1..<paramref name="count"/>
+    /// for islands. Two-pass union-find over 4-connectivity — one linear scan, then a root resolve, which
+    /// matters because this runs on a 4096² plane.</summary>
+    internal static int[] LabelIslands(byte[] inside, int w, int h, out int count)
+    {
+        var labels = new int[w * h];
+        // parent[i] is the provisional label i's union-find parent. Unions always point the higher index at
+        // the lower one, so a root is exactly an i with parent[i] == i, and roots are found in ascending
+        // order — which is what lets the remap below resolve in a single forward pass.
+        var parent = new List<int> { 0 };
+        int Find(int x)
+        {
+            while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+            return x;
+        }
+
+        for (int y = 0; y < h; y++)
+        {
+            int row = y * w;
+            for (int x = 0; x < w; x++)
+            {
+                int p = row + x;
+                if (inside[p] == 0) continue;
+                int west  = x > 0 ? labels[p - 1] : 0;
+                int north = y > 0 ? labels[p - w] : 0;
+                if (west == 0 && north == 0)
+                {
+                    parent.Add(parent.Count);
+                    labels[p] = parent.Count - 1;
+                }
+                else if (west != 0 && north != 0)
+                {
+                    labels[p] = Math.Min(west, north);
+                    int a = Find(west), b = Find(north);
+                    if (a != b) parent[Math.Max(a, b)] = Math.Min(a, b);
+                }
+                else labels[p] = west != 0 ? west : north;
+            }
+        }
+
+        var remap = new int[parent.Count];
+        count = 0;
+        for (int i = 1; i < parent.Count; i++)
+        {
+            int r = Find(i);
+            remap[i] = r == i ? ++count : remap[r];   // r < i, so remap[r] is already resolved
+        }
+        ParallelPixels(0, labels.Length, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++) if (labels[p] != 0) labels[p] = remap[Find(labels[p])];
+        });
+        return labels;
+    }
+
+    /// <summary>How far past an island border the seam map must reach to cover the blur's window.
+    /// <see cref="BlurCoverage"/> is SEPARABLE — two box passes of the given radius per axis — so its window
+    /// is a SQUARE reaching 2*radius in x and in y independently, and therefore 2*radius*sqrt(2) diagonally.
+    /// Filling only a disc of 2*radius leaves the window's corners unmapped, and they fall back to
+    /// extrapolation: measured, that cost 19.94 mean cross-seam mismatch against 17.49 once the corners are
+    /// covered. Beyond this there is nothing left to gain (48 measured at 17.52).</summary>
+    internal static int SeamReach(int radius) => (int)Math.Ceiling(2 * radius * 1.4143);
+
+    /// <summary>Below this share of the blur window being on the SAME island, the renormalised average is
+    /// noise rather than a mean, and the texel keeps its authored value instead.</summary>
+    private const int MinIslandWeight = 8;   // ~3% of a full window
+
+    /// <summary>For every padding texel, the label of the CLOSEST island — which island's dilation that bit
+    /// of gutter is standing in for. Multi-source breadth-first expansion from the island borders outward, so
+    /// each texel is reached first along its shortest path. 0 where nothing is reachable.</summary>
+    internal static int[] NearestIslandOwner(int[] labels, int w, int h)
+    {
+        var owner = new int[w * h];
+        var frontier = new List<int>();
+
+        // Seed: padding texels touching an island. Seeding from the islands themselves would enqueue
+        // millions of interior texels that can never own anything.
+        for (int y = 0; y < h; y++)
+        {
+            int row = y * w;
+            for (int x = 0; x < w; x++)
+            {
+                int p = row + x;
+                if (labels[p] != 0 || owner[p] != 0) continue;
+                int L = 0;
+                if (x > 0 && labels[p - 1] != 0) L = labels[p - 1];
+                else if (x < w - 1 && labels[p + 1] != 0) L = labels[p + 1];
+                else if (y > 0 && labels[p - w] != 0) L = labels[p - w];
+                else if (y < h - 1 && labels[p + w] != 0) L = labels[p + w];
+                if (L == 0) continue;
+                owner[p] = L;
+                frontier.Add(p);
+            }
+        }
+
+        var next = new List<int>();
+        while (frontier.Count > 0)
+        {
+            next.Clear();
+            foreach (int p in frontier)
+            {
+                int L = owner[p], x = p % w, y = p / w;
+                if (x > 0)     Push(p - 1);
+                if (x < w - 1) Push(p + 1);
+                if (y > 0)     Push(p - w);
+                if (y < h - 1) Push(p + w);
+
+                void Push(int q)
+                {
+                    if (labels[q] != 0 || owner[q] != 0) return;
+                    owner[q] = L;
+                    next.Add(q);
+                }
+            }
+            (frontier, next) = (next, frontier);
+        }
+        return owner;
+    }
+
+    /// <summary>
+    /// The labelling depends only on the island mask and the plane size, never on the mask being composited,
+    /// so it is computed once and reused — it is a full serial pass over a 4096² plane.
+    /// <para/>
+    /// Instance-scoped and capped, not static: each entry is two <c>int[w*h]</c> (134 MB at 4096²), so a
+    /// static dictionary would pin every body type the session ever drew for the plugin's whole lifetime.
+    /// Keyed on a checksum of the mask itself rather than the body type alone, so a transfer map replaced on
+    /// disk can't be served a stale labelling.
+    /// </summary>
+    private readonly List<((string BodyType, int W, int H, long Sum) Key, (int[] Labels, int[] Owner, int Count) Value)>
+        islandLabelCache = new();
+    private const int MaxCachedLabelings = 2;
+    private readonly object islandLabelLock = new();
+
+    internal (int[] Labels, int[] Owner, int Count) IslandLabelsFor(string bodyType, byte[] inside, int w, int h)
+    {
+        // Cheap but content-sensitive: the mask is 0/255, so a strided sum distinguishes any real change.
+        long sum = 0;
+        for (int p = 0; p < w * h; p += 97) sum += inside[p];
+        var key = (bodyType, w, h, sum);
+
+        lock (islandLabelLock)
+        {
+            for (int i = 0; i < islandLabelCache.Count; i++)
+                if (islandLabelCache[i].Key == key) return islandLabelCache[i].Value;
+        }
+
+        // Built outside the lock — it is a serial pass over the whole plane, and holding the lock would
+        // stall an unrelated material behind it. A concurrent duplicate build wastes work, never misleads.
+        var labels = LabelIslands(inside, w, h, out int count);
+        var built = (labels, NearestIslandOwner(labels, w, h), count);
+
+        lock (islandLabelLock)
+        {
+            for (int i = 0; i < islandLabelCache.Count; i++)
+                if (islandLabelCache[i].Key == key) return islandLabelCache[i].Value;
+            if (islandLabelCache.Count >= MaxCachedLabelings) islandLabelCache.RemoveAt(0);
+            islandLabelCache.Add((key, built));
+        }
+        return built;
+    }
+
+    /// <summary>
+    /// Blur an AO silhouette without ever sampling across a UV-island border: each texel averages only
+    /// texels of its OWN island, renormalised by how much of the window that was. This is what makes the
+    /// AO come from the mask rather than from the UV layout.
+    /// <para/>
+    /// Why not a plain blur: the texture space between islands is padding, and art tools dilate into it with
+    /// whatever suits the DIFFUSE, not something consistent with a coverage mask. Measured on a real mask,
+    /// the padding is 90% covered at a mean of 40 (~127 across the torso/leg gutter) while the body either
+    /// side is 94% EMPTY. A plain blur drags that plateau inward and <see cref="ApplyNormalIndent"/> carves
+    /// its gradient into a crease that follows the UV seam across bare skin.
+    /// <para/>
+    /// Why not merely extend the island's own values into the padding first — which is what this replaced —
+    /// is that the gutters are NARROW. Measured on the bibo layout (the destination Valid of
+    /// gen3_to_bibo_transfer, which is what <see cref="UVRemapService.IslandMask"/> returns for it): 19
+    /// components, with gaps from 6px, against a blur whose window reaches 2*radius per axis. So however
+    /// well the padding is repaired, the blur still samples straight across a gutter into the NEIGHBOURING
+    /// island, which in 3D is an unrelated part of the body. Where a strap crosses the torso/leg seam that
+    /// mixes leg coverage into the torso and back, distorting the AO of a real mask edge. Restricting the
+    /// window to one island removes both failures at once.
+    /// <para/>
+    /// Recorded so they aren't retried — all rejected against this same artefact: ZEROING the padding
+    /// (substitutes an equal step the other way, so AO weakens within a blur-reach of every border, reported
+    /// as "AO near mask edges is gone"); FADING the effect out near borders (only halves it — the fade is
+    /// back to ~1 by the time the bled gradient peaks); CLIPPING the silhouette to the island mask (the same
+    /// step problem); SCALING the radius to the trim's feature size (removes the seam but loses the effect —
+    /// a filament mask wants radius ~4 where the look wants ~12).
+    /// <para/>
+    /// An island may however look at ITS OWN padding — the gutter texels nearer to it than to any other
+    /// island, filled with its own edge values continued outward. That matters, because a strap crossing a
+    /// real 3D seam is one strap on the body but two pieces in UV: restricting strictly to the island drops
+    /// the AO beside it to 81% of what it should be, on exactly the texels where cloth meets a seam.
+    /// Continuing the island's own edge outward stands in for the part that carried on across the seam and
+    /// restores it to 99%, while still never reading the unrelated island across the gutter.
+    /// <para/>
+    /// More than a blur-reach inside an island the window is entirely same-island, so this is identical to a
+    /// plain blur there — verified against the previous pipeline at max difference 0.00 over the interior.
+    /// Cost is bounded: the work is per island over its own bounding box, and a body layout has ~10.
+    /// </summary>
+    internal static byte[] BlurCoverageWithinIslands(byte[] plane, int[] labels, int[] owner, int islandCount,
+                                                     byte[] inside, int[]? seamSource, int w, int h, int radius)
+    {
+        if (w <= 0 || h <= 0 || islandCount <= 0 ||
+            plane.Length < w * h || labels.Length < w * h || owner.Length < w * h || inside.Length < w * h)
+            return BlurCoverage(plane, w, h, radius);
+        if (seamSource != null && seamSource.Length < w * h) seamSource = null;
+
+        // Per-island bounding boxes, so the cost is the sum of island areas rather than islands × map.
+        int n = islandCount + 1;
+        var bx0 = new int[n]; var by0 = new int[n]; var bx1 = new int[n]; var by1 = new int[n];
+        for (int i = 0; i < n; i++) { bx0[i] = int.MaxValue; by0[i] = int.MaxValue; bx1[i] = -1; by1[i] = -1; }
+        for (int y = 0; y < h; y++)
+        {
+            int row = y * w;
+            for (int x = 0; x < w; x++)
+            {
+                int L = labels[row + x];
+                if (L <= 0 || L >= n) continue;
+                if (x < bx0[L]) bx0[L] = x;
+                if (x > bx1[L]) bx1[L] = x;
+                if (y < by0[L]) by0[L] = y;
+                if (y > by1[L]) by1[L] = y;
+            }
+        }
+
+        var outp = new byte[w * h];
+        for (int L = 1; L < n; L++)
+        {
+            if (bx1[L] < 0) continue;
+            // The window has to be able to hang off the island by its own reach — twice, since the first
+            // pass builds the values the second one then reads — or edge texels would be renormalised
+            // against a window the crop had already truncated.
+            int pad = 3 * radius;
+            int ax0 = Math.Max(0, bx0[L] - pad), ax1 = Math.Min(w - 1, bx1[L] + pad);
+            int ay0 = Math.Max(0, by0[L] - pad), ay1 = Math.Min(h - 1, by1[L] + pad);
+            int cw = ax1 - ax0 + 1, ch = ay1 - ay0 + 1;
+
+            // Pass 1 — the island alone, to learn what its edge values are.
+            var num = new byte[cw * ch];
+            var den = new byte[cw * ch];
+            for (int y = 0; y < ch; y++)
+            {
+                int src = (ay0 + y) * w + ax0, dst = y * cw;
+                for (int x = 0; x < cw; x++)
+                {
+                    if (labels[src + x] != L) continue;
+                    num[dst + x] = plane[src + x];
+                    den[dst + x] = 255;
+                }
+            }
+            var bn = BlurCoverage(num, cw, ch, radius);
+            var bd = BlurCoverage(den, cw, ch, radius);
+
+            // Pass 2 — the island plus the gutter it owns, that gutter carrying pass 1's continuation of the
+            // island's own edge. This is what keeps a strap's AO intact where the strap crosses a UV seam.
+            var plane2 = new byte[cw * ch];
+            var mask2 = new byte[cw * ch];
+            for (int y = 0; y < ch; y++)
+            {
+                int src = (ay0 + y) * w + ax0, dst = y * cw;
+                for (int x = 0; x < cw; x++)
+                {
+                    int lp = labels[src + x];
+                    if (lp == L)
+                    {
+                        plane2[dst + x] = plane[src + x];
+                        mask2[dst + x] = 255;
+                    }
+                    else if (lp == 0 && owner[src + x] == L)
+                    {
+                        // Best case: the mesh says which texel the surface actually continues into across
+                        // the seam, so the gutter carries the REAL neighbouring coverage and the halo
+                        // crosses correctly. Where there's no seam data (an open boundary, a body we
+                        // couldn't read) fall back to continuing this island's own edge outward.
+                        //
+                        // The target must itself be ON an island. A seam edge near an island's corner can
+                        // map outward into the NEIGHBOUR's padding, and reading that would feed the art's
+                        // dilated ink straight back into the blur — the exact artefact this whole path
+                        // exists to keep out. Measured: ~13% of mapped gutter texels land off-island.
+                        int q = seamSource != null ? seamSource[src + x] : -1;
+                        if (q >= 0 && labels[q] != 0)
+                        {
+                            plane2[dst + x] = plane[q];
+                            mask2[dst + x] = 255;
+                            continue;
+                        }
+                        int d0 = bd[dst + x];
+                        if (d0 < MinIslandWeight) continue;      // too far out to have a meaningful value
+                        plane2[dst + x] = (byte)Math.Clamp(bn[dst + x] * 255 / d0, 0, 255);
+                        mask2[dst + x] = 255;
+                    }
+                }
+            }
+            var cn = BlurCoverage(plane2, cw, ch, radius);
+            var cd = BlurCoverage(mask2, cw, ch, radius);
+            for (int y = 0; y < ch; y++)
+            {
+                int src = (ay0 + y) * w + ax0, dst = y * cw;
+                for (int x = 0; x < cw; x++)
+                {
+                    if (labels[src + x] != L) continue;
+                    int d = cd[dst + x];
+                    outp[src + x] = d >= MinIslandWeight
+                        ? (byte)Math.Clamp(cn[dst + x] * 255 / d, 0, 255)
+                        : plane[src + x];
+                }
+            }
+        }
+
+        // The padding still has to carry values that agree with the island edge: the sampler's bilinear tap
+        // reaches about a texel past the border, so leaving it at 0 would draw a thin light fringe along
+        // every island outline — the very thing this is here to avoid.
+        return ExtendIntoPadding(outp, inside, w, h, radius);
+    }
 
     /// <summary>Blur radius the Skindenting depth default was tuned against (2048-wide skin map × the 0.003
     /// default softness). <see cref="ApplyNormalIndent"/> normalises its gradient against this.</summary>
