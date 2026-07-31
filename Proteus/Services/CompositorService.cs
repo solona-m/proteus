@@ -3202,6 +3202,12 @@ public class CompositorService : IDisposable
                 OverlayModsUsed = entries.Count,
             };
             ResultChanged?.Invoke();
+
+            // The number the user actually waits through: wall clock from START to everything done — the
+            // texture composite, the second-skin build, the managed-mod write, and the Penumbra reload plus
+            // its redraw-readiness wait. Each phase line above covers one stage and none of them sum to
+            // this, so without it the real cost has to be reconstructed from log timestamps.
+            log.Information("[Proteus] recomposite DONE — {0:F0}ms total", PhaseCounter.MsSince(tRunStart));
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
