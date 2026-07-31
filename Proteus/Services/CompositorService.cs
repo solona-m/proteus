@@ -2557,29 +2557,6 @@ public class CompositorService : IDisposable
                     // shares that UV space. See GarmentSilhouette, which gates gear the same way.
                     bool bodyUvMaterial = IsBodyUvMaterial(mtrlGamePath);
 
-                    // TEMPORARY DIAGNOSTIC (config.AoDiagnosticDump). Writes the planes these passes actually
-                    // work from, so the UV-seam crease can be traced in real data instead of a reconstruction.
-                    // Grayscale expanded to RGBA because WritePng takes RGBA. Remove with the config flag.
-                    void DumpPlane(string modDir, string what, byte[] plane, int w, int h)
-                    {
-                        if (!config.AoDiagnosticDump || plane.Length < w * h) return;
-                        try
-                        {
-                            var dir = Path.Combine(managedModDir, "ao_debug");
-                            Directory.CreateDirectory(dir);
-                            var rgba = new byte[w * h * 4];
-                            for (int p = 0; p < w * h; p++)
-                            {
-                                byte v = plane[p];
-                                rgba[p * 4] = rgba[p * 4 + 1] = rgba[p * 4 + 2] = v;
-                                rgba[p * 4 + 3] = 255;
-                            }
-                            var name = $"{SanitizeName(mtrlGamePath)}_{SanitizeName(modDir)}_{what}.png";
-                            textureLoader.WritePng(rgba, w, h, Path.Combine(dir, name));
-                        }
-                        catch (Exception ex) { log.Warning(ex, "[Proteus] AO dump failed for {0}/{1}", modDir, what); }
-                    }
-
                     // The UV islands at the diffuse resolution: a 0/255 plane to tell body from padding, plus
                     // the per-island labelling BlurCoverageWithinIslands needs to keep each blur window on
                     // one island. Null when this body has no transfer map to derive them from (gen2), in
@@ -2587,6 +2564,9 @@ public class CompositorService : IDisposable
                     byte[]? insidePlane = null;
                     int[]? islandLabels = null, islandOwner = null;
                     int islandCount = 0;
+                    // Reused by every mod's AO pass on THIS material (see IslandBlurCache). Per material,
+                    // because materials composite in parallel while the mod loop below is sequential.
+                    var islandBlurCache = new IslandBlurCache();
                     if (dstBodyType != null && baseD is { Length: > 0 })
                     {
                         var isl = uvRemap.IslandMask(dstBodyType, out int islW, out int islH);
@@ -2612,21 +2592,42 @@ public class CompositorService : IDisposable
                     // edge continues into which other — the texture can't say, and the transfer maps
                     // describe a different body's layout, not this one's topology. Loaded once per
                     // composite; the seam map itself is cached by model content inside the service.
-                    List<byte[]?>? bodyMdls = null;
+                    // IDENTITY ONLY here — no file is opened. The seam map is keyed on it, so a cache hit
+                    // (the normal case: the body doesn't change between composites) never pays the 4.6 MB
+                    // read that used to cost ~1.1s per composite just to compute a content hash.
+                    List<UvSeamMapService.SeamModel>? bodyMdls = null;
                     if (islandLabels != null)
                     {
                         if (BodyModelPathsFor(mtrlGamePath) is { } bodyMdlPaths)
                         {
-                            bodyMdls = new List<byte[]?>(bodyMdlPaths.Length);
-                            int got = 0;
+                            bodyMdls = new List<UvSeamMapService.SeamModel>(bodyMdlPaths.Length);
                             foreach (var mp in bodyMdlPaths)
                             {
-                                var b = textureLoader.LoadRawFile(penumbra.ResolvePlayer(mp), mp);
-                                if (b != null) got++;
-                                bodyMdls.Add(b);
+                                var gamePath = mp;
+                                var disk = penumbra.ResolvePlayer(gamePath);
+                                // A modded part is a real file, so size+mtime settles whether it changed.
+                                // A vanilla one comes from sqpack and can't change without a game patch,
+                                // so the game path alone is a stable identity for it.
+                                string id = gamePath;
+                                try
+                                {
+                                    if (!string.IsNullOrEmpty(disk))
+                                    {
+                                        var fi = new FileInfo(disk);
+                                        if (fi.Exists) id = $"{disk}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
+                                    }
+                                }
+                                catch { /* unreadable — fall back to the game path */ }
+                                bodyMdls.Add(new UvSeamMapService.SeamModel(
+                                    id, () => textureLoader.LoadRawFile(disk, gamePath)));
                             }
-                            log.Debug("[Proteus] seam map: {0}/{1} body part models loaded for {2}",
-                                      got, bodyMdlPaths.Length, mtrlGamePath);
+                            // Which files the seam map will be built from, WITHOUT opening any of them.
+                            // Worth keeping: "did the seam map even see my body?" took several rounds to
+                            // answer once, and on a cache hit nothing else is logged at all.
+                            log.Debug("[Proteus] seam map: {0} body part(s) for {1} — {2}",
+                                      bodyMdls.Count, mtrlGamePath,
+                                      string.Join(", ", bodyMdls.Select(m =>
+                                          m.Id.Contains('|') ? Path.GetFileName(m.Id[..m.Id.IndexOf('|')]) : "(game)")));
                         }
                         else
                         {
@@ -2774,11 +2775,8 @@ public class CompositorService : IDisposable
                                 // texels are the same either way. See BlurCoverageWithinIslands.
                                 blurredD = insidePlane != null && islandLabels != null && islandOwner != null
                                     ? BlurCoverageWithinIslands(strapD, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD)
+                                                                bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD, islandBlurCache)
                                     : BlurCoverage(strapD, wD, hD, radiusD);
-                                DumpPlane(modDir, "silhouette", strapD, wD, hD);
-                                DumpPlane(modDir, "blurred", blurredD, wD, hD);
-                                if (coveredAbove != null) DumpPlane(modDir, "coveredAbove", coveredAbove, wD, hD);
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
                             }
                         }
@@ -2821,19 +2819,13 @@ public class CompositorService : IDisposable
                                     blurredN = strapN == null ? null
                                         : insidePlane != null && islandLabels != null && islandOwner != null && wN == wD && hN == hD
                                             ? BlurCoverageWithinIslands(strapN, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                        bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wN, hN, SeamReach(radiusN)), wN, hN, radiusN)
+                                                                        bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wN, hN, SeamReach(radiusN)), wN, hN, radiusN, islandBlurCache)
                                             : BlurCoverage(strapN, wN, hN, radiusN);
                                 }
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
                                 if (strapN != null && blurredN != null)
                                 {
-                                    // The plane the crease actually comes from: gate × |gradient of blurred|,
-                                    // i.e. exactly what ApplyNormalIndent turns into a normal tilt.
-                                    if (config.AoDiagnosticDump)
-                                        DumpPlane(modDir, "indent", IndentMagnitude(blurredN, strapN, wN, hN,
-                                            wN == wD && hN == hD ? coveredAbove : null,
-                                            wN == wD && hN == hD ? insidePlane : null), wN, hN);
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
                                         wN == wD && hN == hD ? coveredAbove : null, radiusN,
                                         wN == wD && hN == hD ? insidePlane : null);
@@ -4087,49 +4079,6 @@ public class CompositorService : IDisposable
         || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// TEMPORARY DIAGNOSTIC companion to <see cref="ApplyNormalIndent"/>: the magnitude of the tilt it would
-    /// apply, per pixel, scaled to 0-255. Mirrors that method's gate and gradient EXACTLY (same neighbour
-    /// sampling, same covered-above factor) so the dump shows where the crease comes from rather than an
-    /// approximation of it. Remove with <see cref="Configuration.AoDiagnosticDump"/>.
-    /// </summary>
-    internal static byte[] IndentMagnitude(byte[] blurred, byte[] strap, int w, int h, byte[]? coveredAbove,
-        byte[]? inside = null)
-    {
-        if (inside != null && inside.Length < w * h) inside = null;
-        var outp = new byte[w * h];
-        Parallel.For(0, h, y =>
-        {
-            int row = y * w, rowUp = (y > 0 ? y - 1 : 0) * w, rowDown = (y < h - 1 ? y + 1 : h - 1) * w;
-            for (int x = 0; x < w; x++)
-            {
-                float edge = 1f - strap[row + x] / 255f;
-                if (coveredAbove != null) edge *= 1f - coveredAbove[row + x] / 255f;
-                if (edge <= 0f) continue;
-                int xm = x > 0 ? x - 1 : 0, xp = x < w - 1 ? x + 1 : w - 1;
-                // Same border-aware difference as ApplyNormalIndent — the dump is worthless if it shows a
-                // phantom border spike the real pass no longer produces.
-                int rUp = rowUp, rDn = rowDown;
-                int baseSpanX = xp - xm, baseSpanY = (rDn - rUp) / w;
-                int spanX = baseSpanX, spanY = baseSpanY;
-                if (inside != null)
-                {
-                    if (inside[row + xm] == 0) xm = x;
-                    if (inside[row + xp] == 0) xp = x;
-                    if (inside[rUp + x] == 0) rUp = row;
-                    if (inside[rDn + x] == 0) rDn = row;
-                    spanX = xp - xm;
-                    spanY = (rDn - rUp) / w;
-                }
-                float gx = spanX == 0 ? 0f : (blurred[row + xp] - blurred[row + xm]) / 255f * ((float)baseSpanX / spanX);
-                float gy = spanY == 0 ? 0f : (blurred[rDn + x] - blurred[rUp + x]) / 255f * ((float)baseSpanY / spanY);
-                float mag = MathF.Sqrt(gx * gx + gy * gy) * edge;
-                outp[row + x] = (byte)Math.Clamp(mag * 255f * 4f, 0, 255);   // ×4 so faint ridges are visible
-            }
-        });
-        return outp;
-    }
-
-    /// <summary>
     /// Replace an AO silhouette's values OUTSIDE the UV islands with a smooth extension of the values just
     /// inside, so the blur that follows sees no step at an island border.
     /// <para/>
@@ -4157,18 +4106,22 @@ public class CompositorService : IDisposable
     /// meaningfully — deep padding, far from any island — it falls to 0, which is harmless because the blur
     /// can't reach the island from there. Valid texels are copied through EXACTLY; only padding is rewritten.
     /// </summary>
-    internal static byte[] ExtendIntoPadding(byte[] plane, byte[] inside, int w, int h, int radius)
+    internal static byte[] ExtendIntoPadding(byte[] plane, byte[] inside, int w, int h, int radius,
+                                             IslandBlurCache? cache = null)
     {
         if (plane.Length < w * h || inside.Length < w * h || w <= 0 || h <= 0) return plane;
 
-        // Masked sums: numerator over in-island values, denominator over in-island weight.
+        // Masked sums: numerator over in-island values, denominator over in-island weight. The denominator
+        // is the blurred island mask — no dependence on `plane` — so it is reused across this material's mods.
         var masked = new byte[w * h];
         ParallelPixels(0, w * h, 1, (from, to) =>
         {
             for (int p = from; p < to; p++) masked[p] = inside[p] != 0 ? plane[p] : (byte)0;
         });
         var num = BlurCoverage(masked, w, h, radius);
-        var den = BlurCoverage(inside, w, h, radius);
+        var den = cache != null
+            ? cache.PaddingDenominator(inside, radius, () => BlurCoverage(inside, w, h, radius))
+            : BlurCoverage(inside, w, h, radius);
 
         // Below this share of the window being in-island the average is noise, not an extension.
         const int MinWeight = 8;   // ~3% of a full window
@@ -4412,30 +4365,121 @@ public class CompositorService : IDisposable
     /// plain blur there — verified against the previous pipeline at max difference 0.00 over the interior.
     /// Cost is bounded: the work is per island over its own bounding box, and a body layout has ~10.
     /// </summary>
+    /// <summary>
+    /// Scratch for <see cref="BlurCoverageWithinIslands"/>: the parts of its work that do NOT depend on the
+    /// silhouette being blurred, so they can be computed once and reused for every mod on a material.
+    /// <para/>
+    /// Per island the method runs four blurs; two of them — the island-mask blur and the gutter-mask blur —
+    /// are functions of the UV layout and the radius alone. Every branch that decides gutter membership is
+    /// likewise plane-independent (island test, seam target on-island test, and the min-weight test against
+    /// the island-mask blur); only the VALUES written into the numerator depend on the plane. Four mods
+    /// qualified for AO on one body measured ~27 full-map-equivalent 4096² blurs; caching these halves it.
+    /// <para/>
+    /// Deliberately NOT shared between materials. Materials composite in parallel
+    /// (<c>MaxDegreeOfParallelism = 4</c>) while the mod loop inside one material is sequential, so a
+    /// per-material instance is both the exact scope of the reuse and free of any locking.
+    /// </summary>
+    internal sealed class IslandBlurCache
+    {
+        private int[]? labels, owner, seam;
+        private byte[]? inside;
+        private int radius = -1;
+        private int count = -1;
+        private bool ready;
+
+        internal int[]? Bx0, By0, Bx1, By1;   // island bounding boxes — a function of labels alone
+        internal byte[]?[]? Bd, Cd;           // per-island plane-independent blurs
+        private byte[]? padDen;               // ExtendIntoPadding's denominator — a function of inside alone
+
+        /// <summary>
+        /// True when everything held was derived from exactly these inputs AND is fully populated. Reference
+        /// equality, not content: the caller hands back the same cached arrays each time, so this is exact
+        /// and cheap, and it misses naturally when the body or the softness (radius) changes.
+        /// <para/>
+        /// The <see cref="ready"/> flag is the point. The fill runs in stages — <see cref="Reset"/> allocates
+        /// Bd/Cd, then the bounding boxes are stored, then the per-island loop fills the blurs — so ANY field
+        /// used as a proxy for "populated" is true partway through, and a reader that trusted it would meet a
+        /// null Bd entry. Only the producer knows when it has finished, so only the producer sets this, via
+        /// <see cref="MarkReady"/> after the last island. <paramref name="count"/> is in the key because it
+        /// sizes Bd/Cd; a larger one against the same labels would index past them.
+        /// </summary>
+        internal bool Matches(int[] labels, int[] owner, byte[] inside, int[]? seam, int radius, int count)
+            => ready && this.count == count
+            && ReferenceEquals(this.labels, labels) && ReferenceEquals(this.owner, owner)
+            && ReferenceEquals(this.inside, inside) && ReferenceEquals(this.seam, seam)
+            && this.radius == radius;
+
+        internal void Reset(int[] labels, int[] owner, byte[] inside, int[]? seam, int radius, int count)
+        {
+            ready = false;
+            this.labels = labels; this.owner = owner; this.inside = inside; this.seam = seam;
+            this.radius = radius; this.count = count;
+            Bx0 = By0 = Bx1 = By1 = null;
+            Bd = new byte[count + 1][];
+            Cd = new byte[count + 1][];
+            padDen = null;
+        }
+
+        /// <summary>Publish the entry: every island's blurs are now stored. Anything that throws before this
+        /// leaves the cache unusable rather than half-filled, so the next call rebuilds instead of reading a
+        /// null.</summary>
+        internal void MarkReady() => ready = true;
+
+        /// <summary>
+        /// <see cref="ExtendIntoPadding"/>'s blurred island mask, built on first use. Self-validating: a
+        /// cache built for a different mask or radius is ignored rather than trusted, because the caller
+        /// there can't otherwise tell — the denominator only divides, so a stale one yields a plausible
+        /// wrong answer instead of a crash.
+        /// </summary>
+        internal byte[] PaddingDenominator(byte[] inside, int radius, Func<byte[]> build)
+        {
+            bool mine = ReferenceEquals(this.inside, inside) && this.radius == radius;
+            if (mine && padDen != null) return padDen;
+            var den = build();
+            if (mine) padDen = den;
+            return den;
+        }
+    }
+
     internal static byte[] BlurCoverageWithinIslands(byte[] plane, int[] labels, int[] owner, int islandCount,
-                                                     byte[] inside, int[]? seamSource, int w, int h, int radius)
+                                                     byte[] inside, int[]? seamSource, int w, int h, int radius,
+                                                     IslandBlurCache? cache = null)
     {
         if (w <= 0 || h <= 0 || islandCount <= 0 ||
             plane.Length < w * h || labels.Length < w * h || owner.Length < w * h || inside.Length < w * h)
             return BlurCoverage(plane, w, h, radius);
         if (seamSource != null && seamSource.Length < w * h) seamSource = null;
 
-        // Per-island bounding boxes, so the cost is the sum of island areas rather than islands × map.
         int n = islandCount + 1;
-        var bx0 = new int[n]; var by0 = new int[n]; var bx1 = new int[n]; var by1 = new int[n];
-        for (int i = 0; i < n; i++) { bx0[i] = int.MaxValue; by0[i] = int.MaxValue; bx1[i] = -1; by1[i] = -1; }
-        for (int y = 0; y < h; y++)
+        // Everything below that doesn't depend on `plane` is reused across the mods on this material.
+        bool cached = cache != null && cache.Matches(labels, owner, inside, seamSource, radius, islandCount);
+        if (cache != null && !cached) cache.Reset(labels, owner, inside, seamSource, radius, islandCount);
+
+        // Per-island bounding boxes, so the cost is the sum of island areas rather than islands × map.
+        // A function of `labels` alone, and a full-map scan, so it rides the cache too.
+        int[] bx0, by0, bx1, by1;
+        if (cached)
         {
-            int row = y * w;
-            for (int x = 0; x < w; x++)
+            bx0 = cache!.Bx0!; by0 = cache.By0!; bx1 = cache.Bx1!; by1 = cache.By1!;
+        }
+        else
+        {
+            bx0 = new int[n]; by0 = new int[n]; bx1 = new int[n]; by1 = new int[n];
+            for (int i = 0; i < n; i++) { bx0[i] = int.MaxValue; by0[i] = int.MaxValue; bx1[i] = -1; by1[i] = -1; }
+            for (int y = 0; y < h; y++)
             {
-                int L = labels[row + x];
-                if (L <= 0 || L >= n) continue;
-                if (x < bx0[L]) bx0[L] = x;
-                if (x > bx1[L]) bx1[L] = x;
-                if (y < by0[L]) by0[L] = y;
-                if (y > by1[L]) by1[L] = y;
+                int row = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    int L = labels[row + x];
+                    if (L <= 0 || L >= n) continue;
+                    if (x < bx0[L]) bx0[L] = x;
+                    if (x > bx1[L]) bx1[L] = x;
+                    if (y < by0[L]) by0[L] = y;
+                    if (y > by1[L]) by1[L] = y;
+                }
             }
+            if (cache != null) { cache.Bx0 = bx0; cache.By0 = by0; cache.Bx1 = bx1; cache.By1 = by1; }
         }
 
         var outp = new byte[w * h];
@@ -4450,9 +4494,10 @@ public class CompositorService : IDisposable
             int ay0 = Math.Max(0, by0[L] - pad), ay1 = Math.Min(h - 1, by1[L] + pad);
             int cw = ax1 - ax0 + 1, ch = ay1 - ay0 + 1;
 
-            // Pass 1 — the island alone, to learn what its edge values are.
+            // Pass 1 — the island alone, to learn what its edge values are. The numerator carries the plane
+            // and must be rebuilt per mod; the denominator is the island mask, so it is cached.
             var num = new byte[cw * ch];
-            var den = new byte[cw * ch];
+            byte[]? den = cached ? null : new byte[cw * ch];
             for (int y = 0; y < ch; y++)
             {
                 int src = (ay0 + y) * w + ax0, dst = y * cw;
@@ -4460,16 +4505,17 @@ public class CompositorService : IDisposable
                 {
                     if (labels[src + x] != L) continue;
                     num[dst + x] = plane[src + x];
-                    den[dst + x] = 255;
+                    if (den != null) den[dst + x] = 255;
                 }
             }
             var bn = BlurCoverage(num, cw, ch, radius);
-            var bd = BlurCoverage(den, cw, ch, radius);
+            var bd = cached ? cache!.Bd![L]! : BlurCoverage(den!, cw, ch, radius);
+            if (!cached && cache != null) cache.Bd![L] = bd;
 
             // Pass 2 — the island plus the gutter it owns, that gutter carrying pass 1's continuation of the
             // island's own edge. This is what keeps a strap's AO intact where the strap crosses a UV seam.
             var plane2 = new byte[cw * ch];
-            var mask2 = new byte[cw * ch];
+            byte[]? mask2 = cached ? null : new byte[cw * ch];
             for (int y = 0; y < ch; y++)
             {
                 int src = (ay0 + y) * w + ax0, dst = y * cw;
@@ -4479,7 +4525,7 @@ public class CompositorService : IDisposable
                     if (lp == L)
                     {
                         plane2[dst + x] = plane[src + x];
-                        mask2[dst + x] = 255;
+                        if (mask2 != null) mask2[dst + x] = 255;
                     }
                     else if (lp == 0 && owner[src + x] == L)
                     {
@@ -4496,18 +4542,19 @@ public class CompositorService : IDisposable
                         if (q >= 0 && labels[q] != 0)
                         {
                             plane2[dst + x] = plane[q];
-                            mask2[dst + x] = 255;
+                            if (mask2 != null) mask2[dst + x] = 255;
                             continue;
                         }
                         int d0 = bd[dst + x];
                         if (d0 < MinIslandWeight) continue;      // too far out to have a meaningful value
                         plane2[dst + x] = (byte)Math.Clamp(bn[dst + x] * 255 / d0, 0, 255);
-                        mask2[dst + x] = 255;
+                        if (mask2 != null) mask2[dst + x] = 255;
                     }
                 }
             }
             var cn = BlurCoverage(plane2, cw, ch, radius);
-            var cd = BlurCoverage(mask2, cw, ch, radius);
+            var cd = cached ? cache!.Cd![L]! : BlurCoverage(mask2!, cw, ch, radius);
+            if (!cached && cache != null) cache.Cd![L] = cd;
             for (int y = 0; y < ch; y++)
             {
                 int src = (ay0 + y) * w + ax0, dst = y * cw;
@@ -4522,10 +4569,14 @@ public class CompositorService : IDisposable
             }
         }
 
+        // Every island's blurs are stored, so the entry is now safe for the next mod to read. Set here and
+        // not earlier: anything that throws above must leave the cache unusable, not half-filled.
+        cache?.MarkReady();
+
         // The padding still has to carry values that agree with the island edge: the sampler's bilinear tap
         // reaches about a texel past the border, so leaving it at 0 would draw a thin light fringe along
         // every island outline — the very thing this is here to avoid.
-        return ExtendIntoPadding(outp, inside, w, h, radius);
+        return ExtendIntoPadding(outp, inside, w, h, radius, cache);
     }
 
     /// <summary>Blur radius the Skindenting depth default was tuned against (2048-wide skin map × the 0.003

@@ -273,6 +273,111 @@ public class IslandBlurTests
     }
 
     [Fact]
+    public void BlurWithinIslands_TheCacheIsInvisible()
+    {
+        // The cache holds the plane-INDEPENDENT blurs so they're computed once per material instead of once
+        // per mod. It is only safe if it changes nothing: a second call with a DIFFERENT silhouette must
+        // give exactly what an uncached call would. That's the whole contract.
+        const int w = 64, h = 32, radius = 6;
+        var inside = Plane(w, h, 255, (0, 0, 27, 31), (32, 0, 63, 31));
+        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var seam = new int[w * h];
+        System.Array.Fill(seam, -1);
+        for (int y = 0; y < h; y++) { seam[y * w + 30] = y * w + 27; seam[y * w + 31] = y * w + 26; }
+
+        // Two different mods' silhouettes on the same material.
+        var planeA = Plane(w, h, 255, (2, 2, 20, 20));
+        var planeB = Plane(w, h, 255, (36, 6, 60, 26), (4, 24, 10, 30));
+
+        var wantA = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius);
+        var wantB = CompositorService.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius);
+
+        var cache = new CompositorService.IslandBlurCache();
+        var gotA = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
+        var gotB = CompositorService.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius, cache);
+        var gotA2 = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
+
+        Assert.Equal(wantA, gotA);    // first call populates
+        Assert.Equal(wantB, gotB);    // second reuses the masks with a different plane
+        Assert.Equal(wantA, gotA2);   // and reuse doesn't drift
+    }
+
+    [Fact]
+    public void BlurWithinIslands_TheCacheMissesWhenTheRadiusChanges()
+    {
+        // Softness drives the radius, and every cached blur is radius-specific. Serving a radius-6 mask
+        // blur to a radius-3 pass would silently widen the halo, so the key must include it.
+        const int w = 48, h = 24;
+        var inside = Plane(w, h, 255, (0, 0, 47, 23));
+        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var plane = Plane(w, h, 255, (10, 6, 30, 18));
+
+        var cache = new CompositorService.IslandBlurCache();
+        var r6 = CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6, cache);
+        var r3 = CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3, cache);
+
+        Assert.Equal(CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6), r6);
+        Assert.Equal(CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3), r3);
+        Assert.NotEqual(r6, r3);
+    }
+
+    [Fact]
+    public void ExtendIntoPadding_IgnoresACacheBuiltForSomethingElse()
+    {
+        // The cached denominator only divides, so a stale one yields a plausible-but-wrong extension rather
+        // than a crash. ExtendIntoPadding must therefore check the cache belongs to ITS mask and radius
+        // instead of trusting the caller to have validated it.
+        const int w = 48, h = 24, radius = 5;
+        var insideA = Plane(w, h, 255, (0, 0, 23, 23));
+        var insideB = Plane(w, h, 255, (0, 0, 47, 11));      // a different mask entirely
+        var plane = Plane(w, h, 255, (4, 4, 18, 18));
+
+        // Populate the cache against insideA by running the real path.
+        var labels = CompositorService.LabelIslands(insideA, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var cache = new CompositorService.IslandBlurCache();
+        CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, insideA, null, w, h, radius, cache);
+
+        // Now hand that cache to a call for a DIFFERENT mask. It must not reuse insideA's denominator.
+        var want = CompositorService.ExtendIntoPadding(plane, insideB, w, h, radius);
+        var got = CompositorService.ExtendIntoPadding(plane, insideB, w, h, radius, cache);
+        Assert.Equal(want, got);
+
+        // ...and the legitimate reuse still works.
+        var wantA = CompositorService.ExtendIntoPadding(plane, insideA, w, h, radius);
+        Assert.Equal(wantA, CompositorService.ExtendIntoPadding(plane, insideA, w, h, radius, cache));
+    }
+
+    [Fact]
+    public void IslandBlurCache_IsUnusableUntilTheProducerSaysItIsFinished()
+    {
+        // The fill runs in stages: allocate, store bounding boxes, then blur island by island. A reader that
+        // keyed on any of those intermediate fields would take the cached branch while Bd entries are still
+        // null. So a half-built entry — bounding boxes present, blurs absent — must NOT match.
+        const int w = 32, h = 16, radius = 4;
+        var inside = Plane(w, h, 255, (0, 0, 31, 15));
+        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+
+        var cache = new CompositorService.IslandBlurCache();
+        cache.Reset(labels, owner, inside, null, radius, count);
+        Assert.False(cache.Matches(labels, owner, inside, null, radius, count), "fresh Reset must not match");
+
+        // Stand in for the producer having stored the boxes and then failed before filling any blur.
+        cache.Bx0 = new int[count + 1]; cache.By0 = new int[count + 1];
+        cache.Bx1 = new int[count + 1]; cache.By1 = new int[count + 1];
+        Assert.False(cache.Matches(labels, owner, inside, null, radius, count),
+            "bounding boxes alone must not advertise the entry as usable");
+
+        // A real, completed pass publishes it.
+        var plane = Plane(w, h, 255, (6, 4, 20, 12));
+        CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, radius, cache);
+        Assert.True(cache.Matches(labels, owner, inside, null, radius, count));
+    }
+
+    [Fact]
     public void BlurWithinIslands_NoLabels_FallsBackToAPlainBlur()
     {
         // gen2 has no transfer map to derive islands from; the silhouette must still blur as it always did.

@@ -28,9 +28,14 @@ public sealed class UvSeamMapService(IPluginLog log)
     /// an unbounded dictionary would keep one full map per distinct radius the user ever tried (17 of them
     /// across the slider's range, ≈1.1 GB). Two is enough to keep a body and its normal-map resolution hot.
     /// </summary>
-    private readonly List<((long ModelHash, int W, int H, int Reach) Key, int[]? Map)> cache = new();
+    private readonly List<((string Id, int W, int H, int Reach) Key, int[]? Map)> cache = new();
     private const int MaxCachedMaps = 2;
     private readonly object cacheLock = new();
+
+    /// <summary>One body part for the seam map: how to tell whether it changed, and how to read it if it did.</summary>
+    /// <param name="Id">Identity — path plus size and write time, or the game path for an sqpack asset.</param>
+    /// <param name="Load">Reads the bytes. Called ONLY on a cache miss.</param>
+    public readonly record struct SeamModel(string Id, Func<byte[]?> Load);
 
     /// <summary>
     /// For every texel, the texel its surface continues into across a UV seam, or -1 where there is none
@@ -40,35 +45,38 @@ public sealed class UvSeamMapService(IPluginLog log)
     /// Takes ALL the body's part models together, not one: a body is shipped as separate top / dwn / glv /
     /// sho models, and the most conspicuous seam of the lot — torso to leg at the hip — lies BETWEEN two of
     /// those files. Welding them into one topology first is the only way that seam is visible at all.
+    /// <para/>
+    /// Identity rather than content: the previous version hashed the bytes, which meant the caller had to
+    /// read all four models (4.6 MB, ~1.1s measured) before it could discover the answer was already cached.
+    /// A path plus size and mtime settles that without opening anything, so a hit costs nothing.
     /// </summary>
-    public int[]? SeamSource(IReadOnlyList<byte[]?> models, int w, int h, int reach)
+    public int[]? SeamSource(IReadOnlyList<SeamModel> models, int w, int h, int reach)
     {
         if (models == null || models.Count == 0 || w <= 0 || h <= 0 || reach <= 0) return null;
 
-        // Content key: each model's length plus a sampled hash. Sampling densely enough that two body mods
-        // of identical length can't realistically collide — a sparse stride made that a live possibility.
-        long hash = 17;
-        bool any = false;
-        foreach (var m in models)
-        {
-            if (m == null || m.Length < 0x44) { hash = hash * 31 + 1; continue; }
-            any = true;
-            hash = hash * 31 + m.Length;
-            int stride = Math.Max(1, m.Length / 4096);
-            for (int i = 0; i < m.Length; i += stride) hash = hash * 31 + (m[i] ^ i);
-        }
-        if (!any) return null;
+        var sb = new System.Text.StringBuilder();
+        foreach (var m in models) sb.Append(m.Id).Append('');
+        var key = (sb.ToString(), w, h, reach);
 
-        var key = (hash, w, h, reach);
         lock (cacheLock)
         {
             for (int i = 0; i < cache.Count; i++)
                 if (cache[i].Key == key) return cache[i].Map;
         }
 
+        // Only now are the bytes worth reading.
+        var loaded = new List<byte[]?>(models.Count);
+        foreach (var m in models) loaded.Add(m.Load());
+
         // Built outside the lock: it takes a few hundred ms, and holding the lock would stall an unrelated
         // material's composite behind it. A concurrent duplicate build is wasted work, never a wrong answer.
-        var map = Build(models, w, h, reach);
+        //
+        // A body whose parts are all unreadable yields null — and that null is CACHED below like any other
+        // answer. Returning early instead would re-read every part on every composite, which is the exact
+        // cost this identity-keyed cache exists to avoid.
+        var map = loaded.TrueForAll(b => b == null || b.Length < 0x44)
+            ? null
+            : Build(loaded, w, h, reach);
         lock (cacheLock)
         {
             for (int i = 0; i < cache.Count; i++)
