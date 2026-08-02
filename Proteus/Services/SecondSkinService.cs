@@ -276,6 +276,49 @@ public sealed class SecondSkinService
         // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
         bool anyGen2Allowed = gen2Allowed == null || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
 
+        // FFXIV keys EQUIPMENT to a model race, not the character's race. Viera and Hrothgar wear Midlander
+        // models, race-deformed onto their own skeleton, so a c1801 character's gear, accessories AND e0000
+        // parts all live at c0201 paths — the c1801 equivalents were never shipped. Skin is the opposite:
+        // keyed to the real race (mt_c1801b0001_bibo.mtrl). The shell is cut from equipment models and
+        // hosted on accessories, so everything in that space must use the MODEL code; charCode stays for
+        // the body itself. Read it off whatever the game already resolved rather than hardcoding a race
+        // table — and it is simply charCode for races that ship their own models.
+        var equippedPaths = (equippedPartModels?.Values ?? Enumerable.Empty<string>())
+            .Concat(equippedAccessories?.Values ?? Enumerable.Empty<string>())
+            .Concat(metModels ?? Enumerable.Empty<string>());
+        // Every equipped path should agree. If one ever doesn't, say so instead of silently picking by
+        // enumeration order — the whole shell hangs off this value being right.
+        var codes = equippedPaths.Select(PathCharCode).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (codes.Count > 1)
+            log.Warning("[Proteus] second skin: equipped models disagree on a model code [{0}] — using c{1}",
+                string.Join(", ", codes), codes[0]);
+
+        var modelCode = codes.FirstOrDefault();
+        if (modelCode == null)
+        {
+            // Nothing equipped, so there is no resolved path to read it off — and defaulting to charCode
+            // strands exactly the races this exists for: a bare Viera would ask for c1801e0000_top.mdl,
+            // which was never shipped, and end up with no shell at all. Probe instead — the character's own
+            // code first, then the two bases everything else deforms from — and take the first that
+            // actually has an e0000 torso.
+            foreach (var cand in new[] { charCode, "0201", "0101" })
+            {
+                // Existence only — no need to read the model, which would pull megabytes just to discard
+                // them. A mod redirect counts (ResolvePlayer yields a file only for modded paths), else ask
+                // the game index directly.
+                var probe = $"chara/equipment/e0000/model/c{cand}e0000_top.mdl";
+                if (penumbra.ResolvePlayer(probe) == null && !Plugin.DataManager.FileExists(probe)) continue;
+                modelCode = cand;
+                break;
+            }
+            modelCode ??= charCode;
+        }
+
+        if (!string.Equals(modelCode, charCode, StringComparison.OrdinalIgnoreCase))
+            log.Information("[Proteus] second skin: c{0} wears c{1} equipment models (race-deformed) — cutting "
+                          + "and hosting the shell in c{1} space", charCode, modelCode);
+
         // Each kept part carries its bytes and the shape keys enabled on THAT body model (by stem), so the
         // writer bakes only the morphs the game is actually applying to that part.
         var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes)>();
@@ -293,7 +336,7 @@ public sealed class SecondSkinService
             // through it); the flat bare-body e0000 would shell the whole body and float off the posed
             // skin. The skin-material filter in SecondSkinWriter keeps only the skin mesh. Slots with no
             // gear (or gear that exposes no skin) fall back to the bare body e0000.
-            var bareBody = $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
+            var bareBody = $"chara/equipment/e0000/model/c{modelCode}e0000_{part}.mdl";
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
                 : bareBody;
@@ -416,6 +459,14 @@ public sealed class SecondSkinService
                     modelType = wholeType;
                 }
             }
+            else
+            {
+                // Silence here once cost a debugging round: the trigger fired, nothing loaded, and the log
+                // said nothing at all — leaving a shell short of geometry with no line explaining why.
+                log.Information("[Proteus] second skin: every bare-body e0000 part was missing and no whole-body "
+                              + "model loaded for c{0} either (tried {1}) — the shell keeps only the {2} part(s) "
+                              + "cut from equipped gear", charCode, string.Join(", ", WholeBodyIds), bodies.Count);
+            }
         }
 
         if (bodies.Count == 0)
@@ -434,7 +485,7 @@ public sealed class SecondSkinService
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
-        var hosts = ChooseHosts(charCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot);
+        var hosts = ChooseHosts(modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot);
         // Cap total placeable layers at the single-char base-36 disk-id space (0-9a-z = 36). Any excess
         // folds into the over-budget drop path below, so a disk id can never run past 'z' into filesystem-
         // reserved chars. 36 is far beyond the practical geometric limit (~15 stacked shells).
@@ -521,7 +572,12 @@ public sealed class SecondSkinService
             string shader = ov.Descriptor.ShaderPackage;
             char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);   // in-model material index (per-host, <= 'j')
             char diskChar  = DiskId(diskLetter);                               // globally-unique disk id (base-36, 0-9a-z)
-            string matName = $"mt_c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
+            // Materials live INSIDE the host's own model, so name them with the code that model is loaded
+            // under — the equipped host's real resolved path, or charCode for the Emperor rebuild (see
+            // mdlGamePath below). On an append host this also keeps our added letters matching the base's
+            // own material names instead of mixing two codes inside one model.
+            var hostCode = host.ModelPath != null ? PathCharCode(host.ModelPath) ?? modelCode : charCode;
+            string matName = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/v0001/{matName}";
             string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
 
@@ -640,8 +696,15 @@ public sealed class SecondSkinService
                 continue;   // this host fails; the others still build
             }
 
-            // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host; the Emperor
-            // fallback (ModelPath null) rebuilds from the char code, which its EQDP edit makes correct.
+            // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host. The Emperor
+            // fallback has no resolved path to copy (ModelPath null), so its path is rebuilt here — from
+            // charCode, matching the EQDP entry written below, which is keyed to the CHARACTER's race
+            // (EqdpManipulation parses charCode) and declares that race to have its own model for the slot.
+            //
+            // That pairing is the reason for charCode, not proof it is the path the game opens: when the
+            // two codes differ we do not know whether EQDP wins or the model-race chain reaches c{modelCode}
+            // first. The block below publishes the shell at BOTH so the answer doesn't matter — read it for
+            // the deformation consequence, which the choice of path does decide.
             var mdlGamePath = host.ModelPath
                 ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
@@ -650,6 +713,24 @@ public sealed class SecondSkinService
             modelChangedAny |= modelChanged;
             redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
             hostModelPaths.Add(mdlGamePath);
+
+            // When the two codes differ, the Emperor rebuild above is a guess about resolution order: the
+            // EQDP bit we set says "c{charCode} has its own model", but the game may still reach the slot
+            // through the model-race chain and open c{modelCode}. Publish the shell at BOTH so it is found
+            // either way — same bytes, one extra redirect entry. Note the fit caveat: hosted at c{charCode}
+            // the game treats the model as native and does NOT race-deform it, while the shell was cut from
+            // c{modelCode} gear that IS deformed, so this host can render at the wrong proportions. Equipped
+            // hosts don't have the problem (they keep their real, deformed path), which is why the Emperor
+            // is last in fill order.
+            if (host.ModelPath == null && !string.Equals(modelCode, charCode, StringComparison.OrdinalIgnoreCase))
+            {
+                var altPath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{modelCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
+                redirects[altPath] = Rel(outputRoot, mdlDisk);
+                hostModelPaths.Add(altPath);
+                log.Information("[Proteus] host: fallback {0}{1:D4}/\"{2}\" published at both c{3} and c{4} — if the "
+                              + "shell renders the wrong size here, it is the c{3} (undeformed) path winning",
+                              host.Prefix, host.SetId, host.Slot, charCode, modelCode);
+            }
 
             // Only the invisible Emperor's New Ring needs an EQDP entry to load a model at all; real equipped
             // hosts (rings/bracelet/necklace/worn glasses) and the auto-glasses load natively.
@@ -1119,7 +1200,7 @@ public sealed class SecondSkinService
     /// count; a host holds up to <c>MaxMaterials - BaseMatCount</c> layers. The layers are distributed across
     /// this list in order (see Build), so more than one accessory's worth of materials can host a big look.
     /// </summary>
-    private List<HostAccessory> ChooseHosts(string charCode, IReadOnlyDictionary<string, string>? equipped,
+    private List<HostAccessory> ChooseHosts(string modelCode, IReadOnlyDictionary<string, string>? equipped,
         IReadOnlyList<string>? metModels, int? invisibleGlassesSet, string outputRoot)
     {
         log.Information("[Proteus] host: choosing from equipped accessories [{0}], head/glasses [{1}]",
@@ -1138,18 +1219,23 @@ public sealed class SecondSkinService
                 return null;
             }
 
-            // The shell is cut from THIS character's body, so it may only be redirected onto a model the
-            // game loads under THIS character's race code. An invisible item with no model for our race
-            // loads a fallback race instead (e.g. c0101 male on a c0201 female); the game then applies
+            // The shell is cut from equipment models, so it may only be redirected onto a host the game
+            // loads under the SAME model code. An invisible item with no model at that code loads a
+            // different one instead (e.g. c0101 male under a c0201 female); the game then applies
             // race-conversion deformation to whatever sits at that path, which shrinks and warps our shell
             // — it ends up inside the skin with only its edges poking through, correctly shaped and
             // animated but visibly the wrong size. Skip it and let the next candidate host instead.
+            //
+            // Compared against modelCode, NOT the character's race: a Viera wears c0201 equipment by
+            // design, and the shell is cut from those same c0201 models, so a c0201 host matches it
+            // exactly. Comparing against c1801 rejected every accessory the character actually had and
+            // dropped the whole look onto the Emperor fallback alone.
             if (PathCharCode(gamePath) is { } pathCc
-                && !string.Equals(pathCc, charCode, StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(pathCc, modelCode, StringComparison.OrdinalIgnoreCase))
             {
                 log.Information(
-                    "[Proteus] host: {0} ({1}{2:D4}) loads as c{3}, not this character's c{4} — the game would "
-                  + "race-deform the shell, skipping", slot, prefix, setId, pathCc, charCode);
+                    "[Proteus] host: {0} ({1}{2:D4}) loads as c{3}, not the shell's c{4} — the game would "
+                  + "race-deform the shell, skipping", slot, prefix, setId, pathCc, modelCode);
                 return null;
             }
 
@@ -1264,7 +1350,7 @@ public sealed class SecondSkinService
         // determined by our set id plus this character.
         if (hosts.Count == 0 && (metModels == null || metModels.Count == 0) && invisibleGlassesSet is int pending)
         {
-            var pendingPath = $"chara/equipment/e{pending:D4}/model/c{charCode}e{pending:D4}_met.mdl";
+            var pendingPath = $"chara/equipment/e{pending:D4}/model/c{modelCode}e{pending:D4}_met.mdl";
             log.Information("[Proteus] host: invisible glasses e{0:D4} (met, REPLACE — pending injection)", pending);
             hosts.Add(new HostAccessory(pending, "met", "Head", null, 0, "equipment", 'e', pendingPath));
         }
