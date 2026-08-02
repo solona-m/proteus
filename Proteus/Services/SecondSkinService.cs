@@ -57,6 +57,10 @@ public sealed class SecondSkinService
     /// </summary>
     private static readonly string[] Parts = ["top", "dwn", "glv", "sho"];
 
+    /// <summary>Body ids tried by the whole-body fallback, in preference order. b0001 is the standard
+    /// body; a few race/gender combos ship b0101 instead.</summary>
+    private static readonly string[] WholeBodyIds = ["b0001", "b0101"];
+
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
         UVRemapService uvRemap, Configuration config, IPluginLog log)
@@ -276,6 +280,9 @@ public sealed class SecondSkinService
         // writer bakes only the morphs the game is actually applying to that part.
         var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes)>();
         string? modelType = null;   // UV space of the first kept part, from its own skin material
+        // Bare-body slots attempted vs. missing — the whole-body fallback below fires only when EVERY one
+        // of them came back missing (see there for why "any one missing" is the wrong trigger).
+        int barePartsTried = 0, barePartsMissing = 0;
         foreach (var part in Parts)
         {
             // When gear is equipped in a slot, the bare-body part for that slot ISN'T drawn — the gear
@@ -286,17 +293,30 @@ public sealed class SecondSkinService
             // through it); the flat bare-body e0000 would shell the whole body and float off the posed
             // skin. The skin-material filter in SecondSkinWriter keeps only the skin mesh. Slots with no
             // gear (or gear that exposes no skin) fall back to the bare body e0000.
+            var bareBody = $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
-                : $"chara/equipment/e0000/model/c{charCode}e0000_{part}.mdl";
+                : bareBody;
+            bool isBarePart = string.Equals(bodyGamePath, bareBody, StringComparison.Ordinal);
+            if (isBarePart) barePartsTried++;
+
             // ResolvePlayer only yields a real file for MODDED models; a vanilla piece resolves to the
             // game path unchanged, so read from the game data in that case. The transcoder reads each
             // model's own vertex declaration, so vanilla and modded models both skin correctly.
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
             var bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+
             if (bytes == null)
             {
-                log.Debug("[Proteus] second skin: {0} not loadable, skipping", bodyGamePath);
+                // Only BARE-BODY misses count toward the fallback. A missing EQUIPPED model doesn't: the
+                // gear is still drawn in that slot, and shelling the bare skin under it is precisely the
+                // poke-through the comment above says to avoid — just skip the slot.
+                if (isBarePart) barePartsMissing++;
+                // Information, not Debug: when a shell fails to build this is usually the reason, and at
+                // Debug it is invisible in the log level people actually run at — which has already cost
+                // one round of "why did this fail?" that the log couldn't answer. Says only what it knows:
+                // a corrupt mod file and a path the race doesn't ship both land here.
+                log.Information("[Proteus] second skin: {0} not loadable, skipping part {1}", bodyGamePath, part);
                 continue;
             }
 
@@ -325,6 +345,79 @@ public sealed class SecondSkinService
             bodies.Add((bytes, partShapes));
             modelType ??= partType;
         }
+
+        // ── whole-body fallback ──────────────────────────────────────────────
+        // Not every race ships e0000 parts. Viera and Hrothgar have none, so the game resolves those paths
+        // through EQDP to another race's model and the direct path never loads. Left alone that silently
+        // drops the torso and hands from the shell, leaving a fabric that renders only where some equipped
+        // gear model happened to carry a skin mesh — 2 meshes where a Midlander gets 6. Fall back to the
+        // race's own body model: it always exists, is by definition the right race, and is what a body mod
+        // replaces, so it carries the correct UV space too.
+        //
+        // It is the WHOLE body and cannot be split per slot, so it REPLACES everything cut above rather
+        // than stacking a second shell over skin it already covers (coincident geometry that z-fights and
+        // spends the host's mesh budget twice). The cost is the gear-posed parts — a heel's tiptoed foot —
+        // and one consistent shell is the better trade. Decided here rather than mid-loop so the result
+        // can't depend on which slot happened to fail first.
+        //
+        // Trigger: EVERY bare-body slot attempted was missing, which is what "this race ships no e0000
+        // models" actually looks like. Firing on any ONE missing slot would mean a single corrupt file on
+        // a race that does ship them wipes the gear-posed parts that loaded perfectly well and shells bare
+        // skin underneath gear the game is still drawing.
+        if (barePartsTried > 0 && barePartsMissing == barePartsTried)
+        {
+            // b0001 is the standard body, but a few race/gender combos ship b0101, and cutting the shell
+            // from the wrong one yields a plausible-looking shell of the wrong shape — worse than failing.
+            // Prefer whichever body the player's MOD owns (ResolvePlayer yields a real file only for modded
+            // models), since that is the one they are actually wearing; else take the first that exists.
+            (byte[] Bytes, string Path, string? Disk)? pick = null;
+            foreach (var bodyId in WholeBodyIds)
+            {
+                var wholePath = $"chara/human/c{charCode}/obj/body/{bodyId}/model/c{charCode}{bodyId}.mdl";
+                var wholeDisk = penumbra.ResolvePlayer(wholePath);
+                var wholeBytes = textureLoader.LoadRawFile(wholeDisk, wholePath);
+                if (wholeBytes == null) continue;
+                if (wholeDisk != null) { pick = (wholeBytes, wholePath, wholeDisk); break; }
+                pick ??= (wholeBytes, wholePath, wholeDisk);
+            }
+
+            if (pick is { } whole)
+            {
+                var wholeType = SkinBodyType(whole.Bytes);
+                if (string.Equals(wholeType, "gen2", StringComparison.OrdinalIgnoreCase) && !anyGen2Allowed)
+                {
+                    log.Information("[Proteus] second skin: whole-body fallback {0} is vanilla (gen2) — no gear "
+                                  + "overlay opted into All bodies, leaving the {1} part(s) cut above as-is",
+                                  whole.Path, bodies.Count);
+                }
+                else
+                {
+                    // enabledBodyShapes is keyed by the stem of the model the GAME is drawing (e.g.
+                    // c0201e0000_dwn). A race with no e0000 models of its own draws ANOTHER race's, so the
+                    // whole body's stem (c1801b0001) never appears there and an exact lookup quietly bakes
+                    // no morphs at all — the shell would sit off a body with "Remove Hip Dips" enabled,
+                    // which is the very thing the shape-key baking exists to prevent. Fall back to the
+                    // union of every enabled set: baking a shape key a model doesn't declare is a no-op,
+                    // so folding in the face and other stems costs nothing.
+                    HashSet<string>? wholeShapes = null;
+                    if (enabledBodyShapes != null
+                        && !enabledBodyShapes.TryGetValue(Interop.BodyShapeReader.Stem(whole.Path), out wholeShapes))
+                    {
+                        wholeShapes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var set in enabledBodyShapes.Values) wholeShapes.UnionWith(set);
+                        if (wholeShapes.Count == 0) wholeShapes = null;
+                    }
+                    log.Information("[Proteus] second skin: a bare-body e0000 part was not loadable (usual cause: "
+                                  + "c{0} ships no e0000 models and the game resolves them through EQDP) — cutting "
+                                  + "the whole shell from {1} instead, replacing {2} part(s) cut above",
+                                  charCode, whole.Path, bodies.Count);
+                    bodies.Clear();
+                    bodies.Add((whole.Bytes, wholeShapes));
+                    modelType = wholeType;
+                }
+            }
+        }
+
         if (bodies.Count == 0)
         {
             log.Warning("[Proteus] second skin: no skin models resolved for c{0} (or all parts gated out)", charCode);
