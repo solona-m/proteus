@@ -70,8 +70,12 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            // Never fatal: worst case we are back to the lazy load we had before.
-            log.Debug("[Proteus] image codec preload skipped: {0}", ex.Message);
+            // Never fatal: worst case we are back to the lazy load we had before. Warning, not Debug —
+            // if this fails the ALC-unload crash comes back, and a Debug line nobody sees would make the
+            // fix look installed when it isn't.
+            // Pass ex, not ex.Message: an assembly-load failure carries its real cause one level down
+            // (FileLoadException -> "AssemblyLoadContext is unloading"), and the message alone drops it.
+            log.Warning(ex, "[Proteus] image codec preload FAILED, plugin-reload crashes may return");
         }
     }
 
