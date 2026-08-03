@@ -3294,6 +3294,18 @@ public class CompositorService : IDisposable
             log.Information("[Proteus] recomposite DONE — {0:F0}ms total", PhaseCounter.MsSince(tRunStart));
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex))
+        {
+            // The plugin is being torn down with this composite still in flight. Every managed thing it
+            // touches from here is on a dying AssemblyLoadContext — the first not-yet-JITted method that
+            // needs an assembly reference throws "AssemblyLoadContext is unloading or was already
+            // unloaded" (StbImageSharp, on the PNG decode path). Nothing is wrong and nothing is
+            // recoverable: the instance is going away and a fresh one will composite on load. Preloading
+            // the assembly up front did NOT prevent this — the unload drops the ALC's resolved-assembly
+            // cache, so code still running re-resolves and fails regardless. Log it as the shutdown race
+            // it is instead of a red stack trace that reads like a crash.
+            log.Debug("[Proteus] recomposite abandoned — plugin unloading ({0})", ex.GetBaseException().Message);
+        }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] Recomposite failed");
@@ -3607,6 +3619,26 @@ public class CompositorService : IDisposable
     /// listed leaving its users with the invisible-character bug. Re-probed every 30s so a plugin enabled
     /// mid-session is picked up.
     /// </summary>
+    /// <summary>
+    /// True when <paramref name="ex"/> (or anything it wraps) is the AssemblyLoadContext-unloading
+    /// failure a background composite hits while the plugin is being torn down. Matched on the message
+    /// because the CLR surfaces it as a plain InvalidOperationException inside a FileLoadException, with
+    /// no distinguishing type to catch.
+    /// </summary>
+    private static bool IsLoadContextUnloading(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is AggregateException agg)
+                foreach (var inner in agg.InnerExceptions)
+                    if (IsLoadContextUnloading(inner)) return true;
+            if (e.Message.Contains("AssemblyLoadContext is unloading", StringComparison.OrdinalIgnoreCase)
+             || e.Message.Contains("was already unloaded", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
     private bool SyncPluginLoaded()
     {
         var now = Environment.TickCount64;
