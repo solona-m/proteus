@@ -65,6 +65,14 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool UseInPlaceReload { get; set; } = true;
 
+    /// <summary>
+    /// After edits settle, force one full redraw so sync plugins (Mare and its forks) let paired users
+    /// see the composite. Their between-redraw resource channel drops tex/mdl/mtrl — our entire output —
+    /// so an in-place reload alone leaves peers with no fabric and vanilla skin. Only takes effect when a
+    /// sync plugin is actually loaded; see CompositorService.ScheduleSyncSettleRedraw.
+    /// </summary>
+    public bool SyncSettleRedraw { get; set; } = true;
+
     public int ManagedModPriority { get; set; } = 900;
 
     /// <summary>

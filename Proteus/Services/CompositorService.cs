@@ -259,6 +259,24 @@ public class CompositorService : IDisposable
     private static readonly TimeSpan DecodeCacheIdleRelease = TimeSpan.FromSeconds(60);
     private readonly Timer idleCacheTimer;
 
+    // ── settle redraw for sync plugins ───────────────────────────────────────
+    // Mare and its forks (PSync/MareSempiterne, Snowcloak, …) build a peer's file list from the resources
+    // the character has ACTUALLY resolved, and their between-redraw channel deliberately drops our file
+    // types: TransientResourceManager's allow-list only handles tex/mdl/mtrl while a manual transient
+    // recording is running. Our entire output is those three, written AFTER the draw — so an in-place
+    // reload leaves paired users seeing none of it (no fabric, vanilla skin) until something else forces
+    // a redraw. That's why "redraw + refresh" clears it by hand.
+    //
+    // Fire ONE real redraw once edits settle: the in-place reload still lands immediately, so dragging a
+    // colour slider stays flicker-free, and the redraw that follows the last edit is what the peer picks
+    // up. Rescheduled on every composite, so a burst collapses to a single redraw at the end.
+    private Timer? syncRedrawTimer;
+    private static readonly TimeSpan SyncRedrawSettle = TimeSpan.FromSeconds(3);
+
+    // Re-probed rather than cached forever: a sync plugin can be installed or enabled mid-session.
+    private long syncProbeTick;
+    private bool syncPluginLoaded;
+
     /// <summary>Push the configured decode-cache budget onto the loader. The Settings slider calls this —
     /// the UI has no reference to the loader. Takes effect at once: the loader trims on assignment, so
     /// lowering the budget releases the excess immediately rather than at the next composite.</summary>
@@ -313,6 +331,7 @@ public class CompositorService : IDisposable
         _disposed = true;   // an in-flight boot-probe task bails instead of touching torn-down bridges
 
         idleCacheTimer.Dispose();
+        syncRedrawTimer?.Dispose();
 
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
@@ -3543,12 +3562,71 @@ public class CompositorService : IDisposable
             if (reapplied)
             {
                 log.Debug("[Proteus] Refreshed textures via Glamourer in-place reload.");
+                ScheduleSyncSettleRedraw();
                 return;
             }
         }
 
+        // A real redraw already re-resolves everything, which is exactly what a peer's snapshot needs —
+        // so drop any settle redraw still pending from an earlier in-place reload.
+        syncRedrawTimer?.Change(Timeout.Infinite, Timeout.Infinite);
         Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
         penumbra.RedrawPlayer();
+    }
+
+    /// <summary>
+    /// Arm (or push back) the post-settle redraw that lets sync plugins see this composite. See the
+    /// syncRedrawTimer field for why an in-place reload alone is invisible to them. No-op unless a sync
+    /// plugin is loaded, so nobody else pays a redraw for a feature they aren't using.
+    /// </summary>
+    private void ScheduleSyncSettleRedraw()
+    {
+        if (!config.SyncSettleRedraw || _disposed || !SyncPluginLoaded()) return;
+
+        syncRedrawTimer ??= new Timer(_ =>
+        {
+            if (_disposed) return;
+            try
+            {
+                // Same bookkeeping as every other redraw we initiate: the tick lets our own
+                // redrawn/reapply events be recognised as echoes instead of user activity.
+                Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
+                penumbra.RedrawPlayer();
+                log.Debug("[Proteus] sync settle: full redraw so paired clients resolve this composite");
+            }
+            catch (Exception ex) { log.Warning("[Proteus] sync settle redraw failed: {0}", ex.Message); }
+        }, null, Timeout.Infinite, Timeout.Infinite);
+
+        syncRedrawTimer.Change(SyncRedrawSettle, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// Whether any Mare-family sync plugin is loaded. Matched on internal name rather than an exact list
+    /// because the forks multiply (MareSynchronos, MareSempiterne/PSync, Snowcloak, …); a false positive
+    /// costs one extra redraw a few seconds after editing stops, which is far cheaper than a fork nobody
+    /// listed leaving its users with the invisible-character bug. Re-probed every 30s so a plugin enabled
+    /// mid-session is picked up.
+    /// </summary>
+    private bool SyncPluginLoaded()
+    {
+        var now = Environment.TickCount64;
+        if (now - Interlocked.Read(ref syncProbeTick) < 30_000) return syncPluginLoaded;
+        Interlocked.Exchange(ref syncProbeTick, now);
+
+        try
+        {
+            var hit = Plugin.PluginInterface.InstalledPlugins.FirstOrDefault(p => p.IsLoaded
+                && (p.InternalName.Contains("mare", StringComparison.OrdinalIgnoreCase)
+                 || p.InternalName.Contains("sync", StringComparison.OrdinalIgnoreCase)));
+            if (hit != null && !syncPluginLoaded)
+                log.Information("[Proteus] sync plugin \"{0}\" detected — a full redraw will follow each "
+                              + "settled composite so paired clients resolve our textures and shell",
+                              hit.InternalName);
+            syncPluginLoaded = hit != null;
+        }
+        catch { /* InstalledPlugins can throw during teardown; keep the last answer */ }
+
+        return syncPluginLoaded;
     }
 
     // Reload the managed mod, then redraw — but instead of sleeping a fixed, conservative

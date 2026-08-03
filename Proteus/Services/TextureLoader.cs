@@ -47,7 +47,49 @@ public class TextureLoader
         this.dataManager = dataManager;
         this.log = log;
         EnsureNativeCompressor(log);
+        PreloadImageCodec(log);
     }
+
+    /// <summary>
+    /// Resolve StbImageSharp NOW, while the plugin's AssemblyLoadContext is certainly alive.
+    /// <para/>
+    /// PNG decoding is the first thing that touches this assembly, and it happens deep inside a
+    /// background <c>Parallel.ForEach</c> in the compositor. Reloading the plugin while a composite is
+    /// still running therefore hit the lazy resolve after Dalamud had begun tearing the ALC down, and the
+    /// run died with "AssemblyLoadContext is unloading or was already unloaded" — an alarming red stack
+    /// trace for what is really just a cancelled run on a dying instance. Loading it up front means the
+    /// type is already resolved and no composite can trigger an assembly load at an unsafe moment.
+    /// </summary>
+    private static void PreloadImageCodec(IPluginLog log)
+    {
+        try
+        {
+            // Decoding a 1x1 PNG forces the assembly load AND the JIT of the decode path itself.
+            // Smallest valid PNG: 8-byte signature, IHDR, a single-pixel IDAT, IEND.
+            ImageResult.FromMemory(OnePixelPng, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: worst case we are back to the lazy load we had before.
+            log.Debug("[Proteus] image codec preload skipped: {0}", ex.Message);
+        }
+    }
+
+    /// <summary>A 1x1 RGBA PNG: signature, IHDR, one zlib-deflated scanline, IEND. Generated rather than
+    /// hand-written — the first attempt had a bad IDAT CRC, which the preload's catch would have swallowed,
+    /// leaving the fix inert while looking installed. Covered by ImageCodecPreloadTests.</summary>
+    internal static readonly byte[] OnePixelPng =
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0xDA, 0x63, 0x60, 0x60, 0x60, 0x60,
+        0x00, 0x00, 0x00, 0x05, 0x00, 0x01, 0x7A, 0xA8,
+        0x57, 0x50, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+        0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
 
     // ── Native SIMD block compressor (proteus_bcn.dll = bc7enc + rgbcx) ─────────────
     // BC7/BC5 encoding in managed BCnEncoder.Net is scalar C# and painfully slow (a compressed composite
