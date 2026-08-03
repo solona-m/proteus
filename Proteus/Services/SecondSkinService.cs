@@ -285,16 +285,29 @@ public sealed class SecondSkinService
         // table — and it is simply charCode for races that ship their own models.
         var equippedPaths = (equippedPartModels?.Values ?? Enumerable.Empty<string>())
             .Concat(equippedAccessories?.Values ?? Enumerable.Empty<string>())
-            .Concat(metModels ?? Enumerable.Empty<string>());
-        // Every equipped path should agree. If one ever doesn't, say so instead of silently picking by
-        // enumeration order — the whole shell hangs off this value being right.
-        var codes = equippedPaths.Select(PathCharCode).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (codes.Count > 1)
-            log.Warning("[Proteus] second skin: equipped models disagree on a model code [{0}] — using c{1}",
-                string.Join(", ", codes), codes[0]);
+            .Concat(metModels ?? Enumerable.Empty<string>())
+            // NEVER count the Emperor's ring. It is OUR host: last composite redirected it, so Penumbra
+            // resolves it straight back to our own output and it reports whatever code WE published it at.
+            // Reading the model race off it is a feedback loop — observed live as c0101 -> build shell ->
+            // publish at c1801 -> next composite reads 1801 -> every c1801e0000 part missing -> shell torn
+            // down -> redraw restores c0101 -> rebuild, forever. (ChooseHosts guards the same hazard when
+            // it picks a base model; this is the same trap one layer up.) Vanilla only ships a0053 at
+            // c0101 anyway, so it is never evidence of anything.
+            .Where(pth => !pth.Contains($"a{EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase));
 
-        var modelCode = codes.FirstOrDefault();
+        // Group rather than take-the-first: a real disagreement is decided by weight of evidence, not by
+        // dictionary enumeration order. On the character that exposed this, the honest gear (ril a0031 and
+        // met e5501) both say 0201 while only the discounted Emperor said 0101 — and picking wrong costs
+        // the ENTIRE shell, not the one stray redraw a wrong guess costs elsewhere.
+        var codeVotes = equippedPaths.Select(PathCharCode).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!)
+            .GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (codeVotes.Count > 1)
+            log.Warning("[Proteus] second skin: equipped models disagree on a model code [{0}] — using c{1}",
+                string.Join(", ", codeVotes.Select(g => $"{g.Key}x{g.Count()}")), codeVotes[0].Key);
+
+        var modelCode = codeVotes.Count > 0 ? codeVotes[0].Key : null;
         if (modelCode == null)
         {
             // Nothing equipped, so there is no resolved path to read it off — and defaulting to charCode
@@ -701,10 +714,16 @@ public sealed class SecondSkinService
             // charCode, matching the EQDP entry written below, which is keyed to the CHARACTER's race
             // (EqdpManipulation parses charCode) and declares that race to have its own model for the slot.
             //
-            // That pairing is the reason for charCode, not proof it is the path the game opens: when the
-            // two codes differ we do not know whether EQDP wins or the model-race chain reaches c{modelCode}
-            // first. The block below publishes the shell at BOTH so the answer doesn't matter — read it for
-            // the deformation consequence, which the choice of path does decide.
+            // charCode is also what the game actually asks for, confirmed in a live log: with charCode
+            // c1801 and modelCode c0201 it requested chara/accessory/a0053/model/c1801a0053_rir.mdl and
+            // got our shell. So EQDP wins over the model-race chain here, and ONE published path is right.
+            // An earlier version hedged by publishing at c{modelCode} too; that alias returned as an
+            // equipped accessory next composite and poisoned the model-race vote above. Don't re-add it.
+            //
+            // The open consequence is fit, not lookup: hosted at c{charCode} the game treats the model as
+            // native and does NOT race-deform it, while the shell is cut from c{modelCode} gear that IS
+            // deformed, so this host can render at the wrong proportions. Equipped hosts avoid that (they
+            // keep their real, deformed path), which is why the Emperor is last in fill order.
             var mdlGamePath = host.ModelPath
                 ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{charCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
@@ -714,23 +733,10 @@ public sealed class SecondSkinService
             redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
             hostModelPaths.Add(mdlGamePath);
 
-            // When the two codes differ, the Emperor rebuild above is a guess about resolution order: the
-            // EQDP bit we set says "c{charCode} has its own model", but the game may still reach the slot
-            // through the model-race chain and open c{modelCode}. Publish the shell at BOTH so it is found
-            // either way — same bytes, one extra redirect entry. Note the fit caveat: hosted at c{charCode}
-            // the game treats the model as native and does NOT race-deform it, while the shell was cut from
-            // c{modelCode} gear that IS deformed, so this host can render at the wrong proportions. Equipped
-            // hosts don't have the problem (they keep their real, deformed path), which is why the Emperor
-            // is last in fill order.
-            if (host.ModelPath == null && !string.Equals(modelCode, charCode, StringComparison.OrdinalIgnoreCase))
-            {
-                var altPath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{modelCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
-                redirects[altPath] = Rel(outputRoot, mdlDisk);
-                hostModelPaths.Add(altPath);
-                log.Information("[Proteus] host: fallback {0}{1:D4}/\"{2}\" published at both c{3} and c{4} — if the "
-                              + "shell renders the wrong size here, it is the c{3} (undeformed) path winning",
-                              host.Prefix, host.SetId, host.Slot, charCode, modelCode);
-            }
+            // NOTE: we deliberately publish the shell at ONE path only. An earlier version also published
+            // it at c{modelCode} to cover either resolution order; that extra path came straight back as an
+            // equipped accessory on the next composite and poisoned the model-race vote above. One path,
+            // paired with the EQDP entry below, is the only self-consistent choice.
 
             // Only the invisible Emperor's New Ring needs an EQDP entry to load a model at all; real equipped
             // hosts (rings/bracelet/necklace/worn glasses) and the auto-glasses load natively.
