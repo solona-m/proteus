@@ -390,8 +390,36 @@ public sealed class SecondSkinService
             // kept part's, below) and maps every part's art with it, so a part whose space differs here is
             // rendered with the wrong UVs. Logged per part because the fallback paths resolve through
             // Penumbra to whatever body mod owns them, which can differ slot to slot.
-            log.Information("[Proteus] second skin part {0}: uv={1} {2} ({3} KB) <- {4}",
-                part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024,
+            // A shape FINGERPRINT of the skin geometry we are about to cut from. The shell only conforms if
+            // this is the same mesh the game draws, and the two ways that fails look identical in game —
+            // the body pokes through the fabric either way:
+            //   - wrong variant: a body mod ships several chest sizes and ResolvePlayer handed us a
+            //     different one than the character renders. A different size is a different SHAPE, so the
+            //     vertex count and/or bounds differ from a known-good run of the same option.
+            //   - race deformation: the cut mesh is right, but the game deforms host and body differently.
+            //     Then these numbers MATCH a known-good run and the fault is in hosting, not geometry.
+            // Cheap enough to always emit: the writer parses this same geometry every composite anyway.
+            var shape = "(no skin geometry)";
+            if (SecondSkinWriter.TryReadLod0Geometry(bytes, out var dbgPos, out _, out var dbgTri)
+                && dbgPos.Length >= 3)
+            {
+                float x0 = float.MaxValue, y0 = float.MaxValue, z0 = float.MaxValue;
+                float x1 = float.MinValue, y1 = float.MinValue, z1 = float.MinValue;
+                for (int v = 0; v + 2 < dbgPos.Length; v += 3)
+                {
+                    if (dbgPos[v]     < x0) x0 = dbgPos[v];
+                    if (dbgPos[v]     > x1) x1 = dbgPos[v];
+                    if (dbgPos[v + 1] < y0) y0 = dbgPos[v + 1];
+                    if (dbgPos[v + 1] > y1) y1 = dbgPos[v + 1];
+                    if (dbgPos[v + 2] < z0) z0 = dbgPos[v + 2];
+                    if (dbgPos[v + 2] > z1) z1 = dbgPos[v + 2];
+                }
+                shape = $"{dbgPos.Length / 3}v/{dbgTri.Length / 3}t bounds=[{x0:F3}..{x1:F3}, "
+                      + $"{y0:F3}..{y1:F3}, {z0:F3}..{z1:F3}]";
+            }
+
+            log.Information("[Proteus] second skin part {0}: uv={1} {2} ({3} KB) skin={4} <- {5}",
+                part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024, shape,
                 bodyDisk ?? "(game data)");
 
             // Shape keys enabled on this exact body model (matched by file stem, e.g. c0201e0000_dwn).
