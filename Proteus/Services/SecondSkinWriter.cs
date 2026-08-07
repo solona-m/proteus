@@ -20,6 +20,19 @@ public sealed class SecondSkinLayer
 
     public int CoverageWidth { get; init; }
     public int CoverageHeight { get; init; }
+
+    /// <summary>
+    /// Optional toe-cap mask (one byte per texel, body UV, 0 = untouched .. 255 = fully capped). Where it
+    /// is non-zero the shell is inflated onto a smooth envelope instead of following the body contour, so
+    /// hosiery webs the gaps between the toes rather than sleeving each one. Null = today's behaviour.
+    /// </summary>
+    public byte[]? ToeCap { get; init; }
+
+    public int ToeCapWidth { get; init; }
+    public int ToeCapHeight { get; init; }
+
+    /// <summary>How far the masked region inflates toward its envelope (0 = off, 1 = full).</summary>
+    public float ToeCapStrength { get; init; } = 1f;
 }
 
 /// <summary>
@@ -353,6 +366,8 @@ public static class SecondSkinWriter
 
             byte[][] outStreams; byte[] outStrides; byte[] declBlock;
             (float U, float V)[] uv;
+            Vec3[]? capSrcPos = null, capOutPos = null;   // set only where a toe cap actually moved geometry
+            ToeCapPlan? capPlan = null;
             if (preserve)
             {
                 CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
@@ -361,8 +376,14 @@ public static class SecondSkinWriter
             }
             else
             {
+                // The toe cap smooths across the mesh's own topology, so it needs the mesh's triangle list
+                // BEFORE coverage trimming — read it only when a layer actually asks for a cap.
+                var capTris = cov is { ToeCap: not null } && cov.ToeCapStrength > 0f
+                    ? MeshTriangles(src, srcSubIdx, srcSubCount)
+                    : null;
                 BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
-                    out outStreams, out outStrides, out declBlock, out uv);
+                    out outStreams, out outStrides, out declBlock, out uv,
+                    out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag);
             }
 
             // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
@@ -428,11 +449,35 @@ public static class SecondSkinWriter
                     }
                     triIn++;
                     if (cov != null && !AnyVisible(cov, uv[a], uv[b], uv[c])) continue;
+                    // The toe box was replaced wholesale, so its triangles go; the cap's own are added
+                    // below. Anything the cap merely nudged is dropped only if it collapsed outright.
+                    if (capPlan != null && capPlan.IsCut(a, b, c)) continue;
+                    if (capOutPos != null && CapDegenerate(capSrcPos!, capOutPos, a, b, c)) continue;
                     keep.Add(a); keep.Add(b); keep.Add(c);
                     used[a] = used[b] = used[c] = true;
                     triOut++;
                 }
                 keptPerSub.Add(keep.ToArray());
+            }
+
+            // The rebuilt cap joins the submesh that lost the most geometry to the cut. Its vertices are
+            // all reused originals from that region, so they already skin through that submesh's bone
+            // window — which is the one thing a new triangle here must respect.
+            if (capPlan is { NewTriangles.Count: > 0 })
+            {
+                int host = 0;
+                for (int su = 1; su < keptPerSub.Count; su++)
+                    if (keptPerSub[su].Length > keptPerSub[host].Length) host = su;
+
+                var grown = new List<ushort>(keptPerSub[host]);
+                foreach (var (a, b, c) in capPlan.NewTriangles)
+                {
+                    if (a >= vc || b >= vc || c >= vc) continue;
+                    grown.Add(a); grown.Add(b); grown.Add(c);
+                    used[a] = used[b] = used[c] = true;
+                    triOut++;
+                }
+                keptPerSub[host] = grown.ToArray();
             }
             if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
 
@@ -980,8 +1025,11 @@ public static class SecondSkinWriter
 
     private static void BuildVerbatim(
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
-        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs)
+        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
+        out Vec3[]? capSrcPos, out Vec3[]? capOutPos, out ToeCapPlan? capPlan,
+        SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null)
     {
+        capPlan = null;
         VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
         foreach (var el in decl)
             switch (el.Usage)
@@ -1020,22 +1068,26 @@ public static class SecondSkinWriter
         Span<float> tmp = stackalloc float[4];
         int SrcAddr(int st, int i, int off) => vb + (int)vbo[st] + i * bs[st] + off;
 
+        // Positions and normalized normals are decoded here but written AFTER the UV pass, because the
+        // toe cap displaces them and it samples its mask with the normalized UV.
+        Vec3[]? basePos = null, baseNrm = null;
+        if (pos is not null && norm is not null) { basePos = new Vec3[vc]; baseNrm = new Vec3[vc]; }
+
         for (int i = 0; i < vc; i++)
         {
             for (int st = 0; st < streamCount; st++)
                 Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * outStrides[st], bs[st]);
 
-            // Push position along its normalized normal, re-encoded in the position's own type.
-            if (pos is { } pe && norm is { } ne)
+            if (basePos is not null && baseNrm is not null && pos is { } pe && norm is { } ne)
             {
                 ReadTyped(s, SrcAddr(ne.Stream, i, ne.Offset), ne.Type, tmp);
                 float nx = tmp[0], ny = tmp[1], nz = tmp[2];
                 if (ne.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
                 float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
                 if (len > 1e-6f) { nx /= len; ny /= len; nz /= len; }
+                baseNrm[i] = new Vec3(nx, ny, nz);
                 ReadTyped(s, SrcAddr(pe.Stream, i, pe.Offset), pe.Type, tmp);
-                WriteXYZ(outStreams[pe.Stream], i * outStrides[pe.Stream] + pe.Offset, pe.Type,
-                    tmp[0] + nx * push, tmp[1] + ny * push, tmp[2] + nz * push);
+                basePos[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
             }
 
             // Force vertex colour white so the gear shader's emissive isn't gated off.
@@ -1075,6 +1127,76 @@ public static class SecondSkinWriter
             }
         }
 
+        // Position write-back: base + (optional) toe-cap displacement, then the push along the vertex's
+        // normal, re-encoded in the position's own type. The cap needs the mesh's topology and a UV, so
+        // it can only run here; with no cap this is byte-for-byte what the in-loop push produced.
+        capSrcPos = null;
+        capOutPos = null;
+        if (basePos is not null && baseNrm is not null && pos is { } pw)
+        {
+            var plan = uv0 is not null && cap is { ToeCap: { } tc } && capTris is not null
+                ? ToeCapSolve(basePos, baseNrm, uvs, capTris, tc, cap.ToeCapWidth, cap.ToeCapHeight, cap.ToeCapStrength)
+                : null;
+            var delta = plan?.Delta;
+            capPlan = plan;
+
+            // Normals recomputed from the REBUILT surface — the source triangles minus the ones the cut
+            // removed, plus the cap's own. Without this the shell keeps shading as the toes it replaced.
+            var finalNrm = plan is null ? baseNrm : CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!));
+
+            int stride = outStrides[pw.Stream];
+            int normalsWritten = 0;
+            bool encoderMissing = false;
+            var outPos = plan is null ? null : new Vec3[vc];
+
+            for (int i = 0; i < vc; i++)
+            {
+                var p = basePos[i];
+                var n = finalNrm[i];
+                if (delta is not null) p = new Vec3(p.X + delta[i].X, p.Y + delta[i].Y, p.Z + delta[i].Z);
+
+                var final = new Vec3(p.X + n.X * push, p.Y + n.Y * push, p.Z + n.Z * push);
+                WriteXYZ(outStreams[pw.Stream], i * stride + pw.Offset, pw.Type, final.X, final.Y, final.Z);
+                if (outPos is not null) outPos[i] = final;
+
+                // Only vertices the cap actually reached get a new normal; everything else keeps the
+                // bytes it arrived with. The normal element has its own stream — it need not be pos's.
+                if (plan is not null && norm is { } ne2 && plan.NodeWeight[plan.NodeOf[i]] > 0f)
+                {
+                    if (WriteNormal(outStreams[ne2.Stream], i * outStrides[ne2.Stream] + ne2.Offset, ne2.Type,
+                            n.X, n.Y, n.Z))
+                        normalsWritten++;
+                    else
+                        encoderMissing = true;
+                }
+            }
+
+            if (plan is not null)
+            {
+                capSrcPos = basePos;
+                capOutPos = outPos;
+            }
+
+            // Report what the cap did. "0 moved" on a mesh that should hold the toes means the mask
+            // missed the UV; "0 normals" means it moved geometry nobody will see move.
+            if (capLog != null && cap?.ToeCap != null)
+            {
+                int moved = 0;
+                float max = 0f;
+                if (delta != null)
+                    foreach (var d in delta)
+                    {
+                        float m = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+                        if (m > 1e-7f) moved++;
+                        max = MathF.Max(max, m);
+                    }
+                capLog($"toe cap: {moved}/{vc} vertices moved, max {max:0.#####}, {normalsWritten} normals rewritten"
+                     + (plan is null ? "" : $", {plan.NewTriangles.Count} triangles rebuilt"));
+                if (encoderMissing)
+                    capLog($"toe cap: no encoder for normal type {norm?.Type} — that mesh keeps its old shading");
+            }
+        }
+
         // Declaration: copy the source mesh's block verbatim, splicing in a uv1 element only when we
         // appended one (the .zw / existing-uidx1 cases already declare their uv1).
         declBlock = new byte[DeclSize];
@@ -1092,6 +1214,1318 @@ public static class SecondSkinWriter
                 if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
                 break;
             }
+    }
+
+    /// <summary>A position/normal/displacement in model space.</summary>
+    internal readonly record struct Vec3(float X, float Y, float Z);
+
+    /// <summary>
+    /// Mask value at which a vertex counts as part of the cap's CORE rather than its soft edge. The core
+    /// alone sets the axis, the band and the slicing; a fringe of 1/255 covers a lot of ground and would
+    /// otherwise drag all three off the toes.
+    /// </summary>
+    private const float ToeCapCoreWeight = 0.5f;
+
+    /// <summary>Bounds on the ring count swept from the rim to the tip; the actual number follows edge length.</summary>
+    private const int MinRings = 4, MaxRings = 64;
+
+    /// <summary>
+    /// Ring spacing as a fraction of the mesh's own edge length. Below 1 the cap is finer than the body
+    /// it replaces, which is what lets the end taper with the toes instead of ending on a blunt cone.
+    /// </summary>
+    private const float RingDensity = 0.5f;
+
+    /// <summary>Share of the cut region's vertices the rings may consume, leaving the rest as slack.</summary>
+    private const float DonorBudget = 0.75f;
+
+    /// <summary>Rim vertices needed before a cut boundary is a usable loop to sew onto.</summary>
+    private const int MinRimNodes = 8;
+
+    /// <summary>
+    /// How much of an island the cap may claim. Past this there is no rim left to sew to — a toenail is
+    /// masked end to end — and the island is better left alone inside the cap.
+    /// </summary>
+    private const float MaxCoreFraction = 0.8f;
+
+    /// <summary>How far past the last ring the closing apex sits, in ring spacings.</summary>
+    private const float TipReach = 0.5f;
+
+
+    /// <summary>
+    /// Closest the relaxed cap may come to the skin, in mesh edge lengths — the fabric's thickness. Taken
+    /// from what a hand pass over this cap left in place (its tightest 5% sat at about a fifth of an edge).
+    /// </summary>
+    private const float SkinClearance = 0.2f;
+
+    /// <summary>Skin triangles shortlisted per cap vertex, so clearance can be enforced on every pass.</summary>
+    private const int SkinCandidates = 16;
+
+    /// <summary>
+    /// How far past the real surface a slot's outline must reach, in edge lengths, before that slot counts
+    /// as bridging a gap rather than lying on a toe.
+    /// </summary>
+    private const float BridgeMargin = 0.2f;
+
+
+    /// <summary>Smoothing passes over the finished cap — the equivalent of relaxing it by hand.</summary>
+    private const int RelaxPasses = 24;
+
+    /// <summary>How far each pass moves a vertex toward its neighbours' average.</summary>
+    private const float RelaxRate = 0.5f;
+
+    /// <summary>
+    /// How far the cap stands off the outline it is built from, as a fraction of the cross-section's own
+    /// radius — the fabric's thickness, in effect. Zero would leave it tangent to the toes underneath and
+    /// they would poke through the moment the foot deforms.
+    /// </summary>
+    private const float CapClearance = 0.06f;
+
+    /// <summary>
+    /// How far beyond its own slice a cross-section reads points for its hull, in slice thicknesses.
+    /// Overlapping the windows keeps the outline from jumping where a toe ends; too much and the cap
+    /// stops following the shape it is meant to enclose.
+    /// </summary>
+    private const float SliceWindow = 1.0f;
+
+    /// <summary>
+    /// Smallest masked island worth capping. Guards against a stray scrap of geometry — a toenail, a
+    /// detached sliver — being treated as its own toe box.
+    /// </summary>
+    private const int MinToeCapNodes = 24;
+
+    /// <summary>Points a cross-section needs before its hull is a meaningful outline.</summary>
+    private const int MinSliceNodes = 8;
+
+    /// <summary>How many times a cross-section may widen its band looking for enough points.</summary>
+    private const int BandWidenSteps = 5;
+
+
+
+    /// <summary>
+    /// Fraction of its original area a capped triangle must keep to survive. Relative, not absolute, so
+    /// a dense body isn't culled for having small triangles to begin with.
+    /// </summary>
+    private const float DegenerateAreaFraction = 0.02f;
+
+    /// <summary>Movement below which a vertex counts as untouched, matching the cap's own reporting.</summary>
+    private const float DegenerateMoveEpsilon = 1e-7f;
+
+    /// <summary>Distance at which two capped corners count as the same point — the weld's own grid.</summary>
+    private const float DegenerateWeldDistance = 1e-5f;
+
+    /// <summary>
+    /// Every triangle of one mesh, as mesh-local vertex indices, across all of its submeshes. The toe cap
+    /// needs the mesh's full topology (adjacency) — including submeshes coverage or the connector filter
+    /// will later drop, since those still hold the surface together.
+    /// </summary>
+    private static ushort[] MeshTriangles(Source src, ushort subIdx, ushort subCount)
+    {
+        var s = src.S;
+        var tris = new List<ushort>();
+        for (int su = 0; su < subCount; su++)
+        {
+            int ss = src.SubmeshStart + (subIdx + su) * 16;
+            uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
+            for (uint t = 0; t + 2 < sc; t += 3)
+            {
+                int p = src.Ib + (int)(so + t) * 2;
+                tris.Add(BitConverter.ToUInt16(s, p));
+                tris.Add(BitConverter.ToUInt16(s, p + 2));
+                tris.Add(BitConverter.ToUInt16(s, p + 4));
+            }
+        }
+        return tris.ToArray();
+    }
+
+    /// <summary>
+    /// Toe cap: per-vertex displacement that inflates the masked region onto a smooth envelope, so a
+    /// stocking shell webs the gaps between the toes instead of sleeving each toe individually.
+    /// <para/>
+    /// The region is treated as a height field measured radially from the centre of the masked area, and
+    /// each height is repeatedly raised to at least the average of its neighbours'. Smoothing alone can't
+    /// do this: it equalizes, converging right back onto the toes, and clamping it outward along each
+    /// vertex's own normal stalls at once, because inside a gap the normals point sideways ACROSS the gap
+    /// rather than out of it. Raising toward the neighbour mean, in a frame the whole region shares, lets
+    /// a toe tip's height propagate into the gaps beside it — the taut membrane real hosiery forms.
+    /// <para/>
+    /// The result only ever inflates, so the toes stay inside the cap instead of poking through it, and
+    /// every step is scaled by the vertex's mask value, so black is pinned and the cap fades into the
+    /// untouched shell across the grey.
+    /// <para/>
+    /// Vertices are WELDED by source position first: a body mesh splits vertices at UV seams, and two
+    /// coincident copies with different neighbour sets would otherwise smooth apart and crack open. Each
+    /// weld group moves as one, by a single shared delta, so hard-edge normal splits keep their offsets.
+    /// <para/>
+    /// Returns null when nothing is masked — the caller then writes exactly what it would have without
+    /// this feature.
+    /// </summary>
+    internal static Vec3[]? ToeCapDelta(
+        Vec3[] pos, Vec3[] nrm, (float U, float V)[] uv, ushort[] tris,
+        byte[] mask, int mw, int mh, float strength)
+        => ToeCapSolve(pos, nrm, uv, tris, mask, mw, mh, strength)?.Delta;
+
+    /// <summary>
+    /// What the toe cap decided: the displacement, plus the welding and per-node data the normal pass
+    /// needs. Moving the vertices is only half the job — a shell whose normals still describe five
+    /// separate toes shades as five separate toes no matter where the geometry sits.
+    /// </summary>
+    internal sealed class ToeCapPlan
+    {
+        /// <summary>Per-vertex displacement, indexed like the mesh's vertices.</summary>
+        public required Vec3[] Delta { get; init; }
+
+        /// <summary>Vertex index -> welded node index.</summary>
+        public required int[] NodeOf { get; init; }
+
+        /// <summary>Per-node mask weight (max over the node's members), 0 where the cap left it alone.</summary>
+        public required float[] NodeWeight { get; init; }
+
+        /// <summary>Per-node normalized average of the members' SOURCE normals.</summary>
+        public required Vec3[] NodeNormal { get; init; }
+
+        /// <summary>Nodes inside the cap: every triangle touching one is cut out and replaced.</summary>
+        public required bool[] CutNode { get; init; }
+
+        /// <summary>The rebuilt cap, as mesh-local vertex indices.</summary>
+        public required List<(ushort A, ushort B, ushort C)> NewTriangles { get; init; }
+
+
+        /// <summary>Does this triangle belong to the region the cap replaced?</summary>
+        public bool IsCut(ushort a, ushort b, ushort c)
+            => CutNode[NodeOf[a]] || CutNode[NodeOf[b]] || CutNode[NodeOf[c]];
+    }
+
+    private static ToeCapPlan? ToeCapSolve(
+        Vec3[] pos, Vec3[] nrm, (float U, float V)[] uv, ushort[] tris,
+        byte[] mask, int mw, int mh, float strength)
+    {
+        int vc = pos.Length;
+        if (vc == 0 || mw <= 0 || mh <= 0 || strength <= 0f || mask.Length < mw * mh) return null;
+
+        // Mask weight per vertex, sampled nearest at the vertex's (already normalized) UV.
+        var w = new float[vc];
+        bool any = false;
+        for (int i = 0; i < vc; i++)
+        {
+            int x = ((int)MathF.Floor(uv[i].U * mw) % mw + mw) % mw;
+            int y = ((int)MathF.Floor(uv[i].V * mh) % mh + mh) % mh;
+            float m = mask[y * mw + x] / 255f * strength;
+            if (m <= 0f) continue;
+            w[i] = MathF.Min(1f, m);
+            any = true;
+        }
+        if (!any) return null;
+
+        var nodeOf = WeldByPosition(pos, out int nodeCount);
+
+        var start = new Vec3[nodeCount];
+        var nNorm = new Vec3[nodeCount];
+        var nW = new float[nodeCount];
+        var members = new int[nodeCount];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            start[n] = new Vec3(start[n].X + pos[i].X, start[n].Y + pos[i].Y, start[n].Z + pos[i].Z);
+            nNorm[n] = new Vec3(nNorm[n].X + nrm[i].X, nNorm[n].Y + nrm[i].Y, nNorm[n].Z + nrm[i].Z);
+            nW[n] = MathF.Max(nW[n], w[i]);
+            members[n]++;
+        }
+        for (int n = 0; n < nodeCount; n++)
+        {
+            float inv = 1f / members[n];
+            start[n] = new Vec3(start[n].X * inv, start[n].Y * inv, start[n].Z * inv);
+            var q = nNorm[n];
+            float len = MathF.Sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z);
+            nNorm[n] = len > 1e-6f ? new Vec3(q.X / len, q.Y / len, q.Z / len) : default;
+        }
+
+        // Edge adjacency over the welded nodes, deduped (a shared edge would otherwise weight twice).
+        var adj = new List<int>[nodeCount];
+        var seen = new HashSet<long>();
+        void Link(int a, int b)
+        {
+            if (a == b) return;
+            long key = a < b ? (long)a * nodeCount + b : (long)b * nodeCount + a;
+            if (!seen.Add(key)) return;
+            (adj[a] ??= new List<int>()).Add(b);
+            (adj[b] ??= new List<int>()).Add(a);
+        }
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;   // never fault on a bad index
+            int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+            Link(a, b); Link(b, c); Link(c, a);
+        }
+
+        // Connected components: the two feet are separate islands and must never share a centre, or the
+        // envelope would bridge the gap BETWEEN them.
+        var comp = new int[nodeCount];
+        Array.Fill(comp, -1);
+        int compCount = 0;
+        var stack = new Stack<int>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (comp[n] >= 0) continue;
+            comp[n] = compCount;
+            stack.Push(n);
+            while (stack.Count > 0)
+            {
+                int q = stack.Pop();
+                if (adj[q] == null) continue;
+                foreach (int k in adj[q])
+                    if (comp[k] < 0) { comp[k] = compCount; stack.Push(k); }
+            }
+            compCount++;
+        }
+
+        var maskedByComp = new List<int>[compCount];
+        for (int n = 0; n < nodeCount; n++)
+            if (nW[n] > 0f) (maskedByComp[comp[n]] ??= new List<int>()).Add(n);
+
+        var target = new Vec3[nodeCount];
+        var hasTarget = new bool[nodeCount];
+        var cutNode = new bool[nodeCount];
+        var newTris = new List<(ushort A, ushort B, ushort C)>();
+        bool capped = false;
+
+        // One representative vertex per node — the cap's triangles are written in vertex indices.
+        var repOf = new ushort[nodeCount];
+        var haveRep = new bool[nodeCount];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            if (!haveRep[n]) { repOf[n] = (ushort)i; haveRep[n] = true; }
+        }
+        ushort Rep(int n) => repOf[n];
+
+        var islandSize = new int[compCount];
+        for (int n = 0; n < nodeCount; n++) islandSize[comp[n]]++;
+
+        for (int c = 0; c < compCount; c++)
+        {
+            var masked = maskedByComp[c];
+            if (masked is not { Count: >= MinToeCapNodes }) continue;
+
+            // The CORE of the mask — where it is actually painted in, not its antialiased fringe. A soft
+            // edge covers a lot of ground at a value of 1 or 2/255, and letting that define the region
+            // stretches it over the whole foot: the axis tilts and the slices below land mostly behind the
+            // toes, where they do nothing. Everything that sets up the frame uses the core; the fringe
+            // still moves, just by its own small weight.
+            var core = new List<int>();
+            foreach (int n in masked)
+                if (nW[n] >= ToeCapCoreWeight) core.Add(n);
+            if (core.Count < MinToeCapNodes) continue;
+
+            // A cap is sewn onto surviving geometry. An island that is ENTIRELY masked — each toenail is
+            // — has no rim to sew to, so leave it alone; it ends up inside the cap either way.
+            if (core.Count > MaxCoreFraction * islandSize[c]) continue;
+
+            float cx = 0, cy = 0, cz = 0, wsum = 0;
+            foreach (int n in core)
+            {
+                cx += start[n].X * nW[n]; cy += start[n].Y * nW[n]; cz += start[n].Z * nW[n];
+                wsum += nW[n];
+            }
+            if (wsum <= 0f) continue;
+            var mid = new Vec3(cx / wsum, cy / wsum, cz / wsum);
+
+            float ax = 0, ay = 0, az = 0;
+            int all = 0;
+            for (int n = 0; n < nodeCount; n++)
+                if (comp[n] == c) { ax += start[n].X; ay += start[n].Y; az += start[n].Z; all++; }
+            var islandMid = new Vec3(ax / all, ay / all, az / all);
+
+            // A mask covering its whole island puts the two centres on top of each other and leaves no
+            // direction; fall back to the region's longest extent, which for a foot is still its length.
+            var axis = Normalize(new Vec3(mid.X - islandMid.X, mid.Y - islandMid.Y, mid.Z - islandMid.Z))
+                    ?? LongestExtent(start, core);
+            if (axis is null) continue;
+            Basis(axis.Value, out var eu, out var ev);
+
+            float Axial(Vec3 p) => (p.X - mid.X) * axis.Value.X + (p.Y - mid.Y) * axis.Value.Y + (p.Z - mid.Z) * axis.Value.Z;
+            (float X, float Y) Flatten(Vec3 p)
+            {
+                var d = new Vec3(p.X - mid.X, p.Y - mid.Y, p.Z - mid.Z);
+                return (d.X * eu.X + d.Y * eu.Y + d.Z * eu.Z, d.X * ev.X + d.Y * ev.Y + d.Z * ev.Z);
+            }
+
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (int n in core) { float t = Axial(start[n]); lo = MathF.Min(lo, t); hi = MathF.Max(hi, t); }
+            float span = hi - lo;
+            if (span <= 1e-6f) continue;
+
+            // ── the cut ────────────────────────────────────────────────────────────────────────────
+            // Every triangle with a core corner leaves the mesh, and the edges left used by only one of
+            // them form the rim the cap is sewn onto. Displacing the toes could never work — a stocking's
+            // toe box is a DIFFERENT surface, not the toes moved — so the toes come out and a new one
+            // goes in, exactly as a modeller builds it.
+            var inCut = new bool[nodeCount];
+            foreach (int n in core) inCut[n] = true;
+
+            // A painted mask is never perfectly solid: grey specks and the deep creases between the toes
+            // leave patches of unmasked geometry STRANDED inside the cut. Each one survives as a scrap
+            // floating under the finished cap, ringed by its own hole — the overlapping shards on the top
+            // of the foot, and the reason a smaller mask made it worse. Anything no longer joined to the
+            // surviving foot is absorbed into the cut, which also leaves exactly one rim to sew.
+            var reached = new bool[nodeCount];
+            var patches = new List<List<int>>();
+            var flood = new Stack<int>();
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (comp[n] != c || inCut[n] || reached[n]) continue;
+                var patch = new List<int>();
+                flood.Push(n);
+                reached[n] = true;
+                while (flood.Count > 0)
+                {
+                    int q = flood.Pop();
+                    patch.Add(q);
+                    if (adj[q] == null) continue;
+                    foreach (int k in adj[q])
+                        if (comp[k] == c && !inCut[k] && !reached[k]) { reached[k] = true; flood.Push(k); }
+                }
+                patches.Add(patch);
+            }
+            int mainPatch = 0;
+            for (int i = 1; i < patches.Count; i++)
+                if (patches[i].Count > patches[mainPatch].Count) mainPatch = i;
+            for (int i = 0; i < patches.Count; i++)
+            {
+                if (i == mainPatch) continue;
+                foreach (int n in patches[i])
+                {
+                    inCut[n] = true;
+                    nW[n] = 1f;       // fully inside the cap, so its normal is rebuilt with the rest
+                    core.Add(n);      // and it joins the pool the rings draw their vertices from
+                }
+            }
+
+            // The skin the cap has to stay off: the triangles it replaced, at their original positions,
+            // each with the direction that is OUT of the body — taken from the corners' own normals, since
+            // index winding is not dependable here.
+            var skinTris = new List<(Vec3 A, Vec3 B, Vec3 C, Vec3 Out)>();
+
+            var edgeUse = new Dictionary<(int, int), int>();
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+                int na = nodeOf[tris[t]], nb = nodeOf[tris[t + 1]], nc2 = nodeOf[tris[t + 2]];
+                if (comp[na] != c) continue;
+                if (!inCut[na] && !inCut[nb] && !inCut[nc2]) continue;
+                {
+                    Vec3 pa = start[na], pb = start[nb], pc = start[nc2];
+                    float ux = pb.X - pa.X, uy = pb.Y - pa.Y, uz = pb.Z - pa.Z;
+                    float wx = pc.X - pa.X, wy = pc.Y - pa.Y, wz = pc.Z - pa.Z;
+                    var face = Normalize(new Vec3(uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx));
+                    if (face is { } fn)
+                    {
+                        float agree = fn.X * (nNorm[na].X + nNorm[nb].X + nNorm[nc2].X)
+                                    + fn.Y * (nNorm[na].Y + nNorm[nb].Y + nNorm[nc2].Y)
+                                    + fn.Z * (nNorm[na].Z + nNorm[nb].Z + nNorm[nc2].Z);
+                        if (agree < 0) fn = new Vec3(-fn.X, -fn.Y, -fn.Z);
+                        skinTris.Add((pa, pb, pc, fn));
+                    }
+                }
+                foreach (var (p, q) in new[] { (na, nb), (nb, nc2), (nc2, na) })
+                {
+                    var key = p < q ? (p, q) : (q, p);
+                    edgeUse[key] = edgeUse.GetValueOrDefault(key) + 1;
+                }
+            }
+
+            var rim = new Dictionary<int, List<int>>();
+            foreach (var (e, uses) in edgeUse)
+            {
+                if (uses != 1) continue;
+                (rim.TryGetValue(e.Item1, out var l1) ? l1 : rim[e.Item1] = new List<int>()).Add(e.Item2);
+                (rim.TryGetValue(e.Item2, out var l2) ? l2 : rim[e.Item2] = new List<int>()).Add(e.Item1);
+            }
+            var loop = LongestLoop(rim);
+            if (loop.Count < MinRimNodes) continue;
+
+            // The walk gives the rim its true cyclic order; only rotate and orient it, never re-sort —
+            // sorting by angle crosses the stitch and shreds the seam.
+            OrientLoop(loop, start, Flatten);
+            int rimCount = loop.Count;
+
+            // ── the sweep ──────────────────────────────────────────────────────────────────────────
+            // Rings of the cross-section outline, marching from the rim to the tip. Each ring is sampled
+            // radially off the slice's convex hull, so it bridges every toe in that slice by construction.
+            var chain = new List<List<int>> { loop };
+            var taken = new HashSet<int>(loop);
+            float edgeLen = MeanEdgeLength(start, adj, core);
+
+            // Rings reuse vertices from the cut region, so the pool is finite: ask for more than it holds
+            // and the last rings are stitched from whatever is left, dragging vertices in from across the
+            // foot. Budget for slack so each slot still gets a donor that was already near it.
+            int affordable = (int)(core.Count * DonorBudget) / Math.Max(rimCount, 1);
+            int ringCount = Math.Clamp((int)MathF.Round(span / MathF.Max(edgeLen * RingDensity, 1e-6f)),
+                                       MinRings, Math.Clamp(affordable, MinRings, MaxRings));
+            float ringStep = span / ringCount;
+
+            // Where each slot sits ANGULARLY. The rim's vertices are far from evenly spaced — on this
+            // foot they range from 0.12 to 0.46 radians apart — so a ring of evenly spaced slots skews
+            // every strip against it and the worst ones cross, which is the overlap on top of the foot.
+            // Rings therefore start on the rim's own angles and even out as they climb, by which point
+            // they are far from the seam. Both sequences increase, so no blend of them can cross.
+            var rimAngle = new float[rimCount];
+            for (int j = 0; j < rimCount; j++)
+            {
+                var f = Flatten(start[loop[j]]);
+                rimAngle[j] = MathF.Atan2(f.Y, f.X);
+            }
+            for (int j = 1; j < rimCount; j++)
+            {
+                float a = rimAngle[j], prev = rimAngle[j - 1];
+                while (a - prev > MathF.PI) a -= MathF.Tau;
+                while (a - prev < -MathF.PI) a += MathF.Tau;
+                rimAngle[j] = a;
+            }
+
+            // The rim follows the painted mask edge and is nowhere near flat — here it juts forward over
+            // a sixth of the cap's length. Rings still march up the whole span (starting them past the
+            // rim's leading edge leaves one long chord that cuts under the foot and lets skin through),
+            // but each rim slot WAITS at the rim until the rings have passed it. Slots therefore join the
+            // sweep at different rings, which is what stops the first strip folding back on itself.
+            var joinAt = new int[rimCount];
+            for (int j = 0; j < rimCount; j++)
+            {
+                float rt = Axial(start[loop[j]]);
+                joinAt[j] = ringCount + 1;
+                for (int r = 1; r <= ringCount; r++)
+                    if (lo + ringStep * r > rt + ringStep * 0.5f) { joinAt[j] = r; break; }
+            }
+
+            // Kept so the relax below can push a vertex back out onto the outline it belongs on.
+            var ringHull = new (float X, float Y)[ringCount + 1][];
+            var ringCentre = new (float X, float Y)[ringCount + 1];
+            var ringAt = new float[ringCount + 1];
+            var ringClear = new float[ringCount + 1];
+            var ringSpans = new bool[ringCount + 1][];   // per slot: is this one bridging a gap?
+
+            List<int>? BuildRing(int r)
+            {
+                float t = lo + ringStep * r;
+
+                // Read the cross-section from the NARROWEST band that still holds enough points, widening
+                // only where the geometry thins out. A fixed band drags the wider sections behind the toes
+                // forward, which is what left the end of the cap blunt and standing off the tips.
+                var slicePts = new List<(float X, float Y)>();
+                float band = MathF.Min(ringStep, edgeLen * SliceWindow);
+                for (int widen = 0; widen < BandWidenSteps; widen++)
+                {
+                    slicePts.Clear();
+                    for (int n = 0; n < nodeCount; n++)
+                        if (comp[n] == c && MathF.Abs(Axial(start[n]) - t) <= band)
+                            slicePts.Add(Flatten(start[n]));
+                    if (slicePts.Count >= MinSliceNodes) break;
+                    band *= 1.8f;
+                }
+                if (slicePts.Count < MinSliceNodes) return null;
+
+                var hull = ConvexHull(slicePts.ToArray());
+                if (hull.Length < 3) return null;
+
+                float hx = 0, hy = 0;
+                foreach (var h in hull) { hx += h.X; hy += h.Y; }
+                var centre = (X: hx / hull.Length, Y: hy / hull.Length);
+
+                // Sitting exactly ON the hull leaves the cap tangent to the toes it encloses, so the skin
+                // pokes through it as soon as the body deforms. Stand it off by a little, eased in from
+                // the rim so the join stays flush.
+                float clear = 1f + CapClearance * MathF.Min(1f, r / 2f);
+                ringHull[r] = hull;
+                ringCentre[r] = centre;
+                ringAt[r] = t;
+                ringClear[r] = clear;
+
+                // Which slots are BRIDGING and which are simply lying on a toe. A bridging slot's ray
+                // crosses empty space to reach the outline, so the outline sits well beyond anything
+                // actually there; a slot on a toe meets the surface right where the outline is. The relax
+                // below leans on this: a vertex on a toe may settle inward and even the surface out, but
+                // one spanning a gap has nothing under it and would simply fall into the crevice.
+                var dirs = new (float X, float Y)[rimCount];
+                var hullRad = new float[rimCount];
+                var reach = new float[rimCount];
+                for (int j = 0; j < rimCount; j++)
+                {
+                    float even = rimAngle[0] + MathF.Tau * j / rimCount;
+                    float a = rimAngle[j] + (even - rimAngle[j]) * ((float)r / ringCount);
+                    dirs[j] = (MathF.Cos(a), MathF.Sin(a));
+                    hullRad[j] = HullRadius(hull, centre, dirs[j].X, dirs[j].Y);
+                }
+                float cone = MathF.Cos(MathF.PI / rimCount);
+                foreach (var q in slicePts)
+                {
+                    float ox = q.X - centre.X, oy = q.Y - centre.Y;
+                    float len = MathF.Sqrt(ox * ox + oy * oy);
+                    if (len <= 1e-9f) continue;
+                    for (int j = 0; j < rimCount; j++)
+                        if ((ox * dirs[j].X + oy * dirs[j].Y) / len >= cone)
+                            reach[j] = MathF.Max(reach[j], len);
+                }
+                var spans = new bool[rimCount];
+                for (int j = 0; j < rimCount; j++)
+                    spans[j] = hullRad[j] - reach[j] > edgeLen * BridgeMargin;
+                ringSpans[r] = spans;
+
+                // Donors claimed here are released again if the ring turns out unusable. Left claimed,
+                // they keep the position the abandoned ring gave them while belonging to no ring at all —
+                // so nothing relaxes them and nothing checks them against the skin.
+                var claimed = new List<int>(rimCount);
+                void Abandon()
+                {
+                    foreach (int taken2 in claimed)
+                    {
+                        taken.Remove(taken2);
+                        hasTarget[taken2] = false;
+                        target[taken2] = default;
+                    }
+                }
+
+                var ring = new List<int>(rimCount);
+                for (int j = 0; j < rimCount; j++)
+                {
+                    if (r < joinAt[j]) { ring.Add(-1); continue; }   // this slot is still back at the rim
+
+                    float dx = dirs[j].X, dy = dirs[j].Y;
+                    float rad = hullRad[j] * clear;
+                    float qx = centre.X + dx * rad, qy = centre.Y + dy * rad;
+                    var p = new Vec3(
+                        mid.X + axis.Value.X * t + eu.X * qx + ev.X * qy,
+                        mid.Y + axis.Value.Y * t + eu.Y * qx + ev.Y * qy,
+                        mid.Z + axis.Value.Z * t + eu.Z * qx + ev.Z * qy);
+
+                    // Reuse a vertex already in the region rather than creating one: it keeps its own
+                    // blend weights and its place in the submesh's bone window, so the cap skins and
+                    // draws with no new vertex data to author.
+                    int donor = NearestFree(core, start, taken, p);
+                    if (donor < 0) { Abandon(); return null; }   // pool exhausted; the caller stops here
+                    taken.Add(donor);
+                    claimed.Add(donor);
+                    target[donor] = new Vec3(p.X - start[donor].X, p.Y - start[donor].Y, p.Z - start[donor].Z);
+                    hasTarget[donor] = true;
+                    ring.Add(donor);
+                }
+                if (ring.Count == rimCount) return ring;
+                Abandon();
+                return null;
+            }
+
+            // Claim the LAST ring first. It is the one that decides whether the toe tips are enclosed, and
+            // if it is the ring that gets lost — to a thin cross-section or an exhausted vertex pool — the
+            // cap ends on a cone that runs straight through the tips of the middle toes.
+            var tipRing = BuildRing(ringCount);
+            for (int r = 1; r < ringCount; r++)
+            {
+                var ring = BuildRing(r);
+                if (ring == null) break;
+                chain.Add(ring);
+            }
+            if (tipRing != null) chain.Add(tipRing);
+            if (chain.Count < 2) continue;
+
+            // A slot that has not joined yet is still the rim vertex, so a strip crossing the join is a
+            // triangle rather than a quad and the degenerate halves fall away below.
+            int At(int level, int j)
+            {
+                if (level == 0) return loop[j];
+                int v = chain[level][j];
+                return v >= 0 ? v : loop[j];
+            }
+
+            Vec3 Placed(int n) => new(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
+
+            // ── the relax ──────────────────────────────────────────────────────────────────────────
+            // The rings inherit the rim's spacing, which is uneven enough that a few quads come out
+            // twisted however they are split. So even the cap out the way you would by hand: pull each
+            // vertex toward the average of its four neighbours in the ring grid, then push it back out
+            // onto its cross-section's outline so the relax can only slide it ALONG the cap, never let it
+            // sink onto the toes underneath. The rim and the tip are pinned, so the seam does not move.
+            // Nearest bit of skin under each cap vertex, found once. The relax is bounded by THIS rather
+            // than by the cross-section outline: holding every vertex out on the hull is what stops the
+            // surface evening out, and a hand pass over this cap moves more than half its vertices, over
+            // a third of them inward. What actually has to hold is clearance over the skin, not the hull.
+            var anchor = new Vec3[nodeCount];
+            for (int r = 1; r < chain.Count; r++)
+                foreach (int n in chain[r])
+                {
+                    if (n < 0) continue;
+                    var p = Placed(n);
+                    float bestD = float.MaxValue;
+                    foreach (int m in core)
+                    {
+                        float dx = start[m].X - p.X, dy = start[m].Y - p.Y, dz = start[m].Z - p.Z;
+                        float d = dx * dx + dy * dy + dz * dz;
+                        if (d < bestD) { bestD = d; anchor[n] = start[m]; }
+                    }
+                }
+            float minClear = edgeLen * SkinClearance;
+
+            // A shortlist of the skin under each cap vertex, so the clearance rule can be enforced on
+            // EVERY relax pass instead of once at the end. Snapping vertices onto the surface after the
+            // fact leaves its own creases; letting them settle against the constraint does not.
+            var nearSkin = new Dictionary<int, int[]>();
+            if (skinTris.Count > 0)
+                for (int r = 1; r < chain.Count; r++)
+                    foreach (int n in chain[r])
+                    {
+                        if (n < 0 || nearSkin.ContainsKey(n)) continue;
+                        var p = Placed(n);
+                        var order = new (float D, int I)[skinTris.Count];
+                        for (int t = 0; t < skinTris.Count; t++)
+                        {
+                            var (ta, tb, tc, _) = skinTris[t];
+                            float cx2 = (ta.X + tb.X + tc.X) / 3f - p.X;
+                            float cy2 = (ta.Y + tb.Y + tc.Y) / 3f - p.Y;
+                            float cz2 = (ta.Z + tb.Z + tc.Z) / 3f - p.Z;
+                            order[t] = (cx2 * cx2 + cy2 * cy2 + cz2 * cz2, t);
+                        }
+                        Array.Sort(order, (x, y) => x.D.CompareTo(y.D));
+                        int take = Math.Min(SkinCandidates, order.Length);
+                        var pick = new int[take];
+                        for (int k = 0; k < take; k++) pick[k] = order[k].I;
+                        nearSkin[n] = pick;
+                    }
+
+            // Signed distance out of the body, over that vertex's shortlist.
+            float Clearance(int n, Vec3 p, out Vec3 onSkin, out Vec3 outward)
+            {
+                onSkin = default; outward = default;
+                if (!nearSkin.TryGetValue(n, out var cand)) return float.MaxValue;
+                float bestD = float.MaxValue;
+                foreach (int t in cand)
+                {
+                    var (ta, tb, tc, to) = skinTris[t];
+                    var q = ClosestOnTriangle(p, ta, tb, tc);
+                    float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+                    float d = dx * dx + dy * dy + dz * dz;
+                    if (d < bestD) { bestD = d; onSkin = q; outward = to; }
+                }
+                if (bestD == float.MaxValue) return float.MaxValue;
+                return (p.X - onSkin.X) * outward.X + (p.Y - onSkin.Y) * outward.Y + (p.Z - onSkin.Z) * outward.Z;
+            }
+
+            for (int pass = 0; pass < RelaxPasses; pass++)
+            {
+                var moved = new List<(int Node, Vec3 To)>();
+                // Every ring relaxes, including the last: it cannot drift backwards because the step below
+                // holds each vertex in its own ring's plane.
+                for (int r = 1; r < chain.Count; r++)
+                    for (int j = 0; j < rimCount; j++)
+                    {
+                        int n = chain[r][j];
+                        if (n < 0) continue;
+
+                        float sx = 0, sy = 0, sz = 0;
+                        int count = 0;
+                        void Gather(int m)
+                        {
+                            if (m < 0) return;
+                            var q = Placed(m);
+                            sx += q.X; sy += q.Y; sz += q.Z; count++;
+                        }
+                        Gather(At(r - 1, j));
+                        Gather(r + 1 < chain.Count ? chain[r + 1][j] : -1);
+                        Gather(chain[r][(j + 1) % rimCount]);
+                        Gather(chain[r][(j - 1 + rimCount) % rimCount]);
+                        if (count == 0) continue;
+
+                        var p = Placed(n);
+                        float nx = p.X + (sx / count - p.X) * RelaxRate;
+                        float ny = p.Y + (sy / count - p.Y) * RelaxRate;
+                        float nz = p.Z + (sz / count - p.Z) * RelaxRate;
+
+                        // Hold the vertex in its own ring's plane — a hand pass moves these more than
+                        // three times as far across the section as along the foot, and letting them drift
+                        // axially walks the last rings back off the toe tips.
+                        // Held in its own ring's plane, but otherwise free to settle wherever the
+                        // smoothing takes it — including inward, and including down into a toe gap. The
+                        // only thing that must hold is clearance over the skin, and that is enforced
+                        // exactly, against the skin's own triangles, once the relax has finished.
+                        var rel = new Vec3(nx, ny, nz);
+                        int rr = Math.Clamp(r, 1, ringCount);
+                        if (ringHull[rr] != null)
+                        {
+                            var f2 = Flatten(rel);
+                            float t2 = ringAt[rr];
+                            rel = new Vec3(
+                                mid.X + axis.Value.X * t2 + eu.X * f2.X + ev.X * f2.Y,
+                                mid.Y + axis.Value.Y * t2 + eu.Y * f2.X + ev.Y * f2.Y,
+                                mid.Z + axis.Value.Z * t2 + eu.Z * f2.X + ev.Z * f2.Y);
+                        }
+
+                        // Free to settle inward — down into a toe gap is fine, and reads better than a
+                        // flat bridge — but never through the skin.
+                        float side = Clearance(n, rel, out var onSkin, out var outward);
+                        if (side < minClear && side != float.MaxValue)
+                            rel = new Vec3(
+                                onSkin.X + outward.X * minClear,
+                                onSkin.Y + outward.Y * minClear,
+                                onSkin.Z + outward.Z * minClear);
+                        moved.Add((n, rel));
+                    }
+
+                foreach (var (n, to) in moved)
+                    target[n] = new Vec3(to.X - start[n].X, to.Y - start[n].Y, to.Z - start[n].Z);
+            }
+
+            // ── keep it off the skin ───────────────────────────────────────────────────────────────
+            // The relax already holds this against each vertex's shortlist; this last sweep checks the
+            // whole surface, in case settling carried a vertex over some triangle that was not on its
+            // list. Measured against TRIANGLES, not vertices — a vertex-only test lets the cap sink
+            // through the middle of a face and call it clear.
+            if (skinTris.Count > 0)
+            {
+                float want = edgeLen * SkinClearance;
+                for (int r = 1; r < chain.Count; r++)
+                    foreach (int n in chain[r])
+                    {
+                        if (n < 0 || !hasTarget[n]) continue;
+                        var p = Placed(n);
+
+                        Vec3 best = default, bestOut = default;
+                        float bestD = float.MaxValue;
+                        foreach (var (ta, tb, tc, to) in skinTris)
+                        {
+                            var q = ClosestOnTriangle(p, ta, tb, tc);
+                            float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+                            float d = dx * dx + dy * dy + dz * dz;
+                            if (d < bestD) { bestD = d; best = q; bestOut = to; }
+                        }
+                        if (bestD == float.MaxValue) continue;
+
+                        // SIGNED, against the surface's own outward direction. Measuring plain distance
+                        // and shoving along (p - closest) drives a vertex that has ended up UNDER the skin
+                        // further under it, since that direction points into the body.
+                        float side = (p.X - best.X) * bestOut.X + (p.Y - best.Y) * bestOut.Y + (p.Z - best.Z) * bestOut.Z;
+                        if (side >= want) continue;
+
+                        target[n] = new Vec3(
+                            best.X + bestOut.X * want - start[n].X,
+                            best.Y + bestOut.Y * want - start[n].Y,
+                            best.Z + bestOut.Z * want - start[n].Z);
+                    }
+            }
+
+            // Which way is "out" here. Measured against the SOURCE normals of the vertices involved, not
+            // against a radial from the sweep axis: radial is fine around the sides but meaningless at the
+            // end of the cap, where the surface faces along the axis rather than away from it.
+            float FacesOut(int i0, int i1, int i2)
+            {
+                if (i0 == i1 || i1 == i2 || i0 == i2) return float.MaxValue;   // degenerate: dropped anyway
+                Vec3 p0 = Placed(i0), p1 = Placed(i1), p2 = Placed(i2);
+                float ux = p1.X - p0.X, uy = p1.Y - p0.Y, uz = p1.Z - p0.Z;
+                float wx = p2.X - p0.X, wy = p2.Y - p0.Y, wz = p2.Z - p0.Z;
+                var nrmF = Normalize(new Vec3(uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx));
+                if (nrmF is null) return float.MaxValue;
+
+                var outward = Normalize(new Vec3(
+                    nNorm[i0].X + nNorm[i1].X + nNorm[i2].X,
+                    nNorm[i0].Y + nNorm[i1].Y + nNorm[i2].Y,
+                    nNorm[i0].Z + nNorm[i1].Z + nNorm[i2].Z));
+                if (outward is null) return float.MaxValue;
+                return nrmF.Value.X * outward.Value.X + nrmF.Value.Y * outward.Value.Y + nrmF.Value.Z * outward.Value.Z;
+            }
+
+            // Winding comes from the ring order and stays consistent — never flipped per triangle. The
+            // vertex normals are averaged FROM these faces, so flipping one to satisfy a normal test just
+            // corrupts the normal it was tested against, and the surface ends up worse than it started.
+            void Emit(int i0, int i1, int i2)
+            {
+                if (i0 == i1 || i1 == i2 || i0 == i2) return;
+                newTris.Add((Rep(i0), Rep(i1), Rep(i2)));
+            }
+
+            // Split the quad on whichever diagonal keeps BOTH halves facing out. Where a joined slot sits
+            // beside one still waiting at the rim the quad is a bowtie, and one diagonal folds it back
+            // through the cap — those are the slivers left poking out of the seam.
+            void EmitQuad(int a0, int a1, int b1, int b0)
+            {
+                float d1 = MathF.Min(FacesOut(a0, a1, b1), FacesOut(a0, b1, b0));
+                float d2 = MathF.Min(FacesOut(a0, a1, b0), FacesOut(a1, b1, b0));
+                if (d1 >= d2) { Emit(a0, a1, b1); Emit(a0, b1, b0); }
+                else          { Emit(a0, a1, b0); Emit(a1, b1, b0); }
+            }
+
+            // ── the stitch ─────────────────────────────────────────────────────────────────────────
+            for (int r = 0; r + 1 < chain.Count; r++)
+                for (int j = 0; j < rimCount; j++)
+                {
+                    int k = (j + 1) % rimCount;
+                    EmitQuad(At(r, j), At(r, k), At(r + 1, k), At(r + 1, j));
+                }
+            // Close the far end on a single apex just past the last ring, rather than fanning the ring
+            // to one of its own vertices — that would leave a flat disc where the toe should round off.
+            int last = chain.Count - 1;
+            var tip = new List<int>(rimCount);
+            for (int j = 0; j < rimCount; j++) tip.Add(At(last, j));
+
+            // The apex sits over the middle of the LAST RING, pushed a little further along the foot. Not
+            // on the region's axis: that axis is an average over the whole cap and by the tip it no longer
+            // runs through the toes, so an apex placed on it juts out sideways past them — the one spike
+            // left in the finished cap, and the only vertex a hand pass had to move.
+            float ax3 = 0, ay3 = 0, az3 = 0;
+            int tipCount = 0;
+            for (int j = 0; j < rimCount; j++)
+            {
+                int v = chain[last][j];
+                if (v < 0) continue;                     // still back at the rim; it would drag the centre
+                var q = Placed(v);
+                ax3 += q.X; ay3 += q.Y; az3 += q.Z;
+                tipCount++;
+            }
+            if (tipCount == 0)
+                foreach (int v in tip) { var q = Placed(v); ax3 += q.X; ay3 += q.Y; az3 += q.Z; tipCount++; }
+
+            float reach = MathF.Max(ringStep, edgeLen) * TipReach;
+            var apexAt = new Vec3(
+                ax3 / tipCount + axis.Value.X * reach,
+                ay3 / tipCount + axis.Value.Y * reach,
+                az3 / tipCount + axis.Value.Z * reach);
+
+            int apex = NearestFree(core, start, taken, apexAt);
+            if (apex >= 0)
+            {
+                taken.Add(apex);
+                target[apex] = new Vec3(apexAt.X - start[apex].X, apexAt.Y - start[apex].Y, apexAt.Z - start[apex].Z);
+                hasTarget[apex] = true;
+                for (int j = 0; j < rimCount; j++)
+                    Emit(tip[j], tip[(j + 1) % rimCount], apex);
+            }
+
+            foreach (int n in core) cutNode[n] = true;
+            capped = true;
+        }
+
+        if (!capped || newTris.Count == 0) return null;
+
+        var delta = new Vec3[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            if (hasTarget[n]) delta[i] = target[n];
+        }
+
+        // Nodes the cap never moved must report zero weight, so the normal pass leaves their bytes
+        // exactly as they were — that is what keeps an untouched shell byte-identical.
+        for (int n = 0; n < nodeCount; n++)
+            if (!hasTarget[n]) nW[n] = 0f;
+
+        return new ToeCapPlan
+        {
+            Delta = delta, NodeOf = nodeOf, NodeWeight = nW, NodeNormal = nNorm,
+            CutNode = cutNode, NewTriangles = newTris,
+        };
+    }
+
+    /// <summary>Longest cycle in a rim adjacency map, walked in connectivity order.</summary>
+    private static List<int> LongestLoop(Dictionary<int, List<int>> rim)
+    {
+        var best = new List<int>();
+        var seen = new HashSet<int>();
+        foreach (int s in rim.Keys)
+        {
+            if (!seen.Add(s)) continue;
+            var loop = new List<int> { s };
+            int cur = s, prev = -1;
+            while (true)
+            {
+                int next = -1;
+                foreach (int k in rim[cur])
+                    if (k != prev && !seen.Contains(k)) { next = k; break; }
+                if (next < 0) break;
+                seen.Add(next);
+                loop.Add(next);
+                prev = cur;
+                cur = next;
+            }
+            if (loop.Count > best.Count) best = loop;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Rotate a rim loop to start near angle zero and run counter-clockwise, WITHOUT reordering it —
+    /// its walk order is the only thing that keeps the stitch from crossing itself.
+    /// </summary>
+    private static void OrientLoop(List<int> loop, Vec3[] pos, Func<Vec3, (float X, float Y)> flatten)
+    {
+        int n = loop.Count;
+        var ang = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            var f = flatten(pos[loop[i]]);
+            ang[i] = MathF.Atan2(f.Y, f.X);
+        }
+
+        float turn = 0;
+        for (int i = 0; i < n; i++)
+        {
+            float d = ang[(i + 1) % n] - ang[i];
+            while (d > MathF.PI) d -= MathF.Tau;
+            while (d < -MathF.PI) d += MathF.Tau;
+            turn += d;
+        }
+        if (turn < 0) { loop.Reverse(); Array.Reverse(ang); }
+
+        int startAt = 0;
+        for (int i = 1; i < n; i++)
+            if (MathF.Abs(ang[i]) < MathF.Abs(ang[startAt])) startAt = i;
+        if (startAt == 0) return;
+
+        var rotated = new List<int>(n);
+        for (int i = 0; i < n; i++) rotated.Add(loop[(startAt + i) % n]);
+        loop.Clear();
+        loop.AddRange(rotated);
+    }
+
+    /// <summary>Closest point to <paramref name="p"/> on a triangle, including its edges and corners.</summary>
+    private static Vec3 ClosestOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
+    {
+        static float Dot(Vec3 u, Vec3 v) => u.X * v.X + u.Y * v.Y + u.Z * v.Z;
+        static Vec3 Sub(Vec3 u, Vec3 v) => new(u.X - v.X, u.Y - v.Y, u.Z - v.Z);
+        static Vec3 Add(Vec3 u, Vec3 v, float s) => new(u.X + v.X * s, u.Y + v.Y * s, u.Z + v.Z * s);
+
+        Vec3 ab = Sub(b, a), ac = Sub(c, a), ap = Sub(p, a);
+        float d1 = Dot(ab, ap), d2 = Dot(ac, ap);
+        if (d1 <= 0 && d2 <= 0) return a;
+
+        Vec3 bp = Sub(p, b);
+        float d3 = Dot(ab, bp), d4 = Dot(ac, bp);
+        if (d3 >= 0 && d4 <= d3) return b;
+
+        float vc2 = d1 * d4 - d3 * d2;
+        if (vc2 <= 0 && d1 >= 0 && d3 <= 0) return Add(a, ab, d1 / (d1 - d3));
+
+        Vec3 cp = Sub(p, c);
+        float d5 = Dot(ab, cp), d6 = Dot(ac, cp);
+        if (d6 >= 0 && d5 <= d6) return c;
+
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) return Add(a, ac, d2 / (d2 - d6));
+
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0)
+            return Add(b, Sub(c, b), (d4 - d3) / (d4 - d3 + (d5 - d6)));
+
+        float den = 1f / (va + vb + vc2);
+        return Add(Add(a, ab, vb * den), ac, vc2 * den);
+    }
+
+    /// <summary>Nearest not-yet-claimed node to a target point, or -1 when the region is exhausted.</summary>
+    private static int NearestFree(List<int> pool, Vec3[] pos, HashSet<int> taken, Vec3 p)
+    {
+        int best = -1;
+        float bestD = float.MaxValue;
+        foreach (int n in pool)
+        {
+            if (taken.Contains(n)) continue;
+            float dx = pos[n].X - p.X, dy = pos[n].Y - p.Y, dz = pos[n].Z - p.Z;
+            float d = dx * dx + dy * dy + dz * dz;
+            if (d < bestD) { bestD = d; best = n; }
+        }
+        return best;
+    }
+
+    /// <summary>Distance from an interior point to the hull boundary along a unit direction.</summary>
+    private static float HullRadius((float X, float Y)[] hull, (float X, float Y) c, float dx, float dy)
+    {
+        float best = 0;
+        for (int i = 0; i < hull.Length; i++)
+        {
+            var a = hull[i];
+            var b = hull[(i + 1) % hull.Length];
+            float ex = b.X - a.X, ey = b.Y - a.Y;
+            float den = dx * ey - dy * ex;
+            if (MathF.Abs(den) < 1e-12f) continue;
+            float t = ((a.X - c.X) * ey - (a.Y - c.Y) * ex) / den;
+            float u = ((a.X - c.X) * dy - (a.Y - c.Y) * dx) / den;
+            if (t > 0 && u >= -1e-6f && u <= 1 + 1e-6f) best = MathF.Max(best, t);
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// The mesh's triangle list as the cap leaves it — the source triangles it did not cut out, plus the
+    /// ones it built. Vertex normals must be averaged over THIS, not the source list, or the cap is
+    /// shaded by the toes it replaced.
+    /// </summary>
+    private static ushort[] CappedTopology(ToeCapPlan plan, ushort[] tris)
+    {
+        var kept = new List<ushort>(tris.Length);
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            ushort a = tris[t], b = tris[t + 1], c = tris[t + 2];
+            if (a >= plan.NodeOf.Length || b >= plan.NodeOf.Length || c >= plan.NodeOf.Length) continue;
+            if (plan.IsCut(a, b, c)) continue;
+            kept.Add(a); kept.Add(b); kept.Add(c);
+        }
+        foreach (var (a, b, c) in plan.NewTriangles) { kept.Add(a); kept.Add(b); kept.Add(c); }
+        return kept.ToArray();
+    }
+
+    /// <summary>
+    /// Did the cap collapse this triangle? Only triangles it actually moved are eligible, so an
+    /// uncapped shell can never lose geometry to this test.
+    /// </summary>
+    private static bool CapDegenerate(Vec3[] src, Vec3[] def, ushort a, ushort b, ushort c)
+    {
+        if (a >= def.Length || b >= def.Length || c >= def.Length) return false;
+
+        static float Dist2(Vec3 p, Vec3 q)
+        {
+            float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+            return dx * dx + dy * dy + dz * dz;
+        }
+        static float Cross2(Vec3 p, Vec3 q, Vec3 r)
+        {
+            float ux = q.X - p.X, uy = q.Y - p.Y, uz = q.Z - p.Z;
+            float wx = r.X - p.X, wy = r.Y - p.Y, wz = r.Z - p.Z;
+            float x = uy * wz - uz * wy, y = uz * wx - ux * wz, z = ux * wy - uy * wx;
+            return x * x + y * y + z * z;   // = (2*area)^2
+        }
+
+        float eps2 = DegenerateMoveEpsilon * DegenerateMoveEpsilon;
+        if (Dist2(src[a], def[a]) <= eps2 && Dist2(src[b], def[b]) <= eps2 && Dist2(src[c], def[c]) <= eps2)
+            return false;   // the cap never touched this one
+
+        float weld2 = DegenerateWeldDistance * DegenerateWeldDistance;
+        if (Dist2(def[a], def[b]) <= weld2 || Dist2(def[b], def[c]) <= weld2 || Dist2(def[a], def[c]) <= weld2)
+            return true;
+
+        return Cross2(def[a], def[b], def[c])
+             <= DegenerateAreaFraction * DegenerateAreaFraction * Cross2(src[a], src[b], src[c]);
+    }
+
+    /// <summary>
+    /// Vertex normals recomputed from the CAPPED surface, blended back to the original by mask weight.
+    /// <para/>
+    /// Without this the whole cap is invisible: the vertex streams are a raw byte copy, so every normal
+    /// still describes the toe it was cut from, and the shell shades as five separate toes however far
+    /// the geometry moved. It also fixes the push — <c>position += normal * push</c> along a stale
+    /// sidewall normal drives the two halves of a bridged gap apart instead of offsetting them together.
+    /// <para/>
+    /// Faces contribute their unnormalized cross product, so area weights itself and the slivers left
+    /// where a gap closed contribute almost nothing. Normals are accumulated per WELDED NODE and every
+    /// copy of a node gets the same answer, so UV seams inside the cap don't crack.
+    /// </summary>
+    private static Vec3[] CapNormals(Vec3[] basePos, Vec3[] baseNrm, ToeCapPlan plan, ushort[] tris)
+    {
+        int vc = basePos.Length;
+        var nodeOf = plan.NodeOf;
+        int nodeCount = plan.NodeWeight.Length;
+
+        var def = new Vec3[vc];
+        for (int i = 0; i < vc; i++)
+            def[i] = new Vec3(basePos[i].X + plan.Delta[i].X, basePos[i].Y + plan.Delta[i].Y, basePos[i].Z + plan.Delta[i].Z);
+
+        // Deduped by node triple: capTris spans every submesh of the mesh, including the duplicate
+        // variant the connector filter drops later, and a doubled face would skew the average.
+        var accum = new Vec3[nodeCount];
+        var seenFace = new HashSet<(int, int, int)>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            ushort ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+            if (ia >= vc || ib >= vc || ic >= vc) continue;
+            int na = nodeOf[ia], nb = nodeOf[ib], nc = nodeOf[ic];
+            if (na == nb || nb == nc || na == nc) continue;
+
+            int s0 = Math.Min(na, Math.Min(nb, nc)), s2 = Math.Max(na, Math.Max(nb, nc));
+            if (!seenFace.Add((s0, na + nb + nc - s0 - s2, s2))) continue;
+
+            float ux = def[ib].X - def[ia].X, uy = def[ib].Y - def[ia].Y, uz = def[ib].Z - def[ia].Z;
+            float wx = def[ic].X - def[ia].X, wy = def[ic].Y - def[ia].Y, wz = def[ic].Z - def[ia].Z;
+            float cxp = uy * wz - uz * wy, cyp = uz * wx - ux * wz, czp = ux * wy - uy * wx;
+            if (cxp * cxp + cyp * cyp + czp * czp <= 1e-24f) continue;   // collapsed: no direction to give
+
+            foreach (int n in stackalloc[] { na, nb, nc })
+                accum[n] = new Vec3(accum[n].X + cxp, accum[n].Y + cyp, accum[n].Z + czp);
+        }
+
+        // Winding is not guaranteed here. Getting it backwards shades the cap inside out AND makes the
+        // push drive the shell into the body, so decide it once from the source normals we trust.
+        float agree = 0;
+        for (int n = 0; n < nodeCount; n++)
+            if (plan.NodeWeight[n] > 0f)
+                agree += accum[n].X * plan.NodeNormal[n].X + accum[n].Y * plan.NodeNormal[n].Y + accum[n].Z * plan.NodeNormal[n].Z;
+        float sign = agree < 0f ? -1f : 1f;
+
+        var outN = new Vec3[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            float w = plan.NodeWeight[n];
+            if (w <= 0f) { outN[i] = baseNrm[i]; continue; }   // untouched: original bytes must survive
+
+            var a = accum[n];
+            var fresh = Normalize(new Vec3(a.X * sign, a.Y * sign, a.Z * sign)) ?? plan.NodeNormal[n];
+            var src = plan.NodeNormal[n];
+
+            // Blend against the NODE-averaged source normal, not this vertex's own, so welded copies
+            // land on identical bytes; the weight fade rejoins the untouched shell without a crease.
+            outN[i] = Normalize(new Vec3(
+                src.X + (fresh.X - src.X) * w,
+                src.Y + (fresh.Y - src.Y) * w,
+                src.Z + (fresh.Z - src.Z) * w)) ?? baseNrm[i];
+        }
+        return outN;
+    }
+
+    /// <summary>
+    /// Encode a unit normal into a vertex element of the given type, leaving any 4th component (often
+    /// handedness or an occlusion term) intact. False when the type has no room for three components or
+    /// no defined scale to encode into — the caller then leaves the original bytes and says so.
+    /// <para/>
+    /// Deliberately NOT <see cref="WriteXYZ"/>: that one writes a Half2 by dropping z, which is a fine
+    /// partial write for a position and silent corruption for a normal.
+    /// </summary>
+    internal static bool WriteNormal(byte[] a, int off, byte type, float x, float y, float z)
+    {
+        switch (type)
+        {
+            case 2: case 3:   // Float3 / Float4
+                W32(a, off, (uint)BitConverter.SingleToInt32Bits(x));
+                W32(a, off + 4, (uint)BitConverter.SingleToInt32Bits(y));
+                W32(a, off + 8, (uint)BitConverter.SingleToInt32Bits(z));
+                return true;
+            case 14:          // Half4
+                W16(a, off, Half(x)); W16(a, off + 2, Half(y)); W16(a, off + 4, Half(z));
+                return true;
+            case 10:          // Short4n
+                W16(a, off,     (ushort)(short)Math.Clamp(MathF.Round(x * 32767f), -32767f, 32767f));
+                W16(a, off + 2, (ushort)(short)Math.Clamp(MathF.Round(y * 32767f), -32767f, 32767f));
+                W16(a, off + 4, (ushort)(short)Math.Clamp(MathF.Round(z * 32767f), -32767f, 32767f));
+                return true;
+            case 8:           // Ubyte4n — inverts ReadTyped's /255 AND BuildVerbatim's *2-1 unbias
+                a[off]     = (byte)Math.Clamp(MathF.Round((x * 0.5f + 0.5f) * 255f), 0f, 255f);
+                a[off + 1] = (byte)Math.Clamp(MathF.Round((y * 0.5f + 0.5f) * 255f), 0f, 255f);
+                a[off + 2] = (byte)Math.Clamp(MathF.Round((z * 0.5f + 0.5f) * 255f), 0f, 255f);
+                return true;
+            default:
+                return false;   // 9/13 have no z; 5/6/7/16/17 have no normalized scale
+        }
+    }
+
+    /// <summary>
+    /// Group coincident vertices into shared nodes, returning each vertex's node index. A body mesh
+    /// splits vertices at UV seams and hard edges; the cap's displacement and its normals must both be
+    /// decided per NODE, or two copies of the same point drift apart and the surface cracks open along
+    /// the seam. One function so that grouping is structurally identical in both passes.
+    /// </summary>
+    private static int[] WeldByPosition(Vec3[] pos, out int nodeCount)
+    {
+        var nodeOf = new int[pos.Length];
+        var byPos = new Dictionary<(int, int, int), int>(pos.Length);
+        nodeCount = 0;
+        for (int i = 0; i < pos.Length; i++)
+        {
+            var key = ((int)MathF.Round(pos[i].X * 1e5f), (int)MathF.Round(pos[i].Y * 1e5f), (int)MathF.Round(pos[i].Z * 1e5f));
+            if (!byPos.TryGetValue(key, out int n)) byPos[key] = n = nodeCount++;
+            nodeOf[i] = n;
+        }
+        return nodeOf;
+    }
+
+    /// <summary>Mean length of the edges touching the given nodes — the mesh's own resolution.</summary>
+    private static float MeanEdgeLength(Vec3[] pos, List<int>[] adj, List<int> nodes)
+    {
+        float total = 0;
+        int count = 0;
+        foreach (int n in nodes)
+        {
+            if (adj[n] == null) continue;
+            foreach (int k in adj[n])
+            {
+                float dx = pos[k].X - pos[n].X, dy = pos[k].Y - pos[n].Y, dz = pos[k].Z - pos[n].Z;
+                total += MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                count++;
+            }
+        }
+        return count > 0 ? total / count : 0f;
+    }
+
+    /// <summary>Axis of the given nodes' longest bounding-box side, or null when they occupy no space.</summary>
+    private static Vec3? LongestExtent(Vec3[] pos, List<int> nodes)
+    {
+        float lox = float.MaxValue, loy = float.MaxValue, loz = float.MaxValue;
+        float hix = float.MinValue, hiy = float.MinValue, hiz = float.MinValue;
+        foreach (int n in nodes)
+        {
+            lox = MathF.Min(lox, pos[n].X); hix = MathF.Max(hix, pos[n].X);
+            loy = MathF.Min(loy, pos[n].Y); hiy = MathF.Max(hiy, pos[n].Y);
+            loz = MathF.Min(loz, pos[n].Z); hiz = MathF.Max(hiz, pos[n].Z);
+        }
+        float ex = hix - lox, ey = hiy - loy, ez = hiz - loz;
+        if (ex <= 1e-6f && ey <= 1e-6f && ez <= 1e-6f) return null;
+        return ex >= ey && ex >= ez ? new Vec3(1, 0, 0)
+             : ey >= ez             ? new Vec3(0, 1, 0)
+                                    : new Vec3(0, 0, 1);
+    }
+
+    /// <summary>Unit vector, or null when the input is too short to have a direction.</summary>
+    private static Vec3? Normalize(Vec3 v)
+    {
+        float len = MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+        return len > 1e-6f ? new Vec3(v.X / len, v.Y / len, v.Z / len) : null;
+    }
+
+    /// <summary>Any two unit vectors spanning the plane perpendicular to <paramref name="n"/>.</summary>
+    private static void Basis(Vec3 n, out Vec3 u, out Vec3 v)
+    {
+        var seed = MathF.Abs(n.X) < 0.9f ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+        u = Normalize(new Vec3(
+            seed.Y * n.Z - seed.Z * n.Y,
+            seed.Z * n.X - seed.X * n.Z,
+            seed.X * n.Y - seed.Y * n.X))!.Value;
+        v = new Vec3(n.Y * u.Z - n.Z * u.Y, n.Z * u.X - n.X * u.Z, n.X * u.Y - n.Y * u.X);
+    }
+
+    /// <summary>Convex hull of a 2D point set, counter-clockwise (Andrew's monotone chain).</summary>
+    private static (float X, float Y)[] ConvexHull((float X, float Y)[] pts)
+    {
+        if (pts.Length < 3) return pts;
+        var p = (( float X, float Y)[])pts.Clone();
+        Array.Sort(p, (a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
+
+        static float Cross((float X, float Y) o, (float X, float Y) a, (float X, float Y) b)
+            => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
+
+        var hull = new (float X, float Y)[p.Length * 2];
+        int k = 0;
+        foreach (var q in p)
+        {
+            while (k >= 2 && Cross(hull[k - 2], hull[k - 1], q) <= 0) k--;
+            hull[k++] = q;
+        }
+        int lower = k + 1;
+        for (int i = p.Length - 2; i >= 0; i--)
+        {
+            var q = p[i];
+            while (k >= lower && Cross(hull[k - 2], hull[k - 1], q) <= 0) k--;
+            hull[k++] = q;
+        }
+        return hull[..Math.Max(k - 1, 0)];
+    }
+
+    /// <summary>Nearest point to <paramref name="q"/> on the hull's boundary.</summary>
+    private static (float X, float Y) ClosestOnHull((float X, float Y)[] hull, (float X, float Y) q)
+    {
+        var best = hull[0];
+        float bestD = float.MaxValue;
+        for (int i = 0; i < hull.Length; i++)
+        {
+            var a = hull[i];
+            var b = hull[(i + 1) % hull.Length];
+            float ex = b.X - a.X, ey = b.Y - a.Y;
+            float len2 = ex * ex + ey * ey;
+            float t = len2 > 1e-20f ? ((q.X - a.X) * ex + (q.Y - a.Y) * ey) / len2 : 0f;
+            t = Math.Clamp(t, 0f, 1f);
+            float px = a.X + ex * t, py = a.Y + ey * t;
+            float d = (px - q.X) * (px - q.X) + (py - q.Y) * (py - q.Y);
+            if (d < bestD) { bestD = d; best = (px, py); }
+        }
+        return best;
     }
 
     /// <summary>Write a 2-component UV (u,v) at <paramref name="off"/>, as two halves or two floats.</summary>
@@ -1129,7 +2563,7 @@ public static class SecondSkinWriter
     /// four floats. Covers the types skin meshes actually use for position/normal/uv (float, half, and
     /// the normalized integer forms); unknown types leave the destination zeroed.
     /// </summary>
-    private static void ReadTyped(byte[] s, int addr, byte type, Span<float> o)
+    internal static void ReadTyped(byte[] s, int addr, byte type, Span<float> o)
     {
         o.Clear();
         float H(int a) => (float)BitConverter.ToHalf(s, a);

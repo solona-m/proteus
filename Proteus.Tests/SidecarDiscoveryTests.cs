@@ -305,6 +305,26 @@ public class SidecarDiscoveryTests
     }
 
     [Fact]
+    public void ResolveMaskPaths_ToeCapOption_Excluded()
+    {
+        // "Toe Cap" lives in the Masks group and is authored like a mask, but it is NOT one: it moves
+        // shell geometry and must never carve coverage or become a paintable mask layer.
+        using var tmp = new TempDirectory();
+        var masksDir = Path.Combine(tmp.Path, "Masks");
+        Directory.CreateDirectory(masksDir);
+        File.WriteAllBytes(Path.Combine(masksDir, "Sleeves.png"), [0]);
+        File.WriteAllBytes(Path.Combine(masksDir, SidecarDiscoveryService.ToeCapOptionName + ".png"), [0]);
+        File.WriteAllBytes(Path.Combine(masksDir, "ToeCap.png"), [0]);
+
+        // Spelling is matched on letters/digits only — an unmatched name would fall through as a real
+        // mask, carve the garment away and paint a shell in the mask colour.
+        var result = SidecarDiscoveryService.ResolveMaskPaths(tmp.Path, ["Sleeves", "Toe Cap", "ToeCap", "toe-cap"]);
+
+        Assert.Single(result);
+        Assert.EndsWith("Sleeves.png", result[0]);
+    }
+
+    [Fact]
     public void ResolveMaskPaths_MissingFile_Skipped()
     {
         using var tmp = new TempDirectory();

@@ -32,6 +32,12 @@ public sealed class SecondSkinService
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
 
+    /// <summary>
+    /// The toe-cap mask is sampled per VERTEX, not per texel, so it needs more resolution than coverage
+    /// (the toes are a small, position-sensitive patch of body UV) but far less than the art.
+    /// </summary>
+    private const int ToeCapSize = 512;
+
     /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
     /// so an id never runs past 'z'.</summary>
     private const int DiskIdSpace = 36;
@@ -679,12 +685,19 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
+            // A shell follows every body contour, so hosiery sleeves each toe unless the author marks the
+            // toe area — then the writer inflates that region into one rounded cap.
+            var toeCap = LoadToeCap(ov.Descriptor, entry, srcType, bodyType);
             perHostLayers[hIdx].Add(new SecondSkinLayer
             {
                 MaterialName = "/" + matName,   // the model stores material names with a leading slash
                 Coverage = coverage,
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
+                ToeCap = toeCap,
+                ToeCapWidth = toeCap == null ? 0 : ToeCapSize,
+                ToeCapHeight = toeCap == null ? 0 : ToeCapSize,
+                ToeCapStrength = Math.Clamp(ov.Descriptor.ToeCapStrength ?? 1f, 0f, 1f),
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;
@@ -901,6 +914,45 @@ public sealed class SecondSkinService
             }
         }
         return cov;
+    }
+
+    /// <summary>
+    /// Load this shell's toe-cap map as a single-channel mask in the BODY's UV space (the shell inherits
+    /// the body's UVs, so the same remap the art takes applies here). Greyscale, so the red channel is the
+    /// value.
+    /// <para/>
+    /// Two ways to ask for one, checked in this order: the option's own <c>ToeCap</c> path — per-option, so
+    /// "Sheer" can be capped and "Fishnet" not — or the reserved <c>Toe Cap</c> entry in the mod's Masks
+    /// group, which the wearer toggles like any other mask and which applies to all of that mod's shells.
+    /// <para/>
+    /// Null — and no cap — when neither asks, strength is zero, the file won't load, or the map is all black.
+    /// </summary>
+    private byte[]? LoadToeCap(OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType)
+    {
+        if ((d.ToeCapStrength ?? 1f) <= 0f) return null;
+
+        var path = d.ToeCap != null ? Path.Combine(entry.SidecarRoot, d.ToeCap) : discovery.ResolveActiveToeCap(entry);
+        if (path == null) return null;
+
+        var rgba = RemapPath(path, srcType, dstType, ToeCapSize, ToeCapSize);
+        if (rgba == null)
+        {
+            log.Warning("[Proteus] second skin: toe cap map {0} failed to load — shell built without a cap", path);
+            return null;
+        }
+
+        var mask = new byte[ToeCapSize * ToeCapSize];
+        bool any = false;
+        for (int p = 0; p < mask.Length; p++)
+        {
+            mask[p] = rgba[p * 4];
+            if (mask[p] != 0) any = true;
+        }
+        if (!any) return null;   // all black = untouched everywhere; keep the build byte-identical
+
+        log.Information("[Proteus] second skin: toe cap {0} at strength {1:0.##}",
+            Path.GetFileName(path), d.ToeCapStrength ?? 1f);
+        return mask;
     }
 
     /// <summary>Box-downsample the coverage for triangle trimming; it only decides keep/drop.</summary>
