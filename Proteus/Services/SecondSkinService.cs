@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -775,6 +775,7 @@ public sealed class SecondSkinService
 
             byte[] shell;
             SecondSkinWriter.Stats stats;
+            DumpShellInputs(h, bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors, bodyShapes);
             try
             {
                 shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
@@ -963,6 +964,51 @@ public sealed class SecondSkinService
     /// <para/>
     /// Null — and no cap — when neither asks, strength is zero, the file won't load, or the map is all black.
     /// </summary>
+    /// <summary>
+    /// Write out exactly what the writer is about to be handed, so the offline harness can rebuild the
+    /// same shell instead of approximating its inputs. Enabled by CREATING the folder — it does nothing
+    /// until %TEMP%\proteus-shell-dump exists, and there is nothing to turn off afterwards but deleting
+    /// it again.
+    /// <para/>
+    /// This exists because approximating those inputs cost several rounds of chasing defects that the
+    /// harness could not reproduce: it was pointed at a different foot model than the one equipped, and
+    /// then at one body where the game passes several, no shape keys, and no connector-mesh mode.
+    /// </summary>
+    private void DumpShellInputs(int host, IReadOnlyList<byte[]> bodies, IReadOnlyList<SecondSkinLayer> layers,
+                                 byte[]? baseModel, bool skipConnectors, IReadOnlyList<HashSet<string>>? shapes)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        try
+        {
+            var pre = Path.Combine(dir, $"host{host}_");
+            for (int i = 0; i < bodies.Count; i++) File.WriteAllBytes($"{pre}body{i}.mdl", bodies[i]);
+            if (baseModel != null) File.WriteAllBytes($"{pre}base.mdl", baseModel);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"skipConnectors={skipConnectors}");
+            sb.AppendLine($"bodies={bodies.Count}");
+            // A body with no shape keys enabled contributes a null entry, not an empty set.
+            for (int i = 0; i < (shapes?.Count ?? 0); i++)
+                sb.AppendLine($"shapes[{i}]={(shapes![i] is { } sk ? string.Join(',', sk) : "")}");
+            for (int i = 0; i < layers.Count; i++)
+            {
+                var l = layers[i];
+                sb.AppendLine($"layer[{i}] material={l.MaterialName} "
+                            + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
+                            + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength}");
+                if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
+                if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
+            }
+            File.WriteAllText($"{pre}inputs.txt", sb.ToString());
+            log.Information("[Proteus] second skin: dumped build inputs for host {0} to {1}", host, dir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not dump build inputs");
+        }
+    }
+
     private byte[]? ReadToeCap(string path, string? srcType, string? dstType)
     {
         var rgba = RemapPath(path, srcType, dstType, ToeCapSize, ToeCapSize);

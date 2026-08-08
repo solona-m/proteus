@@ -378,9 +378,8 @@ public static class SecondSkinWriter
             {
                 // The toe cap smooths across the mesh's own topology, so it needs the mesh's triangle list
                 // BEFORE coverage trimming — read it only when a layer actually asks for a cap.
-                var capTris = cov is { ToeCap: not null } && cov.ToeCapStrength > 0f
-                    ? MeshTriangles(src, srcSubIdx, srcSubCount)
-                    : null;
+                bool wantCap = cov is { ToeCap: not null } && cov.ToeCapStrength > 0f;
+                var capTris = wantCap ? MeshTriangles(src, srcSubIdx, srcSubCount) : null;
                 BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv,
                     out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag);
@@ -1136,7 +1135,8 @@ public static class SecondSkinWriter
         if (basePos is not null && baseNrm is not null && pos is { } pw)
         {
             var plan = uv0 is not null && cap is { ToeCap: { } tc } && capTris is not null
-                ? ToeCapSolve(basePos, baseNrm, uvs, capTris, tc, cap.ToeCapWidth, cap.ToeCapHeight, cap.ToeCapStrength)
+                ? ToeCapSolve(basePos, baseNrm, uvs, capTris, tc, cap.ToeCapWidth, cap.ToeCapHeight,
+                              cap.ToeCapStrength)
                 : null;
             var delta = plan?.Delta;
             capPlan = plan;
@@ -1258,6 +1258,9 @@ public static class SecondSkinWriter
     /// They keep the rim's slot count — the grid patch closes whatever is left, so nothing has to narrow.
     /// </summary>
     private const int TipRings = 3;
+
+    /// <summary>Fewest slots a dome ring is worth building with; below this the closing patch takes over.</summary>
+    private const int MinDomeSlots = 8;
 
     /// <summary>
     /// How far the end domes over, as a fraction of the cap's own radius there. Scaling it to the ring
@@ -1563,6 +1566,21 @@ public static class SecondSkinWriter
         var islandSize = new int[compCount];
         for (int n = 0; n < nodeCount; n++) islandSize[comp[n]]++;
 
+        // Which islands the cap swallows whole — the toenails. Settled BEFORE anything is capped, because
+        // the foot's own component is capped in this same loop and needs to know about them by then: on
+        // some bodies the nails are a separate MESH, but on others (Neolithe) they are separate islands
+        // inside the foot mesh itself, and then nothing outside this function can see them at all.
+        for (int c = 0; c < compCount; c++)
+        {
+            var m2 = maskedByComp[c];
+            if (m2 is not { Count: >= MinToeCapNodes }) continue;
+            int core2 = 0;
+            foreach (int n in m2) if (nW[n] >= ToeCapCoreWeight) core2++;
+            if (core2 < MinToeCapNodes) continue;
+            if (core2 > MaxCoreFraction * islandSize[c] && islandSize[c] <= nodeCount * SmallIslandFraction)
+                foreach (int n in m2) dropNode[n] = true;
+        }
+
         for (int c = 0; c < compCount; c++)
         {
             var masked = maskedByComp[c];
@@ -1585,12 +1603,7 @@ public static class SecondSkinWriter
             // which is exactly the crunch it reads as. They are underneath a stocking, so drop them.
             //
             // Only ever a SMALL island: a mask painted over a whole foot would otherwise swallow the foot.
-            if (core.Count > MaxCoreFraction * islandSize[c])
-            {
-                if (islandSize[c] <= nodeCount * SmallIslandFraction)
-                    foreach (int n in maskedByComp[c]!) dropNode[n] = true;
-                continue;
-            }
+            if (core.Count > MaxCoreFraction * islandSize[c]) continue;   // marked by the pre-pass above
 
             float cx = 0, cy = 0, cz = 0, wsum = 0;
             foreach (int n in core)
@@ -1703,6 +1716,37 @@ public static class SecondSkinWriter
                     var key = p < q ? (p, q) : (q, p);
                     edgeUse[key] = edgeUse.GetValueOrDefault(key) + 1;
                 }
+            }
+
+            // The toenails, and anything else of this body sitting inside the capped stretch. Added here,
+            // BEFORE the per-vertex shortlists below are built, so they are candidates like any other skin
+            // triangle — an earlier attempt appended them afterwards and every shortlist was already full
+            // of flesh, so nothing ever tested against a nail and the numbers did not move.
+            //
+            // Their outward side is the direction away from the cap's own sweep axis, which is right for
+            // something lying ON the surface the cap encloses. They take no part in the rim: the cap is
+            // sewn to the mesh it was cut from, not to these.
+            // The swallowed islands are geometry the cap has to close OVER, not through. They sit proud
+            // of the flesh, so without this the cap passes underneath them and the player's own toenails
+            // come through the fabric — 649 cap vertices inside a nail on the equipped body, worst 0.027.
+            // Oriented by their own source normals, which are to hand here because they are the same mesh.
+            int islandObs = 0;
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+                int na2 = nodeOf[tris[t]], nb3 = nodeOf[tris[t + 1]], nc4 = nodeOf[tris[t + 2]];
+                if (!dropNode[na2] || !dropNode[nb3] || !dropNode[nc4]) continue;
+                Vec3 pa2 = start[na2], pb2 = start[nb3], pc2 = start[nc4];
+                float ux3 = pb2.X - pa2.X, uy3 = pb2.Y - pa2.Y, uz3 = pb2.Z - pa2.Z;
+                float wx3 = pc2.X - pa2.X, wy3 = pc2.Y - pa2.Y, wz3 = pc2.Z - pa2.Z;
+                if (Normalize(new Vec3(uy3 * wz3 - uz3 * wy3, uz3 * wx3 - ux3 * wz3, ux3 * wy3 - uy3 * wx3))
+                    is not { } fn3) continue;
+                float agree2 = fn3.X * (nNorm[na2].X + nNorm[nb3].X + nNorm[nc4].X)
+                             + fn3.Y * (nNorm[na2].Y + nNorm[nb3].Y + nNorm[nc4].Y)
+                             + fn3.Z * (nNorm[na2].Z + nNorm[nb3].Z + nNorm[nc4].Z);
+                if (agree2 < 0) fn3 = new Vec3(-fn3.X, -fn3.Y, -fn3.Z);
+                skinTris.Add((pa2, pb2, pc2, fn3));
+                islandObs++;
             }
 
             var rim = new Dictionary<int, List<int>>();
@@ -1974,9 +2018,14 @@ public static class SecondSkinWriter
                 float domeReach;
 
                 // Rings that curve the end over, each narrower and further along than the last, following a
-                // quarter circle so the cap finishes as a dome rather than a stump. They keep the SAME
-                // number of slots — the grid patch closes whatever opening is left, so nothing has to
-                // funnel down to a point and the strips between them stay ordinary quads.
+                // quarter circle so the cap finishes as a dome rather than a stump.
+                //
+                // Each ring carries slots in proportion to its own PERIMETER, so the spacing round it
+                // stays at the mesh's own edge length. Keeping the full count instead packs them together
+                // as the radius falls away — the last of them sits at 38% of the radius, so its slots end
+                // up a third of their spacing apart, and the grid closing the end inherits that. Measured
+                // on the equipped body, the last 0.002 of the cap carried 439 faces whose edges were a
+                // sixth of the mesh's own: the clump of vertices at the toes.
                 //
                 // The height of that dome is a fraction of the CAP'S OWN RADIUS, not of the ring spacing:
                 // scaled to the spacing it comes to about a tenth of what the shape needs, and the end
@@ -1998,23 +2047,72 @@ public static class SecondSkinWriter
                 domeReach = endRadius * TipRound;
                 domeTop = lastT + domeReach;      // the crown of the quarter circle the rings follow
 
+                // The last full ring's outline as radius against angle, so a dome ring with a different
+                // number of slots can be sampled from the SHAPE. Decimating it instead — taking every
+                // n-th vertex — keeps whichever bumps happen to fall on the surviving slots and drops
+                // the rest, and the ring stops being round.
+                var prof = new List<(float A, float R)>(rimCount);
+                float perimeter = 0;
+                {
+                    (float X, float Y)? first = null, prev = null;
+                    foreach (int v in chain[lastFull])
+                    {
+                        if (v < 0) continue;
+                        var f = Flatten(Placed(v));
+                        float ox = f.X - lastCentre.X, oy = f.Y - lastCentre.Y;
+                        float rad2 = MathF.Sqrt(ox * ox + oy * oy);
+                        if (rad2 > 1e-9f) prof.Add((MathF.Atan2(oy, ox), rad2));
+                        if (prev is { } pv)
+                            perimeter += MathF.Sqrt((f.X - pv.X) * (f.X - pv.X) + (f.Y - pv.Y) * (f.Y - pv.Y));
+                        else first = f;
+                        prev = f;
+                    }
+                    if (first is { } fs && prev is { } lv)
+                        perimeter += MathF.Sqrt((fs.X - lv.X) * (fs.X - lv.X) + (fs.Y - lv.Y) * (fs.Y - lv.Y));
+                }
+                if (prof.Count < 3) prof.Clear();
+                prof.Sort((u, v) => u.A.CompareTo(v.A));
+
+                float OutlineAt(float ang)
+                {
+                    if (prof.Count == 0) return endRadius;
+                    while (ang < prof[0].A) ang += MathF.Tau;
+                    while (ang > prof[0].A + MathF.Tau) ang -= MathF.Tau;
+                    for (int q = 0; q < prof.Count; q++)
+                    {
+                        var (a0, r0) = prof[q];
+                        var (a1, r1) = q + 1 < prof.Count ? prof[q + 1] : (prof[0].A + MathF.Tau, prof[0].R);
+                        if (ang >= a0 && ang <= a1)
+                            return a1 - a0 <= 1e-9f ? r0 : r0 + (r1 - r0) * ((ang - a0) / (a1 - a0));
+                    }
+                    return prof[^1].R;
+                }
+
+                float phase = prof.Count > 0 ? prof[0].A : 0f;
+                int prevWidth = chain[lastFull].Count;
+
                 for (int k = 1; k <= TipRings; k++)
                 {
                     float frac = (float)k / (TipRings + 1);
                     float shrink = MathF.Cos(frac * MathF.PI / 2f);
                     float along = lastT + domeReach * MathF.Sin(frac * MathF.PI / 2f);
 
-                    var dome = new List<int>(rimCount);
-                    var claimed = new List<int>(rimCount);
-                    for (int j = 0; j < rimCount; j++)
-                    {
-                        int src = chain[lastFull][j];
-                        if (src < 0) { dome.Add(-1); continue; }
+                    // Slots for THIS ring's perimeter, at the mesh's own edge length. Even, because the
+                    // grid closing the end needs an even loop; never wider than the ring before it, or
+                    // the strip between them folds.
+                    int width2 = (int)MathF.Round(perimeter * shrink / MathF.Max(edgeLen, 1e-6f));
+                    width2 = Math.Min(width2, prevWidth);
+                    width2 -= width2 & 1;
+                    if (width2 < MinDomeSlots) break;      // too narrow to be a ring; the patch closes it
 
-                        var f = Flatten(new Vec3(
-                            start[src].X + target[src].X, start[src].Y + target[src].Y, start[src].Z + target[src].Z));
-                        float qx = lastCentre.X + (f.X - lastCentre.X) * shrink;
-                        float qy = lastCentre.Y + (f.Y - lastCentre.Y) * shrink;
+                    var dome = new List<int>(width2);
+                    var claimed = new List<int>(width2);
+                    for (int j = 0; j < width2; j++)
+                    {
+                        float ang = phase + MathF.Tau * j / width2;
+                        float rad2 = OutlineAt(ang) * shrink;
+                        float qx = lastCentre.X + MathF.Cos(ang) * rad2;
+                        float qy = lastCentre.Y + MathF.Sin(ang) * rad2;
                         var p = new Vec3(
                             mid.X + axis.Value.X * along + eu.X * qx + ev.X * qy,
                             mid.Y + axis.Value.Y * along + eu.Y * qx + ev.Y * qy,
@@ -2026,15 +2124,20 @@ public static class SecondSkinWriter
                         claimed.Add(donor);
                         target[donor] = new Vec3(p.X - start[donor].X, p.Y - start[donor].Y, p.Z - start[donor].Z);
                         hasTarget[donor] = true;
-                        nodeFill[donor] = nodeFill[src];
+                        // Whether a slot bridges is a property of the DIRECTION, so take it from the slot
+                        // of the full ring pointing the same way.
+                        int near = chain[lastFull][Math.Clamp(
+                            (int)MathF.Round((float)j * prevWidth / width2), 0, prevWidth - 1)];
+                        nodeFill[donor] = near >= 0 ? nodeFill[near] : 1f;
                         dome.Add(donor);
                     }
 
-                    if (dome.Count != rimCount)
+                    if (dome.Count != width2)
                     {
                         foreach (int c2 in claimed) { taken.Remove(c2); hasTarget[c2] = false; target[c2] = default; }
                         break;
                     }
+                    prevWidth = width2;
                     chain.Add(dome);
                     chainAt.Add(along);
                 }
@@ -2268,8 +2371,12 @@ public static class SecondSkinWriter
             // corrupts the normal it was tested against, and the surface ends up worse than it started.
             void Emit(int i0, int i1, int i2)
             {
-                if (i0 == i1 || i1 == i2 || i0 == i2) return;
-                newTris.Add((Rep(i0), Rep(i1), Rep(i2)));
+                // Tested on the VERTICES, after merging, not on the nodes going in: two nodes welded
+                // together are still different nodes, and a triangle spanning them is degenerate all the
+                // same. Checking before the merge lets exactly those through.
+                ushort a = Rep(i0), b = Rep(i1), c = Rep(i2);
+                if (a == b || b == c || a == c) return;
+                newTris.Add((a, b, c));
             }
 
             // Split the quad on whichever diagonal keeps BOTH halves facing out. Where a joined slot sits
@@ -2299,68 +2406,37 @@ public static class SecondSkinWriter
                 }
                 else
                 {
-                    // Two loops of different lengths, zipped: walk both round together and always advance
-                    // whichever one is behind, taking a triangle at each step. That covers every edge of
-                    // both loops exactly once, for outer+inner triangles and no slivers. Handing each
-                    // inner vertex a "run" of outer ones instead leaves degenerate wedges where the runs
-                    // meet — the outer ring's slots are unevenly spaced, so the runs are unequal.
-                    var ctr = ringCentre[Math.Clamp(r, 1, ringCount)];
-                    float Bearing(int v)
+                    // Rings of different lengths, paired BY INDEX RATIO. Both rings are laid out in the
+                    // same angular order and start from the same phase, so outer slot i belongs against
+                    // inner slot round(i * inner / outer): a quad wherever the inner index holds, a
+                    // triangle wherever it steps on. The reduction comes out evenly spread by
+                    // construction, whatever the vertices themselves are doing.
+                    //
+                    // The previous pairing walked both loops in order of BEARING about the section
+                    // centre. Bearings bunch precisely where the ring bunches, so it handed a long run of
+                    // outer vertices to one inner vertex and fanned it — max valence 28 the one time ring
+                    // counts were reduced, which is what made that attempt look unworkable.
+                    int Inner(int i) => (int)MathF.Round((float)i * inner / outer) % inner;
+                    for (int i = 0; i < outer; i++)
                     {
-                        var f = Flatten(Placed(v));
-                        return MathF.Atan2(f.Y - ctr.Y, f.X - ctr.X);
-                    }
-                    // Each loop is rotated to begin at its own lowest bearing so its parameters climb
-                    // steadily, and its wrap sentinel is that first bearing plus a full turn. Starting
-                    // both at a shared zero leaves the parameters jumping back past it mid-loop, and the
-                    // walk then pairs vertices from opposite sides of the ring.
-                    (int[] V, float[] P) Loop(Func<int, int> at, int count)
-                    {
-                        var v = new int[count];
-                        var p = new float[count];
-                        for (int t = 0; t < count; t++)
+                        int o0 = At(r, i), o1 = At(r, (i + 1) % outer);
+                        int b0 = Inner(i), b1 = Inner(i + 1);
+                        if (b0 == b1)
                         {
-                            v[t] = at(t);
-                            float turn = Bearing(v[t]);
-                            while (turn < 0) turn += MathF.Tau;
-                            while (turn >= MathF.Tau) turn -= MathF.Tau;
-                            p[t] = turn / MathF.Tau;
-                        }
-                        int lowest = 0;
-                        for (int t = 1; t < count; t++) if (p[t] < p[lowest]) lowest = t;
-
-                        var rv = new int[count];
-                        var rp = new float[count + 1];
-                        for (int t = 0; t < count; t++)
-                        {
-                            rv[t] = v[(lowest + t) % count];
-                            rp[t] = p[(lowest + t) % count];
-                            if (t > 0 && rp[t] < rp[t - 1]) rp[t] += 1f;   // carried past the wrap
-                        }
-                        rp[count] = rp[0] + 1f;
-                        return (rv, rp);
-                    }
-
-                    var (ov, op) = Loop(t => At(r, t), outer);
-                    var (iv, ip) = Loop(t => chain[r + 1][t], inner);
-
-                    int ia = 0, ib = 0;
-                    while (ia < outer || ib < inner)
-                    {
-                        bool advanceOuter = ib >= inner || (ia < outer && op[ia + 1] <= ip[ib + 1]);
-                        if (advanceOuter)
-                        {
-                            Emit(ov[ia % outer], ov[(ia + 1) % outer], iv[ib % inner]);
-                            ia++;
+                            Emit(o0, o1, chain[r + 1][b0]);
                         }
                         else
                         {
-                            Emit(ov[ia % outer], iv[(ib + 1) % inner], iv[ib % inner]);
-                            ib++;
+                            // The inner ring steps on here: one triangle to carry the outer edge, then a
+                            // fan across however many inner slots this outer edge spans (normally one).
+                            Emit(o0, o1, chain[r + 1][b1]);
+                            for (int k = b0; k != b1; k = (k + 1) % inner)
+                                Emit(o0, chain[r + 1][(k + 1) % inner], chain[r + 1][k]);
                         }
                     }
                 }
             }
+
             // ── close the end with a grid ──────────────────────────────────────────────────────────
             // Not a fan to a single apex: that makes a pole, where every vertex of the last ring meets at
             // one point, and it shades badly however carefully the triangles are shaped. Instead the

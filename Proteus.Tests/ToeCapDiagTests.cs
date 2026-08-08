@@ -12,13 +12,100 @@ namespace Proteus.Tests;
 /// <summary>Scratch diagnostics — runs the real toe-cap mask against the real bibo foot model.</summary>
 public class ToeCapDiagTests
 {
-    private const string Sho =
-        @"E:\Penumbradt\Bibo+\Feet\Small Clothes\chara\equipment\e0000\model\c0201e0000_sho.mdl";
+    // WHICH FOOT every measurement in this harness describes. Always a midlander (c0201), but a dozen
+    // installed bodies redirect that slot to their own model and they differ by more than 3x in size —
+    // the cap's topology at the tips differs enormously between them. Pointed here at the equipped body
+    // (Neolithe's meta.json maps c0201e0000_sho.mdl -> feet\feet.mdl); pointed at Bibo+ it reported 2
+    // sliver faces where the shipped shell had 50, so a whole session's numbers described a foot nobody
+    // was wearing. A stale path here does not fail, it just quietly measures something else.
+    private static readonly string Sho =
+        Environment.GetEnvironmentVariable("PROTEUS_SHO")
+        ?? @"E:\Penumbradt\Neolithe [ALL IN ONE]\FEET\Feet.mdl";
     private const string Scratch =
         @"C:\Users\solon\AppData\Local\Temp\claude\e--repos-Proteus\c157041f-f61a-45b3-8a2b-72bc7dcbef80\scratchpad";
 
     private readonly ITestOutputHelper o;
     public ToeCapDiagTests(ITestOutputHelper o) => this.o = o;
+
+    /// <summary>
+    /// Rebuild the shell from the inputs the GAME used, dumped by SecondSkinService.DumpShellInputs into
+    /// %TEMP%\proteus-shell-dump. Approximating those inputs here — one body instead of several, no shape
+    /// keys, no connector-mesh mode, a mask baked by hand rather than remapped into this body's UV — is
+    /// how the harness came to report a clean cap for a shell that shipped with slivers all over its toes.
+    /// Does nothing until the dump folder exists and has been filled by a build in game.
+    /// </summary>
+    [Fact]
+    public void DiagnoseFromGameDump()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+
+        foreach (var info in Directory.GetFiles(dir, "host*_inputs.txt"))
+        {
+            var pre = info.Substring(0, info.Length - "inputs.txt".Length);
+            var text = File.ReadAllLines(info);
+            foreach (var l in text) o.WriteLine(l);
+
+            bool skip = Array.Exists(text, l => l == "skipConnectors=True");
+            var bodies = new List<byte[]>();
+            for (int i = 0; File.Exists($"{pre}body{i}.mdl"); i++) bodies.Add(File.ReadAllBytes($"{pre}body{i}.mdl"));
+            if (bodies.Count == 0) continue;
+            var baseModel = File.Exists($"{pre}base.mdl") ? File.ReadAllBytes($"{pre}base.mdl") : null;
+
+            var layers = new List<SecondSkinLayer>();
+            var plainLayers = new List<SecondSkinLayer>();
+            for (int i = 0; ; i++)
+            {
+                var line = Array.Find(text, l => l.StartsWith($"layer[{i}] "));
+                if (line == null) break;
+                var capPath = $"{pre}layer{i}_toecap.raw";
+                var covPath = $"{pre}layer{i}_coverage.raw";
+                var cap = File.Exists(capPath) ? File.ReadAllBytes(capPath) : null;
+                var cov = File.Exists(covPath) ? File.ReadAllBytes(covPath) : null;
+                int side = cap == null ? 0 : (int)Math.Round(Math.Sqrt(cap.Length));
+                // Coverage dimensions come from the dump when it records them, and from the byte count
+                // when replaying an older dump. AnyVisible divides by them, so leaving them at zero is
+                // not "no coverage", it is a DivideByZeroException.
+                var cvm = System.Text.RegularExpressions.Regex.Match(line, @"coverage=(\d+)x(\d+)");
+                int cw = cvm.Success ? int.Parse(cvm.Groups[1].Value)
+                       : cov == null ? 0 : (int)Math.Round(Math.Sqrt(cov.Length));
+                int ch = cvm.Success ? int.Parse(cvm.Groups[2].Value)
+                       : cov == null ? 0 : (int)Math.Round(Math.Sqrt(cov.Length));
+                SecondSkinLayer L(byte[]? c) => new()
+                {
+                    MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                    Coverage = cov,
+                    CoverageWidth = cw,
+                    CoverageHeight = ch,
+                    ToeCap = c,
+                    ToeCapWidth = c == null ? 0 : side,
+                    ToeCapHeight = c == null ? 0 : side,
+                    ToeCapStrength = 1f,
+                };
+                layers.Add(L(cap));
+                plainLayers.Add(L(null));
+            }
+            if (layers.Count == 0) continue;
+
+            var lines = new List<string>();
+            var plain  = SecondSkinWriter.Build(bodies, plainLayers, baseModel, skip, out _);
+            var capped = SecondSkinWriter.Build(bodies, layers, baseModel, skip, out var st,
+                null, m => lines.Add(m));
+            foreach (var l in lines) o.WriteLine(l);
+            o.WriteLine($"stats: triIn={st.TrianglesIn} triOut={st.TrianglesOut} verts={st.VerticesOut}");
+
+            // The BODY models themselves, not just the shell built from them: the cap has to clear the
+            // player's own skin and toenails, and the shell is a pushed copy, so measuring against it
+            // answers a slightly different question than the one the game renders.
+            for (int i = 0; i < bodies.Count; i++)
+                WriteObj(bodies[i], Path.Combine(Scratch, $"game_body{i}.obj"));
+
+            WriteObj(plain,  Path.Combine(Scratch, "game_plain.obj"));
+            WriteObj(capped, Path.Combine(Scratch, "game_capped.obj"));
+            o.WriteLine($"wrote game_plain.obj / game_capped.obj from {Path.GetFileName(info)}");
+            return;   // one host is enough — the feet live on whichever host took the stocking
+        }
+    }
 
     [Fact]
     public void Diagnose()
