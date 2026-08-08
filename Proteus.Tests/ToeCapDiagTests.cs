@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -108,7 +108,14 @@ public class ToeCapDiagTests
         int subStart = meshStart + meshCount * 36;
         uint vtxOff = U32(16), idxOff = U32(28);
 
-        var sb = new StringBuilder();
+        // Grouped sections and fully-qualified face references. Interleaving v/vn/vt per vertex and
+        // then emitting bare "f a b c" is legal OBJ and reads back fine, but 3ds Max makes nonsense of
+        // it — it imported a clean cap as a handful of enormous fins. Every importer handles the
+        // conventional layout, so write that.
+        var vs = new StringBuilder();
+        var ts = new StringBuilder();
+        var ns = new StringBuilder();
+        var fs = new StringBuilder();
         int baseVert = 1;
         for (int mi = 0; mi < meshCount; mi++)
         {
@@ -139,7 +146,7 @@ public class ToeCapDiagTests
                 float x, y, z;
                 if (pType == 14) { x = (float)BitConverter.ToHalf(m, a); y = (float)BitConverter.ToHalf(m, a + 2); z = (float)BitConverter.ToHalf(m, a + 4); }
                 else { x = BitConverter.ToSingle(m, a); y = BitConverter.ToSingle(m, a + 4); z = BitConverter.ToSingle(m, a + 8); }
-                sb.Append("v ").Append(F(x)).Append(' ').Append(F(y)).Append(' ').Append(F(z)).Append('\n');
+                vs.Append("v ").Append(F(x)).Append(' ').Append(F(y)).Append(' ').Append(F(z)).Append('\n');
 
                 // The STORED normal — what the game shades with. Renders that recompute normals from
                 // geometry are exactly how a shell full of stale normals looked correct offline.
@@ -159,7 +166,7 @@ public class ToeCapDiagTests
                             nx = m[b] / 255f * 2 - 1; ny = m[b + 1] / 255f * 2 - 1; nz = m[b + 2] / 255f * 2 - 1; break;
                     }
                 }
-                sb.Append("vn ").Append(F(nx)).Append(' ').Append(F(ny)).Append(' ').Append(F(nz)).Append('\n');
+                ns.Append("vn ").Append(F(nx)).Append(' ').Append(F(ny)).Append(' ').Append(F(nz)).Append('\n');
 
                 float u = 0, v = 0;
                 if (tStream >= 0)
@@ -168,18 +175,21 @@ public class ToeCapDiagTests
                     if (tType is 13 or 14) { u = (float)BitConverter.ToHalf(m, b); v = (float)BitConverter.ToHalf(m, b + 2); }
                     else { u = BitConverter.ToSingle(m, b); v = BitConverter.ToSingle(m, b + 4); }
                 }
-                sb.Append("vt ").Append(F(u)).Append(' ').Append(F(v)).Append('\n');
+                ts.Append("vt ").Append(F(u)).Append(' ').Append(F(v)).Append('\n');
             }
 
             for (uint t = 0; t + 2 < idxCount; t += 3)
             {
                 int p = (int)(idxOff + (startIdx + t) * 2);
                 int a = U16(p) + baseVert, b = U16(p + 2) + baseVert, c = U16(p + 4) + baseVert;
-                sb.Append("f ").Append(a).Append(' ').Append(b).Append(' ').Append(c).Append('\n');
+                fs.Append("f ")
+                  .Append(a).Append('/').Append(a).Append('/').Append(a).Append(' ')
+                  .Append(b).Append('/').Append(b).Append('/').Append(b).Append(' ')
+                  .Append(c).Append('/').Append(c).Append('/').Append(c).Append('\n');
             }
             baseVert += vc;
         }
-        File.WriteAllText(path, sb.ToString());
+        File.WriteAllText(path, vs.Append(ts).Append(ns).Append(fs).ToString());
     }
 
     private static string F(float f) => f.ToString("0.######", CultureInfo.InvariantCulture);

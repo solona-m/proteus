@@ -3200,7 +3200,12 @@ public class CompositorService : IDisposable
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
-                            invisibleGlassesSet, metModels, bodyShapes, maskShellMods);
+                            invisibleGlassesSet, metModels, bodyShapes, maskShellMods,
+                            // Skin-layer mods count too: a toe cap map is about the foot, not about
+                            // whether the mod shipping it happens to put a shell over the toes.
+                            entries.Concat(gearOverlays.Select(g => g.Entry))
+                                   .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
+                                   .Select(g => g.First()).ToList());
                         if (shells != null)
                         {
                             shellBuilt = true;
