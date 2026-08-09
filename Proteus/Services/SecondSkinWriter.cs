@@ -1358,6 +1358,13 @@ public static class SecondSkinWriter
     /// </summary>
     private const int TipRelaxSpan = 3;
 
+    /// <summary>
+    /// How many rings back from the rim the join is smoothed over. The cut boundary is denser and less
+    /// even than the mesh it was cut from, and the first rings inherit its spacing, so this is where the
+    /// pinched cells over the top of the toes come from.
+    /// </summary>
+    private const int RimRelaxRings = 4;
+
     /// <summary>How far each pass moves a vertex toward its neighbours' average.</summary>
     private const float RelaxRate = 0.5f;
 
@@ -2484,6 +2491,64 @@ public static class SecondSkinWriter
                                 Emit(o0, chain[r + 1][(k + 1) % inner], chain[r + 1][k]);
                         }
                     }
+                }
+            }
+
+            // ── smooth where the cap meets the foot ────────────────────────────────────────────────
+            // The rings nearest the rim take their slot ANGLES from the rim's own, and only reach even
+            // spacing at the far end of the cap (the blend in BuildRing runs on r/ringCount). The cut
+            // boundary follows mesh edges diagonally, so it is denser and less even than the mesh — and
+            // the first rings inherit that, leaving pinched cells over the top of the toes where they
+            // join the foot: faces with a short edge a fifth of the mesh's own.
+            //
+            // The main relax ran before the stitch and holds every vertex in its own ring's plane. This
+            // is the pass a modeller would make by hand instead: relax the join, in place, over the few
+            // rings either side of it, against the triangles actually emitted. The rim itself never
+            // moves — it is shared with the untouched shell, and moving it tears the seam.
+            {
+                var joinAdj = new Dictionary<int, List<int>>();
+                var joinSeen = new HashSet<(int, int)>();
+                var joinSet = new HashSet<int>();
+                var joinMove = new HashSet<int>();
+                for (int r = 1; r < chain.Count && r <= RimRelaxRings; r++)
+                    foreach (int n in chain[r])
+                        if (n >= 0 && hasTarget[n]) { joinSet.Add(n); joinMove.Add(n); }
+                // The rim and the ring beyond the band are the fixed edges this smooths between.
+                foreach (int v in loop) joinSet.Add(v);
+                if (RimRelaxRings + 1 < chain.Count)
+                    foreach (int n in chain[RimRelaxRings + 1]) if (n >= 0) joinSet.Add(n);
+
+                void JoinLink(int a, int b)
+                {
+                    if (a < 0 || b < 0 || a == b) return;
+                    if (!joinSet.Contains(a) || !joinSet.Contains(b)) return;
+                    if (!joinSeen.Add(a < b ? (a, b) : (b, a))) return;
+                    (joinAdj.TryGetValue(a, out var la) ? la : joinAdj[a] = new List<int>()).Add(b);
+                    (joinAdj.TryGetValue(b, out var lb) ? lb : joinAdj[b] = new List<int>()).Add(a);
+                }
+                foreach (var (ta, tb, tc) in newTris)
+                {
+                    int na = nodeOf[ta], nb2 = nodeOf[tb], nc3 = nodeOf[tc];
+                    JoinLink(na, nb2); JoinLink(nb2, nc3); JoinLink(nc3, na);
+                }
+
+                for (int pass = 0; pass < RelaxPasses; pass++)
+                {
+                    var moved2 = new List<(int Node, Vec3 To)>();
+                    foreach (int n in joinMove)
+                    {
+                        if (!joinAdj.TryGetValue(n, out var nb) || nb.Count == 0) continue;
+                        float sx = 0, sy = 0, sz = 0;
+                        foreach (int k in nb) { var q = Placed(k); sx += q.X; sy += q.Y; sz += q.Z; }
+                        var p2 = Placed(n);
+                        moved2.Add((n, new Vec3(
+                            p2.X + (sx / nb.Count - p2.X) * RelaxRate,
+                            p2.Y + (sy / nb.Count - p2.Y) * RelaxRate,
+                            p2.Z + (sz / nb.Count - p2.Z) * RelaxRate)));
+                    }
+                    foreach (var (n, to) in moved2)
+                        target[n] = new Vec3(to.X - start[n].X, to.Y - start[n].Y, to.Z - start[n].Z);
+                    foreach (int n in joinMove) PushOffSkin(n);
                 }
             }
 
