@@ -1328,6 +1328,19 @@ public static class SecondSkinWriter
     /// </summary>
     private const float PokeReach = 0.25f;
 
+    /// <summary>Aspect ratio above which a cap face is badly enough shaped to be worth evening out.</summary>
+    private const float TangentTrigger = 4f;
+
+    /// <summary>Passes of that evening-out. It converges; more than this buys nothing.</summary>
+    private const int TangentPasses = 30;
+
+    /// <summary>
+    /// How far it may slide any vertex from where the rings placed it, in edge lengths. Sliding along
+    /// the surface cannot change the silhouette, but it can still walk a vertex a long way round the cap
+    /// given enough passes, and that spoils the cells it walks through.
+    /// </summary>
+    private const float TangentClamp = 0.75f;
+
     /// <summary>Skin triangles shortlisted per cap vertex, so clearance can be enforced on every pass.</summary>
     private const int SkinCandidates = 16;
 
@@ -2875,6 +2888,129 @@ public static class SecondSkinWriter
                              + $"(ceiling {maxLift:F5}, clearance {wantClear:F5})");
         }
 
+        // ── even out the pinched cells ─────────────────────────────────────────────────────────────
+        // What is left are pinches: two ring slots that came to rest a tenth of an edge apart, with a
+        // long third edge. Ring slots sit at around 60% of the mesh's own edge length — oversampled —
+        // and follow the rim's uneven angles, so now and then two land on top of each other.
+        //
+        // Smoothing them by POSITION does not work and was measured not to: a pinched pair has nearly
+        // the same neighbourhood, so the average pulls both the same way and the short edge survives,
+        // while the vertices sink toward the skin (clearance went negative). This slides them along the
+        // surface instead — the Laplacian with its normal component removed. Spacing evens out, the
+        // silhouette does not move, and nothing can descend into a toe, which is what went wrong with
+        // every positional attempt at this.
+        //
+        // Prototyped on the shell the game actually builds before being written here: faces over aspect
+        // 8 fall from 8 to 1, the worst from 11.4 to 8.6. It plateaus there — no smoothing separates a
+        // coincident pair properly. Removing the pinches for good means giving each ring slots in
+        // proportion to its own perimeter, as the dome rings already do.
+        if (capped && newTris.Count > 0)
+        {
+            var tanAdj = new Dictionary<int, HashSet<int>>();
+            var tanFaces = new Dictionary<int, List<(int A, int B, int C)>>();
+            void TanEdge(int a, int b)
+            {
+                if (a == b) return;
+                (tanAdj.TryGetValue(a, out var la) ? la : tanAdj[a] = new HashSet<int>()).Add(b);
+                (tanAdj.TryGetValue(b, out var lb) ? lb : tanAdj[b] = new HashSet<int>()).Add(a);
+            }
+            var capTri = new List<(int A, int B, int C)>(newTris.Count);
+            foreach (var (ta, tb, tc) in newTris)
+            {
+                int na = nodeOf[ta], nb = nodeOf[tb], nc = nodeOf[tc];
+                capTri.Add((na, nb, nc));
+                TanEdge(na, nb); TanEdge(nb, nc); TanEdge(nc, na);
+                foreach (int n in stackalloc[] { na, nb, nc })
+                    (tanFaces.TryGetValue(n, out var lf) ? lf : tanFaces[n] = new List<(int, int, int)>())
+                        .Add((na, nb, nc));
+            }
+
+            // The surviving shell around the cap joins the graph too — without it a cap vertex on the
+            // rim only sees its cap-side neighbours and the average drags it inward, which is both a
+            // worse result and the thing that has gone wrong every other time.
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+                int na = nodeOf[tris[t]], nb = nodeOf[tris[t + 1]], nc = nodeOf[tris[t + 2]];
+                if (cutNode[na] || cutNode[nb] || cutNode[nc]) continue;
+                TanEdge(na, nb); TanEdge(nb, nc); TanEdge(nc, na);
+                foreach (int n in stackalloc[] { na, nb, nc })
+                    (tanFaces.TryGetValue(n, out var lf2) ? lf2 : tanFaces[n] = new List<(int, int, int)>())
+                        .Add((na, nb, nc));
+            }
+
+            Vec3 Now(int n) => new(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
+
+            var allCap = new List<int>();
+            foreach (var kv in tanAdj) if (hasTarget[kv.Key]) allCap.Add(kv.Key);
+            float tanEdge = MeanEdgeLength(start, adj, allCap);
+            float tanLimit = tanEdge * TangentClamp;
+
+            // Only the vertices of faces that are actually badly shaped; everything else stays put.
+            var tanMove = new HashSet<int>();
+            foreach (var (a, b, c) in capTri)
+            {
+                Vec3 pa = Now(a), pb = Now(b), pc = Now(c);
+                float e0 = Dist(pa, pb), e1 = Dist(pb, pc), e2 = Dist(pc, pa);
+                float lo2 = MathF.Min(e0, MathF.Min(e1, e2)), hi2 = MathF.Max(e0, MathF.Max(e1, e2));
+                if (lo2 <= 1e-9f || hi2 / lo2 <= TangentTrigger) continue;
+                if (hasTarget[a]) tanMove.Add(a);
+                if (hasTarget[b]) tanMove.Add(b);
+                if (hasTarget[c]) tanMove.Add(c);
+            }
+
+            if (tanMove.Count > 0)
+            {
+                var from = new Dictionary<int, Vec3>();
+                foreach (int n in tanMove) from[n] = Now(n);
+
+                for (int pass = 0; pass < TangentPasses; pass++)
+                {
+                    var next = new List<(int Node, Vec3 To)>(tanMove.Count);
+                    foreach (int n in tanMove)
+                    {
+                        if (!tanAdj.TryGetValue(n, out var nb) || nb.Count == 0) continue;
+                        var p2 = Now(n);
+                        float sx = 0, sy = 0, sz = 0;
+                        foreach (int k in nb) { var q = Now(k); sx += q.X; sy += q.Y; sz += q.Z; }
+                        float dx = sx / nb.Count - p2.X, dy = sy / nb.Count - p2.Y, dz = sz / nb.Count - p2.Z;
+
+                        // The surface normal here, area weighted over the faces this vertex belongs to.
+                        float ax = 0, ay = 0, az = 0;
+                        if (tanFaces.TryGetValue(n, out var fl))
+                            foreach (var (a, b, c) in fl)
+                            {
+                                Vec3 pa = Now(a), pb = Now(b), pc = Now(c);
+                                float ux = pb.X - pa.X, uy = pb.Y - pa.Y, uz = pb.Z - pa.Z;
+                                float wx = pc.X - pa.X, wy = pc.Y - pa.Y, wz = pc.Z - pa.Z;
+                                ax += uy * wz - uz * wy; ay += uz * wx - ux * wz; az += ux * wy - uy * wx;
+                            }
+                        if (Normalize(new Vec3(ax, ay, az)) is { } nn)
+                        {
+                            float along = dx * nn.X + dy * nn.Y + dz * nn.Z;
+                            dx -= nn.X * along; dy -= nn.Y * along; dz -= nn.Z * along;   // tangential only
+                        }
+
+                        var cand = new Vec3(p2.X + dx * RelaxRate, p2.Y + dy * RelaxRate, p2.Z + dz * RelaxRate);
+
+                        // Never far from where it started, however many passes run.
+                        var o = from[n];
+                        float tx = cand.X - o.X, ty = cand.Y - o.Y, tz = cand.Z - o.Z;
+                        float travel = MathF.Sqrt(tx * tx + ty * ty + tz * tz);
+                        if (travel > tanLimit)
+                        {
+                            float k2 = tanLimit / travel;
+                            cand = new Vec3(o.X + tx * k2, o.Y + ty * k2, o.Z + tz * k2);
+                        }
+                        next.Add((n, cand));
+                    }
+                    foreach (var (n, to) in next)
+                        target[n] = new Vec3(to.X - start[n].X, to.Y - start[n].Y, to.Z - start[n].Z);
+                }
+            }
+
+        }
+
         // ── UVs for the rebuilt surface ────────────────────────────────────────────────────────────
         // Every cap vertex is a vertex REUSED from somewhere else in the toe box, and it still carries
         // that donor's texture coordinate. Left alone, the cap samples the skin's texture — and its
@@ -3031,6 +3167,12 @@ public static class SecondSkinWriter
     }
 
     /// <summary>Closest point to <paramref name="p"/> on a triangle, including its edges and corners.</summary>
+    private static float Dist(Vec3 a, Vec3 b)
+    {
+        float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
+        return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     private static Vec3 ClosestOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
     {
         static float Dot(Vec3 u, Vec3 v) => u.X * v.X + u.Y * v.Y + u.Z * v.Z;
