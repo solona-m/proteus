@@ -41,8 +41,15 @@ public sealed class SecondSkinService
     /// <summary>
     /// How much of the capped area a shell must actually paint before it gets a toe cap. A shell that
     /// stops at the ankle has no business rebuilding the toes.
+    /// <para/>
+    /// Deliberately LOW. Every shell that keeps any geometry over the toes has to be capped, or it
+    /// sleeves each toe while the capped shell smooths over them, and the uncapped one comes through —
+    /// measured with a thigh-band overlay whose shell still had toe geometry: 226 of its toe vertices
+    /// sat outside the capped shell, by up to 0.0036. Capping a shell whose toe art really is absent
+    /// costs nothing, because the coverage test then trims the rebuilt cap away exactly as it trimmed
+    /// what was cut out.
     /// </summary>
-    private const float MinToeCoverage = 0.25f;
+    private const float MinToeCoverage = 0.02f;
 
     /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
     /// so an id never runs past 'z'.</summary>

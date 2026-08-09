@@ -52,6 +52,17 @@ public class ToeCapDiagTests
             if (bodies.Count == 0) continue;
             var baseModel = File.Exists($"{pre}base.mdl") ? File.ReadAllBytes($"{pre}base.mdl") : null;
 
+            // The dump records the cap the SERVICE decided each layer should get. Setting PROTEUS_CAP_ALL
+            // hands the same map to every layer instead, which is what lowering MinToeCoverage does — it
+            // answers "would capping the other shells stop them poking through?" without a round trip
+            // through the game.
+            bool capAll = Environment.GetEnvironmentVariable("PROTEUS_CAP_ALL") == "1";
+            byte[]? anyCap = null;
+            if (capAll)
+                for (int i = 0; File.Exists($"{pre}layer{i}_toecap.raw") || i < 8; i++)
+                    if (File.Exists($"{pre}layer{i}_toecap.raw"))
+                    { anyCap = File.ReadAllBytes($"{pre}layer{i}_toecap.raw"); break; }
+
             var layers = new List<SecondSkinLayer>();
             var plainLayers = new List<SecondSkinLayer>();
             for (int i = 0; ; i++)
@@ -60,7 +71,7 @@ public class ToeCapDiagTests
                 if (line == null) break;
                 var capPath = $"{pre}layer{i}_toecap.raw";
                 var covPath = $"{pre}layer{i}_coverage.raw";
-                var cap = File.Exists(capPath) ? File.ReadAllBytes(capPath) : null;
+                var cap = File.Exists(capPath) ? File.ReadAllBytes(capPath) : (capAll ? anyCap : null);
                 var cov = File.Exists(covPath) ? File.ReadAllBytes(covPath) : null;
                 int side = cap == null ? 0 : (int)Math.Round(Math.Sqrt(cap.Length));
                 // Coverage dimensions come from the dump when it records them, and from the byte count

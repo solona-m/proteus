@@ -1136,7 +1136,7 @@ public static class SecondSkinWriter
         {
             var plan = uv0 is not null && cap is { ToeCap: { } tc } && capTris is not null
                 ? ToeCapSolve(basePos, baseNrm, uvs, capTris, tc, cap.ToeCapWidth, cap.ToeCapHeight,
-                              cap.ToeCapStrength)
+                              cap.ToeCapStrength, capLog)
                 : null;
             var delta = plan?.Delta;
             capPlan = plan;
@@ -1146,7 +1146,7 @@ public static class SecondSkinWriter
             var finalNrm = plan is null ? baseNrm : CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!));
 
             int stride = outStrides[pw.Stream];
-            int normalsWritten = 0;
+            int normalsWritten = 0, uvsWritten = 0;
             bool encoderMissing = false;
             var outPos = plan is null ? null : new Vec3[vc];
 
@@ -1170,6 +1170,27 @@ public static class SecondSkinWriter
                     else
                         encoderMissing = true;
                 }
+
+                // ...and the UV it was projected onto, for the same vertices. Written into every uv slot
+                // the mesh has, exactly as the normalization pass above did — uv1 mirrors uv0 for the
+                // scroll shader, so leaving it on the donor's coordinate would show through there.
+                //
+                // uvs[] is updated with it too: the coverage test that decides which triangles survive
+                // reads that array, and testing a moved vertex at its donor's UV asks about the wrong
+                // part of the texture.
+                if (plan is not null && plan.NodeUV is { } capUV && uv0 is { } u0w
+                    && plan.NodeWeight[plan.NodeOf[i]] > 0f)
+                {
+                    var (cu, cv) = capUV[plan.NodeOf[i]];
+                    uvs[i] = (cu, cv);
+                    int so2 = i * outStrides[u0w.Stream];
+                    bool half0 = u0w.Type is 13 or 14;
+                    WriteUV2(outStreams[u0w.Stream], so2 + u0w.Offset, half0, cu, cv);
+                    if (zwValid)         WriteUV2(outStreams[u0w.Stream], so2 + zwOff, zwHalf, cu, cv);
+                    if (uv1El is { } e2) WriteUV2(outStreams[e2.Stream], i * outStrides[e2.Stream] + e2.Offset, e2.Type is 13 or 14, cu, cv);
+                    if (appendUv1)       WriteUV2(outStreams[uv1Stream], i * outStrides[uv1Stream] + bs[uv1Stream], false, cu, cv);
+                    uvsWritten++;
+                }
             }
 
             if (plan is not null)
@@ -1192,7 +1213,8 @@ public static class SecondSkinWriter
                         max = MathF.Max(max, m);
                     }
                 capLog($"toe cap: {moved}/{vc} vertices moved, max {max:0.#####}, {normalsWritten} normals rewritten"
-                     + (plan is null ? "" : $", {plan.NewTriangles.Count} triangles rebuilt"));
+                     + (plan is null ? "" : $", {plan.NewTriangles.Count} triangles rebuilt")
+                     + (uvsWritten == 0 ? "" : $", {uvsWritten} uvs reprojected"));
                 if (encoderMissing)
                     capLog($"toe cap: no encoder for normal type {norm?.Type} — that mesh keeps its old shading");
             }
@@ -1284,6 +1306,27 @@ public static class SecondSkinWriter
 
     /// <summary>How bridged a slot must be before nothing may pull it down toward the skin at all.</summary>
     private const float BridgeExempt = 0.999f;
+
+    /// <summary>
+    /// Passes lifting the cap off skin that comes through the middle of a face. Moving a corner changes
+    /// what its neighbours measure, so it is worth repeating; it stops early once a pass finds nothing.
+    /// </summary>
+    private const int PokePasses = 4;
+
+    /// <summary>
+    /// Ceiling on how far that lift may move any one cap vertex, in mesh edge lengths. The correction
+    /// wanted is a fraction of an edge; this is only here so that a bad measurement cannot send a vertex
+    /// off the foot, which an earlier version — summing every skin vertex's request instead of taking
+    /// the largest — did spectacularly.
+    /// </summary>
+    private const float MaxPokeLift = 1.5f;
+
+    /// <summary>
+    /// How far to the side the cap may be and still count as covering a skin vertex, in edge lengths.
+    /// Without it the nearest cap face to a vertex on a toe's inner flank is the bridge across the gap,
+    /// and lifting that along the flank's own normal pushes the bridge into the neighbouring toe.
+    /// </summary>
+    private const float PokeReach = 0.25f;
 
     /// <summary>Skin triangles shortlisted per cap vertex, so clearance can be enforced on every pass.</summary>
     private const int SkinCandidates = 16;
@@ -1438,6 +1481,13 @@ public static class SecondSkinWriter
         /// <summary>Nodes inside the cap: every triangle touching one is cut out and replaced.</summary>
         public required bool[] CutNode { get; init; }
 
+        /// <summary>
+        /// Per-node UV for the nodes the cap moved, projected back onto the surface it replaced. Null
+        /// when nothing moved. A cap vertex is a REUSED one, and it arrives carrying the UV of wherever
+        /// it was borrowed from, which is somewhere else entirely on the toe box.
+        /// </summary>
+        public (float U, float V)[]? NodeUV { get; init; }
+
         /// <summary>The rebuilt cap, as mesh-local vertex indices.</summary>
         public required List<(ushort A, ushort B, ushort C)> NewTriangles { get; init; }
 
@@ -1456,7 +1506,7 @@ public static class SecondSkinWriter
 
     private static ToeCapPlan? ToeCapSolve(
         Vec3[] pos, Vec3[] nrm, (float U, float V)[] uv, ushort[] tris,
-        byte[] mask, int mw, int mh, float strength)
+        byte[] mask, int mw, int mh, float strength, Action<string>? capLogSink = null)
     {
         int vc = pos.Length;
         if (vc == 0 || mw <= 0 || mh <= 0 || strength <= 0f || mask.Length < mw * mh) return null;
@@ -2630,6 +2680,204 @@ public static class SecondSkinWriter
             capped = true;
         }
 
+        // ── stop the skin bulging through the cap ──────────────────────────────────────────────────
+        // Clearance has been enforced one way only: every cap vertex is pushed off the nearest skin
+        // triangle. Nothing tested the reverse, and a convex toe pad comes through the MIDDLE of a flat
+        // cap triangle while all three corners sit comfortably clear — the shape of the underside of a
+        // toe, and where this showed worst: 57 of 407 skin vertices under the toes outside the shell,
+        // the worst by 0.0029 against a 0.005 edge.
+        //
+        // So walk the skin instead, and lift the cap where it passes under a vertex. The lift each
+        // corner needs is the LARGEST any skin vertex asks of it, applied once — summing every request
+        // stacks a full lift per vertex, and a triangle spanning twenty of them flies off the foot.
+        // Capped as well, at a fraction of an edge, so a bad measurement can never do that again.
+        if (capped && newTris.Count > 0)
+        {
+            var capNodes = new int[newTris.Count * 3];
+            for (int t = 0; t < newTris.Count; t++)
+            {
+                var (ta, tb, tc) = newTris[t];
+                capNodes[t * 3] = nodeOf[ta];
+                capNodes[t * 3 + 1] = nodeOf[tb];
+                capNodes[t * 3 + 2] = nodeOf[tc];
+            }
+
+            Vec3 At2(int n) => new(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
+
+            var skinPts = new List<int>();
+            var capped2 = new List<int>();
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (cutNode[n]) skinPts.Add(n);
+                if (hasTarget[n]) capped2.Add(n);
+            }
+            float edge2 = MeanEdgeLength(start, adj, skinPts.Count > 0 ? skinPts : capped2);
+            float wantClear = edge2 * SkinClearance;
+            float maxLift = edge2 * MaxPokeLift;
+
+            var want = new float[nodeCount];      // largest lift any skin vertex asks of this node
+            var dir = new Vec3[nodeCount];        // and the direction that asked for it
+            var used = new float[nodeCount];      // total already applied, against the cap
+            float biggest = 0f;
+
+            for (int pass = 0; pass < PokePasses; pass++)
+            {
+                Array.Clear(want);
+                int asked = 0;
+
+                foreach (int m in skinPts)
+                {
+                    var pm = start[m];
+                    var nm = nNorm[m];
+
+                    int bestT = -1;
+                    float bestD = float.MaxValue;
+                    Vec3 bestQ = default;
+                    for (int t = 0; t < newTris.Count; t++)
+                    {
+                        Vec3 a = At2(capNodes[t * 3]), b = At2(capNodes[t * 3 + 1]), c = At2(capNodes[t * 3 + 2]);
+                        var q = ClosestOnTriangle(pm, a, b, c);
+                        float dx = pm.X - q.X, dy = pm.Y - q.Y, dz = pm.Z - q.Z;
+                        float d = dx * dx + dy * dy + dz * dz;
+                        if (d < bestD) { bestD = d; bestT = t; bestQ = q; }
+                    }
+                    if (bestT < 0) continue;
+
+                    // Only where the cap actually passes OVER this vertex. On the inner flank of a toe
+                    // the skin's normal points at its neighbour, and the nearest cap face is the bridge
+                    // spanning the gap — lifting that along this normal drives the bridge into the toe
+                    // opposite, which is precisely what the two-toe fixture caught.
+                    float dqx = bestQ.X - pm.X, dqy = bestQ.Y - pm.Y, dqz = bestQ.Z - pm.Z;
+                    float off = dqx * nm.X + dqy * nm.Y + dqz * nm.Z;
+                    float latx = dqx - nm.X * off, laty = dqy - nm.Y * off, latz = dqz - nm.Z * off;
+                    if (latx * latx + laty * laty + latz * latz > (edge2 * PokeReach) * (edge2 * PokeReach))
+                        continue;
+                    if (off >= wantClear) continue;
+                    float deficit = wantClear - off;
+                    asked++;
+
+                    int na = capNodes[bestT * 3], nb = capNodes[bestT * 3 + 1], nc = capNodes[bestT * 3 + 2];
+                    Vec3 pa = At2(na), pb = At2(nb), pc = At2(nc);
+
+                    // Barycentric coordinates of the landing point, so the lift stays local to the bulge.
+                    float v0x = pb.X - pa.X, v0y = pb.Y - pa.Y, v0z = pb.Z - pa.Z;
+                    float v1x = pc.X - pa.X, v1y = pc.Y - pa.Y, v1z = pc.Z - pa.Z;
+                    float v2x = bestQ.X - pa.X, v2y = bestQ.Y - pa.Y, v2z = bestQ.Z - pa.Z;
+                    float e00 = v0x * v0x + v0y * v0y + v0z * v0z;
+                    float e01 = v0x * v1x + v0y * v1y + v0z * v1z;
+                    float e11 = v1x * v1x + v1y * v1y + v1z * v1z;
+                    float e20 = v2x * v0x + v2y * v0y + v2z * v0z;
+                    float e21 = v2x * v1x + v2y * v1y + v2z * v1z;
+                    float den = e00 * e11 - e01 * e01;
+                    float wa = 1f / 3f, wb = 1f / 3f, wc = 1f / 3f;
+                    if (MathF.Abs(den) > 1e-20f)
+                    {
+                        wb = Math.Clamp((e11 * e20 - e01 * e21) / den, 0f, 1f);
+                        wc = Math.Clamp((e00 * e21 - e01 * e20) / den, 0f, 1f);
+                        wa = Math.Clamp(1f - wb - wc, 0f, 1f);
+                        float sum = wa + wb + wc;
+                        if (sum > 1e-6f) { wa /= sum; wb /= sum; wc /= sum; }
+                    }
+
+                    // The MAXIMUM asked of each corner this pass, never the sum.
+                    void Ask(int n, float w)
+                    {
+                        if (n < 0 || !hasTarget[n]) return;      // rim vertices are shared: moving one tears the seam
+                        float need = deficit * w;
+                        if (need <= want[n]) return;
+                        want[n] = need;
+                        dir[n] = nm;
+                    }
+                    Ask(na, wa); Ask(nb, wb); Ask(nc, wc);
+                }
+
+                if (asked == 0) break;
+
+                foreach (int n in capped2)
+                {
+                    if (want[n] <= 0f) continue;
+                    float step = MathF.Min(want[n], maxLift - used[n]);
+                    if (step <= 0f) continue;
+                    used[n] += step;
+                    biggest = MathF.Max(biggest, used[n]);
+                    target[n] = new Vec3(target[n].X + dir[n].X * step,
+                                         target[n].Y + dir[n].Y * step,
+                                         target[n].Z + dir[n].Z * step);
+                }
+            }
+
+            capLogSink?.Invoke($"poke: lifted the cap off the skin, most-moved vertex {biggest:F5} "
+                             + $"(ceiling {maxLift:F5}, clearance {wantClear:F5})");
+        }
+
+        // ── UVs for the rebuilt surface ────────────────────────────────────────────────────────────
+        // Every cap vertex is a vertex REUSED from somewhere else in the toe box, and it still carries
+        // that donor's texture coordinate. Left alone, the cap samples the skin's texture — and its
+        // alpha — from wherever each vertex happened to come from: measured on the equipped body, 494
+        // of 2112 cap faces had their UV scale off by more than 8x from the shell's own median, the
+        // worst by 6300x. It does not read as torn geometry, it reads as a smeared texture.
+        //
+        // So shrink-wrap instead: drop each moved vertex onto the surface the cap replaced and take
+        // the UV where it lands, interpolated across that triangle. This is what projecting the UVs
+        // by hand would do, and it keeps the cap continuous with the skin it is sewn to.
+        (float U, float V)[]? nodeUV = null;
+        if (capped)
+        {
+            var srcTri = new List<(Vec3 A, Vec3 B, Vec3 C, int NA, int NB, int NC)>();
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+                int na = nodeOf[tris[t]], nb = nodeOf[tris[t + 1]], nc = nodeOf[tris[t + 2]];
+                // The replaced region plus a rim of what survives, so the join stays continuous.
+                if (!cutNode[na] && !cutNode[nb] && !cutNode[nc]) continue;
+                srcTri.Add((start[na], start[nb], start[nc], na, nb, nc));
+            }
+
+            if (srcTri.Count > 0)
+            {
+                // One UV per welded node. Coincident duplicates across a UV seam collapse to one node
+                // and one of their UVs wins; that is already true of every other cap attribute.
+                var uvOf = new (float U, float V)[nodeCount];
+                for (int i = 0; i < vc; i++) uvOf[nodeOf[i]] = uv[i];
+
+                nodeUV = new (float U, float V)[nodeCount];
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    if (!hasTarget[n]) continue;
+                    var p2 = new Vec3(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
+
+                    float bestD = float.MaxValue;
+                    (float U, float V) best = uvOf[n];
+                    foreach (var (a, b, c, na, nb, nc) in srcTri)
+                    {
+                        var q = ClosestOnTriangle(p2, a, b, c);
+                        float dx = p2.X - q.X, dy = p2.Y - q.Y, dz = p2.Z - q.Z;
+                        float d = dx * dx + dy * dy + dz * dz;
+                        if (d >= bestD) continue;
+                        bestD = d;
+
+                        // Barycentric coordinates of the landing point, by area.
+                        float v0x = b.X - a.X, v0y = b.Y - a.Y, v0z = b.Z - a.Z;
+                        float v1x = c.X - a.X, v1y = c.Y - a.Y, v1z = c.Z - a.Z;
+                        float v2x = q.X - a.X, v2y = q.Y - a.Y, v2z = q.Z - a.Z;
+                        float d00 = v0x * v0x + v0y * v0y + v0z * v0z;
+                        float d01 = v0x * v1x + v0y * v1y + v0z * v1z;
+                        float d11 = v1x * v1x + v1y * v1y + v1z * v1z;
+                        float d20 = v2x * v0x + v2y * v0y + v2z * v0z;
+                        float d21 = v2x * v1x + v2y * v1y + v2z * v1z;
+                        float den = d00 * d11 - d01 * d01;
+                        if (MathF.Abs(den) < 1e-20f) { best = uvOf[na]; continue; }
+                        float wb = (d11 * d20 - d01 * d21) / den;
+                        float wc = (d00 * d21 - d01 * d20) / den;
+                        float wa = 1f - wb - wc;
+                        best = (uvOf[na].U * wa + uvOf[nb].U * wb + uvOf[nc].U * wc,
+                                uvOf[na].V * wa + uvOf[nb].V * wb + uvOf[nc].V * wc);
+                    }
+                    nodeUV[n] = best;
+                }
+            }
+        }
+
         // A mesh may have nothing to cap and still have islands to drop — the toenail mesh is exactly
         // that: every island on it is swallowed whole, so no cap is ever built for it.
         bool anyDropped = false;
@@ -2651,6 +2899,7 @@ public static class SecondSkinWriter
         return new ToeCapPlan
         {
             Delta = delta, NodeOf = nodeOf, NodeWeight = nW, NodeNormal = nNorm, DropNode = dropNode,
+            NodeUV = nodeUV,
             CutNode = cutNode, NewTriangles = newTris,
         };
     }
@@ -3126,6 +3375,15 @@ public static class SecondSkinWriter
     }
 
     /// <summary>
+    /// Faintest coverage that still counts as painted, out of 255. Testing for any non-zero texel at all
+    /// keeps geometry under alpha of 1/255, which is invisible — and a resampled or compressed coverage
+    /// map is full of that. One measured here had 7.4% of its texels non-zero with a MEDIAN non-zero
+    /// value of 5, and it kept an entire second shell over the feet for an overlay whose art is a band
+    /// on the thigh. That shell then pokes through the one above it.
+    /// </summary>
+    private const byte CoverageFloor = 8;
+
+    /// <summary>
     /// Does any texel under this triangle's UV footprint carry coverage? Scans the full texel bounding
     /// box (padded one texel for bilinear bleed) rather than the exact triangle: over-keeping a sliver
     /// is free, wrongly culling one leaves a visible sawtooth.
@@ -3150,7 +3408,7 @@ public static class SecondSkinWriter
             for (int x = x0; x <= x1; x++)
             {
                 int wx = ((x % w) + w) % w;
-                if (mask[wy * w + wx] > 0) return true;
+                if (mask[wy * w + wx] >= CoverageFloor) return true;
             }
         }
         return false;
