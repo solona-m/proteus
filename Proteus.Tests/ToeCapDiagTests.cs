@@ -105,7 +105,7 @@ public class ToeCapDiagTests
             foreach (var cand in new[]
                      {
                          Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
-                         @"E:epos\Proteus\Proteus\Meshes	oecap.mdl",
+                         @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
                      })
                 if (File.Exists(cand)) { authored = File.ReadAllBytes(cand); break; }
             o.WriteLine(authored == null ? "no authored cap" : $"authored cap {authored.Length} bytes");

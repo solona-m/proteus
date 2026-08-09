@@ -363,7 +363,7 @@ public static class SecondSkinWriter
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
-                      (float U, float V)[]? overrideUV = null)
+                      CapUvPlan? capUv = null)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -393,8 +393,31 @@ public static class SecondSkinWriter
                 // through BuildVerbatim, so it does not happen by itself. The authored toe cap arrives
                 // with every vertex at (0,1) — one corner texel of the overlay, transparent — and looks
                 // perfect in a modelling package while rendering as nothing at all in game.
-                if (overrideUV is { } ouv2 && ouv2.Length == vc)
+                if (capUv is { } tooBig && tooBig.SourceOf.Length > ushort.MaxValue)
+                    diag?.Invoke($"authored cap: {tooBig.SourceOf.Length} vertices after the seam split "
+                               + "exceeds a 16-bit index — UVs NOT applied, the cap will render blank");
+                if (capUv is { } plan && plan.SourceOf.Length <= ushort.MaxValue)
                 {
+                    // The projection cuts the body's UV seams into the cap, which means vertices on the
+                    // seam exist once per chart. Everything but the coordinate is identical, so each copy
+                    // is a byte-for-byte duplicate of the vertex it came from, in every stream.
+                    int nvNew = plan.SourceOf.Length;
+                    var grownStreams = new byte[outStreams.Length][];
+                    for (int st = 0; st < outStreams.Length; st++)
+                    {
+                        int stride = outStrides[st];
+                        var g = new byte[nvNew * stride];
+                        for (int i = 0; i < nvNew; i++)
+                        {
+                            int from = plan.SourceOf[i];
+                            if (from >= 0 && from < vc)
+                                Buffer.BlockCopy(outStreams[st], from * stride, g, i * stride, stride);
+                        }
+                        grownStreams[st] = g;
+                    }
+                    outStreams = grownStreams;
+                    vc = (ushort)nvNew;
+
                     VElem? u0 = null, u1 = null;
                     foreach (var el in decl)
                         if (el.Usage == UseUV) { if (el.UsageIndex == 0) u0 ??= el; else u1 ??= el; }
@@ -404,14 +427,14 @@ public static class SecondSkinWriter
                         // live in another cell, and the overlay is a single tile.
                         float minU = float.MaxValue, minV = float.MaxValue;
                         for (int i = 0; i < vc; i++)
-                        { minU = MathF.Min(minU, ouv2[i].U); minV = MathF.Min(minV, ouv2[i].V); }
+                        { minU = MathF.Min(minU, plan.Uv[i].U); minV = MathF.Min(minV, plan.Uv[i].V); }
                         float capUOff = MathF.Floor(minU), capVOff = MathF.Floor(minV);
                         bool half0 = ue2.Type is 13 or 14;
                         bool zwOk = ue2.Type is 3 or 14;
                         int zwOff2 = ue2.Offset + (ue2.Type == 3 ? 8 : 4);
                         for (int i = 0; i < vc; i++)
                         {
-                            float u = ouv2[i].U - capUOff, v = ouv2[i].V - capVOff;
+                            float u = plan.Uv[i].U - capUOff, v = plan.Uv[i].V - capVOff;
                             int so = i * outStrides[ue2.Stream];
                             WriteUV2(outStreams[ue2.Stream], so + ue2.Offset, half0, u, v);
                             if (zwOk) WriteUV2(outStreams[ue2.Stream], so + zwOff2, ue2.Type == 14, u, v);
@@ -431,7 +454,7 @@ public static class SecondSkinWriter
                 BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv,
                     out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag,
-                    buildCapGeometry: capSrc == null, overrideUV: overrideUV);
+                    buildCapGeometry: capSrc == null);
             }
 
             // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
@@ -466,6 +489,11 @@ public static class SecondSkinWriter
             // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
             var keptPerSub = new List<ushort[]>();
             var used = new bool[vc];
+            // Position in the cap's flattened corner list. The projection walked the index buffer in
+            // exactly this order (submeshes ascending, triangles ascending, nothing skipped), so a simple
+            // running cursor lines the two up. Only ever used with dropConnectors off, which is the one
+            // thing below that would skip a whole submesh and desync it.
+            int cornerCursor = 0;
             for (int su = 0; su < srcSubCount; su++)
             {
                 int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
@@ -485,6 +513,16 @@ public static class SecondSkinWriter
                 {
                     int p = src.Ib + (int)(so + t) * 2;
                     ushort a = BitConverter.ToUInt16(s, p), b = BitConverter.ToUInt16(s, p + 2), c = BitConverter.ToUInt16(s, p + 4);
+                    if (capUv is { } cplan)
+                    {
+                        if (cornerCursor + 2 < cplan.Corner.Length)
+                        {
+                            a = (ushort)cplan.Corner[cornerCursor];
+                            b = (ushort)cplan.Corner[cornerCursor + 1];
+                            c = (ushort)cplan.Corner[cornerCursor + 2];
+                        }
+                        cornerCursor += 3;
+                    }
                     // Redirect any of the triangle's three index entries whose (mesh-relative) position
                     // carries a shape edit. so is absolute; subtract meshStartIndex to get the mesh-local
                     // position the shape's BaseIndicesIndex keys are in.
@@ -632,6 +670,10 @@ public static class SecondSkinWriter
             }
         }
 
+        // The cap's projection depends only on the cap and the bodies, never on the layer wearing it, and
+        // it is the most expensive thing in the build — every cap vertex against every skin triangle.
+        var capUvCache = new Dictionary<int, CapUvPlan?>();
+
         for (ushort layer = 0; layer < layers.Count; layer++)
         {
             var def = layers[layer];
@@ -737,7 +779,8 @@ public static class SecondSkinWriter
                     if (BitConverter.ToUInt16(cs.S, cs.MeshStart + m * 36) == 0) continue;   // empty mesh
                     EmitMesh(cs, m, matIndex, 0f, preserve: true, cov: null, capMapBase,
                              ref capMapAppended, dropConnectors: false,
-                             overrideUV: ProjectCapUV(cs, m, sources, diag));
+                             capUv: capUvCache.TryGetValue(m, out var cached) ? cached
+                                  : capUvCache[m] = ProjectCapUV(cs, m, sources, diag));
                     emitted++;
                 }
                 diag?.Invoke($"authored toe cap: grafted {emitted} mesh(es) onto layer {layer}");
@@ -1153,7 +1196,7 @@ public static class SecondSkinWriter
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
         out Vec3[]? capSrcPos, out Vec3[]? capOutPos, out ToeCapPlan? capPlan,
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
-        bool buildCapGeometry = true, (float U, float V)[]? overrideUV = null)
+        bool buildCapGeometry = true)
     {
         capPlan = null;
         VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
@@ -1227,13 +1270,6 @@ public static class SecondSkinWriter
             // Decode uv0 (raw) — normalized and written below, once the mesh's UV cell is known.
             if (uv0 is { } ue) { ReadTyped(s, SrcAddr(ue.Stream, i, ue.Offset), ue.Type, tmp); uvs[i] = (tmp[0], tmp[1]); }
         }
-
-        // A supplied UV replaces whatever the mesh carried. The authored toe cap has none — every one
-        // of its vertices arrives at (0,1) — so it would otherwise sample a single corner texel of the
-        // overlay, which is transparent, and render as nothing at all. Substituted HERE so the shift
-        // and the write below treat it exactly like a mesh's own coordinate.
-        if (overrideUV is { } ouv && ouv.Length == vc)
-            for (int i = 0; i < vc; i++) uvs[i] = ouv[i];
 
         // Normalize the mesh's UV into the [0,1] tile and force uv1 = uv0. The overlay is a single [0,1]
         // image, but a body UV can live in another cell (vanilla U∈[1,2], bibo V∈[-1,0]); shift the WHOLE
@@ -1407,6 +1443,47 @@ public static class SecondSkinWriter
     /// surface to the cap — projecting onto one stretches a triangle across the gap between islands.
     /// </summary>
     private const float ProjectIslandFloor = 0.25f;
+
+    /// <summary>
+    /// Distinct landings kept per cap vertex before the seam pass chooses between them. Only ever more
+    /// than one where the body's atlas is cut, or where two body parts nearly touch.
+    /// </summary>
+    private const int ProjectCandidates = 6;
+
+    /// <summary>
+    /// How far apart two landings must be in UV to count as different places. Below this they are the
+    /// same patch of atlas reached through neighbouring triangles, and keeping both would crowd out the
+    /// far side of a seam — which is the only rival that matters.
+    /// </summary>
+    private const float ProjectMergeUV = 0.004f;
+
+    /// <summary>
+    /// Cap edge lengths a rival landing may sit further away and still be considered. The two sides of a
+    /// UV seam are welded in 3D, so the rival is normally within a whisker; this only has to cover a
+    /// vertex sitting a little back from the cut.
+    /// </summary>
+    private const float ProjectSeamSlack = 1.5f;
+
+    /// <summary>Sweeps of the agreement pass. It settles in three or four; the rest are free.</summary>
+    private const int ProjectSeamPasses = 24;
+
+    /// <summary>
+    /// UV span across one cap face that means it has straddled a seam rather than covered texture. The
+    /// cap's own faces measure about 0.0024, so this is two orders of magnitude clear of normal.
+    /// </summary>
+    private const float ProjectSeamSpan = 0.10f;
+
+    /// <summary>
+    /// Multiples of the cap's median UV stretch (UV distance per unit of 3D distance) at which an edge is
+    /// taken to cross a cut in the body's atlas rather than to cover texture.
+    /// </summary>
+    private const float ProjectSeamStretch = 8f;
+
+    /// <summary>
+    /// Weight on staying near, relative to agreeing with the neighbours, in the seam pass. Keeps the
+    /// undisputed interior exactly where nearest-hit put it.
+    /// </summary>
+    private const float ProjectNearBias = 1.0f;
 
     /// <summary>Rim vertices needed before a cut boundary is a usable loop to sew onto.</summary>
     private const int MinRimNodes = 8;
@@ -3741,8 +3818,8 @@ public static class SecondSkinWriter
     /// instead would be worse than useless: the overlays are painted in the BODY's layout and have
     /// nothing anywhere else, so the cap would sample empty texture.
     /// </summary>
-    private static (float U, float V)[]? ProjectCapUV(Source cap, int mesh, IReadOnlyList<byte[]> bodies,
-                                                      Action<string>? diag)
+    private static CapUvPlan? ProjectCapUV(Source cap, int mesh, IReadOnlyList<byte[]> bodies,
+                                           Action<string>? diag)
     {
         var s = cap.S;
         int mo = cap.MeshStart + mesh * 36;
@@ -3818,22 +3895,50 @@ public static class SecondSkinWriter
         }
         if (tri.Count == 0) { diag?.Invoke("authored cap: no body geometry to project UVs from"); return null; }
 
-        var outUV = new (float U, float V)[vc];
+        // The cap's OWN connectivity, and how big one of its edges is. Both drive the seam pass below:
+        // the graph says which vertices have to agree, the length says how far away a rival landing may
+        // sit and still count as a genuine alternative rather than a worse answer.
+        var capTri = CapTriangles(cap, mesh, vc);
+        var adj = new HashSet<int>[vc];
+        for (int i = 0; i < vc; i++) adj[i] = [];
+        var edgeLen = new List<float>();
+        for (int t = 0; t + 2 < capTri.Count; t += 3)
+        {
+            int a = capTri[t], b = capTri[t + 1], c = capTri[t + 2];
+            adj[a].Add(b); adj[b].Add(a);
+            adj[b].Add(c); adj[c].Add(b);
+            adj[c].Add(a); adj[a].Add(c);
+            edgeLen.Add(Dist(cp[a], cp[b]));
+            edgeLen.Add(Dist(cp[b], cp[c]));
+            edgeLen.Add(Dist(cp[c], cp[a]));
+        }
+        edgeLen.Sort();
+        float capEdge = edgeLen.Count > 0 ? edgeLen[edgeLen.Count / 2] : 0.002f;
+
+        // Every landing worth considering, nearest first — not just the nearest one. A UV seam is a cut
+        // in TEXTURE space only: the two sides are still welded in 3D, so a vertex sitting on one is very
+        // nearly equidistant from body triangles carrying wildly different coordinates. Taking the
+        // nearest per vertex then hands the three corners of one cap face landings on opposite sides of
+        // the cut, and the face stretches clean across the atlas.
+        var candU = new float[vc * ProjectCandidates];
+        var candV = new float[vc * ProjectCandidates];
+        var candD = new float[vc * ProjectCandidates];
+        var candN = new int[vc];
         float worst = 0f;
         for (int i = 0; i < vc; i++)
         {
             var p = cp[i];
-            float bestD = float.MaxValue;
-            (float U, float V) best = default;
+            int b0 = i * ProjectCandidates;
+            int n = 0;
+            float cull = float.MaxValue;   // squared distance the K-th best already achieves
             foreach (var (a, b, c, ua, ub, uc, ctr) in tri)
             {
                 float cx = ctr.X - p.X, cy = ctr.Y - p.Y, cz = ctr.Z - p.Z;
-                if (cx * cx + cy * cy + cz * cz > bestD + 0.01f) continue;
+                if (cx * cx + cy * cy + cz * cz > cull + 0.01f) continue;
                 var q = ClosestOnTriangle(p, a, b, c);
                 float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
                 float d = dx * dx + dy * dy + dz * dz;
-                if (d >= bestD) continue;
-                bestD = d;
+                if (n == ProjectCandidates && d >= candD[b0 + n - 1]) continue;
 
                 float v0x = b.X - a.X, v0y = b.Y - a.Y, v0z = b.Z - a.Z;
                 float v1x = c.X - a.X, v1y = c.Y - a.Y, v1z = c.Z - a.Z;
@@ -3844,17 +3949,295 @@ public static class SecondSkinWriter
                 float d20 = v2x * v0x + v2y * v0y + v2z * v0z;
                 float d21 = v2x * v1x + v2y * v1y + v2z * v1z;
                 float den = d00 * d11 - d01 * d01;
-                if (MathF.Abs(den) < 1e-20f) { best = ua; continue; }
-                float wb = (d11 * d20 - d01 * d21) / den;
-                float wc = (d00 * d21 - d01 * d20) / den;
-                float wa = 1f - wb - wc;
-                best = (ua.U * wa + ub.U * wb + uc.U * wc, ua.V * wa + ub.V * wb + uc.V * wc);
+                float hu, hv;
+                if (MathF.Abs(den) < 1e-20f) { hu = ua.U; hv = ua.V; }
+                else
+                {
+                    float wb = (d11 * d20 - d01 * d21) / den;
+                    float wc = (d00 * d21 - d01 * d20) / den;
+                    float wa = 1f - wb - wc;
+                    hu = ua.U * wa + ub.U * wb + uc.U * wc;
+                    hv = ua.V * wa + ub.V * wb + uc.V * wc;
+                }
+
+                // One landing per DISTINCT patch of the atlas. Body triangles that share an edge in UV
+                // give near-identical coordinates; keeping them all would fill the list with one side of
+                // the seam and crowd the other side out entirely.
+                int dup = -1;
+                for (int k = 0; k < n; k++)
+                {
+                    float du = candU[b0 + k] - hu, dv = candV[b0 + k] - hv;
+                    if (du * du + dv * dv < ProjectMergeUV * ProjectMergeUV) { dup = k; break; }
+                }
+                if (dup >= 0)
+                {
+                    if (d >= candD[b0 + dup]) continue;
+                    for (int k = dup; k + 1 < n; k++)
+                    {
+                        candU[b0 + k] = candU[b0 + k + 1]; candV[b0 + k] = candV[b0 + k + 1];
+                        candD[b0 + k] = candD[b0 + k + 1];
+                    }
+                    n--;
+                }
+                else if (n == ProjectCandidates) n--;
+
+                int ins = n;
+                while (ins > 0 && candD[b0 + ins - 1] > d)
+                {
+                    candU[b0 + ins] = candU[b0 + ins - 1]; candV[b0 + ins] = candV[b0 + ins - 1];
+                    candD[b0 + ins] = candD[b0 + ins - 1];
+                    ins--;
+                }
+                candU[b0 + ins] = hu; candV[b0 + ins] = hv; candD[b0 + ins] = d;
+                n++;
+                if (n == ProjectCandidates) cull = candD[b0 + n - 1];
             }
-            outUV[i] = best;
-            worst = MathF.Max(worst, bestD);
+            candN[i] = n;
+            if (n > 0) worst = MathF.Max(worst, candD[b0]);
         }
-        diag?.Invoke($"authored cap: projected {vc} uvs from the body, furthest landing {MathF.Sqrt(worst):F4}");
-        return outUV;
+
+        var outUV = new (float U, float V)[vc];
+        var pick = new int[vc];
+        for (int i = 0; i < vc; i++) outUV[i] = candN[i] > 0 ? (candU[i * ProjectCandidates], candV[i * ProjectCandidates]) : default;
+
+        // Sweep the cap's own graph and let agreement, not proximity, settle the ties. A vertex switches
+        // to a rival landing only when its neighbours' coordinates say so and the rival is no further
+        // away than about one cap edge — so the vast interior, where there is one landing and no dispute,
+        // never moves, and only the strip lying over the cut changes side.
+        float slack = capEdge * ProjectSeamSlack;
+        int moved = 0;
+        for (int pass = 0; pass < ProjectSeamPasses; pass++)
+        {
+            int changed = 0;
+            for (int i = 0; i < vc; i++)
+            {
+                int n = candN[i];
+                if (n < 2 || adj[i].Count == 0) continue;
+                int b0 = i * ProjectCandidates;
+                float near = MathF.Sqrt(candD[b0]);
+
+                int bestK = pick[i];
+                float bestCost = float.MaxValue;
+                for (int k = 0; k < n; k++)
+                {
+                    float far = MathF.Sqrt(candD[b0 + k]);
+                    if (far > near + slack) continue;
+                    float sum = 0f;
+                    foreach (int j in adj[i])
+                    {
+                        float du = candU[b0 + k] - outUV[j].U, dv = candV[b0 + k] - outUV[j].V;
+                        sum += MathF.Sqrt(du * du + dv * dv);
+                    }
+                    // The distance term is only a tie-break, converted into UV units at the cap's own
+                    // scale so the two halves of the cost are comparable.
+                    float cost = sum / adj[i].Count + (far - near) * ProjectNearBias / MathF.Max(capEdge, 1e-6f) * ProjectMergeUV;
+                    if (cost < bestCost) { bestCost = cost; bestK = k; }
+                }
+                if (bestK == pick[i]) continue;
+                pick[i] = bestK;
+                outUV[i] = (candU[b0 + bestK], candV[b0 + bestK]);
+                changed++;
+            }
+            moved += changed;
+            if (changed == 0) break;
+        }
+
+        // Agreement alone cannot finish the job, and it is worth being clear why. Where the body's atlas
+        // is cut, the cap straddles the cut, and BOTH sides are locally self-consistent — every vertex on
+        // the far side agrees with its own neighbours, so nothing wants to move and the sweeps converge
+        // with the seam still running through the middle. Measured: 32 straddling faces before, 30 after.
+        //
+        // Nor can one side simply be folded onto the other. That was tried, on the assumption that the
+        // far side was a thin strip: it is not. The cut runs right through the toe box, 326 vertices
+        // against 561 on the Neolithe foot, and forcing them together made it worse (30 straddling faces
+        // to 36) because both charts carry real, different art.
+        //
+        // The cut is REPRODUCED instead. Label every cap face with the chart it belongs to, then give
+        // each vertex one copy per chart its faces use, each copy taking a landing in its own chart. No
+        // face has corners in two charts any more, so none can stretch between them — the same trick the
+        // body's own mesh uses at the same place, which is why the seam is there to begin with.
+        //
+        // What marks an edge as crossing the cut is STRETCH — UV travelled per unit of 3D travelled — and
+        // not an absolute UV distance. Two charts can pass arbitrarily close in the atlas: measured here,
+        // a 0.10 cut-off left the far side still reachable from the near side through a chain of short
+        // steps, so the whole cap read as one patch. Stretch has no such blind spot.
+        var stretch = new List<float>();
+        for (int t = 0; t + 2 < capTri.Count; t += 3)
+            for (int k = 0; k < 3; k++)
+            {
+                int a = capTri[t + k], b = capTri[t + (k + 1) % 3];
+                float d3 = Dist(cp[a], cp[b]);
+                if (d3 < 1e-7f) continue;
+                float du = outUV[a].U - outUV[b].U, dv = outUV[a].V - outUV[b].V;
+                stretch.Add(MathF.Sqrt(du * du + dv * dv) / d3);
+            }
+        stretch.Sort();
+        float seamCut = (stretch.Count > 0 ? stretch[stretch.Count / 2] : 1f) * ProjectSeamStretch;
+
+        var patchAdj = new HashSet<int>[vc];
+        for (int i = 0; i < vc; i++) patchAdj[i] = [];
+        for (int i = 0; i < vc; i++)
+            foreach (int j in adj[i])
+            {
+                float d3 = Dist(cp[i], cp[j]);
+                float du = outUV[i].U - outUV[j].U, dv = outUV[i].V - outUV[j].V;
+                if (d3 < 1e-7f || MathF.Sqrt(du * du + dv * dv) / d3 <= seamCut) patchAdj[i].Add(j);
+            }
+        var patch = ConnectedComponents(patchAdj, vc);
+
+        // A face belongs to whichever chart most of its corners are in; a three-way split (a corner
+        // exactly on a junction) goes to the corner whose landing is nearest, which is the one whose
+        // projection is least of a guess.
+        int triCount = capTri.Count / 3;
+        var faceChart = new int[triCount];
+        for (int f = 0; f < triCount; f++)
+        {
+            int a = capTri[f * 3], b = capTri[f * 3 + 1], c = capTri[f * 3 + 2];
+            faceChart[f] = patch[a] == patch[b] || patch[a] == patch[c] ? patch[a]
+                         : patch[b] == patch[c] ? patch[b]
+                         : candD[a * ProjectCandidates] <= candD[b * ProjectCandidates]
+                           && candD[a * ProjectCandidates] <= candD[c * ProjectCandidates] ? patch[a]
+                         : candD[b * ProjectCandidates] <= candD[c * ProjectCandidates] ? patch[b]
+                         : patch[c];
+        }
+
+        // One output vertex per (vertex, chart) actually used. Everything away from the cut keeps a
+        // single copy, so the cap grows by the width of the seam and nothing else.
+        var copyOf = new Dictionary<(int V, int Chart), int>();
+        var sourceOf = new List<int>();
+        var corner = new int[capTri.Count];
+        for (int f = 0; f < triCount; f++)
+            for (int k = 0; k < 3; k++)
+            {
+                var key = (capTri[f * 3 + k], faceChart[f]);
+                if (!copyOf.TryGetValue(key, out int outIdx))
+                {
+                    copyOf[key] = outIdx = sourceOf.Count;
+                    sourceOf.Add(key.Item1);
+                }
+                corner[f * 3 + k] = outIdx;
+            }
+
+        // Each copy takes the landing that best suits ITS chart — for the copy on the far side of the
+        // cut that is a different body triangle from the one nearest in 3D, which is the whole point.
+        var finalUV = new (float U, float V)[sourceOf.Count];
+        int reseated = 0;
+        foreach (var ((v, chart), outIdx) in copyOf)
+        {
+            int b0 = v * ProjectCandidates;
+            int bestK = pick[v];
+            if (patch[v] != chart)
+            {
+                float bestCost = float.MaxValue;
+                for (int k = 0; k < candN[v]; k++)
+                {
+                    float sum = 0f;
+                    int c = 0;
+                    foreach (int j in adj[v])
+                    {
+                        if (patch[j] != chart) continue;
+                        float du = candU[b0 + k] - outUV[j].U, dv = candV[b0 + k] - outUV[j].V;
+                        sum += MathF.Sqrt(du * du + dv * dv);
+                        c++;
+                    }
+                    if (c > 0 && sum / c < bestCost) { bestCost = sum / c; bestK = k; }
+                }
+                if (bestK != pick[v]) reseated++;
+            }
+            finalUV[outIdx] = candN[v] > 0 ? (candU[b0 + bestK], candV[b0 + bestK]) : default;
+        }
+
+        // What the whole exercise is for: faces that still straddle the atlas. Reported so a regression
+        // shows up in the build log rather than in game.
+        int hops = 0;
+        for (int f = 0; f < triCount; f++)
+        {
+            var (ua, ub, uc) = (finalUV[corner[f * 3]], finalUV[corner[f * 3 + 1]], finalUV[corner[f * 3 + 2]]);
+            float span = MathF.Max(
+                MathF.Max(MathF.Abs(ua.U - ub.U), MathF.Max(MathF.Abs(ub.U - uc.U), MathF.Abs(uc.U - ua.U))),
+                MathF.Max(MathF.Abs(ua.V - ub.V), MathF.Max(MathF.Abs(ub.V - uc.V), MathF.Abs(uc.V - ua.V))));
+            if (span > ProjectSeamSpan) hops++;
+        }
+        int charts = 0;
+        {
+            var seen = new HashSet<int>();
+            foreach (int p in patch) seen.Add(p);
+            charts = seen.Count;
+        }
+        diag?.Invoke($"authored cap: projected {vc} uvs from the body, furthest landing {MathF.Sqrt(worst):F4}, "
+                   + $"{moved} settled by agreement; {charts} chart patch(es) split into {sourceOf.Count} "
+                   + $"vertices ({reseated} copies reprojected), {hops} face(s) spanning >{ProjectSeamSpan:F2} uv");
+        return new CapUvPlan { Uv = finalUV, SourceOf = sourceOf.ToArray(), Corner = corner };
+    }
+
+    /// <summary>
+    /// How the authored cap's vertices are laid out once the body's UV seams have been cut into it:
+    /// one entry per output vertex, and where every triangle corner points.
+    /// </summary>
+    private sealed class CapUvPlan
+    {
+        /// <summary>Projected coordinate per OUTPUT vertex.</summary>
+        public required (float U, float V)[] Uv;
+
+        /// <summary>The cap vertex each output vertex is a copy of — everything but the UV comes from it.</summary>
+        public required int[] SourceOf;
+
+        /// <summary>
+        /// Output vertex per triangle corner, in the cap's own submesh-then-triangle order. The emitter
+        /// walks its index buffer in that same order and substitutes these.
+        /// </summary>
+        public required int[] Corner;
+    }
+
+    /// <summary>
+    /// Component label per vertex over an adjacency list, optionally restricted to a subset. Vertices
+    /// outside the subset keep label -1.
+    /// </summary>
+    private static int[] ConnectedComponents(HashSet<int>?[] adj, int vc, IReadOnlyList<int>? subset = null)
+    {
+        var label = new int[vc];
+        Array.Fill(label, -1);
+        var seeds = subset ?? Enumerable.Range(0, vc).ToList();
+        var stack = new Stack<int>();
+        int next = 0;
+        foreach (int seed in seeds)
+        {
+            if (label[seed] >= 0) continue;
+            int id = next++;
+            stack.Push(seed);
+            label[seed] = id;
+            while (stack.Count > 0)
+            {
+                int v = stack.Pop();
+                if (adj[v] is not { } near) continue;
+                foreach (int j in near)
+                    if (label[j] < 0) { label[j] = id; stack.Push(j); }
+            }
+        }
+        return label;
+    }
+
+    /// <summary>LOD0 triangle indices of one mesh of a parsed source, flattened.</summary>
+    private static List<int> CapTriangles(Source src, int mesh, ushort vc)
+    {
+        var s = src.S;
+        int mo = src.MeshStart + mesh * 36;
+        ushort si = BitConverter.ToUInt16(s, mo + 10), sc = BitConverter.ToUInt16(s, mo + 12);
+        var outp = new List<int>();
+        for (int su = 0; su < sc; su++)
+        {
+            int ss = src.SubmeshStart + (si + su) * 16;
+            uint so = BitConverter.ToUInt32(s, ss), cnt = BitConverter.ToUInt32(s, ss + 4);
+            for (uint t = 0; t + 2 < cnt; t += 3)
+            {
+                int q = src.Ib + (int)(so + t) * 2;
+                int a = BitConverter.ToUInt16(s, q), b = BitConverter.ToUInt16(s, q + 2), c = BitConverter.ToUInt16(s, q + 4);
+                // Clamped, never skipped: the emitter walks the same triangles in the same order and
+                // reads the result positionally, so dropping one here would shift every corner after it.
+                outp.Add(Math.Min(a, vc - 1)); outp.Add(Math.Min(b, vc - 1)); outp.Add(Math.Min(c, vc - 1));
+            }
+        }
+        return outp;
     }
 
     /// <summary>
