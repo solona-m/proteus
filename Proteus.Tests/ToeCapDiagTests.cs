@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Proteus.Services;
 using Xunit;
@@ -99,9 +100,19 @@ public class ToeCapDiagTests
             if (layers.Count == 0) continue;
 
             var lines = new List<string>();
+            // The bundled authored cap, if this working copy has one built.
+            byte[]? authored = null;
+            foreach (var cand in new[]
+                     {
+                         Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
+                         @"E:epos\Proteus\Proteus\Meshes	oecap.mdl",
+                     })
+                if (File.Exists(cand)) { authored = File.ReadAllBytes(cand); break; }
+            o.WriteLine(authored == null ? "no authored cap" : $"authored cap {authored.Length} bytes");
+
             var plain  = SecondSkinWriter.Build(bodies, plainLayers, baseModel, skip, out _);
             var capped = SecondSkinWriter.Build(bodies, layers, baseModel, skip, out var st,
-                null, m => lines.Add(m));
+                null, m => lines.Add(m), authored);
             foreach (var l in lines) o.WriteLine(l);
             o.WriteLine($"stats: triIn={st.TrianglesIn} triOut={st.TrianglesOut} verts={st.VerticesOut}");
 
@@ -154,6 +165,115 @@ public class ToeCapDiagTests
         o.WriteLine("wrote objs");
 
         foreach (var l in Submeshes(body)) o.WriteLine(l);
+    }
+
+    /// <summary>
+    /// Structural dump of an authored cap converted out of 3ds Max, before anything tries to merge it:
+    /// mesh and submesh layout, bone table, materials, and the geometry as an OBJ so it can be measured
+    /// against the foot it will sit on. Runs only when the file is there.
+    /// </summary>
+    [Fact]
+    public void DumpAuthoredCap()
+    {
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                "OneDrive", "Desktop", "cap.mdl");
+        if (!File.Exists(path)) return;
+        var m = File.ReadAllBytes(path);
+        o.WriteLine($"cap.mdl: {m.Length} bytes");
+
+        ushort U16(int x) => BitConverter.ToUInt16(m, x);
+        uint U32(int x) => BitConverter.ToUInt32(m, x);
+        int declCount = U16(12);
+        const int declCount0 = 17 * 8;
+        int declEnd = 0x44 + declCount * declCount0;
+        int strSize = (int)U32(declEnd + 4);
+        int strBlock = declEnd + 8;
+        int mh = strBlock + strSize;
+        // Field offsets exactly as SecondSkinWriter.Parse reads them.
+        ushort meshCount = U16(mh + 4), attrCount = U16(mh + 6), submeshCount = U16(mh + 8);
+        ushort matCount = U16(mh + 10), boneCount = U16(mh + 12), boneTableCount = U16(mh + 14);
+        o.WriteLine($"version {U32(0):X}, {declCount} vertex declarations, string block {strSize} bytes");
+        o.WriteLine($"meshes {meshCount}, submeshes {submeshCount}, materials {matCount}, "
+                  + $"bones {boneCount}, boneTables {boneTableCount}, shapes {U16(mh + 16)}");
+
+        byte flags2b = m[mh + 27];
+        ushort elemCountB = U16(mh + 24);
+        byte tsMeshB = m[mh + 26];
+        ushort tsSubB = U16(mh + 38);
+        int lodStartB = mh + 56 + elemCountB * 32;
+        int meshStartB = lodStartB + 3 * 60 + ((flags2b & 0x10) != 0 ? 3 * 40 : 0);
+        int attrStartB = meshStartB + meshCount * 36;
+        int subStartB = attrStartB + attrCount * 4 + tsMeshB * 20;
+        int matOffB = subStartB + submeshCount * 16 + tsSubB * 12;
+        int boneOffB = matOffB + matCount * 4;
+        string Str(uint rel)
+        {
+            int a = strBlock + (int)rel, e = a;
+            while (m[e] != 0) e++;
+            return System.Text.Encoding.ASCII.GetString(m, a, e - a);
+        }
+        for (int i = 0; i < matCount; i++) o.WriteLine($"  material {i}: {Str(U32(matOffB + i * 4))}");
+        for (int i = 0; i < boneCount; i++) o.WriteLine($"  bone {i}: {Str(U32(boneOffB + i * 4))}");
+
+        foreach (var l in Submeshes(m)) o.WriteLine(l);
+
+        // Per-vertex blend weights, resolved through the mesh's own bone table to names. The bone LIST
+        // only says which bones exist; this says where the weight actually went.
+        int p2 = boneOffB + boneCount * 4;
+        var tables = new ushort[boneTableCount][];
+        for (int i = 0; i < boneTableCount; i++)
+        {
+            int hp = p2 + i * 4;
+            ushort off = U16(hp), size = U16(hp + 2);
+            int data = hp + off * 4;
+            var t = new ushort[size];
+            for (int k = 0; k < size; k++) t[k] = U16(data + k * 2);
+            tables[i] = t;
+        }
+        uint vtxOffB = U32(16);
+        for (int mi = 0; mi < meshCount; mi++)
+        {
+            int mo = meshStartB + mi * 36;
+            ushort vc = U16(mo);
+            if (vc == 0) continue;
+            var decl = new List<(byte Stream, byte Offset, byte Type, byte Usage)>();
+            for (int e = 0; e < 17; e++)
+            {
+                int x = 0x44 + mi * declCount0 + e * 8;
+                if (m[x] == 0xFF) break;
+                decl.Add((m[x], m[x + 1], m[x + 2], m[x + 3]));
+            }
+            var wEl = decl.FirstOrDefault(d => d.Usage == 1);
+            var iEl = decl.FirstOrDefault(d => d.Usage == 2);
+            if (wEl.Type == 0 && iEl.Type == 0) { o.WriteLine($"  mesh {mi}: no blend data"); continue; }
+            uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] bs = { m[mo + 32], m[mo + 33], m[mo + 34] };
+            var table = mi < tables.Length ? tables[mi] : [];
+            var acc = new Dictionary<int, float>();
+            for (int v = 0; v < vc; v++)
+            {
+                int wa = (int)(vtxOffB + vbo[wEl.Stream]) + v * bs[wEl.Stream] + wEl.Offset;
+                int ia = (int)(vtxOffB + vbo[iEl.Stream]) + v * bs[iEl.Stream] + iEl.Offset;
+                for (int k = 0; k < 4; k++)
+                {
+                    float w = m[wa + k] / 255f;
+                    if (w <= 0f) continue;
+                    int local = m[ia + k];
+                    acc[local] = acc.GetValueOrDefault(local) + w;
+                }
+            }
+            float sum = acc.Values.Sum();
+            o.WriteLine($"  mesh {mi} weight by bone (table {table.Length} entries):");
+            foreach (var kv in acc.OrderByDescending(k => k.Value))
+            {
+                string nm = kv.Key < table.Length && table[kv.Key] < boneCount
+                    ? Str(U32(boneOffB + table[kv.Key] * 4)) : $"local {kv.Key}";
+                o.WriteLine($"     {nm,-14} {100 * kv.Value / sum,5:0.0}%");
+            }
+        }
+
+        WriteObj(m, Path.Combine(Scratch, "cap.obj"));
+        o.WriteLine("wrote cap.obj");
     }
 
     /// <summary>Per-mesh submesh layout of a SOURCE model — a generated triangle has to fit in one.</summary>

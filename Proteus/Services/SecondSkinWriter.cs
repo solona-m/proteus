@@ -285,7 +285,8 @@ public static class SecondSkinWriter
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, bool skipConnectors, out Stats stats,
-        IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null)
+        IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null,
+        byte[]? authoredCap = null)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
@@ -307,6 +308,18 @@ public static class SecondSkinWriter
                     diag($"shape '{name}' enabled but not present in source {i} — not baked");
         }
         Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
+
+        // The hand-modelled toe box, bundled with the plugin. It replaces the generated cap: a shell is
+        // a displaced copy of the body, so it sleeves each toe unless something covers the toe box, and
+        // generating that something is a topology problem that kept producing pinched, lumpy geometry.
+        // Merged like any other source — its own bone table joins the union by name and its vertices
+        // keep their blend indices, so it skins without anything being reinterpreted.
+        Source? capSrc = null;
+        if (authoredCap != null)
+        {
+            try { capSrc = Parse(authoredCap); }
+            catch (Exception ex) { diag?.Invoke($"authored cap failed to parse, ignoring: {ex.Message}"); }
+        }
         int baseMatCount = baseSrc?.MatNames.Count ?? 0;
         if (baseMatCount + layers.Count > MaxMaterials)
             throw new InvalidOperationException(
@@ -317,7 +330,8 @@ public static class SecondSkinWriter
         var boneNames = new List<string>();
         var boneIndex = new Dictionary<string, ushort>(StringComparer.Ordinal);
         var boneBBox = new List<byte[]>();
-        var boneSources = baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed;
+        var boneSources = (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed)
+            .Concat(capSrc != null ? new[] { capSrc } : []);
         foreach (var src in boneSources)
             for (int i = 0; i < src.BoneNames.Length; i++)
             {
@@ -348,7 +362,8 @@ public static class SecondSkinWriter
         // accumulators; `cov` null keeps all triangles; `mapBase`/`mapAppended` share the src's submesh bone
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
-                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors)
+                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
+                      (float U, float V)[]? overrideUV = null)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -373,6 +388,39 @@ public static class SecondSkinWriter
                 CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
                     out outStreams, out outStrides, out declBlock);
                 uv = [];   // no coverage trim for the host mesh
+
+                // A supplied UV still has to be written, and this path copies bytes rather than going
+                // through BuildVerbatim, so it does not happen by itself. The authored toe cap arrives
+                // with every vertex at (0,1) — one corner texel of the overlay, transparent — and looks
+                // perfect in a modelling package while rendering as nothing at all in game.
+                if (overrideUV is { } ouv2 && ouv2.Length == vc)
+                {
+                    VElem? u0 = null, u1 = null;
+                    foreach (var el in decl)
+                        if (el.Usage == UseUV) { if (el.UsageIndex == 0) u0 ??= el; else u1 ??= el; }
+                    if (u0 is { } ue2)
+                    {
+                        // Shifted onto the [0,1] tile the same way every other mesh is: a body UV can
+                        // live in another cell, and the overlay is a single tile.
+                        float minU = float.MaxValue, minV = float.MaxValue;
+                        for (int i = 0; i < vc; i++)
+                        { minU = MathF.Min(minU, ouv2[i].U); minV = MathF.Min(minV, ouv2[i].V); }
+                        float capUOff = MathF.Floor(minU), capVOff = MathF.Floor(minV);
+                        bool half0 = ue2.Type is 13 or 14;
+                        bool zwOk = ue2.Type is 3 or 14;
+                        int zwOff2 = ue2.Offset + (ue2.Type == 3 ? 8 : 4);
+                        for (int i = 0; i < vc; i++)
+                        {
+                            float u = ouv2[i].U - capUOff, v = ouv2[i].V - capVOff;
+                            int so = i * outStrides[ue2.Stream];
+                            WriteUV2(outStreams[ue2.Stream], so + ue2.Offset, half0, u, v);
+                            if (zwOk) WriteUV2(outStreams[ue2.Stream], so + zwOff2, ue2.Type == 14, u, v);
+                            if (u1 is { } ue3)
+                                WriteUV2(outStreams[ue3.Stream], i * outStrides[ue3.Stream] + ue3.Offset,
+                                         ue3.Type is 13 or 14, u, v);
+                        }
+                    }
+                }
             }
             else
             {
@@ -382,7 +430,8 @@ public static class SecondSkinWriter
                 var capTris = wantCap ? MeshTriangles(src, srcSubIdx, srcSubCount) : null;
                 BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv,
-                    out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag);
+                    out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag,
+                    buildCapGeometry: capSrc == null, overrideUV: overrideUV);
             }
 
             // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
@@ -589,6 +638,51 @@ public static class SecondSkinWriter
             float push = BaseOffset + LayerSeparation * layer;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
+            // Where an authored cap fills the toe box, pull the CUT in a little. The painted map says
+            // where a cap is wanted, not where the modelled one reaches, and it runs about 0.002 past
+            // the cap's rear edge — leaving a strip of bare skin whose edge follows the map's texel
+            // grid, which is what makes it look jagged. Eroding the map is enough: the cap then laps
+            // over the shell that survives instead of meeting it exactly.
+            var cutDef = def;
+            if (capSrc != null && def.ToeCap is { } paint && def.ToeCapWidth > 0 && def.ToeCapHeight > 0)
+            {
+                int mwp = def.ToeCapWidth, mhp = def.ToeCapHeight;
+                var eroded = (byte[])paint.Clone();
+                for (int step = 0; step < CapCutErode; step++)
+                {
+                    var next = (byte[])eroded.Clone();
+                    for (int y = 0; y < mhp; y++)
+                        for (int x = 0; x < mwp; x++)
+                        {
+                            if (eroded[y * mwp + x] < 128) continue;
+                            bool edge = false;
+                            for (int dy = -1; dy <= 1 && !edge; dy++)
+                                for (int dx = -1; dx <= 1 && !edge; dx++)
+                                {
+                                    int nx = x + dx, ny = y + dy;
+                                    if (nx < 0 || ny < 0 || nx >= mwp || ny >= mhp || eroded[ny * mwp + nx] < 128)
+                                        edge = true;
+                                }
+                            if (edge) next[y * mwp + x] = 0;
+                        }
+                    eroded = next;
+                }
+                int lit = 0;
+                foreach (byte px in eroded) if (px >= 128) lit++;
+                diag?.Invoke($"authored cap: cut map eroded by {CapCutErode}, {lit} texels remain");
+                cutDef = new SecondSkinLayer
+                {
+                    MaterialName = def.MaterialName,
+                    Coverage = def.Coverage,
+                    CoverageWidth = def.CoverageWidth,
+                    CoverageHeight = def.CoverageHeight,
+                    ToeCap = eroded,
+                    ToeCapWidth = mwp,
+                    ToeCapHeight = mhp,
+                    ToeCapStrength = def.ToeCapStrength,
+                };
+            }
+
             foreach (var src in parsed)
             {
                 var s = src.S;
@@ -613,9 +707,40 @@ public static class SecondSkinWriter
                     if (srcMat >= src.MatNames.Count || SkinMaterialBodyType(src.MatNames[srcMat]) == null)
                         continue;
 
-                    EmitMesh(src, m, matIndex, push, preserve: false, cov: def, mapBase, ref mapAppended,
+                    EmitMesh(src, m, matIndex, push, preserve: false, cov: cutDef, mapBase, ref mapAppended,
                         dropConnectors: skipConnectors);
                 }
+            }
+
+            // Graft the authored cap on for any layer that asked for one, wearing that layer's material.
+            // Emitted VERBATIM for now — no push, no coverage trim, no displacement: it is already
+            // modelled where it belongs on the foot it was authored against. Fitting it to a different
+            // foot comes later and is a separate step; proving the merge itself comes first.
+            if (capSrc is { } cs && def.ToeCap != null)
+            {
+                // The cap is authored WITHOUT UVs — every vertex arrives at (0,1), so without this it
+                // samples one corner texel of the overlay, which is transparent, and the whole cap is
+                // invisible in game while looking perfectly correct in a modelling package.
+                //
+                // Give it the body's UV by dropping each vertex onto the skin underneath and taking the
+                // coordinate where it lands. That is what makes the stocking's texture AND its alpha
+                // continue across the cap, carried over the gaps between toes from the flanks either
+                // side. Nothing here needs the author to unwrap anything: fresh UV space would have no
+                // art in it at all, since the overlays are painted in the body's layout.
+
+                int capMapBase = submeshBoneMap.Count;
+                bool capMapAppended = false;
+                int cEnd = cs.Lod0MeshIndex + cs.Lod0MeshCount;
+                int emitted = 0;
+                for (int m = cs.Lod0MeshIndex; m < cEnd && m < cs.MeshCount; m++)
+                {
+                    if (BitConverter.ToUInt16(cs.S, cs.MeshStart + m * 36) == 0) continue;   // empty mesh
+                    EmitMesh(cs, m, matIndex, 0f, preserve: true, cov: null, capMapBase,
+                             ref capMapAppended, dropConnectors: false,
+                             overrideUV: ProjectCapUV(cs, m, sources, diag));
+                    emitted++;
+                }
+                diag?.Invoke($"authored toe cap: grafted {emitted} mesh(es) onto layer {layer}");
             }
         }
 
@@ -1027,7 +1152,8 @@ public static class SecondSkinWriter
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
         out Vec3[]? capSrcPos, out Vec3[]? capOutPos, out ToeCapPlan? capPlan,
-        SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null)
+        SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
+        bool buildCapGeometry = true, (float U, float V)[]? overrideUV = null)
     {
         capPlan = null;
         VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
@@ -1102,6 +1228,13 @@ public static class SecondSkinWriter
             if (uv0 is { } ue) { ReadTyped(s, SrcAddr(ue.Stream, i, ue.Offset), ue.Type, tmp); uvs[i] = (tmp[0], tmp[1]); }
         }
 
+        // A supplied UV replaces whatever the mesh carried. The authored toe cap has none — every one
+        // of its vertices arrives at (0,1) — so it would otherwise sample a single corner texel of the
+        // overlay, which is transparent, and render as nothing at all. Substituted HERE so the shift
+        // and the write below treat it exactly like a mesh's own coordinate.
+        if (overrideUV is { } ouv && ouv.Length == vc)
+            for (int i = 0; i < vc; i++) uvs[i] = ouv[i];
+
         // Normalize the mesh's UV into the [0,1] tile and force uv1 = uv0. The overlay is a single [0,1]
         // image, but a body UV can live in another cell (vanilla U∈[1,2], bibo V∈[-1,0]); shift the WHOLE
         // mesh by the integer floor of its minimum UV. A per-mesh (not per-vertex) shift keeps islands
@@ -1136,7 +1269,7 @@ public static class SecondSkinWriter
         {
             var plan = uv0 is not null && cap is { ToeCap: { } tc } && capTris is not null
                 ? ToeCapSolve(basePos, baseNrm, uvs, capTris, tc, cap.ToeCapWidth, cap.ToeCapHeight,
-                              cap.ToeCapStrength, capLog)
+                              cap.ToeCapStrength, capLog, buildCapGeometry)
                 : null;
             var delta = plan?.Delta;
             capPlan = plan;
@@ -1261,6 +1394,20 @@ public static class SecondSkinWriter
     /// <summary>Share of the cut region's vertices the rings may consume, leaving the rest as slack.</summary>
     private const float DonorBudget = 0.75f;
 
+    /// <summary>
+    /// Texels the toe-cap map is pulled in by before it cuts, when an authored cap is filling the hole.
+    /// The map is painted to say where a cap is wanted; the modelled mesh decides where one actually is,
+    /// and it does not reach as far.
+    /// </summary>
+    private const int CapCutErode = 3;
+
+    /// <summary>
+    /// Smallest island, as a fraction of the largest, that the authored cap will take UVs from. Keeps
+    /// the feet and rejects the toenails, which carry their own UV island and are often the nearest
+    /// surface to the cap — projecting onto one stretches a triangle across the gap between islands.
+    /// </summary>
+    private const float ProjectIslandFloor = 0.25f;
+
     /// <summary>Rim vertices needed before a cut boundary is a usable loop to sew onto.</summary>
     private const int MinRimNodes = 8;
 
@@ -1382,6 +1529,13 @@ public static class SecondSkinWriter
     private const float RelaxRate = 0.5f;
 
     /// <summary>
+    /// How firmly the relax holds each vertex in its own ring's plane, 1 being rigidly. Rigid keeps the
+    /// last rings from walking back off the toe tips, but it also means a bump along a ring can only be
+    /// smoothed across the section and never along the foot, and the surface converges lumpy.
+    /// </summary>
+    private const float RingPlaneHold = 0.5f;
+
+    /// <summary>
     /// How far the cap stands off the outline it is built from, as a fraction of the cross-section's own
     /// radius — the fabric's thickness, in effect. Zero would leave it tangent to the toes underneath and
     /// they would poke through the moment the foot deforms.
@@ -1407,6 +1561,23 @@ public static class SecondSkinWriter
     /// detached sliver — being treated as its own toe box.
     /// </summary>
     private const int MinToeCapNodes = 24;
+
+    /// <summary>
+    /// Fewest slots a ring is built with, however small its cross-section gets. Below a handful the
+    /// ring stops describing the shape at all.
+    /// </summary>
+    private const int MinRingSlots = 12;
+
+    /// <summary>Closest two neighbouring slots in a ring may be smoothed, in edge lengths.</summary>
+    private const float SlotMinGap = 0.35f;
+
+
+    /// <summary>
+    /// What fraction of the rim's slot count an average ring is expected to carry, for budgeting donors.
+    /// Only an estimate: too high and the cap gets fewer rings than it could afford, too low and a ring
+    /// runs the pool dry part way and is abandoned.
+    /// </summary>
+    private const float RingWidthEstimate = 0.7f;
 
     /// <summary>Points a cross-section needs before its hull is a meaningful outline.</summary>
     private const int MinSliceNodes = 8;
@@ -1526,7 +1697,8 @@ public static class SecondSkinWriter
 
     private static ToeCapPlan? ToeCapSolve(
         Vec3[] pos, Vec3[] nrm, (float U, float V)[] uv, ushort[] tris,
-        byte[] mask, int mw, int mh, float strength, Action<string>? capLogSink = null)
+        byte[] mask, int mw, int mh, float strength, Action<string>? capLogSink = null,
+        bool buildGeometry = true)
     {
         int vc = pos.Length;
         if (vc == 0 || mw <= 0 || mh <= 0 || strength <= 0f || mask.Length < mw * mh) return null;
@@ -1614,6 +1786,12 @@ public static class SecondSkinWriter
         var target = new Vec3[nodeCount];
         var hasTarget = new bool[nodeCount];
         var dropNode = new bool[nodeCount];
+        // Which ring and slot placed each cap vertex, so a defect in the finished mesh can be traced
+        // back to the construction that made it instead of guessed at from its geometry.
+        var fromRing = new int[nodeCount];
+        var fromSlot = new int[nodeCount];
+        Array.Fill(fromRing, -1);
+        Array.Fill(fromSlot, -1);
         // How much of this node's placement was a bridge across empty space rather than the surface it
         // lies on. 1 means nothing is under it, so nothing may pull it down; the closing patch keeps that
         // default so the rounded end is never dragged back onto the toe tips.
@@ -1674,6 +1852,17 @@ public static class SecondSkinWriter
             //
             // Only ever a SMALL island: a mask painted over a whole foot would otherwise swallow the foot.
             if (core.Count > MaxCoreFraction * islandSize[c]) continue;   // marked by the pre-pass above
+
+            // An authored cap is filling this region, so only the CUT is wanted: take the toe box out
+            // and leave it to the modelled mesh. Everything past here — the swept rings, the dome, the
+            // closing patch, the relax and the clearance passes that argue with it — exists solely to
+            // invent a surface to put back, and it is exactly what the authored cap replaces.
+            if (!buildGeometry)
+            {
+                foreach (int n in core) cutNode[n] = true;
+                capped = true;
+                continue;
+            }
 
             float cx = 0, cy = 0, cz = 0, wsum = 0;
             foreach (int n in core)
@@ -1845,10 +2034,18 @@ public static class SecondSkinWriter
             // Rings reuse vertices from the cut region, so the pool is finite: ask for more than it holds
             // and the last rings are stitched from whatever is left, dragging vertices in from across the
             // foot. Budget for slack so each slot still gets a donor that was already near it.
-            // Leave room for the grid that closes the end: roughly a quarter of the rim squared, since it
-            // spans the opening rather than converging on a point.
-            int gridCost = (rimCount / 4) * (rimCount / 4);
-            int affordable = (int)(core.Count * DonorBudget - gridCost) / Math.Max(rimCount, 1) - TipRings - 1;
+            // Leave room for the grid that closes the end. It spans the LAST DOME RING, not the rim: the
+            // dome rings carry slots in proportion to their radius, so the opening is a fraction of the
+            // rim's width and the grid across it a fraction of the rim's cost.
+            float lastShrink = MathF.Cos((float)TipRings / (TipRings + 1) * MathF.PI / 2f);
+            int gridSide = Math.Max(2, (int)(rimCount * lastShrink) / 4);
+            int gridCost = gridSide * gridSide;
+            // And a ring no longer costs the rim's worth of donors either — it carries slots for its own
+            // perimeter, and the cross-section narrows toward the toes. Budgeting as though every ring
+            // were full width is what held the ring count down and left the cells twice as long along
+            // the foot as they are around it.
+            int ringCost = Math.Max(1, (int)(rimCount * RingWidthEstimate));
+            int affordable = (int)(core.Count * DonorBudget - gridCost) / ringCost - TipRings - 1;
             int ringCount = Math.Clamp((int)MathF.Round(span / MathF.Max(edgeLen * RingDensity, 1e-6f)),
                                        MinRings, Math.Clamp(affordable, MinRings, MaxRings));
             float ringStep = span / ringCount;
@@ -1929,26 +2126,10 @@ public static class SecondSkinWriter
                 ringAt[r] = t;
                 ringClear[r] = clear;
 
-                // Which slots are BRIDGING and which are simply lying on a toe. A bridging slot's ray
-                // crosses empty space to reach the outline, so the outline sits well beyond anything
-                // actually there; a slot on a toe meets the surface right where the outline is. The relax
-                // below leans on this: a vertex on a toe may settle inward and even the surface out, but
-                // one spanning a gap has nothing under it and would simply fall into the crevice.
-                var dirs = new (float X, float Y)[rimCount];
-                var hullRad = new float[rimCount];
-                var reach = new float[rimCount];
-                for (int j = 0; j < rimCount; j++)
-                {
-                    float even = rimAngle[0] + MathF.Tau * j / rimCount;
-                    float a = rimAngle[j] + (even - rimAngle[j]) * ((float)r / ringCount);
-                    dirs[j] = (MathF.Cos(a), MathF.Sin(a));
-                    hullRad[j] = HullRadius(hull, centre, dirs[j].X, dirs[j].Y);
-                }
-                // The outline the slice points actually trace, sampled at every slot. Bucket them by angle
-                // about the centre, keep the farthest in each bucket, then fill the empty buckets by
-                // interpolating round the circle. Testing each slot against a cone of pi/rimCount instead —
-                // a window narrower than the angular spacing of the points themselves — leaves most slots
-                // finding nothing at all, and every one of those falls back to the hull.
+                // The outline the slice points actually trace: bucket them by angle about the centre,
+                // keep the farthest in each bucket, then fill the empty buckets by interpolating round
+                // the circle. This is read BEFORE the slots are chosen, because how many slots the ring
+                // should carry depends on how big it is.
                 int bins = Math.Max(rimCount, MinOutlineBins);
                 var binR = new float[bins];
                 for (int b = 0; b < bins; b++) binR[b] = -1f;
@@ -1958,8 +2139,8 @@ public static class SecondSkinWriter
                     float ox = q.X - centre.X, oy = q.Y - centre.Y;
                     float len = MathF.Sqrt(ox * ox + oy * oy);
                     if (len <= 1e-9f) continue;
-                    float ang = MathF.Atan2(oy, ox);
-                    int b = (int)MathF.Floor((ang + MathF.PI) / MathF.Tau * bins);
+                    float ang0 = MathF.Atan2(oy, ox);
+                    int b = (int)MathF.Floor((ang0 + MathF.PI) / MathF.Tau * bins);
                     b = Math.Clamp(b, 0, bins - 1);
                     if (binR[b] < 0f) filled++;
                     binR[b] = MathF.Max(binR[b], len);
@@ -1988,27 +2169,84 @@ public static class SecondSkinWriter
                     binR = solid;
                 }
 
-                for (int j = 0; j < rimCount; j++)
+                float OutlineRadius(float ang)
                 {
-                    float ang = MathF.Atan2(dirs[j].Y, dirs[j].X);
-                    float f = (ang + MathF.PI) / MathF.Tau * bins - 0.5f;
-                    int b0 = (int)MathF.Floor(f);
-                    float w = f - b0;
-                    reach[j] = binR[((b0 % bins) + bins) % bins] * (1f - w)
-                             + binR[(((b0 + 1) % bins) + bins) % bins] * w;
+                    float f2 = (ang + MathF.PI) / MathF.Tau * bins - 0.5f;
+                    int b0 = (int)MathF.Floor(f2);
+                    float w2 = f2 - b0;
+                    return binR[((b0 % bins) + bins) % bins] * (1f - w2)
+                         + binR[(((b0 + 1) % bins) + bins) % bins] * w2;
                 }
+
+                // HOW MANY SLOTS THIS RING CARRIES. Its own perimeter, at the mesh's own edge length.
+                // Every ring used to carry the rim's count whatever its size, and the cross-section
+                // narrows toward the toes, so the slots bunched — measured at about 60% of an edge
+                // apart around the cap while the rings sat 110% apart along it. Cells came out twice as
+                // long as they were wide, and where two slots landed on top of each other the strip
+                // between them was a sliver. It also wasted the donor pool, which is what limited how
+                // many rings the cap could afford in the first place.
+                //
+                // The FIRST ring keeps the rim's count: each rim slot waits at the rim until the sweep
+                // passes it (joinAt), and that staircase only means anything while ring slot j is rim
+                // slot j.
+                float perim = 0f;
+                {
+                    var prevP = (X: 0f, Y: 0f);
+                    bool first = true;
+                    var firstP = (X: 0f, Y: 0f);
+                    for (int b = 0; b <= bins; b++)
+                    {
+                        float ang0 = -MathF.PI + MathF.Tau * (b % bins) / bins;
+                        float rr0 = binR[b % bins];
+                        var pt = (X: MathF.Cos(ang0) * rr0, Y: MathF.Sin(ang0) * rr0);
+                        if (first) { firstP = pt; first = false; }
+                        else perim += MathF.Sqrt((pt.X - prevP.X) * (pt.X - prevP.X) + (pt.Y - prevP.Y) * (pt.Y - prevP.Y));
+                        prevP = pt;
+                    }
+                    perim += MathF.Sqrt((firstP.X - prevP.X) * (firstP.X - prevP.X) + (firstP.Y - prevP.Y) * (firstP.Y - prevP.Y));
+                }
+
+                int width = rimCount;
+                if (r > 1)
+                {
+                    width = (int)MathF.Round(perim / MathF.Max(edgeLen, 1e-6f));
+                    width = Math.Clamp(width, Math.Min(MinRingSlots, rimCount), rimCount);
+                }
+                bool evenSlots = width != rimCount;
+
+                // Which slots are BRIDGING and which are simply lying on a toe. A bridging slot's ray
+                // crosses empty space to reach the outline, so the outline sits well beyond anything
+                // actually there; a slot on a toe meets the surface right where the outline is. The relax
+                // below leans on this: a vertex on a toe may settle inward and even the surface out, but
+                // one spanning a gap has nothing under it and would simply fall into the crevice.
+                var dirs = new (float X, float Y)[width];
+                var hullRad = new float[width];
+                var reach = new float[width];
+                var ang = new float[width];
+                for (int j = 0; j < width; j++)
+                    ang[j] = evenSlots
+                        ? rimAngle[0] + MathF.Tau * j / width          // its own even spacing
+                        : rimAngle[j] + (rimAngle[0] + MathF.Tau * j / rimCount - rimAngle[j]) * ((float)r / ringCount);
+
+                for (int j = 0; j < width; j++)
+                {
+                    dirs[j] = (MathF.Cos(ang[j]), MathF.Sin(ang[j]));
+                    hullRad[j] = HullRadius(hull, centre, dirs[j].X, dirs[j].Y);
+                    reach[j] = OutlineRadius(ang[j]);
+                }
+
                 // Sitting on the hull is right only where the ray crosses empty space. Over the crown of a
                 // toe the hull is a CHORD strung to the next toe's outer corner, and placing the slot on it
                 // floats the cap above the toe by that chord's sagitta — further over the second toe, whose
                 // chord is longer. So blend from where the skin actually is toward the hull, by how much
                 // space the ray crosses.
                 float bridgeAt = edgeLen * BridgeSpan;
-                var fill = new float[rimCount];
-                var spans = new bool[rimCount];
-                for (int j = 0; j < rimCount; j++)
+                var fill = new float[width];
+                var spans = new bool[width];
+                for (int j = 0; j < width; j++)
                 {
-                    // No slice point in this slot's cone: nothing is known to be under it, so it bridges.
-                    // Without this guard reach[j] is 0 and the slot collapses to the section's centre.
+                    // Nothing known to be under this slot: it bridges. Without the guard reach is 0 and
+                    // the slot collapses to the section's centre.
                     if (reach[j] <= 0f) { fill[j] = 1f; spans[j] = true; continue; }
                     float u = Math.Clamp((hullRad[j] - reach[j]) / bridgeAt, 0f, 1f);
                     fill[j] = u * u * (3f - 2f * u);   // smoothstep: a hard cut steps where a toe ends
@@ -2019,7 +2257,7 @@ public static class SecondSkinWriter
                 // Donors claimed here are released again if the ring turns out unusable. Left claimed,
                 // they keep the position the abandoned ring gave them while belonging to no ring at all —
                 // so nothing relaxes them and nothing checks them against the skin.
-                var claimed = new List<int>(rimCount);
+                var claimed = new List<int>(width);
                 void Abandon()
                 {
                     foreach (int taken2 in claimed)
@@ -2030,10 +2268,11 @@ public static class SecondSkinWriter
                     }
                 }
 
-                var ring = new List<int>(rimCount);
-                for (int j = 0; j < rimCount; j++)
+                var ring = new List<int>(width);
+                for (int j = 0; j < width; j++)
                 {
-                    if (r < joinAt[j]) { ring.Add(-1); continue; }   // this slot is still back at the rim
+                    // Only while this ring is still slot-for-slot with the rim does waiting mean anything.
+                    if (!evenSlots && r < joinAt[j]) { ring.Add(-1); continue; }
 
                     float dx = dirs[j].X, dy = dirs[j].Y;
                     float rad = (reach[j] + (hullRad[j] - reach[j]) * fill[j]) * clear;
@@ -2053,9 +2292,10 @@ public static class SecondSkinWriter
                     target[donor] = new Vec3(p.X - start[donor].X, p.Y - start[donor].Y, p.Z - start[donor].Z);
                     hasTarget[donor] = true;
                     nodeFill[donor] = fill[j];
+                    fromRing[donor] = r; fromSlot[donor] = j;
                     ring.Add(donor);
                 }
-                if (ring.Count == rimCount) return ring;
+                if (ring.Count == width) return ring;
                 Abandon();
                 return null;
             }
@@ -2199,6 +2439,7 @@ public static class SecondSkinWriter
                         int near = chain[lastFull][Math.Clamp(
                             (int)MathF.Round((float)j * prevWidth / width2), 0, prevWidth - 1)];
                         nodeFill[donor] = near >= 0 ? nodeFill[near] : 1f;
+                        fromRing[donor] = 1000 + k; fromSlot[donor] = j;
                         dome.Add(donor);
                     }
 
@@ -2341,11 +2582,19 @@ public static class SecondSkinWriter
                             var f2 = Flatten(rel);
                             // Its OWN ring's plane. Clamping to the last full ring's instead flattens
                             // every dome ring back onto it, which folds the rounded end inside out.
+                            //
+                            // Held only PARTLY. Clamped hard the relax converges lumpy — measured at 22%
+                            // of an edge and unchanged by four times the passes — because a bump along a
+                            // ring can only be smoothed across the section, never along the foot. A hand
+                            // relax over the same region reaches 6% because it moves in 3D.
                             float t2 = chainAt[r];
-                            rel = new Vec3(
+                            var flat = new Vec3(
                                 mid.X + axis.Value.X * t2 + eu.X * f2.X + ev.X * f2.Y,
                                 mid.Y + axis.Value.Y * t2 + eu.Y * f2.X + ev.Y * f2.Y,
                                 mid.Z + axis.Value.Z * t2 + eu.Z * f2.X + ev.Z * f2.Y);
+                            rel = new Vec3(rel.X + (flat.X - rel.X) * RingPlaneHold,
+                                           rel.Y + (flat.Y - rel.Y) * RingPlaneHold,
+                                           rel.Z + (flat.Z - rel.Z) * RingPlaneHold);
                         }
 
                         // Free to settle inward — down into a toe gap is fine, and reads better than a
@@ -2371,6 +2620,24 @@ public static class SecondSkinWriter
                                     rel.Y - outward.Y * (side - allow),
                                     rel.Z - outward.Z * (side - allow));
                         }
+                        // ...and never on top of the slot beside it. Smoothing pulls neighbours together
+                        // as readily as it evens them out, and where a ring dips into the valley between
+                        // two toes it can close a pair to almost nothing — the worst face in the cap came
+                        // from one, at 2% of an edge. Turning the relax off avoids it and costs far more
+                        // elsewhere (faces past aspect 6 go from 15 to 70), so hold the spacing instead.
+                        float keep = edgeLen * SlotMinGap;
+                        for (int nbSide = 0; nbSide < 2; nbSide++)
+                        {
+                            int nbIdx = chain[r][(j + (nbSide == 0 ? 1 : width - 1)) % width];
+                            if (nbIdx < 0 || nbIdx == n) continue;
+                            var np2 = Placed(nbIdx);
+                            float ddx = rel.X - np2.X, ddy = rel.Y - np2.Y, ddz = rel.Z - np2.Z;
+                            float dist = MathF.Sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                            if (dist >= keep || dist <= 1e-9f) continue;
+                            float grow = (keep - dist) / dist;
+                            rel = new Vec3(rel.X + ddx * grow, rel.Y + ddy * grow, rel.Z + ddz * grow);
+                        }
+
                         moved.Add((n, rel));
                     }
 
@@ -2632,6 +2899,7 @@ public static class SecondSkinWriter
                         taken.Add(donor);
                         target[donor] = new Vec3(p.X - start[donor].X, p.Y - start[donor].Y, p.Z - start[donor].Z);
                         hasTarget[donor] = true;
+                        fromRing[donor] = 2000; fromSlot[donor] = i * 1000 + j;
                         gridV[i, j] = donor;
 
                         // These are made after the relax has run, so they have to be checked against the
@@ -2993,6 +3261,21 @@ public static class SecondSkinWriter
 
                         var cand = new Vec3(p2.X + dx * RelaxRate, p2.Y + dy * RelaxRate, p2.Z + dz * RelaxRate);
 
+                        // ...and never on top of a neighbour. Sliding vertices together evens the
+                        // spacing as readily as it evens the shape, and three of the four collapsed
+                        // pairs left in the cap were made here — traced back to adjacent slots of one
+                        // ring, 2% of an edge apart, which is what shows in game as a black fleck.
+                        float keep2 = tanEdge * SlotMinGap;
+                        foreach (int k in nb)
+                        {
+                            var np3 = Now(k);
+                            float gx = cand.X - np3.X, gy = cand.Y - np3.Y, gz = cand.Z - np3.Z;
+                            float gd = MathF.Sqrt(gx * gx + gy * gy + gz * gz);
+                            if (gd >= keep2 || gd <= 1e-9f) continue;
+                            float grow2 = (keep2 - gd) / gd;
+                            cand = new Vec3(cand.X + gx * grow2, cand.Y + gy * grow2, cand.Z + gz * grow2);
+                        }
+
                         // Never far from where it started, however many passes run.
                         var o = from[n];
                         float tx = cand.X - o.X, ty = cand.Y - o.Y, tz = cand.Z - o.Z;
@@ -3009,6 +3292,36 @@ public static class SecondSkinWriter
                 }
             }
 
+        }
+
+        if (capLogSink != null && capped)
+        {
+            var placed = new List<int>();
+            for (int n = 0; n < nodeCount; n++) if (hasTarget[n]) placed.Add(n);
+            var all = new List<int>();
+            for (int n = 0; n < nodeCount; n++) if (cutNode[n] || hasTarget[n]) all.Add(n);
+            float near = MeanEdgeLength(start, adj, all) * 0.15f;
+            Vec3 Fin(int n) => new(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
+            string Where(int n) => fromRing[n] switch
+            {
+                -1 => "rim",
+                2000 => $"patch[{fromSlot[n] / 1000},{fromSlot[n] % 1000}]",
+                >= 1000 => $"dome{fromRing[n] - 1000} slot {fromSlot[n]}",
+                _ => $"ring {fromRing[n]} slot {fromSlot[n]}",
+            };
+            int reported = 0;
+            for (int a = 0; a < placed.Count && reported < 12; a++)
+                for (int b = a + 1; b < placed.Count && reported < 12; b++)
+                {
+                    var pa = Fin(placed[a]);
+                    var pb = Fin(placed[b]);
+                    float dx = pa.X - pb.X, dy = pa.Y - pb.Y, dz = pa.Z - pb.Z;
+                    float d = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                    if (d >= near) continue;
+                    capLogSink($"collapsed pair {d:F6} apart at ({pa.X:F4},{pa.Y:F4},{pa.Z:F4}): "
+                             + $"{Where(placed[a])} <-> {Where(placed[b])}");
+                    reported++;
+                }
         }
 
         // ── UVs for the rebuilt surface ────────────────────────────────────────────────────────────
@@ -3417,6 +3730,205 @@ public static class SecondSkinWriter
             nodeOf[i] = n;
         }
         return nodeOf;
+    }
+
+    /// <summary>
+    /// UVs for an authored mesh that has none, taken from the body it is grafted onto: drop each vertex
+    /// onto the nearest skin triangle and interpolate that triangle's coordinate where it lands.
+    /// <para/>
+    /// This is what carries the overlay's texture — and its alpha — across the cap, continued over the
+    /// gaps between the toes from the flanks either side. Unwrapping the cap into fresh UV space
+    /// instead would be worse than useless: the overlays are painted in the BODY's layout and have
+    /// nothing anywhere else, so the cap would sample empty texture.
+    /// </summary>
+    private static (float U, float V)[]? ProjectCapUV(Source cap, int mesh, IReadOnlyList<byte[]> bodies,
+                                                      Action<string>? diag)
+    {
+        var s = cap.S;
+        int mo = cap.MeshStart + mesh * 36;
+        ushort vc = BitConverter.ToUInt16(s, mo);
+        if (vc == 0) return null;
+
+        var decl = mesh < cap.Decls.Length ? cap.Decls[mesh] : [];
+        VElem? pos = null;
+        foreach (var el in decl) if (el.Usage == UsePosition) { pos = el; break; }
+        if (pos is not { } pe) return null;
+
+        uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
+                       BitConverter.ToUInt32(s, mo + 28) };
+        byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+        var cp = new Vec3[vc];
+        {
+            Span<float> tmp = stackalloc float[4];
+            for (int i = 0; i < vc; i++)
+            {
+                ReadTyped(s, cap.Vb + (int)vbo[pe.Stream] + i * bs[pe.Stream] + pe.Offset, pe.Type, tmp);
+                cp[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
+            }
+        }
+
+        // Every body's LOD0 SKIN geometry, in one list. Reuses the reader the seam analysis uses, which
+        // already applies the same skin-only filter the shell builder does.
+        var tri = new List<(Vec3 A, Vec3 B, Vec3 C, (float U, float V) Ua, (float U, float V) Ub, (float U, float V) Uc, Vec3 Ctr)>();
+        foreach (var body in bodies)
+        {
+            if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt)) continue;
+
+            // TOENAILS ARE NOT A PROJECTION TARGET. They are skin by material, they sit proud of the
+            // flesh, and over the toes they are frequently the NEAREST surface — but they carry their
+            // own UV island. A cap triangle with one corner landing on a nail and another on skin then
+            // stretches clean across the gap between two islands and samples whatever lies between,
+            // which shows as a jagged transparent band through the middle of the cap.
+            //
+            // They are separate connected components, so drop the small ones and keep the feet.
+            int nv = bp.Length / 3;
+            var parent = new int[nv];
+            for (int i = 0; i < nv; i++) parent[i] = i;
+            int Find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+            void Union(int x, int y) { int rx = Find(x), ry = Find(y); if (rx != ry) parent[rx] = ry; }
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+            {
+                if (bt[t] >= nv || bt[t + 1] >= nv || bt[t + 2] >= nv) continue;
+                Union(bt[t], bt[t + 1]); Union(bt[t + 1], bt[t + 2]);
+            }
+            var size = new Dictionary<int, int>();
+            for (int i = 0; i < nv; i++)
+            {
+                int r = Find(i);
+                size[r] = size.GetValueOrDefault(r) + 1;
+            }
+            int biggest = 0;
+            foreach (int v in size.Values) biggest = Math.Max(biggest, v);
+            // A foot is within a fraction of the other foot's size; a nail is a small fraction of either.
+            int keepAbove = (int)(biggest * ProjectIslandFloor);
+
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+            {
+                int a = bt[t], b = bt[t + 1], c = bt[t + 2];
+                if ((a + 1) * 3 > bp.Length || (b + 1) * 3 > bp.Length || (c + 1) * 3 > bp.Length) continue;
+                if (size.GetValueOrDefault(Find(a)) < keepAbove) continue;
+                var pa = new Vec3(bp[a * 3], bp[a * 3 + 1], bp[a * 3 + 2]);
+                var pb = new Vec3(bp[b * 3], bp[b * 3 + 1], bp[b * 3 + 2]);
+                var pc = new Vec3(bp[c * 3], bp[c * 3 + 1], bp[c * 3 + 2]);
+                tri.Add((pa, pb, pc, (bu[a * 2], bu[a * 2 + 1]), (bu[b * 2], bu[b * 2 + 1]),
+                         (bu[c * 2], bu[c * 2 + 1]), new Vec3((pa.X + pb.X + pc.X) / 3f,
+                                                              (pa.Y + pb.Y + pc.Y) / 3f,
+                                                              (pa.Z + pb.Z + pc.Z) / 3f)));
+            }
+        }
+        if (tri.Count == 0) { diag?.Invoke("authored cap: no body geometry to project UVs from"); return null; }
+
+        var outUV = new (float U, float V)[vc];
+        float worst = 0f;
+        for (int i = 0; i < vc; i++)
+        {
+            var p = cp[i];
+            float bestD = float.MaxValue;
+            (float U, float V) best = default;
+            foreach (var (a, b, c, ua, ub, uc, ctr) in tri)
+            {
+                float cx = ctr.X - p.X, cy = ctr.Y - p.Y, cz = ctr.Z - p.Z;
+                if (cx * cx + cy * cy + cz * cz > bestD + 0.01f) continue;
+                var q = ClosestOnTriangle(p, a, b, c);
+                float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+                float d = dx * dx + dy * dy + dz * dz;
+                if (d >= bestD) continue;
+                bestD = d;
+
+                float v0x = b.X - a.X, v0y = b.Y - a.Y, v0z = b.Z - a.Z;
+                float v1x = c.X - a.X, v1y = c.Y - a.Y, v1z = c.Z - a.Z;
+                float v2x = q.X - a.X, v2y = q.Y - a.Y, v2z = q.Z - a.Z;
+                float d00 = v0x * v0x + v0y * v0y + v0z * v0z;
+                float d01 = v0x * v1x + v0y * v1y + v0z * v1z;
+                float d11 = v1x * v1x + v1y * v1y + v1z * v1z;
+                float d20 = v2x * v0x + v2y * v0y + v2z * v0z;
+                float d21 = v2x * v1x + v2y * v1y + v2z * v1z;
+                float den = d00 * d11 - d01 * d01;
+                if (MathF.Abs(den) < 1e-20f) { best = ua; continue; }
+                float wb = (d11 * d20 - d01 * d21) / den;
+                float wc = (d00 * d21 - d01 * d20) / den;
+                float wa = 1f - wb - wc;
+                best = (ua.U * wa + ub.U * wb + uc.U * wc, ua.V * wa + ub.V * wb + uc.V * wc);
+            }
+            outUV[i] = best;
+            worst = MathF.Max(worst, bestD);
+        }
+        diag?.Invoke($"authored cap: projected {vc} uvs from the body, furthest landing {MathF.Sqrt(worst):F4}");
+        return outUV;
+    }
+
+    /// <summary>
+    /// A cut mask covering exactly where the authored cap actually is, rasterised from its projected
+    /// UVs. Substituted for the painted ToeCap map when a cap is grafted.
+    /// <para/>
+    /// The painted map says where a cap is WANTED; it cannot say where the modelled one reaches. Cutting
+    /// by it leaves a strip of skin bare wherever the paint runs past the mesh — measured at 0.002 past
+    /// the cap's rear edge, showing in game as a jagged band along the top of the foot, jagged because
+    /// it follows the map's texel grid. Eroded by a texel or two so the cap's boundary always laps over
+    /// the shell that survives rather than meeting it exactly.
+    /// </summary>
+    private static byte[] CapFootprintMask(Source cap, int mesh, (float U, float V)[] uv, int size, int erode)
+    {
+        var s = cap.S;
+        var mask = new byte[size * size];
+        int mo = cap.MeshStart + mesh * 36;
+        ushort si = BitConverter.ToUInt16(s, mo + 10), sc = BitConverter.ToUInt16(s, mo + 12);
+        ushort vc = BitConverter.ToUInt16(s, mo);
+
+        for (int su = 0; su < sc; su++)
+        {
+            int ss = cap.SubmeshStart + (si + su) * 16;
+            uint so = BitConverter.ToUInt32(s, ss), cnt = BitConverter.ToUInt32(s, ss + 4);
+            for (uint t = 0; t + 2 < cnt; t += 3)
+            {
+                int q = cap.Ib + (int)(so + t) * 2;
+                int a = BitConverter.ToUInt16(s, q), b = BitConverter.ToUInt16(s, q + 2), c = BitConverter.ToUInt16(s, q + 4);
+                if (a >= vc || b >= vc || c >= vc || a >= uv.Length || b >= uv.Length || c >= uv.Length) continue;
+
+                float ax = uv[a].U * size, ay = uv[a].V * size;
+                float bx = uv[b].U * size, by = uv[b].V * size;
+                float cx = uv[c].U * size, cy = uv[c].V * size;
+                int x0 = Math.Clamp((int)MathF.Floor(MathF.Min(ax, MathF.Min(bx, cx))) - 1, 0, size - 1);
+                int x1 = Math.Clamp((int)MathF.Ceiling(MathF.Max(ax, MathF.Max(bx, cx))) + 1, 0, size - 1);
+                int y0 = Math.Clamp((int)MathF.Floor(MathF.Min(ay, MathF.Min(by, cy))) - 1, 0, size - 1);
+                int y1 = Math.Clamp((int)MathF.Ceiling(MathF.Max(ay, MathF.Max(by, cy))) + 1, 0, size - 1);
+                if ((long)(x1 - x0 + 1) * (y1 - y0 + 1) > 1 << 18) continue;   // a seam-straddling triangle
+
+                float den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+                if (MathF.Abs(den) < 1e-12f) continue;
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        float px = x + 0.5f, py = y + 0.5f;
+                        float w0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den;
+                        float w1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den;
+                        float w2 = 1f - w0 - w1;
+                        if (w0 < -0.02f || w1 < -0.02f || w2 < -0.02f) continue;
+                        mask[y * size + x] = 255;
+                    }
+            }
+        }
+
+        // Pull the edge in, so the shell that survives is always overlapped rather than merely abutted.
+        for (int step = 0; step < erode; step++)
+        {
+            var next = (byte[])mask.Clone();
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    if (mask[y * size + x] == 0) continue;
+                    bool edge = false;
+                    for (int dy = -1; dy <= 1 && !edge; dy++)
+                        for (int dx = -1; dx <= 1 && !edge; dx++)
+                        {
+                            int nx = x + dx, ny = y + dy;
+                            if (nx < 0 || ny < 0 || nx >= size || ny >= size || mask[ny * size + nx] == 0) edge = true;
+                        }
+                    if (edge) next[y * size + x] = 0;
+                }
+            mask = next;
+        }
+        return mask;
     }
 
     /// <summary>Mean length of the edges touching the given nodes — the mesh's own resolution.</summary>

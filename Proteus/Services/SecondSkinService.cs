@@ -93,6 +93,37 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
+    /// The hand-modelled toe box shipped beside the plugin, read once. Null when it is missing or will
+    /// not parse, in which case the shell builds exactly as it did before — this is additive.
+    /// </summary>
+    private byte[]? authoredCap;
+    private bool authoredCapTried;
+
+    private byte[]? AuthoredCap()
+    {
+        if (authoredCapTried) return authoredCap;
+        authoredCapTried = true;
+        try
+        {
+            var dir = discovery.AssemblyDir;
+            if (dir == null) return null;
+            var path = Path.Combine(dir, "Meshes", "toecap.mdl");
+            if (!File.Exists(path))
+            {
+                log.Debug("[Proteus] second skin: no authored toe cap at {0}", path);
+                return null;
+            }
+            authoredCap = File.ReadAllBytes(path);
+            log.Information("[Proteus] second skin: authored toe cap loaded ({0} bytes)", authoredCap.Length);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
+        }
+        return authoredCap;
+    }
+
+    /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
     ///
     /// <paramref name="ShellChanged"/> is true when the model, a material OR a texture differs from what
@@ -786,7 +817,8 @@ public sealed class SecondSkinService
             try
             {
                 shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
-                    out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg));
+                    out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg),
+                    AuthoredCap());
             }
             catch (Exception ex)
             {
