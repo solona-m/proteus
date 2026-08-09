@@ -104,7 +104,12 @@ public static class SecondSkinWriter
     /// a truncated buffer, anything Parse rejects. The caller treats that as "no seam data" and falls back.
     /// </summary>
     public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs, out int[] triangles)
-        => TryReadLod0Geometry(mdl, out positions, out uvs, out triangles, out _);
+        => TryReadLod0Geometry(mdl, out positions, out uvs, out triangles, out _, out _);
+
+    /// <inheritdoc cref="TryReadLod0Geometry(byte[], out float[], out float[], out int[], out (string, float)[][], out float[])"/>
+    public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs,
+                                           out int[] triangles, out (string Bone, float W)[][] weights)
+        => TryReadLod0Geometry(mdl, out positions, out uvs, out triangles, out weights, out _);
 
     /// <inheritdoc cref="TryReadLod0Geometry(byte[], out float[], out float[], out int[])"/>
     /// <param name="weights">
@@ -112,16 +117,22 @@ public static class SecondSkinWriter
     /// only meaningful against the mesh's own bone table, and the whole point of reading these is to hand
     /// them to a different mesh.
     /// </param>
+    /// <param name="normals">
+    /// Per vertex, the stored normal. A cap vertex records how far it sits OFF the skin, and "off" only
+    /// means anything along this.
+    /// </param>
     public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs,
-                                           out int[] triangles, out (string Bone, float W)[][] weights)
+                                           out int[] triangles, out (string Bone, float W)[][] weights,
+                                           out float[] normals)
     {
-        positions = []; uvs = []; triangles = []; weights = [];
+        positions = []; uvs = []; triangles = []; weights = []; normals = [];
         Source src;
         try { src = Parse(mdl); }
         catch { return false; }
 
         var s = src.S;
         var wgt = new List<(string Bone, float W)[]>();
+        var nrm = new List<float>();
 
         // SKIN MESHES ONLY. A body model is not all skin: it carries the smallclothes/undies mesh, nails,
         // piercings and pubes, and each of those is authored in its OWN UV layout (gear space, not body
@@ -148,13 +159,14 @@ public static class SecondSkinWriter
             if (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null) continue;
 
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
-            VElem? posEl = null, uvEl = null, wEl = null, iEl = null;
+            VElem? posEl = null, uvEl = null, wEl = null, iEl = null, nEl = null;
             foreach (var el in decl)
             {
                 if (el.Usage == UsePosition) posEl ??= el;
                 else if (el.Usage == UseUV && el.UsageIndex == 0) uvEl ??= el;
                 else if (el.Usage == UseBlendWeight) wEl ??= el;
                 else if (el.Usage == UseBlendIndices) iEl ??= el;
+                else if (el.Usage == UseNormal) nEl ??= el;
             }
             if (posEl is not { } pe || uvEl is not { } ue) continue;
 
@@ -176,6 +188,22 @@ public static class SecondSkinWriter
                 ReadTyped(s, pa, pe.Type, tmp); pos.Add(tmp[0]); pos.Add(tmp[1]); pos.Add(tmp[2]);
                 ReadTyped(s, ua, ue.Type, tmp); uv.Add(tmp[0]); uv.Add(tmp[1]);
 
+                if (nEl is { } ne7 && ne7.Stream <= 2)
+                {
+                    int na = (int)(src.Vb + vbo[ne7.Stream]) + k * bs[ne7.Stream] + ne7.Offset;
+                    if (na >= 0 && na + 16 <= s.Length)
+                    {
+                        ReadTyped(s, na, ne7.Type, tmp);
+                        float nx = tmp[0], ny = tmp[1], nz = tmp[2];
+                        if (ne7.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+                        float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                        if (len > 1e-6f) { nx /= len; ny /= len; nz /= len; }
+                        nrm.Add(nx); nrm.Add(ny); nrm.Add(nz);
+                    }
+                    else { nrm.Add(0); nrm.Add(0); nrm.Add(0); }
+                }
+                else { nrm.Add(0); nrm.Add(0); nrm.Add(0); }
+
                 if (wEl is not { } we2 || iEl is not { } ie2 || we2.Stream > 2 || ie2.Stream > 2)
                 { wgt.Add([]); continue; }
                 int wa = (int)(src.Vb + vbo[we2.Stream]) + k * bs[we2.Stream] + we2.Offset;
@@ -194,6 +222,7 @@ public static class SecondSkinWriter
             }
             if (!ok) { pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3);
                        uv.RemoveRange(baseVertex * 2, uv.Count - baseVertex * 2);
+                       if (nrm.Count > baseVertex * 3) nrm.RemoveRange(baseVertex * 3, nrm.Count - baseVertex * 3);
                        if (wgt.Count > baseVertex) wgt.RemoveRange(baseVertex, wgt.Count - baseVertex);
                        continue; }
 
@@ -210,7 +239,9 @@ public static class SecondSkinWriter
         if (tri.Count == 0) return false;
         positions = pos.ToArray(); uvs = uv.ToArray(); triangles = tri.ToArray();
         while (wgt.Count < pos.Count / 3) wgt.Add([]);
+        while (nrm.Count < pos.Count) nrm.Add(0);
         weights = wgt.ToArray();
+        normals = nrm.ToArray();
         return true;
     }
 
@@ -322,7 +353,7 @@ public static class SecondSkinWriter
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, bool skipConnectors, out Stats stats,
         IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null,
-        byte[]? authoredCap = null)
+        byte[]? authoredCap = null, byte[]? authoredCapBind = null)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
@@ -355,6 +386,24 @@ public static class SecondSkinWriter
         {
             try { capSrc = Parse(authoredCap); }
             catch (Exception ex) { diag?.Invoke($"authored cap failed to parse, ignoring: {ex.Message}"); }
+        }
+
+        // FIT THE CAP TO THE FOOT THIS PLAYER IS ACTUALLY WEARING, before anything else looks at it. The
+        // cap is exact on exactly one model — the one it was modelled against — and a foot in heels is a
+        // different model in a different pose: measured, a median of 0.067 away, some eighteen edge
+        // lengths, which in game is the cap hanging in the air off the end of the toes. The binding
+        // records each vertex as an atlas coordinate plus an offset along the normal there, so it can be
+        // rebuilt on any foot that shares the body atlas — heels, or another body entirely.
+        //
+        // Everything downstream then re-derives from the placed cap against the equipped body: the UV
+        // projection, the seam split, the weld and the reskin all see a cap already sitting where it
+        // belongs, and none of them need to know a binding was involved.
+        Dictionary<int, CapPlacement>? capPlaced = null;
+        if (capSrc != null && authoredCapBind != null)
+        {
+            var placed = TryPlaceCapFromBind(authoredCapBind, sources, diag, authoredCap);
+            if (placed is { Count: > 0 }) capPlaced = placed.ToDictionary(p => p.Mesh);
+            else diag?.Invoke("authored cap: binding did not apply, using the cap as authored");
         }
         int baseMatCount = baseSrc?.MatNames.Count ?? 0;
         if (baseMatCount + layers.Count > MaxMaterials)
@@ -476,6 +525,38 @@ public static class SecondSkinWriter
                     }
                     outStreams = grownStreams;
                     vc = (ushort)nvNew;
+
+                    // The binding's placement, written into the stream the copies were taken from. Done
+                    // before the push and the weld, so both act on a cap that is already on the right
+                    // foot. Indexed through SourceOf because the seam split gave some vertices more than
+                    // one copy and the binding is per authored vertex.
+                    if (capPlaced != null && capPlaced.TryGetValue(m, out var place))
+                    {
+                        VElem? pP = null, pN = null;
+                        foreach (var el in decl)
+                        {
+                            if (el.Usage == UsePosition) pP ??= el;
+                            if (el.Usage == UseNormal) pN ??= el;
+                        }
+                        if (pP is { } pe4)
+                        {
+                            int moved = 0;
+                            for (int i = 0; i < nvNew; i++)
+                            {
+                                int from = plan.SourceOf[i];
+                                if (from < 0 || from >= place.Pos.Length) continue;
+                                WriteXYZ(outStreams[pe4.Stream], i * outStrides[pe4.Stream] + pe4.Offset,
+                                         pe4.Type, place.Pos[from].X, place.Pos[from].Y, place.Pos[from].Z);
+                                if (pN is { } ne8)
+                                    WriteNormal(outStreams[ne8.Stream],
+                                                i * outStrides[ne8.Stream] + ne8.Offset, ne8.Type,
+                                                place.Nrm[from].X, place.Nrm[from].Y, place.Nrm[from].Z);
+                                moved++;
+                            }
+                            diag?.Invoke($"authored cap: mesh {m} placed onto the equipped body, "
+                                       + $"{moved} vertices moved, {place.Missed} left as authored");
+                        }
+                    }
 
                     // RESKIN THE CAP TO THE BODY. The cap ships with authored weights, and they are not
                     // wrong so much as unrelated: the shell around it carries the BODY's weights, and
@@ -1099,7 +1180,8 @@ public static class SecondSkinWriter
                 {
                     if (BitConverter.ToUInt16(cw.S, cw.MeshStart + m * 36) == 0) continue;
                     if (!capUvCache.TryGetValue(m, out var pl))
-                        capUvCache[m] = pl = ProjectCapUV(cw, m, sources, diag);
+                        capUvCache[m] = pl = ProjectCapUV(cw, m, sources, diag,
+                            capPlaced != null && capPlaced.TryGetValue(m, out var pw2) ? pw2 : null);
                     if (pl == null) continue;
 
                     // The rim of the cap AS THIS LAYER WILL EMIT IT — that is, after the layer's own
@@ -1243,7 +1325,8 @@ public static class SecondSkinWriter
                     EmitMesh(cs, m, matIndex, push, preserve: true, cov: def, capMapBase,
                              ref capMapAppended, dropConnectors: false,
                              capUv: capUvCache.TryGetValue(m, out var cached) ? cached
-                                  : capUvCache[m] = ProjectCapUV(cs, m, sources, diag));
+                                  : capUvCache[m] = ProjectCapUV(cs, m, sources, diag,
+                                        capPlaced != null && capPlaced.TryGetValue(m, out var pc2) ? pc2 : null));
                     emitted++;
                 }
                 diag?.Invoke($"authored toe cap: grafted {emitted} mesh(es) onto layer {layer}, "
@@ -4062,6 +4145,460 @@ public static class SecondSkinWriter
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    /// <summary>"PTCB" — the authored cap's binding to the body, see <see cref="BakeCapBind"/>.</summary>
+    private const uint CapBindMagic = 0x42435450;
+
+    /// <summary>
+    /// Where the authored cap sits, expressed so it survives a change of foot: per vertex a coordinate in
+    /// the BODY's UV atlas, how far off that surface it sits along the normal, and which side of the body
+    /// it is on. Every body shares the atlas — that is the premise the whole overlay system rests on — so
+    /// a vertex recorded this way can be put back on any foot in any shape.
+    /// <para/>
+    /// The side matters because the atlas is MIRRORED: measured on this body, the cap vertices at
+    /// x = +0.0440 and x = -0.0440 both land on uv (0.874, 0.297). A coordinate alone would be ambiguous
+    /// between the two feet.
+    /// <para/>
+    /// The reference foot is NOT shipped and must not be — it is somebody's body mod, and bundling it
+    /// would redistribute it. Only these four numbers per vertex travel.
+    /// </summary>
+    public static byte[] BakeCapBind(byte[] capMdl, IReadOnlyList<byte[]> referenceBodies,
+                                     Action<string>? diag = null)
+    {
+        var cap = Parse(capMdl);
+        var tris = CollectSkinTriangles(referenceBodies);
+        if (tris.Count == 0) throw new InvalidOperationException("reference body has no skin geometry");
+
+        var meshes = new List<int>();
+        int meshEnd = cap.Lod0MeshIndex + cap.Lod0MeshCount;
+        for (int m = cap.Lod0MeshIndex; m < meshEnd && m < cap.MeshCount; m++)
+            if (BitConverter.ToUInt16(cap.S, cap.MeshStart + m * 36) != 0) meshes.Add(m);
+
+        var body = new MemoryStream();
+        var w = new BinaryWriter(body);
+        w.Write(meshes.Count);
+
+        // WHICH PART OF THE BODY the cap belongs to, recorded as the bones its landings are skinned to.
+        // Every body model carries its OWN [0,1] atlas — the feet and the torso both use the whole square
+        // — so an atlas coordinate is meaningless without knowing which one it belongs to. Without this
+        // the first placement put the toe cap at y = 0.87, on the waist, having found the same coordinate
+        // there. Bones separate them cleanly and survive any body or mod: a foot triangle is weighted to
+        // j_asi_*, a torso triangle never is.
+        var parts = new HashSet<string>(StringComparer.Ordinal);
+
+        float worstOff = 0f;
+        int total = 0;
+        foreach (int m in meshes)
+        {
+            ReadCapVertices(cap, m, out var cp, out _);
+            w.Write(m);
+            w.Write(cp.Length);
+            foreach (var p in cp)
+            {
+                float bestD = float.MaxValue;
+                (float U, float V) uv = default;
+                float off = 0f;
+                (string Bone, float W)[] landedOn = [];
+                // Which way the skin faced where this vertex landed. Kept because an atlas coordinate can
+                // be covered by more than one triangle — the sole and the top of a toe can be packed over
+                // each other — and the two candidates face opposite ways. Without it the round trip onto
+                // the very foot the cap was measured on was out by as much as 0.0104, three edge lengths.
+                Vec3 face = default;
+                foreach (var t in tris)
+                {
+                    float cx = t.Ctr.X - p.X, cy = t.Ctr.Y - p.Y, cz = t.Ctr.Z - p.Z;
+                    if (cx * cx + cy * cy + cz * cz > bestD + 0.01f) continue;
+                    var q = ClosestOnTriangle(p, t.A, t.B, t.C);
+                    float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+                    float d = dx * dx + dy * dy + dz * dz;
+                    if (d >= bestD) continue;
+                    bestD = d;
+                    var (ba, bb, bc) = Barycentric(q, t.A, t.B, t.C);
+                    // Stored in the triangle's OWN cell, so it means the same thing on a body that packs
+                    // its atlas somewhere else. See TileOf.
+                    var tile = TileOf(t);
+                    uv = (t.Ua.U * ba + t.Ub.U * bb + t.Uc.U * bc - tile.U,
+                          t.Ua.V * ba + t.Ub.V * bb + t.Uc.V * bc - tile.V);
+                    var n = NormalizeOr(new Vec3(t.Na.X * ba + t.Nb.X * bb + t.Nc.X * bc,
+                                                 t.Na.Y * ba + t.Nb.Y * bb + t.Nc.Y * bc,
+                                                 t.Na.Z * ba + t.Nb.Z * bb + t.Nc.Z * bc), default);
+                    // SIGNED along the normal, so a vertex tucked under the surface comes back under it.
+                    off = dx * n.X + dy * n.Y + dz * n.Z;
+                    landedOn = t.Wa;
+                    face = n;
+                }
+                foreach (var (bone, _) in landedOn) parts.Add(bone);
+                w.Write(uv.U); w.Write(uv.V); w.Write(off); w.Write(p.X >= 0f ? 1 : -1);
+                w.Write(face.X); w.Write(face.Y); w.Write(face.Z);
+                worstOff = MathF.Max(worstOff, MathF.Abs(off));
+                total++;
+            }
+        }
+
+        var ms = new MemoryStream();
+        var head = new BinaryWriter(ms);
+        head.Write(CapBindMagic);
+        head.Write(1);   // version
+        head.Write(parts.Count);
+        foreach (var b in parts.OrderBy(x => x, StringComparer.Ordinal)) head.Write(b);
+        ms.Write(body.GetBuffer(), 0, (int)body.Length);
+
+        diag?.Invoke($"cap bind: {total} vertices over {meshes.Count} mesh(es), furthest off the skin "
+                   + $"{worstOff:F5}, anchored to {parts.Count} bone(s): "
+                   + string.Join(", ", parts.OrderBy(x => x, StringComparer.Ordinal)));
+        return ms.ToArray();
+    }
+
+    /// <summary>Where one cap mesh's vertices land on the body currently equipped.</summary>
+    internal sealed class CapPlacement
+    {
+        public required int Mesh;
+        public required Vec3[] Pos;
+        public required Vec3[] Nrm;
+        public required (float U, float V)[] Uv;
+        public required (string Bone, float W)[][] W;
+        /// <summary>Vertices whose atlas coordinate is not covered by this body; they keep their authored place.</summary>
+        public required int Missed;
+    }
+
+    /// <summary>
+    /// Fit the authored cap to the body actually equipped, by looking each baked atlas coordinate back up
+    /// on it and stepping off along the normal there. This is what makes one authored cap work on a foot
+    /// it was never modelled against — a heeled foot sits a median of 0.067 from the flat one it was
+    /// authored on, which is about eighteen edge lengths and reads in game as the cap floating clear of
+    /// the toes altogether.
+    /// </summary>
+    internal static List<CapPlacement>? TryPlaceCapFromBind(byte[] bind, IReadOnlyList<byte[]> bodies,
+                                                            Action<string>? diag = null,
+                                                            byte[]? capMdl = null)
+    {
+        if (bind.Length < 12 || BitConverter.ToUInt32(bind, 0) != CapBindMagic) return null;
+        var tris = CollectSkinTriangles(bodies);
+        if (tris.Count == 0) return null;
+
+        var r = new BinaryReader(new MemoryStream(bind));
+        r.ReadUInt32();
+        int version = r.ReadInt32();
+        if (version != 1) { diag?.Invoke($"cap bind: version {version} not understood"); return null; }
+
+        int partCount = r.ReadInt32();
+        var parts = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < partCount; i++) parts.Add(r.ReadString());
+        // Only the part of the body the cap was bound to. See the note in BakeCapBind: without this the
+        // toe cap finds its own atlas coordinate on the torso and lands at the waist.
+        tris = tris.Where(t => t.Wa.Any(x => parts.Contains(x.Bone))
+                            || t.Wb.Any(x => parts.Contains(x.Bone))
+                            || t.Wc.Any(x => parts.Contains(x.Bone))).ToList();
+        if (tris.Count == 0) { diag?.Invoke("cap bind: this body has none of the bound bones"); return null; }
+        diag?.Invoke($"cap bind: {tris.Count} triangle(s) on the equipped body carry the bound bones");
+
+        int meshCount = r.ReadInt32();
+
+        var outp = new List<CapPlacement>();
+        for (int mi = 0; mi < meshCount; mi++)
+        {
+            int mesh = r.ReadInt32();
+            int vc = r.ReadInt32();
+            var pos = new Vec3[vc];
+            var nrm = new Vec3[vc];
+            var uvs = new (float U, float V)[vc];
+            var wts = new (string Bone, float W)[vc][];
+            var found = new bool[vc];
+            int missed = 0;
+
+            for (int i = 0; i < vc; i++)
+            {
+                float u = r.ReadSingle(), v = r.ReadSingle(), off = r.ReadSingle();
+                int side = r.ReadInt32();
+                var face = new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                uvs[i] = (u, v);
+                wts[i] = [];
+
+                // The atlas is mirrored, so a coordinate names a point on BOTH feet; the side recorded at
+                // bake time picks the right one. Best-fit rather than first-hit: a coordinate can graze
+                // several triangles at a UV seam, and the one it is most inside is the one that owns it.
+                // Least-outside wins, and among candidates that all contain the coordinate the one facing
+                // the way the skin faced at bake time wins. No early exit: the first triangle to contain
+                // a coordinate is not necessarily the right one.
+                float best = float.MaxValue, bestFacing = -2f;
+                foreach (var t in tris)
+                {
+                    if (MathF.Sign(t.Ctr.X) != side && t.Ctr.X != 0f) continue;
+                    var tile = TileOf(t);
+                    var (ba, bb, bc) = Barycentric2(u + tile.U, v + tile.V, t.Ua, t.Ub, t.Uc);
+                    float outside = MathF.Max(0f, -ba) + MathF.Max(0f, -bb) + MathF.Max(0f, -bc);
+                    if (outside > best + 1e-6f) continue;
+
+                    var n = NormalizeOr(new Vec3(t.Na.X * ba + t.Nb.X * bb + t.Nc.X * bc,
+                                                 t.Na.Y * ba + t.Nb.Y * bb + t.Nc.Y * bc,
+                                                 t.Na.Z * ba + t.Nb.Z * bb + t.Nc.Z * bc), default);
+                    float facing = n.X * face.X + n.Y * face.Y + n.Z * face.Z;
+                    if (outside > best - 1e-6f && facing <= bestFacing) continue;   // tie: keep the better facing
+
+                    best = MathF.Min(best, outside);
+                    bestFacing = facing;
+                    var p = new Vec3(t.A.X * ba + t.B.X * bb + t.C.X * bc,
+                                     t.A.Y * ba + t.B.Y * bb + t.C.Y * bc,
+                                     t.A.Z * ba + t.B.Z * bb + t.C.Z * bc);
+                    pos[i] = new Vec3(p.X + n.X * off, p.Y + n.Y * off, p.Z + n.Z * off);
+                    nrm[i] = n;
+                    wts[i] = BlendWeights(t.Wa, ba, t.Wb, bb, t.Wc, bc);
+                }
+                found[i] = best <= CapBindMissTolerance;
+                if (!found[i]) missed++;
+            }
+
+            // A vertex whose coordinate falls in a gap of the atlas has nowhere to go — and leaving it at
+            // its authored place is far worse than it sounds, because every neighbour has moved. On the
+            // heeled foot that is a jump of 0.067, and the 76 stragglers dragged triangles across it:
+            // slivers went from 2 to 540, worst aspect from 8 to 49, and the mesh stopped being manifold.
+            // They follow the crowd instead, taking the average of whichever neighbours did land, spread
+            // outwards until none are left. A vertex placed this way is in the right region and smooth
+            // with its surroundings, which is all the cap needs of it.
+            if (missed > 0 && capMdl != null)
+            {
+                try
+                {
+                    var capSrc2 = Parse(capMdl);
+                    ReadCapVertices(capSrc2, mesh, out var asAuthored, out _);
+                    var tri2 = CapTriangles(capSrc2, mesh, (ushort)vc);
+                    var near2 = new List<int>[vc];
+                    for (int i = 0; i < vc; i++) near2[i] = [];
+                    for (int t = 0; t + 2 < tri2.Count; t += 3)
+                        for (int k = 0; k < 3; k++)
+                        {
+                            int a = tri2[t + k], b = tri2[t + (k + 1) % 3];
+                            if (a < vc && b < vc) { near2[a].Add(b); near2[b].Add(a); }
+                        }
+
+                    int filled = 0;
+                    for (int pass = 0; pass < CapBindFillPasses; pass++)
+                    {
+                        int did = 0;
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (found[i]) continue;
+                            // Each neighbour votes for where this vertex should be by carrying its OWN
+                            // move and keeping the authored gap between them. Averaging the neighbours'
+                            // positions outright looks equivalent and is not: two adjacent stragglers
+                            // sharing a neighbourhood average to the SAME point, which is a zero-area
+                            // triangle — measured, faces at aspect 2.7e9 and the cap no longer manifold.
+                            Vec3 sp = default, sn = default;
+                            int c = 0;
+                            foreach (int j in near2[i])
+                            {
+                                if (!found[j]) continue;
+                                var keep = i < asAuthored.Length && j < asAuthored.Length
+                                    ? new Vec3(asAuthored[i].X - asAuthored[j].X,
+                                               asAuthored[i].Y - asAuthored[j].Y,
+                                               asAuthored[i].Z - asAuthored[j].Z)
+                                    : default;
+                                sp = new Vec3(sp.X + pos[j].X + keep.X, sp.Y + pos[j].Y + keep.Y,
+                                              sp.Z + pos[j].Z + keep.Z);
+                                sn = new Vec3(sn.X + nrm[j].X, sn.Y + nrm[j].Y, sn.Z + nrm[j].Z);
+                                c++;
+                            }
+                            if (c == 0) continue;
+                            pos[i] = new Vec3(sp.X / c, sp.Y / c, sp.Z / c);
+                            nrm[i] = NormalizeOr(sn, nrm[i]);
+                            did++;
+                        }
+                        if (did == 0) break;
+                        for (int i = 0; i < vc; i++) if (!found[i] && near2[i].Any(j => found[j])) found[i] = true;
+                        filled += did;
+                    }
+                    diag?.Invoke($"cap bind: {filled} of {missed} unplaced vertices filled from their neighbours");
+                }
+                catch (Exception ex)
+                {
+                    diag?.Invoke($"cap bind: could not fill unplaced vertices ({ex.Message})");
+                }
+            }
+
+            outp.Add(new CapPlacement
+            {
+                Mesh = mesh, Pos = pos, Nrm = nrm, Uv = uvs, W = wts, Missed = missed,
+            });
+            diag?.Invoke($"cap bind: mesh {mesh} placed {vc} vertices on the equipped body"
+                       + (missed > 0 ? $", {missed} outside its atlas" : ""));
+        }
+        return outp;
+    }
+
+    /// <summary>
+    /// Which cell of the atlas a triangle lives in. A body's UVs are not obliged to sit in [0,1]: vanilla
+    /// puts U in [1,2], bibo puts V in [-1,0], and the model equipped here is in a different cell again.
+    /// Comparing a coordinate from one body against a triangle from another is meaningless until both are
+    /// brought back to the same cell — before this, every lookup on the heeled foot missed by 56 to 58
+    /// barycentric units, which is not a near miss, it is a different coordinate system.
+    /// </summary>
+    private static (float U, float V) TileOf(SkinTri t)
+        => (MathF.Floor(MathF.Min(t.Ua.U, MathF.Min(t.Ub.U, t.Uc.U))),
+            MathF.Floor(MathF.Min(t.Ua.V, MathF.Min(t.Ub.V, t.Uc.V))));
+
+    /// <summary>Barycentric coordinate of a point against a triangle in UV space.</summary>
+    private static (float A, float B, float C) Barycentric2(
+        float u, float v, (float U, float V) a, (float U, float V) b, (float U, float V) c)
+    {
+        float v0u = b.U - a.U, v0v = b.V - a.V;
+        float v1u = c.U - a.U, v1v = c.V - a.V;
+        float den = v0u * v1v - v1u * v0v;
+        // A triangle with no area in the ATLAS contains nothing. Reporting it as (1,0,0) reads as
+        // "strictly inside" and the search stops there — measured, three different coordinates all
+        // resolved to the same vertex, because the first collapsed triangle in the list swallowed them.
+        if (MathF.Abs(den) < 1e-14f) return (1f, -1f, -1f);
+        float v2u = u - a.U, v2v = v - a.V;
+        float wb = (v2u * v1v - v1u * v2v) / den;
+        float wc = (v0u * v2v - v2u * v0v) / den;
+        return (1f - wb - wc, wb, wc);
+    }
+
+    /// <summary>
+    /// How far outside a triangle, in barycentric terms, a baked coordinate may land before it counts as
+    /// unplaced. Small but not zero: the atlas has gaps between islands and a vertex on a seam can miss
+    /// every triangle by a hair.
+    /// </summary>
+    private const float CapBindMissTolerance = 0.01f;
+
+    /// <summary>
+    /// Rings a vertex with no atlas coordinate may be filled from. A handful is plenty — the gaps are a
+    /// vertex or two wide — and a bound stops a cap that failed to place at all from being smeared into
+    /// one point by repeated averaging.
+    /// </summary>
+    private const int CapBindFillPasses = 6;
+
+    /// <summary>
+    /// The authored cap's own LOD0 vertices, per mesh. Not <see cref="TryReadLod0Geometry"/>: that filters
+    /// to SKIN materials and the cap wears the overlay's, so it comes back empty.
+    /// </summary>
+    internal static List<(int Mesh, Vec3[] Pos)> ReadCapMeshes(byte[] capMdl)
+    {
+        var cap = Parse(capMdl);
+        var outp = new List<(int, Vec3[])>();
+        int end = cap.Lod0MeshIndex + cap.Lod0MeshCount;
+        for (int m = cap.Lod0MeshIndex; m < end && m < cap.MeshCount; m++)
+        {
+            if (BitConverter.ToUInt16(cap.S, cap.MeshStart + m * 36) == 0) continue;
+            ReadCapVertices(cap, m, out var p, out _);
+            outp.Add((m, p));
+        }
+        return outp;
+    }
+
+    /// <summary>Positions and normals of one mesh of a parsed cap.</summary>
+    private static void ReadCapVertices(Source cap, int mesh, out Vec3[] pos, out Vec3[] nrm)
+    {
+        var s = cap.S;
+        int mo = cap.MeshStart + mesh * 36;
+        ushort vc = BitConverter.ToUInt16(s, mo);
+        pos = new Vec3[vc];
+        nrm = new Vec3[vc];
+        var decl = mesh < cap.Decls.Length ? cap.Decls[mesh] : [];
+        VElem? pe = null, ne = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UsePosition) pe ??= el;
+            if (el.Usage == UseNormal) ne ??= el;
+        }
+        if (pe is not { } p0) return;
+
+        uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
+                       BitConverter.ToUInt32(s, mo + 28) };
+        byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+        Span<float> tmp = stackalloc float[4];
+        for (int i = 0; i < vc; i++)
+        {
+            ReadTyped(s, cap.Vb + (int)vbo[p0.Stream] + i * bs[p0.Stream] + p0.Offset, p0.Type, tmp);
+            pos[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
+            if (ne is not { } n0) continue;
+            ReadTyped(s, cap.Vb + (int)vbo[n0.Stream] + i * bs[n0.Stream] + n0.Offset, n0.Type, tmp);
+            float nx = tmp[0], ny = tmp[1], nz = tmp[2];
+            if (n0.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+            nrm[i] = NormalizeOr(new Vec3(nx, ny, nz), default);
+        }
+    }
+
+    /// <summary>
+    /// One triangle of body skin, with everything a cap vertex needs to be placed against it or read off
+    /// it: geometry, atlas coordinate, normal and skinning at each corner.
+    /// </summary>
+    private readonly record struct SkinTri(
+        Vec3 A, Vec3 B, Vec3 C,
+        (float U, float V) Ua, (float U, float V) Ub, (float U, float V) Uc,
+        Vec3 Na, Vec3 Nb, Vec3 Nc,
+        (string Bone, float W)[] Wa, (string Bone, float W)[] Wb, (string Bone, float W)[] Wc,
+        Vec3 Ctr);
+
+    /// <summary>
+    /// Every body's LOD0 SKIN triangles in one list, with the toenail islands dropped.
+    /// <para/>
+    /// TOENAILS ARE NOT A PROJECTION TARGET. They are skin by material, they sit proud of the flesh, and
+    /// over the toes they are frequently the NEAREST surface — but they carry their own UV island. A cap
+    /// triangle with one corner landing on a nail and another on skin then stretches clean across the gap
+    /// between two islands and samples whatever lies between, which shows as a jagged transparent band
+    /// through the middle of the cap. They are separate connected components, so drop the small ones.
+    /// </summary>
+    private static List<SkinTri> CollectSkinTriangles(IReadOnlyList<byte[]> bodies)
+    {
+        var tri = new List<SkinTri>();
+        foreach (var body in bodies)
+        {
+            if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt, out var bw, out var bn))
+                continue;
+
+            int nv = bp.Length / 3;
+            var parent = new int[nv];
+            for (int i = 0; i < nv; i++) parent[i] = i;
+            int Find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+            void Union(int x, int y) { int rx = Find(x), ry = Find(y); if (rx != ry) parent[rx] = ry; }
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+            {
+                if (bt[t] >= nv || bt[t + 1] >= nv || bt[t + 2] >= nv) continue;
+                Union(bt[t], bt[t + 1]); Union(bt[t + 1], bt[t + 2]);
+            }
+            var size = new Dictionary<int, int>();
+            for (int i = 0; i < nv; i++) { int r = Find(i); size[r] = size.GetValueOrDefault(r) + 1; }
+            int biggest = 0;
+            foreach (int v in size.Values) biggest = Math.Max(biggest, v);
+            // A foot is within a fraction of the other foot's size; a nail is a small fraction of either.
+            int keepAbove = (int)(biggest * ProjectIslandFloor);
+
+            Vec3 P(int i) => new(bp[i * 3], bp[i * 3 + 1], bp[i * 3 + 2]);
+            Vec3 N(int i) => i * 3 + 2 < bn.Length ? new Vec3(bn[i * 3], bn[i * 3 + 1], bn[i * 3 + 2]) : default;
+            (float, float) U(int i) => (bu[i * 2], bu[i * 2 + 1]);
+            (string, float)[] W(int i) => i < bw.Length ? bw[i] : [];
+
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+            {
+                int a = bt[t], b = bt[t + 1], c = bt[t + 2];
+                if ((a + 1) * 3 > bp.Length || (b + 1) * 3 > bp.Length || (c + 1) * 3 > bp.Length) continue;
+                if (size.GetValueOrDefault(Find(a)) < keepAbove) continue;
+                var (pa, pb, pc) = (P(a), P(b), P(c));
+                tri.Add(new SkinTri(pa, pb, pc, U(a), U(b), U(c), N(a), N(b), N(c), W(a), W(b), W(c),
+                                    new Vec3((pa.X + pb.X + pc.X) / 3f, (pa.Y + pb.Y + pc.Y) / 3f,
+                                             (pa.Z + pb.Z + pc.Z) / 3f)));
+            }
+        }
+        return tri;
+    }
+
+    /// <summary>Barycentric coordinate of <paramref name="q"/> in the plane of a triangle.</summary>
+    private static (float A, float B, float C) Barycentric(Vec3 q, Vec3 a, Vec3 b, Vec3 c)
+    {
+        float v0x = b.X - a.X, v0y = b.Y - a.Y, v0z = b.Z - a.Z;
+        float v1x = c.X - a.X, v1y = c.Y - a.Y, v1z = c.Z - a.Z;
+        float v2x = q.X - a.X, v2y = q.Y - a.Y, v2z = q.Z - a.Z;
+        float d00 = v0x * v0x + v0y * v0y + v0z * v0z;
+        float d01 = v0x * v1x + v0y * v1y + v0z * v1z;
+        float d11 = v1x * v1x + v1y * v1y + v1z * v1z;
+        float d20 = v2x * v0x + v2y * v0y + v2z * v0z;
+        float d21 = v2x * v1x + v2y * v1y + v2z * v1z;
+        float den = d00 * d11 - d01 * d01;
+        if (MathF.Abs(den) < 1e-20f) return (1f, 0f, 0f);
+        float wb = (d11 * d20 - d01 * d21) / den;
+        float wc = (d00 * d21 - d01 * d20) / den;
+        return (1f - wb - wc, wb, wc);
+    }
+
     /// <summary>
     /// Three body vertices' skinning combined at a barycentric coordinate, keyed by bone NAME, reduced to
     /// the four slots a vertex has and renormalised. Names because the result is destined for a different
@@ -4400,7 +4937,7 @@ public static class SecondSkinWriter
     /// nothing anywhere else, so the cap would sample empty texture.
     /// </summary>
     private static CapUvPlan? ProjectCapUV(Source cap, int mesh, IReadOnlyList<byte[]> bodies,
-                                           Action<string>? diag)
+                                           Action<string>? diag, CapPlacement? placed = null)
     {
         var s = cap.S;
         int mo = cap.MeshStart + mesh * 36;
@@ -4433,6 +4970,12 @@ public static class SecondSkinWriter
                 if (ne.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
                 cn[i] = NormalizeOr(new Vec3(nx, ny, nz), default);
             }
+
+            // Where the binding put it, if there is one. Everything below — the landing search, the seam
+            // split, the rim — then describes the cap as it will actually be emitted rather than as it
+            // was authored against a foot this player may not be wearing.
+            if (placed is { } pl && pl.Pos.Length == vc)
+                for (int i = 0; i < vc; i++) { cp[i] = pl.Pos[i]; cn[i] = pl.Nrm[i]; }
         }
 
         // Every body's LOD0 SKIN geometry, in one list. Reuses the reader the seam analysis uses, which

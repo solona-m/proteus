@@ -110,9 +110,20 @@ public class ToeCapDiagTests
                 if (File.Exists(cand)) { authored = File.ReadAllBytes(cand); break; }
             o.WriteLine(authored == null ? "no authored cap" : $"authored cap {authored.Length} bytes");
 
+            // The cap's binding to the body atlas, the same file the plugin ships. Without it the cap is
+            // only correct on the one foot it was modelled against.
+            byte[]? bind = null;
+            foreach (var cand in new[]
+                     {
+                         Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.bind"),
+                         @"E:\repos\Proteus\Proteus\Meshes\toecap.bind",
+                     })
+                if (File.Exists(cand)) { bind = File.ReadAllBytes(cand); break; }
+            o.WriteLine(bind == null ? "no cap binding" : $"cap binding {bind.Length} bytes");
+
             var plain  = SecondSkinWriter.Build(bodies, plainLayers, baseModel, skip, out _);
             var capped = SecondSkinWriter.Build(bodies, layers, baseModel, skip, out var st,
-                null, m => lines.Add(m), authored);
+                null, m => lines.Add(m), authored, bind);
             foreach (var l in lines) o.WriteLine(l);
             o.WriteLine($"stats: triIn={st.TrianglesIn} triOut={st.TrianglesOut} verts={st.VerticesOut}");
 
@@ -128,6 +139,100 @@ public class ToeCapDiagTests
 
             foreach (var l in SeamWeights(capped)) o.WriteLine(l);
             return;   // one host is enough — the feet live on whichever host took the stocking
+        }
+    }
+
+    /// <summary>
+    /// The foot the cap was AUTHORED against, dumped in the same space as the game's, so the two can be
+    /// laid over each other. The cap is exact on one model and nothing has ever measured how far that is
+    /// from whatever the player is actually wearing.
+    /// </summary>
+    [Fact]
+    public void DumpReferenceFoot()
+    {
+        if (!File.Exists(Sho)) return;
+        WriteObj(File.ReadAllBytes(Sho), Path.Combine(Scratch, "ref_foot.obj"));
+        o.WriteLine($"wrote ref_foot.obj from {Sho}");
+
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        foreach (var f in Directory.Exists(dir) ? Directory.GetFiles(dir, "host*_body*.mdl") : [])
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(f), out var p, out _, out var t))
+            { o.WriteLine($"{Path.GetFileName(f)}: no skin geometry"); continue; }
+            o.WriteLine($"{Path.GetFileName(f)}: {p.Length / 3} skin verts, {t.Length / 3} tris");
+        }
+    }
+
+    /// <summary>
+    /// Bake the authored cap's binding against the foot it was modelled on, then put it back on that same
+    /// foot and see whether it lands where it started. That round trip is the whole claim the binding
+    /// makes — "these four numbers per vertex are enough to reconstruct the cap on any body" — and if it
+    /// cannot reproduce the foot it was measured against, it will not reproduce any other.
+    /// <para/>
+    /// Then place it on the body the GAME is currently handing us, which is the heeled foot, and report
+    /// how far that moves it. Writes Proteus/Meshes/toecap.bind on success.
+    /// </summary>
+    [Fact]
+    public void BakeAndCheckCapBind()
+    {
+        var capPath = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
+            @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
+        }.FirstOrDefault(File.Exists);
+        if (capPath == null || !File.Exists(Sho)) return;
+
+        var cap = File.ReadAllBytes(capPath);
+        var reference = new[] { File.ReadAllBytes(Sho) };
+        var log = new List<string>();
+        var bind = SecondSkinWriter.BakeCapBind(cap, reference, log.Add);
+        foreach (var l in log) o.WriteLine(l);
+        o.WriteLine($"bind is {bind.Length} bytes");
+
+        // What the cap actually is, to measure the round trip against.
+        var authoredMeshes = SecondSkinWriter.ReadCapMeshes(cap).ToDictionary(x => x.Mesh, x => x.Pos);
+        var placedRef = SecondSkinWriter.TryPlaceCapFromBind(bind, reference, o.WriteLine);
+        Assert.NotNull(placedRef);
+        foreach (var pl in placedRef!)
+        {
+            if (!authoredMeshes.TryGetValue(pl.Mesh, out var src)) continue;
+            double sum = 0, worst = 0;
+            int n = Math.Min(pl.Pos.Length, src.Length);
+            for (int i = 0; i < n; i++)
+            {
+                double d = Math.Sqrt(Math.Pow(pl.Pos[i].X - src[i].X, 2)
+                                   + Math.Pow(pl.Pos[i].Y - src[i].Y, 2)
+                                   + Math.Pow(pl.Pos[i].Z - src[i].Z, 2));
+                sum += d; worst = Math.Max(worst, d);
+            }
+            o.WriteLine($"ROUND TRIP mesh {pl.Mesh}: {n} verts, mean {sum / Math.Max(1, n):F6}, "
+                      + $"worst {worst:F6}, {pl.Missed} unplaced");
+        }
+
+        // ...and onto whatever the game is wearing right now.
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        var bodies = new List<byte[]>();
+        for (int i = 0; File.Exists(Path.Combine(dir, $"host0_body{i}.mdl")); i++)
+            bodies.Add(File.ReadAllBytes(Path.Combine(dir, $"host0_body{i}.mdl")));
+        if (bodies.Count > 0)
+        {
+            var placed = SecondSkinWriter.TryPlaceCapFromBind(bind, bodies, o.WriteLine);
+            if (placed != null)
+                foreach (var pl in placed)
+                {
+                    var p = pl.Pos;
+                    o.WriteLine($"EQUIPPED mesh {pl.Mesh}: bbox "
+                              + $"x {p.Min(q => q.X):F4}..{p.Max(q => q.X):F4} "
+                              + $"y {p.Min(q => q.Y):F4}..{p.Max(q => q.Y):F4} "
+                              + $"z {p.Min(q => q.Z):F4}..{p.Max(q => q.Z):F4}, {pl.Missed} unplaced");
+                }
+        }
+
+        var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", "toecap.bind");
+        if (Directory.Exists(Path.GetDirectoryName(outPath)!))
+        {
+            File.WriteAllBytes(outPath, bind);
+            o.WriteLine($"wrote {outPath}");
         }
     }
 

@@ -115,12 +115,37 @@ public sealed class SecondSkinService
             }
             authoredCap = File.ReadAllBytes(path);
             log.Information("[Proteus] second skin: authored toe cap loaded ({0} bytes)", authoredCap.Length);
+
+            // Its binding to the body, if one has been baked. Without it the cap is only correct on the
+            // foot it was modelled against — a foot in heels is a different model in a different pose and
+            // the cap ends up hanging off the end of the toes.
+            var bindPath = Path.Combine(dir, "Meshes", "toecap.bind");
+            if (File.Exists(bindPath))
+            {
+                authoredCapBind = File.ReadAllBytes(bindPath);
+                log.Information("[Proteus] second skin: toe cap binding loaded ({0} bytes)",
+                    authoredCapBind.Length);
+            }
+            else
+            {
+                log.Debug("[Proteus] second skin: no toe cap binding at {0} — cap fits one foot only",
+                    bindPath);
+            }
         }
         catch (Exception ex)
         {
             log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
         }
         return authoredCap;
+    }
+
+    /// <summary>The cap's binding to the body atlas; see <see cref="AuthoredCap"/>, which loads it.</summary>
+    private byte[]? authoredCapBind;
+
+    private byte[]? AuthoredCapBind()
+    {
+        AuthoredCap();
+        return authoredCapBind;
     }
 
     /// <summary>
@@ -818,7 +843,7 @@ public sealed class SecondSkinService
             {
                 shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
                     out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg),
-                    AuthoredCap());
+                    AuthoredCap(), AuthoredCapBind());
             }
             catch (Exception ex)
             {
