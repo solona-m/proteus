@@ -125,6 +125,8 @@ public class ToeCapDiagTests
             WriteObj(plain,  Path.Combine(Scratch, "game_plain.obj"));
             WriteObj(capped, Path.Combine(Scratch, "game_capped.obj"));
             o.WriteLine($"wrote game_plain.obj / game_capped.obj from {Path.GetFileName(info)}");
+
+            foreach (var l in SeamWeights(capped)) o.WriteLine(l);
             return;   // one host is enough — the feet live on whichever host took the stocking
         }
     }
@@ -276,6 +278,169 @@ public class ToeCapDiagTests
         o.WriteLine("wrote cap.obj");
     }
 
+    /// <summary>
+    /// Do the two sides of the cap/shell join carry the SAME skinning? The positions are snapped until
+    /// they coincide, but coincident is a bind-pose statement: two vertices in the same place with
+    /// different weights sit together in the T-pose and pull apart the moment the foot is posed, which
+    /// is the only pose anyone ever sees. Every measurement in this harness is bind-pose, so this is the
+    /// one thing it cannot see by looking at positions.
+    /// <para/>
+    /// Pairs up vertices from DIFFERENT meshes that share a position and reports where their weights
+    /// disagree, resolved through each mesh's own bone table to names.
+    /// </summary>
+    private static List<string> SeamWeights(byte[] m)
+    {
+        ushort U16(int x) => BitConverter.ToUInt16(m, x);
+        uint U32(int x) => BitConverter.ToUInt32(m, x);
+
+        int declCount = U16(12);
+        const int declSize = 17 * 8;
+        int declEnd = 0x44 + declCount * declSize;
+        int strSize = (int)U32(declEnd + 4);
+        int strBlock = declEnd + 8;
+        int mh = strBlock + strSize;
+        ushort meshCount = U16(mh + 4), attrCount = U16(mh + 6), submeshCount = U16(mh + 8);
+        ushort matCount = U16(mh + 10), boneCount = U16(mh + 12), boneTableCount = U16(mh + 14);
+        ushort elemCount = U16(mh + 24);
+        byte tsMesh = m[mh + 26], flags2 = m[mh + 27];
+        ushort tsSub = U16(mh + 38);
+        int lodStart = mh + 56 + elemCount * 32;
+        int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
+        int attrStart = meshStart + meshCount * 36;
+        int subStart = attrStart + attrCount * 4 + tsMesh * 20;
+        int matOff = subStart + submeshCount * 16 + tsSub * 12;
+        int boneOff = matOff + matCount * 4;
+        uint vtxOff = U32(16);
+
+        string Str(uint rel)
+        {
+            int a = strBlock + (int)rel, e = a;
+            while (m[e] != 0) e++;
+            return Encoding.ASCII.GetString(m, a, e - a);
+        }
+
+        int p2 = boneOff + boneCount * 4;
+        var tables = new ushort[boneTableCount][];
+        for (int i = 0; i < boneTableCount; i++)
+        {
+            int hp = p2 + i * 4;
+            ushort off = U16(hp), size = U16(hp + 2);
+            int data = hp + off * 4;
+            var t = new ushort[size];
+            for (int k = 0; k < size; k++) t[k] = U16(data + k * 2);
+            tables[i] = t;
+        }
+
+        var all = new List<(int Mesh, float X, float Y, float Z, Dictionary<string, float> W)>();
+        for (int mi = 0; mi < meshCount; mi++)
+        {
+            int mo = meshStart + mi * 36;
+            ushort vc = U16(mo);
+            if (vc == 0) continue;
+            ushort boneTbl = U16(mo + 14);
+            uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] bs = { m[mo + 32], m[mo + 33], m[mo + 34] };
+
+            (byte Stream, byte Offset, byte Type)? pos = null, wgt = null, idx = null;
+            for (int e = 0; e < 17; e++)
+            {
+                int x = 0x44 + mi * declSize + e * 8;
+                if (m[x] == 0xFF) break;
+                if (m[x + 3] == 0) pos ??= (m[x], m[x + 1], m[x + 2]);
+                if (m[x + 3] == 1) wgt ??= (m[x], m[x + 1], m[x + 2]);
+                if (m[x + 3] == 2) idx ??= (m[x], m[x + 1], m[x + 2]);
+            }
+            if (pos is not { } pe || wgt is not { } we || idx is not { } ie) continue;
+            var table = boneTbl < tables.Length ? tables[boneTbl] : [];
+
+            for (int v = 0; v < vc; v++)
+            {
+                int pa = (int)(vtxOff + vbo[pe.Stream]) + v * bs[pe.Stream] + pe.Offset;
+                float x2, y2, z2;
+                if (pe.Type == 14)
+                { x2 = (float)BitConverter.ToHalf(m, pa); y2 = (float)BitConverter.ToHalf(m, pa + 2); z2 = (float)BitConverter.ToHalf(m, pa + 4); }
+                else
+                { x2 = BitConverter.ToSingle(m, pa); y2 = BitConverter.ToSingle(m, pa + 4); z2 = BitConverter.ToSingle(m, pa + 8); }
+                if (y2 > 0.08f) continue;   // feet only
+
+                int wa = (int)(vtxOff + vbo[we.Stream]) + v * bs[we.Stream] + we.Offset;
+                int ia = (int)(vtxOff + vbo[ie.Stream]) + v * bs[ie.Stream] + ie.Offset;
+                var w = new Dictionary<string, float>();
+                for (int k = 0; k < 4; k++)
+                {
+                    float f = m[wa + k] / 255f;
+                    if (f <= 0f) continue;
+                    int local = m[ia + k];
+                    string nm = local < table.Length && table[local] < boneCount
+                        ? Str(U32(boneOff + table[local] * 4)) : $"?{local}";
+                    w[nm] = w.GetValueOrDefault(nm) + f;
+                }
+                all.Add((mi, x2, y2, z2, w));
+            }
+        }
+
+        // Nearest neighbour ACROSS meshes rather than exact coincidence. The weld lands a shell vertex on
+        // the nearest POINT of a cap segment, so the two sides almost never share a coordinate exactly —
+        // testing for that found 10 pairs out of some 140 welded vertices and said nothing about the rest.
+        var outp = new List<string>();
+        int pairs = 0, disagree = 0;
+        float worst = 0f;
+        var byPair = new Dictionary<(int, int), (int N, int Bad, float Worst)>();
+        // Bucketed by how far apart the pair actually is. Two vertices 1.5mm apart on the body carry
+        // measurably different weights all by themselves — the body's own field varies over that
+        // distance — so a flat "nearest neighbour disagrees" number says nothing about continuity. What
+        // matters is the trend as the distance goes to zero: if the disagreement vanishes with it, the
+        // two surfaces share one weight field and the join cannot open however the foot is posed.
+        var buckets = new (float Max, int N, float Sum, float Worst)[]
+        {
+            (0.00005f, 0, 0, 0), (0.0002f, 0, 0, 0), (0.0005f, 0, 0, 0),
+            (0.001f, 0, 0, 0), (0.0015f, 0, 0, 0),
+        };
+        const float near = 0.0015f;
+        for (int i = 0; i < all.Count; i++)
+        {
+            int bestJ = -1;
+            float bestD = near * near;
+            for (int j = 0; j < all.Count; j++)
+            {
+                if (all[j].Mesh == all[i].Mesh) continue;
+                float dx = all[i].X - all[j].X, dy = all[i].Y - all[j].Y, dz = all[i].Z - all[j].Z;
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < bestD) { bestD = d2; bestJ = j; }
+            }
+            if (bestJ < 0) continue;
+            pairs++;
+            float d = 0f;
+            foreach (var nm in all[i].W.Keys.Union(all[bestJ].W.Keys))
+                d += MathF.Abs(all[i].W.GetValueOrDefault(nm) - all[bestJ].W.GetValueOrDefault(nm));
+            d /= 2f;   // total variation distance: 0 = identical, 1 = nothing in common
+            var k2 = (Math.Min(all[i].Mesh, all[bestJ].Mesh), Math.Max(all[i].Mesh, all[bestJ].Mesh));
+            var acc = byPair.GetValueOrDefault(k2);
+            byPair[k2] = (acc.N + 1, acc.Bad + (d > 0.02f ? 1 : 0), MathF.Max(acc.Worst, d));
+            if (d > 0.02f) disagree++;
+            worst = MathF.Max(worst, d);
+
+            float gap = MathF.Sqrt(bestD);
+            for (int q = 0; q < buckets.Length; q++)
+                if (gap <= buckets[q].Max)
+                {
+                    buckets[q] = (buckets[q].Max, buckets[q].N + 1, buckets[q].Sum + d,
+                                  MathF.Max(buckets[q].Worst, d));
+                    break;
+                }
+        }
+        outp.Add($"seam weights: {pairs} coincident cross-mesh vertex pair(s) on the feet, "
+               + $"{disagree} disagree by >2%, worst {worst * 100:0.0}%");
+        foreach (var kv in byPair.OrderByDescending(k => k.Value.N))
+            outp.Add($"   mesh{kv.Key.Item1} / mesh{kv.Key.Item2}: {kv.Value.N} pairs, "
+                   + $"{kv.Value.Bad} disagree, worst {kv.Value.Worst * 100:0.0}%");
+        outp.Add("   by how far apart the pair is (mean / worst disagreement):");
+        foreach (var b in buckets)
+            outp.Add($"      within {b.Max:F5}: {b.N,5} pairs  mean {(b.N > 0 ? b.Sum / b.N : 0) * 100,5:0.0}%"
+                   + $"  worst {b.Worst * 100,5:0.0}%");
+        return outp;
+    }
+
     /// <summary>Per-mesh submesh layout of a SOURCE model — a generated triangle has to fit in one.</summary>
     private static List<string> Submeshes(byte[] m)
     {
@@ -396,6 +561,7 @@ public class ToeCapDiagTests
                 ts.Append("vt ").Append(F(u)).Append(' ').Append(F(v)).Append('\n');
             }
 
+            fs.Append("g mesh").Append(mi).Append('\n');
             for (uint t = 0; t + 2 < idxCount; t += 3)
             {
                 int p = (int)(idxOff + (startIdx + t) * 2);

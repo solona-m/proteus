@@ -104,13 +104,24 @@ public static class SecondSkinWriter
     /// a truncated buffer, anything Parse rejects. The caller treats that as "no seam data" and falls back.
     /// </summary>
     public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs, out int[] triangles)
+        => TryReadLod0Geometry(mdl, out positions, out uvs, out triangles, out _);
+
+    /// <inheritdoc cref="TryReadLod0Geometry(byte[], out float[], out float[], out int[])"/>
+    /// <param name="weights">
+    /// Per vertex, the bones it is skinned to BY NAME with their weights. Names, not indices: an index is
+    /// only meaningful against the mesh's own bone table, and the whole point of reading these is to hand
+    /// them to a different mesh.
+    /// </param>
+    public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs,
+                                           out int[] triangles, out (string Bone, float W)[][] weights)
     {
-        positions = []; uvs = []; triangles = [];
+        positions = []; uvs = []; triangles = []; weights = [];
         Source src;
         try { src = Parse(mdl); }
         catch { return false; }
 
         var s = src.S;
+        var wgt = new List<(string Bone, float W)[]>();
 
         // SKIN MESHES ONLY. A body model is not all skin: it carries the smallclothes/undies mesh, nails,
         // piercings and pubes, and each of those is authored in its OWN UV layout (gear space, not body
@@ -137,13 +148,18 @@ public static class SecondSkinWriter
             if (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null) continue;
 
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
-            VElem? posEl = null, uvEl = null;
+            VElem? posEl = null, uvEl = null, wEl = null, iEl = null;
             foreach (var el in decl)
             {
                 if (el.Usage == UsePosition) posEl ??= el;
                 else if (el.Usage == UseUV && el.UsageIndex == 0) uvEl ??= el;
+                else if (el.Usage == UseBlendWeight) wEl ??= el;
+                else if (el.Usage == UseBlendIndices) iEl ??= el;
             }
             if (posEl is not { } pe || uvEl is not { } ue) continue;
+
+            ushort meshBoneTbl = BitConverter.ToUInt16(s, mo + 14);
+            var boneTbl = meshBoneTbl < src.BoneTables.Length ? src.BoneTables[meshBoneTbl] : [];
 
             uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24), BitConverter.ToUInt32(s, mo + 28) };
             byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
@@ -159,9 +175,27 @@ public static class SecondSkinWriter
                 if (pa < 0 || ua < 0 || pa + 16 > s.Length || ua + 16 > s.Length) { ok = false; break; }
                 ReadTyped(s, pa, pe.Type, tmp); pos.Add(tmp[0]); pos.Add(tmp[1]); pos.Add(tmp[2]);
                 ReadTyped(s, ua, ue.Type, tmp); uv.Add(tmp[0]); uv.Add(tmp[1]);
+
+                if (wEl is not { } we2 || iEl is not { } ie2 || we2.Stream > 2 || ie2.Stream > 2)
+                { wgt.Add([]); continue; }
+                int wa = (int)(src.Vb + vbo[we2.Stream]) + k * bs[we2.Stream] + we2.Offset;
+                int ia2 = (int)(src.Vb + vbo[ie2.Stream]) + k * bs[ie2.Stream] + ie2.Offset;
+                if (wa < 0 || ia2 < 0 || wa + 4 > s.Length || ia2 + 4 > s.Length) { wgt.Add([]); continue; }
+                var acc = new List<(string, float)>(4);
+                for (int q = 0; q < 4; q++)
+                {
+                    float f = s[wa + q] / 255f;
+                    if (f <= 0f) continue;
+                    int local = s[ia2 + q];
+                    if (local >= boneTbl.Length || boneTbl[local] >= src.BoneNames.Length) continue;
+                    acc.Add((src.BoneNames[boneTbl[local]], f));
+                }
+                wgt.Add(acc.ToArray());
             }
             if (!ok) { pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3);
-                       uv.RemoveRange(baseVertex * 2, uv.Count - baseVertex * 2); continue; }
+                       uv.RemoveRange(baseVertex * 2, uv.Count - baseVertex * 2);
+                       if (wgt.Count > baseVertex) wgt.RemoveRange(baseVertex, wgt.Count - baseVertex);
+                       continue; }
 
             for (uint i = 0; i + 2 < ic; i += 3)
             {
@@ -175,6 +209,8 @@ public static class SecondSkinWriter
 
         if (tri.Count == 0) return false;
         positions = pos.ToArray(); uvs = uv.ToArray(); triangles = tri.ToArray();
+        while (wgt.Count < pos.Count / 3) wgt.Add([]);
+        weights = wgt.ToArray();
         return true;
     }
 
@@ -356,6 +392,22 @@ public static class SecondSkinWriter
         int triIn = 0, triOut = 0, vertOut = 0;
         int shapedTotal = 0;   // index entries rewired to a morphed vertex by an enabled body shape key
 
+        // The rim of the cap the CURRENT layer is about to graft, already pushed to that layer's offset,
+        // and how many shell vertices have been welded onto it. Set before the layer's bodies are emitted
+        // so each shell mesh can close onto it as it goes; null on a layer with no cap.
+        RimSeg[]? weldRim = null;
+        // Which cap vertices (pre-split indices) that rim runs through, so the graft knows which of its
+        // own vertices to snap back. Per layer, for the same reason the rim itself is.
+        var weldRimVerts = new HashSet<int>();
+        int welded = 0, weldWorst = 0;
+        float weldWorstD = 0f;
+
+        // ...and the return half: the shell's OWN rim once it has been welded, carrying the normals it
+        // had BEFORE averaging, for the cap to be snapped back onto when it is grafted.
+        var shellRim = new List<RimSeg>();
+        RimSeg[]? shellRimArr = null;
+        int capWelded = 0;
+
         // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
         // byte copy, keep every triangle, keep the authored material index) and the shell layers
         // (preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed). Mutates the shared
@@ -380,6 +432,9 @@ public static class SecondSkinWriter
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
 
             byte[][] outStreams; byte[] outStrides; byte[] declBlock;
+            // Set when the cap is reskinned: its blend indices then address THIS table, not the one the
+            // authored mesh shipped with.
+            ushort[]? capBoneTable = null;
             (float U, float V)[] uv;
             Vec3[]? capSrcPos = null, capOutPos = null;   // set only where a toe cap actually moved geometry
             ToeCapPlan? capPlan = null;
@@ -387,7 +442,11 @@ public static class SecondSkinWriter
             {
                 CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
                     out outStreams, out outStrides, out declBlock);
-                uv = [];   // no coverage trim for the host mesh
+                // The host accessory has no coordinate to trim by; the grafted cap does, and it MUST be
+                // trimmed the same way the shell is. Without this every capped layer emitted the entire
+                // cap whatever that layer covered — so an overlay reaching a sliver of the foot still put
+                // a full toe box on top of everything, with its rim attached to nothing.
+                uv = capUv is { } uvPlan ? uvPlan.Uv : [];
 
                 // A supplied UV still has to be written, and this path copies bytes rather than going
                 // through BuildVerbatim, so it does not happen by itself. The authored toe cap arrives
@@ -417,6 +476,135 @@ public static class SecondSkinWriter
                     }
                     outStreams = grownStreams;
                     vc = (ushort)nvNew;
+
+                    // RESKIN THE CAP TO THE BODY. The cap ships with authored weights, and they are not
+                    // wrong so much as unrelated: the shell around it carries the BODY's weights, and
+                    // where the two meet they disagreed on 123 of 192 vertex pairs by as much as 12.5%.
+                    // Coincident positions with different weights is a bind-pose weld — the two edges sit
+                    // together in the T-pose and separate as soon as a toe bends, which is every pose
+                    // anyone actually sees. Taking the weights from the same body triangle the UV already
+                    // comes from makes the cap deform identically to the skin under it, so the join holds
+                    // by construction rather than by measurement.
+                    //
+                    // The bone table grows to fit: the cap's own table is unlikely to name every bone the
+                    // body's foot uses, and an index is only meaningful against the table it belongs to.
+                    if (plan.Weights.Length == nvNew)
+                    {
+                        VElem? wEl2 = null, iEl2 = null;
+                        foreach (var el in decl)
+                        {
+                            if (el.Usage == UseBlendWeight) wEl2 ??= el;
+                            if (el.Usage == UseBlendIndices) iEl2 ??= el;
+                        }
+                        if (wEl2 is { } we5 && iEl2 is { } ie5)
+                        {
+                            var srcTbl = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
+                            var tbl = new List<ushort>();
+                            var slot = new Dictionary<string, int>();
+                            foreach (var bi in srcTbl)
+                            {
+                                var nmB = bi < src.BoneNames.Length ? src.BoneNames[bi] : null;
+                                if (nmB != null && boneIndex.TryGetValue(nmB, out var ui2))
+                                { slot.TryAdd(nmB, tbl.Count); tbl.Add(ui2); }
+                                else tbl.Add(0);
+                            }
+                            int reskinned = 0, dropped = 0;
+                            for (int i = 0; i < nvNew; i++)
+                            {
+                                var w = plan.Weights[i];
+                                if (w.Length == 0) continue;
+                                Span<byte> wb2 = stackalloc byte[4], ib2 = stackalloc byte[4];
+                                int used2 = 0, total = 0;
+                                foreach (var (bone, f) in w)
+                                {
+                                    if (used2 == 4) break;
+                                    if (!slot.TryGetValue(bone, out int at2))
+                                    {
+                                        if (!boneIndex.TryGetValue(bone, out var ui3)) { dropped++; continue; }
+                                        if (tbl.Count >= 255) { dropped++; continue; }
+                                        slot[bone] = at2 = tbl.Count;
+                                        tbl.Add(ui3);
+                                    }
+                                    byte q = (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
+                                    if (q == 0) continue;
+                                    ib2[used2] = (byte)at2; wb2[used2] = q; total += q;
+                                    used2++;
+                                }
+                                if (used2 == 0) continue;
+                                // The four bytes must come to 255 or the vertex shrinks toward the origin.
+                                wb2[0] = (byte)Math.Clamp(wb2[0] + (255 - total), 0, 255);
+                                int wo = i * outStrides[we5.Stream] + we5.Offset;
+                                int io = i * outStrides[ie5.Stream] + ie5.Offset;
+                                for (int q2 = 0; q2 < 4; q2++)
+                                {
+                                    outStreams[we5.Stream][wo + q2] = wb2[q2];
+                                    outStreams[ie5.Stream][io + q2] = ib2[q2];
+                                }
+                                reskinned++;
+                            }
+                            capBoneTable = tbl.ToArray();
+                            diag?.Invoke($"authored cap: reskinned {reskinned} vertices from the body, "
+                                       + $"bone table {srcTbl.Length} -> {tbl.Count}"
+                                       + (dropped > 0 ? $", {dropped} influence(s) dropped" : ""));
+                        }
+                    }
+
+                    // Two corrections, both on the cap's own vertices, both needed before the UV pass.
+                    //
+                    // PUSH. The cap is authored ON the skin; the shell it lands in is pushed off it. Left
+                    // at zero the shell's cut edge stands proud of the cap by the whole offset — 0.001,
+                    // better than a quarter of the mesh's own edge — as a lip running the length of the
+                    // join with bare skin showing in it.
+                    //
+                    // SNAP BACK. The shell has already been pulled onto this rim, but that is only half a
+                    // weld: measured after the shell pass alone, every shell vertex sat exactly on a cap
+                    // segment while 110 of the cap's 112 rim vertices had no shell vertex on them — so the
+                    // shell's edge ran as a chord past each one and the lens between chord and cap
+                    // boundary was an open gap, up to 0.00047. Pulling the rim back onto the shell's makes
+                    // each polyline pass through the other's vertices, and two polylines that do that
+                    // trace the same path. The normal is averaged at the same time and against the
+                    // shell's PRE-average value, so both sides arrive at the same answer and the join
+                    // stops shading as a crease — which is what makes it read as a dark line even when
+                    // there is no light coming through.
+                    VElem? pEl = null, nEl = null;
+                    foreach (var el in decl)
+                    {
+                        if (el.Usage == UsePosition) pEl ??= el;
+                        if (el.Usage == UseNormal) nEl ??= el;
+                    }
+                    if (pEl is { } pe3 && nEl is { } ne3 && (push != 0f || shellRim.Count > 0))
+                    {
+                        Span<float> tmp3 = stackalloc float[4];
+                        for (int i = 0; i < vc; i++)
+                        {
+                            ReadTyped(outStreams[ne3.Stream], i * outStrides[ne3.Stream] + ne3.Offset,
+                                      ne3.Type, tmp3);
+                            float nx = tmp3[0], ny = tmp3[1], nz = tmp3[2];
+                            if (ne3.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+                            var n3 = NormalizeOr(new Vec3(nx, ny, nz), default);
+                            if (n3 is { X: 0, Y: 0, Z: 0 }) continue;
+
+                            int po = i * outStrides[pe3.Stream] + pe3.Offset;
+                            ReadTyped(outStreams[pe3.Stream], po, pe3.Type, tmp3);
+                            var p3 = new Vec3(tmp3[0] + n3.X * push, tmp3[1] + n3.Y * push,
+                                              tmp3[2] + n3.Z * push);
+
+                            int from2 = plan.SourceOf[i];
+                            if (shellRim.Count > 0 && weldRimVerts.Contains(from2)
+                                && NearestOnRim(p3, shellRimArr ??= shellRim.ToArray(), CapWeldRadius,
+                                                out var onShell, out var shellN, out _, out _))
+                            {
+                                p3 = onShell;
+                                var avg = NormalizeOr(new Vec3(n3.X + shellN.X, n3.Y + shellN.Y,
+                                                               n3.Z + shellN.Z), n3);
+                                WriteNormal(outStreams[ne3.Stream],
+                                            i * outStrides[ne3.Stream] + ne3.Offset, ne3.Type,
+                                            avg.X, avg.Y, avg.Z);
+                                capWelded++;
+                            }
+                            WriteXYZ(outStreams[pe3.Stream], po, pe3.Type, p3.X, p3.Y, p3.Z);
+                        }
+                    }
 
                     VElem? u0 = null, u1 = null;
                     foreach (var el in decl)
@@ -568,6 +756,221 @@ public static class SecondSkinWriter
             }
             if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
 
+            // ── weld the cut lip onto the cap's rim ───────────────────────────────────────────────────
+            // The cut is decided in TEXTURE space, from a painted map, so its edge lands wherever the
+            // map's texels happen to fall — measured, a median of 0.007 from where the cap's boundary
+            // actually is, in a ragged line following the texel grid. The cap then either laps over the
+            // shell or leaves bare skin showing, and the join reads as a torn edge either way.
+            //
+            // Each lip vertex slides onto the NEAREST POINT OF A RIM SEGMENT, not onto the nearest rim
+            // vertex. The two loops have different vertex counts (56 on the cap against 107 and 90 on the
+            // shell), so vertex-to-vertex pairing would collapse several lip vertices onto one rim vertex
+            // and tear the triangles between them. The cap is snapped back onto this rim in the graft —
+            // see the note there for why only doing it in this direction leaves a gap.
+            if (weldRim is { Length: > 0 } wr && !preserve)
+            {
+                VElem? pEl2 = null, nEl2 = null, wEl3 = null, iEl3 = null;
+                foreach (var el in decl)
+                {
+                    if (el.Usage == UsePosition) pEl2 ??= el;
+                    if (el.Usage == UseNormal) nEl2 ??= el;
+                    if (el.Usage == UseBlendWeight) wEl3 ??= el;
+                    if (el.Usage == UseBlendIndices) iEl3 ??= el;
+                }
+                if (pEl2 is { } pw2)
+                {
+                    int stride = outStrides[pw2.Stream];
+                    var movedV = new bool[vc];
+                    var weldPos = new Vec3[vc];
+                    var weldNrm = new Vec3[vc];
+                    var weldWgt = new (string Bone, float W)[vc][];
+                    for (int i = 0; i < vc; i++) weldWgt[i] = [];
+                    Span<float> tmpW = stackalloc float[4];
+
+                    // The shell's bone table, grown on demand so a welded vertex can be given the cap's
+                    // skinning even when that names a bone this mesh never used.
+                    var shellTbl = new List<ushort>();
+                    var shellSlot = new Dictionary<string, int>();
+                    {
+                        var st0 = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
+                        foreach (var bi in st0)
+                        {
+                            var nmB = bi < src.BoneNames.Length ? src.BoneNames[bi] : null;
+                            if (nmB != null && boneIndex.TryGetValue(nmB, out var ui4))
+                            { shellSlot.TryAdd(nmB, shellTbl.Count); shellTbl.Add(ui4); }
+                            else shellTbl.Add(0);
+                        }
+                    }
+                    int reweighted = 0;
+
+                    // TWICE, and the second round is not belt and braces. Dropping a collapsed triangle
+                    // EXPOSES vertices that were interior when the boundary was worked out, and those
+                    // never got a look — measured, one such vertex sat 0.0075 from the rim, two edge
+                    // lengths, holding the join open at exactly one spot on the sole while the median
+                    // along the rest of it was already 0.000015. A second round costs nothing because
+                    // every vertex settled in the first is skipped.
+                    for (int round = 0; round < WeldRounds; round++)
+                    {
+                        // WHAT COUNTS AS THE LIP is the shell's open boundary, not "whatever the toe-cap
+                        // cut removed". Keying off the cut alone left every vertex that coverage trimming
+                        // exposed along the same line unwelded. A hole is a hole whatever made it.
+                        var edgeUses = new Dictionary<(ushort, ushort), int>();
+                        foreach (var sub in keptPerSub)
+                            for (int t = 0; t + 2 < sub.Length; t += 3)
+                                for (int k = 0; k < 3; k++)
+                                {
+                                    ushort x = sub[t + k], y = sub[t + (k + 1) % 3];
+                                    var e = (Math.Min(x, y), Math.Max(x, y));
+                                    edgeUses[e] = edgeUses.GetValueOrDefault(e) + 1;
+                                }
+                        var onBoundary = new bool[vc];
+                        foreach (var (e, n) in edgeUses)
+                            if (n == 1) { onBoundary[e.Item1] = true; onBoundary[e.Item2] = true; }
+
+                        int movedThisRound = 0;
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (!used[i] || !onBoundary[i] || movedV[i]) continue;
+                            int po = i * stride + pw2.Offset;
+                            ReadTyped(outStreams[pw2.Stream], po, pw2.Type, tmpW);
+                            var p = new Vec3(tmpW[0], tmpW[1], tmpW[2]);
+
+                            // Past the radius the vertex is not on the cap's boundary at all — the far
+                            // side of a toe, or another hole entirely — and dragging it in would fold the
+                            // mesh. Counted only on the last round, or the first round's near misses get
+                            // reported twice.
+                            if (!NearestOnRim(p, wr, WeldRadius, out var best, out var capN, out var capW,
+                                              out float dist))
+                            { if (round == WeldRounds - 1) weldWorst++; continue; }
+                            WriteXYZ(outStreams[pw2.Stream], po, pw2.Type, best.X, best.Y, best.Z);
+                            movedV[i] = true;
+                            weldPos[i] = best;
+                            welded++;
+                            movedThisRound++;
+                            weldWorstD = MathF.Max(weldWorstD, dist);
+
+                            // THE SKINNING MOVES WITH THE VERTEX. This is the half that was missing, and
+                            // it is the half that shows: a lip vertex dragged as much as 0.0118 kept the
+                            // weights of where it used to be, so it ended up sitting exactly on a cap
+                            // vertex skinned from somewhere else. Measured, the pairs that coincided most
+                            // closely were the ones that disagreed most — mean 8.3% against 0.1% for
+                            // pairs a fifth of a millimetre apart. In bind pose that is invisible; posed,
+                            // it is the seam.
+                            weldWgt[i] = capW;
+                            if (wEl3 is { } we6 && iEl3 is { } ie6 && capW.Length > 0)
+                            {
+                                Span<byte> wb3 = stackalloc byte[4], ib3 = stackalloc byte[4];
+                                int used3 = 0, total3 = 0;
+                                foreach (var (bone, f) in capW)
+                                {
+                                    if (used3 == 4) break;
+                                    if (!shellSlot.TryGetValue(bone, out int at3))
+                                    {
+                                        if (!boneIndex.TryGetValue(bone, out var ui5)) continue;
+                                        if (shellTbl.Count >= 255) continue;
+                                        shellSlot[bone] = at3 = shellTbl.Count;
+                                        shellTbl.Add(ui5);
+                                    }
+                                    byte q3 = (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
+                                    if (q3 == 0) continue;
+                                    ib3[used3] = (byte)at3; wb3[used3] = q3; total3 += q3;
+                                    used3++;
+                                }
+                                if (used3 > 0)
+                                {
+                                    wb3[0] = (byte)Math.Clamp(wb3[0] + (255 - total3), 0, 255);
+                                    int wo3 = i * outStrides[we6.Stream] + we6.Offset;
+                                    int io3 = i * outStrides[ie6.Stream] + ie6.Offset;
+                                    for (int q4 = 0; q4 < 4; q4++)
+                                    {
+                                        outStreams[we6.Stream][wo3 + q4] = wb3[q4];
+                                        outStreams[ie6.Stream][io3 + q4] = ib3[q4];
+                                    }
+                                    reweighted++;
+                                }
+                            }
+
+                            if (nEl2 is not { } ne4) continue;
+                            int no = i * outStrides[ne4.Stream] + ne4.Offset;
+                            ReadTyped(outStreams[ne4.Stream], no, ne4.Type, tmpW);
+                            float sx = tmpW[0], sy = tmpW[1], sz = tmpW[2];
+                            if (ne4.Type == 8) { sx = sx * 2 - 1; sy = sy * 2 - 1; sz = sz * 2 - 1; }
+                            var own = NormalizeOr(new Vec3(sx, sy, sz), capN);
+                            // Kept BEFORE averaging: the cap has to average against the shell's own
+                            // normal, not against a value that already has the cap folded into it, or the
+                            // two sides land on different answers and the crease survives.
+                            weldNrm[i] = own;
+                            var avg = NormalizeOr(new Vec3(own.X + capN.X, own.Y + capN.Y, own.Z + capN.Z), own);
+                            WriteNormal(outStreams[ne4.Stream], no, ne4.Type, avg.X, avg.Y, avg.Z);
+                        }
+                        if (movedThisRound == 0) break;
+
+                        var wp = new Vec3[vc];
+                        for (int i = 0; i < vc; i++)
+                        {
+                            ReadTyped(outStreams[pw2.Stream], i * stride + pw2.Offset, pw2.Type, tmpW);
+                            wp[i] = new Vec3(tmpW[0], tmpW[1], tmpW[2]);
+                        }
+
+                        // Sliding the lip inevitably flattens a few of the triangles behind it — one
+                        // measured at an aspect ratio of 720, against 14 for the worst the mesh had
+                        // before. They have no area left to draw and the cap covers exactly where they
+                        // were, so they go.
+                        var lens = new List<float>();
+                        foreach (var sub in keptPerSub)
+                            for (int t = 0; t + 2 < sub.Length; t += 3)
+                                for (int k = 0; k < 3; k++)
+                                    lens.Add(Dist(wp[sub[t + k]], wp[sub[t + (k + 1) % 3]]));
+                        if (lens.Count > 0)
+                        {
+                            lens.Sort();
+                            float floorLen = lens[lens.Count / 2] * WeldCollapse;
+                            for (int su = 0; su < keptPerSub.Count; su++)
+                            {
+                                var sub = keptPerSub[su];
+                                var trimmed = new List<ushort>(sub.Length);
+                                for (int t = 0; t + 2 < sub.Length; t += 3)
+                                {
+                                    ushort a3 = sub[t], b3 = sub[t + 1], c3 = sub[t + 2];
+                                    bool touched = movedV[a3] || movedV[b3] || movedV[c3];
+                                    float shortest = MathF.Min(Dist(wp[a3], wp[b3]),
+                                                     MathF.Min(Dist(wp[b3], wp[c3]), Dist(wp[c3], wp[a3])));
+                                    if (touched && shortest < floorLen) { triOut--; continue; }
+                                    trimmed.Add(a3); trimmed.Add(b3); trimmed.Add(c3);
+                                }
+                                keptPerSub[su] = trimmed.ToArray();
+                            }
+                        }
+                    }
+
+                    if (welded > 0)
+                    {
+
+                        // The welded lip as segments, taken from the triangles that SURVIVED so a chord of
+                        // a dropped one cannot pull the cap sideways. Any edge with both ends on the lip
+                        // lies along the join; the few that cut across it are chords of the same line and
+                        // make no difference to a nearest-point query.
+                        var seenEdge = new HashSet<(ushort, ushort)>();
+                        foreach (var sub in keptPerSub)
+                            for (int t = 0; t + 2 < sub.Length; t += 3)
+                                for (int k = 0; k < 3; k++)
+                                {
+                                    ushort x = sub[t + k], y = sub[t + (k + 1) % 3];
+                                    if (!movedV[x] || !movedV[y]) continue;
+                                    if (!seenEdge.Add((Math.Min(x, y), Math.Max(x, y)))) continue;
+                                    shellRim.Add(new RimSeg(weldPos[x], weldNrm[x], weldWgt[x],
+                                                            weldPos[y], weldNrm[y], weldWgt[y]));
+                                }
+                    }
+                    if (reweighted > 0)
+                    {
+                        capBoneTable = shellTbl.ToArray();
+                        diag?.Invoke($"authored cap: {reweighted} welded shell vertices took the rim's "
+                                   + $"skinning, bone table -> {shellTbl.Count}");
+                    }
+                }
+            }
+
             if (!mapAppended)
             {
                 submeshBoneMap.AddRange(src.SubmeshBoneMap);
@@ -624,12 +1027,13 @@ public static class SecondSkinWriter
             // This mesh's OWN bone table, entries remapped onto the union list. Never merged with
             // other meshes' tables — ubyte4 vertex indices cap a table at 255 entries.
             var srcTable = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
-            var table = new ushort[srcTable.Length];
-            for (int i = 0; i < srcTable.Length; i++)
-            {
-                var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
-                table[i] = name != null && boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
-            }
+            var table = capBoneTable ?? new ushort[srcTable.Length];
+            if (capBoneTable == null)
+                for (int i = 0; i < srcTable.Length; i++)
+                {
+                    var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
+                    table[i] = name != null && boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
+                }
 
             var nm = new byte[36];
             W16(nm, 0, nv);
@@ -680,11 +1084,66 @@ public static class SecondSkinWriter
             float push = BaseOffset + LayerSeparation * layer;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
-            // Where an authored cap fills the toe box, pull the CUT in a little. The painted map says
-            // where a cap is wanted, not where the modelled one reaches, and it runs about 0.002 past
-            // the cap's rear edge — leaving a strip of bare skin whose edge follows the map's texel
-            // grid, which is what makes it look jagged. Eroding the map is enough: the cap then laps
-            // over the shell that survives instead of meeting it exactly.
+            // The cap's rim, pushed to this layer's offset, ready for the shell meshes below to close
+            // onto. It has to exist BEFORE they are emitted, which is why the projection runs here rather
+            // than at the graft — it is cached, so asking early costs nothing.
+            weldRim = null;
+            weldRimVerts.Clear();
+            welded = 0; weldWorst = 0; weldWorstD = 0f; capWelded = 0;
+            shellRim.Clear(); shellRimArr = null;
+            if (capSrc is { } cw && def.ToeCap != null)
+            {
+                var segs = new List<RimSeg>();
+                int cwEnd = cw.Lod0MeshIndex + cw.Lod0MeshCount;
+                for (int m = cw.Lod0MeshIndex; m < cwEnd && m < cw.MeshCount; m++)
+                {
+                    if (BitConverter.ToUInt16(cw.S, cw.MeshStart + m * 36) == 0) continue;
+                    if (!capUvCache.TryGetValue(m, out var pl))
+                        capUvCache[m] = pl = ProjectCapUV(cw, m, sources, diag);
+                    if (pl == null) continue;
+
+                    // The rim of the cap AS THIS LAYER WILL EMIT IT — that is, after the layer's own
+                    // coverage has trimmed it. It cannot be worked out once and shared: a layer covering
+                    // a sliver of the foot keeps a sliver of the cap, and its rim is nothing like the
+                    // full cap's. Measured before this: the outer layer emitted the whole cap against a
+                    // 400-face shell and its boundary stood a median of 0.015 from anything to weld to,
+                    // a free edge across the top of the foot — which is what shows in game, because the
+                    // outermost layer is the one being looked at.
+                    //
+                    // Counted on PRE-SPLIT indices: a split vertex has one copy per UV chart, so counting
+                    // on the split indices would read the seam as a boundary and run a phantom rim
+                    // through the middle of the cap.
+                    var edgeUse = new Dictionary<(int A, int B), int>();
+                    for (int f = 0; f * 3 + 2 < pl.Corner.Length; f++)
+                    {
+                        int c0 = pl.Corner[f * 3], c1 = pl.Corner[f * 3 + 1], c2 = pl.Corner[f * 3 + 2];
+                        if (def.Coverage != null && !AnyVisible(def, pl.Uv[c0], pl.Uv[c1], pl.Uv[c2]))
+                            continue;
+                        int s0 = pl.SourceOf[c0], s1 = pl.SourceOf[c1], s2 = pl.SourceOf[c2];
+                        foreach (var (x, y) in new[] { (s0, s1), (s1, s2), (s2, s0) })
+                        {
+                            var e = (Math.Min(x, y), Math.Max(x, y));
+                            edgeUse[e] = edgeUse.GetValueOrDefault(e) + 1;
+                        }
+                    }
+                    foreach (var (e, n) in edgeUse)
+                    {
+                        if (n != 1) continue;
+                        var (pa, na) = (pl.SrcPos[e.A], pl.SrcNrm[e.A]);
+                        var (pb, nb) = (pl.SrcPos[e.B], pl.SrcNrm[e.B]);
+                        segs.Add(new RimSeg(
+                            new Vec3(pa.X + na.X * push, pa.Y + na.Y * push, pa.Z + na.Z * push), na, pl.SrcW[e.A],
+                            new Vec3(pb.X + nb.X * push, pb.Y + nb.Y * push, pb.Z + nb.Z * push), nb, pl.SrcW[e.B]));
+                        weldRimVerts.Add(e.A); weldRimVerts.Add(e.B);
+                    }
+                }
+                if (segs.Count > 0) weldRim = segs.ToArray();
+                diag?.Invoke($"authored cap: layer {layer} keeps a rim of {segs.Count} edge(s) after its "
+                           + "own coverage trims the cap");
+            }
+
+            // Where an authored cap fills the toe box, optionally pull the CUT in before it is applied.
+            // See CapCutErode — normally zero, because the weld above closes the join instead.
             var cutDef = def;
             if (capSrc != null && def.ToeCap is { } paint && def.ToeCapWidth > 0 && def.ToeCapHeight > 0)
             {
@@ -754,10 +1213,14 @@ public static class SecondSkinWriter
                 }
             }
 
+            if (weldRim != null)
+                diag?.Invoke($"authored cap: welded {welded} cut-lip vertices onto the rim "
+                           + $"(furthest moved {weldWorstD:F4}), {weldWorst} left beyond {WeldRadius:F3}");
+
             // Graft the authored cap on for any layer that asked for one, wearing that layer's material.
-            // Emitted VERBATIM for now — no push, no coverage trim, no displacement: it is already
-            // modelled where it belongs on the foot it was authored against. Fitting it to a different
-            // foot comes later and is a separate step; proving the merge itself comes first.
+            // Emitted verbatim apart from the layer push, the weld back onto the shell's rim, and the
+            // projected UV — it is already modelled where it belongs on the foot it was authored against.
+            // Fitting it to a DIFFERENT foot comes later and is a separate step.
             if (capSrc is { } cs && def.ToeCap != null)
             {
                 // The cap is authored WITHOUT UVs — every vertex arrives at (0,1), so without this it
@@ -777,13 +1240,14 @@ public static class SecondSkinWriter
                 for (int m = cs.Lod0MeshIndex; m < cEnd && m < cs.MeshCount; m++)
                 {
                     if (BitConverter.ToUInt16(cs.S, cs.MeshStart + m * 36) == 0) continue;   // empty mesh
-                    EmitMesh(cs, m, matIndex, 0f, preserve: true, cov: null, capMapBase,
+                    EmitMesh(cs, m, matIndex, push, preserve: true, cov: def, capMapBase,
                              ref capMapAppended, dropConnectors: false,
                              capUv: capUvCache.TryGetValue(m, out var cached) ? cached
                                   : capUvCache[m] = ProjectCapUV(cs, m, sources, diag));
                     emitted++;
                 }
-                diag?.Invoke($"authored toe cap: grafted {emitted} mesh(es) onto layer {layer}");
+                diag?.Invoke($"authored toe cap: grafted {emitted} mesh(es) onto layer {layer}, "
+                           + $"{capWelded} rim vertices welded back onto {shellRim.Count} shell segment(s)");
             }
         }
 
@@ -1432,10 +1896,45 @@ public static class SecondSkinWriter
 
     /// <summary>
     /// Texels the toe-cap map is pulled in by before it cuts, when an authored cap is filling the hole.
-    /// The map is painted to say where a cap is wanted; the modelled mesh decides where one actually is,
-    /// and it does not reach as far.
+    /// <para/>
+    /// Zero now: this existed to hide the mismatch between where the map cuts and where the cap's mesh
+    /// actually reaches, by leaving the shell lapping over the cap. The weld closes that properly, and
+    /// the two work against each other — eroding by 3 left the lip a median of 0.007 from the rim instead
+    /// of 0.002, and dragging it that far collapsed triangles (aspect 720, against 14 before). Kept as
+    /// one number so the lap can be brought back if a cap is ever authored short of its map.
     /// </summary>
-    private const int CapCutErode = 3;
+    private const int CapCutErode = 0;
+
+    /// <summary>
+    /// How far a boundary vertex may be dragged to meet the cap's rim. Past the widest mismatch the
+    /// painted map produces (0.0093 measured, against a median edge of 0.0037) and short of the next
+    /// open edge, so a vertex belonging to some other hole — an ankle cut, a coverage bite elsewhere —
+    /// is left alone. It has to be tighter than it once was: the test is now "on the shell's boundary"
+    /// rather than "the toe cap cut this away", which is a much broader set of vertices.
+    /// </summary>
+    private const float WeldRadius = 0.012f;
+
+    /// <summary>
+    /// Fraction of the shell's own median edge below which a triangle the weld touched counts as
+    /// collapsed and is dropped. Well under the 25% that merely counts as a sliver.
+    /// </summary>
+    private const float WeldCollapse = 0.10f;
+
+    /// <summary>
+    /// How far a cap rim vertex may be moved to land on the shell's rim. Far tighter than
+    /// <see cref="WeldRadius"/>, and deliberately so: the shell has already been pulled onto this rim, so
+    /// all that is left to correct is the chord error, measured at 0.00047. A layer whose shell barely
+    /// got cut contributes a handful of rim segments, and a generous radius would drag the whole cap
+    /// boundary onto them.
+    /// </summary>
+    private const float CapWeldRadius = 0.002f;
+
+    /// <summary>
+    /// Weld-then-drop rounds. Dropping a collapsed triangle exposes vertices that were interior when the
+    /// boundary was worked out, so one round always leaves a few behind; the second finds them and in
+    /// practice there is nothing left for a third.
+    /// </summary>
+    private const int WeldRounds = 3;
 
     /// <summary>
     /// Smallest island, as a fraction of the largest, that the authored cap will take UVs from. Keeps
@@ -3563,6 +4062,88 @@ public static class SecondSkinWriter
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    /// <summary>
+    /// Three body vertices' skinning combined at a barycentric coordinate, keyed by bone NAME, reduced to
+    /// the four slots a vertex has and renormalised. Names because the result is destined for a different
+    /// mesh with a different bone table — an index would mean something else there.
+    /// </summary>
+    private static (string Bone, float W)[] BlendWeights(
+        (string Bone, float W)[] a, float wa, (string Bone, float W)[] b, float wb,
+        (string Bone, float W)[] c, float wc)
+    {
+        var acc = new Dictionary<string, float>(8);
+        void Add((string Bone, float W)[] src, float k)
+        {
+            if (k <= 0f) return;                       // a clamped barycentric can go slightly negative
+            foreach (var (bone, w) in src) acc[bone] = acc.GetValueOrDefault(bone) + w * k;
+        }
+        Add(a, wa); Add(b, wb); Add(c, wc);
+        if (acc.Count == 0) return [];
+
+        var top = acc.OrderByDescending(kv => kv.Value).Take(4).ToArray();
+        float sum = top.Sum(kv => kv.Value);
+        if (sum <= 0f) return [];
+        return top.Select(kv => (kv.Key, kv.Value / sum)).ToArray();
+    }
+
+    private static Vec3 ClosestOnSegment(Vec3 p, Vec3 a, Vec3 b, out float t)
+    {
+        float dx = b.X - a.X, dy = b.Y - a.Y, dz = b.Z - a.Z;
+        float len2 = dx * dx + dy * dy + dz * dz;
+        if (len2 < 1e-20f) { t = 0f; return a; }
+        t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy + (p.Z - a.Z) * dz) / len2;
+        t = MathF.Max(0f, MathF.Min(1f, t));
+        return new Vec3(a.X + dx * t, a.Y + dy * t, a.Z + dz * t);
+    }
+
+    private static Vec3 NormalizeOr(Vec3 v, Vec3 fallback)
+    {
+        float len = MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+        return len > 1e-6f ? new Vec3(v.X / len, v.Y / len, v.Z / len) : fallback;
+    }
+
+    /// <summary>
+    /// One segment of a join, carrying everything both sides have to agree on: where it is, which way it
+    /// faces, and what it is skinned to. The weights travel with it because moving a vertex onto this
+    /// line without moving its skinning produces a weld that only holds in bind pose.
+    /// </summary>
+    private readonly record struct RimSeg(
+        Vec3 PA, Vec3 NA, (string Bone, float W)[] WA,
+        Vec3 PB, Vec3 NB, (string Bone, float W)[] WB);
+
+    /// <summary>
+    /// Nearest point on a rim, with the normal and the skinning interpolated along the segment it lands
+    /// on. False when nothing is within <paramref name="radius"/>.
+    /// </summary>
+    private static bool NearestOnRim(Vec3 p, RimSeg[] rim, float radius,
+                                     out Vec3 at, out Vec3 normal, out (string Bone, float W)[] weights,
+                                     out float dist)
+    {
+        at = default; normal = default; weights = [];
+        float best = float.MaxValue;
+
+        // Always the nearest POINT of a segment, never the nearest rim VERTEX. Preferring vertices was
+        // tried, to stop an edge cutting a corner off, and it is the wrong tool: several vertices land on
+        // the same one, and on the cap side that collapsed rim triangles to zero area outright (aspect
+        // 3e9) and took the whole shell from manifold to 21 bad edges and 36 winding errors. The corner
+        // problem it was aimed at turned out to be unwelded boundary instead — see WeldRounds.
+        foreach (var seg in rim)
+        {
+            var q = ClosestOnSegment(p, seg.PA, seg.PB, out float t);
+            float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+            float d = dx * dx + dy * dy + dz * dz;
+            if (d >= best) continue;
+            best = d;
+            at = q;
+            var (na, nb) = (seg.NA, seg.NB);
+            normal = NormalizeOr(new Vec3(na.X + (nb.X - na.X) * t, na.Y + (nb.Y - na.Y) * t,
+                                          na.Z + (nb.Z - na.Z) * t), na);
+            weights = BlendWeights(seg.WA, 1f - t, seg.WB, t, [], 0f);
+        }
+        dist = best < float.MaxValue ? MathF.Sqrt(best) : float.MaxValue;
+        return dist <= radius;
+    }
+
     private static Vec3 ClosestOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c)
     {
         static float Dot(Vec3 u, Vec3 v) => u.X * v.X + u.Y * v.Y + u.Z * v.Z;
@@ -3827,29 +4408,41 @@ public static class SecondSkinWriter
         if (vc == 0) return null;
 
         var decl = mesh < cap.Decls.Length ? cap.Decls[mesh] : [];
-        VElem? pos = null;
-        foreach (var el in decl) if (el.Usage == UsePosition) { pos = el; break; }
+        VElem? pos = null, nrm = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UsePosition) pos ??= el;
+            if (el.Usage == UseNormal) nrm ??= el;
+        }
         if (pos is not { } pe) return null;
 
         uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
                        BitConverter.ToUInt32(s, mo + 28) };
         byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
         var cp = new Vec3[vc];
+        var cn = new Vec3[vc];
         {
             Span<float> tmp = stackalloc float[4];
             for (int i = 0; i < vc; i++)
             {
                 ReadTyped(s, cap.Vb + (int)vbo[pe.Stream] + i * bs[pe.Stream] + pe.Offset, pe.Type, tmp);
                 cp[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
+                if (nrm is not { } ne) continue;
+                ReadTyped(s, cap.Vb + (int)vbo[ne.Stream] + i * bs[ne.Stream] + ne.Offset, ne.Type, tmp);
+                float nx = tmp[0], ny = tmp[1], nz = tmp[2];
+                if (ne.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+                cn[i] = NormalizeOr(new Vec3(nx, ny, nz), default);
             }
         }
 
         // Every body's LOD0 SKIN geometry, in one list. Reuses the reader the seam analysis uses, which
         // already applies the same skin-only filter the shell builder does.
-        var tri = new List<(Vec3 A, Vec3 B, Vec3 C, (float U, float V) Ua, (float U, float V) Ub, (float U, float V) Uc, Vec3 Ctr)>();
+        var tri = new List<(Vec3 A, Vec3 B, Vec3 C, (float U, float V) Ua, (float U, float V) Ub,
+                            (float U, float V) Uc, Vec3 Ctr,
+                            (string Bone, float W)[] Wa, (string Bone, float W)[] Wb, (string Bone, float W)[] Wc)>();
         foreach (var body in bodies)
         {
-            if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt)) continue;
+            if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt, out var bw)) continue;
 
             // TOENAILS ARE NOT A PROJECTION TARGET. They are skin by material, they sit proud of the
             // flesh, and over the toes they are frequently the NEAREST surface — but they carry their
@@ -3890,7 +4483,8 @@ public static class SecondSkinWriter
                 tri.Add((pa, pb, pc, (bu[a * 2], bu[a * 2 + 1]), (bu[b * 2], bu[b * 2 + 1]),
                          (bu[c * 2], bu[c * 2 + 1]), new Vec3((pa.X + pb.X + pc.X) / 3f,
                                                               (pa.Y + pb.Y + pc.Y) / 3f,
-                                                              (pa.Z + pb.Z + pc.Z) / 3f)));
+                                                              (pa.Z + pb.Z + pc.Z) / 3f),
+                         a < bw.Length ? bw[a] : [], b < bw.Length ? bw[b] : [], c < bw.Length ? bw[c] : []));
             }
         }
         if (tri.Count == 0) { diag?.Invoke("authored cap: no body geometry to project UVs from"); return null; }
@@ -3923,6 +4517,12 @@ public static class SecondSkinWriter
         var candU = new float[vc * ProjectCandidates];
         var candV = new float[vc * ProjectCandidates];
         var candD = new float[vc * ProjectCandidates];
+        // The SKINNING that goes with each landing, blended by the same barycentric coordinate as the UV.
+        // The cap has to deform exactly as the skin beneath it does or the join opens the moment the foot
+        // is posed: measured against the authored weights, 123 of 192 vertex pairs across the join
+        // disagreed, by up to 12.5%. A bind-pose measurement cannot see that, which is why every
+        // geometric fix improved the numbers and changed nothing on screen.
+        var candW = new (string Bone, float W)[vc * ProjectCandidates][];
         var candN = new int[vc];
         float worst = 0f;
         for (int i = 0; i < vc; i++)
@@ -3931,7 +4531,7 @@ public static class SecondSkinWriter
             int b0 = i * ProjectCandidates;
             int n = 0;
             float cull = float.MaxValue;   // squared distance the K-th best already achieves
-            foreach (var (a, b, c, ua, ub, uc, ctr) in tri)
+            foreach (var (a, b, c, ua, ub, uc, ctr, wga, wgb, wgc) in tri)
             {
                 float cx = ctr.X - p.X, cy = ctr.Y - p.Y, cz = ctr.Z - p.Z;
                 if (cx * cx + cy * cy + cz * cz > cull + 0.01f) continue;
@@ -3950,7 +4550,8 @@ public static class SecondSkinWriter
                 float d21 = v2x * v1x + v2y * v1y + v2z * v1z;
                 float den = d00 * d11 - d01 * d01;
                 float hu, hv;
-                if (MathF.Abs(den) < 1e-20f) { hu = ua.U; hv = ua.V; }
+                (string Bone, float W)[] hw;
+                if (MathF.Abs(den) < 1e-20f) { hu = ua.U; hv = ua.V; hw = wga; }
                 else
                 {
                     float wb = (d11 * d20 - d01 * d21) / den;
@@ -3958,6 +4559,7 @@ public static class SecondSkinWriter
                     float wa = 1f - wb - wc;
                     hu = ua.U * wa + ub.U * wb + uc.U * wc;
                     hv = ua.V * wa + ub.V * wb + uc.V * wc;
+                    hw = BlendWeights(wga, wa, wgb, wb, wgc, wc);
                 }
 
                 // One landing per DISTINCT patch of the atlas. Body triangles that share an edge in UV
@@ -3975,7 +4577,7 @@ public static class SecondSkinWriter
                     for (int k = dup; k + 1 < n; k++)
                     {
                         candU[b0 + k] = candU[b0 + k + 1]; candV[b0 + k] = candV[b0 + k + 1];
-                        candD[b0 + k] = candD[b0 + k + 1];
+                        candD[b0 + k] = candD[b0 + k + 1]; candW[b0 + k] = candW[b0 + k + 1];
                     }
                     n--;
                 }
@@ -3985,10 +4587,10 @@ public static class SecondSkinWriter
                 while (ins > 0 && candD[b0 + ins - 1] > d)
                 {
                     candU[b0 + ins] = candU[b0 + ins - 1]; candV[b0 + ins] = candV[b0 + ins - 1];
-                    candD[b0 + ins] = candD[b0 + ins - 1];
+                    candD[b0 + ins] = candD[b0 + ins - 1]; candW[b0 + ins] = candW[b0 + ins - 1];
                     ins--;
                 }
-                candU[b0 + ins] = hu; candV[b0 + ins] = hv; candD[b0 + ins] = d;
+                candU[b0 + ins] = hu; candV[b0 + ins] = hv; candD[b0 + ins] = d; candW[b0 + ins] = hw;
                 n++;
                 if (n == ProjectCandidates) cull = candD[b0 + n - 1];
             }
@@ -4121,6 +4723,9 @@ public static class SecondSkinWriter
         // Each copy takes the landing that best suits ITS chart — for the copy on the far side of the
         // cut that is a different body triangle from the one nearest in 3D, which is the whole point.
         var finalUV = new (float U, float V)[sourceOf.Count];
+        var finalW = new (string Bone, float W)[sourceOf.Count][];
+        var srcW = new (string Bone, float W)[vc][];
+        for (int i = 0; i < vc; i++) srcW[i] = [];
         int reseated = 0;
         foreach (var ((v, chart), outIdx) in copyOf)
         {
@@ -4145,6 +4750,11 @@ public static class SecondSkinWriter
                 if (bestK != pick[v]) reseated++;
             }
             finalUV[outIdx] = candN[v] > 0 ? (candU[b0 + bestK], candV[b0 + bestK]) : default;
+            finalW[outIdx] = candN[v] > 0 ? candW[b0 + bestK] ?? [] : [];
+            // The rim is expressed in PRE-SPLIT indices, so it needs a weight per source vertex too.
+            // Where a vertex was split the copies sit at the same place on the body and their weights
+            // agree; which copy answers is immaterial.
+            srcW[v] = finalW[outIdx];
         }
 
         // What the whole exercise is for: faces that still straddle the atlas. Reported so a regression
@@ -4167,7 +4777,11 @@ public static class SecondSkinWriter
         diag?.Invoke($"authored cap: projected {vc} uvs from the body, furthest landing {MathF.Sqrt(worst):F4}, "
                    + $"{moved} settled by agreement; {charts} chart patch(es) split into {sourceOf.Count} "
                    + $"vertices ({reseated} copies reprojected), {hops} face(s) spanning >{ProjectSeamSpan:F2} uv");
-        return new CapUvPlan { Uv = finalUV, SourceOf = sourceOf.ToArray(), Corner = corner };
+        return new CapUvPlan
+        {
+            Uv = finalUV, Weights = finalW, SourceOf = sourceOf.ToArray(), Corner = corner,
+            Tri = capTri.ToArray(), SrcPos = cp, SrcNrm = cn, SrcW = srcW,
+        };
     }
 
     /// <summary>
@@ -4179,6 +4793,14 @@ public static class SecondSkinWriter
         /// <summary>Projected coordinate per OUTPUT vertex.</summary>
         public required (float U, float V)[] Uv;
 
+        /// <summary>
+        /// Skinning per OUTPUT vertex, taken from the body underneath at the same landing as the UV, by
+        /// bone NAME so it can be remapped into whatever table the emitted mesh ends up with. This is
+        /// what keeps the cap moving with the skin it sits on — the authored weights coincided with the
+        /// shell's in bind pose and differed by up to 12.5%, which opens the join in any real pose.
+        /// </summary>
+        public required (string Bone, float W)[][] Weights;
+
         /// <summary>The cap vertex each output vertex is a copy of — everything but the UV comes from it.</summary>
         public required int[] SourceOf;
 
@@ -4187,6 +4809,22 @@ public static class SecondSkinWriter
         /// walks its index buffer in that same order and substitutes these.
         /// </summary>
         public required int[] Corner;
+
+        /// <summary>
+        /// The cap's triangles by PRE-SPLIT index, and the position and normal of each such vertex. The
+        /// boundary cannot be baked in here: it depends on the coverage map, which differs per layer, so
+        /// each layer works out its own trimmed rim from these.
+        /// </summary>
+        public required int[] Tri;
+
+        /// <inheritdoc cref="Tri"/>
+        public required Vec3[] SrcPos;
+
+        /// <inheritdoc cref="Tri"/>
+        public required Vec3[] SrcNrm;
+
+        /// <inheritdoc cref="Tri"/>
+        public required (string Bone, float W)[][] SrcW;
     }
 
     /// <summary>
