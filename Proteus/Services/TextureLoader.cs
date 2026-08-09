@@ -104,6 +104,15 @@ public class TextureLoader
     private static int _nativeProbed;
     private static volatile bool _nativeAvailable;
 
+    /// <summary>
+    /// Which block-compression backend a call would use right now: <c>true</c> native shim, <c>false</c>
+    /// managed BCnEncoder. The two encode the same pixels to DIFFERENT bytes, so this belongs in the
+    /// content tag that names an output file — otherwise a session that fell back to managed reuses (and
+    /// keeps serving) a file the native encoder produced, under a name that claims to describe its bytes.
+    /// Both outputs are valid BC7, so this is about keeping the name honest, not about visible corruption.
+    /// </summary>
+    public static bool NativeEncoderAvailable => _nativeAvailable;
+
     [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern void proteus_encode_bc7(IntPtr rgba, int width, int height, int blockRowStart, int blockRowCount, IntPtr outPtr);
 

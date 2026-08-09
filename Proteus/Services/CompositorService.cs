@@ -259,23 +259,17 @@ public class CompositorService : IDisposable
     private static readonly TimeSpan DecodeCacheIdleRelease = TimeSpan.FromSeconds(60);
     private readonly Timer idleCacheTimer;
 
-    // ── settle redraw for sync plugins ───────────────────────────────────────
-    // Mare and its forks (PSync/MareSempiterne, Snowcloak, …) build a peer's file list from the resources
-    // the character has ACTUALLY resolved, and their between-redraw channel deliberately drops our file
-    // types: TransientResourceManager's allow-list only handles tex/mdl/mtrl while a manual transient
-    // recording is running. Our entire output is those three, written AFTER the draw — so an in-place
-    // reload leaves paired users seeing none of it (no fabric, vanilla skin) until something else forces
-    // a redraw. That's why "redraw + refresh" clears it by hand.
+    // A "settle redraw" used to live here: one full redraw a few seconds after edits stopped, on the
+    // theory that Mare-family sync plugins drop tex/mdl/mtrl arriving between redraws and so could never
+    // see our output. Removed 2026-08-09 after measuring it. The theory was wrong — those plugins build a
+    // peer's file list from currently-LOADED resources, and our in-place reload loads them. Verified end
+    // to end with the redraw disabled: a skin edit wrote two textures and PSync independently found two
+    // new hashes, compressed, uploaded and pushed them, with no redraw anywhere in the sequence.
     //
-    // Fire ONE real redraw once edits settle: the in-place reload still lands immediately, so dragging a
-    // colour slider stays flicker-free, and the redraw that follows the last edit is what the peer picks
-    // up. Rescheduled on every composite, so a burst collapses to a single redraw at the end.
-    private Timer? syncRedrawTimer;
-    private static readonly TimeSpan SyncRedrawSettle = TimeSpan.FromSeconds(3);
-
-    // Re-probed rather than cached forever: a sync plugin can be installed or enabled mid-session.
-    private long syncProbeTick;
-    private bool syncPluginLoaded;
+    // The real cause of peers seeing nothing was a composite deleting its own output up front, which left
+    // live redirects dangling; that is fixed by keeping output on disk until the next composite prunes it.
+    // Don't reintroduce a redraw here without evidence: it cost a full character redraw per edit, and
+    // those redraws were what kept landing inside composite windows and triggering the very bug.
 
     /// <summary>Push the configured decode-cache budget onto the loader. The Settings slider calls this —
     /// the UI has no reference to the loader. Takes effect at once: the loader trims on assignment, so
@@ -331,7 +325,6 @@ public class CompositorService : IDisposable
         _disposed = true;   // an in-flight boot-probe task bails instead of touching torn-down bridges
 
         idleCacheTimer.Dispose();
-        syncRedrawTimer?.Dispose();
 
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.ModAdded          -= OnModAdded;
@@ -358,6 +351,15 @@ public class CompositorService : IDisposable
             return;
 
         var sidecar = HasSidecar(modDir);
+
+        // Before any of the early returns below. Anything that isn't one of our overlay mods can change
+        // which file a base game path resolves to — a body/skin mod toggling, or a new one outranking the
+        // old — and that has to be recorded even when we decide not to recomposite. The echo-suppression
+        // return further down is NOT sidecar-gated, so leaving this after it let a design-driven body-mod
+        // change inside the 1500 ms window keep a stale upstream indefinitely. Sidecar toggles are exempt:
+        // they only add overlay art, they can't move a base, and they fire constantly, so flushing on them
+        // would empty the cache exactly when the resolve race needs it.
+        if (!sidecar) InvalidateUpstreamCache($"ModSettingChanged:{change}:{modDir}");
 
         // For enable/disable events on our own overlay mods, re-check whether the active mod set
         // actually changed. Glamourer re-applies designs after each redraw, calling Penumbra to
@@ -396,10 +398,24 @@ public class CompositorService : IDisposable
         EvaluateBodyModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}");
     }
 
+    /// <summary>
+    /// Drop every remembered upstream. Called whenever Penumbra's resolution for the player could have
+    /// changed under us — the cache is only ever read when a resolve races our own reload, and a stale
+    /// entry there means compositing onto the wrong base with nothing but a Debug line to show for it.
+    /// Cheap to rebuild: the next composite's normal resolutions repopulate it.
+    /// </summary>
+    private void InvalidateUpstreamCache(string reason)
+    {
+        if (_upstreamByGamePath.IsEmpty) return;
+        _upstreamByGamePath.Clear();
+        log.Debug("[Proteus] upstream cache cleared ({0})", reason);
+    }
+
     private void OnModAdded(string modDir)
     {
         // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
         textureLoader.EvictMod(modDir);
+        InvalidateUpstreamCache($"ModAdded:{modDir}");
         if (HasSidecar(modDir))
         {
             TriggerRecomposite($"ModAdded:{modDir}");
@@ -416,6 +432,7 @@ public class CompositorService : IDisposable
         // rather than rescanning; then drop it, there's nothing left to invalidate against.
         var wasBodyMod = _bodyModCache.TryGetValue(modDir, out var cached) && cached.IsBodyMod;
         if (wasBodyMod) _activeMtrlSnapshotDirty = true;
+        InvalidateUpstreamCache($"ModDeleted:{modDir}");
 
         // Drop the cached classification off the framework thread — config.Save is a disk write.
         Task.Run(() =>
@@ -473,6 +490,7 @@ public class CompositorService : IDisposable
         // option selections are all collection-scoped, so the whole composite must be recomputed.
         // Rare event; not worth trying to scan every mod in the new collection, just force one walk.
         _activeMtrlSnapshotDirty = true;
+        InvalidateUpstreamCache("collection-changed");
         if (!config.PluginEnabled) return;
         TriggerRecomposite("collection-changed");
     }
@@ -1135,7 +1153,29 @@ public class CompositorService : IDisposable
 
     // ── Core compositor ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// How many <see cref="Recomposite"/> bodies are executing right now. Cancellation here is cooperative
+    /// and the LAST <c>ct.IsCancellationRequested</c> check sits some nine hundred lines before the writes,
+    /// so a superseded composite does not stop — it keeps writing files and publishes its manifest. Two
+    /// runs genuinely overlap in practice (the log shows a 4971 ms and a 3952 ms composite finishing 1.5 s
+    /// apart, i.e. ~2.5 s of overlap), and the pruner has to know.
+    /// </summary>
+    private int _compositesInFlight;
+
     private void Recomposite(CancellationToken ct)
+    {
+        Interlocked.Increment(ref _compositesInFlight);
+        try
+        {
+            RecompositeBody(ct);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _compositesInFlight);
+        }
+    }
+
+    private void RecompositeBody(CancellationToken ct)
     {
         try
         {
@@ -1150,21 +1190,35 @@ public class CompositorService : IDisposable
 
             EnsureManagedModExists();
 
-            // Clear previously written files out of the way BEFORE clearing redirects so that
-            // File.Exists checks fail even if the Penumbra IPC reload is asynchronous.
-            // This prevents us from loading our own stale output as the base texture.
-            // Second-skin files (ss_*, models/) are deliberately NOT touched: they're compared against
-            // the new build to decide whether the shell actually changed, and a changed shell is what
-            // forces a full redraw. Wiping them first would make every run look like a change.
-            // They're never read back as a compositing source, so a stale one is harmless.
+            // The previous run's output STAYS ON DISK for the whole composite, and is only pruned once the
+            // new manifest is live. Deleting it here — which is what this used to do — left every redirect
+            // we own pointing at a file that no longer existed for the ~5s a composite takes. Penumbra
+            // validates a redirect's target, so it fell back to the raw game path; for a skin mod's invented
+            // paths (Bibo's chara/bibo_mid_*.tex) there is nothing behind that, and the load hard-failed:
+            //
+            //   WRN Failed to synchronously load resource chara/bibo_mid_base.tex … state: 2:Failure
+            //   WRN Failed to … mt_c0201b0001_bibo.mtrl … state: 2:FailedSubResource
+            //
+            // A material in FailedSubResource does not render, so any redraw landing inside a composite —
+            // including the sync-settle redraw we schedule ourselves — turned the body invisible. Worse, a
+            // sync plugin snapshotting in that window sees no loaded body textures, so they never reach the
+            // peer at all and the invisibility sticks on their side. Content-hashed filenames are what make
+            // keeping the old files safe: changed content writes to a DIFFERENT name, so old and new coexist
+            // and no live redirect is ever dangling.
             var texturesDirEarly  = Path.Combine(managedModDir, "textures");
             var materialsDirEarly = Path.Combine(managedModDir, "materials");
-            StashPreviousOutput(texturesDirEarly,  "*.tex");
-            StashPreviousOutput(materialsDirEarly, "*.mtrl");
+
+            // Collect what the last published manifest no longer names. Doing it HERE, a composite late,
+            // is deliberate — see PruneSupersededOutput. It also sweeps up anything a cancelled run wrote,
+            // which is the only place that ever happens.
+            PruneSupersededOutput();
 
             // Clear redirects and reload. Penumbra's IPC reload may process asynchronously
             // on the game main thread, so sleep briefly to let it take effect before any
             // ResolvePlayer calls that determine which mod's file is the upstream source.
+            // This is now purely about RESOLUTION, not about making files disappear: an empty manifest with
+            // the files still present resolves to the upstream mod (or, until it lands, to our own output —
+            // which exists). Neither answer can fail to load. ResolveUpstream covers the transition.
             WriteManagedModJson(new Dictionary<string, string>());
             penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
             Thread.Sleep(80);
@@ -1181,7 +1235,11 @@ public class CompositorService : IDisposable
 
             if (entries.Count == 0)
             {
-                WriteManagedModJson(new Dictionary<string, string>());
+                var empty = new Dictionary<string, string>();
+                WriteManagedModJson(empty);
+                // Nothing is referenced any more. Recorded rather than skipped so the history reflects
+                // reality: once this empty manifest ages out of it, everything becomes collectable.
+                RecordPublish(empty);
 
                 // A shell hosted on an accessory redirected that accessory's .mdl; an in-place reload won't
                 // reload it, so dropping to zero enabled mods must force a FULL redraw or the shell lingers
@@ -1192,11 +1250,7 @@ public class CompositorService : IDisposable
                 _secondSkinActive = false;
                 _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
 
-                // Nothing is referenced now, so remove every ss_*/model/material orphan too (the up-front
-                // cleanup keeps ss_ files; with all mods off, none should survive).
-                PruneManagedOutput(new Dictionary<string, string>());
-
-                // Nothing is hosted, and the line above just deleted the redirect that renders our
+                // Nothing is hosted, and the empty manifest above dropped the redirect that renders our
                 // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
                 // glasses on the player's face that they never chose, so take it off before the redraw.
                 // This early return skips the reconcile at the end of the method, hence the explicit call.
@@ -1907,7 +1961,7 @@ public class CompositorService : IDisposable
 
                 if (ct.IsCancellationRequested) return;
 
-                var mtrlDisk = penumbra.ResolvePlayer(mtrlGamePath);
+                var mtrlDisk = ResolveUpstream(mtrlGamePath);
                 // RAW parse. The disk/game split this used to do by hand lives inside ResolveMtrlTexturesRaw
                 // now, and more importantly it skips Lumina's typed MtrlFile — which misreads some Dawntrail
                 // layouts. A modded material (older TexTools layout) read fine while the stock game file came
@@ -2128,7 +2182,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseD == null)
                         {
-                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                            var diffDisk = ResolveUpstream(texPaths.Diffuse);
                             var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
                             if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                             baseD ??= Array.Empty<byte>();
@@ -2189,7 +2243,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Mask), texPaths.Mask);
+                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -2363,7 +2417,7 @@ public class CompositorService : IDisposable
                         // (and any mask) applied without altering the skin diffuse.
                         if (baseD == null)
                         {
-                            var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                            var diffDisk = ResolveUpstream(texPaths.Diffuse);
                             var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
                             if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                             baseD ??= Array.Empty<byte>();
@@ -2460,7 +2514,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Mask), texPaths.Mask);
+                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -2561,7 +2615,7 @@ public class CompositorService : IDisposable
 
                     if (baseD == null)
                     {
-                        var diffDisk = penumbra.ResolvePlayer(texPaths.Diffuse);
+                        var diffDisk = ResolveUpstream(texPaths.Diffuse);
                         var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
                         if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                         baseD ??= Array.Empty<byte>();
@@ -2813,7 +2867,7 @@ public class CompositorService : IDisposable
                     // mod supplies nothing but a mask still got a Proteus-written, BC7-recompressed _d.
                     if ((baseD == null || baseD.Length == 0) && texPaths.Diffuse != null && aoQualified.Count > 0)
                     {
-                        var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(texPaths.Diffuse), texPaths.Diffuse);
+                        var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Diffuse), texPaths.Diffuse);
                         if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                     }
 
@@ -2962,16 +3016,20 @@ public class CompositorService : IDisposable
                 // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
                 bool compress = config.EnableCompression;
 
-                // Salted with the dimensions and the encoding flag: both change the written bytes without
-                // changing the RGBA buffer, and a stale path would leave the game on the old format.
-                int encSalt = compress ? 1 : 0;
+                // Salted with the dimensions and how the bytes will be encoded — both change the written
+                // file without changing the RGBA buffer, and a stale path would leave the game on the old
+                // format. 0 = uncompressed, 1 = BC7 via the native shim, 2 = BC7 via managed BCnEncoder:
+                // the two encoders differ byte-for-byte, so a session that fell back to managed must not
+                // silently reuse a native-encoded file under a name that claims to describe its content.
+                // Only distinguished when compressing, so a backend flip can't churn uncompressed output.
+                int encSalt = compress ? (TextureLoader.NativeEncoderAvailable ? 1 : 2) : 0;
 
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
                     var name = baseName + "_" + ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion) + "_d.tex";
                     var outPath = Path.Combine(texturesDir, name);
                     var relPath = "textures/" + name;
-                    if (ReuseStashed(outPath)
+                    if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
                         redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
@@ -2991,7 +3049,7 @@ public class CompositorService : IDisposable
                     var name = baseName + "_" + ContentTag(baseN, wN, hN, encSalt, OutputFormatVersion) + "_n.tex";
                     var outPath = Path.Combine(texturesDir, name);
                     var relPath = "textures/" + name;
-                    if (ReuseStashed(outPath)
+                    if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal"); }
                 }
@@ -3000,7 +3058,7 @@ public class CompositorService : IDisposable
                     var name = baseName + "_" + ContentTag(baseM, wM, hM, encSalt, OutputFormatVersion) + "_m.tex";
                     var outPath = Path.Combine(texturesDir, name);
                     var relPath = "textures/" + name;
-                    if (ReuseStashed(outPath)
+                    if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask"); }
                 }
@@ -3055,7 +3113,7 @@ public class CompositorService : IDisposable
                         var name = baseName + "_" + ContentTag(raw, OutputFormatVersion) + ".mtrl";
                         var outPath = Path.Combine(materialsDir, name);
                         var relPath = "materials/" + name;
-                        if (ReuseStashed(outPath) || textureLoader.WriteMtrl(raw, outPath))
+                        if (AlreadyWritten(outPath) || textureLoader.WriteMtrl(raw, outPath))
                             redirects[mtrlGamePath] = relPath;
                     }
                 }
@@ -3277,8 +3335,11 @@ public class CompositorService : IDisposable
                     PhaseCounter.MsSince(tGear), gearOverlays.Count);
 
             WriteManagedModJson(redirects, manipulations);
-            PruneManagedOutput(redirects);   // drop ss_*/model/material orphans from disabled/shrunk mods
-            ReloadAndRedrawWhenReady(redirects);
+
+            // Publish only. Nothing is deleted in this composite: whatever this map supersedes is collected
+            // at the top of the NEXT one, by which point the reload below has long since landed. See
+            // PruneSupersededOutput for why an immediate prune could not be made safe.
+            ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
 
             // Reconcile the invisible-glasses injection AFTER the redirect mod is live, so when the equip's
             // redraw loads the glasses model it resolves straight to the shell (no visible frames). Passes
@@ -3473,87 +3534,207 @@ public class CompositorService : IDisposable
             managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
     }
 
-    /// <summary>Subdirectory each run moves the previous run's skin output into. A directory rather than a
-    /// filename suffix so the non-recursive <c>Directory.GetFiles</c> scans elsewhere in this class can't
-    /// see it — including the "*.tex" scan in <see cref="StashPreviousOutput"/> itself, which on Windows
-    /// will happily match extensions that merely START with the pattern's.</summary>
-    private const string StashDir = ".stale";
-
     /// <summary>
-    /// Move this directory's previously written files (everything but the ss_* shell output) aside into
-    /// <see cref="StashDir"/>, so that from here on the live path does not exist — same guarantee the old
-    /// outright delete gave, which is what stops a composite reading its own prior output back as a base
-    /// texture while Penumbra's async reload is still in flight.
+    /// The last disk path Penumbra resolved each game path to that WASN'T our own output — i.e. the real
+    /// upstream mod file a composite reads as its base. Recorded on every clean resolution and used only
+    /// when a resolution comes back pointing at the managed mod, which happens in the window between
+    /// clearing the manifest and Penumbra finishing the reload.
     ///
-    /// Moving rather than deleting is what makes content-hashed filenames pay off. An unchanged texture
-    /// resolves to the name it already had, so <see cref="ReuseStashed"/> can move the file straight back
-    /// instead of re-encoding 64 MB of BC7 — and, critically, a move preserves LastWriteTime. Sync plugins
-    /// invalidate their file cache on any modtime change (PSync: FileCacheManager.ValidateFileCacheEntity),
-    /// so a delete-and-rewrite would re-hash the whole ~300 MB skin set on every slider drag even though
-    /// not one byte changed. It also shrinks the window where the path is absent from seconds of encoding
-    /// down to two renames.
+    /// Falling back to the game's SqPack there (what the old guard did) is wrong for exactly the textures
+    /// that matter: a skin mod's paths are invented — chara/bibo_mid_base.tex is in no game index — so
+    /// "fall back to vanilla" means "fail to load". Remembering the upstream keeps the composite reading
+    /// the same base it would have read after the reload landed.
     /// </summary>
-    private void StashPreviousOutput(string dir, string pattern)
+    private readonly ConcurrentDictionary<string, string> _upstreamByGamePath =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when this run's output is already sitting at <paramref name="outPath"/>, so the write can be
+    /// skipped. Safe because the filename carries a <see cref="ContentTag"/> over the exact bytes plus
+    /// <see cref="OutputFormatVersion"/>: a matching name means matching content, so the file already
+    /// there IS what we were about to write. Skipping saves the encode (64 MB of BC7 per skin channel)
+    /// and, just as importantly, leaves LastWriteTime alone — sync plugins invalidate their file cache on
+    /// any modtime change (PSync: FileCacheManager.ValidateFileCacheEntity), so rewriting identical bytes
+    /// would force a re-hash of the whole skin set on every slider drag.
+    /// </summary>
+    private static bool AlreadyWritten(string outPath) => File.Exists(outPath);
+
+    /// <summary>
+    /// True when <paramref name="diskPath"/> is a file this plugin wrote into the managed mod. Compared on
+    /// canonical full paths so a forward/back-slash or relative-segment mismatch can't slip past.
+    ///
+    /// Undecidable input answers TRUE. The two ways to be wrong are not symmetric: rejecting a genuine
+    /// upstream costs one uncomposited channel for one run, self-correcting on the next composite, while
+    /// accepting our own output as a base composites the previous composite again — cumulative, silent,
+    /// and only noticed once the skin has visibly drifted. So the fallbacks below bias toward "ours".
+    /// </summary>
+    private bool IsOwnOutput(string? diskPath)
     {
-        if (!Directory.Exists(dir)) return;
-        var stash = Path.Combine(dir, StashDir);
+        var diskFull    = TryCanonicalise(diskPath);
+        var managedFull = TryCanonicalise(managedModDir);
 
-        // Merge into whatever a cancelled run left behind rather than wiping first: those files are still
-        // valid reuse candidates. A completed run clears the whole directory in PruneManagedOutput.
-        try { Directory.CreateDirectory(stash); }
-        catch (Exception ex) { log.Debug("[Proteus] stash dir unavailable ({0}) — deleting instead", ex.Message); stash = ""; }
+        if (diskFull != null && managedFull != null)
+            return IsUnderRoot(diskFull, managedFull);
 
-        foreach (var f in Directory.GetFiles(dir, pattern))
+        // Something wouldn't canonicalise. A literal separator-normalised compare still catches the
+        // ordinary case; only if even that is unevaluable do we fall back to the pessimistic answer.
+        var d = diskPath?.Replace('/', Path.DirectorySeparatorChar);
+        var m = managedModDir?.Replace('/', Path.DirectorySeparatorChar);
+        if (!string.IsNullOrEmpty(d) && !string.IsNullOrEmpty(m))
+            return IsUnderRoot(d, m);
+
+        log.Warning("[Proteus] could not tell whether \"{0}\" is our own output — treating it as ours "
+                  + "rather than risk compositing onto a previous composite", diskPath ?? "(null)");
+        return true;
+    }
+
+    private static bool IsUnderRoot(string path, string root)
+        => path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                           StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path.TrimEnd(Path.DirectorySeparatorChar),
+                         root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+
+    private static string? TryCanonicalise(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try { return Path.GetFullPath(path); } catch { return null; }
+    }
+
+    /// <summary>
+    /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its BASE, never to
+    /// our own previous output. Every call site that loads a base texture or material goes through this
+    /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
+    /// upstream, which lets the loader fall through to game data as before.
+    /// </summary>
+    private string? ResolveUpstream(string gamePath)
+    {
+        var disk = penumbra.ResolvePlayer(gamePath);
+
+        if (disk != null && !IsOwnOutput(disk))
         {
-            if (Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase)) continue;
-            // The live path MUST end up gone; if the move fails for any reason, fall back to the delete.
-            if (stash.Length > 0)
-            {
-                try { File.Move(f, Path.Combine(stash, Path.GetFileName(f)), overwrite: true); continue; }
-                catch { }
-            }
-            try { File.Delete(f); } catch { }
+            // Freshest truth: remember it for the runs where our own redirect masks it.
+            _upstreamByGamePath[gamePath] = disk;
+            return disk;
+        }
+
+        if (_upstreamByGamePath.TryGetValue(gamePath, out var prev) && File.Exists(prev))
+        {
+            if (disk != null)
+                log.Debug("[Proteus] resolve for {0} still pointed at our output — using upstream {1}",
+                          gamePath, prev);
+            return prev;
+        }
+
+        if (disk != null)
+            log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} and no upstream is "
+                      + "known — falling back to game data", gamePath);
+        return null;
+    }
+
+    /// <summary>
+    /// The last few redirect maps we published, newest last. Penumbra may still be serving ANY of them, so
+    /// <see cref="PruneSupersededOutput"/> keeps anything named by any remembered map rather than assuming
+    /// the newest one is live. Output survives a couple of composites longer, which costs disk and nothing
+    /// else, and no live redirect can ever be left dangling.
+    ///
+    /// Two independent reasons, both of which outlive any improvement to the readiness probe:
+    ///
+    /// The reload is ASYNCHRONOUS. <see cref="WaitForManifestLive"/> does confirm the new manifest landed
+    /// (measured at 16-32 ms in practice), but it is skipped entirely under DisableAutoRedraw and can hit
+    /// its timeout, so "confirmed" is not something every path can rely on.
+    ///
+    /// And composites OVERLAP. Cancellation is cooperative and its last check sits far above the writes,
+    /// so a superseded run keeps going and publishes after a newer one already has — at which point the
+    /// newest map is not even the live one. No probe can fix that; it is not a timing question.
+    ///
+    /// So do not collapse this to a single map on the grounds that the probe works. It does now; that was
+    /// never what this defends against. Getting it wrong means a live redirect pointing at a deleted file,
+    /// which for a skin mod's invented paths hard-fails the load and renders the body invisible.
+    ///
+    /// Empty on startup on purpose: Penumbra is still serving the manifest the LAST SESSION left on disk,
+    /// and this session has no idea what that named. Pruning against an empty history would delete the
+    /// very files that manifest points at, so the pruner no-ops until we have published something.
+    ///
+    /// Guarded by <see cref="_publishHistoryLock"/> — written by whichever composite task publishes, read
+    /// by whichever one prunes, and those are not the same thread.
+    /// </summary>
+    private readonly Queue<IDictionary<string, string>> _publishHistory = new();
+    private readonly object _publishHistoryLock = new();
+
+    /// <summary>How many past manifests to treat as possibly-live. Two would cover the ordinary
+    /// publish-then-reload lag; three leaves room for a reload that Penumbra queues behind another.</summary>
+    private const int PublishHistoryDepth = 3;
+
+    /// <summary>
+    /// Remember a manifest we just published as possibly-live, retiring the oldest, and return the one it
+    /// replaces (null on the first publish of a session). The caller needs that to tell which redirects
+    /// actually changed — the only ones worth probing for readiness.
+    /// </summary>
+    private IDictionary<string, string>? RecordPublish(IDictionary<string, string> redirects)
+    {
+        // Snapshot: the caller's map is a live ConcurrentDictionary this reference would otherwise outlive.
+        var snapshot = new Dictionary<string, string>(redirects, StringComparer.OrdinalIgnoreCase);
+        lock (_publishHistoryLock)
+        {
+            var previous = _publishHistory.Count > 0 ? _publishHistory.Last() : null;
+            _publishHistory.Enqueue(snapshot);
+            while (_publishHistory.Count > PublishHistoryDepth) _publishHistory.Dequeue();
+            return previous;
         }
     }
 
     /// <summary>
-    /// Move <paramref name="outPath"/> back from the stash if this run wants the exact same filename, and
-    /// report whether it did. The name carries a <see cref="ContentTag"/>, so an identical name means
-    /// identical bytes — the file already on disk IS this run's output and re-encoding it would produce
-    /// the same thing at the cost of the encode and a modtime bump.
+    /// Delete output files that nothing can still be pointing at, run at the START of a composite rather
+    /// than the end of the previous one. What goes: the previous run's copy of a texture whose content has
+    /// since changed, files from a mod that got disabled, a dropped spill host, a shell that shed a layer,
+    /// and — the case an end-of-run prune could never reach — whatever a CANCELLED composite wrote before
+    /// it bailed, since every cancellation path returns long before the publish step.
+    ///
+    /// Two things make it safe, and both replace guarantees the old end-of-run prune could not actually
+    /// give. It keeps anything named by ANY of the last <see cref="PublishHistoryDepth"/> manifests, so it
+    /// does not matter which one Penumbra is currently serving — deleting right after publishing meant
+    /// racing an asynchronous reload whose readiness poll times out routinely and is skipped entirely
+    /// under DisableAutoRedraw. And it stands down while another composite is in flight, because that
+    /// composite has already passed its last cancellation check and will write files and publish them:
+    /// deleting its output mid-run would hand it a manifest full of dangling redirects.
+    ///
+    /// Either mistake produces the same failure — a live redirect pointing at a file that is gone, which
+    /// for a skin mod's invented paths hard-fails the load and takes the whole body material with it
+    /// (2:Failure → 2:FailedSubResource → invisible body). Both fallbacks defer collection by a run, which
+    /// costs disk and nothing else.
+    ///
+    /// Safe to delete a file still tracked in SecondSkinService's hash cache: the write path re-checks
+    /// File.Exists and rewrites.
     /// </summary>
-    private bool ReuseStashed(string outPath)
+    private void PruneSupersededOutput()
     {
-        try
+        // >1 because this composite has already counted itself in.
+        var others = Volatile.Read(ref _compositesInFlight) - 1;
+        if (others > 0)
         {
-            var stashed = Path.Combine(Path.GetDirectoryName(outPath)!, StashDir, Path.GetFileName(outPath));
-            if (!File.Exists(stashed)) return false;
-            File.Move(stashed, outPath, overwrite: true);
-            return true;
+            log.Debug("[Proteus] prune deferred — {0} other composite(s) still running and writing", others);
+            return;
         }
-        catch (Exception ex)
-        {
-            // Fall through to a normal write — correct either way, just slower.
-            log.Debug("[Proteus] stash reuse failed for {0}: {1}", Path.GetFileName(outPath), ex.Message);
-            return false;
-        }
-    }
 
-    /// <summary>
-    /// Delete any file under textures/ materials/ models/ that the just-written manifest doesn't reference —
-    /// orphans left by a now-disabled mod, a dropped spill host, or a shell that shed a layer. That includes
-    /// emptying the <see cref="StashDir"/> holding pens: whatever this run did not move back out of them is
-    /// by definition superseded. The ss_*/model/material files are deliberately kept across a run for the
-    /// change-detection skip, so nothing else ever removes their orphans. Pass the FINAL redirect map (its
-    /// rel-path values are what to keep). Safe to delete a file still tracked in SecondSkinService's hash
-    /// cache: the write path re-checks File.Exists and rewrites.
-    /// </summary>
-    private void PruneManagedOutput(IDictionary<string, string> redirects)
-    {
         var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var rel in redirects.Values)
-            keep.Add(rel.Replace('\\', '/'));   // Rel() emits backslashes, the skin path forward slashes
+        lock (_publishHistoryLock)
+        {
+            if (_publishHistory.Count == 0) return;   // see the field: last session's manifest is still live
+            foreach (var map in _publishHistory)
+                foreach (var rel in map.Values)
+                    keep.Add(rel.Replace('\\', '/'));   // Rel() emits backslashes, the skin path forward slashes
+        }
 
+        PruneManagedOutput(keep);
+    }
+
+    /// <summary>
+    /// Delete any file under textures/ materials/ models/ whose <c>sub/name</c> is not in
+    /// <paramref name="keep"/>. Callers build that set from every manifest that could still be live —
+    /// never from the one about to be published.
+    /// </summary>
+    private void PruneManagedOutput(HashSet<string> keep)
+    {
         foreach (var sub in new[] { "textures", "materials", "models" })
         {
             var dir = Path.Combine(managedModDir, sub);
@@ -3561,8 +3742,6 @@ public class CompositorService : IDisposable
             foreach (var f in Directory.GetFiles(dir))
                 if (!keep.Contains(sub + "/" + Path.GetFileName(f)))
                     try { File.Delete(f); } catch { }
-
-            try { Directory.Delete(Path.Combine(dir, StashDir), recursive: true); } catch { }
         }
     }
 
@@ -3649,51 +3828,14 @@ public class CompositorService : IDisposable
             if (reapplied)
             {
                 log.Debug("[Proteus] Refreshed textures via Glamourer in-place reload.");
-                ScheduleSyncSettleRedraw();
                 return;
             }
         }
 
-        // A real redraw already re-resolves everything, which is exactly what a peer's snapshot needs —
-        // so drop any settle redraw still pending from an earlier in-place reload.
-        syncRedrawTimer?.Change(Timeout.Infinite, Timeout.Infinite);
         Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
         penumbra.RedrawPlayer();
     }
 
-    /// <summary>
-    /// Arm (or push back) the post-settle redraw that lets sync plugins see this composite. See the
-    /// syncRedrawTimer field for why an in-place reload alone is invisible to them. No-op unless a sync
-    /// plugin is loaded, so nobody else pays a redraw for a feature they aren't using.
-    /// </summary>
-    private void ScheduleSyncSettleRedraw()
-    {
-        if (!config.SyncSettleRedraw || _disposed || !SyncPluginLoaded()) return;
-
-        syncRedrawTimer ??= new Timer(_ =>
-        {
-            if (_disposed) return;
-            try
-            {
-                // Same bookkeeping as every other redraw we initiate: the tick lets our own
-                // redrawn/reapply events be recognised as echoes instead of user activity.
-                Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
-                penumbra.RedrawPlayer();
-                log.Debug("[Proteus] sync settle: full redraw so paired clients resolve this composite");
-            }
-            catch (Exception ex) { log.Warning("[Proteus] sync settle redraw failed: {0}", ex.Message); }
-        }, null, Timeout.Infinite, Timeout.Infinite);
-
-        syncRedrawTimer.Change(SyncRedrawSettle, Timeout.InfiniteTimeSpan);
-    }
-
-    /// <summary>
-    /// Whether any Mare-family sync plugin is loaded. Matched on internal name rather than an exact list
-    /// because the forks multiply (MareSynchronos, MareSempiterne/PSync, Snowcloak, …); a false positive
-    /// costs one extra redraw a few seconds after editing stops, which is far cheaper than a fork nobody
-    /// listed leaving its users with the invisible-character bug. Re-probed every 30s so a plugin enabled
-    /// mid-session is picked up.
-    /// </summary>
     /// <summary>
     /// True when <paramref name="ex"/> (or anything it wraps) is the AssemblyLoadContext-unloading
     /// failure a background composite hits while the plugin is being torn down. Matched on the message
@@ -3714,73 +3856,83 @@ public class CompositorService : IDisposable
         return false;
     }
 
-    private bool SyncPluginLoaded()
-    {
-        var now = Environment.TickCount64;
-        if (now - Interlocked.Read(ref syncProbeTick) < 30_000) return syncPluginLoaded;
-        Interlocked.Exchange(ref syncProbeTick, now);
+    /// <summary>How long to keep polling for the reload to land before giving up and redrawing anyway.
+    /// Generous because the old 400 ms cap was never actually reached by a match (see WaitForManifestLive)
+    /// — until the logs show real latencies, a cap tight enough to expire is a cap that hides them.</summary>
+    private static readonly TimeSpan ManifestLiveTimeout = TimeSpan.FromMilliseconds(1500);
 
-        try
-        {
-            var hit = Plugin.PluginInterface.InstalledPlugins.FirstOrDefault(p => p.IsLoaded
-                && (p.InternalName.Contains("mare", StringComparison.OrdinalIgnoreCase)
-                 || p.InternalName.Contains("sync", StringComparison.OrdinalIgnoreCase)));
-            if (hit != null && !syncPluginLoaded)
-                log.Information("[Proteus] sync plugin \"{0}\" detected — a full redraw will follow each "
-                              + "settled composite so paired clients resolve our textures and shell",
-                              hit.InternalName);
-            syncPluginLoaded = hit != null;
-        }
-        catch { /* InstalledPlugins can throw during teardown; keep the last answer */ }
-
-        return syncPluginLoaded;
-    }
-
-    // Reload the managed mod, then redraw — but instead of sleeping a fixed, conservative
-    // interval before the redraw, poll until Penumbra has actually processed the new
-    // redirects. Penumbra applies a ReloadMod asynchronously on its framework handler; the
-    // redraw re-requests textures through ResolvePlayer, so redrawing before the reload lands
-    // loads stale files. Because the managed mod is highest priority, ResolvePlayer returns
-    // our own output, and seeing the exact filename this run wrote confirms the new manifest is live
-    // (not the previous one's). Typical readiness is well under the old 300 ms; the cap keeps a
-    // miss from hanging the redraw.
-    //
-    // The probe compares the resolved FILENAME, not a run id: output names are content-hashed now, so a
-    // composite that changes nothing legitimately resolves to the name it already had. The manifest is
-    // cleared at the top of every run, so until the new one lands ResolvePlayer returns the upstream
-    // mod's path instead — the probe still distinguishes "loaded" from "not yet".
-    private void ReloadAndRedrawWhenReady(IDictionary<string, string> redirects)
+    // Reload the managed mod, then redraw — but instead of sleeping a fixed, conservative interval before
+    // the redraw, poll until Penumbra has actually processed the new redirects. Penumbra applies a
+    // ReloadMod asynchronously on its framework handler; the redraw re-requests textures through
+    // ResolvePlayer, so redrawing before the reload lands renders the previous composite.
+    private void ReloadAndRedrawWhenReady(IDictionary<string, string> redirects,
+                                          IDictionary<string, string>? previous)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
         if (config.DisableAutoRedraw) return;
 
-        // A game path we just redirected to a .tex output — used as the readiness probe.
-        var probeKv = redirects.FirstOrDefault(
-            kv => kv.Value.EndsWith(".tex", StringComparison.OrdinalIgnoreCase));
-        var probe = probeKv.Key;
-        var expected = probeKv.Value == null ? null : Path.GetFileName(probeKv.Value.Replace('\\', '/'));
-
-        if (probe != null && expected != null)
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < 400)
-            {
-                var resolved = penumbra.ResolvePlayer(probe);
-                if (resolved != null && Path.GetFileName(resolved.Replace('\\', '/'))
-                        .Equals(expected, StringComparison.OrdinalIgnoreCase))
-                    break;
-                Thread.Sleep(15);
-            }
-            log.Debug("[Proteus] reload ready after {0}ms", sw.ElapsedMilliseconds);
-        }
-        else
-        {
-            Thread.Sleep(300); // no texture probe (mtrl-only redirects) — fall back to fixed wait
-        }
+        WaitForManifestLive(redirects, previous);
 
         RefreshPlayerTextures();
         SchedulePostRedrawBodyTypeCheck();
+    }
+
+    /// <summary>
+    /// Block until Penumbra resolves a path this composite CHANGED to the file we just wrote for it.
+    /// <paramref name="previous"/> is the manifest being replaced.
+    ///
+    /// Both halves of that sentence are load-bearing, and both were wrong before:
+    ///
+    /// It must compare FULL PATHS. Comparing filenames looks equivalent but isn't, because a shell
+    /// texture's output name is the same as the name in its game path — "chara/equipment/e5501/texture/
+    /// ss_0_base.tex" maps to "textures/ss_0_base.tex". An unredirected resolve returns the game path,
+    /// whose filename already equals what we expect, so the probe passed instantly and we redrew before
+    /// the reload had landed. (The runId check this replaced had the mirror-image flaw: shell filenames
+    /// never contain a runId, so whenever the probe happened to pick one it could never match and the
+    /// loop ran to its cap. That is the "reload ready after 409ms" on every composite in the logs — not a
+    /// slow reload, a probe that was structurally incapable of succeeding.)
+    ///
+    /// And it must probe a CHANGED entry. Output names are content-hashed, so an unchanged redirect maps
+    /// to the file the previous manifest already pointed at; matching on one proves nothing about which
+    /// manifest is live. When nothing changed there is genuinely nothing to wait for.
+    /// </summary>
+    private void WaitForManifestLive(IDictionary<string, string> redirects,
+                                     IDictionary<string, string>? previous)
+    {
+        string? probe = null, expectedFull = null;
+        foreach (var (gamePath, rel) in redirects)
+        {
+            if (previous != null && previous.TryGetValue(gamePath, out var was)
+                && string.Equals(was, rel, StringComparison.OrdinalIgnoreCase))
+                continue;                         // unchanged — proves nothing
+            var full = TryCanonicalise(Path.Combine(managedModDir, rel));
+            if (full == null) continue;
+            probe = gamePath; expectedFull = full; break;
+        }
+
+        if (probe == null || expectedFull == null)
+        {
+            log.Debug("[Proteus] no redirect changed this composite — nothing to wait for");
+            return;
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.Elapsed < ManifestLiveTimeout)
+        {
+            var resolved = TryCanonicalise(penumbra.ResolvePlayer(probe));
+            if (resolved != null && string.Equals(resolved, expectedFull, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Debug("[Proteus] manifest live after {0}ms", sw.ElapsedMilliseconds);
+                return;
+            }
+            Thread.Sleep(15);
+        }
+
+        // Distinct from the success line on purpose: a timeout means the redraw below may render the
+        // PREVIOUS composite, and that should be legible in the log rather than buried in a shared message.
+        log.Warning("[Proteus] manifest not live after {0}ms (probe {1}) — redrawing anyway",
+                    sw.ElapsedMilliseconds, probe);
     }
 
     // After a composite, verify it used the settled body state. The snapshot at trigger time can
@@ -3862,29 +4014,15 @@ public class CompositorService : IDisposable
 
     // ── Compositing ──────────────────────────────────────────────────────────
 
-    // Load the base normal texture, guarding against our own managed mod output
-    // (feedback loop: Penumbra may still resolve our path after a reload if the IPC
-    // is processed asynchronously, or if path separators differ).
-    // Falls back to game SqPack if the resolved path points into managedModDir.
+    // Load the base normal texture. ResolveUpstream keeps this off our own managed output (a feedback
+    // loop: Penumbra may still resolve our path while its reload is in flight) and, unlike the plain
+    // managedModDir guard this used to do inline, falls back to the last known UPSTREAM rather than to
+    // game data — which for a skin mod's invented paths does not exist.
     // After loading, resets alpha to 0 if >50% of pixels are 255 — a reliable
     // fingerprint of our own stale all-255 output (natural base normals avg ~5).
     private byte[] LoadBaseNormal(string gamePath, ref int w, ref int h)
     {
-        var diskPath = penumbra.ResolvePlayer(gamePath);
-        if (diskPath != null)
-        {
-            // Normalize separators before comparing so forward/back-slash mismatches don't bypass the guard.
-            var diskFull    = Path.GetFullPath(diskPath);
-            var managedFull = Path.GetFullPath(managedModDir);
-            if (diskFull.StartsWith(managedFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(diskFull, managedFull, StringComparison.OrdinalIgnoreCase))
-            {
-                log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} — falling back to game data", gamePath);
-                diskPath = null;
-            }
-        }
-
-        var loaded = textureLoader.LoadBaseTexture(diskPath, gamePath);
+        var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(gamePath), gamePath);
         if (!loaded.HasValue) return Array.Empty<byte>();
 
         var rgba = loaded.Value.rgba;
