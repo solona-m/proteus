@@ -1012,4 +1012,63 @@ public class CompositorMathTests
             [pairIdx] = new() { A = new() { Opacity = opA }, B = new() { Opacity = opB } }
         };
     }
+
+    // ── ContentTag ───────────────────────────────────────────────────────────
+    // The output filename suffix. Stability is the whole point: a sync plugin keys transfers on content,
+    // so identical bytes must produce an identical name (no re-upload), and any difference that reaches
+    // the written file must produce a different one (or the game keeps rendering its cached texture).
+
+    [Fact]
+    public void ContentTag_IdenticalInput_IsStable()
+    {
+        var a = new byte[1000]; var b = new byte[1000];
+        for (int i = 0; i < a.Length; i++) { a[i] = (byte)(i * 7); b[i] = (byte)(i * 7); }
+
+        Assert.Equal(CompositorService.ContentTag(a, 512, 512, 1),
+                     CompositorService.ContentTag(b, 512, 512, 1));
+    }
+
+    [Fact]
+    public void ContentTag_IsEightHexChars()
+    {
+        var tag = CompositorService.ContentTag(new byte[64], 4, 4);
+        Assert.Equal(8, tag.Length);
+        Assert.All(tag, c => Assert.Contains(c, "0123456789abcdef"));
+    }
+
+    [Fact]
+    public void ContentTag_OneChangedByte_ChangesTag()
+    {
+        var a = new byte[1000];
+        var b = (byte[])a.Clone();
+        b[997] = 1;   // in the ragged tail past the last whole 8-byte word
+
+        Assert.NotEqual(CompositorService.ContentTag(a), CompositorService.ContentTag(b));
+    }
+
+    [Fact]
+    public void ContentTag_TailBytesAreNotIgnored()
+    {
+        // 1003 bytes = 125 whole words + 3 loose. A word-at-a-time hash that forgets the remainder would
+        // give these two the same name and the peer would never see the edit.
+        var a = new byte[1003];
+        var b = (byte[])a.Clone();
+        b[1002] = 0xFF;
+
+        Assert.NotEqual(CompositorService.ContentTag(a), CompositorService.ContentTag(b));
+    }
+
+    [Fact]
+    public void ContentTag_SaltDistinguishesDimensionsAndEncoding()
+    {
+        var data = new byte[512];
+
+        // Same pixels, different declared size — a resize writes different bytes.
+        Assert.NotEqual(CompositorService.ContentTag(data, 128, 128, 0),
+                        CompositorService.ContentTag(data, 256, 64, 0));
+
+        // Same pixels, compression toggled — BC7 vs B8G8R8A8 must not share a filename.
+        Assert.NotEqual(CompositorService.ContentTag(data, 128, 128, 0),
+                        CompositorService.ContentTag(data, 128, 128, 1));
+    }
 }

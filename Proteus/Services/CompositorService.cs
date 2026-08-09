@@ -1150,23 +1150,17 @@ public class CompositorService : IDisposable
 
             EnsureManagedModExists();
 
-            // Delete previously written files BEFORE clearing redirects so that
+            // Clear previously written files out of the way BEFORE clearing redirects so that
             // File.Exists checks fail even if the Penumbra IPC reload is asynchronous.
             // This prevents us from loading our own stale output as the base texture.
-            // Second-skin files (ss_*, models/) are deliberately NOT deleted: they're compared against
+            // Second-skin files (ss_*, models/) are deliberately NOT touched: they're compared against
             // the new build to decide whether the shell actually changed, and a changed shell is what
             // forces a full redraw. Wiping them first would make every run look like a change.
             // They're never read back as a compositing source, so a stale one is harmless.
             var texturesDirEarly  = Path.Combine(managedModDir, "textures");
             var materialsDirEarly = Path.Combine(managedModDir, "materials");
-            if (Directory.Exists(texturesDirEarly))
-                foreach (var f in Directory.GetFiles(texturesDirEarly, "*.tex"))
-                    if (!Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
-                        try { File.Delete(f); } catch { }
-            if (Directory.Exists(materialsDirEarly))
-                foreach (var f in Directory.GetFiles(materialsDirEarly, "*.mtrl"))
-                    if (!Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase))
-                        try { File.Delete(f); } catch { }
+            StashPreviousOutput(texturesDirEarly,  "*.tex");
+            StashPreviousOutput(materialsDirEarly, "*.mtrl");
 
             // Clear redirects and reload. Penumbra's IPC reload may process asynchronously
             // on the game main thread, so sleep briefly to let it take effect before any
@@ -1504,11 +1498,9 @@ public class CompositorService : IDisposable
             // Accumulated across the parallel per-material loop; published to _skinGlowTargets after it.
             var skinGlow = new ConcurrentDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>();
 
-            // Unique suffix for all output files in this composite run. FFXIV caches textures
-            // by their resolved path; using the same filename across runs means the game never
-            // reloads the file even after the content changes. A new suffix each run guarantees
-            // Penumbra sees a genuinely different redirect path → forces a cache miss.
-            var runId = Guid.NewGuid().ToString("N")[..8];
+            // Output filenames carry a CONTENT hash, not a per-run id — see ContentTag for why. Changed
+            // bytes still get a new path (the cache miss the old GUID existed for); unchanged bytes keep
+            // theirs, so sync plugins stop re-transferring the whole skin set on every composite.
 
             // Per-mod transparency masks (the "Masks" convention): a Penumbra multi-select group
             // named "Masks" whose selected options each load a grayscale PNG from Proteus/Masks/.
@@ -2963,18 +2955,24 @@ public class CompositorService : IDisposable
                     if (aoLoadedNormal && !aoIndentedNormal && baseN is { Length: > 0 }) baseN = null;
                 }
 
-                var baseName = SanitizeName(mtrlGamePath) + "_" + runId;
+                var baseName = SanitizeName(mtrlGamePath);
                 var channels = new System.Text.StringBuilder();
 
                 // Compression (opt-in): BC7 for every skin channel — the skin normal uses its B/A channels
                 // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
                 bool compress = config.EnableCompression;
 
+                // Salted with the dimensions and the encoding flag: both change the written bytes without
+                // changing the RGBA buffer, and a stale path would leave the game on the old format.
+                int encSalt = compress ? 1 : 0;
+
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_d.tex");
-                    var relPath = "textures/" + baseName + "_d.tex";
-                    if (textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                    var name = baseName + "_" + ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion) + "_d.tex";
+                    var outPath = Path.Combine(texturesDir, name);
+                    var relPath = "textures/" + name;
+                    if (ReuseStashed(outPath)
+                     || textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
                         redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
 
@@ -2990,16 +2988,20 @@ public class CompositorService : IDisposable
                 }
                 if (baseN is { Length: > 0 } && texPaths.Normal != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_n.tex");
-                    var relPath = "textures/" + baseName + "_n.tex";
-                    if (textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                    var name = baseName + "_" + ContentTag(baseN, wN, hN, encSalt, OutputFormatVersion) + "_n.tex";
+                    var outPath = Path.Combine(texturesDir, name);
+                    var relPath = "textures/" + name;
+                    if (ReuseStashed(outPath)
+                     || textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal"); }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
-                    var outPath = Path.Combine(texturesDir, baseName + "_m.tex");
-                    var relPath = "textures/" + baseName + "_m.tex";
-                    if (textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
+                    var name = baseName + "_" + ContentTag(baseM, wM, hM, encSalt, OutputFormatVersion) + "_m.tex";
+                    var outPath = Path.Combine(texturesDir, name);
+                    var relPath = "textures/" + name;
+                    if (ReuseStashed(outPath)
+                     || textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask"); }
                 }
 
@@ -3047,9 +3049,13 @@ public class CompositorService : IDisposable
                         raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1f, 1f, 1f);
 
                         Directory.CreateDirectory(materialsDir);
-                        var outPath = Path.Combine(materialsDir, baseName + ".mtrl");
-                        var relPath = "materials/" + baseName + ".mtrl";
-                        if (textureLoader.WriteMtrl(raw, outPath))
+                        // Hashed over the patched bytes, independent of the textures above: the material
+                        // changes on a colour-table or shader-key edit that leaves the textures untouched,
+                        // and vice versa.
+                        var name = baseName + "_" + ContentTag(raw, OutputFormatVersion) + ".mtrl";
+                        var outPath = Path.Combine(materialsDir, name);
+                        var relPath = "materials/" + name;
+                        if (ReuseStashed(outPath) || textureLoader.WriteMtrl(raw, outPath))
                             redirects[mtrlGamePath] = relPath;
                     }
                 }
@@ -3277,7 +3283,7 @@ public class CompositorService : IDisposable
 
             WriteManagedModJson(redirects, manipulations);
             PruneManagedOutput(redirects);   // drop ss_*/model/material orphans from disabled/shrunk mods
-            ReloadAndRedrawWhenReady(redirects, runId);
+            ReloadAndRedrawWhenReady(redirects);
 
             // Reconcile the invisible-glasses injection AFTER the redirect mod is live, so when the equip's
             // redraw loads the glasses model it resolves straight to the shell (no visible frames). Passes
@@ -3472,13 +3478,80 @@ public class CompositorService : IDisposable
             managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
     }
 
+    /// <summary>Subdirectory each run moves the previous run's skin output into. A directory rather than a
+    /// filename suffix so the non-recursive <c>Directory.GetFiles</c> scans elsewhere in this class can't
+    /// see it — including the "*.tex" scan in <see cref="StashPreviousOutput"/> itself, which on Windows
+    /// will happily match extensions that merely START with the pattern's.</summary>
+    private const string StashDir = ".stale";
+
+    /// <summary>
+    /// Move this directory's previously written files (everything but the ss_* shell output) aside into
+    /// <see cref="StashDir"/>, so that from here on the live path does not exist — same guarantee the old
+    /// outright delete gave, which is what stops a composite reading its own prior output back as a base
+    /// texture while Penumbra's async reload is still in flight.
+    ///
+    /// Moving rather than deleting is what makes content-hashed filenames pay off. An unchanged texture
+    /// resolves to the name it already had, so <see cref="ReuseStashed"/> can move the file straight back
+    /// instead of re-encoding 64 MB of BC7 — and, critically, a move preserves LastWriteTime. Sync plugins
+    /// invalidate their file cache on any modtime change (PSync: FileCacheManager.ValidateFileCacheEntity),
+    /// so a delete-and-rewrite would re-hash the whole ~300 MB skin set on every slider drag even though
+    /// not one byte changed. It also shrinks the window where the path is absent from seconds of encoding
+    /// down to two renames.
+    /// </summary>
+    private void StashPreviousOutput(string dir, string pattern)
+    {
+        if (!Directory.Exists(dir)) return;
+        var stash = Path.Combine(dir, StashDir);
+
+        // Merge into whatever a cancelled run left behind rather than wiping first: those files are still
+        // valid reuse candidates. A completed run clears the whole directory in PruneManagedOutput.
+        try { Directory.CreateDirectory(stash); }
+        catch (Exception ex) { log.Debug("[Proteus] stash dir unavailable ({0}) — deleting instead", ex.Message); stash = ""; }
+
+        foreach (var f in Directory.GetFiles(dir, pattern))
+        {
+            if (Path.GetFileName(f).StartsWith("ss_", StringComparison.OrdinalIgnoreCase)) continue;
+            // The live path MUST end up gone; if the move fails for any reason, fall back to the delete.
+            if (stash.Length > 0)
+            {
+                try { File.Move(f, Path.Combine(stash, Path.GetFileName(f)), overwrite: true); continue; }
+                catch { }
+            }
+            try { File.Delete(f); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Move <paramref name="outPath"/> back from the stash if this run wants the exact same filename, and
+    /// report whether it did. The name carries a <see cref="ContentTag"/>, so an identical name means
+    /// identical bytes — the file already on disk IS this run's output and re-encoding it would produce
+    /// the same thing at the cost of the encode and a modtime bump.
+    /// </summary>
+    private bool ReuseStashed(string outPath)
+    {
+        try
+        {
+            var stashed = Path.Combine(Path.GetDirectoryName(outPath)!, StashDir, Path.GetFileName(outPath));
+            if (!File.Exists(stashed)) return false;
+            File.Move(stashed, outPath, overwrite: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Fall through to a normal write — correct either way, just slower.
+            log.Debug("[Proteus] stash reuse failed for {0}: {1}", Path.GetFileName(outPath), ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>
     /// Delete any file under textures/ materials/ models/ that the just-written manifest doesn't reference —
-    /// orphans left by a now-disabled mod, a dropped spill host, or a shell that shed a layer. The skin
-    /// textures are already cleared up-front (they're runId-named), but the ss_*/model/material files are
-    /// deliberately kept across a run for the change-detection skip, so nothing else ever removes their
-    /// orphans. Pass the FINAL redirect map (its rel-path values are what to keep). Safe to delete a file
-    /// still tracked in SecondSkinService's hash cache: the write path re-checks File.Exists and rewrites.
+    /// orphans left by a now-disabled mod, a dropped spill host, or a shell that shed a layer. That includes
+    /// emptying the <see cref="StashDir"/> holding pens: whatever this run did not move back out of them is
+    /// by definition superseded. The ss_*/model/material files are deliberately kept across a run for the
+    /// change-detection skip, so nothing else ever removes their orphans. Pass the FINAL redirect map (its
+    /// rel-path values are what to keep). Safe to delete a file still tracked in SecondSkinService's hash
+    /// cache: the write path re-checks File.Exists and rewrites.
     /// </summary>
     private void PruneManagedOutput(IDictionary<string, string> redirects)
     {
@@ -3493,6 +3566,8 @@ public class CompositorService : IDisposable
             foreach (var f in Directory.GetFiles(dir))
                 if (!keep.Contains(sub + "/" + Path.GetFileName(f)))
                     try { File.Delete(f); } catch { }
+
+            try { Directory.Delete(Path.Combine(dir, StashDir), recursive: true); } catch { }
         }
     }
 
@@ -3671,26 +3746,34 @@ public class CompositorService : IDisposable
     // redirects. Penumbra applies a ReloadMod asynchronously on its framework handler; the
     // redraw re-requests textures through ResolvePlayer, so redrawing before the reload lands
     // loads stale files. Because the managed mod is highest priority, ResolvePlayer returns
-    // our own output, and this run's unique runId in the filename confirms the *new* output is
-    // live (not a prior run's). Typical readiness is well under the old 300 ms; the cap keeps a
+    // our own output, and seeing the exact filename this run wrote confirms the new manifest is live
+    // (not the previous one's). Typical readiness is well under the old 300 ms; the cap keeps a
     // miss from hanging the redraw.
-    private void ReloadAndRedrawWhenReady(IDictionary<string, string> redirects, string runId)
+    //
+    // The probe compares the resolved FILENAME, not a run id: output names are content-hashed now, so a
+    // composite that changes nothing legitimately resolves to the name it already had. The manifest is
+    // cleared at the top of every run, so until the new one lands ResolvePlayer returns the upstream
+    // mod's path instead — the probe still distinguishes "loaded" from "not yet".
+    private void ReloadAndRedrawWhenReady(IDictionary<string, string> redirects)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
         if (config.DisableAutoRedraw) return;
 
         // A game path we just redirected to a .tex output — used as the readiness probe.
-        var probe = redirects.FirstOrDefault(
-            kv => kv.Value.EndsWith(".tex", StringComparison.OrdinalIgnoreCase)).Key;
+        var probeKv = redirects.FirstOrDefault(
+            kv => kv.Value.EndsWith(".tex", StringComparison.OrdinalIgnoreCase));
+        var probe = probeKv.Key;
+        var expected = probeKv.Value == null ? null : Path.GetFileName(probeKv.Value.Replace('\\', '/'));
 
-        if (probe != null)
+        if (probe != null && expected != null)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             while (sw.ElapsedMilliseconds < 400)
             {
                 var resolved = penumbra.ResolvePlayer(probe);
-                if (resolved != null && resolved.Contains(runId, StringComparison.OrdinalIgnoreCase))
+                if (resolved != null && Path.GetFileName(resolved.Replace('\\', '/'))
+                        .Equals(expected, StringComparison.OrdinalIgnoreCase))
                     break;
                 Thread.Sleep(15);
             }
@@ -5035,5 +5118,44 @@ public class CompositorService : IDisposable
         foreach (var ch in Path.GetInvalidFileNameChars())
             name = name.Replace(ch, '_');
         return name;
+    }
+
+    /// <summary>
+    /// Bump this whenever the WRITER's output changes for identical inputs — the .tex header layout, the
+    /// mip policy, the BC7 encoder, or anything WriteMtrl does to the bytes handed to it.
+    ///
+    /// It is folded into every output filename because a content hash alone only covers the inputs. Change
+    /// the encoder without bumping this and the new bytes land under the OLD name: the file on disk is
+    /// right, but everything downstream is keyed on the path and keeps serving the previous version — the
+    /// game's texture cache, every paired client's content cache, and this run's own stash reuse (which
+    /// treats a matching name as proof of matching bytes and skips the encode entirely). The symptom is a
+    /// texture that refuses to update until some unrelated edit happens to change a pixel.
+    /// </summary>
+    internal const int OutputFormatVersion = 1;
+
+    /// <summary>
+    /// Eight hex chars identifying <paramref name="data"/> (plus any <paramref name="salt"/> values that
+    /// change how it will be encoded) — the filename suffix for every skin texture and material we write.
+    ///
+    /// This replaced a per-run GUID. The GUID's job was to force a cache miss: FFXIV caches textures by
+    /// resolved path, so reusing a filename means the game keeps rendering the old bytes. A content hash
+    /// keeps that guarantee where it matters — changed bytes ⇒ changed name ⇒ miss — while giving the
+    /// reverse for free: UNCHANGED bytes keep their name. That second half is what sync plugins need. They
+    /// key transfers on content, and a GUID renamed all ~300 MB of skin output on every composite, so a
+    /// paired client re-fetched the whole set each time a slider moved and often never finished — leaving
+    /// the body invisible, because Bibo-style skin paths are mod-invented and have no vanilla fallback to
+    /// fail back to.
+    /// </summary>
+    internal static string ContentTag(byte[] data, params int[] salt)
+    {
+        // FNV-1a over 8 bytes at a time. The byte-wise variant costs ~1s across five 64 MB skin textures,
+        // which is real time on a path that already runs per keystroke; this is ~8× cheaper and the tag
+        // only has to be collision-resistant against the PREVIOUS content of one texture, not globally.
+        ulong h = 14695981039346656037;
+        var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ulong>(data);
+        foreach (var w in words) { h ^= w; h *= 1099511628211; }
+        for (int i = words.Length * 8; i < data.Length; i++) { h ^= data[i]; h *= 1099511628211; }
+        foreach (var s in salt) { h ^= (ulong)s; h *= 1099511628211; }
+        return h.ToString("x16")[..8];
     }
 }
