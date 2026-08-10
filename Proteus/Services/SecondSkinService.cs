@@ -96,57 +96,47 @@ public sealed class SecondSkinService
     /// The hand-modelled toe box shipped beside the plugin, read once. Null when it is missing or will
     /// not parse, in which case the shell builds exactly as it did before — this is additive.
     /// </summary>
-    private byte[]? authoredCap;
+    private readonly List<SecondSkinWriter.AuthoredCapSet> authoredCaps = [];
     private bool authoredCapTried;
 
-    private byte[]? AuthoredCap()
+    private IReadOnlyList<SecondSkinWriter.AuthoredCapSet> AuthoredCaps()
     {
-        if (authoredCapTried) return authoredCap;
+        if (authoredCapTried) return authoredCaps;
         authoredCapTried = true;
         try
         {
             var dir = discovery.AssemblyDir;
-            if (dir == null) return null;
-            var path = Path.Combine(dir, "Meshes", "toecap.mdl");
-            if (!File.Exists(path))
-            {
-                log.Debug("[Proteus] second skin: no authored toe cap at {0}", path);
-                return null;
-            }
-            authoredCap = File.ReadAllBytes(path);
-            log.Information("[Proteus] second skin: authored toe cap loaded ({0} bytes)", authoredCap.Length);
-
-            // Its binding to the body, if one has been baked. Without it the cap is only correct on the
-            // foot it was modelled against — a foot in heels is a different model in a different pose and
-            // the cap ends up hanging off the end of the toes.
-            var bindPath = Path.Combine(dir, "Meshes", "toecap.bind");
-            if (File.Exists(bindPath))
-            {
-                authoredCapBind = File.ReadAllBytes(bindPath);
-                log.Information("[Proteus] second skin: toe cap binding loaded ({0} bytes)",
-                    authoredCapBind.Length);
-            }
-            else
-            {
-                log.Debug("[Proteus] second skin: no toe cap binding at {0} — cap fits one foot only",
-                    bindPath);
-            }
+            if (dir == null) return authoredCaps;
+            // ONE CAP PER BODY: toecap.mdl / toecap.<body>.mdl, each with the binding of the same name
+            // that says where it sits on the body it was modelled for. The binding carries it across
+            // heels and other foot-model swaps for that body; it does NOT carry it to another body, which
+            // is why there is a cap per body rather than one cap and many bindings. The writer picks by
+            // which binding places best, so no file has to be matched to a body by name.
+            var meshDir = Path.Combine(dir, "Meshes");
+            if (Directory.Exists(meshDir))
+                foreach (var mp in Directory.GetFiles(meshDir, "toecap*.mdl").OrderBy(x => x))
+                {
+                    var bindPath = Path.ChangeExtension(mp, ".bind");
+                    authoredCaps.Add(new SecondSkinWriter.AuthoredCapSet(
+                        File.ReadAllBytes(mp),
+                        File.Exists(bindPath) ? File.ReadAllBytes(bindPath) : null,
+                        Path.GetFileNameWithoutExtension(mp)));
+                    log.Information("[Proteus] second skin: toe cap {0} loaded{1}",
+                        Path.GetFileName(mp),
+                        File.Exists(bindPath) ? "" : " (no binding — fits one foot only)");
+                }
+            if (authoredCaps.Count == 0)
+                log.Debug("[Proteus] second skin: no authored toe cap in {0}", meshDir);
         }
         catch (Exception ex)
         {
             log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
         }
-        return authoredCap;
+        return authoredCaps;
     }
 
-    /// <summary>The cap's binding to the body atlas; see <see cref="AuthoredCap"/>, which loads it.</summary>
-    private byte[]? authoredCapBind;
-
-    private byte[]? AuthoredCapBind()
-    {
-        AuthoredCap();
-        return authoredCapBind;
-    }
+    /// <summary>Last cap messages told to the wearer, so a recomposite doesn't repeat them.</summary>
+    private string? lastCapDeclined, lastCapUsed;
 
     /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
@@ -843,12 +833,40 @@ public sealed class SecondSkinService
             {
                 shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
                     out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg),
-                    AuthoredCap(), AuthoredCapBind());
+                    AuthoredCaps());
             }
             catch (Exception ex)
             {
                 log.Error(ex, "[Proteus] second skin: model build failed for host {0}{1:D4}/{2}", host.Prefix, host.SetId, host.Slot);
                 continue;   // this host fails; the others still build
+            }
+
+            // The toe cap was wanted but no binding described this body, so none was emitted. Say so —
+            // the toes just quietly lose their cap otherwise, and there is a concrete thing the wearer
+            // can do about it (bake a binding against this body). Deduped: the shell rebuilds often.
+            if (stats.CapDeclined is { } declined)
+            {
+                if (lastCapDeclined != declined)
+                {
+                    lastCapDeclined = declined;
+                    var capMsg = $"[Proteus] Toe cap skipped: {declined}. The cap is fitted by a binding "
+                               + "measured against each supported body; this one has none, so the toes are "
+                               + "left uncapped rather than torn.";
+                    Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(capMsg, 25).Build());
+                }
+                log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
+            }
+            else lastCapDeclined = null;
+
+            // Which cap this shell actually got. Said out loud because the alternative is reading the
+            // Dalamud log, which is size-capped and quietly stops writing — "is the cap I just authored
+            // being used?" should not need forensics. Only on a change, so it is not chat spam.
+            if (stats.CapUsed is { } capUsed && lastCapUsed != capUsed)
+            {
+                lastCapUsed = capUsed;
+                Plugin.ChatGui.Print(new SeStringBuilder()
+                    .AddUiForeground($"[Proteus] Toe cap: {capUsed}", 25).Build());
+                log.Information("[Proteus] second skin: toe cap {0}", capUsed);
             }
 
             // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host. The Emperor

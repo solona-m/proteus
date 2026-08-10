@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 287;
+    public const int BuildNumber = 307;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -158,7 +158,29 @@ public sealed class Plugin : IDalamudPlugin
     private void OpenMainUi() => statusWindow.IsOpen = true;
 
     private void OnCommand(string command, string args)
-        => statusWindow.IsOpen = !statusWindow.IsOpen;
+    {
+        // "/proteus models [filter]" — what the RENDERER loaded, not what we wrote. Everything else in
+        // this plugin's diagnostics reads the .mdl on disk, which cannot tell a stale or redirected
+        // resource from a correct one.
+        var a = args.Trim();
+        if (a.StartsWith("models", StringComparison.OrdinalIgnoreCase))
+        {
+            var filter = a.Length > 6 ? a[6..].Trim() : "";
+            var dump = new LiveModelDump(ObjectTable, Log);
+            var lines = filter.Length > 0
+                ? dump.DumpMatching(filter, System.IO.Path.Combine(
+                      System.IO.Path.GetTempPath(), "proteus-live-models"))
+                : dump.DescribeLocalPlayer();
+            foreach (var l in lines)
+            {
+                Log.Information("[Proteus] {0}", l);
+                ChatGui.Print($"[Proteus] {l}");
+            }
+            return;
+        }
+
+        statusWindow.IsOpen = !statusWindow.IsOpen;
+    }
 
     public void Dispose()
     {

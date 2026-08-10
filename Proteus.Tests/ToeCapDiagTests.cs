@@ -72,7 +72,14 @@ public class ToeCapDiagTests
                 if (line == null) break;
                 var capPath = $"{pre}layer{i}_toecap.raw";
                 var covPath = $"{pre}layer{i}_coverage.raw";
-                var cap = File.Exists(capPath) ? File.ReadAllBytes(capPath) : (capAll ? anyCap : null);
+                // inputs.txt is the authority on whether this layer HAD a cap, not the presence of a
+                // .raw file. The dump folder is never cleaned, so a layer that has since stopped being
+                // capped still has yesterday's map sitting in it — and the replay dutifully capped a
+                // layer the game did not, inventing a whole extra cap mesh. Every measurement taken
+                // through that described a shell nobody was wearing.
+                bool declaresCap = !line.Contains("toeCap=none", StringComparison.OrdinalIgnoreCase);
+                var cap = declaresCap && File.Exists(capPath) ? File.ReadAllBytes(capPath)
+                        : declaresCap && capAll ? anyCap : null;
                 var cov = File.Exists(covPath) ? File.ReadAllBytes(covPath) : null;
                 int side = cap == null ? 0 : (int)Math.Round(Math.Sqrt(cap.Length));
                 // Coverage dimensions come from the dump when it records them, and from the byte count
@@ -112,18 +119,40 @@ public class ToeCapDiagTests
 
             // The cap's binding to the body atlas, the same file the plugin ships. Without it the cap is
             // only correct on the one foot it was modelled against.
-            byte[]? bind = null;
-            foreach (var cand in new[]
-                     {
-                         Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.bind"),
-                         @"E:\repos\Proteus\Proteus\Meshes\toecap.bind",
-                     })
-                if (File.Exists(cand)) { bind = File.ReadAllBytes(cand); break; }
-            o.WriteLine(bind == null ? "no cap binding" : $"cap binding {bind.Length} bytes");
+            var caps = CapSets();
+            o.WriteLine(caps.Count == 0 ? "no authored cap"
+                                        : $"{caps.Count} authored cap(s): {string.Join(", ", caps.Select(c => c.Name))}");
+
+            // PLACEMENT ALONE, using the bind that ships — before the push, the weld and the seam split
+            // get near it. The build's cap comes out measurably deformed from the authored one, and this
+            // splits "the binding put it in the wrong place" from "the graft moved it afterwards".
+            foreach (var cs in caps.Where(c => c.Bind != null))
+            {
+                var back = SecondSkinWriter.TryPlaceCapFromBind(cs.Bind!, bodies, null, cs.Cap);
+                if (back == null) continue;
+                var authoredMeshes = SecondSkinWriter.ReadCapMeshes(cs.Cap).ToDictionary(x => x.Mesh, x => x.Pos);
+                foreach (var pl in back)
+                {
+                    if (!authoredMeshes.TryGetValue(pl.Mesh, out var srcPos)) continue;
+                    double sum = 0, worst = 0;
+                    int n = Math.Min(pl.Pos.Length, srcPos.Length);
+                    for (int i = 0; i < n; i++)
+                    {
+                        double d = Math.Sqrt(Math.Pow(pl.Pos[i].X - srcPos[i].X, 2)
+                                           + Math.Pow(pl.Pos[i].Y - srcPos[i].Y, 2)
+                                           + Math.Pow(pl.Pos[i].Z - srcPos[i].Z, 2));
+                        sum += d; worst = Math.Max(worst, d);
+                    }
+                    o.WriteLine($"PLACEMENT ONLY [{cs.Name}] mesh {pl.Mesh}: {n} verts, "
+                              + $"mean {sum / Math.Max(1, n):F6}, worst {worst:F6}, "
+                              + $"{pl.Missed} unplaced of {pl.Considered}");
+                }
+            }
 
             var plain  = SecondSkinWriter.Build(bodies, plainLayers, baseModel, skip, out _);
             var capped = SecondSkinWriter.Build(bodies, layers, baseModel, skip, out var st,
-                null, m => lines.Add(m), authored, bind);
+                null, m => lines.Add(m), caps);
+            if (st.CapDeclined is { } dec) o.WriteLine($"CAP DECLINED: {dec}");
             foreach (var l in lines) o.WriteLine(l);
             o.WriteLine($"stats: triIn={st.TrianglesIn} triOut={st.TrianglesOut} verts={st.VerticesOut}");
 
@@ -133,11 +162,32 @@ public class ToeCapDiagTests
             for (int i = 0; i < bodies.Count; i++)
                 WriteObj(bodies[i], Path.Combine(Scratch, $"game_body{i}.obj"));
 
+            // The built shell itself, so its headers can be inspected the way the game reads them —
+            // bone tables and submesh bone windows do not survive a trip through OBJ.
+            File.WriteAllBytes(Path.Combine(Scratch, "game_capped.mdl"), capped);
+
             WriteObj(plain,  Path.Combine(Scratch, "game_plain.obj"));
             WriteObj(capped, Path.Combine(Scratch, "game_capped.obj"));
             o.WriteLine($"wrote game_plain.obj / game_capped.obj from {Path.GetFileName(info)}");
 
             foreach (var l in SeamWeights(capped)) o.WriteLine(l);
+
+            // What the game skins with, which no OBJ round trip and no modelling package can show.
+            o.WriteLine("--- built shell bones");
+            foreach (var l in SecondSkinWriter.DescribeBones(capped)) o.WriteLine(l);
+
+            // And the SHIPPED file, not the one this harness just rebuilt. The two come from the same
+            // writer but not the same caller, and "the test builds it correctly" has never been the same
+            // claim as "the plugin wrote that".
+            foreach (var shipped in new[] { @"E:\Penumbradt\Proteus\models\secondskin_0.mdl" })
+            {
+                if (!File.Exists(shipped)) continue;
+                var b = File.ReadAllBytes(shipped);
+                WriteObj(b, Path.Combine(Scratch, "game_shipped.obj"));
+                o.WriteLine($"--- SHIPPED {shipped} ({b.Length} bytes, "
+                          + $"{(b.Length == capped.Length && b.AsSpan().SequenceEqual(capped) ? "identical to" : "DIFFERS from")} the rebuild)");
+                foreach (var l in SecondSkinWriter.DescribeBones(b)) o.WriteLine(l);
+            }
             return;   // one host is enough — the feet live on whichever host took the stocking
         }
     }
@@ -236,6 +286,319 @@ public class ToeCapDiagTests
         }
     }
 
+    /// <summary>
+    /// Every LOD0 mesh of every dumped body: its material, size, where it sits, and what it is skinned
+    /// to. The question this exists to answer is which meshes the skin filter is throwing away — a body
+    /// that splits its toes onto their own material looks, to everything downstream, like a foot with no
+    /// toes on it.
+    /// </summary>
+    [Fact]
+    public void DumpBodyMeshes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+
+        foreach (var f in Directory.GetFiles(dir, "host0_body*.mdl"))
+        {
+            o.WriteLine($"=== {Path.GetFileName(f)}");
+            foreach (var l in MeshBreakdown(File.ReadAllBytes(f))) o.WriteLine(l);
+        }
+    }
+
+    private static List<string> MeshBreakdown(byte[] m)
+    {
+        ushort U16(int x) => BitConverter.ToUInt16(m, x);
+        uint U32(int x) => BitConverter.ToUInt32(m, x);
+
+        int declCount = U16(12);
+        const int declSize = 17 * 8;
+        int declEnd = 0x44 + declCount * declSize;
+        int strSize = (int)U32(declEnd + 4);
+        int strBlock = declEnd + 8;
+        int mh = strBlock + strSize;
+        ushort meshCount = U16(mh + 4), attrCount = U16(mh + 6), submeshCount = U16(mh + 8);
+        ushort matCount = U16(mh + 10), boneCount = U16(mh + 12), boneTableCount = U16(mh + 14);
+        ushort elemCount = U16(mh + 24);
+        byte tsMesh = m[mh + 26], flags2 = m[mh + 27];
+        ushort tsSub = U16(mh + 38);
+        int lodStart = mh + 56 + elemCount * 32;
+        int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
+        int attrStart = meshStart + meshCount * 36;
+        int subStart = attrStart + attrCount * 4 + tsMesh * 20;
+        int matOff = subStart + submeshCount * 16 + tsSub * 12;
+        int boneOff = matOff + matCount * 4;
+        uint vtxOff = U32(16);
+
+        string Str(uint rel)
+        {
+            int a = strBlock + (int)rel, e = a;
+            while (m[e] != 0) e++;
+            return Encoding.ASCII.GetString(m, a, e - a);
+        }
+
+        int p2 = boneOff + boneCount * 4;
+        var tables = new ushort[boneTableCount][];
+        for (int i = 0; i < boneTableCount; i++)
+        {
+            int hp = p2 + i * 4;
+            ushort off = U16(hp), size = U16(hp + 2);
+            int data = hp + off * 4;
+            var t = new ushort[size];
+            for (int k = 0; k < size; k++) t[k] = U16(data + k * 2);
+            tables[i] = t;
+        }
+
+        // LOD0 only: the lod table's first entry gives the mesh range.
+        ushort lod0Mesh = U16(lodStart), lod0Count = U16(lodStart + 2);
+        var outp = new List<string>();
+        for (int mi = lod0Mesh; mi < lod0Mesh + lod0Count && mi < meshCount; mi++)
+        {
+            int mo = meshStart + mi * 36;
+            ushort vc = U16(mo);
+            if (vc == 0) continue;
+            uint ic = U32(mo + 4);
+            ushort matIdx = U16(mo + 8), boneTbl = U16(mo + 14);
+            string mat = matIdx < matCount ? Str(U32(matOff + matIdx * 4)) : "?";
+
+            uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] bs = { m[mo + 32], m[mo + 33], m[mo + 34] };
+            (byte Stream, byte Offset, byte Type)? pos = null, wgt = null, idx = null;
+            for (int e = 0; e < 17; e++)
+            {
+                int x = 0x44 + mi * declSize + e * 8;
+                if (m[x] == 0xFF) break;
+                if (m[x + 3] == 0) pos ??= (m[x], m[x + 1], m[x + 2]);
+                if (m[x + 3] == 1) wgt ??= (m[x], m[x + 1], m[x + 2]);
+                if (m[x + 3] == 2) idx ??= (m[x], m[x + 1], m[x + 2]);
+            }
+            if (pos is not { } pe) continue;
+
+            float x0 = 9e9f, x1 = -9e9f, y0 = 9e9f, y1 = -9e9f, z0 = 9e9f, z1 = -9e9f;
+            var acc = new Dictionary<string, float>();
+            var table = boneTbl < tables.Length ? tables[boneTbl] : [];
+            for (int v = 0; v < vc; v++)
+            {
+                int pa = (int)(vtxOff + vbo[pe.Stream]) + v * bs[pe.Stream] + pe.Offset;
+                float px, py, pz;
+                if (pe.Type == 14)
+                { px = (float)BitConverter.ToHalf(m, pa); py = (float)BitConverter.ToHalf(m, pa + 2); pz = (float)BitConverter.ToHalf(m, pa + 4); }
+                else
+                { px = BitConverter.ToSingle(m, pa); py = BitConverter.ToSingle(m, pa + 4); pz = BitConverter.ToSingle(m, pa + 8); }
+                x0 = MathF.Min(x0, px); x1 = MathF.Max(x1, px);
+                y0 = MathF.Min(y0, py); y1 = MathF.Max(y1, py);
+                z0 = MathF.Min(z0, pz); z1 = MathF.Max(z1, pz);
+
+                if (wgt is not { } we || idx is not { } ie) continue;
+                int wa = (int)(vtxOff + vbo[we.Stream]) + v * bs[we.Stream] + we.Offset;
+                int ia = (int)(vtxOff + vbo[ie.Stream]) + v * bs[ie.Stream] + ie.Offset;
+                for (int k = 0; k < 4; k++)
+                {
+                    float w = m[wa + k] / 255f;
+                    if (w <= 0f) continue;
+                    int local = m[ia + k];
+                    string nm = local < table.Length && table[local] < boneCount
+                        ? Str(U32(boneOff + table[local] * 4)) : $"?{local}";
+                    acc[nm] = acc.GetValueOrDefault(nm) + w;
+                }
+            }
+            float sum = acc.Values.Sum();
+            var top = acc.OrderByDescending(k => k.Value).Take(5)
+                         .Select(k => $"{k.Key} {100 * k.Value / MathF.Max(sum, 1e-6f):0}%");
+            outp.Add($"  mesh {mi,2}: {vc,5} verts {ic / 3,6} tris  {mat,-34} "
+                   + $"x {x0,7:F3}..{x1,6:F3} y {y0,7:F3}..{y1,6:F3} z {z0,7:F3}..{z1,6:F3}");
+            outp.Add($"            skin={SecondSkinWriter.SkinMaterialBodyType(mat) ?? "NOT SKIN",-8} "
+                   + $"bones: {string.Join(", ", top)}");
+        }
+        return outp;
+    }
+
+    /// <summary>
+    /// Bake a binding against the body the game is CURRENTLY handing us, and ship it beside the cap.
+    /// <para/>
+    /// This is how a new body gets supported. A binding measured against one body does not transfer to
+    /// another even when both are nominally the same UV space: Neolithe and Rue are both "bibo" and lay
+    /// their toe islands in the same place, but a point on one sits about 0.008 away on the other, which
+    /// is roughly a triangle — enough that the narrow toe islands miss and 78% of the cap fails to place.
+    /// Measuring against each body sidesteps the comparison entirely.
+    /// <para/>
+    /// Workflow: wear the body, rebuild the shell in game so the dump refreshes, then run this with
+    /// PROTEUS_BIND_NAME set to something recognisable. Nothing of the body itself is stored — only the
+    /// four numbers per vertex — so no body mod is redistributed.
+    /// </summary>
+    [Fact]
+    public void BakeCapBindForEquippedBody()
+    {
+        var name = Environment.GetEnvironmentVariable("PROTEUS_BIND_NAME");
+        if (string.IsNullOrWhiteSpace(name)) return;   // opt-in: this writes a shipped file
+
+        // Which cap to measure — the one modelled for the body currently worn.
+        var capPath = Environment.GetEnvironmentVariable("PROTEUS_CAP_PATH")
+                   ?? new[]
+                      {
+                          Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
+                          @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
+                      }.FirstOrDefault(File.Exists);
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (capPath == null || !File.Exists(capPath) || !Directory.Exists(dir)) return;
+        o.WriteLine($"measuring {capPath}");
+
+        var bodies = new List<byte[]>();
+        for (int i = 0; File.Exists(Path.Combine(dir, $"host0_body{i}.mdl")); i++)
+            bodies.Add(File.ReadAllBytes(Path.Combine(dir, $"host0_body{i}.mdl")));
+        Assert.NotEmpty(bodies);
+
+        // Offsets are MEASURED here, not transplanted: this cap was modelled against this body, so the
+        // height it sits at above this skin is the authored one already. Transplanting only made sense
+        // while one cap was being stretched across bodies, which is no longer how this works.
+        var cap = File.ReadAllBytes(capPath);
+        var bind = SecondSkinWriter.BakeCapBind(cap, bodies, o.WriteLine);
+
+        // It has to reproduce the cap on the body it was just measured against, or it will not
+        // reproduce it anywhere.
+        var back = SecondSkinWriter.TryPlaceCapFromBind(bind, bodies, o.WriteLine, cap);
+        Assert.NotNull(back);
+        var authoredMeshes = SecondSkinWriter.ReadCapMeshes(cap).ToDictionary(x => x.Mesh, x => x.Pos);
+        foreach (var pl in back!)
+        {
+            if (!authoredMeshes.TryGetValue(pl.Mesh, out var src)) continue;
+            double sum = 0, worst = 0;
+            int n = Math.Min(pl.Pos.Length, src.Length);
+            for (int i = 0; i < n; i++)
+            {
+                double d = Math.Sqrt(Math.Pow(pl.Pos[i].X - src[i].X, 2)
+                                   + Math.Pow(pl.Pos[i].Y - src[i].Y, 2)
+                                   + Math.Pow(pl.Pos[i].Z - src[i].Z, 2));
+                sum += d; worst = Math.Max(worst, d);
+            }
+            o.WriteLine($"ROUND TRIP mesh {pl.Mesh}: {n} verts, mean {sum / Math.Max(1, n):F6}, "
+                      + $"worst {worst:F6}, {pl.Missed} unplaced of {pl.Considered}");
+        }
+
+        var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", $"toecap.{name}.bind");
+        File.WriteAllBytes(outPath, bind);
+        o.WriteLine($"wrote {outPath} ({bind.Length} bytes)");
+    }
+
+    /// <summary>
+    /// Decode the shell's baked .tex files to PNG, plus an alpha-only copy of each normal map.
+    /// <para/>
+    /// The normal map is where a gear shell's TRANSPARENCY lives, so a shell with correct geometry and
+    /// correct UVs can still show bare skin wherever that alpha is zero. Nothing else in this harness
+    /// looks at it — every measurement so far has been geometry.
+    /// </summary>
+    [Fact]
+    public void DumpShellTextures()
+    {
+        var dir = Environment.GetEnvironmentVariable("PROTEUS_TEX_DIR")
+               ?? @"E:\Penumbradt\Proteus\textures";
+        if (!Directory.Exists(dir)) return;
+
+        var loader = new TextureLoader(null!, new NullLog());
+        foreach (var tex in Directory.GetFiles(dir, "*.tex").OrderBy(x => x))
+        {
+            var got = loader.LoadTexAsRgba(tex);
+            if (got is not { } t) { o.WriteLine($"{Path.GetFileName(tex)}: could not decode"); continue; }
+            var (rgba, w, h) = t;
+
+            var name = Path.GetFileNameWithoutExtension(tex);
+            loader.WritePng(rgba, w, h, Path.Combine(Scratch, $"{name}.png"));
+
+            // Alpha on its own — on a normal map that IS the coverage, and it is invisible in the RGB.
+            var a = new byte[rgba.Length];
+            long sum = 0; int zero = 0;
+            for (int i = 0; i < w * h; i++)
+            {
+                byte v = rgba[i * 4 + 3];
+                a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = v;
+                a[i * 4 + 3] = 255;
+                sum += v;
+                if (v < 8) zero++;
+            }
+            loader.WritePng(a, w, h, Path.Combine(Scratch, $"{name}_alpha.png"));
+            o.WriteLine($"{name}: {w}x{h}  mean alpha {sum / (double)(w * h):F1}  "
+                      + $"{zero * 100.0 / (w * h):F1}% at or below 8");
+        }
+        o.WriteLine($"wrote PNGs to {Scratch}");
+    }
+
+    private sealed class NullLog : Dalamud.Plugin.Services.IPluginLog
+    {
+        public Serilog.Events.LogEventLevel MinimumLogLevel { get; set; }
+        public Serilog.ILogger Logger => Serilog.Core.Logger.None;
+        public void Debug(string m, params object[] v) { }
+        public void Debug(Exception? e, string m, params object[] v) { }
+        public void Error(string m, params object[] v) { }
+        public void Error(Exception? e, string m, params object[] v) { }
+        public void Fatal(string m, params object[] v) { }
+        public void Fatal(Exception? e, string m, params object[] v) { }
+        public void Info(string m, params object[] v) { }
+        public void Info(Exception? e, string m, params object[] v) { }
+        public void Information(string m, params object[] v) { }
+        public void Information(Exception? e, string m, params object[] v) { }
+        public void Verbose(string m, params object[] v) { }
+        public void Verbose(Exception? e, string m, params object[] v) { }
+        public void Warning(string m, params object[] v) { }
+        public void Warning(Exception? e, string m, params object[] v) { }
+        public void Write(Serilog.Events.LogEventLevel l, Exception? e, string m, params object[] v) { }
+    }
+
+    /// <summary>
+    /// Vertex colour per LOD0 mesh. The shell forces it white on purpose; anything that does not go
+    /// through that path keeps whatever its exporter wrote, and vertex colour is not inert.
+    /// </summary>
+    [Fact]
+    public void DumpVertexColors()
+    {
+        var path = Environment.GetEnvironmentVariable("PROTEUS_CAP_PATH")
+                ?? @"E:\Penumbradt\Proteus\models\secondskin_0.mdl";
+        if (!File.Exists(path)) return;
+        var m = File.ReadAllBytes(path);
+        o.WriteLine($"vertex colours in {path}");
+
+        ushort U16(int x) => BitConverter.ToUInt16(m, x);
+        uint U32(int x) => BitConverter.ToUInt32(m, x);
+        int declCount = U16(12);
+        const int declSize = 17 * 8;
+        int declEnd = 0x44 + declCount * declSize;
+        int mh = declEnd + 8 + (int)U32(declEnd + 4);
+        ushort meshCount = U16(mh + 4);
+        ushort elemCount = U16(mh + 24);
+        byte flags2 = m[mh + 27];
+        int lodStart = mh + 56 + elemCount * 32;
+        int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
+        uint vtxOff = U32(16);
+
+        for (int mi = 0; mi < meshCount; mi++)
+        {
+            int mo = meshStart + mi * 36;
+            ushort vc = U16(mo);
+            if (vc == 0) continue;
+            uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] bs = { m[mo + 32], m[mo + 33], m[mo + 34] };
+            (byte S, byte O, byte T)? col = null;
+            for (int e = 0; e < 17; e++)
+            {
+                int x = 0x44 + mi * declSize + e * 8;
+                if (m[x] == 0xFF) break;
+                if (m[x + 3] == 7) { col = (m[x], m[x + 1], m[x + 2]); break; }
+            }
+            if (col is not { } ce) { o.WriteLine($"  mesh {mi,2}: {vc,5} verts — no vertex colour"); continue; }
+
+            var seen = new Dictionary<(byte, byte, byte, byte), int>();
+            for (int v = 0; v < vc; v++)
+            {
+                int a = (int)(vtxOff + vbo[ce.S]) + v * bs[ce.S] + ce.O;
+                var k = (m[a], m[a + 1], m[a + 2], m[a + 3]);
+                seen[k] = seen.GetValueOrDefault(k) + 1;
+            }
+            var top = seen.OrderByDescending(k => k.Value).Take(4)
+                          .Select(k => $"({k.Key.Item1},{k.Key.Item2},{k.Key.Item3},{k.Key.Item4})x{k.Value}");
+            bool allWhite = seen.Count == 1 && seen.Keys.First() == ((byte)255, (byte)255, (byte)255, (byte)255);
+            o.WriteLine($"  mesh {mi,2}: {vc,5} verts  {seen.Count,4} distinct  "
+                      + (allWhite ? "ALL WHITE" : "NOT WHITE: " + string.Join(" ", top)));
+        }
+    }
+
     [Fact]
     public void Diagnose()
     {
@@ -282,9 +645,11 @@ public class ToeCapDiagTests
     [Fact]
     public void DumpAuthoredCap()
     {
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        var path = Environment.GetEnvironmentVariable("PROTEUS_CAP_PATH")
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                                 "OneDrive", "Desktop", "cap.mdl");
         if (!File.Exists(path)) return;
+        o.WriteLine($"inspecting {path}");
         var m = File.ReadAllBytes(path);
         o.WriteLine($"cap.mdl: {m.Length} bytes");
 
@@ -471,7 +836,10 @@ public class ToeCapDiagTests
                 int wa = (int)(vtxOff + vbo[we.Stream]) + v * bs[we.Stream] + we.Offset;
                 int ia = (int)(vtxOff + vbo[ie.Stream]) + v * bs[ie.Stream] + ie.Offset;
                 var w = new Dictionary<string, float>();
-                for (int k = 0; k < 4; k++)
+                // EIGHT on the Dawntrail format (type 17), four otherwise. Reading four from an
+                // eight-influence vertex compares truncated sets and invents disagreements.
+                int nInf = we.Type == 17 ? 8 : 4;
+                for (int k = 0; k < nInf; k++)
                 {
                     float f = m[wa + k] / 255f;
                     if (f <= 0f) continue;
@@ -544,6 +912,27 @@ public class ToeCapDiagTests
             outp.Add($"      within {b.Max:F5}: {b.N,5} pairs  mean {(b.N > 0 ? b.Sum / b.N : 0) * 100,5:0.0}%"
                    + $"  worst {b.Worst * 100,5:0.0}%");
         return outp;
+    }
+
+    /// <summary>Every authored cap the plugin would ship, paired with its binding — same rule as the service.</summary>
+    private static List<SecondSkinWriter.AuthoredCapSet> CapSets()
+    {
+        foreach (var d in new[] { Path.Combine(AppContext.BaseDirectory, "Meshes"),
+                                  @"E:\repos\Proteus\Proteus\Meshes" })
+        {
+            if (!Directory.Exists(d)) continue;
+            var found = new List<SecondSkinWriter.AuthoredCapSet>();
+            foreach (var mp in Directory.GetFiles(d, "toecap*.mdl").OrderBy(x => x))
+            {
+                var bind = Path.ChangeExtension(mp, ".bind");
+                found.Add(new SecondSkinWriter.AuthoredCapSet(
+                    File.ReadAllBytes(mp),
+                    File.Exists(bind) ? File.ReadAllBytes(bind) : null,
+                    Path.GetFileNameWithoutExtension(mp)));
+            }
+            if (found.Count > 0) return found;
+        }
+        return [];
     }
 
     /// <summary>Per-mesh submesh layout of a SOURCE model — a generated triangle has to fit in one.</summary>
