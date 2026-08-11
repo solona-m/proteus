@@ -330,6 +330,17 @@ public class ToeCapDiagTests
                 }
         }
 
+        // OPT IN TO SHIPPING IT. This used to write on every run, and it is an ordinary [Fact] — so every
+        // `dotnet test` silently replaced the Neolithe binding the plugin ships, and which one was in the
+        // build stopped being anybody's decision. It cost most of a session: the file kept coming back
+        // modified after being restored, and Neolithe kept changing behaviour between builds for no
+        // reason visible in the diff. Same gate as BakeCapBindForEquippedBody, which had it from the
+        // start; measuring the round trip is the useful part and that still runs unconditionally.
+        if (Environment.GetEnvironmentVariable("PROTEUS_WRITE_BIND") != "1")
+        {
+            o.WriteLine("not writing toecap.bind — set PROTEUS_WRITE_BIND=1 to ship this bake");
+            return;
+        }
         var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", "toecap.bind");
         if (Directory.Exists(Path.GetDirectoryName(outPath)!))
         {
