@@ -550,6 +550,9 @@ public static class SecondSkinWriter
         // Which cap vertices (pre-split indices) that rim runs through, so the graft knows which of its
         // own vertices to snap back. Per layer, for the same reason the rim itself is.
         var weldRimVerts = new HashSet<int>();
+        // Every point on the cap's rim that a shell vertex was welded onto, this layer. The cap is split
+        // at these when it is emitted, so both boundaries end up with the same vertex positions.
+        var capRimLandings = new List<Vec3>();
         int welded = 0, weldWorst = 0;
         float weldWorstD = 0f;
 
@@ -959,6 +962,7 @@ public static class SecondSkinWriter
             // are the ones the weld is allowed to drag a long way, because the cap is what is supposed to
             // be filling the space they were pulled back from.
             var cutAway = new bool[vc];
+            int cutTris = 0;
             // Position in the cap's flattened corner list. The projection walked the index buffer in
             // exactly this order (submeshes ascending, triangles ascending, nothing skipped), so a simple
             // running cursor lines the two up. Only ever used with dropConnectors off, which is the one
@@ -1008,7 +1012,7 @@ public static class SecondSkinWriter
                     // The toe box was replaced wholesale, so its triangles go; the cap's own are added
                     // below. Anything the cap merely nudged is dropped only if it collapsed outright.
                     if (capPlan != null && capPlan.IsCut(a, b, c))
-                    { cutAway[a] = cutAway[b] = cutAway[c] = true; continue; }
+                    { cutAway[a] = cutAway[b] = cutAway[c] = true; cutTris++; continue; }
                     if (capPlan != null && capPlan.IsDropped(a, b, c)) continue;
                     if (capOutPos != null && CapDegenerate(capSrcPos!, capOutPos, a, b, c)) continue;
                     keep.Add(a); keep.Add(b); keep.Add(c);
@@ -1017,6 +1021,9 @@ public static class SecondSkinWriter
                 }
                 keptPerSub.Add(keep.ToArray());
             }
+            if (cov?.ToeCap != null)
+                diag?.Invoke($"toe cap: mesh {m} — plan {(capPlan == null ? "NULL" : "present")}, "
+                           + $"the cut removed {cutTris} triangle(s)");
 
             // The rebuilt cap joins the submesh that lost the most geometry to the cut. Its vertices are
             // all reused originals from that region, so they already skin through that submesh's bone
@@ -1036,6 +1043,25 @@ public static class SecondSkinWriter
                     triOut++;
                 }
                 keptPerSub[host] = grown.ToArray();
+            }
+
+            // WATERTIGHT THE JOIN. The shell's lip has already been welded onto this cap's rim, but it
+            // landed part-way along rim EDGES, not on rim vertices — 2 of 134 coincided. The cap has no
+            // vertex at the others, so each is a T-junction and the surfaces separate by a sliver as soon
+            // as the two edges are not exactly collinear. That is the fine light seam: the join measures
+            // closed surface-to-surface (0.0002) and still leaks, because closed and watertight are
+            // different properties and only the first was ever being checked.
+            //
+            // Splitting the cap's rim at each landing puts a vertex where the shell has one, without
+            // moving anything. Snapping the shell to rim vertices instead was tried before and is
+            // recorded in NearestOnRim as having collapsed rim triangles outright.
+            if (preserve && capUv != null && capRimLandings.Count > 0)
+            {
+                int added = SplitCapRim(capRimLandings, decl, ref outStreams, outStrides, ref vc,
+                                        keptPerSub, ref used);
+                if (added > 0)
+                    diag?.Invoke($"authored cap: split the rim at {added} shell landing(s) so both "
+                               + "boundaries share vertex positions");
             }
             if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
 
@@ -1137,6 +1163,11 @@ public static class SecondSkinWriter
                             WriteXYZ(outStreams[pw2.Stream], po, pw2.Type, best.X, best.Y, best.Z);
                             movedV[i] = true;
                             weldPos[i] = best;
+                            // Where the shell landed ON the cap's rim. The cap has no vertex at most of
+                            // these — measured, 2 of 134 — so each one is a T-junction, and the two
+                            // surfaces part by a sliver wherever the edges are not exactly collinear.
+                            // The cap's rim gets split at them when it is grafted; see SplitCapRim.
+                            capRimLandings.Add(best);
                             welded++;
                             movedThisRound++;
                             weldWorstD = MathF.Max(weldWorstD, dist);
@@ -1434,6 +1465,20 @@ public static class SecondSkinWriter
             float push = BaseOffset + LayerSeparation * layer;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
+            // THE CAP TAKES THE FULL PUSH, like everything else in the layer.
+            //
+            // It was briefly emitted at push - BaseOffset, on the reasoning that the cap is modelled at
+            // the shell's surface already: the Rue cap sits a median 1.12 mm off the skin and BaseOffset
+            // is 1.00 mm, so pushing it again put it at 2.09 mm against the shell's 1.00 and left a ridge
+            // along the join. But that 1.12 was a coincidence, not a rule — the Neolithe cap measures
+            // 1.64 mm off its own skin. Each cap is authored at whatever height its author chose, so
+            // subtracting a fixed offset moves every cap by a different amount relative to the rim it has
+            // to meet, and it broke the weld on both bodies.
+            //
+            // The ridge is real and still wants fixing. The measurement to drive it is the cap's OWN
+            // clearance over the body it is being placed on, not a constant.
+            float capPush = push;
+
             // A declined cap takes its cut with it, so the toes keep the shell they already had.
             if (capDeclined != null && def.ToeCap != null)
                 def = new SecondSkinLayer
@@ -1454,6 +1499,7 @@ public static class SecondSkinWriter
             weldRim = null;
             weldRimVerts.Clear();
             welded = 0; weldWorst = 0; weldWorstD = 0f; capWelded = 0;
+            capRimLandings.Clear();
             shellRim.Clear(); shellRimArr = null;
             byte[]? footprint = null;
             int footprintSize = def.ToeCapWidth > 0 && def.ToeCapWidth == def.ToeCapHeight
@@ -1503,8 +1549,8 @@ public static class SecondSkinWriter
                         var (pa, na) = (pl.SrcPos[e.A], pl.SrcNrm[e.A]);
                         var (pb, nb) = (pl.SrcPos[e.B], pl.SrcNrm[e.B]);
                         segs.Add(new RimSeg(
-                            new Vec3(pa.X + na.X * push, pa.Y + na.Y * push, pa.Z + na.Z * push), na, pl.SrcW[e.A],
-                            new Vec3(pb.X + nb.X * push, pb.Y + nb.Y * push, pb.Z + nb.Z * push), nb, pl.SrcW[e.B]));
+                            new Vec3(pa.X + na.X * capPush, pa.Y + na.Y * capPush, pa.Z + na.Z * capPush), na, pl.SrcW[e.A],
+                            new Vec3(pb.X + nb.X * capPush, pb.Y + nb.Y * capPush, pb.Z + nb.Z * capPush), nb, pl.SrcW[e.B]));
                         weldRimVerts.Add(e.A); weldRimVerts.Add(e.B);
                     }
                 }
@@ -1559,8 +1605,40 @@ public static class SecondSkinWriter
                 int lit = 0, painted = 0;
                 foreach (byte px in eroded) if (px >= 128) lit++;
                 if (footprint != null) foreach (byte px in footprint) if (px >= 128) painted++;
+
+                // CUT TO THE CAP, not to the painted map. The map is an authored asset sized for the
+                // cap it was drawn alongside; on another body's cap it takes out far more shell than
+                // that cap fills — measured on Rue, 8156 texels cut against 2480 covered. Nothing snaps
+                // a difference like that shut: the weld hauls boundary vertices as much as 0.0139 to
+                // reach the rim (WeldCutReach allows 0.04 where every other boundary gets 0.012), the
+                // triangles behind them collapse, WeldCollapse drops them, and the shell tears open
+                // well away from the join. The join itself measured perfect throughout — two-way max
+                // 0.00042 — because the tearing is the price being paid for that.
+                //
+                // Dilated by a couple of texels so the shell's lip lands just OUTSIDE the cap's rim and
+                // the weld pulls it in a short way. Cutting to the bare footprint is what failed when
+                // this was tried on the generated cap: the rasterised footprint under-covers the cap's
+                // thin edges, so the shell was left standing INSIDE the cap's boundary with nothing to
+                // weld to — its rim a median 0.027 from the rim it was supposed to meet.
+                if (MaskDump is { } dump)
+                {
+                    dump("painted", eroded, mwp);
+                    if (footprint != null) dump("footprint", footprint, footprintSize);
+                }
+
+                // THE PAINTED MAP CUTS. Cutting to the cap instead — by its UV footprint or by a 3D test
+                // for skin beneath it — was tried and reverted: it left both bodies unwelded, and Rue
+                // clipping through the shell above the cap line. The reason the earlier attempts LOOKED
+                // promising is that they were not cutting at all (see the NewTriangles note in
+                // ToeCapSolve), so the shell stayed whole and the cap simply lay on top of it.
+                //
+                // The over-cut this leaves on a body the map was not painted for is real — 8156 texels
+                // against the cap's 2480 on Rue — and it is what makes the weld drag lip vertices as far
+                // as 0.0139. That is a problem to solve with a map matched to the cap, not by deriving
+                // the cut from the cap's geometry.
                 diag?.Invoke($"authored cap: cut map eroded by {CapCutErode}, {lit} texels remain "
                            + $"(the cap itself covers {painted})");
+
                 cutDef = new SecondSkinLayer
                 {
                     MaterialName = def.MaterialName,
@@ -1630,7 +1708,7 @@ public static class SecondSkinWriter
                 for (int m = cs.Lod0MeshIndex; m < cEnd && m < cs.MeshCount; m++)
                 {
                     if (BitConverter.ToUInt16(cs.S, cs.MeshStart + m * 36) == 0) continue;   // empty mesh
-                    EmitMesh(cs, m, matIndex, push, preserve: true, cov: def, capMapBase,
+                    EmitMesh(cs, m, matIndex, capPush, preserve: true, cov: def, capMapBase,
                              ref capMapAppended, dropConnectors: false,
                              capUv: capUvCache.TryGetValue(m, out var cached) ? cached
                                   : capUvCache[m] = ProjectCapUV(cs, m, sources, diag,
@@ -2337,10 +2415,12 @@ public static class SecondSkinWriter
 
     /// <summary>
     /// Rings in from the cap's back seam over which its authored skinning is blended toward the body's.
-    /// Everything deeper keeps exactly what the author weighted — including to the toenails, which the
-    /// body's skin-only weights cannot express and which the cap collapses without.
+    /// ONE — the open edge itself and nothing else. Everything else keeps exactly what the author
+    /// weighted, including to the toenails, which the body's skin-only weights cannot express and which
+    /// the cap collapses without. It was 3, which reached a ring and a half into geometry that had no
+    /// business being touched: the two surfaces only have to agree where they meet.
     /// </summary>
-    private const int CapSeamBlendRings = 3;
+    private const int CapSeamBlendRings = 1;
 
     /// <summary>
     /// Weld-then-drop rounds. Dropping a collapsed triangle exposes vertices that were interior when the
@@ -2821,6 +2901,13 @@ public static class SecondSkinWriter
         for (int c = 0; c < compCount; c++)
         {
             var masked = maskedByComp[c];
+            // Every island that the mask touches at all, and what happened to it. The cut silently
+            // declining an island looks exactly like the cut working — the shell simply comes out whole
+            // — and a mask that lit the right region in the atlas still cut nothing at all because of a
+            // gate down here. Cheap enough to always report; a foot has a handful of islands.
+            if (masked is { Count: > 0 })
+                capLogSink?.Invoke($"toe cap: island {c} of {islandSize[c]} node(s), {masked.Count} masked"
+                    + (masked.Count < MinToeCapNodes ? $" — SKIPPED, under MinToeCapNodes ({MinToeCapNodes})" : ""));
             if (masked is not { Count: >= MinToeCapNodes }) continue;
 
             // The CORE of the mask — where it is actually painted in, not its antialiased fringe. A soft
@@ -2831,7 +2918,13 @@ public static class SecondSkinWriter
             var core = new List<int>();
             foreach (int n in masked)
                 if (nW[n] >= ToeCapCoreWeight) core.Add(n);
-            if (core.Count < MinToeCapNodes) continue;
+            if (core.Count < MinToeCapNodes)
+            {
+                capLogSink?.Invoke($"toe cap: island {c} — SKIPPED, core {core.Count} of {masked.Count} "
+                    + $"masked is under MinToeCapNodes ({MinToeCapNodes}); mask weight below "
+                    + $"{ToeCapCoreWeight} does not count");
+                continue;
+            }
 
             // A cap is sewn onto surviving geometry. An island that is ENTIRELY masked — each toenail is
             // — has no rim to sew to, so no cap can be built for it. It used to be left where it was, on
@@ -2840,7 +2933,13 @@ public static class SecondSkinWriter
             // which is exactly the crunch it reads as. They are underneath a stocking, so drop them.
             //
             // Only ever a SMALL island: a mask painted over a whole foot would otherwise swallow the foot.
-            if (core.Count > MaxCoreFraction * islandSize[c]) continue;   // marked by the pre-pass above
+            if (core.Count > MaxCoreFraction * islandSize[c])
+            {
+                capLogSink?.Invoke($"toe cap: island {c} — SKIPPED, core {core.Count} is over "
+                    + $"{MaxCoreFraction:P0} of the island's {islandSize[c]} node(s)");
+                continue;   // marked by the pre-pass above
+            }
+            capLogSink?.Invoke($"toe cap: island {c} — CUT, core {core.Count} of {islandSize[c]} node(s)");
 
             // An authored cap is filling this region, so only the CUT is wanted: take the toe box out
             // and leave it to the modelled mesh. Everything past here — the swept rings, the dome, the
@@ -4385,7 +4484,14 @@ public static class SecondSkinWriter
         // that: every island on it is swallowed whole, so no cap is ever built for it.
         bool anyDropped = false;
         foreach (bool d in dropNode) if (d) { anyDropped = true; break; }
-        if ((!capped || newTris.Count == 0) && !anyDropped) return null;
+        // An empty NewTriangles is a failure only when geometry was meant to be built. On the authored
+        // path it is the expected outcome — the cap is a modelled mesh, so all this pass contributes is
+        // the CUT, and demanding new triangles here threw that cut away every time. It went unnoticed
+        // because the painted map is wide enough to swallow the toenail islands whole, which sets
+        // anyDropped and carries the plan past this line; the moment the cut was narrowed to the cap the
+        // nails stopped being covered, the plan came back null, and the shell was emitted as the entire
+        // uncut foot with the cap laid on top of it.
+        if ((!capped || (buildGeometry && newTris.Count == 0)) && !anyDropped) return null;
 
         var delta = new Vec3[vc];
         for (int i = 0; i < vc; i++)
@@ -4916,6 +5022,15 @@ public static class SecondSkinWriter
 
     /// <summary>Resolution the cap's own footprint is rasterised at when the layer's map isn't square.</summary>
     private const int CapFootprintSize = 512;
+
+    /// <summary>
+    /// Set by a diagnostic to receive each cut mask as it is built — name, texels, side. The cut is a UV
+    /// mask and every argument about it so far has been made from texel COUNTS, which say nothing about
+    /// where a mask actually lands in the atlas. Two masks of similar size can describe completely
+    /// different regions, and that is exactly the confusion this exists to end.
+    /// </summary>
+    internal static Action<string, byte[], int>? MaskDump;
+
 
     /// <summary>
     /// Bone tables and submesh bone windows, as the GAME reads them. A modelling package builds its
@@ -5476,6 +5591,193 @@ public static class SecondSkinWriter
     private readonly record struct RimSeg(
         Vec3 PA, Vec3 NA, (string Bone, float W)[] WA,
         Vec3 PB, Vec3 NB, (string Bone, float W)[] WB);
+
+    /// <summary>
+    /// Put a vertex on the cap's boundary wherever a shell vertex was welded onto it, so the two
+    /// boundaries share positions instead of one crossing the middle of the other's edges.
+    /// <para/>
+    /// A boundary edge belongs to exactly one triangle, so a split is a fan: the triangle keeps its
+    /// opposite corner and is replaced by one triangle per sub-segment. Nothing moves — the new vertices
+    /// sit exactly where the shell already is — so this cannot reopen a join or distort the cap.
+    /// </summary>
+    /// <returns>How many vertices were inserted.</returns>
+    private static int SplitCapRim(List<Vec3> landings, VElem[] decl, ref byte[][] streams,
+                                   byte[] strides, ref ushort vc, List<ushort[]> keptPerSub,
+                                   ref bool[] used)
+    {
+        // Boundary edges of what this mesh is actually emitting, with the triangle each belongs to.
+        var edgeUse = new Dictionary<(ushort A, ushort B), int>();
+        foreach (var sub in keptPerSub)
+            for (int t = 0; t + 2 < sub.Length; t += 3)
+                foreach (var (x, y) in new[] { (sub[t], sub[t + 1]), (sub[t + 1], sub[t + 2]), (sub[t + 2], sub[t]) })
+                {
+                    var e = x < y ? (x, y) : (y, x);
+                    edgeUse[e] = edgeUse.GetValueOrDefault(e) + 1;
+                }
+        var boundary = edgeUse.Where(kv => kv.Value == 1).Select(kv => kv.Key).ToList();
+        if (boundary.Count == 0) return 0;
+
+        VElem? pEl = null;
+        foreach (var el in decl) if (el.Usage == UsePosition) { pEl = el; break; }
+        if (pEl is not { } pe) return 0;
+
+        var posStream = streams[pe.Stream];
+        int posStride = strides[pe.Stream];
+        Vec3 PosOf(int v)
+        {
+            Span<float> tmp = stackalloc float[4];
+            ReadTyped(posStream, v * posStride + pe.Offset, pe.Type, tmp);
+            return new Vec3(tmp[0], tmp[1], tmp[2]);
+        }
+
+        // Each landing against the boundary edge it sits on, as a parameter along that edge. Landings at
+        // an endpoint need no split — those are the ones that already coincide.
+        var cuts = new Dictionary<(ushort A, ushort B), List<(float T, Vec3 P)>>();
+        foreach (var land in landings)
+        {
+            (ushort A, ushort B) bestE = default;
+            float bestD2 = float.MaxValue, bestT = 0f;
+            foreach (var e in boundary)
+            {
+                var a = PosOf(e.A);
+                var b = PosOf(e.B);
+                float ex = b.X - a.X, ey = b.Y - a.Y, ez = b.Z - a.Z;
+                float len = ex * ex + ey * ey + ez * ez;
+                if (len < 1e-20f) continue;
+                float t = Math.Clamp(((land.X - a.X) * ex + (land.Y - a.Y) * ey + (land.Z - a.Z) * ez) / len, 0f, 1f);
+                float qx = a.X + ex * t, qy = a.Y + ey * t, qz = a.Z + ez * t;
+                float d2 = (land.X - qx) * (land.X - qx) + (land.Y - qy) * (land.Y - qy) + (land.Z - qz) * (land.Z - qz);
+                if (d2 >= bestD2) continue;
+                bestD2 = d2; bestE = e; bestT = t;
+            }
+            if (bestD2 > CapRimSplitReach * CapRimSplitReach) continue;
+            // Already a shared vertex, or close enough to one that a split would make a sliver.
+            float edgeLen = Dist(PosOf(bestE.A), PosOf(bestE.B));
+            if (edgeLen < 1e-6f) continue;
+            float margin = CapRimSplitMargin / edgeLen;
+            if (bestT <= margin || bestT >= 1f - margin) continue;
+            (cuts.TryGetValue(bestE, out var l) ? l : cuts[bestE] = new List<(float, Vec3)>()).Add((bestT, land));
+        }
+        if (cuts.Count == 0) return 0;
+
+        // Grow every stream by the number of vertices about to be inserted, then fill each by
+        // interpolating its edge's endpoints. Blend indices and weights are taken from the NEARER
+        // endpoint rather than mixed: two adjacent rim vertices can name different bones, and averaging
+        // index bytes produces a bone nobody asked for.
+        int newCount = cuts.Sum(kv => kv.Value.Count);
+        int baseV = vc;
+        for (int st = 0; st < streams.Length; st++)
+        {
+            if (streams[st] == null || strides[st] == 0) continue;
+            var g = new byte[(vc + newCount) * strides[st]];
+            Buffer.BlockCopy(streams[st], 0, g, 0, vc * strides[st]);
+            streams[st] = g;
+        }
+        var grownUsed = new bool[vc + newCount];
+        Array.Copy(used, grownUsed, vc);
+        used = grownUsed;
+
+        int next = baseV;
+        var inserted = new Dictionary<(ushort A, ushort B), List<(float T, ushort V)>>();
+        foreach (var (e, list) in cuts)
+        {
+            list.Sort((x, y) => x.T.CompareTo(y.T));
+            var made = new List<(float, ushort)>();
+            foreach (var (t, p) in list)
+            {
+                ushort nv = (ushort)next++;
+                LerpVertex(decl, streams, strides, e.A, e.B, t, nv);
+                // The position is the shell's landing exactly, not the interpolation — that is the whole
+                // point, and the two differ by however far the shell's rim bows off the chord.
+                WriteXYZ(streams[pe.Stream], nv * strides[pe.Stream] + pe.Offset, pe.Type, p.X, p.Y, p.Z);
+                used[nv] = true;
+                made.Add((t, nv));
+            }
+            inserted[e] = made;
+        }
+        vc = (ushort)(baseV + newCount);
+
+        // Re-fan every triangle that owns a split edge.
+        for (int su = 0; su < keptPerSub.Count; su++)
+        {
+            var sub = keptPerSub[su];
+            var outp = new List<ushort>(sub.Length);
+            for (int t = 0; t + 2 < sub.Length; t += 3)
+            {
+                ushort a = sub[t], b = sub[t + 1], c = sub[t + 2];
+                bool done = false;
+                for (int k = 0; k < 3 && !done; k++)
+                {
+                    (ushort x, ushort y, ushort opp) = k switch
+                    {
+                        0 => (a, b, c),
+                        1 => (b, c, a),
+                        _ => (c, a, b),
+                    };
+                    var e = x < y ? (A: x, B: y) : (A: y, B: x);
+                    if (!inserted.TryGetValue(e, out var pts)) continue;
+                    // Walk the edge in the triangle's own winding so the fan keeps its facing.
+                    var seq = new List<ushort> { x };
+                    if (x == e.A) seq.AddRange(pts.Select(p => p.V));
+                    else for (int i = pts.Count - 1; i >= 0; i--) seq.Add(pts[i].V);
+                    seq.Add(y);
+                    for (int i = 0; i + 1 < seq.Count; i++)
+                    { outp.Add(seq[i]); outp.Add(seq[i + 1]); outp.Add(opp); }
+                    done = true;
+                }
+                if (!done) { outp.Add(a); outp.Add(b); outp.Add(c); }
+            }
+            keptPerSub[su] = outp.ToArray();
+        }
+        return newCount;
+    }
+
+    /// <summary>Write vertex <paramref name="dst"/> as the interpolation of <paramref name="va"/> and
+    /// <paramref name="vb"/>, attribute by attribute as the declaration describes them.</summary>
+    private static void LerpVertex(VElem[] decl, byte[][] streams, byte[] strides,
+                                   ushort va, ushort vb, float t, ushort dst)
+    {
+        // Start from the nearer endpoint, so anything not explicitly interpolated below — blend indices,
+        // blend weights, colour — arrives as a coherent set rather than a mix of two.
+        ushort near = t < 0.5f ? va : vb;
+        for (int st = 0; st < streams.Length; st++)
+        {
+            if (streams[st] == null || strides[st] == 0) continue;
+            Buffer.BlockCopy(streams[st], near * strides[st], streams[st], dst * strides[st], strides[st]);
+        }
+
+        Span<float> A = stackalloc float[4], B = stackalloc float[4];
+        foreach (var el in decl)
+        {
+            if (el.Usage is not (UsePosition or UseNormal or UseUV)) continue;
+            var s = streams[el.Stream];
+            if (s == null) continue;
+            ReadTyped(s, va * strides[el.Stream] + el.Offset, el.Type, A);
+            ReadTyped(s, vb * strides[el.Stream] + el.Offset, el.Type, B);
+            float x = A[0] + (B[0] - A[0]) * t, y = A[1] + (B[1] - A[1]) * t, z = A[2] + (B[2] - A[2]) * t;
+            int off = dst * strides[el.Stream] + el.Offset;
+            switch (el.Usage)
+            {
+                case UsePosition: WriteXYZ(s, off, el.Type, x, y, z); break;
+                case UseNormal:
+                {
+                    var n = NormalizeOr(new Vec3(x, y, z), new Vec3(A[0], A[1], A[2]));
+                    WriteNormal(s, off, el.Type, n.X, n.Y, n.Z);
+                    break;
+                }
+                case UseUV:
+                    WriteUV2(s, off, el.Type is 13 or 14, x, y);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>How far a welded landing may sit from a cap boundary edge and still be treated as on it.</summary>
+    private const float CapRimSplitReach = 0.004f;
+
+    /// <summary>How close to an existing rim vertex a landing must be before splitting is pointless — a
+    /// split there would only make a sliver, and the vertex it would share is already there.</summary>
+    private const float CapRimSplitMargin = 2e-4f;
 
     /// <summary>
     /// Nearest point on a rim, with the normal and the skinning interpolated along the segment it lands

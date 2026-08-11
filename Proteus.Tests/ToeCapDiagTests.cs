@@ -149,6 +149,29 @@ public class ToeCapDiagTests
                 }
             }
 
+            // THE CUT MASKS, in atlas space. Every argument about the cut so far has been made from texel
+            // counts, which cannot tell two completely different regions of the same size apart. One
+            // colour per mask plus a composite, so "is the shadow mask even landing on the toes" and "is
+            // the painted map's extra area one band or several islands" are answerable by looking.
+            var maskLoader = new TextureLoader(null!, new NullLog());
+            var masks = new Dictionary<string, (byte[] M, int N)>();
+            SecondSkinWriter.MaskDump = (nm, m, side) =>
+            {
+                if (masks.ContainsKey(nm)) return;      // first layer only
+                masks[nm] = ((byte[])m.Clone(), side);
+                var rgba = new byte[side * side * 4];
+                for (int i = 0; i < side * side; i++)
+                {
+                    byte v = m[i] >= 128 ? (byte)255 : (byte)0;
+                    rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = v;
+                    rgba[i * 4 + 3] = 255;
+                }
+                maskLoader.WritePng(rgba, side, side, Path.Combine(Scratch, $"cutmask_{nm}.png"));
+                int lit = 0;
+                foreach (var px in m) if (px >= 128) lit++;
+                o.WriteLine($"cut mask '{nm}': {side}x{side}, {lit} texels lit");
+            };
+
             var plain  = SecondSkinWriter.Build(bodies, plainLayers, baseModel, skip, out _);
             var capped = SecondSkinWriter.Build(bodies, layers, baseModel, skip, out var st,
                 null, m => lines.Add(m), caps);
@@ -169,6 +192,28 @@ public class ToeCapDiagTests
             WriteObj(plain,  Path.Combine(Scratch, "game_plain.obj"));
             WriteObj(capped, Path.Combine(Scratch, "game_capped.obj"));
             o.WriteLine($"wrote game_plain.obj / game_capped.obj from {Path.GetFileName(info)}");
+
+            SecondSkinWriter.MaskDump = null;
+            // Composite: red = painted only, green = shadow only, yellow = both. Where the painted map
+            // takes out shell the cap has no claim on shows as red; where the 3D test finds skin the
+            // painted map misses shows as green.
+            if (masks.TryGetValue("painted", out var pm) && masks.TryGetValue("shadow", out var sm)
+                && pm.N == sm.N)
+            {
+                int n = pm.N;
+                var rgba = new byte[n * n * 4];
+                int both = 0, pOnly = 0, sOnly = 0;
+                for (int i = 0; i < n * n; i++)
+                {
+                    bool p = pm.M[i] >= 128, s = sm.M[i] >= 128;
+                    rgba[i * 4] = (byte)(p ? 255 : 0);
+                    rgba[i * 4 + 1] = (byte)(s ? 255 : 0);
+                    rgba[i * 4 + 3] = 255;
+                    if (p && s) both++; else if (p) pOnly++; else if (s) sOnly++;
+                }
+                maskLoader.WritePng(rgba, n, n, Path.Combine(Scratch, "cutmask_compare.png"));
+                o.WriteLine($"cut masks: {both} texels in both, {pOnly} painted-only, {sOnly} shadow-only");
+            }
 
             foreach (var l in SeamWeights(capped)) o.WriteLine(l);
 
