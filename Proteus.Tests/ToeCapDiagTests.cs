@@ -176,6 +176,13 @@ public class ToeCapDiagTests
             o.WriteLine("--- built shell bones");
             foreach (var l in SecondSkinWriter.DescribeBones(capped)) o.WriteLine(l);
 
+            // Per-vertex, against the cap it was grafted from. The per-bone totals above cannot see a
+            // left/right swap on a symmetric cap; this can.
+            o.WriteLine("--- cap skinning, vertex by vertex");
+            foreach (var cs in caps)
+                foreach (var l in SecondSkinWriter.DiffCapSkinning(capped, cs.Cap))
+                    o.WriteLine($"[{cs.Name}] {l}");
+
             // And the SHIPPED file, not the one this harness just rebuilt. The two come from the same
             // writer but not the same caller, and "the test builds it correctly" has never been the same
             // claim as "the plugin wrote that".
@@ -472,6 +479,21 @@ public class ToeCapDiagTests
             }
             o.WriteLine($"ROUND TRIP mesh {pl.Mesh}: {n} verts, mean {sum / Math.Max(1, n):F6}, "
                       + $"worst {worst:F6}, {pl.Missed} unplaced of {pl.Considered}");
+
+            // WHERE the error is, not just how big. A mean of 0.0003 with a worst of 0.0039 is not a
+            // uniformly good reconstruction — it is an excellent one almost everywhere and a bad one
+            // somewhere specific, and "somewhere specific" on a toe cap is a feature you can see.
+            var errs = new List<(double D, SecondSkinWriter.Vec3 P)>();
+            for (int i = 0; i < n; i++)
+                errs.Add((Math.Sqrt(Math.Pow(pl.Pos[i].X - src[i].X, 2)
+                                  + Math.Pow(pl.Pos[i].Y - src[i].Y, 2)
+                                  + Math.Pow(pl.Pos[i].Z - src[i].Z, 2)), src[i]));
+            errs.Sort((a, b) => b.D.CompareTo(a.D));
+            foreach (var cut in new[] { 0.003, 0.002, 0.001, 0.0005 })
+                o.WriteLine($"   over {cut:F4}: {errs.Count(e => e.D > cut)} vertices");
+            o.WriteLine("   worst 12, authored position (x y z) -> displacement:");
+            foreach (var (d, p) in errs.Take(12))
+                o.WriteLine($"      ({p.X,8:F4} {p.Y,8:F4} {p.Z,8:F4})  {d:F5}");
         }
 
         var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", $"toecap.{name}.bind");

@@ -152,7 +152,7 @@ public static class SecondSkinWriter
     /// </param>
     public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs,
                                            out int[] triangles, out (string Bone, float W)[][] weights,
-                                           out float[] normals, bool skinOnly = true)
+                                           out float[] normals, bool skinOnly = true, bool nonSkin = false)
     {
         positions = []; uvs = []; triangles = []; weights = []; normals = [];
         Source src;
@@ -185,7 +185,17 @@ public static class SecondSkinWriter
             if (vc == 0 || ic < 3) continue;
 
             ushort matIdx = BitConverter.ToUInt16(s, mo + 8);
-            if (skinOnly && (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null))
+            // nonSkin inverts the filter: exactly the meshes the skin filter throws away — toenails,
+            // fingernails, undies, piercings. Wanted for the CAP BINDING and nothing else. A body's
+            // skin mesh has a HOLE where each toenail sits (Rue does; Neolithe carries skin under its
+            // nails), so a cap vertex over a nail has no skin beneath it and binds to the rim of that
+            // hole instead — the offset there came out at 0.0085 against about 0.001 everywhere else,
+            // and measuring from an edge is what pressed a dish into the toenail.
+            if (nonSkin)
+            {
+                if (matIdx < matNames.Count && SkinMaterialBodyType(matNames[matIdx]) != null) continue;
+            }
+            else if (skinOnly && (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null))
                 continue;
 
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
@@ -4496,7 +4506,7 @@ public static class SecondSkinWriter
         if (offsetsFrom != null) keepOff = ReadBindOffsets(offsetsFrom);
 
         var cap = Parse(capMdl);
-        var tris = CollectSkinTriangles(referenceBodies);
+        var tris = BindSurface(referenceBodies);
         if (tris.Count == 0) throw new InvalidOperationException("reference body has no skin geometry");
 
 
@@ -4517,7 +4527,7 @@ public static class SecondSkinWriter
         // j_asi_*, a torso triangle never is.
         var parts = new HashSet<string>(StringComparer.Ordinal);
 
-        float worstOff = 0f;
+        float worstOff = 0f, worstRes = 0f;
         int total = 0;
         foreach (int m in meshes)
         {
@@ -4564,8 +4574,33 @@ public static class SecondSkinWriter
                 // The height the cap was MODELLED at, where one is on offer — see offsetsFrom.
                 if (authored != null && vi < authored.Length) off = authored[vi];
 
-                w.Write(uv.U); w.Write(uv.V); w.Write(off); w.Write(p.X >= 0f ? 1 : -1);
+                int side = p.X >= 0f ? 1 : -1;
+
+                // WHAT THE PLACEMENT WILL ACTUALLY REBUILD, and the difference from what was authored.
+                // The atlas coordinate is recovered by inverting the UV parameterisation, which is not
+                // the operation that produced it (that was a closest-point in 3D), so the two disagree
+                // wherever the atlas is compressed or a coordinate is shared by more than one triangle.
+                // Alone that is sub-millimetre, but the offset multiplies it, and the offset is largest
+                // exactly over the toenails — the nails are their own mesh and not in the skin surface,
+                // so the reference there is the recessed nail bed. Storing the difference makes the
+                // round trip onto this body exact, and carries the author's intent to any other body
+                // because it travels in the surface's own tangent frame.
+                float rt = 0f, rb = 0f, rn = 0f;
+                if (ResolveBindLanding(tris, uv.U, uv.V, side, face,
+                                       out var at, out var n2, out _, out var tan, out var bit)
+                    < float.MaxValue)
+                {
+                    float ex = p.X - (at.X + n2.X * off), ey = p.Y - (at.Y + n2.Y * off),
+                          ez = p.Z - (at.Z + n2.Z * off);
+                    rt = ex * tan.X + ey * tan.Y + ez * tan.Z;
+                    rb = ex * bit.X + ey * bit.Y + ez * bit.Z;
+                    rn = ex * n2.X + ey * n2.Y + ez * n2.Z;
+                    worstRes = MathF.Max(worstRes, MathF.Sqrt(ex * ex + ey * ey + ez * ez));
+                }
+
+                w.Write(uv.U); w.Write(uv.V); w.Write(off); w.Write(side);
                 w.Write(face.X); w.Write(face.Y); w.Write(face.Z);
+                w.Write(rt); w.Write(rb); w.Write(rn);
                 worstOff = MathF.Max(worstOff, MathF.Abs(off));
                 total++;
             }
@@ -4574,13 +4609,13 @@ public static class SecondSkinWriter
         var ms = new MemoryStream();
         var head = new BinaryWriter(ms);
         head.Write(CapBindMagic);
-        head.Write(1);   // version
+        head.Write(2);   // version — 2 adds the tangent-frame residual, see the note at the write site
         head.Write(parts.Count);
         foreach (var b in parts.OrderBy(x => x, StringComparer.Ordinal)) head.Write(b);
         ms.Write(body.GetBuffer(), 0, (int)body.Length);
 
         diag?.Invoke($"cap bind: {total} vertices over {meshes.Count} mesh(es), furthest off the skin "
-                   + $"{worstOff:F5}, anchored to {parts.Count} bone(s): "
+                   + $"{worstOff:F5}, worst residual corrected {worstRes:F5}, anchored to {parts.Count} bone(s): "
                    + string.Join(", ", parts.OrderBy(x => x, StringComparer.Ordinal)));
         return ms.ToArray();
     }
@@ -4616,13 +4651,15 @@ public static class SecondSkinWriter
                                                             byte[]? capMdl = null, int stride = 1)
     {
         if (bind.Length < 12 || BitConverter.ToUInt32(bind, 0) != CapBindMagic) return null;
-        var tris = CollectSkinTriangles(bodies);
+        var tris = BindSurface(bodies);
         if (tris.Count == 0) return null;
 
         var r = new BinaryReader(new MemoryStream(bind));
         r.ReadUInt32();
         int version = r.ReadInt32();
-        if (version != 1) { diag?.Invoke($"cap bind: version {version} not understood"); return null; }
+        // 1: (u, v, offset, side, facing). 2: the same plus a residual in the landing's tangent frame.
+        // Version 1 still loads — a cap bound before the residual existed is imperfect, not unusable.
+        if (version is not (1 or 2)) { diag?.Invoke($"cap bind: version {version} not understood"); return null; }
 
         int partCount = r.ReadInt32();
         var parts = new HashSet<string>(StringComparer.Ordinal);
@@ -4634,7 +4671,7 @@ public static class SecondSkinWriter
                             || t.Wc.Any(x => parts.Contains(x.Bone))).ToList();
         if (tris.Count == 0) { diag?.Invoke("cap bind: this body has none of the bound bones"); return null; }
         {
-            var all = CollectSkinTriangles(bodies);
+            var all = BindSurface(bodies);
             (float, float, float, float) Span(List<SkinTri> ts)
             {
                 float u0 = float.MaxValue, u1 = float.MinValue, v0 = float.MaxValue, v1 = float.MinValue;
@@ -4671,39 +4708,28 @@ public static class SecondSkinWriter
                 float u = r.ReadSingle(), v = r.ReadSingle(), off = r.ReadSingle();
                 int side = r.ReadInt32();
                 var face = new Vec3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                // Version 2 carries the reconstruction residual in the landing's tangent frame. See
+                // BakeCapBind: without it the round trip onto the very body the cap was authored on is
+                // out by up to 0.0039, and every one of the worst offenders sits on a toenail — the cap
+                // stands furthest off the skin there (the nails are not in the skin mesh, so the
+                // reference surface is the recessed nail bed), and that long lever multiplies any slip
+                // in the reconstructed landing. It read in game as a dish pressed into the toenail.
+                float rt = 0f, rb = 0f, rn = 0f;
+                if (version >= 2) { rt = r.ReadSingle(); rb = r.ReadSingle(); rn = r.ReadSingle(); }
                 uvs[i] = (u, v);
                 wts[i] = [];
                 if (stride > 1 && i % stride != 0) continue;
                 sampled++;
 
-                // Left and right carry their own coordinates, but a body may also mirror them onto each
-                // other; the side recorded at bake time keeps the two feet apart either way.
-                // Least-outside wins, and among candidates that all contain the coordinate the one facing
-                // the way the skin faced at bake time wins. No early exit: the first triangle to contain
-                // a coordinate is not necessarily the right one.
-                float best = float.MaxValue, bestFacing = -2f;
-                foreach (var t in tris)
+                float best = ResolveBindLanding(tris, u, v, side, face,
+                                                out var at, out var n2, out var w2, out var tan, out var bit);
+                if (best < float.MaxValue)
                 {
-                    if (MathF.Sign(t.Ctr.X) != side && t.Ctr.X != 0f) continue;
-                    var tile = TileOf(t);
-                    var (ba, bb, bc) = Barycentric2(u + tile.U, v + tile.V, t.Ua, t.Ub, t.Uc);
-                    float outside = MathF.Max(0f, -ba) + MathF.Max(0f, -bb) + MathF.Max(0f, -bc);
-                    if (outside > best + 1e-6f) continue;
-
-                    var n = NormalizeOr(new Vec3(t.Na.X * ba + t.Nb.X * bb + t.Nc.X * bc,
-                                                 t.Na.Y * ba + t.Nb.Y * bb + t.Nc.Y * bc,
-                                                 t.Na.Z * ba + t.Nb.Z * bb + t.Nc.Z * bc), default);
-                    float facing = n.X * face.X + n.Y * face.Y + n.Z * face.Z;
-                    if (outside > best - 1e-6f && facing <= bestFacing) continue;   // tie: keep the better facing
-
-                    best = MathF.Min(best, outside);
-                    bestFacing = facing;
-                    var p = new Vec3(t.A.X * ba + t.B.X * bb + t.C.X * bc,
-                                     t.A.Y * ba + t.B.Y * bb + t.C.Y * bc,
-                                     t.A.Z * ba + t.B.Z * bb + t.C.Z * bc);
-                    pos[i] = new Vec3(p.X + n.X * off, p.Y + n.Y * off, p.Z + n.Z * off);
-                    nrm[i] = n;
-                    wts[i] = BlendWeights(t.Wa, ba, t.Wb, bb, t.Wc, bc);
+                    pos[i] = new Vec3(at.X + n2.X * off + tan.X * rt + bit.X * rb + n2.X * rn,
+                                      at.Y + n2.Y * off + tan.Y * rt + bit.Y * rb + n2.Y * rn,
+                                      at.Z + n2.Z * off + tan.Z * rt + bit.Z * rb + n2.Z * rn);
+                    nrm[i] = n2;
+                    wts[i] = w2;
                 }
                 found[i] = best <= CapBindMissTolerance;
                 if (!found[i]) missed++;
@@ -4897,6 +4923,149 @@ public static class SecondSkinWriter
     /// window is wrong imports perfectly and deforms as garbage in game — which is the one failure mode
     /// no offline check has ever been able to see.
     /// </summary>
+    /// <summary>
+    /// One mesh's per-vertex skinning, resolved to bone names, with the position it sits at.
+    /// </summary>
+    private static (Vec3 P, (string Bone, float W)[] W)[] ReadMeshSkinning(Source src, int m)
+    {
+        int mo = src.MeshStart + m * 36;
+        ushort vc = BitConverter.ToUInt16(src.S, mo);
+        ushort tbl = BitConverter.ToUInt16(src.S, mo + 14);
+        var decl = m < src.Decls.Length ? src.Decls[m] : [];
+        VElem? pEl = null, wEl = null, iEl = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UsePosition) pEl ??= el;
+            if (el.Usage == UseBlendWeight) wEl ??= el;
+            if (el.Usage == UseBlendIndices) iEl ??= el;
+        }
+        if (vc == 0 || pEl is not { } pe || wEl is not { } we || iEl is not { } ie
+            || tbl >= src.BoneTables.Length)
+            return [];
+
+        var table = src.BoneTables[tbl];
+        int nInf = BlendCount(we.Type);
+        uint[] vOff = { BitConverter.ToUInt32(src.S, mo + 20), BitConverter.ToUInt32(src.S, mo + 24),
+                        BitConverter.ToUInt32(src.S, mo + 28) };
+        byte[] strides = { src.S[mo + 32], src.S[mo + 33], src.S[mo + 34] };
+
+        var outp = new (Vec3, (string, float)[])[vc];
+        Span<float> tmp = stackalloc float[4];
+        for (int v = 0; v < vc; v++)
+        {
+            int pa = (int)(src.Vb + vOff[pe.Stream]) + v * strides[pe.Stream] + pe.Offset;
+            ReadTyped(src.S, pa, pe.Type, tmp);
+            var p = new Vec3(tmp[0], tmp[1], tmp[2]);
+
+            int wa = (int)(src.Vb + vOff[we.Stream]) + v * strides[we.Stream] + we.Offset;
+            int ia = (int)(src.Vb + vOff[ie.Stream]) + v * strides[ie.Stream] + ie.Offset;
+            var acc = new Dictionary<string, float>(StringComparer.Ordinal);
+            if (wa + nInf <= src.S.Length && ia + nInf <= src.S.Length)
+                for (int k = 0; k < nInf; k++)
+                {
+                    float f = src.S[wa + k] / 255f;
+                    if (f <= 0f) continue;
+                    int local = src.S[ia + k];
+                    string nm = local < table.Length && table[local] < src.BoneNames.Length
+                        ? src.BoneNames[table[local]] : $"?{local}";
+                    acc[nm] = acc.GetValueOrDefault(nm) + f;
+                }
+            outp[v] = (p, acc.OrderByDescending(k => k.Value).Select(k => (k.Key, k.Value)).ToArray());
+        }
+        return outp;
+    }
+
+    /// <summary>
+    /// The grafted cap's skinning against the cap file it came from, VERTEX BY VERTEX.
+    /// <para/>
+    /// Comparing per-bone weight TOTALS between the two is not a check: the cap is near-symmetric —
+    /// <c>iv_asi_oya_b_l</c> and <c>_r</c> both carry 16.8% — so a left/right swap, or any per-vertex
+    /// permutation that preserves the totals, produces an identical summary. A vertex driven by the
+    /// opposite foot's toe bone is perfect in bind pose and ruinous once the toes move, which is
+    /// exactly the failure this exists to catch and exactly what the summary cannot see.
+    /// <para/>
+    /// Matched authored → shipped by nearest position; placement round-trips at a mean of 0.0003, well
+    /// inside the mesh's own edge length, so the pairing is unambiguous.
+    /// </summary>
+    /// <param name="shell">The built shell.</param>
+    /// <param name="capMdl">The authored cap the graft was taken from.</param>
+    internal static List<string> DiffCapSkinning(byte[] shell, byte[] capMdl)
+    {
+        var outp = new List<string>();
+        Source sh, cp;
+        try { sh = Parse(shell); cp = Parse(capMdl); }
+        catch (Exception ex) { outp.Add($"cap skinning diff: cannot parse ({ex.Message})"); return outp; }
+
+        // The authored side: every LOD0 mesh the cap has that carries skinning.
+        var authored = new List<(Vec3 P, (string Bone, float W)[] W)>();
+        for (int m = cp.Lod0MeshIndex; m < cp.Lod0MeshIndex + cp.Lod0MeshCount && m < cp.MeshCount; m++)
+            authored.AddRange(ReadMeshSkinning(cp, m));
+        if (authored.Count == 0) { outp.Add("cap skinning diff: authored cap has no skinning"); return outp; }
+
+        // The shipped side: the shell's cap meshes are the ones with the cap's vertex count after the
+        // seam split, so identify them by bone-table content instead — a cap mesh's table is the cap's
+        // own bone set, which no body mesh reproduces exactly.
+        var capBones = new HashSet<string>(authored.SelectMany(a => a.W).Select(w => w.Bone), StringComparer.Ordinal);
+        for (int m = sh.Lod0MeshIndex; m < sh.Lod0MeshIndex + sh.Lod0MeshCount && m < sh.MeshCount; m++)
+        {
+            var got = ReadMeshSkinning(sh, m);
+            if (got.Length == 0) continue;
+            var mine = new HashSet<string>(got.SelectMany(g => g.W).Select(w => w.Bone), StringComparer.Ordinal);
+            // A cap mesh draws its bones from the cap's set and essentially nothing else. A body mesh
+            // that happens to share the toe bones still brings ankle and leg bones with it.
+            int shared = mine.Count(b => capBones.Contains(b));
+            if (mine.Count == 0 || shared < mine.Count * 0.8) continue;
+
+            int domDiff = 0, setDiff = 0, sideFlip = 0, unmatched = 0;
+            float worstMove = 0f;
+            var examples = new List<string>();
+            foreach (var (ap, aw) in authored)
+            {
+                if (aw.Length == 0) continue;
+                int best = -1;
+                float bestD = float.MaxValue;
+                for (int v = 0; v < got.Length; v++)
+                {
+                    float dx = got[v].P.X - ap.X, dy = got[v].P.Y - ap.Y, dz = got[v].P.Z - ap.Z;
+                    float d = dx * dx + dy * dy + dz * dz;
+                    if (d < bestD) { bestD = d; best = v; }
+                }
+                if (best < 0 || bestD > CapDiffMatchRadius * CapDiffMatchRadius) { unmatched++; continue; }
+                worstMove = MathF.Max(worstMove, MathF.Sqrt(bestD));
+
+                var bw = got[best].W;
+                if (bw.Length == 0) { setDiff++; continue; }
+                string a0 = aw[0].Bone, b0 = bw[0].Bone;
+                if (a0 != b0)
+                {
+                    domDiff++;
+                    // The one that matters: same bone, opposite foot. Invisible to any summary, and
+                    // it renders as the cap tearing off the toe the moment the toes are posed.
+                    if (a0.Length > 2 && b0.Length > 2 && a0[..^1] == b0[..^1]
+                        && (a0[^1], b0[^1]) is ('l', 'r') or ('r', 'l'))
+                        sideFlip++;
+                    if (examples.Count < 6)
+                        examples.Add($"      ({ap.X:F4},{ap.Y:F4},{ap.Z:F4}) {a0} {aw[0].W:P0} -> {b0} {bw[0].W:P0}");
+                }
+                var aset = aw.Where(x => x.W > 0.02f).Select(x => x.Bone).OrderBy(x => x, StringComparer.Ordinal);
+                var bset = bw.Where(x => x.W > 0.02f).Select(x => x.Bone).OrderBy(x => x, StringComparer.Ordinal);
+                if (!aset.SequenceEqual(bset, StringComparer.Ordinal)) setDiff++;
+            }
+
+            outp.Add($"cap skinning diff, shell mesh {m}: {authored.Count} authored vertices, "
+                   + $"{got.Length} shipped, furthest match {worstMove:F4}");
+            outp.Add($"   dominant bone differs: {domDiff}   of those, LEFT/RIGHT FLIPPED: {sideFlip}");
+            outp.Add($"   influence set differs: {setDiff}   unmatched beyond {CapDiffMatchRadius:F3}: {unmatched}");
+            outp.AddRange(examples);
+        }
+        if (outp.Count == 0) outp.Add("cap skinning diff: no cap mesh found in the shell");
+        return outp;
+    }
+
+    /// <summary>How far a shipped cap vertex may sit from its authored one and still be the same vertex.
+    /// The graft moves them by the layer push plus the weld, both well under this.</summary>
+    private const float CapDiffMatchRadius = 0.02f;
+
     internal static List<string> DescribeBones(byte[] mdl)
     {
         var src = Parse(mdl);
@@ -5002,7 +5171,8 @@ public static class SecondSkinWriter
         if (bind.Length < 12 || BitConverter.ToUInt32(bind, 0) != CapBindMagic) return null;
         var r = new BinaryReader(new MemoryStream(bind));
         r.ReadUInt32();
-        if (r.ReadInt32() != 1) return null;
+        int version = r.ReadInt32();
+        if (version is not (1 or 2)) return null;
         int partCount = r.ReadInt32();
         for (int i = 0; i < partCount; i++) r.ReadString();
 
@@ -5018,6 +5188,7 @@ public static class SecondSkinWriter
                 off[i] = r.ReadSingle();
                 r.ReadInt32();                       // side
                 r.ReadSingle(); r.ReadSingle(); r.ReadSingle();   // facing
+                if (version >= 2) { r.ReadSingle(); r.ReadSingle(); r.ReadSingle(); }   // residual
             }
             outp[mesh] = off;
         }
@@ -5061,6 +5232,102 @@ public static class SecondSkinWriter
     /// One triangle of body skin, with everything a cap vertex needs to be placed against it or read off
     /// it: geometry, atlas coordinate, normal and skinning at each corner.
     /// </summary>
+    /// <summary>
+    /// The surface the cap is BOUND to. Skin only, and it has to stay that way.
+    /// <para/>
+    /// The diagnosis that led here is right: Rue's skin mesh has a HOLE where each toenail sits, so a cap
+    /// vertex over a nail measures from the rim of that hole rather than from a surface under it — the
+    /// offset came out at 0.0085 there against about 0.001 elsewhere, and every one of the worst
+    /// placements landed on a toenail. Neolithe never showed it because its skin continues under its
+    /// nails. But adding the nail mesh to this set is not the cure: a binding is an ATLAS coordinate, and
+    /// the nails carry their own UV island in gear space, so a coordinate measured on a nail is looked up
+    /// somewhere unrelated on the body. Measured — 8 vertices placed over a metre out, and the round trip
+    /// went from exact to a mean of 0.0041.
+    /// <para/>
+    /// The residual in the bind (version 2) fixes the same defect from the other end: the coordinate
+    /// stays in the skin atlas where it transfers, and the difference between what that reconstructs and
+    /// what the author modelled is carried alongside it. On the reference body that is exact.
+    /// </summary>
+    private static List<SkinTri> BindSurface(IReadOnlyList<byte[]> bodies)
+        => CollectSkinTriangles(bodies);
+
+    /// <summary>
+    /// Look one baked atlas coordinate back up on a body: which point of which triangle it names, the
+    /// normal there, the skinning there, and a tangent frame for the surface.
+    /// <para/>
+    /// Shared by <see cref="BakeCapBind"/> and <see cref="TryPlaceCapFromBind"/> so the bake can predict
+    /// exactly what the placement will reconstruct. Two copies of this would drift, and the residual the
+    /// bake stores is only a correction if both sides agree to the last bit about where the vertex lands.
+    /// </summary>
+    /// <returns>How far outside the winning triangle the coordinate fell; 0 means inside it.</returns>
+    private static float ResolveBindLanding(IReadOnlyList<SkinTri> tris, float u, float v, int side,
+                                            Vec3 face, out Vec3 at, out Vec3 nrm,
+                                            out (string Bone, float W)[] w, out Vec3 tan, out Vec3 bit)
+    {
+        at = default; nrm = default; w = []; tan = default; bit = default;
+        float best = float.MaxValue, bestFacing = -2f;
+        foreach (var t in tris)
+        {
+            // Left and right carry their own coordinates, but a body may also mirror them onto each
+            // other; the side recorded at bake time keeps the two feet apart either way.
+            if (MathF.Sign(t.Ctr.X) != side && t.Ctr.X != 0f) continue;
+            var tile = TileOf(t);
+            var (ba, bb, bc) = Barycentric2(u + tile.U, v + tile.V, t.Ua, t.Ub, t.Uc);
+            // Least-outside wins; among candidates that all contain the coordinate, the one facing the
+            // way the skin faced at bake time wins. No early exit: the first triangle to contain a
+            // coordinate is not necessarily the right one.
+            float outside = MathF.Max(0f, -ba) + MathF.Max(0f, -bb) + MathF.Max(0f, -bc);
+            if (outside > best + 1e-6f) continue;
+
+            var n = NormalizeOr(new Vec3(t.Na.X * ba + t.Nb.X * bb + t.Nc.X * bc,
+                                         t.Na.Y * ba + t.Nb.Y * bb + t.Nc.Y * bc,
+                                         t.Na.Z * ba + t.Nb.Z * bb + t.Nc.Z * bc), default);
+            float facing = n.X * face.X + n.Y * face.Y + n.Z * face.Z;
+            if (outside > best - 1e-6f && facing <= bestFacing) continue;   // tie: keep the better facing
+
+            best = MathF.Min(best, outside);
+            bestFacing = facing;
+            at = new Vec3(t.A.X * ba + t.B.X * bb + t.C.X * bc,
+                          t.A.Y * ba + t.B.Y * bb + t.C.Y * bc,
+                          t.A.Z * ba + t.B.Z * bb + t.C.Z * bc);
+            nrm = n;
+            w = BlendWeights(t.Wa, ba, t.Wb, bb, t.Wc, bc);
+            (tan, bit) = UvFrame(t, n);
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// A tangent frame for a triangle, taken from its UV parameterisation rather than its edges. The
+    /// residual a cap vertex carries is stored in this frame, so it means the same thing on any body
+    /// laid out in the same atlas however that body is posed — an edge-derived frame would rotate with
+    /// the triangle and put the correction somewhere else on a heeled foot.
+    /// </summary>
+    private static (Vec3 T, Vec3 B) UvFrame(SkinTri t, Vec3 n)
+    {
+        float du1 = t.Ub.U - t.Ua.U, dv1 = t.Ub.V - t.Ua.V;
+        float du2 = t.Uc.U - t.Ua.U, dv2 = t.Uc.V - t.Ua.V;
+        var e1 = new Vec3(t.B.X - t.A.X, t.B.Y - t.A.Y, t.B.Z - t.A.Z);
+        var e2 = new Vec3(t.C.X - t.A.X, t.C.Y - t.A.Y, t.C.Z - t.A.Z);
+        float det = du1 * dv2 - du2 * dv1;
+        Vec3 tan;
+        if (MathF.Abs(det) < 1e-12f)
+            tan = NormalizeOr(e1, new Vec3(1, 0, 0));
+        else
+        {
+            float rr = 1f / det;
+            tan = NormalizeOr(new Vec3((e1.X * dv2 - e2.X * dv1) * rr,
+                                       (e1.Y * dv2 - e2.Y * dv1) * rr,
+                                       (e1.Z * dv2 - e2.Z * dv1) * rr), e1);
+        }
+        float d = tan.X * n.X + tan.Y * n.Y + tan.Z * n.Z;      // Gram-Schmidt against the normal
+        tan = NormalizeOr(new Vec3(tan.X - n.X * d, tan.Y - n.Y * d, tan.Z - n.Z * d), tan);
+        var bitan = new Vec3(n.Y * tan.Z - n.Z * tan.Y,
+                             n.Z * tan.X - n.X * tan.Z,
+                             n.X * tan.Y - n.Y * tan.X);
+        return (tan, bitan);
+    }
+
     private readonly record struct SkinTri(
         Vec3 A, Vec3 B, Vec3 C,
         (float U, float V) Ua, (float U, float V) Ub, (float U, float V) Uc,
@@ -5085,13 +5352,13 @@ public static class SecondSkinWriter
     /// nail the cap covers is exactly the thing whose bones it needs to follow.
     /// </param>
     private static List<SkinTri> CollectSkinTriangles(IReadOnlyList<byte[]> bodies, bool skinOnly = true,
-                                                      bool dropIslands = true)
+                                                      bool dropIslands = true, bool nonSkin = false)
     {
         var tri = new List<SkinTri>();
         foreach (var body in bodies)
         {
             if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt, out var bw, out var bn,
-                                     skinOnly))
+                                     skinOnly, nonSkin))
                 continue;
 
             int nv = bp.Length / 3;
