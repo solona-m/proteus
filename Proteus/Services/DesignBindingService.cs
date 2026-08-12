@@ -423,10 +423,11 @@ public class DesignBindingService : IDisposable
     /// </summary>
     private void DisableAllProteusMods()
     {
-        // Proteus is standing down, so its invisible-glasses host has nothing left to carry. Pull it now:
-        // once the mods are off, the redirect that renders it as the shell goes with them, and anything
-        // still equipped shows up as a real pair of glasses on the player's face.
+        // Proteus is standing down, so its injected hosts have nothing left to carry. Pull them now: once
+        // the mods are off, the redirect that renders them as the shell goes with them, and anything still
+        // equipped shows up as a real pair of glasses on the player's face (or a ring they never chose).
         compositor.RemoveInjectedGlasses();
+        compositor.RemoveInjectedRing();
 
         var collId = penumbra.GetPlayerCollectionId();
         if (collId == null) return;
@@ -790,11 +791,17 @@ public class DesignBindingService : IDisposable
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
 
-        // Match against the player's OWN choices: strip anything Proteus equipped for them (today the
-        // invisible-glasses host) or nothing would ever match and every Proteus mod would be disabled.
-        state = NeutralizeProteusOwnedState(state, config.AutoInvisibleGlasses
-            ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId
-            : null);
+        // Match against the player's OWN choices: strip anything Proteus equipped for them (the invisible
+        // glasses and the Emperor's ring hosts) or nothing would ever match and every Proteus mod would be
+        // disabled.
+        //
+        // Asked of the compositor, which knows what it actually injected, rather than derived from the
+        // feature toggles. Either way round is a trap: gating on the toggle misses our item during the
+        // window between switching it off and the recomposite pulling it, while blanking the id whenever
+        // the feature is off would erase the player's OWN Emperor's New Ring — a common invisible-ring
+        // glamour — from every comparison. Both mistakes end in a design that matches nothing.
+        state = NeutralizeProteusOwnedState(state,
+            compositor.InjectedGlassesItemId, compositor.InjectedRingItemId);
 
         var matches = new List<(Guid id, int specificity)>();
         foreach (var id in candidateIds)
@@ -983,22 +990,46 @@ public class DesignBindingService : IDisposable
     /// <param name="syntheticGlassesId">
     /// The Glasses-slot item id of the invisible-glasses host, when that feature has one equipped.
     /// </param>
-    internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId)
+    /// <param name="syntheticRingId">
+    /// The item id of the Emperor's-ring host, when that feature has one equipped in the right ring slot.
+    /// </param>
+    internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId,
+        ulong? syntheticRingId = null)
     {
-        if (syntheticGlassesId is not { } glasses) return state;   // nothing of ours in there
-        if (state["Bonus"] is not JObject bonus) return state;
-
         JObject? copy = null;
-        foreach (var prop in bonus.Properties())
-        {
-            if (prop.Value is not JObject slot) continue;
-            if (slot["BonusId"] is not { } id || id.ToObject<ulong>() != glasses) continue;
 
-            // Ours — present it as an empty slot so a design that saved "no glasses" still matches.
-            copy ??= (JObject)state.DeepClone();
-            if (((JObject?)copy["Bonus"])?[prop.Name] is JObject target)
-                target["BonusId"] = 0;
+        if (syntheticGlassesId is { } glasses && state["Bonus"] is JObject bonus)
+        {
+            foreach (var prop in bonus.Properties())
+            {
+                if (prop.Value is not JObject slot) continue;
+                if (slot["BonusId"] is not { } id || id.ToObject<ulong>() != glasses) continue;
+
+                // Ours — present it as an empty slot so a design that saved "no glasses" still matches.
+                copy ??= (JObject)state.DeepClone();
+                if (((JObject?)copy["Bonus"])?[prop.Name] is JObject target)
+                    target["BonusId"] = 0;
+            }
         }
+
+        // Same for the ring we equip to host the shell in cut space — either hand, since it goes to
+        // whichever slot was free. Nothing zero-ish about the id: a design that saved an empty ring stores
+        // ItemId 0, so that is what "not the player's choice" has to look like here — otherwise wearing
+        // our ring makes every such design mismatch.
+        if (syntheticRingId is { } ring)
+        {
+            foreach (var finger in new[] { "RFinger", "LFinger" })
+            {
+                if ((copy ?? state)["Equipment"] is not JObject equip
+                    || equip[finger] is not JObject slot
+                    || slot["ItemId"] is not { } rid || rid.ToObject<ulong>() != ring)
+                    continue;
+                copy ??= (JObject)state.DeepClone();
+                if (((JObject?)copy["Equipment"])?[finger] is JObject target)
+                    target["ItemId"] = 0;
+            }
+        }
+
         return copy ?? state;
     }
 

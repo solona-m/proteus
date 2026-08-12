@@ -363,6 +363,20 @@ public class StatusWindow : Window
                              "ring. This writes a (hidden) bonus item to your Glamourer state; it's removed\n" +
                              "when you disable Proteus, equip real glasses, or turn this off.");
 
+        bool autoRing = config.AutoEmperorRing;
+        if (ImGui.Checkbox("Host on the Emperor's New Ring when nothing else can", ref autoRing))
+        {
+            config.AutoEmperorRing = autoRing;
+            config.Save();
+            // Recomposite so the injection/removal reconciles now (turning it off pulls the ring).
+            compositor.TriggerRecomposite("auto-ring-toggle");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When on and nothing you wear can host the second skin, Proteus has Glamourer\n" +
+                             "equip the invisible Emperor's New Ring in your FREE right ring slot and hosts\n" +
+                             "there. A ring you're already wearing is never taken. Removed when you disable\n" +
+                             "Proteus or turn this off.");
+
         // The second skin rides on an equipped ring/bracelet (its model is redirected to our merged
         // shell). An in-place reload can't reload that .mdl, so if a shell ever gets stuck on the
         // accessory this forces a full redraw to reload the accessory's original model.

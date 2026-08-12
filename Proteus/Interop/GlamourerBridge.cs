@@ -29,6 +29,7 @@ public class GlamourerBridge : IDisposable
     private readonly GetState getState;
     private readonly ReapplyState reapplyState;
     private readonly SetBonusItem setBonusItem;
+    private readonly SetItem setItem;
 
     public bool IsAvailable { get; private set; }
 
@@ -64,6 +65,7 @@ public class GlamourerBridge : IDisposable
         getState         = new GetState(pluginInterface);
         reapplyState     = new ReapplyState(pluginInterface);
         setBonusItem     = new SetBonusItem(pluginInterface);
+        setItem          = new SetItem(pluginInterface);
 
         try
         {
@@ -175,6 +177,38 @@ public class GlamourerBridge : IDisposable
         catch (Exception ex)
         {
             log.Warning("[Proteus] SetBonusItem(Glasses,{0}) failed: {1}", itemId, ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Equip an item in a RING slot on the local player, or clear it with <paramref name="itemId"/> 0. Same
+    /// contract as <see cref="SetGlasses"/>: <see cref="ApplyFlag.Once"/> so it reverts on the next
+    /// design/reset (the caller re-asserts) and is deliberately NOT locked, leaving the slot under the
+    /// player's control. MUST be called on the framework thread. Returns true only on Glamourer success.
+    /// <para/>
+    /// The slot must match the one the shell was published for: its path and EQDP entry name either
+    /// RFinger (c….a0053_rir.mdl) or LFinger (…_ril.mdl), and the game only loads the one it asked for.
+    /// </summary>
+    public bool SetRing(ulong itemId, bool leftHand)
+    {
+        if (!IsAvailable) return false;
+        var slot = leftHand ? ApiEquipSlot.LFinger : ApiEquipSlot.RFinger;
+        try
+        {
+            // No stains: an invisible ring has nothing to dye, and passing the player's would be a change
+            // we have no business making.
+            var ec = setItem.Invoke(0, slot, itemId, [], key: 0, ApplyFlag.Once);
+            if (ec != GlamourerApiEc.Success)
+            {
+                log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] SetItem({0},{1}) failed: {2}", slot, itemId, ex.Message);
             return false;
         }
     }

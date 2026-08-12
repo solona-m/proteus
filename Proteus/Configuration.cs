@@ -124,6 +124,19 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoInvisibleGlasses { get; set; } = true;
 
+    /// <summary>
+    /// When true and nothing the player wears can host the shell in its own model space, Proteus has
+    /// Glamourer equip the (invisible) Emperor's New Ring in the free RIGHT ring slot and hosts there.
+    /// <para/>
+    /// This is what makes non-Midlander races fit. The game race-deforms a model by the race code of the
+    /// path it loaded it from: facewear and most accessories ship per-race, so a shell cut from c0201 body
+    /// parts hosted on them gets no deform and renders a race-size wrong. We write the ring's EQDP entry
+    /// ourselves, so we can leave the wearer's own race empty and let the lookup fall through to the c0201
+    /// model we publish — inheriting the same deform the body already gets. Never steals an occupied right
+    /// ring slot; same ApplyFlag.Once/removal contract as <see cref="AutoInvisibleGlasses"/>.
+    /// </summary>
+    public bool AutoEmperorRing { get; set; } = true;
+
     /// <summary>Optional explicit path to Glamourer's designs directory; null = derive from the config dir.</summary>
     public string? GlamourerDesignDirOverride { get; set; } = null;
 
