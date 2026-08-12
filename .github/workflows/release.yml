@@ -43,9 +43,13 @@ jobs:
           $manifest = Get-Content "Proteus\bin\Release\win-x64\Proteus.json" | ConvertFrom-Json
           "version=$($manifest.AssemblyVersion)" | Out-File -Append $env:GITHUB_OUTPUT
 
+      # Ship the package the Dalamud SDK already built, NOT a re-zip of the whole build output.
+      # Zipping bin\Release\win-x64\* swallowed this very file, so every release carried a second,
+      # complete copy of itself (and of DefaultEffects) nested inside — a ~61 MB download where
+      # ~31 MB was the duplicate. Contents are otherwise identical, file for file.
       - name: Package
         shell: pwsh
-        run: Compress-Archive -Path "Proteus\bin\Release\win-x64\*" -DestinationPath latest.zip
+        run: Copy-Item "Proteus\bin\Release\win-x64\Proteus\latest.zip" -Destination latest.zip
 
       - name: Create release
         uses: softprops/action-gh-release@v2

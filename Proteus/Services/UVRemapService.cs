@@ -129,6 +129,10 @@ public class UVRemapService
         return null;
     }
 
+    // Latched when the LibTiff codec itself can't be loaded, so the failure is reported once rather
+    // than per material per composite. Written under cacheLock, like the cache beside it.
+    private bool tiffUnavailable;
+
     private TransferMap? GetMap(string from, string to, bool loadIfMissing = true)
     {
         var key = (from.ToLowerInvariant(), to.ToLowerInvariant());
@@ -136,10 +140,58 @@ public class UVRemapService
         {
             if (cache.TryGetValue(key, out var hit)) return hit;
             if (!loadIfMissing) return null;   // peek-only: don't pay the disk load just to check
-            var map = LoadMap(from, to);
+            if (tiffUnavailable) return null;
+
+            TransferMap? map;
+            try
+            {
+                map = LoadMap(from, to);
+            }
+            catch (Exception ex) when (IsTiffCodecMissing(ex))
+            {
+                // This is the ONLY place the codec's absence can be caught. The CLR resolves
+                // BitMiracle.LibTiff.NET when it JITs LoadMapRaw — i.e. on ENTRY, before that method's
+                // own try block is in scope — which is why a report of this lands on its first line
+                // rather than on Tiff.Open. Left uncaught it escapes IslandMask into RecompositeBody's
+                // Parallel.ForEach and takes the whole composite down, turning one missing file into a
+                // plugin that does nothing. A null map is already an expected outcome (see IslandMask):
+                // every caller treats it as "no island mask", so compositing continues.
+                tiffUnavailable = true;
+                log.Error(ex, "[Proteus] TIFF codec unavailable — UV transfer maps are disabled for this " +
+                              "session. BitMiracle.LibTiff.NET.dll is missing from the plugin folder, which " +
+                              "means a damaged or interrupted install: reinstall Proteus. Compositing " +
+                              "continues without island masks (expect softer sibling-body seams).");
+                return null;
+            }
+
             if (map != null) cache[key] = map;
             return map;
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="ex"/> is the CLR failing to load the LibTiff ASSEMBLY, as opposed to a
+    /// problem with a map file. Matched on the name because the two arrive as the same exception types.
+    /// <para/>
+    /// A file problem cannot actually reach here today — <see cref="LoadMapRaw"/> ends in a catch-all that
+    /// logs and returns null — so this is a guard against that catch ever being narrowed, not against the
+    /// current code. Without it, one unreadable .tif could latch the codec off for the whole session.
+    /// </summary>
+    private static bool IsTiffCodecMissing(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            var name = e switch
+            {
+                FileNotFoundException f    => f.FileName,
+                FileLoadException f        => f.FileName,
+                BadImageFormatException f  => f.FileName,
+                TypeLoadException t        => t.TypeName,
+                _                          => null,
+            };
+            if (name?.Contains("LibTiff", StringComparison.OrdinalIgnoreCase) == true) return true;
+        }
+        return false;
     }
 
     // Loads the forward map (from→to) and, when the reverse map (to→from) is available,

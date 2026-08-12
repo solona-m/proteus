@@ -43,9 +43,11 @@ jobs:
           $manifest = Get-Content "Proteus\bin\Release\win-x64\Proteus.json" | ConvertFrom-Json
           "version=$($manifest.AssemblyVersion)" | Out-File -Append $env:GITHUB_OUTPUT
 
+      # Ship the SDK's own package rather than re-zipping the build output — see release.yml for why
+      # (the re-zip nested a complete duplicate of the release inside itself).
       - name: Package
         shell: pwsh
-        run: Compress-Archive -Path "Proteus\bin\Release\win-x64\*" -DestinationPath latest.zip
+        run: Copy-Item "Proteus\bin\Release\win-x64\Proteus\latest.zip" -Destination latest.zip
 
       # Marked prerelease so it never becomes /releases/latest — the stable
       # DownloadLinkInstall keeps resolving to the last non-prerelease build.
