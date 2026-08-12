@@ -24,6 +24,14 @@ public class GlamourerBridge : IDisposable
     // only has to cover Glamourer raising the event for a call we just made, not any real user action.
     private const int OwnReapplyEchoMs = 250;
     private long lastOwnReapplyTick;
+
+    // When someone OTHER than us last had Glamourer reapply state on the local player. Automation applying
+    // a design on a gearset or job change is invisible in every other way — Glamourer raises no
+    // Design/DesignApplied signal for it (the actor set is empty for StateSource.Fixed) and the follow-up
+    // uses ReapplyState rather than ReapplyAutomationState — so this Reapply, paired with the Gearset
+    // finalization that follows it, is the only evidence the apply happened. See
+    // DesignBindingService.IsInferredAutomationApply.
+    private long lastForeignReapplyTick;
     private readonly GetDesignList getDesignList;
     private readonly GetDesignJObject getDesignJObject;
     private readonly GetState getState;
@@ -268,6 +276,23 @@ public class GlamourerBridge : IDisposable
         return since >= 0 && since < OwnReapplyEchoMs;
     }
 
+    /// <summary>
+    /// How long ago someone other than Proteus had Glamourer reapply the local player's state, or
+    /// <see cref="long.MaxValue"/> if that has never happened this session. Half of the automation-apply
+    /// inference (<see cref="DesignBindingService.IsInferredAutomationApply"/>); on its own it means very
+    /// little, since a plain <c>/glamour reapply</c> lands here too.
+    /// </summary>
+    public long MsSinceForeignReapply
+    {
+        get
+        {
+            var stamp = Interlocked.Read(ref lastForeignReapplyTick);
+            if (stamp == 0) return long.MaxValue;                  // never seen one
+            var since = unchecked(Environment.TickCount64 - stamp);
+            return since < 0 ? long.MaxValue : since;              // clock went backwards: treat as never
+        }
+    }
+
     private void OnStateChanged(nint address, StateChangeType changeType)
     {
         var localPlayer = objectTable.LocalPlayer;
@@ -276,6 +301,14 @@ public class GlamourerBridge : IDisposable
         // Debug-level: this no longer drives design binding (the finalized= signal does), but keeping it
         // paired in the log makes it obvious which signals an action produced.
         log.Debug("[Proteus] glamourer signal: changeType={0}", changeType);
+
+        // Stamp before the filtering below: a Reapply we did NOT cause is the first half of the
+        // automation-apply signature. Our own IPC reapply is excluded by the same echo window that
+        // suppresses its finalization — what that window cannot exclude is the reapply Glamourer performs
+        // after a Penumbra redraw (including ours), which is why the consumer also discounts our own
+        // composites. See DesignBindingService.IsInferredAutomationApply.
+        if (changeType is StateChangeType.Reapply && !WithinOwnReapplyEcho())
+            Interlocked.Exchange(ref lastForeignReapplyTick, Environment.TickCount64);
 
         // Model/EntireCustomize can change race/body without touching mod settings.
         // Fire the customization event so the compositor recomposites unconditionally.

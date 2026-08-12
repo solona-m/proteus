@@ -395,6 +395,59 @@ public class DesignBindingTests
                 $"{t} is classified as both an application and a revert");
     }
 
+    // ── IsInferredAutomationApply ────────────────────────────────────────────────
+
+    // Automation applying a design on a gearset/job change raises no apply signal of its own: the apply
+    // runs with StateSource.Fixed (empty actor set → no Design/DesignApplied over IPC) and is followed by
+    // ReapplyState(isFinal: false) rather than ReapplyAutomationState. All that arrives is the game's
+    // Gearset — preceded, a moment earlier, by the Reapply that automation caused.
+    [Fact]
+    public void InferredAutomationApply_ReapplyThenGearset_IsAnApply()
+        => Assert.True(DesignBindingService.IsInferredAutomationApply(
+            StateFinalizationType.Gearset, msSinceForeignReapply: 30, isOwnRedrawEcho: false));
+
+    // The pairing is what separates "automation re-asserted state" from "the game loaded gear"; a Gearset
+    // that stands alone is just a gear change and must not re-evaluate anything.
+    [Theory]
+    [InlineData(3000)]              // outside the pair window
+    [InlineData(long.MaxValue)]     // no foreign reapply this session at all
+    public void InferredAutomationApply_GearsetWithoutAPairedReapply_IsNotAnApply(long msSinceForeignReapply)
+        => Assert.False(DesignBindingService.IsInferredAutomationApply(
+            StateFinalizationType.Gearset, msSinceForeignReapply, isOwnRedrawEcho: false));
+
+    // Proteus's own redraw manufactures the exact same pair — the draw object reload reports Gearset, and
+    // Penumbra's mod-setting change makes Glamourer reapply state right after — so the one Gearset our own
+    // redraw is owed gets discounted no matter how perfect its timing looks.
+    [Fact]
+    public void InferredAutomationApply_OurOwnRedrawEcho_IsNotAnApply()
+        => Assert.False(DesignBindingService.IsInferredAutomationApply(
+            StateFinalizationType.Gearset, msSinceForeignReapply: 30, isOwnRedrawEcho: true));
+
+    // Only Gearset is inferred from. Every other type either reports an application honestly (and goes
+    // through IsApplySignal) or means something else entirely — perfect timings must not promote it.
+    [Theory]
+    [InlineData(StateFinalizationType.Reapply)]
+    [InlineData(StateFinalizationType.DesignApplied)]
+    [InlineData(StateFinalizationType.ReapplyAutomation)]
+    [InlineData(StateFinalizationType.Revert)]
+    [InlineData(StateFinalizationType.RevertAutomation)]
+    [InlineData(StateFinalizationType.ModelChange)]
+    public void InferredAutomationApply_OtherTypes_AreNeverInferred(StateFinalizationType type)
+        => Assert.False(DesignBindingService.IsInferredAutomationApply(
+            type, msSinceForeignReapply: 30, isOwnRedrawEcho: false));
+
+    // The inference is additive: it must not quietly reclassify anything the reported signals already own.
+    [Fact]
+    public void InferredAutomationApply_NeverOverlapsTheReportedSignals()
+    {
+        foreach (StateFinalizationType t in Enum.GetValues<StateFinalizationType>())
+        {
+            var inferred = DesignBindingService.IsInferredAutomationApply(t, 30, false);
+            Assert.False(inferred && DesignBindingService.IsApplySignal(t),  $"{t} is both reported and inferred");
+            Assert.False(inferred && DesignBindingService.IsRevertSignal(t), $"{t} is both a revert and an apply");
+        }
+    }
+
     // ── Store round-trip ───────────────────────────────────────────────────────
 
     [Fact]

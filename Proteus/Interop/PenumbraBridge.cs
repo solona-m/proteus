@@ -295,11 +295,16 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "TrySetModSetting(s) failed for {0}/{1}", modDirectory, groupName); return PenumbraApiEc.UnknownError; }
     }
 
-    public void RedrawPlayer()
+    /// <summary>
+    /// Ask Penumbra to redraw the local player. Returns false when the request never reached the game —
+    /// Penumbra absent, or the IPC threw — which callers need in order to know whether to expect the
+    /// redraw's downstream echoes (see <c>CompositorService.StampOwnRedraw</c>).
+    /// </summary>
+    public bool RedrawPlayer()
     {
-        if (!IsAvailable) return;
-        try { redrawObject.Invoke(0, RedrawType.Redraw); }
-        catch (Exception ex) { log.Error(ex, "RedrawObject failed"); }
+        if (!IsAvailable) return false;
+        try { redrawObject.Invoke(0, RedrawType.Redraw); return true; }
+        catch (Exception ex) { log.Error(ex, "RedrawObject failed"); return false; }
     }
 
     public void OpenToMod(string modDirectory)

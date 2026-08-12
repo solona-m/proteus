@@ -64,6 +64,58 @@ public class CompositorService : IDisposable
     private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
     private long _lastOwnReapplyTick = 0; // TickCount64 when we last called Glamourer ReapplyState()
 
+    // Armed when we ask the game to rebuild the player's draw object, cleared by the first Gearset
+    // finalization that follows. 0 = nothing outstanding. See ConsumeOwnRedrawEcho.
+    private long _pendingRedrawEchoTick = 0;
+
+    /// <summary>
+    /// Whether the Gearset finalization now arriving is the echo of a redraw PROTEUS asked for — and
+    /// consumes that expectation either way, so it can only ever account for ONE Gearset.
+    /// <para/>
+    /// A redraw rebuilds the draw object, which the game reports as exactly one bulk equipment load
+    /// (<c>Gearset</c>), and Penumbra's mod-setting churn makes Glamourer reapply state right after (a
+    /// foreign <c>Reapply</c>) — together, byte-for-byte the pairing that identifies an automation apply
+    /// (<see cref="DesignBindingService.IsInferredAutomationApply"/>).
+    /// <para/>
+    /// One-shot rather than a time window on purpose. A window long enough to cover a slow composite's
+    /// redraw also swallows every REAL gearset change in it — and since restoring a binding itself ends in
+    /// a composite, that blackout would re-arm after every restore, which is exactly when the player is
+    /// most likely to be flipping gearsets. Consuming a single expected echo costs the same protection
+    /// and nothing else. <paramref name="withinMs"/> only bounds how long we keep waiting for an echo
+    /// that may never arrive (a redraw suppressed by DisableAutoRedraw, say).
+    /// <para/>
+    /// Deliberately NOT armed by the in-place reload: that path reloads textures through
+    /// FlagSlotForUpdate and never touches the game's gearset load, so it produces no Gearset to discount.
+    /// </summary>
+    public bool ConsumeOwnRedrawEcho(int withinMs)
+    {
+        var stamp = Interlocked.Exchange(ref _pendingRedrawEchoTick, 0);   // consume, expired or not
+        if (stamp == 0) return false;
+        var since = unchecked(Environment.TickCount64 - stamp);
+        return since >= 0 && since < withinMs;
+    }
+
+    /// <summary>Record that WE caused the redraw the game is about to perform: the suppression window
+    /// <see cref="OnModSettingChanged"/> uses for Glamourer's temporary-setting echo, and the one-shot
+    /// Gearset expectation design binding consumes.</summary>
+    private void StampOwnRedraw()
+    {
+        var now = Environment.TickCount64;
+        Interlocked.Exchange(ref _lastOwnRedrawTick, now);
+        Interlocked.Exchange(ref _pendingRedrawEchoTick, now);
+    }
+
+    /// <summary>
+    /// Withdraw the expectation <see cref="StampOwnRedraw"/> armed, for a redraw that never reached the
+    /// game (Penumbra absent or the IPC threw). Without this the expectation would survive to swallow the
+    /// player's next real gearset change — a redraw that did not happen produces no echo to spend it on.
+    /// <para/>
+    /// Armed before the call and withdrawn after, rather than armed on success afterwards, so there is no
+    /// window in which the echo could arrive before we are ready for it.
+    /// </summary>
+    private void CancelOwnRedrawEcho()
+        => Interlocked.Exchange(ref _pendingRedrawEchoTick, 0);
+
     // Non-persistent per-mod color override pushed by the design-binding system. When set, the
     // compositor uses these colors in place of each mod's metadata.json colors for the run; null
     // means "use metadata as authored". Reference assignment is atomic; read on the recomposite task.
@@ -4628,8 +4680,9 @@ public class CompositorService : IDisposable
             {
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
                 Thread.Sleep(300);
-                Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
-                Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult();
+                StampOwnRedraw();
+                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
+                    CancelOwnRedrawEcho();
                 log.Information("[Proteus] restored changed accessory via full redraw");
             }
             catch (Exception ex) { log.Error(ex, "[Proteus] restore changed accessory failed"); }
@@ -4664,8 +4717,9 @@ public class CompositorService : IDisposable
             }
         }
 
-        Interlocked.Exchange(ref _lastOwnRedrawTick, Environment.TickCount64);
-        penumbra.RedrawPlayer();
+        StampOwnRedraw();
+        if (!penumbra.RedrawPlayer())
+            CancelOwnRedrawEcho();
     }
 
     /// <summary>

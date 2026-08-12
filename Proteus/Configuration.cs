@@ -127,6 +127,15 @@ public class Configuration : IPluginConfiguration
     public bool DesignBindingEnabled { get; set; } = true;
 
     /// <summary>
+    /// Also treat Glamourer's automation applies (gearset / job change) as design applications.
+    /// Glamourer raises no apply signal at all on that path — see
+    /// <c>DesignBindingService.IsInferredAutomationApply</c> for the Reapply→Gearset pairing this
+    /// infers it from. Restore-only: an inferred signal can restore a binding, never clear one.
+    /// Requires <see cref="DesignBindingEnabled"/>.
+    /// </summary>
+    public bool DesignBindingFollowsAutomation { get; set; } = true;
+
+    /// <summary>
     /// When true and no real glasses are worn, Proteus has Glamourer equip an (invisible-rendered) glasses
     /// item so the second-skin shell can ride the facewear slot instead of a ring/accessory. On by default;
     /// note it writes a (hidden) bonus item to the player's Glamourer state (see <c>CompositorService</c>

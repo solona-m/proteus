@@ -67,6 +67,22 @@ public class DesignBindingService : IDisposable
     private const int MinGearSlots = 3;
     private const int RestoreSuppressMs = 2000;
 
+    // Widest gap allowed between the foreign Reapply and the Gearset finalization for the pair to read as
+    // one automation apply. Measured in-game at 30-450 ms; the headroom covers a slow equipment load
+    // without widening this into "any gear change counts". See IsInferredAutomationApply.
+    private const int AutomationPairWindowMs = 2000;
+
+    // How long we keep expecting the Gearset that OUR OWN redraw causes.
+    //
+    // It bounds a ONE-SHOT expectation, not a blackout — see CompositorService.ConsumeOwnRedrawEcho for why
+    // that distinction is what keeps a restore from suppressing the player's next real gearset change. That
+    // also makes this generous by choice rather than by necessity: the expectation is armed at the moment
+    // the redraw is REQUESTED, which is after the composite has finished, so it never has to outlast a
+    // composite — only the game's own redraw-to-equipment-load latency, which is well under a second. The
+    // headroom costs nothing while the redraw does arrive, and a redraw that never reaches the game
+    // withdraws the expectation immediately instead of waiting this out (CancelOwnRedrawEcho).
+    private const int OwnRedrawEchoMs = 10000;
+
     private readonly PenumbraBridge penumbra;
     private readonly GlamourerBridge glamourer;
     private readonly SidecarDiscoveryService discovery;
@@ -745,6 +761,10 @@ public class DesignBindingService : IDisposable
     /// Penumbra's auto-redraw. No design-application path ends there, so treating it as an apply signal
     /// just fed the heuristic our own echo. Likewise <c>Gearset</c> (gear moved, the design did not) and
     /// every <c>Revert*</c> (handled by <see cref="IsRevertSignal"/> instead).
+    ///
+    /// <c>Gearset</c> is not quite the dead end that reads as, though — it is the ONLY thing an
+    /// automation-applied design produces, so it is admitted separately, in company and restore-only, by
+    /// <see cref="IsInferredAutomationApply"/>.
     /// </summary>
     internal static bool IsApplySignal(StateFinalizationType type)
         => type is StateFinalizationType.DesignApplied
@@ -766,6 +786,39 @@ public class DesignBindingService : IDisposable
                 or StateFinalizationType.RevertEquipment
                 or StateFinalizationType.RevertAdvanced;
 
+    /// <summary>
+    /// Whether a <c>Gearset</c> finalization is really automation having just applied a design.
+    ///
+    /// Automation applying a design on a gearset or job change raises NO apply signal: Glamourer merges
+    /// and applies it with <c>StateSource.Fixed</c>, whose <c>RequiresChange()</c> is false, so the actor
+    /// set is empty and the IPC layer — which iterates actors — emits neither <c>Design</c> nor
+    /// <c>DesignApplied</c>; and the follow-up call is <c>ReapplyState(isFinal: false)</c> rather than the
+    /// <c>ReapplyAutomationState</c> that would have reported <c>ReapplyAutomation</c>. All that reaches us
+    /// is the game's own <c>Gearset</c>, from the equipment load finishing.
+    ///
+    /// So the signature is ordered rather than typed: a Reapply we did not cause, then a Gearset a moment
+    /// later (30-450 ms in practice). Bare <c>Gearset</c> is NOT usable on its own — it fires on every
+    /// zone-in, redraw and gear swap, design or no design.
+    ///
+    /// Both conditions earn their place:
+    ///  • <paramref name="msSinceForeignReapply"/> is what separates "automation re-asserted state" from
+    ///    "the game loaded gear" (<see cref="long.MaxValue"/> when there has never been one). Without it
+    ///    this is just bare Gearset.
+    ///  • <paramref name="isOwnRedrawEcho"/> excludes OUR OWN tail, and is the one doing the real work: a
+    ///    Proteus redraw rebuilds the draw object (→ Gearset) and makes Glamourer reapply state right after
+    ///    (→ foreign Reapply, via PenumbraAutoRedraw), which is indistinguishable from the real thing. It
+    ///    is a consumed one-shot expectation rather than a time window, so discounting our own redraw
+    ///    cannot also discount the player's next gearset change — see
+    ///    <see cref="CompositorService.ConsumeOwnRedrawEcho"/>.
+    ///
+    /// A caller acting on this must treat it as restore-only — see <see cref="EvaluateAppliedDesign"/>.
+    /// </summary>
+    internal static bool IsInferredAutomationApply(StateFinalizationType type,
+                                                   long msSinceForeignReapply, bool isOwnRedrawEcho)
+        => type is StateFinalizationType.Gearset
+        && !isOwnRedrawEcho
+        && msSinceForeignReapply < AutomationPairWindowMs;
+
     private void OnGlamourerStateFinalized(StateFinalizationType type)
     {
         // A revert leaves no design applied: drop the override so colours fall back to metadata. This is
@@ -776,20 +829,75 @@ public class DesignBindingService : IDisposable
             return;
         }
 
-        if (!IsApplySignal(type)) return;
+        // The one-shot expectation belongs to the redraw, not to any decision made below it, so consume it
+        // for every Gearset that arrives. Deferring it past the guards would let a Gearset dropped for an
+        // unrelated reason — our own restore echo, the feature being off — leave the expectation armed to
+        // swallow a genuine gearset change later instead.
+        var ownRedrawEcho = type is StateFinalizationType.Gearset
+                         && compositor.ConsumeOwnRedrawEcho(OwnRedrawEchoMs);
+
         if (Environment.TickCount64 < suppressUntilTick) return; // our own restore echo
 
-        // Feature disabled → never restore. Also drop any override left active from before the
-        // toggle was turned off, so "off" means colors fall back to metadata (off == fully off).
+        // Feature disabled → never restore. Also drop any override left active from before the toggle was
+        // turned off, so "off" means colors fall back to metadata (off == fully off). Checked before the
+        // inference below rather than after: an inferred signal has nothing to clear (it is restore-only),
+        // so with the feature off it would otherwise announce an apply in the log and then do nothing.
         if (!config.DesignBindingEnabled)
         {
-            if (activeDesignId != null) ClearColorOverride();
+            if (IsApplySignal(type) && activeDesignId != null) ClearColorOverride();
             return;
         }
 
+        // Automation-applied designs (gearset / job change) arrive with no apply signal of their own and
+        // have to be inferred. That inference is a guess, so it is allowed to restore a binding and never
+        // to clear one: a wrong restore is visible and reversible, a wrong clear silently drops the
+        // player's colours back to metadata white.
+        var inferred = false;
+        if (!IsApplySignal(type))
+        {
+            if (type is not StateFinalizationType.Gearset) return;
+            if (!config.DesignBindingFollowsAutomation) return;
+
+            var sinceReapply = glamourer.MsSinceForeignReapply;
+            if (!IsInferredAutomationApply(type, sinceReapply, ownRedrawEcho))
+            {
+                log.Debug("[Proteus] design-binding: Gearset ignored (foreign reapply {0}, own redraw echo={1}).",
+                    Elapsed(sinceReapply), ownRedrawEcho);
+                return;
+            }
+
+            inferred = true;
+            log.Information("[Proteus] glamourer signal: finalized=Gearset + foreign reapply {0} -> inferred automation apply.",
+                Elapsed(sinceReapply));
+        }
+
+        EvaluateAppliedDesign(allowUnbind: !inferred);
+    }
+
+    /// <summary>An elapsed-ms reading for the log, where "never happened" is a sentinel that would
+    /// otherwise print as 9223372036854775807 and read like a glitch.</summary>
+    private static string Elapsed(long ms)
+        => ms == long.MaxValue ? "never" : $"{ms}ms ago";
+
+    /// <summary>
+    /// Match the player's current state against every binding and restore the best one.
+    ///
+    /// <paramref name="allowUnbind"/> is false when the signal that got us here was INFERRED
+    /// (<see cref="IsInferredAutomationApply"/>) rather than reported by Glamourer. A failed match then
+    /// means "the guess did not pan out", not "the player is wearing something unbound" — and the two are
+    /// indistinguishable from here, so nothing is cleared. It also sidesteps the mid-transition read: the
+    /// Gearset finalization is the GAME finishing its equipment load, which is not ordered against
+    /// Glamourer finishing its design apply, so the state read here can legitimately be half-applied.
+    /// </summary>
+    private void EvaluateAppliedDesign(bool allowUnbind)
+    {
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
-        if (candidateIds.Length == 0) { HandleUnboundDesign(); return; } // nothing ever bound
+        if (candidateIds.Length == 0)                                    // nothing ever bound
+        {
+            if (allowUnbind) HandleUnboundDesign();
+            return;
+        }
 
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
@@ -816,6 +924,15 @@ public class DesignBindingService : IDisposable
 
         if (matches.Count == 0)
         {
+            if (!allowUnbind)
+            {
+                // Inferred signal: no match is an ordinary outcome (the pairing can also come from a gear
+                // change nobody bound, or a state read taken before Glamourer finished applying), so it is
+                // neither a warning nor a reason to touch anything.
+                log.Information("[Proteus] design-binding: no binding matched the inferred automation apply — leaving overrides as they are.");
+                return;
+            }
+
             // No binding matched, so overrides get dropped and gear dyes revert to metadata. This is the
             // apply-match false-negative that silently clears a correctly-dyed design on a redraw, so log
             // the FIRST field that rejected each candidate — the usual culprit and hard to spot otherwise.

@@ -1073,6 +1073,29 @@ public class StatusWindow : Window
             ImGui.SetTooltip("When on, saving a Glamourer design snapshots the current Proteus state.\n" +
                              "Applying that design later restores it (best-effort gear match).");
 
+        ImGui.Indent();
+        using (ImRaii.Disabled(!bindEnabled))
+        {
+            bool followAutomation = config.DesignBindingFollowsAutomation;
+            if (ImGui.Checkbox("Follow Glamourer automation (gearset / job changes)", ref followAutomation))
+            {
+                config.DesignBindingFollowsAutomation = followAutomation;
+                config.Save();
+                // No ClearColorOverride here, unlike the parent: this path only ever restores a binding,
+                // so switching it off has nothing to undo.
+            }
+            // AllowWhenDisabled: without it the tooltip is unreachable exactly when it is most wanted —
+            // greyed out because the parent toggle is off, with nothing to explain why.
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip("Glamourer reports nothing when automation applies a design on a gearset\n" +
+                                 "or job change, so Proteus infers it from the signals that do arrive.\n\n" +
+                                 "Only ever restores a binding — it never clears one.\n" +
+                                 "The one redraw Proteus itself causes is discounted, so its own work\n" +
+                                 "can't be mistaken for an automation apply.\n\n" +
+                                 "Needs \"Bind Proteus state to Glamourer designs\" above.");
+        }
+        ImGui.Unindent();
+
         var bindings = designBindings.Bindings;
         var activeId = designBindings.ActiveDesignId;
 
