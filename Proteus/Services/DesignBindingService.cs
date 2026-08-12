@@ -400,7 +400,10 @@ public class DesignBindingService : IDisposable
             compositor.SetActiveColorOverride(null);
             compositor.SetActiveGearOverride(null);
             compositor.SetActiveStackOverride(null);
-            compositor.TriggerRecomposite("design-binding-unbound");
+            // Ambient: reached from Glamourer's state-finalized signal, which fires on every zone-in. The
+            // overrides just cleared are part of the composite fingerprint, so a real unbinding still
+            // composites — this only lets a re-assert that changed nothing stop early.
+            compositor.TriggerRecomposite("design-binding-unbound", force: false);
         }
     }
 

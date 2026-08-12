@@ -62,6 +62,55 @@ internal static class PenumbraModMeta
         catch { return null; /* missing or malformed — fall back to v3 */ }
     }
 
+    /// <summary>
+    /// The mod's always-applied redirects and metadata edits as they are ON DISK right now — the inverse
+    /// of <see cref="WriteRedirects"/>, reading whichever format the folder is in. Null when there is no
+    /// manifest or it can't be parsed, which the caller must treat as "unknown", never as "empty".
+    ///
+    /// Manipulations come back as boxed <see cref="JsonElement"/>s rather than a typed model on purpose:
+    /// the only thing that consumes them is <see cref="WriteRedirects"/>, which serialises each entry by
+    /// its runtime type, and a JsonElement round-trips through that verbatim. So a read→write cycle
+    /// preserves EQDP rows (and any future manipulation kind) without this file having to understand them.
+    /// </summary>
+    public static (Dictionary<string, string> Files, List<object> Manipulations)? TryReadDefaultData(string modRoot)
+    {
+        try
+        {
+            var manifest = ReadManifest(modRoot);
+            if (FileVersionOf(manifest) >= SingleFileVersion)
+            {
+                if (!manifest.TryGetValue("DefaultData", out var dd) || dd.ValueKind != JsonValueKind.Object)
+                    return null;
+                return ReadFilesAndManipulations(dd);
+            }
+
+            var legacy = Path.Combine(modRoot, LegacyDefaultMod);
+            if (!File.Exists(legacy)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(legacy));
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            return ReadFilesAndManipulations(doc.RootElement);
+        }
+        catch { return null; /* missing or malformed — "unknown", and the caller must not guess */ }
+    }
+
+    /// <summary>Shared shape of the v3 root object and the v4 <c>DefaultData</c> object.</summary>
+    private static (Dictionary<string, string> Files, List<object> Manipulations) ReadFilesAndManipulations(
+        JsonElement root)
+    {
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (root.TryGetProperty("Files", out var f) && f.ValueKind == JsonValueKind.Object)
+            foreach (var p in f.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { } rel)
+                    files[p.Name] = rel;
+
+        var manips = new List<object>();
+        if (root.TryGetProperty("Manipulations", out var m) && m.ValueKind == JsonValueKind.Array)
+            foreach (var e in m.EnumerateArray())
+                manips.Add(e.Clone());   // the JsonDocument is disposed when the caller returns
+
+        return (files, manips);
+    }
+
     /// <summary>The <c>Options[].Name</c> values of <paramref name="group"/>, in order.</summary>
     public static List<string> ReadOptionNames(JsonElement group)
     {

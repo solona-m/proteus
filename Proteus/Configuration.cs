@@ -44,6 +44,17 @@ public class Configuration : IPluginConfiguration
     public bool DisableAutoRedraw { get; set; } = false;
 
     /// <summary>
+    /// Let a composite triggered by an ambient event — zoning, a redraw, Glamourer re-asserting temporary
+    /// settings — return early when its inputs are identical to the composite already published. On by
+    /// default: those triggers fire several times per zone and re-run a multi-second pipeline to produce
+    /// byte-identical output, which is what "my mods disappear when I zone" was.
+    ///
+    /// Anything the user or a plugin explicitly asks for is never skipped, regardless of this setting.
+    /// Turn it off only to rule the gate out when diagnosing a change that isn't taking effect.
+    /// </summary>
+    public bool SkipUnchangedComposites { get; set; } = true;
+
+    /// <summary>
     /// Block-compress the baked output textures: BC5 for normals, BC7 for everything else. Cuts each
     /// texture to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on disk and in VRAM. Off = uncompressed
     /// B8G8R8A8 (byte-identical to legacy output).

@@ -311,6 +311,18 @@ public class StatusWindow : Window
             config.Save();
         }
 
+        var skipUnchanged = config.SkipUnchangedComposites;
+        if (ImGui.Checkbox("Skip unchanged recomposites", ref skipUnchanged))
+        {
+            config.SkipUnchangedComposites = skipUnchanged;
+            config.Save();
+            compositor.TriggerRecomposite("skip-gate-toggle");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Let a recomposite triggered by zoning or a redraw stop early when nothing that\n" +
+                             "affects the output has changed. Anything you change yourself always recomposites.\n" +
+                             "Turn off only to rule this out when an edit isn't taking effect.");
+
         var inPlaceReload = config.UseInPlaceReload;
         if (ImGui.Checkbox("In-place reload", ref inPlaceReload))
         {

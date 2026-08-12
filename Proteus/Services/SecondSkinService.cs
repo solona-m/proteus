@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
@@ -96,7 +97,16 @@ public sealed class SecondSkinService
         // must reload its real model, which only a full redraw does; the compositor forces one on any change.
         List<string> HostModelPaths);
 
-    /// <summary>Write only if the content differs; reports whether it did.</summary>
+    /// <summary>
+    /// Write only if the content differs; reports whether it did.
+    ///
+    /// Via a temp file and an atomic move, NOT WriteAllBytes. Shell output names are stable
+    /// (models/secondskin_{hash}.mdl, materials/ss_{char}.mtrl — the hash is over the SOURCE, so the same
+    /// source rewrites the same name), which means a rewrite truncates a file a LIVE redirect points at.
+    /// That was survivable only while the composite unpublished every redirect up front; now that it
+    /// doesn't, a redraw landing mid-write would read a half-written model. Same reasoning and same shape
+    /// as TextureLoader.WriteWithRetry and PenumbraModMeta.AtomicWrite.
+    /// </summary>
     private static bool WriteIfChanged(string path, byte[] data)
     {
         try
@@ -106,8 +116,14 @@ public sealed class SecondSkinService
         }
         catch { /* unreadable — fall through and rewrite */ }
 
-        File.WriteAllBytes(path, data);
-        return true;
+        var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllBytes(tmp, data);
+        for (int i = 0; ; i++)
+        {
+            try { File.Move(tmp, path, overwrite: true); return true; }
+            catch (Exception) when (i < 5) { Thread.Sleep(50 << i); }  // the game may hold it open mid-load
+            catch { try { File.Delete(tmp); } catch { } throw; }       // don't leave the temp behind
+        }
     }
 
     /// <summary>

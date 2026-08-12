@@ -313,7 +313,9 @@ public class CompositorService : IDisposable
                 // an empty result just means "not yet", so leave the flag clear and try again next tick.
                 if (discovery.DiscoverEnabled().Count == 0) return;
                 log.Debug("[Proteus] boot composite: player + discovery ready");
-                TriggerRecomposite("boot-ready");
+                // Ambient: the boot poll re-arms whenever the local player goes away, so every zone
+                // transition queues one of these on arrival.
+                TriggerRecomposite("boot-ready", force: false);
                 // Only latch AFTER the trigger, so a throw above leaves the poll armed to retry.
                 Volatile.Write(ref _bootComposited, 1);
             }
@@ -367,7 +369,15 @@ public class CompositorService : IDisposable
         // change inside the 1500 ms window keep a stale upstream indefinitely. Sidecar toggles are exempt:
         // they only add overlay art, they can't move a base, and they fire constantly, so flushing on them
         // would empty the cache exactly when the resolve race needs it.
-        if (!sidecar) InvalidateUpstreamCache($"ModSettingChanged:{change}:{modDir}");
+        //
+        // Mods already CLASSIFIED as non-body are exempt too. Emptying the cache is no longer free: the next
+        // composite has to re-derive every upstream through PrimeUpstreamCache, which briefly unpublishes
+        // those redirects — so doing it for a hair or VFX mod that cannot move any base we read means a
+        // pointless flicker. Glamourer re-asserts temporary settings for every mod a design touches on each
+        // zone-in, so unfiltered this fired constantly. See MayMoveOurBases for why an unknown mod still
+        // invalidates, and EvaluateBodyModOffThread for the case where a classification turns out stale.
+        if (!sidecar && MayMoveOurBases(modDir))
+            InvalidateUpstreamCache($"ModSettingChanged:{change}:{modDir}");
 
         // For enable/disable events on our own overlay mods, re-check whether the active mod set
         // actually changed. Glamourer re-applies designs after each redraw, calling Penumbra to
@@ -391,19 +401,24 @@ public class CompositorService : IDisposable
             if (msSince >= 0 && msSince < 1500) return;
         }
 
+        // A TemporarySetting is the only change here that Glamourer generates by itself, and it re-asserts
+        // them after every redraw — so it is the one change kind that routinely carries no new information.
+        // Every other kind is a deliberate act by the user or another plugin and must always composite.
+        bool ambient = change == ModSettingChange.TemporarySetting;
+
         if (sidecar)
         {
             // The mod's files may have changed underneath a cached decode (a reinstall/edit that kept the
             // same timestamp or byte length); drop this mod's cached textures so the composite re-reads them.
             textureLoader.EvictMod(modDir);
-            TriggerRecomposite($"ModSettingChanged:{change}:{modDir}");
+            TriggerRecomposite($"ModSettingChanged:{change}:{modDir}", force: !ambient);
             return;
         }
 
         // Not one of our overlay mods: the only other thing we react to is a body mod (ships an
         // obj/body/ material), whose change can leave the cached snapshot wrong without a redraw.
         // Its detection does manifest file I/O + a config.Save, so run it off the framework thread.
-        EvaluateBodyModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}");
+        EvaluateBodyModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient);
     }
 
     /// <summary>
@@ -412,8 +427,33 @@ public class CompositorService : IDisposable
     /// entry there means compositing onto the wrong base with nothing but a Debug line to show for it.
     /// Cheap to rebuild: the next composite's normal resolutions repopulate it.
     /// </summary>
+    /// <summary>
+    /// Could a settings change on this mod move a file we read as a composite base? Answers the question
+    /// WITHOUT touching disk, because it is called from a framework-thread Penumbra event.
+    ///
+    /// "Unknown" answers TRUE. The asymmetry is the whole point: invalidating unnecessarily costs one
+    /// upstream re-derivation, while failing to invalidate when a body mod really did move means compositing
+    /// onto the wrong base with nothing in the log to show for it. Only a mod we have already classified as
+    /// shipping no body materials is exempt.
+    ///
+    /// Note this consults the cached VERDICT and ignores the fingerprint <see cref="IsBodyMod"/> stores
+    /// beside it — checking that would mean reading the mod's manifest, which is exactly the I/O this has to
+    /// avoid here. A mod that changes from non-body to body under a stale verdict is caught instead by
+    /// <see cref="EvaluateBodyModOffThread"/>, which re-runs the full fingerprinted classification off-thread
+    /// and invalidates there.
+    /// </summary>
+    private bool MayMoveOurBases(string modDir)
+        => !_bodyModCache.TryGetValue(modDir, out var cached) || cached.IsBodyMod;
+
     private void InvalidateUpstreamCache(string reason)
     {
+        // Deliberately does NOT clear _lastCompositeFingerprint. This fires for every non-sidecar mod,
+        // which includes Glamourer re-asserting a body mod's temporary settings on zone-in — the exact
+        // event the unchanged-inputs gate exists to skip, so nulling here would blind the gate whenever a
+        // body mod happens to be design-associated. The change this invalidation is really guarding against
+        // (a different file behind a base path) is caught instead by the upstream identity the fingerprint
+        // carries: PrimeUpstreamCache re-resolves these paths before the gate reads them, so a body mod
+        // that genuinely moved shows up as a different disk path or mtime and the composite runs.
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
@@ -459,7 +499,7 @@ public class CompositorService : IDisposable
     // IsBodyMod does manifest file I/O + a config.Save on a cache miss, both of which must stay off
     // the framework-thread event handlers. Evaluate it on a background thread; if the mod turns out
     // to ship body materials, mark the snapshot dirty and trigger a (debounced) recomposite.
-    private void EvaluateBodyModOffThread(string modDir, string reason)
+    private void EvaluateBodyModOffThread(string modDir, string reason, bool force = true)
     {
         Task.Run(() =>
         {
@@ -468,7 +508,16 @@ public class CompositorService : IDisposable
                 if (!IsBodyMod(modDir)) return;
                 textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
                 _activeMtrlSnapshotDirty = true;
-                TriggerRecomposite(reason);
+                // The authoritative invalidation. MayMoveOurBases had to answer from a cached verdict with no
+                // disk access, so it can be working from a stale classification — a mod that only just began
+                // shipping body materials would have been let through. IsBodyMod above has just re-derived it
+                // against a fresh fingerprint, so this is the point where we actually know. Idempotent: when
+                // the sync check already invalidated, the cache is empty and this returns immediately.
+                InvalidateUpstreamCache(reason);
+                // Safe to gate on an ambient re-assert: the upstream identity in the composite fingerprint
+                // is what actually detects a body mod that moved, and the EvictMod above guarantees the
+                // prime re-reads rather than trusting a cached decode.
+                TriggerRecomposite(reason, force: force);
             }
             catch (Exception ex)
             {
@@ -489,7 +538,7 @@ public class CompositorService : IDisposable
         // Leave previous-session files intact — ModSettingChanged/ModAdded will fire the first
         // real composite once settings are available.
         if (discovery.DiscoverEnabled().Count > 0)
-            TriggerRecomposite("PenumbraReady");
+            TriggerRecomposite("PenumbraReady", force: false);
     }
 
     private void OnPlayerCollectionChanged()
@@ -500,7 +549,7 @@ public class CompositorService : IDisposable
         _activeMtrlSnapshotDirty = true;
         InvalidateUpstreamCache("collection-changed");
         if (!config.PluginEnabled) return;
-        TriggerRecomposite("collection-changed");
+        TriggerRecomposite("collection-changed", force: false);
     }
 
     // Called on the framework thread by PenumbraBridge whenever the local player's draw object is
@@ -513,6 +562,7 @@ public class CompositorService : IDisposable
     {
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
         bool equipChanged = false;
+        bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below
         if (snapshot != null)
         {
             _activeMtrlSnapshot = snapshot;
@@ -547,16 +597,43 @@ public class CompositorService : IDisposable
                 var sig = EquipSignature(equipped, accessories, metModels, bare);
                 equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
                 _lastEquipSignature = sig;
+                modelWalkOk = true;
             }
         }
 
         RefreshGlamourerCharCode();
 
+        // Put the carriers back, NOW. They are equipped with ApplyFlag.Once, so this redraw is exactly what
+        // reverted them — and with them gone the shell has no host and stops rendering. The reconciles are
+        // idempotent and cost an IPC each, so running them on every redraw is far cheaper than the composite
+        // that used to be the only thing that re-equipped them.
+        //
+        // Off-thread: the reconciles block on RunOnFrameworkThread and read Lumina sheets, neither of which
+        // belongs on a frame. alreadyHosted, because the shell's redirect is live at the carrier's model path
+        // the whole time now — the equip's own redraw lands straight on the finished shell, so chaining a
+        // recomposite here would only redo identical work. Skipped while a composite is running, since that
+        // composite will run its own reconcile with fresher arguments.
+        if (config.PluginEnabled && modelWalkOk && _secondSkinActive
+            && Volatile.Read(ref _compositesInFlight) == 0)
+        {
+            var (gearWanted, shellBuilt, onFacewear, ringSlot) =
+                (_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear, _lastShellRingSlot);
+            Task.Run(() =>
+            {
+                try
+                {
+                    ReconcileInvisibleGlasses(gearWanted, shellBuilt, onFacewear, alreadyHosted: true);
+                    ReconcileEmperorRing(gearWanted, shellBuilt, ringSlot);
+                }
+                catch (Exception ex) { log.Debug("[Proteus] carrier reconcile on redraw failed: {0}", ex.Message); }
+            });
+        }
+
         if (equipChanged && config.PluginEnabled)
-            TriggerRecomposite("equipment-change");
+            TriggerRecomposite("equipment-change", force: false);
 
         if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
-            TriggerRecomposite("glamourer-customization");
+            TriggerRecomposite("glamourer-customization", force: false);
     }
 
     private void OnGlamourerCustomizationChanged()
@@ -572,7 +649,7 @@ public class CompositorService : IDisposable
         _ = Task.Delay(2000).ContinueWith(_ =>
         {
             if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
-                TriggerRecomposite("glamourer-customization-timeout");
+                TriggerRecomposite("glamourer-customization-timeout", force: false);
         });
     }
 
@@ -619,7 +696,7 @@ public class CompositorService : IDisposable
         // cancel the in-flight recomposite before it reaches the `LastDiscovered = allEntries` line,
         // keeping the sets permanently unequal and looping.
         LastDiscovered = current;
-        TriggerRecomposite("glamourer-design");
+        TriggerRecomposite("glamourer-design", force: false);
     }
 
     // Extracts the human character code (e.g. "c0101") from a path like
@@ -777,12 +854,26 @@ public class CompositorService : IDisposable
     {
         var collId = penumbra.GetPlayerCollectionId();
 
+        // Either direction changes what is published out from under the gate.
+        _lastCompositeFingerprint = null;
+
         if (enabled)
         {
-            EnsureManagedModExists();
-            if (collId.HasValue)
-                penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
-            TriggerRecomposite("enabled");
+            // Off the framework thread, like the disable branch below. EnsureManagedModExists does file I/O
+            // and can write the manifest, which now serialises on _manifestLock — and a composite priming
+            // its upstream cache can hold that for a few hundred milliseconds. Blocking a frame on it would
+            // be a visible hitch for no reason: nothing here needs to complete before the checkbox returns.
+            Task.Run(() =>
+            {
+                try
+                {
+                    EnsureManagedModExists();
+                    if (collId.HasValue)
+                        penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+                    TriggerRecomposite("enabled");
+                }
+                catch (Exception ex) { log.Error(ex, "[Proteus] failed to enable cleanly"); }
+            });
             return;
         }
 
@@ -802,6 +893,9 @@ public class CompositorService : IDisposable
             {
                 WriteManagedModJson(new Dictionary<string, string>());
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+                // Nothing is hosted any more, so the redraw hook must not re-equip a carrier for a shell
+                // that no longer exists.
+                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, ringSlot: null);
                 if (restoreAccessory) _needFullRedraw = true;
                 ReloadAndRedraw();   // character reverts to un-composited
                 _secondSkinActive = false;
@@ -830,6 +924,10 @@ public class CompositorService : IDisposable
     {
         int dropped = textureLoader.ClearCache();
         log.Information("[Proteus] Texture cache cleared manually ({0} entries) — recompositing.", dropped);
+        // This exists for the case where a file changed in a way nothing can see; the fingerprint is one of
+        // the things that can't see it, so drop it too. (The trigger below is forced anyway — belt and braces
+        // for an escape hatch whose whole job is to bypass every optimisation.)
+        _lastCompositeFingerprint = null;
         TriggerRecomposite("clear-texture-cache", 0);
         return dropped;
     }
@@ -841,10 +939,25 @@ public class CompositorService : IDisposable
     /// mask toggles, while colour-table edits pass a longer window so a run of slider drags recomposites
     /// only once, 5s after the user stops.
     /// </summary>
-    public void TriggerRecomposite(string reason, int delayMs = 200)
+    /// <param name="force">
+    /// True (the default) for anything the USER or a plugin explicitly asked for — a setting change, a
+    /// design apply, an IPC call, a mod being installed. Such a composite always runs.
+    ///
+    /// False marks an AMBIENT trigger: something in the world moved and we are checking whether it mattered
+    /// (zoning, a redraw, Glamourer re-asserting temporary settings). Those may be skipped when the
+    /// composite's inputs are byte-identical to the last published one — see the gate in RecompositeBody.
+    /// Defaulting to true means a new call site is safe by construction; opting out is the deliberate act.
+    /// </param>
+    public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true)
     {
         if (!config.PluginEnabled || !penumbra.IsAvailable) return;
         Highlighter?.Clear();
+
+        // A forced composite that gets cancelled by an ambient one must not be lost. Without this latch the
+        // sequence "drag a colour slider (5s debounce), zone before it fires" cancels the user's edit and
+        // replaces it with a composite that skips — and the colour silently never applies. The latch is
+        // cleared only when a composite actually publishes.
+        if (force) Interlocked.Exchange(ref _forcePending, 1);
 
         CancellationTokenSource cts;
         lock (triggerLock)
@@ -963,8 +1076,136 @@ public class CompositorService : IDisposable
                     config.Save();
                 }
             }
-            Recomposite(token);
+            Recomposite(token, force);
         });
+    }
+
+    /// <summary>
+    /// Set by any forced <see cref="TriggerRecomposite"/>, cleared only once a composite publishes. While
+    /// it is set, even an ambient composite runs — the forced work it superseded is still owed.
+    /// </summary>
+    private int _forcePending;
+
+    /// <summary>
+    /// The composite inputs behind the manifest that is currently published, or null when that is unknown
+    /// (nothing composited yet, the last one failed, or something happened that could have moved the world
+    /// under us). An ambient trigger whose inputs hash to this can skip: the composite would rewrite the
+    /// same bytes and redraw the character for nothing.
+    ///
+    /// Written only after a successful publish, so a cancelled or throwing run can never leave a fingerprint
+    /// claiming output that was never produced. Two overlapping composites are last-writer-wins; a stale run
+    /// finishing second costs one extra composite later, which is not worth a lock.
+    /// </summary>
+    private volatile string? _lastCompositeFingerprint;
+
+    /// <summary>
+    /// Everything that decides what this composite will produce, as one comparable string. Built at the
+    /// point where the inputs are settled but before any expensive work, so an ambient trigger whose world
+    /// hasn't moved can return without paying for a composite.
+    ///
+    /// What is IN, and why each is not redundant:
+    ///   • the overlays in composite order, with their descriptors and colour rows — this one component
+    ///     subsumes the enabled mod set, Penumbra priorities, option selections, all three design-binding
+    ///     overrides, skin-to-gear promotion, the user's tab-strip stack order, and metadata.json content;
+    ///   • the gear overlays, the mask paths/assets/colour rows, and the mask-shell set — a mask lives
+    ///     outside the overlay lists and changes coverage, relief and colour;
+    ///   • the material set, AFTER filtering and sibling synthesis — which bodies actually get written;
+    ///   • the equip signature, body shape, body types, char codes and race — the shell's geometry.
+    ///
+    /// What is deliberately OUT:
+    ///   • the raw active-material snapshot. It contains weapon paths, which change on draw/sheathe and on
+    ///     every zone-in, so hashing it would make the fingerprint differ almost every time and the gate
+    ///     would never fire. Its two composite-relevant projections (the body-type/char-code keys, and the
+    ///     filtered material set) are in.
+    ///   • Configuration values. Every knob is reachable only through a FORCED trigger, and _forcePending
+    ///     covers the case where an ambient trigger cancels one. THIS IS A STANDING REQUIREMENT: a new
+    ///     config knob that affects output must trigger with force: true, or its change will be skipped.
+    /// </summary>
+    private string BuildCompositeFingerprint(
+        Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>> byMaterial,
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        Dictionary<string, List<string>> maskPathsByMod,
+        Dictionary<string, List<(string MaskPath, string? NormalPath, string? IndexPath)>> maskAssetsByMod,
+        Dictionary<string, Dictionary<int, ColorTableRowOverride>> maskRowsByMod,
+        HashSet<string> maskShellMods,
+        List<string> baseKeys)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        static void Pair(System.Text.StringBuilder b, OverlayEntry e, ResolvedOverlay o)
+            => b.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
+               .Append(o.OptionGroup).Append('/').Append(o.Option).Append('#').Append(o.GroupOrder).Append('#')
+               .Append(JsonSerializer.Serialize(o.Descriptor)).Append('#')
+               .Append(o.ColorTableRows == null ? "-" : JsonSerializer.Serialize(o.ColorTableRows)).Append(';');
+
+        // Material order and, within a material, composite order — both are output-affecting, so iterate
+        // sorted by key but NOT sorted within a list: the list order IS the stack.
+        foreach (var mtrl in byMaterial.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+        {
+            sb.Append("mtrl:").Append(mtrl).Append('{');
+            foreach (var (e, o) in byMaterial[mtrl]) Pair(sb, e, o);
+            sb.Append("}\n");
+        }
+
+        sb.Append("gear:");
+        foreach (var (e, o) in gearOverlays) Pair(sb, e, o);
+        sb.Append('\n');
+
+        foreach (var mod in maskPathsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            sb.Append("mask:").Append(mod).Append('=')
+              .Append(string.Join(",", maskPathsByMod[mod])).Append('\n');
+
+        foreach (var mod in maskAssetsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            sb.Append("maskasset:").Append(mod).Append('=')
+              .Append(string.Join(",", maskAssetsByMod[mod].Select(a => $"{a.MaskPath}|{a.NormalPath}|{a.IndexPath}")))
+              .Append('\n');
+
+        foreach (var mod in maskRowsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            sb.Append("maskrow:").Append(mod).Append('=')
+              .Append(JsonSerializer.Serialize(maskRowsByMod[mod].OrderBy(kv => kv.Key)
+                          .ToDictionary(kv => kv.Key, kv => kv.Value)))
+              .Append('\n');
+
+        sb.Append("maskshell:")
+          .Append(string.Join(",", maskShellMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase))).Append('\n');
+
+        // Recomputed here, NOT read from _lastEquipSignature: that field is only written by the redraw hook,
+        // so it is stale for every trigger that didn't come from a redraw — while TriggerRecomposite's
+        // preamble has just refreshed the four maps it is built from.
+        sb.Append("equip:")
+          .Append(EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels, _bareBodyModels))
+          .Append('\n');
+        sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
+        sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
+        sb.Append("charcodes:").Append(_lastCompositedCharCodes).Append('\n');
+        sb.Append("glamcode:").Append(_glamourerCharCode).Append('\n');
+        sb.Append("race:").Append(_drawnRaceCode).Append('\n');
+
+        // WHICH FILE each base path actually resolves to, plus its size and mtime. The overlay entries above
+        // describe what we paint; this describes what we paint ON TOP OF. Without it, switching body mods,
+        // reinstalling one, or a design selecting a different body option would all hash identically to the
+        // composite already published and be skipped — the output would silently keep the old base.
+        //
+        // baseKeys comes from PrimeUpstreamCache, which has just resolved every one of them. It is a
+        // function of this composite's inputs alone — deliberately NOT _upstreamByGamePath's key set, which
+        // grows as the blend loop resolves textures and is emptied wholesale on any non-sidecar mod change,
+        // so hashing that would give a different key set before and after every zone-in and the gate would
+        // alternate between two shapes forever instead of settling.
+        foreach (var gamePath in baseKeys)
+        {
+            sb.Append("base:").Append(gamePath).Append('=')
+              .Append(_upstreamByGamePath.TryGetValue(gamePath, out var disk) ? disk : "(game data)");
+            if (disk == null) { sb.Append('\n'); continue; }
+            try
+            {
+                var fi = new FileInfo(disk);
+                if (fi.Exists) sb.Append('|').Append(fi.Length).Append('|').Append(fi.LastWriteTimeUtc.Ticks);
+            }
+            catch { /* unreadable — the path alone still distinguishes a different mod */ }
+            sb.Append('\n');
+        }
+
+        return sb.ToString();
     }
 
     // Comma-joined sorted set of the body types present in a snapshot (e.g. "bibo,gen2,gen3"),
@@ -1113,6 +1354,65 @@ public class CompositorService : IDisposable
     private volatile string? _injectedRingSlot;   // "rir"/"ril", or null if we have not equipped one
     private volatile bool _injectedGlasses;
 
+    // What the last composite decided about hosting, remembered so a reconcile can be re-run WITHOUT one.
+    // The carriers are equipped with ApplyFlag.Once, so any redraw the game does on its own — zoning is the
+    // one users notice — reverts them, and the shell loses its host. Re-running the reconciles from the
+    // redraw hook puts them back in milliseconds; before this, the only thing that re-equipped them was the
+    // tail of a full 5-7s composite, which is what "my gear takes forever to come back" was.
+    private volatile bool _lastGearWanted;
+    private volatile bool _lastShellBuilt;
+    private volatile bool _lastShellOnFacewear;
+    private volatile string? _lastShellRingSlot;
+
+    /// <summary>Remember this composite's hosting decision for the cheap reconciles above.</summary>
+    private void RememberHostDecision(bool gearWanted, bool shellBuilt, bool onFacewear, string? ringSlot)
+    {
+        _lastGearWanted      = gearWanted;
+        _lastShellBuilt      = shellBuilt;
+        _lastShellOnFacewear = onFacewear;
+        _lastShellRingSlot   = ringSlot;
+    }
+
+    /// <summary>At most one outstanding <see cref="ScheduleCarrierRetry"/>; extra requests coalesce onto it.</summary>
+    private int _carrierRetryPending;
+
+    /// <summary>
+    /// Re-run the carrier reconciles once <paramref name="cooldownRemainingMs"/> has elapsed, for the case
+    /// where one of them wanted to equip and was refused only by its inject cooldown.
+    ///
+    /// The cooldowns exist to stop an inject/re-inject ping-pong while the game has not yet loaded and
+    /// captured the item's model, and they were sized against the only caller that used to exist: the tail
+    /// of a composite, several seconds long, by which point the window had always lapsed. The redraw hook
+    /// and the unchanged-inputs skip both run in milliseconds, so without this a zone landing inside the
+    /// window leaves the shell with no host and nothing scheduled to put one back.
+    ///
+    /// Deliberately does not touch the cooldown itself: the retry goes through the same guards, and by the
+    /// time it runs a model that WAS merely still loading has been captured, so the equip is skipped for
+    /// the right reason instead of repeated.
+    /// </summary>
+    private void ScheduleCarrierRetry(int cooldownRemainingMs)
+    {
+        if (Interlocked.Exchange(ref _carrierRetryPending, 1) == 1) return;
+
+        // A margin past the window: TickCount64 and the timer are not the same clock, and firing a
+        // millisecond early would be refused again and schedule yet another retry.
+        _ = Task.Delay(Math.Clamp(cooldownRemainingMs, 0, GlassesInjectCooldownMs) + 250)
+            .ContinueWith(_ =>
+            {
+                Interlocked.Exchange(ref _carrierRetryPending, 0);
+                try
+                {
+                    if (_disposed || !config.PluginEnabled || !_secondSkinActive) return;
+                    // A composite in flight runs its own reconcile with fresher arguments than these.
+                    if (Volatile.Read(ref _compositesInFlight) > 0) return;
+                    ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
+                                              alreadyHosted: true);
+                    ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellRingSlot);
+                }
+                catch (Exception ex) { log.Debug("[Proteus] carrier retry failed: {0}", ex.Message); }
+            });
+    }
+
     /// <summary>The equipment set number from a head "_met" model path, e.g. "…/e5524/model/…_met.mdl" → 5524.</summary>
     private static int? ParseMetSet(string metGamePath)
     {
@@ -1174,8 +1474,17 @@ public class CompositorService : IDisposable
             // even across a plugin reload that lost the flag while the item stayed equipped.
             if (IsOurGlassesWorn(g.ModelSet)) _injectedGlasses = true;
 
+            var sinceInject = unchecked(Environment.TickCount64 - _lastGlassesInjectTick);
+            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject <= GlassesInjectCooldownMs)
+                // Wanted to equip and was refused only by the cooldown. Something has to come back for it:
+                // the callers that reach here now (the redraw hook and the unchanged-inputs skip) run in
+                // milliseconds, so a zone landing inside the window would otherwise leave the shell hostless
+                // with nothing scheduled to retry. That was safe only while the sole caller was the tail of
+                // a multi-second composite, by which point the window had always lapsed.
+                ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject));
+
             if (MetSnapshotKnown && !AnyMetWorn()
-                && unchecked(Environment.TickCount64 - _lastGlassesInjectTick) > GlassesInjectCooldownMs
+                && sinceInject > GlassesInjectCooldownMs
                 && SetGlassesOnFramework(g.ItemId))
             {
                 _lastGlassesInjectTick = Environment.TickCount64;
@@ -1224,7 +1533,7 @@ public class CompositorService : IDisposable
     private bool SetGlassesOnFramework(ulong itemId)
     {
         try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetGlasses(itemId)).GetAwaiter().GetResult(); }
-        catch (Exception ex) { log.Warning("[Proteus] invisible glasses: SetGlasses({0}) failed: {1}", itemId, ex.Message); return false; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] invisible glasses: SetGlasses({0}) failed", itemId); return false; }
     }
 
     /// <summary>The model the game draws in a ring slot ("rir"/"ril"), or null when that slot is empty.
@@ -1298,7 +1607,14 @@ public class CompositorService : IDisposable
             if (RingModel(ringSlot!) != null) return;
             // Same cooldown reasoning as the glasses: the composite this triggers can run before the game
             // has loaded and captured the ring model, and without the guard we would equip again and again.
-            if (unchecked(Environment.TickCount64 - _lastRingInjectTick) <= RingInjectCooldownMs) return;
+            // And, as there, a retry has to be scheduled behind it — the millisecond-scale callers can all
+            // land inside the window and leave the shell hostless with nothing to come back for it.
+            var sinceRing = unchecked(Environment.TickCount64 - _lastRingInjectTick);
+            if (sinceRing <= RingInjectCooldownMs)
+            {
+                ScheduleCarrierRetry((int)(RingInjectCooldownMs - sinceRing));
+                return;
+            }
 
             if (SetRingOnFramework(r.ItemId, leftHand: ringSlot == "ril"))
             {
@@ -1344,7 +1660,7 @@ public class CompositorService : IDisposable
     private bool SetRingOnFramework(ulong itemId, bool leftHand)
     {
         try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetRing(itemId, leftHand)).GetAwaiter().GetResult(); }
-        catch (Exception ex) { log.Warning("[Proteus] Emperor's ring: SetItem({0}) failed: {1}", itemId, ex.Message); return false; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] Emperor's ring: SetItem({0}) failed", itemId); return false; }
     }
 
     /// <summary>
@@ -1384,17 +1700,34 @@ public class CompositorService : IDisposable
     // host. The bare-body models are in for the same reason as the gear: the shell is cut from them, so a
     // slot that starts resolving to a different race's e0000 model is a different shell. Prefixed "bare:"
     // because those keys are the same four slot names the gear map uses.
-    private static string EquipSignature(
+    //
+    // OUR OWN CARRIERS ARE EXCLUDED — the invisible glasses and the Emperor's ring. They are hosts, never
+    // sources: nothing is ever cut from them, and a change of host is tracked separately and correctly by
+    // _lastShellHostPaths/hostsChanged. Including them made the signature report a full equipment change
+    // every time an ApplyFlag.Once carrier reverted on a redraw, which fired a composite whose only job was
+    // to put the carrier back — and, worse, moved the signature so the unchanged-inputs gate could never
+    // skip for anyone running a gear shell. The cost is that manually equipping a real Emperor's New Ring
+    // no longer fires an equipment-change composite; ChooseHosts already treats that ring as a free slot
+    // and the reconcile adopts it, so there is nothing for that composite to have done.
+    private string EquipSignature(
         IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null,
         IReadOnlyList<string>? metModels = null, IReadOnlyDictionary<string, string>? bareBody = null)
-        => string.Join("|",
+    {
+        var glassesSet = InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet;
+        bool IsOurCarrier(string modelPath)
+            => modelPath.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase)
+            || (glassesSet is int gs && modelPath.Contains($"e{gs:D4}", StringComparison.OrdinalIgnoreCase));
+
+        return string.Join("|",
             (models ?? new Dictionary<string, string>()).Concat(accessories ?? new Dictionary<string, string>())
+            .Where(kv => !IsOurCarrier(kv.Value))
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => $"{kv.Key}={kv.Value}")
-            .Concat((metModels ?? []).Select(p => $"met={p}"))
+            .Concat((metModels ?? []).Where(p => !IsOurCarrier(p)).Select(p => $"met={p}"))
             .Concat((bareBody ?? new Dictionary<string, string>())
                 .OrderBy(kv => kv.Key, StringComparer.Ordinal)
                 .Select(kv => $"bare:{kv.Key}={kv.Value}")));
+    }
 
     private static string? BodyTypeKey(HashSet<string> snapshot)
     {
@@ -1418,12 +1751,12 @@ public class CompositorService : IDisposable
     /// </summary>
     private int _compositesInFlight;
 
-    private void Recomposite(CancellationToken ct)
+    private void Recomposite(CancellationToken ct, bool force)
     {
         Interlocked.Increment(ref _compositesInFlight);
         try
         {
-            RecompositeBody(ct);
+            RecompositeBody(ct, force);
         }
         finally
         {
@@ -1431,7 +1764,7 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void RecompositeBody(CancellationToken ct)
+    private void RecompositeBody(CancellationToken ct, bool force)
     {
         try
         {
@@ -1469,15 +1802,23 @@ public class CompositorService : IDisposable
             // which is the only place that ever happens.
             PruneSupersededOutput();
 
-            // Clear redirects and reload. Penumbra's IPC reload may process asynchronously
-            // on the game main thread, so sleep briefly to let it take effect before any
-            // ResolvePlayer calls that determine which mod's file is the upstream source.
-            // This is now purely about RESOLUTION, not about making files disappear: an empty manifest with
-            // the files still present resolves to the upstream mod (or, until it lands, to our own output —
-            // which exists). Neither answer can fail to load. ResolveUpstream covers the transition.
-            WriteManagedModJson(new Dictionary<string, string>());
-            penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
-            Thread.Sleep(80);
+            // NOTHING IS UNPUBLISHED HERE, and nothing may be. This used to clear the manifest and reload,
+            // so that a base resolve couldn't come back pointing at our own previous output. The cost of
+            // that was every redirect we own — skin textures, shell materials and models, AND the EQDP rows
+            // in Manipulations — going dark from here until the republish some five seconds later. The EQDP
+            // loss is the worst of it: the host accessory stops loading a model at all, so the shell doesn't
+            // degrade, it vanishes.
+            //
+            // And it was not one composite's worth. Every cancellation check in this method sits AFTER this
+            // point and BEFORE the republish, while TriggerRecomposite cancels the in-flight run — so a
+            // burst of triggers went: A clears, B cancels A (manifest left empty), B clears, C cancels B…
+            // The manifest stayed empty for the whole burst plus the first run that survived to the end.
+            // That is what "all my mods disappear when I zone" was: a zone-in fires four independent
+            // triggers, and the blackout lasted until the last of them finished.
+            //
+            // Resolution is handled instead by ResolveUpstream, which every base read already goes through
+            // and which refuses to read our own output — plus PrimeUpstreamCache below for the one case
+            // ResolveUpstream can't cover on its own (a cold cache with nothing remembered yet).
 
             // Discover ALL sidecar mods (incl. disabled) so the UI can list and re-enable them;
             // composite only the ones enabled in Penumbra, in priority order.
@@ -1505,6 +1846,14 @@ public class CompositorService : IDisposable
                 if (_secondSkinActive) _needFullRedraw = true;
                 _secondSkinActive = false;
                 _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+
+                // This branch publishes an empty manifest, which no fingerprint describes — and it satisfies
+                // whatever forced work was owed, since "no enabled mods" IS the requested result.
+                _lastCompositeFingerprint = null;
+                Interlocked.Exchange(ref _forcePending, 0);
+                // Nothing is hosted any more, so the redraw hook must not put a carrier back for a shell
+                // that no longer exists.
+                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, ringSlot: null);
 
                 // Nothing is hosted, and the empty manifest above dropped the redirect that renders our
                 // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
@@ -1971,6 +2320,57 @@ public class CompositorService : IDisposable
                     });
                     log.Debug("[Proteus] skin stack (bottom->top): {0}", string.Join("  ->  ", parts));
                 }
+            }
+
+            // Everything this composite will read as a base is known now, and nothing expensive has started.
+            // Make sure each of those paths has a remembered upstream before anything resolves them through
+            // our own live redirects. Normally returns immediately; see PrimeUpstreamCache.
+            //
+            // BEFORE the gate, not after: the gate's fingerprint includes which file each base path actually
+            // resolves to, and that is only knowable once this has run. It is also what lets
+            // InvalidateUpstreamCache stay a pure cache drop instead of a gate-defeating reset.
+            var baseKeys = PrimeUpstreamCache(byMaterial.Keys);
+            if (ct.IsCancellationRequested) return;
+
+            // ── Unchanged-inputs gate ────────────────────────────────────────
+            // Every input is settled here and nothing expensive has run yet: the decode/blend loop, the
+            // shell build and all writes are below. An AMBIENT trigger — one that fires because the world
+            // moved rather than because the user asked for something — can stop here when the inputs hash
+            // to what is already published.
+            //
+            // This is what makes zoning cheap. A single zone-in fires four independent triggers (the boot
+            // poll re-arms when the local player goes away, the redraw hook, Glamourer re-asserting
+            // temporary settings, and a design binding failing to re-match), and every one of them used to
+            // run the whole 5-7s pipeline to produce byte-identical output.
+            //
+            // Placed HERE and not earlier on purpose: option and mask selections are only known after
+            // discovery and resolution, and the design-binding overrides are only folded into the overlays
+            // at this point. A gate above them would compare a set of inputs that omits the very things a
+            // Penumbra temporary setting carries. Nothing persistent is mutated between here and the return
+            // below, so a skip leaves the previous composite's shell state intact.
+            var fingerprint = BuildCompositeFingerprint(
+                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
+                baseKeys);
+
+            if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
+                && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
+            {
+                // Still reconcile the carriers. They are ApplyFlag.Once, so whatever redraw led here may
+                // well have reverted them — and this is the one path that would otherwise leave a shell
+                // hosted on an item the player is no longer wearing. Idempotent, so a redundant call when
+                // the redraw hook already did it costs nothing.
+                ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
+                                          alreadyHosted: true);
+                ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellRingSlot);
+
+                // Nothing published, so nothing to record: RecordPublish here would make _publishHistory
+                // describe a manifest that was never written, and PruneSupersededOutput would eventually
+                // collect files the LIVE manifest still points at. No write, no reload, no redraw — a
+                // redraw is precisely the flicker this exists to remove. LastResult keeps showing the last
+                // real composite.
+                log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms)",
+                    PhaseCounter.MsSince(tRunStart));
+                return;
             }
 
             // A mask OCCLUDES everything beneath it. In a mask's territory every overlay group — including the
@@ -3619,12 +4019,22 @@ public class CompositorService : IDisposable
             // PruneSupersededOutput for why an immediate prune could not be made safe.
             ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
 
+            // Published: from here the manifest on disk is the output of exactly these inputs, so an ambient
+            // trigger that hashes to the same thing has nothing to do. Set only on this path — a cancelled or
+            // throwing run returns before it and leaves the previous (or no) fingerprint standing, so the
+            // gate can never claim output that was not produced. The forced-work latch is settled here too:
+            // whatever the user asked for is now in the published manifest.
+            _lastCompositeFingerprint = fingerprint;
+            Interlocked.Exchange(ref _forcePending, 0);
+
             // Reconcile the injected host items AFTER the redirect mod is live, so when the equip's redraw
             // loads the model it resolves straight to the shell (no visible frames, no bare ring). Each
             // passes whether the shell actually went to THAT host; the reconciles read the worn state
             // themselves. Glasses only count when the shell rides the facewear slot — on a race whose
             // facewear ships native the shell goes to the ring instead, and equipping a pair we don't host
             // on would just put real frames on the player's face.
+            RememberHostDecision(gearOverlays.Count > 0, shellBuilt, shellOnFacewear,
+                                 shellBuilt ? shellRingSlot : null);
             ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt, shellOnFacewear, glassesPreHosted);
             ReconcileEmperorRing(gearOverlays.Count > 0, shellBuilt, shellBuilt ? shellRingSlot : null);
 
@@ -3660,6 +4070,9 @@ public class CompositorService : IDisposable
             log.Error(ex, "[Proteus] Recomposite failed");
             LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message };
             ResultChanged?.Invoke();
+            // What is published no longer corresponds to any known set of inputs, so the next ambient
+            // trigger must actually composite rather than trust a fingerprint from before the failure.
+            _lastCompositeFingerprint = null;
         }
     }
 
@@ -3812,9 +4225,23 @@ public class CompositorService : IDisposable
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
-        PenumbraModMeta.WriteRedirects(
-            managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
+        lock (_manifestLock)
+            PenumbraModMeta.WriteRedirects(
+                managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
     }
+
+    /// <summary>
+    /// Serialises every write to the managed mod's manifest, and — the reason it exists — lets
+    /// <see cref="PrimeUpstreamCache"/> hold a read-modify-write across its whole narrow-and-restore span.
+    ///
+    /// Composites genuinely overlap (see <see cref="_compositesInFlight"/>), so without this a prime could
+    /// read the live manifest, another composite could publish, and the prime's restore would then write the
+    /// pre-publish copy back — silently discarding a published manifest while the fingerprint recorded it as
+    /// live, which the unchanged-inputs gate would then refuse to correct.
+    ///
+    /// Monitor is reentrant per thread, so the prime's own nested WriteManagedModJson calls are free.
+    /// </summary>
+    private readonly object _manifestLock = new();
 
     /// <summary>
     /// The last disk path Penumbra resolved each game path to that WASN'T our own output — i.e. the real
@@ -3911,6 +4338,129 @@ public class CompositorService : IDisposable
             log.Warning("[Proteus] ResolvePlayer returned our own managed file for {0} and no upstream is "
                       + "known — falling back to game data", gamePath);
         return null;
+    }
+
+    /// <summary>How long to wait for the narrowed manifest to land before priming anyway.</summary>
+    private static readonly TimeSpan PrimeLiveTimeout = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Make sure every game path we currently redirect and are about to READ has a known upstream, so the
+    /// composite reads the user's body mod as its base rather than our own last output.
+    ///
+    /// This is the narrow remnant of the manifest clear that used to sit at the top of a composite. The
+    /// difference is the scope. That cleared EVERYTHING for the whole run; this drops only the handful of
+    /// paths whose upstream we don't already remember, keeps the shell and its EQDP rows published
+    /// throughout, and puts the full manifest back within a few hundred milliseconds.
+    ///
+    /// It is needed at all because <see cref="ResolveUpstream"/> can only fall back to a remembered value,
+    /// and <see cref="_upstreamByGamePath"/> is in-memory: empty at session start, and emptied by
+    /// <see cref="InvalidateUpstreamCache"/> whenever a non-sidecar mod's settings change — which Glamourer
+    /// does on zone-in when it re-asserts a body mod's temporary settings. With a cold cache and a live
+    /// manifest, every path we redirect resolves to our own output, ResolveUpstream returns null, and the
+    /// composite silently bakes onto vanilla (or, for a skin mod's invented paths, onto nothing at all).
+    ///
+    /// Normally a no-op: after the first composite of a session every path is remembered, so this returns
+    /// at the <c>needPrime.Count == 0</c> check without touching Penumbra. That is the zone-in path.
+    /// </summary>
+    /// <param name="materialPaths">The material game paths this composite will read as bases.</param>
+    /// <returns>
+    /// Every base path considered, sorted — the live manifest's readable keys plus <paramref name="materialPaths"/>.
+    /// This is the set the composite fingerprint reports upstream identity for, and it is returned rather than
+    /// recomputed there so the fingerprint depends only on THIS composite's inputs. Deriving it from
+    /// <see cref="_upstreamByGamePath"/> instead would make it depend on whatever earlier composites happened
+    /// to resolve — that dictionary grows during the blend loop and is emptied wholesale by
+    /// <see cref="InvalidateUpstreamCache"/>, so the key set would change shape after every zone-in and the
+    /// gate would never settle.
+    /// </returns>
+    private List<string> PrimeUpstreamCache(IEnumerable<string> materialPaths)
+    {
+        // Only paths we might read as a BASE matter here. Shell files under chara/equipment|accessory are
+        // write-only from the composite's point of view — the sole host-model read is already guarded by
+        // SecondSkinService's own IsInsideOutputRoot check — and excluding them also stops a new shell
+        // texture name from forcing a prime every time the shell changes.
+        static bool IsReadableBase(string p)
+            => !p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
+            && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase);
+
+        List<string> baseKeys;
+
+        // The lock covers the read-modify-write and NOTHING ELSE. A concurrent composite publishing between
+        // the read and the restore would otherwise have its manifest silently overwritten with the
+        // pre-publish copy (see _manifestLock) — but the trailing resolve loop below touches no manifest, and
+        // on a cold cache it is dozens of Penumbra IPC calls, so holding the lock across it would block a
+        // concurrent publish for no reason and keep the older manifest live longer than necessary.
+        lock (_manifestLock)
+        {
+            // What is actually published right now — not what we are about to publish. Null means unreadable,
+            // which is "unknown", not "empty": guessing empty would skip a prime that is genuinely needed.
+            var live = PenumbraModMeta.TryReadDefaultData(managedModDir);
+
+            var keys = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in materialPaths) keys.Add(p);
+            if (live is { } l)
+                foreach (var p in l.Files.Keys)
+                    if (IsReadableBase(p)) keys.Add(p);
+            baseKeys = [.. keys];
+
+            // A path only needs the narrow-and-restore dance if OUR OWN manifest currently masks it. Anything
+            // else already resolves to its real upstream, so a plain ResolveUpstream call is enough.
+            var needPrime = live is { } lv
+                ? baseKeys.Where(p => lv.Files.ContainsKey(p) && !_upstreamByGamePath.ContainsKey(p)).ToList()
+                : [];
+
+            if (needPrime.Count > 0)
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var files = live!.Value.Files;
+                var manips = live.Value.Manipulations;
+                var narrowed = new Dictionary<string, string>(files, StringComparer.OrdinalIgnoreCase);
+                foreach (var p in needPrime) narrowed.Remove(p);
+
+                try
+                {
+                    // Manipulations are carried across verbatim: dropping them here is what used to un-load
+                    // the shell's host accessory entirely, and none of them affect texture resolution.
+                    WriteManagedModJson(narrowed, manips);
+                    penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+
+                    // Poll rather than sleep a fixed interval — the reload is processed asynchronously on
+                    // Penumbra's framework handler, and one probe unmasking means the whole write landed.
+                    var probe = needPrime[0];
+                    while (sw.Elapsed < PrimeLiveTimeout)
+                    {
+                        var d = penumbra.ResolvePlayer(probe);
+                        if (d == null || !IsOwnOutput(d)) break;
+                        Thread.Sleep(15);
+                    }
+
+                    int missed = 0;
+                    foreach (var p in needPrime)
+                        if (ResolveUpstream(p) == null) missed++;   // populates _upstreamByGamePath en route
+
+                    log.Information("[Proteus] upstream prime: {0} path(s) in {1}ms{2}",
+                        needPrime.Count, sw.ElapsedMilliseconds,
+                        missed > 0 ? $" — {missed} still unresolved (will composite on game data)" : "");
+                }
+                finally
+                {
+                    // Always, even if the prime threw: leaving the narrowed manifest live is exactly the
+                    // blackout this whole change exists to remove.
+                    WriteManagedModJson(files, manips);
+                    penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
+                }
+            }
+        }
+
+        // Outside the lock: this writes no manifest. Whatever is still unresolved isn't masked by us, so it
+        // resolves straight to its real upstream. Done here rather than lazily in the blend loop so every key
+        // the fingerprint reports has its value BEFORE the gate reads it — otherwise the first composite
+        // after a cache drop would report "unknown" for paths the next one reports properly, and differ from
+        // it for no real reason.
+        foreach (var p in baseKeys)
+            if (!_upstreamByGamePath.ContainsKey(p))
+                ResolveUpstream(p);
+
+        return baseKeys;
     }
 
     /// <summary>
@@ -4287,7 +4837,7 @@ public class CompositorService : IDisposable
                     _activeMtrlSnapshotDirty = false;
                     config.CachedActiveMaterialPaths = snapshot.ToList();
                     if (settledShapes != null) _bodyShapeSnapshot = settledShapes;
-                    TriggerRecomposite("post-settle-correction");
+                    TriggerRecomposite("post-settle-correction", force: false);
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }

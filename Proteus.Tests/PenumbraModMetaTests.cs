@@ -147,6 +147,52 @@ public class PenumbraModMetaTests
         Assert.Equal(expected, PenumbraModMeta.ReadFileVersion(tmp.Path));
     }
 
+    // TryReadDefaultData is what lets a composite narrow the LIVE manifest for a moment (to unmask a base
+    // path) and then put it back exactly as it was. Anything it drops on the way through is a redirect or
+    // an EQDP row that silently stops applying, so both directions are pinned here.
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void TryReadDefaultData_round_trips_files_and_manipulations(int fileVersion)
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), $$"""{"FileVersion":{{fileVersion}},"Name":"Proteus"}""");
+        PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect, manipulations: Eqdp);
+
+        var read = PenumbraModMeta.TryReadDefaultData(tmp.Path);
+        Assert.NotNull(read);
+        Assert.Equal(@"textures\foo_d.tex", read!.Value.Files["chara/foo_d.tex"]);
+        Assert.Single(read.Value.Manipulations);
+
+        // Write what we read straight back out: the EQDP row must survive being a JsonElement in between.
+        PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", read.Value.Files,
+                                       manipulations: read.Value.Manipulations);
+
+        var again = PenumbraModMeta.TryReadDefaultData(tmp.Path);
+        Assert.NotNull(again);
+        Assert.Equal(read.Value.Files, again!.Value.Files);
+
+        var written = fileVersion >= 4
+            ? JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement
+                  .GetProperty("DefaultData").GetProperty("Manipulations")
+            : JsonDocument.Parse(File.ReadAllText(tmp.File("default_mod.json"))).RootElement
+                  .GetProperty("Manipulations");
+        AssertEqdpRoundTripped(written);
+    }
+
+    [Fact]
+    public void TryReadDefaultData_reports_unknown_rather_than_empty_when_there_is_no_manifest()
+    {
+        using var tmp = new TempDir();
+        // No meta.json at all, and a v3 folder with no default_mod.json. Both must read as "unknown":
+        // a caller that took an empty file map at face value would narrow the manifest to nothing.
+        Assert.Null(PenumbraModMeta.TryReadDefaultData(tmp.Path));
+
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Proteus"}""");
+        Assert.Null(PenumbraModMeta.TryReadDefaultData(tmp.Path));
+    }
+
     [Fact]
     public void AtomicWrite_leaves_no_temp_files_behind()
     {

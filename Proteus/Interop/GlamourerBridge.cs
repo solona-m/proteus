@@ -150,7 +150,7 @@ public class GlamourerBridge : IDisposable
         }
         catch (Exception ex)
         {
-            log.Warning("[Proteus] ReapplyState failed: {0}", ex.Message);
+            log.Warning(ex, "[Proteus] ReapplyState failed");   // see SetRing on logging the object
             return false;
         }
     }
@@ -164,6 +164,7 @@ public class GlamourerBridge : IDisposable
     public bool SetGlasses(ulong itemId)
     {
         if (!IsAvailable) return false;
+        if (objectTable.LocalPlayer == null) return false;   // see SetRing
         try
         {
             var ec = setBonusItem.Invoke(0, ApiBonusSlot.Glasses, itemId, key: 0, ApplyFlag.Once);
@@ -176,10 +177,23 @@ public class GlamourerBridge : IDisposable
         }
         catch (Exception ex)
         {
-            log.Warning("[Proteus] SetBonusItem(Glasses,{0}) failed: {1}", itemId, ex.Message);
+            log.Warning(ex, "[Proteus] SetBonusItem(Glasses,{0}) failed", itemId);   // see SetRing
             return false;
         }
     }
+
+    /// <summary>
+    /// Both dye channels set to "no dye". A <see cref="List{T}"/>, and deliberately NOT a <c>byte[]</c>:
+    /// Dalamud round-trips IPC arguments through Newtonsoft when the runtime type isn't the declared
+    /// parameter type, and Newtonsoft serialises a byte ARRAY as a base64 string. The receiving side then
+    /// tries to turn <c>"AAA="</c> into an <c>IReadOnlyList&lt;byte&gt;</c> and throws IpcTypeMismatchError.
+    /// An empty byte[] is worse, not better — it serialises to <c>""</c>, which deserialises to NULL and
+    /// crashes Glamourer inside StainIds' constructor instead of failing cleanly.
+    /// <para/>
+    /// A List&lt;byte&gt; serialises as a JSON array (<c>[0,0]</c>) and survives the trip intact. Anything
+    /// passed to an <c>IReadOnlyList&lt;byte&gt;</c> IPC parameter has to avoid byte[] for this reason.
+    /// </summary>
+    private static readonly List<byte> NoStains = [0, 0];
 
     /// <summary>
     /// Equip an item in a RING slot on the local player, or clear it with <paramref name="itemId"/> 0. Same
@@ -193,12 +207,17 @@ public class GlamourerBridge : IDisposable
     public bool SetRing(ulong itemId, bool leftHand)
     {
         if (!IsAvailable) return false;
+        // Nothing to equip on without a drawn player, and no reason to pay the IPC to be told so.
+        if (objectTable.LocalPlayer == null) return false;
         var slot = leftHand ? ApiEquipSlot.LFinger : ApiEquipSlot.RFinger;
         try
         {
-            // No stains: an invisible ring has nothing to dye, and passing the player's would be a change
-            // we have no business making.
-            var ec = setItem.Invoke(0, slot, itemId, [], key: 0, ApplyFlag.Once);
+            // Two explicit zero stains, NOT an empty list. Semantically identical — an invisible ring has
+            // nothing to dye, and passing the player's own would be a change we have no business making —
+            // but `[]` reached Glamourer as a NULL and crashed it in StainIds' constructor on stains.Count,
+            // which surfaced here as an opaque TargetInvocationException on every equip and unequip. Glamourer
+            // never passes an empty list either; its own legacy provider forwards a one-element array.
+            var ec = setItem.Invoke(0, slot, itemId, NoStains, key: 0, ApplyFlag.Once);
             if (ec != GlamourerApiEc.Success)
             {
                 log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
@@ -208,7 +227,11 @@ public class GlamourerBridge : IDisposable
         }
         catch (Exception ex)
         {
-            log.Warning("[Proteus] SetItem({0},{1}) failed: {2}", slot, itemId, ex.Message);
+            // The exception OBJECT, not ex.Message: this arrives as a TargetInvocationException whose own
+            // message is the useless constant "Exception has been thrown by the target of an invocation."
+            // The cause is the inner exception, and logging only the message threw it away — which is why a
+            // field report of this told us nothing beyond the fact that it happened.
+            log.Warning(ex, "[Proteus] SetItem({0},{1}) failed", slot, itemId);
             return false;
         }
     }
