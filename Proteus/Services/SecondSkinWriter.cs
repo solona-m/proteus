@@ -550,6 +550,13 @@ public static class SecondSkinWriter
         // Which cap vertices (pre-split indices) that rim runs through, so the graft knows which of its
         // own vertices to snap back. Per layer, for the same reason the rim itself is.
         var weldRimVerts = new HashSet<int>();
+        // ONE SOURCE OF TRUTH for where the cap's rim ends up. The rim above was worked out from the
+        // placement plus the push; the graft used to arrive at the same point a second way, from the
+        // placement written into its stream and pushed along the stream's own normal. Two computations of
+        // one coordinate agree only to whatever the stream's element type keeps, and everything downstream
+        // — the weld, both splits — is matching positions exactly. So the value is kept here, keyed by the
+        // cap mesh and its PRE-SPLIT source index, and the graft reads it back rather than recomputing it.
+        var weldRimPos = new Dictionary<(int Mesh, int Src), Vec3>();
         // Every point on the cap's rim that a shell vertex was welded onto, this layer. The cap is split
         // at these when it is emitted, so both boundaries end up with the same vertex positions.
         var capRimLandings = new List<Vec3>();
@@ -837,16 +844,16 @@ public static class SecondSkinWriter
                     // better than a quarter of the mesh's own edge — as a lip running the length of the
                     // join with bare skin showing in it.
                     //
-                    // SNAP BACK. The shell has already been pulled onto this rim, but that is only half a
-                    // weld: measured after the shell pass alone, every shell vertex sat exactly on a cap
-                    // segment while 110 of the cap's 112 rim vertices had no shell vertex on them — so the
-                    // shell's edge ran as a chord past each one and the lens between chord and cap
-                    // boundary was an open gap, up to 0.00047. Pulling the rim back onto the shell's makes
-                    // each polyline pass through the other's vertices, and two polylines that do that
-                    // trace the same path. The normal is averaged at the same time and against the
-                    // shell's PRE-average value, so both sides arrive at the same answer and the join
-                    // stops shading as a crease — which is what makes it read as a dark line even when
-                    // there is no light coming through.
+                    // SHARED NORMAL, but NOT a shared position any more. The cap's rim used to be pulled
+                    // onto the shell's here, to make each polyline pass through the other's vertices —
+                    // the shell's edge otherwise ran as a chord past each cap rim vertex and the lens
+                    // between chord and boundary was an open gap, up to 0.00047. The shell is now split at
+                    // those vertices instead, which closes the same lens without moving anything: an
+                    // authoritative rim cannot be allowed to move, or the coordinates the shell was welded
+                    // and split against stop being the ones the cap ships with. The normal is still
+                    // averaged against the shell's PRE-average value, so both sides arrive at the same
+                    // answer and the join stops shading as a crease — which is what makes it read as a
+                    // dark line even when there is no light coming through.
                     VElem? pEl = null, nEl = null;
                     foreach (var el in decl)
                     {
@@ -867,15 +874,18 @@ public static class SecondSkinWriter
 
                             int po = i * outStrides[pe3.Stream] + pe3.Offset;
                             ReadTyped(outStreams[pe3.Stream], po, pe3.Type, tmp3);
-                            var p3 = new Vec3(tmp3[0] + n3.X * push, tmp3[1] + n3.Y * push,
-                                              tmp3[2] + n3.Z * push);
-
                             int from2 = plan.SourceOf[i];
+                            // A rim vertex takes the coordinate the shell was welded and split against,
+                            // verbatim. Everything else is pushed the ordinary way. See weldRimPos.
+                            var p3 = weldRimPos.TryGetValue((m, from2), out var atRim)
+                                ? atRim
+                                : new Vec3(tmp3[0] + n3.X * push, tmp3[1] + n3.Y * push,
+                                           tmp3[2] + n3.Z * push);
+
                             if (shellRim.Count > 0 && weldRimVerts.Contains(from2)
                                 && NearestOnRim(p3, shellRimArr ??= shellRim.ToArray(), CapWeldRadius,
-                                                out var onShell, out var shellN, out _, out _))
+                                                out _, out var shellN, out _, out _))
                             {
-                                p3 = onShell;
                                 var avg = NormalizeOr(new Vec3(n3.X + shellN.X, n3.Y + shellN.Y,
                                                                n3.Z + shellN.Z), n3);
                                 WriteNormal(outStreams[ne3.Stream],
@@ -1058,10 +1068,9 @@ public static class SecondSkinWriter
             if (preserve && capUv != null && capRimLandings.Count > 0)
             {
                 int added = SplitCapRim(capRimLandings, decl, ref outStreams, outStrides, ref vc,
-                                        keptPerSub, ref used);
-                if (added > 0)
-                    diag?.Invoke($"authored cap: split the rim at {added} shell landing(s) so both "
-                               + "boundaries share vertex positions");
+                                        keptPerSub, ref used, out int onVert, out int offEdge);
+                diag?.Invoke($"authored cap: split the CAP's rim at {added} of {capRimLandings.Count} "
+                           + $"shell landing(s) — {onVert} already on a vertex, {offEdge} off the boundary");
             }
             if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
 
@@ -1163,11 +1172,6 @@ public static class SecondSkinWriter
                             WriteXYZ(outStreams[pw2.Stream], po, pw2.Type, best.X, best.Y, best.Z);
                             movedV[i] = true;
                             weldPos[i] = best;
-                            // Where the shell landed ON the cap's rim. The cap has no vertex at most of
-                            // these — measured, 2 of 134 — so each one is a T-junction, and the two
-                            // surfaces part by a sliver wherever the edges are not exactly collinear.
-                            // The cap's rim gets split at them when it is grafted; see SplitCapRim.
-                            capRimLandings.Add(best);
                             welded++;
                             movedThisRound++;
                             weldWorstD = MathF.Max(weldWorstD, dist);
@@ -1298,16 +1302,50 @@ public static class SecondSkinWriter
                         // lies along the join; the few that cut across it are chords of the same line and
                         // make no difference to a nearest-point query.
                         var seenEdge = new HashSet<(ushort, ushort)>();
+                        var stillOnLip = new bool[vc];
                         foreach (var sub in keptPerSub)
                             for (int t = 0; t + 2 < sub.Length; t += 3)
                                 for (int k = 0; k < 3; k++)
                                 {
                                     ushort x = sub[t + k], y = sub[t + (k + 1) % 3];
                                     if (!movedV[x] || !movedV[y]) continue;
+                                    stillOnLip[x] = stillOnLip[y] = true;
                                     if (!seenEdge.Add((Math.Min(x, y), Math.Max(x, y)))) continue;
                                     shellRim.Add(new RimSeg(weldPos[x], weldNrm[x], weldWgt[x],
                                                             weldPos[y], weldNrm[y], weldWgt[y]));
                                 }
+
+                        // Where the shell landed ON the cap's rim, for the cap to be split at when it is
+                        // grafted. Read off the SURVIVING lip for the same reason the segments above are:
+                        // sliding the lip collapses a few triangles and they are dropped, and a landing
+                        // recorded as the weld went could belong to one of them. The cap was then split at
+                        // a point the shell no longer has a vertex at, which is a T-junction made by the
+                        // very pass that exists to remove them — measured on Rue, 3 dropped triangles and
+                        // 3 cap rim vertices with nothing under them.
+                        for (int i = 0; i < vc; i++)
+                            if (stillOnLip[i]) capRimLandings.Add(weldPos[i]);
+                    }
+
+                    // THE OTHER HALF OF WATERTIGHT. The weld put every lip vertex onto a rim SEGMENT, and
+                    // the cap is split at those landings when it is grafted — that direction is closed.
+                    // This is the mirror: the cap's rim has far more vertices than the lip does (256
+                    // against 155 on Rue), and the shell has none at most of them, so the lip runs as one
+                    // long edge past several cap vertices and parts from the cap by whatever the cap bows
+                    // off that chord. Splitting the lip at each one costs no movement — the new vertices
+                    // land exactly where the cap already is.
+                    //
+                    // AFTER shellRim is built, deliberately: that list is indexed by the pre-split vertex
+                    // numbering, and the split grows it.
+                    if (welded > 0 && weldRimPos.Count > 0)
+                    {
+                        SplitProbe = diag;
+                        int mirrored = SplitCapRim([.. weldRimPos.Values], decl, ref outStreams, outStrides,
+                                                   ref vc, keptPerSub, ref used,
+                                                   out int onVert2, out int offEdge2);
+                        SplitProbe = null;
+                        diag?.Invoke($"authored cap: split the SHELL's lip at {mirrored} of "
+                                   + $"{weldRimPos.Count} cap rim vertex/vertices — {onVert2} already on "
+                                   + $"a vertex, {offEdge2} off the boundary");
                     }
                     if (reweighted > 0)
                     {
@@ -1498,6 +1536,7 @@ public static class SecondSkinWriter
             // than at the graft — it is cached, so asking early costs nothing.
             weldRim = null;
             weldRimVerts.Clear();
+            weldRimPos.Clear();
             welded = 0; weldWorst = 0; weldWorstD = 0f; capWelded = 0;
             capRimLandings.Clear();
             shellRim.Clear(); shellRimArr = null;
@@ -1543,15 +1582,21 @@ public static class SecondSkinWriter
                     }
                     CapFootprintMask(pl, def, footprint, footprintSize);
 
+                    // The one place a cap rim vertex's final position is worked out. See weldRimPos.
+                    Vec3 CapFinal(int i)
+                    {
+                        var (p, n2) = (pl.SrcPos[i], pl.SrcNrm[i]);
+                        return new Vec3(p.X + n2.X * capPush, p.Y + n2.Y * capPush, p.Z + n2.Z * capPush);
+                    }
+
                     foreach (var (e, n) in edgeUse)
                     {
                         if (n != 1) continue;
-                        var (pa, na) = (pl.SrcPos[e.A], pl.SrcNrm[e.A]);
-                        var (pb, nb) = (pl.SrcPos[e.B], pl.SrcNrm[e.B]);
-                        segs.Add(new RimSeg(
-                            new Vec3(pa.X + na.X * capPush, pa.Y + na.Y * capPush, pa.Z + na.Z * capPush), na, pl.SrcW[e.A],
-                            new Vec3(pb.X + nb.X * capPush, pb.Y + nb.Y * capPush, pb.Z + nb.Z * capPush), nb, pl.SrcW[e.B]));
+                        Vec3 pa = CapFinal(e.A), pb = CapFinal(e.B);
+                        segs.Add(new RimSeg(pa, pl.SrcNrm[e.A], pl.SrcW[e.A],
+                                            pb, pl.SrcNrm[e.B], pl.SrcW[e.B]));
                         weldRimVerts.Add(e.A); weldRimVerts.Add(e.B);
+                        weldRimPos[(m, e.A)] = pa; weldRimPos[(m, e.B)] = pb;
                     }
                 }
                 if (segs.Count > 0) weldRim = segs.ToArray();
@@ -5601,10 +5646,14 @@ public static class SecondSkinWriter
     /// sit exactly where the shell already is — so this cannot reopen a join or distort the cap.
     /// </summary>
     /// <returns>How many vertices were inserted.</returns>
+    /// <param name="atVertex">Landings skipped because the boundary already has a vertex there.</param>
+    /// <param name="offBoundary">Landings skipped because no boundary edge was within reach — those are
+    /// the ones that leave the join open, and they are a different problem from the ones above.</param>
     private static int SplitCapRim(List<Vec3> landings, VElem[] decl, ref byte[][] streams,
                                    byte[] strides, ref ushort vc, List<ushort[]> keptPerSub,
-                                   ref bool[] used)
+                                   ref bool[] used, out int atVertex, out int offBoundary)
     {
+        atVertex = 0; offBoundary = 0;
         // Boundary edges of what this mesh is actually emitting, with the triangle each belongs to.
         var edgeUse = new Dictionary<(ushort A, ushort B), int>();
         foreach (var sub in keptPerSub)
@@ -5650,12 +5699,18 @@ public static class SecondSkinWriter
                 if (d2 >= bestD2) continue;
                 bestD2 = d2; bestE = e; bestT = t;
             }
-            if (bestD2 > CapRimSplitReach * CapRimSplitReach) continue;
+            if (bestD2 > CapRimSplitReach * CapRimSplitReach) { offBoundary++; continue; }
             // Already a shared vertex, or close enough to one that a split would make a sliver.
             float edgeLen = Dist(PosOf(bestE.A), PosOf(bestE.B));
-            if (edgeLen < 1e-6f) continue;
+            if (edgeLen < 1e-6f) { offBoundary++; continue; }
             float margin = CapRimSplitMargin / edgeLen;
-            if (bestT <= margin || bestT >= 1f - margin) continue;
+            if (bestT <= margin || bestT >= 1f - margin)
+            {
+                atVertex++;
+                SplitProbe?.Invoke($"SKIP atVertex ({land.X:F5},{land.Y:F5},{land.Z:F5}) "
+                                 + $"d {MathF.Sqrt(bestD2):F6} t {bestT:F4} edgeLen {edgeLen:F6}");
+                continue;
+            }
             (cuts.TryGetValue(bestE, out var l) ? l : cuts[bestE] = new List<(float, Vec3)>()).Add((bestT, land));
         }
         if (cuts.Count == 0) return 0;
@@ -5772,6 +5827,9 @@ public static class SecondSkinWriter
         }
     }
 
+    /// <summary>Temporary: where a split declined a landing. Set by the diagnostic test only.</summary>
+    internal static Action<string>? SplitProbe;
+
     /// <summary>How far a welded landing may sit from a cap boundary edge and still be treated as on it.</summary>
     private const float CapRimSplitReach = 0.004f;
 
@@ -5795,20 +5853,34 @@ public static class SecondSkinWriter
         // the same one, and on the cap side that collapsed rim triangles to zero area outright (aspect
         // 3e9) and took the whole shell from manifold to 21 bad edges and 36 winding errors. The corner
         // problem it was aimed at turned out to be unwelded boundary instead — see WeldRounds.
-        foreach (var seg in rim)
+        int win = -1;
+        float winT = 0f;
+        for (int i = 0; i < rim.Length; i++)
         {
-            var q = ClosestOnSegment(p, seg.PA, seg.PB, out float t);
+            var q = ClosestOnSegment(p, rim[i].PA, rim[i].PB, out float t);
             float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
             float d = dx * dx + dy * dy + dz * dz;
             if (d >= best) continue;
-            best = d;
-            at = q;
-            var (na, nb) = (seg.NA, seg.NB);
-            normal = NormalizeOr(new Vec3(na.X + (nb.X - na.X) * t, na.Y + (nb.Y - na.Y) * t,
-                                          na.Z + (nb.Z - na.Z) * t), na);
-            weights = BlendWeights(seg.WA, 1f - t, seg.WB, t, [], 0f);
+            best = d; win = i; winT = t; at = q;
         }
-        dist = best < float.MaxValue ? MathF.Sqrt(best) : float.MaxValue;
+        if (win < 0) { dist = float.MaxValue; return false; }
+
+        // ...but a landing that is ALREADY at an end of its segment takes the end exactly. This is not the
+        // vertex-preference above — the vertex has to be within CapRimSplitMargin, so the correction is
+        // under a fifth of a millimetre and cannot drag anything to a distant rim vertex. It is here
+        // because the alternative is worse: a landing a hair off a rim vertex is too close to split the
+        // boundary at (the split would only make a sliver, so both sides decline it) and too far to share
+        // a position with, and what is left is a T-junction of exactly the size this margin allows.
+        // Measured on Rue, that was the whole residual — 5 pairs from 4.6e-5 to 1.3e-4 apart.
+        var seg2 = rim[win];
+        if (Dist(at, seg2.PA) <= CapRimSplitMargin) { at = seg2.PA; winT = 0f; }
+        else if (Dist(at, seg2.PB) <= CapRimSplitMargin) { at = seg2.PB; winT = 1f; }
+
+        var (na, nb) = (seg2.NA, seg2.NB);
+        normal = NormalizeOr(new Vec3(na.X + (nb.X - na.X) * winT, na.Y + (nb.Y - na.Y) * winT,
+                                      na.Z + (nb.Z - na.Z) * winT), na);
+        weights = BlendWeights(seg2.WA, 1f - winT, seg2.WB, winT, [], 0f);
+        dist = Dist(p, at);
         return dist <= radius;
     }
 
