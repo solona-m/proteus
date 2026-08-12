@@ -241,7 +241,12 @@ public sealed class SecondSkinService
         // Mods that carry a dedicated top mask shell (OverlayDescriptor.IsMaskShell) this build. For these,
         // the mod's OTHER shells must NOT merge the masks' _id/relief — the mask shell owns them, so merging
         // would colour the mask twice. The mask shell itself always merges (it IS the mask).
-        IReadOnlySet<string>? maskShellMods = null)
+        IReadOnlySet<string>? maskShellMods = null,
+        // The bare-body e0000 models the game is CURRENTLY DRAWING, per slot (see
+        // CompositorService.BareBodyModelsFromModels). Ground truth for both the model code and the path a
+        // bare slot is cut from: a race with no e0000 models of its own draws another race's, and only the
+        // live resource says which. Null/absent slots fall back to a path built from the model code.
+        IReadOnlyDictionary<string, string>? bareBodyModels = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -299,13 +304,34 @@ public sealed class SecondSkinService
         // dictionary enumeration order. On the character that exposed this, the honest gear (ril a0031 and
         // met e5501) both say 0201 while only the discounted Emperor said 0101 — and picking wrong costs
         // the ENTIRE shell, not the one stray redraw a wrong guess costs elsewhere.
-        var codeVotes = equippedPaths.Select(PathCharCode).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!)
-            .GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        static List<IGrouping<string, string>> CodeVotes(IEnumerable<string> paths)
+            => paths.Select(PathCharCode).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!)
+                .GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        var codeVotes = CodeVotes(equippedPaths);
+        var voteSource = "equipped";
+
+        // Wearing nothing: the e0000 parts the game is DRAWING are the only evidence left, and they are
+        // evidence of the same kind — the race the game resolved this character's equipment to. Without
+        // them a naked Au Ra fell through to the probe below, which picked her own c1401 (no e0000 models
+        // exist there), so every part missed and the shell came out empty.
+        //
+        // Counted ONLY when nothing is equipped, never alongside gear: uncovered slots OUTNUMBER worn
+        // items, and EQDP is per-item, so a character whose gear ships at her own race while her bare
+        // slots fall back to Midlander would see her gear outvoted 3-to-1. modelCode gates hosting —
+        // LoadCandidate skips any accessory whose path code differs — so a flipped vote would reject every
+        // ring she actually wears and dump the whole look onto the undeformed Emperor fallback.
+        if (codeVotes.Count == 0)
+        {
+            codeVotes = CodeVotes(bareBodyModels?.Values ?? Enumerable.Empty<string>());
+            voteSource = "drawn bare-body";
+        }
+
         if (codeVotes.Count > 1)
-            log.Warning("[Proteus] second skin: equipped models disagree on a model code [{0}] — using c{1}",
-                string.Join(", ", codeVotes.Select(g => $"{g.Key}x{g.Count()}")), codeVotes[0].Key);
+            log.Warning("[Proteus] second skin: {0} models disagree on a model code [{1}] — using c{2}",
+                voteSource, string.Join(", ", codeVotes.Select(g => $"{g.Key}x{g.Count()}")), codeVotes[0].Key);
 
         var modelCode = codeVotes.Count > 0 ? codeVotes[0].Key : null;
         if (modelCode == null)
@@ -318,10 +344,20 @@ public sealed class SecondSkinService
             foreach (var cand in new[] { charCode, "0201", "0101" })
             {
                 // Existence only — no need to read the model, which would pull megabytes just to discard
-                // them. A mod redirect counts (ResolvePlayer yields a file only for modded paths), else ask
-                // the game index directly.
+                // them. A mod redirect counts, else ask the game index directly.
+                //
+                // ResolvePlayer is NOT an existence test: Penumbra ECHOES the game path back when no mod
+                // redirects it, so "!= null" was true for every candidate and the loop always stopped on the
+                // first one, charCode. That silently un-did the whole point of probing — an Au Ra female
+                // (c1401 ships no e0000 models; she draws Midlander c0201) asked for c1401e0000_*.mdl, all
+                // four parts missed, and she got no shell at all. A redirect only counts when it resolves to
+                // something OTHER than the path we asked for, and that something is a real file on disk.
                 var probe = $"chara/equipment/e0000/model/c{cand}e0000_top.mdl";
-                if (penumbra.ResolvePlayer(probe) == null && !Plugin.DataManager.FileExists(probe)) continue;
+                var probeDisk = penumbra.ResolvePlayer(probe);
+                bool modded = probeDisk != null
+                           && !string.Equals(probeDisk, probe, StringComparison.OrdinalIgnoreCase)
+                           && File.Exists(probeDisk);
+                if (!modded && !Plugin.DataManager.FileExists(probe)) continue;
                 modelCode = cand;
                 break;
             }
@@ -349,7 +385,13 @@ public sealed class SecondSkinService
             // through it); the flat bare-body e0000 would shell the whole body and float off the posed
             // skin. The skin-material filter in SecondSkinWriter keeps only the skin mesh. Slots with no
             // gear (or gear that exposes no skin) fall back to the bare body e0000.
-            var bareBody = $"chara/equipment/e0000/model/c{modelCode}e0000_{part}.mdl";
+            // Prefer the e0000 model the game is ACTUALLY drawing in this slot over one rebuilt from the
+            // model code: EQDP can send a slot to a different race than the vote settled on, and the live
+            // resource is the only thing that knows. Rebuild only for a slot that isn't in the live set
+            // (nothing drawn there, or the walk came back empty) — same path as before.
+            var bareBody = bareBodyModels != null && bareBodyModels.TryGetValue(part, out var drawnBare)
+                ? drawnBare
+                : $"chara/equipment/e0000/model/c{modelCode}e0000_{part}.mdl";
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
                 : bareBody;
@@ -431,12 +473,21 @@ public sealed class SecondSkinService
         }
 
         // ── whole-body fallback ──────────────────────────────────────────────
-        // Not every race ships e0000 parts. Viera and Hrothgar have none, so the game resolves those paths
-        // through EQDP to another race's model and the direct path never loads. Left alone that silently
-        // drops the torso and hands from the shell, leaving a fabric that renders only where some equipped
-        // gear model happened to carry a skin mesh — 2 meshes where a Midlander gets 6. Fall back to the
-        // race's own body model: it always exists, is by definition the right race, and is what a body mod
-        // replaces, so it carries the correct UV space too.
+        // Not every race ships e0000 parts. Viera, Hrothgar and Au Ra F have none, so the game resolves
+        // those paths through EQDP to another race's model and the direct path never loads. Left alone that
+        // silently drops the torso and hands from the shell, leaving a fabric that renders only where some
+        // equipped gear model happened to carry a skin mesh — 2 meshes where a Midlander gets 6.
+        //
+        // LAST resort, and a poor one. The primary answer is bareBodyModels: the e0000 model the game is
+        // actually drawing in each slot, whatever race it resolved to, which IS the modded body. This fires
+        // only when that live set had nothing for a slot (an empty/stale draw-object walk) AND the path
+        // rebuilt from the model code missed — i.e. we know nothing about what the character draws.
+        //
+        // Its weakness is UV space, not shape: a body mod replaces the e0000 EQUIPMENT models (Bibo+ ships
+        // c0201e0000_top/dwn/glv/sho and nothing under obj/body/…/model/), so this reads VANILLA bytes in
+        // vanilla UV even for a modded character. SkinBodyType then reports gen2 and the gate below drops it
+        // unless a gear overlay opted into All bodies — which is the honest outcome: a vanilla-UV shell over
+        // a Bibo+ body is art in the wrong place, not a rescue. Don't "fix" that by loosening the gate.
         //
         // It is the WHOLE body and cannot be split per slot, so it REPLACES everything cut above rather
         // than stacking a second shell over skin it already covers (coincident geometry that z-fights and
@@ -452,13 +503,22 @@ public sealed class SecondSkinService
         {
             // b0001 is the standard body, but a few race/gender combos ship b0101, and cutting the shell
             // from the wrong one yields a plausible-looking shell of the wrong shape — worse than failing.
-            // Prefer whichever body the player's MOD owns (ResolvePlayer yields a real file only for modded
-            // models), since that is the one they are actually wearing; else take the first that exists.
+            // Prefer whichever body the player's MOD owns, since that is the one they are actually wearing;
+            // else take the first that exists.
+            // The file name carries the customization-type suffix — c1401b0001_TOP.mdl, the same "top" the
+            // e0000 torso uses (Penumbra.GameData GamePaths.Mdl.Customization). Without it this asked for
+            // c1401b0001.mdl, which exists for no race, so the fallback loaded nothing for ANYONE and the
+            // race it exists to rescue got an empty shell with only "no whole-body model loaded" in the log.
             (byte[] Bytes, string Path, string? Disk)? pick = null;
             foreach (var bodyId in WholeBodyIds)
             {
-                var wholePath = $"chara/human/c{charCode}/obj/body/{bodyId}/model/c{charCode}{bodyId}.mdl";
-                var wholeDisk = penumbra.ResolvePlayer(wholePath);
+                var wholePath = $"chara/human/c{charCode}/obj/body/{bodyId}/model/c{charCode}{bodyId}_top.mdl";
+                // ResolvePlayer ECHOES the game path when nothing redirects it, so a non-null result is not
+                // evidence of a mod — only a resolved path that DIFFERS and is a real file on disk is.
+                var resolved = penumbra.ResolvePlayer(wholePath);
+                var wholeDisk = resolved != null
+                             && !string.Equals(resolved, wholePath, StringComparison.OrdinalIgnoreCase)
+                             && File.Exists(resolved) ? resolved : null;
                 var wholeBytes = textureLoader.LoadRawFile(wholeDisk, wholePath);
                 if (wholeBytes == null) continue;
                 if (wholeDisk != null) { pick = (wholeBytes, wholePath, wholeDisk); break; }
@@ -470,9 +530,14 @@ public sealed class SecondSkinService
                 var wholeType = SkinBodyType(whole.Bytes);
                 if (string.Equals(wholeType, "gen2", StringComparison.OrdinalIgnoreCase) && !anyGen2Allowed)
                 {
-                    log.Information("[Proteus] second skin: whole-body fallback {0} is vanilla (gen2) — no gear "
-                                  + "overlay opted into All bodies, leaving the {1} part(s) cut above as-is",
-                                  whole.Path, bodies.Count);
+                    // Warning, not Information: this is the normal outcome for a modded body (no body mod
+                    // replaces the human body model, so it always reads vanilla), and it means the shell
+                    // ships SHORT — with 0 parts cut above, not at all. Whoever reads the log after "my
+                    // glow didn't appear" needs to see it at the level they actually run at.
+                    log.Warning("[Proteus] second skin: whole-body fallback {0} is vanilla (gen2) — no gear "
+                              + "overlay opted into All bodies, leaving the {1} part(s) cut above as-is. The "
+                              + "live bare-body models were unavailable this composite; a redraw usually fixes it",
+                              whole.Path, bodies.Count);
                 }
                 else
                 {

@@ -105,6 +105,10 @@ public class CompositorService : IDisposable
     // on the framework thread from the draw object's loaded models so the background build can read it
     // without an IPC. Refreshed wherever the material snapshot is.
     private volatile IReadOnlyDictionary<string, string>? _equippedPartModels;
+    // The bare-body e0000 models drawn in the slots gear does NOT cover (part -> .mdl game path), captured
+    // in the same walk. Names the race the game resolved each bare slot to, which is not always the
+    // character's own. See BareBodyModelsFromModels.
+    private volatile IReadOnlyDictionary<string, string>? _bareBodyModels;
     // Enabled shape keys per drawn body model (normalized filename -> shape names), captured on the
     // framework thread each redraw. Used to bake body morphs (e.g. "Remove Hip Dips") into the second-skin
     // shell so it follows the body instead of diverging. See BodyShapeReader.
@@ -517,16 +521,28 @@ public class CompositorService : IDisposable
 
             // Did the gear the second skin cuts its shells from change? Equipping/removing an item
             // fires no mod-setting or design event, so this diff is what makes the shell follow it.
+            //
+            // Guarded on its OWN null, not the material snapshot's: this is a second walk and can come
+            // back null by itself (the draw object being torn down mid-redraw) while materials resolved
+            // fine. Every derived map would then be EMPTY — wiping four good caches and reporting a full
+            // unequip that never happened, which fires a phantom "equipment-change" recomposite that
+            // builds the shell from nothing. Same reasoning as the material snapshot above; keep the last
+            // values and claim no change, since TriggerRecomposite re-walks before it composites anyway.
             var modelPaths = penumbra.GetActivePlayerModelPaths();
-            var equipped = EquippedPartModelsFromModels(modelPaths);
-            var accessories = EquippedAccessoryModelsFromModels(modelPaths);
-            var metModels = EquippedMetModelsFromModels(modelPaths, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
-            _equippedPartModels = equipped;
-            _equippedAccessoryModels = accessories;
-            _equippedMetModels = metModels;
-            var sig = EquipSignature(equipped, accessories, metModels);
-            equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
-            _lastEquipSignature = sig;
+            if (modelPaths != null)
+            {
+                var equipped = EquippedPartModelsFromModels(modelPaths);
+                var accessories = EquippedAccessoryModelsFromModels(modelPaths);
+                var metModels = EquippedMetModelsFromModels(modelPaths, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
+                var bare = BareBodyModelsFromModels(modelPaths);
+                _equippedPartModels = equipped;
+                _equippedAccessoryModels = accessories;
+                _equippedMetModels = metModels;
+                _bareBodyModels = bare;
+                var sig = EquipSignature(equipped, accessories, metModels, bare);
+                equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
+                _lastEquipSignature = sig;
+            }
         }
 
         RefreshGlamourerCharCode();
@@ -853,6 +869,7 @@ public class CompositorService : IDisposable
                     _equippedPartModels = EquippedPartModelsFromModels(equipped);
                     _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
                     _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
+                    _bareBodyModels = BareBodyModelsFromModels(equipped);
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -1006,6 +1023,26 @@ public class CompositorService : IDisposable
         return models;
     }
 
+    // The exact opposite selection: the BARE-BODY (e0000) part models the character is drawing where no gear
+    // covers the slot, e.g. chara/equipment/e0000/model/c0201e0000_top.mdl → top. The shell needs these for
+    // the same reason it needs the gear models — cut from what the game actually draws, never from a path
+    // guessed at. Guessing is what broke a naked Au Ra female: equipment is keyed to a MODEL race, she draws
+    // Midlander c0201 e0000 parts, and with nothing equipped there was no other resolved path to read that
+    // off, so the shell asked for c1401e0000_* (shipped by no one) and came out empty.
+    private static Dictionary<string, string> BareBodyModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (modelPaths == null) return models;
+        foreach (var p in modelPaths)
+        {
+            var match = EquipModelRe.Match(p);
+            if (!match.Success) continue;
+            if (!string.Equals(match.Groups[1].Value, "e0000", StringComparison.OrdinalIgnoreCase)) continue;
+            models[match.Groups[2].Value.ToLowerInvariant()] = match.Value;
+        }
+        return models;
+    }
+
     // The second skin appends its shell into a ring/bracelet the player already wears (so the accessory
     // stays visible), keyed by slot — chara/accessory/a0114/model/c0201a0114_rir.mdl → rir. Detect them
     // the same way as the equipment models above.
@@ -1128,17 +1165,23 @@ public class CompositorService : IDisposable
             SetGlassesOnFramework(0);
     }
 
-    // Stable string of the equipped part + accessory + head("_met") models, for cheap change detection on
-    // redraw. A ring swap must rebuild the shell (it changes the host), so the accessory map is folded in
-    // too — as is the "_met" list, since putting on/removing glasses or a helmet also changes the host.
+    // Stable string of the equipped part + accessory + head("_met") + bare-body models, for cheap change
+    // detection on redraw. A ring swap must rebuild the shell (it changes the host), so the accessory map is
+    // folded in too — as is the "_met" list, since putting on/removing glasses or a helmet also changes the
+    // host. The bare-body models are in for the same reason as the gear: the shell is cut from them, so a
+    // slot that starts resolving to a different race's e0000 model is a different shell. Prefixed "bare:"
+    // because those keys are the same four slot names the gear map uses.
     private static string EquipSignature(
         IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null,
-        IReadOnlyList<string>? metModels = null)
+        IReadOnlyList<string>? metModels = null, IReadOnlyDictionary<string, string>? bareBody = null)
         => string.Join("|",
             (models ?? new Dictionary<string, string>()).Concat(accessories ?? new Dictionary<string, string>())
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => $"{kv.Key}={kv.Value}")
-            .Concat((metModels ?? []).Select(p => $"met={p}")));
+            .Concat((metModels ?? []).Select(p => $"met={p}"))
+            .Concat((bareBody ?? new Dictionary<string, string>())
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+                .Select(kv => $"bare:{kv.Key}={kv.Value}")));
 
     private static string? BodyTypeKey(HashSet<string> snapshot)
     {
@@ -3244,10 +3287,15 @@ public class CompositorService : IDisposable
                         var equippedAccessories = _equippedAccessoryModels
                             ?? new Dictionary<string, string>();
                         var metModels = _equippedMetModels ?? [];
-                        log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}], head/met [{2}] ({3})",
+                        // The bare slots come from the same walk. Logged beside the gear because when a shell
+                        // comes out empty these are usually what answers "cut from WHAT?" — a slot missing
+                        // from BOTH lists is a slot the shell has no geometry for.
+                        var bareBodyModels = _bareBodyModels ?? new Dictionary<string, string>();
+                        log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}], head/met [{2}], bare [{3}] ({4})",
                             string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             string.Join(", ", equippedAccessories.Select(kv => $"{kv.Key}={kv.Value}")),
                             string.Join(", ", metModels),
+                            string.Join(", ", bareBodyModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
 
                         // Our injected invisible-glasses set (when the feature is on) so the shell REPLACES it
@@ -3264,7 +3312,7 @@ public class CompositorService : IDisposable
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
-                            invisibleGlassesSet, metModels, bodyShapes, maskShellMods);
+                            invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels);
                         if (shells != null)
                         {
                             shellBuilt = true;
