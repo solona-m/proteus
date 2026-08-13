@@ -713,11 +713,14 @@ public static class SecondSkinWriter
         int headerBytes = tables.Count * 4;
         long dataPos = start + headerBytes;
 
+        // Hoisted out of the loop: a stackalloc inside one accumulates a frame per iteration and never
+        // releases until the method returns, so a long table list could run the stack down. Reused
+        // rather than re-allocated — every write below fills both bytes before reading it.
+        Span<byte> t = stackalloc byte[2];
         for (int i = 0; i < tables.Count; i++)
         {
             long headerPos = start + i * 4;
             ms.Position = headerPos;
-            Span<byte> t = stackalloc byte[2];
 
             BitConverter.TryWriteBytes(t, (ushort)((dataPos - headerPos) / 4));
             ms.Write(t);

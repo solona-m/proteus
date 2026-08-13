@@ -1668,8 +1668,10 @@ public class CompositorService : IDisposable
             // then clear the slot rather than give it back.
             if (!AccessorySnapshotKnown)
             {
+                // ! like RingModel(ringSlot!) below: `want` is only true when ringSlot is non-null, but
+                // that flows through a bool local the compiler cannot follow back to the null check.
                 log.Debug("[Proteus] Emperor's ring: no accessory snapshot yet — not equipping into {0} until "
-                        + "a walk confirms it is empty", ringSlot);
+                        + "a walk confirms it is empty", ringSlot!);
                 return;
             }
             // Occupied by the player's own ring: not ours to take. ChooseHosts only picks a free slot, so
@@ -1694,7 +1696,7 @@ public class CompositorService : IDisposable
                 // the equip's own redraw lands on the finished shell (the glasses path needs one only when
                 // it guessed the host before the item existed).
                 log.Information("[Proteus] Emperor's ring: equipped item #{0} (model a{1:D4}) in {2} — shell already hosted on it",
-                    r.ItemId, r.ModelSet, ringSlot);
+                    r.ItemId, r.ModelSet, ringSlot!);
             }
         }
         else

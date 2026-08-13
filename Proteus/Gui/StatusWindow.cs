@@ -41,6 +41,14 @@ public class StatusWindow : Window
     // Identity of the overlay tab currently being dragged to restack (payload carries only a marker).
     private (string Mod, string Group, string Option)? _stackDragSrc;
 
+    /// <summary>
+    /// The drag payload ImGui requires but we never read — the source identity rides in
+    /// <see cref="_stackDragSrc"/> instead. A static field rather than a stackalloc at the call site:
+    /// that site sits inside the per-tab loop, where a stackalloc accumulates a frame per iteration
+    /// that only unwinds when the whole draw method returns.
+    /// </summary>
+    private static readonly byte[] StackDragMarker = new byte[1];
+
     /// <summary>Penumbra group → ordinal per mod, memoised: the tab strip needs it every frame to show
     /// the true stacking order, and reading it walks the mod folder.</summary>
     private readonly Dictionary<string, Dictionary<string, int>> _groupOrderCache = new(StringComparer.OrdinalIgnoreCase);
@@ -1470,8 +1478,7 @@ public class StatusWindow : Window
                 if (ImGui.BeginDragDropSource(ImGuiDragDropFlags.None))
                 {
                     _stackDragSrc = (entry.ModDirectory, gName, opt.Name);
-                    ReadOnlySpan<byte> marker = stackalloc byte[1];
-                    ImGui.SetDragDropPayload("PROTEUS_STACK", marker, ImGuiCond.None);
+                    ImGui.SetDragDropPayload("PROTEUS_STACK", StackDragMarker, ImGuiCond.None);
                     ImGui.Text(label);
                     ImGui.EndDragDropSource();
                 }

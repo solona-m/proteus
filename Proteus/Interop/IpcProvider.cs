@@ -73,8 +73,12 @@ public class IpcProvider : IDisposable {
             overlay.Metadata.OptionGroups == null ? null : _discovery.ResolveActiveOverlays(overlay)
                                                                      .GroupBy(g => g.OptionGroup)
                                                                      .ToDictionary(
-                                                                         grouping => grouping.Key ?? string.Empty, 
-                                                                         grouping => grouping.Select( o => o.Option).ToList()
+                                                                         grouping => grouping.Key ?? string.Empty,
+                                                                         // ?? like the key above: ResolvedOverlay.Option is nullable
+                                                                         // (an overlay outside any group has none), and the IPC contract
+                                                                         // is List<string>. Empty rather than dropped, so a group's option
+                                                                         // count still matches what the consumer sees.
+                                                                         grouping => grouping.Select(o => o.Option ?? string.Empty).ToList()
                                                                          )
           )).ToList();
     }

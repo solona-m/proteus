@@ -47,14 +47,18 @@ public sealed record ScrollSettings(float SpeedX, float SpeedY, float TilingX, f
 public static class GearMaterialWriter
 {
     /// <summary>
-    /// Game path of the VANILLA material used as a template, or null when we ship our own.
+    /// Game path of the VANILLA material used as a template.
+    ///
+    /// Non-nullable: the switch has a catch-all arm returning a real path, so there is no shader for
+    /// which this yields nothing. It was declared string? for a "we ship our own template" case that was
+    /// never built, and that lie cost the only caller a nullable warning it could not act on.
     ///
     /// character.shpk clones a real shipping item (e0041), so it needs nothing installed.
     ///
     /// characterscroll clones vanilla e6257. Its rows carry a non-zero emissive, but we always write the
     /// emissive explicitly (see Build), so that no longer leaks through as a flat white glow.
     /// </summary>
-    public static string? TemplateFor(string shaderPackage) => shaderPackage switch
+    public static string TemplateFor(string shaderPackage) => shaderPackage switch
     {
         "characterscroll.shpk" => "chara/equipment/e6257/material/v0001/mt_c0201e6257_top_a.mtrl",
         _                      => "chara/equipment/e0041/material/v0001/mt_c0201e0041_top_a.mtrl",
