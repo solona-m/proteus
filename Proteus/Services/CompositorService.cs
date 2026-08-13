@@ -4821,14 +4821,33 @@ public class CompositorService : IDisposable
         }
 
         int lost = 0;
+        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var gamePath in expected.Keys)
         {
-            if (matched.Contains(gamePath) || unstable.Contains(gamePath)) continue;
+            if (matched.Contains(gamePath))
+            {
+                // Re-arm the chat notice: if this path is ever taken again — the user reinstalls the mod, or
+                // a different one outranks us — that is news, and should be said again.
+                _reportedRedirectLosses.TryRemove(gamePath, out _);
+                continue;
+            }
+            if (unstable.Contains(gamePath)) continue;
+
             lost++;
             log.Warning("[Proteus] redirect NOT live: {0} resolves to {1} — another mod wins this path, so "
                       + "what we composited for it cannot render. Raise the Proteus managed mod's priority "
                       + "in Penumbra above the mod that owns it.", gamePath, raw[gamePath] ?? "(nothing)");
+
+            if (ModFolderOf(raw[gamePath]) is { } owner) owners.Add(owner);
+            else NotifyRedirectLost(gamePath, raw[gamePath]);   // not a mod we can outrank — just say so
         }
+
+        // Raising is the fix, so prefer doing it over describing it. Only when we know WHICH mod to outrank:
+        // a path resolving to nothing, or to a file outside the mod directory, has no priority to beat.
+        if (owners.Count > 0 && !TryRaisePriorityAbove(owners))
+            foreach (var gamePath in expected.Keys)
+                if (!matched.Contains(gamePath) && !unstable.Contains(gamePath))
+                    NotifyRedirectLost(gamePath, raw[gamePath]);
 
         if (unstable.Count > 0)
             log.Warning("[Proteus] redirect check UNDETERMINED for {0} path(s) after {1}ms — they do not "
@@ -4836,8 +4855,14 @@ public class CompositorService : IDisposable
                       + "a loss: {2}", unstable.Count, sw.ElapsedMilliseconds, string.Join(", ", unstable));
 
         if (lost == 0 && unstable.Count == 0)
+        {
+            // Winning everything re-arms the raise latch, exactly as it re-arms the per-path chat notice
+            // above. Without this, a mod installed later in the session that takes a path back could compute
+            // a target we happen to have tried before and be waved through as "already attempted".
+            _highestPriorityRaiseAttempted = int.MinValue;
             log.Debug("[Proteus] all {0} redirect(s) live — every path we publish resolves to our output",
                 expected.Count);
+        }
     }
 
     /// <summary>
@@ -4963,26 +4988,29 @@ public class CompositorService : IDisposable
     /// Model/material shell paths are filtered out; they are written, not read as a base.
     /// </summary>
     public IReadOnlyList<(string GamePath, string Source, bool Settled)> BaseUpstreams()
-    {
-        var root = modsRoot;
-        return _upstreamByGamePath
+        => _upstreamByGamePath
             .Where(kv => kv.Key.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
             .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(kv =>
-            {
-                // The mod FOLDER is the answer to "which mod is this?"; the rest of the path is noise in a
-                // one-line row. Fall back to the full path when it isn't under the mod directory at all.
-                var source = kv.Value;
-                if (!string.IsNullOrEmpty(root)
-                    && source.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                {
-                    var rel = source[root.Length..].TrimStart('/', '\\');
-                    var cut = rel.IndexOfAny(['/', '\\']);
-                    source = cut > 0 ? rel[..cut] : rel;
-                }
-                return (kv.Key, source, !_upstreamUnsettled.ContainsKey(kv.Key));
-            })
+            .Select(kv => (kv.Key, ModFolderOf(kv.Value) ?? kv.Value, !_upstreamUnsettled.ContainsKey(kv.Key)))
             .ToList();
+
+    /// <summary>
+    /// The mod FOLDER a file on disk belongs to — the answer to "which mod is this?", and the name the user
+    /// can actually search for in Penumbra's list. The rest of the path is noise in a one-line row or a chat
+    /// message. Null when the file isn't under the mod directory at all, which the caller should render as
+    /// the full path rather than hiding.
+    /// </summary>
+    private string? ModFolderOf(string? diskPath)
+    {
+        var root = modsRoot;
+        if (string.IsNullOrEmpty(diskPath) || string.IsNullOrEmpty(root)
+            || !diskPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var rel = diskPath[root.Length..].TrimStart('/', '\\');
+        var cut = rel.IndexOfAny(['/', '\\']);
+        var folder = cut > 0 ? rel[..cut] : rel;
+        return folder.Length > 0 ? folder : null;
     }
 
     /// <summary>
@@ -6803,6 +6831,158 @@ public class CompositorService : IDisposable
     /// Marshalled onto the framework thread: the composite runs off it, and ChatGui's queue is not
     /// safe to enqueue into concurrently with the tick that drains it.
     /// </summary>
+    /// <summary>
+    /// The highest priority <see cref="TryRaisePriorityAbove"/> has already tried to set this session. The
+    /// loop-stop: a write Penumbra accepts but does not apply would otherwise be re-attempted forever, since
+    /// the read-back keeps reporting the old value and the target keeps clearing it. Reset the moment every
+    /// path resolves to us again, so a genuine recurrence later in the session is still acted on.
+    ///
+    /// Written only from the composite thread, and composites do not overlap meaningfully — a torn read
+    /// costs one duplicate attempt, which the same guard then absorbs.
+    /// </summary>
+    private int _highestPriorityRaiseAttempted = int.MinValue;
+
+    /// <summary>
+    /// Raise the managed mod above every mod in <paramref name="owners"/>, which have been CONFIRMED to be
+    /// taking paths Proteus publishes. Returns whether the priority was actually changed.
+    ///
+    /// This is the fix for the whole class of "my overlays half-apply" reports. A tattoo or skin mod that
+    /// ships its own copy of a body texture wins that one path on priority, so the diffuse renders as the
+    /// other mod's while the normal — which it doesn't ship — stays ours. Nothing on screen, in the UI, or in
+    /// any other log line hints at a second mod being involved.
+    ///
+    /// Safe to run every composite because it is driven by measurement, not suspicion: <see
+    /// cref="VerifyRedirectsLive"/> only reaches here for a path proven lost against a live manifest.
+    /// <para/>
+    /// Convergence is latched on what was ATTEMPTED, not on what Penumbra reports back. Guarding purely on
+    /// the read-back — which is what this did — only converges if the write is observable through the read,
+    /// and there is a live case where it may not be: <c>GetPlayerCollection</c> returns the EFFECTIVE
+    /// collection, which for a Mare-synced character is a temporary one, and a priority written there need
+    /// not survive or be readable. Every composite would then compute the same target, raise again, and force
+    /// another composite — an unbounded loop at roughly one full composite per second, climbing the priority
+    /// by one each time. <see cref="_highestPriorityRaiseAttempted"/> caps that at one wasted attempt.
+    /// </summary>
+    private bool TryRaisePriorityAbove(IReadOnlyCollection<string> owners)
+    {
+        if (!config.AutoRaiseModPriority) return false;
+
+        var collId = penumbra.GetPlayerCollectionId();
+        if (!collId.HasValue) return false;
+
+        int current = penumbra.GetModSettings(collId.Value, SidecarDiscoveryService.ManagedModDir)?.Priority
+                   ?? config.ManagedModPriority;
+
+        // The highest priority among the mods actually taking paths from us. A folder we can't read settings
+        // for isn't a mod Penumbra knows, so it can't be what beat us — skip rather than guess. Collected
+        // separately from `owners` because only these took part in choosing the target, and claiming a count
+        // that includes the others would overstate what was measured.
+        int highest = int.MinValue;
+        string? highestOwner = null;
+        int outranked = 0;
+        foreach (var owner in owners)
+        {
+            if (penumbra.GetModSettings(collId.Value, owner)?.Priority is not { } p) continue;
+            outranked++;
+            if (p > highest) { highest = p; highestOwner = owner; }
+        }
+        if (highestOwner == null) return false;
+
+        if (highest == int.MaxValue)
+        {
+            log.Warning("[Proteus] \"{0}\" sits at the maximum priority ({1}), so the managed mod cannot be "
+                      + "raised above it — move that mod down instead.", highestOwner, int.MaxValue);
+            return false;
+        }
+
+        int target = highest + 1;
+        if (target <= current) return false;   // already above it; whatever beat us wasn't priority
+
+        if (target <= _highestPriorityRaiseAttempted)
+        {
+            log.Warning("[Proteus] already raised the managed mod to {0} this session and \"{1}\" still wins "
+                      + "its paths — the priority change is not taking effect (a temporary collection, e.g. "
+                      + "one Mare created, cannot always be written to). Not retrying; set it by hand in "
+                      + "Penumbra if the overlays stay missing.", target, highestOwner);
+            return false;
+        }
+        _highestPriorityRaiseAttempted = target;
+
+        var ec = penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, target);
+        if (ec != PenumbraApiEc.Success)
+        {
+            log.Warning("[Proteus] could not raise the managed mod's priority to {0}: {1}", target, ec);
+            return false;
+        }
+
+        // Accepted is not the same as applied. Say so here rather than leaving the next composite to
+        // rediscover the same loss and blame the mod again.
+        if (penumbra.GetModSettings(collId.Value, SidecarDiscoveryService.ManagedModDir)?.Priority is { } after
+            && after != target)
+            log.Warning("[Proteus] Penumbra accepted the priority change to {0} but still reports {1} — the "
+                      + "collection in use may be a temporary one that cannot be written to.", target, after);
+
+        config.ManagedModPriority = target;
+        config.Save();
+        log.Information("[Proteus] raised managed mod priority {0} -> {1}, above \"{2}\" ({3})",
+            current, target, highestOwner, highest);
+
+        var names = outranked == 1 ? $"\"{highestOwner}\""
+                                   : $"\"{highestOwner}\" and {outranked - 1} other mod(s)";
+        var msg = $"[Proteus] {names} was overriding the skin textures Proteus composites your overlays "
+                + $"into, so they could not show up. Raised Proteus's Penumbra priority to {target} to fix "
+                + "it. (Turn off \"Auto-raise mod priority\" in Proteus's settings if you'd rather it "
+                + "didn't.)";
+        _ = Plugin.Framework.RunOnFrameworkThread(
+            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 45).Build()));
+
+        // The redirects are already published; only who wins them changed. A recomposite is the simplest way
+        // to get Penumbra to recompute and the character to re-sample, and the guard above means it cannot
+        // become a loop.
+        TriggerRecomposite("priority-raised", force: true);
+        return true;
+    }
+
+    /// <summary>
+    /// Which mod folder was last REPORTED as taking each path off us, so the notice below fires on a change
+    /// of state rather than on every composite. Cleared for a path the moment we win it back, so a
+    /// recurrence — the mod reinstalled, a different one installed above us — is announced again.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _reportedRedirectLosses =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Say in chat that another mod has taken a path Proteus composites, because the log cannot be the only
+    /// place this appears. The symptom — overlays half-applying, or not at all — looks exactly like Proteus
+    /// being broken, and nothing on screen or in the UI hints that a second mod is overwriting the same
+    /// texture. This is the one failure where naming the culprit IS the fix.
+    ///
+    /// Once per path per change of owner. A composite runs on every gear change and zone, so an unconditional
+    /// print would be unusable; a plain once-per-session latch would stay quiet after the user fixes the
+    /// priority and a different mod later takes the same path.
+    /// <para/>
+    /// Marshalled onto the framework thread for the same reason as <see cref="NotifyGlowPromoted"/>: the
+    /// composite runs off it, and ChatGui's queue is not safe to enqueue into concurrently with the tick
+    /// that drains it.
+    /// </summary>
+    private void NotifyRedirectLost(string gamePath, string? winningDisk)
+    {
+        var owner = ModFolderOf(winningDisk) ?? winningDisk;
+        if (string.IsNullOrEmpty(owner)) return;   // nothing provides it — not another mod's doing
+
+        if (_reportedRedirectLosses.TryGetValue(gamePath, out var reported)
+            && string.Equals(reported, owner, StringComparison.OrdinalIgnoreCase))
+            return;
+        _reportedRedirectLosses[gamePath] = owner;
+
+        // The file name alone: "bibo_mid_base.tex" is recognisable, the full invented game path is not, and a
+        // chat line has no room for it. The log line right above carries the full path for anyone who needs it.
+        var msg = $"[Proteus] \"{owner}\" overrides {Path.GetFileName(gamePath)}, which Proteus composites "
+                + "your overlays into — so they will not show up. Fix: in Penumbra, raise the \"Proteus\" "
+                + $"mod's priority above \"{owner}\".";
+        _ = Plugin.Framework.RunOnFrameworkThread(
+            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
+    }
+
     private void NotifyGlowPromoted(OverlayEntry entry, List<ColorTableRowPreset>? rows)
     {
         if (!HasEmissiveRow(rows) || !_glowPromotedMods.TryAdd(entry.ModDirectory, 0)) return;

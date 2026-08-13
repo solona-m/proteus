@@ -365,6 +365,21 @@ public class StatusWindow : Window
                              "affects the output has changed. Anything you change yourself always recomposites.\n" +
                              "Turn off only to rule this out when an edit isn't taking effect.");
 
+        var autoRaise = config.AutoRaiseModPriority;
+        if (ImGui.Checkbox("Auto-raise mod priority", ref autoRaise))
+        {
+            config.AutoRaiseModPriority = autoRaise;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When another mod is confirmed to be overriding a skin texture Proteus composites\n" +
+                             "into — a tattoo or skin pack shipping its own copy of the body texture — raise\n" +
+                             "Proteus's Penumbra priority above it automatically, and say so in chat.\n\n" +
+                             "That override is otherwise invisible: overlays half-apply (the bumps land, the\n" +
+                             "colour doesn't) and every log line still reads as a success.\n\n" +
+                             "Turn off only if you deliberately want another mod to win a path Proteus\n" +
+                             "composites. Proteus never acts on a guess — only on a confirmed override.");
+
         var inPlaceReload = config.UseInPlaceReload;
         if (ImGui.Checkbox("In-place reload", ref inPlaceReload))
         {

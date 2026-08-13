@@ -98,6 +98,20 @@ public class Configuration : IPluginConfiguration
     public int ManagedModPriority { get; set; } = 900;
 
     /// <summary>
+    /// Let Proteus raise the managed mod's priority above any mod observed taking a path it publishes.
+    ///
+    /// On by default because the failure it fixes is otherwise invisible and near-undiagnosable: a skin or
+    /// tattoo mod that ships its own copy of a body texture — chara/bibo_mid_base.tex and friends — silently
+    /// wins that one path, so overlays half-apply (the normal lands, the diffuse doesn't) while every log line
+    /// reads healthy. The number here isn't a preference anyone holds; it only has to be higher than whatever
+    /// else claims the same file.
+    ///
+    /// Turn it off if you deliberately want another mod to win a path Proteus composites. It only ever acts on
+    /// a loss that has been positively confirmed — see VerifyRedirectsLive — never on a guess.
+    /// </summary>
+    public bool AutoRaiseModPriority { get; set; } = true;
+
+    /// <summary>
     /// How strongly to suppress skin-tone tinting on opaque overlay pixels (0–1), by fading the
     /// normal map's skin-color-influence channel under the overlay. 1 = overlays keep their authored
     /// color on any skin tone (but those pixels read slightly shinier, since the channel also softens
