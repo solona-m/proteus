@@ -37,7 +37,15 @@ public class BodyModCacheEntry
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    /// <summary>
+    /// Current config schema version. Bump whenever a STORED value has to be reinterpreted on load, and
+    /// add the step to <see cref="Migrate"/>. Note the property default below is this constant, not 1: a
+    /// brand-new config is stamped current and so never runs a migration written for settings it was
+    /// never saved with.
+    /// </summary>
+    public const int CurrentVersion = 2;
+
+    public int Version { get; set; } = CurrentVersion;
 
     public bool PluginEnabled { get; set; } = true;
 
@@ -55,11 +63,17 @@ public class Configuration : IPluginConfiguration
     public bool SkipUnchangedComposites { get; set; } = true;
 
     /// <summary>
-    /// Block-compress the baked output textures: BC5 for normals, BC7 for everything else. Cuts each
-    /// texture to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on disk and in VRAM. Off = uncompressed
-    /// B8G8R8A8 (byte-identical to legacy output).
+    /// Block-compress the baked output textures. Cuts each to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on
+    /// disk and in VRAM. Off = uncompressed B8G8R8A8 (byte-identical to legacy output).
+    /// <para/>
+    /// BC7, not BC5, for every SKIN channel — the skin normal carries data in its B/A channels too, and
+    /// BC5 is two-channel, so it would corrupt them (see CompositorService's blend loop). The shell path
+    /// is narrower: BC5 for its normal only when that normal's blue is uniformly opaque (blue is the gear
+    /// transparency gate, so there is nothing to lose at 255), BC7 otherwise, and the index texture is
+    /// never compressed at all — its red/green encode discrete colour-table row selectors, where any
+    /// lossy error crosses a bucket boundary and picks the wrong row.
     /// </summary>
-    public bool EnableCompression { get; set; } = true;
+    public bool EnableCompression { get; set; } = false;
 
     /// <summary>
     /// Render shell coverage as a HARD alpha-test cutout (g_AlphaThreshold left at the template's 0) instead
@@ -299,7 +313,27 @@ public class Configuration : IPluginConfiguration
     }
 
     public void Initialize(IDalamudPluginInterface pluginInterface)
-        => pluginInterface.SavePluginConfig(this);
+    {
+        Migrate();
+        pluginInterface.SavePluginConfig(this);
+    }
+
+    /// <summary>
+    /// Carry a config written by an older build forward. Runs once at load, before any service reads a
+    /// setting, and <see cref="Initialize"/> saves the result — so each step applies exactly once.
+    /// </summary>
+    private void Migrate()
+    {
+        // v1 -> v2: block compression is no longer on by default. Changing the property default reaches
+        // only NEW configs, so without this every user who had already run the plugin would have stayed
+        // on BC7 permanently. Forced off rather than left to the default, because the point is to move
+        // existing users off it. Their baked output is not stranded: the encoding is part of each
+        // texture's content tag (CompositorService's encSalt), so the names change and the next
+        // composite rebakes uncompressed rather than re-approving the old compressed files.
+        if (Version < 2) EnableCompression = false;
+
+        Version = CurrentVersion;
+    }
 
     public void Save()
         => Plugin.PluginInterface.SavePluginConfig(this);

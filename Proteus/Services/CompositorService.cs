@@ -1134,8 +1134,16 @@ public class CompositorService : IDisposable
                 {
                     _activeMtrlSnapshot = fresh;
                     _activeMtrlSnapshotDirty = false;
-                    config.CachedActiveMaterialPaths = fresh.ToList();
-                    config.Save();
+                    // Under the lock like every other off-thread save: Save() serializes the WHOLE
+                    // Configuration, so an unsynchronized one here can throw "collection was modified"
+                    // while IsBodyMod mutates KnownBodyMods on its own thread. Nothing catches that, and
+                    // Recomposite is below — so the composite this trigger exists to run would be dropped
+                    // outright, with no log line to say it happened.
+                    lock (_bodyModConfigLock)
+                    {
+                        config.CachedActiveMaterialPaths = fresh.ToList();
+                        config.Save();
+                    }
                 }
             }
             Recomposite(token, force);
