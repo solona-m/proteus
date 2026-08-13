@@ -191,6 +191,15 @@ public class CompositorService : IDisposable
     // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by IsBodyMod
     // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
     private readonly object _bodyModConfigLock = new();
+
+    /// <summary>
+    /// Save the plugin config under the same lock the off-thread body-mod classifier uses. Callers on
+    /// the framework thread need this too: <c>Save()</c> serializes the WHOLE Configuration, so a bare
+    /// call can serialize <see cref="Configuration.KnownBodyMods"/> while IsBodyMod is mutating it —
+    /// the exact race <see cref="_bodyModConfigLock"/> exists for.
+    /// </summary>
+    public void SaveConfig() { lock (_bodyModConfigLock) config.Save(); }
+
     // Mods already told (this session) that their skin Glow now renders as a cloth layer. The promotion
     // itself is recomputed every composite, so without this the notice would repeat on every run.
     // Concurrent because two composites genuinely overlap (see _compositesInFlight) and both walk the
@@ -225,6 +234,22 @@ public class CompositorService : IDisposable
     private int _bootComposited;      // 1 once the boot composite has fired this login; reset on logout
     private int _bootProbeRunning;    // one off-thread discovery check at a time
     private long _lastBootPollTick;
+
+    /// <summary>
+    /// Withholds the boot composite while <c>DesignBindingService</c> decides whether the character is
+    /// still wearing a bound design. Its colour/gear/stack overrides are part of the composite's inputs
+    /// (see BuildCompositeFingerprint), so a composite that runs before they are published paints
+    /// metadata colours and then has to be redone — two full pipelines and two redraws per load.
+    /// <para/>
+    /// Defaults to TRUE, released by Plugin's constructor when no boot restore was armed. It cannot
+    /// default to false and be raised by DesignBindingService instead: that service is constructed
+    /// AFTER this one, and the plugin constructor does not run on the framework thread, so a tick could
+    /// slip between the two and fire the boot composite before the hold was ever taken.
+    /// <para/>
+    /// Every release path in DesignBindingService.FinishBootRestore is unconditional — adopt, abstain,
+    /// disable and timeout all release it — so a composite always happens.
+    /// </summary>
+    public volatile bool BootCompositeHold = true;
     private volatile bool _disposed;  // set in Dispose so an in-flight probe task bails
 
     /// <summary>
@@ -364,6 +389,10 @@ public class CompositorService : IDisposable
             Volatile.Write(ref _bootComposited, 0);
             return;
         }
+        // Checked after the logout re-arm above (so re-arming still works) and before the latch below
+        // (so the release doesn't have to race it): the design-binding boot restore owes us its
+        // overrides before the first composite reads them.
+        if (BootCompositeHold) return;
         if (Volatile.Read(ref _bootComposited) == 1) return;        // already composited this login
         if (!config.PluginEnabled || !penumbra.IsAvailable) return; // wait for Penumbra IPC
 
@@ -607,6 +636,10 @@ public class CompositorService : IDisposable
         // Now that the mod directory is resolvable, make sure the bundled starter effects are present.
         discovery.SeedDefaultEffects();
         if (!config.PluginEnabled) return;
+        // Same hold as OnBootPoll: at game boot this can fire while the design-binding restore is still
+        // waiting for the player, and compositing without its overrides means doing the whole pipeline
+        // twice. OnBootPoll picks it up once the hold releases.
+        if (BootCompositeHold) return;
         // Only trigger if discovery already sees mods. PenumbraReady can fire before Penumbra's
         // mod settings are readable; if discovery returns empty we'd wipe the existing output.
         // Leave previous-session files intact — ModSettingChanged/ModAdded will fire the first

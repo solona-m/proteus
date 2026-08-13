@@ -555,4 +555,113 @@ public class DesignBindingTests
         };
         Assert.Equal(present, DesignBindingService.PickMostRecent(new[] { missing, present }, bindings));
     }
+
+    // ── BootIdStillApplies (boot restore, step 1) ──────────────────────────────
+
+    [Fact]
+    public void BootIdStillApplies_RememberedDesignStillWorn_IsTrue()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var state  = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        Assert.True(DesignBindingService.BootIdStillApplies(design, state));
+    }
+
+    [Fact]
+    public void BootIdStillApplies_DesignDeletedFromGlamourer_IsFalse()
+    {
+        // GetDesignCached returns null for a design that no longer exists, and a remembered id we
+        // cannot verify must never be adopted on trust.
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        Assert.False(DesignBindingService.BootIdStillApplies(null, state));
+    }
+
+    [Fact]
+    public void BootIdStillApplies_CharacterChangedWhileUnloaded_IsFalse()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var state  = State(("Head", 1), ("Body", 2), ("Hands", 7)); // hands differ
+        Assert.False(DesignBindingService.BootIdStillApplies(design, state));
+    }
+
+    // ── StripCarriers ─────────────────────────────────────────────────────────
+
+    // Glamourer packs a bonus item as (type << 48) | row id; Glasses is type 2, so carrier row 1 is
+    // 562949953421313 — the value observed in the field.
+    private const ulong CarrierGlassesRow    = 1;
+    private const ulong CarrierGlassesPacked = (2UL << 48) | CarrierGlassesRow;
+    // What an empty Glasses slot actually reads as in a live state — the value from the field log.
+    private const ulong NoGlasses = 844424946909184;
+
+    [Fact]
+    public void StripCarriers_DesignThatCapturedOurGlasses_MatchesAStateWithoutThem()
+    {
+        // The design was saved while the shell was hosted, so it demands our carrier facewear. By the
+        // time the boot restore verifies, Dispose has taken it off — and that slot is our doing, not
+        // the player's, so it must not decide the match.
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", CarrierGlassesPacked);
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", NoGlasses);                      // carrier already removed
+
+        Assert.False(Matches(design, state));                        // the bug
+
+        var stripped = DesignBindingService.StripCarriers(design, CarrierGlassesRow, null);
+        Assert.True(Matches(stripped, state));
+    }
+
+    [Fact]
+    public void StripCarriers_LeavesBonusItemsThatArentOurs()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(design, "Glasses", (2UL << 48) | 47);              // a real pair the player chose
+        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
+        WithBonus(state, "Glasses", NoGlasses);
+
+        var stripped = DesignBindingService.StripCarriers(design, CarrierGlassesRow, null);
+        Assert.False(Matches(stripped, state));                      // still a criterion
+    }
+
+    [Fact]
+    public void StripCarriers_RemovesTheCarrierRingFromTheDesign()
+    {
+        const ulong ring = 9295;
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", ring, true));
+        var state  = State(("Head", 1), ("Body", 2), ("Hands", 3));  // ring already removed
+
+        Assert.False(Matches(design, state));
+
+        var stripped = DesignBindingService.StripCarriers(design, null, ring);
+        Assert.True(Matches(stripped, state));
+    }
+
+    [Fact]
+    public void CarrierStillWornAtBoot_StateIsZeroedNotStripped()
+    {
+        // The carrier ring is still equipped at load (a crash, or a Dispose removal that hasn't landed)
+        // and the design saved an EMPTY right ring, which Glamourer stores as ItemId 0 + Apply. The state
+        // must be neutralized by ZEROING our ring, the way the boot restore does it: removing the slot
+        // instead would leave the design carrying RFinger with nothing on the state side to compare, and
+        // the match would fail on a slot that is entirely Proteus's doing.
+        const ulong ring = 9295;
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true), ("RFinger", 0, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", ring));
+
+        Assert.False(Matches(design, worn));                                   // our ring, unneutralized
+
+        var zeroed = DesignBindingService.NeutralizeProteusOwnedState(worn, null, ring);
+        Assert.True(Matches(design, zeroed));                                  // what the boot path does
+
+        // Stripping the state instead is the regression this guards: the slot vanishes and the design's
+        // RFinger has nothing to compare against.
+        var strippedState = DesignBindingService.StripCarriers(worn, null, ring);
+        Assert.False(Matches(design, strippedState));
+    }
+
+    [Fact]
+    public void StripCarriers_NoCarrierPresent_ReturnsTheSameInstance()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        Assert.Same(design, DesignBindingService.StripCarriers(design, CarrierGlassesRow, 9295));
+    }
 }

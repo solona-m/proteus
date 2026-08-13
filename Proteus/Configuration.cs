@@ -171,6 +171,20 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoEmperorRing { get; set; } = true;
 
+    /// <summary>
+    /// The Glamourer design whose Proteus binding was active when the plugin last ran, so a reload can
+    /// pick it back up — Glamourer raises no apply signal for a design that is ALREADY applied, so
+    /// without this the overrides stay null and the first composite paints metadata colours over a
+    /// design the player is still visibly wearing. Null = nothing was active (a revert, or an explicit
+    /// clear), which must stay cleared across the reload.
+    /// <para/>
+    /// Restored only after verifying it still matches live Glamourer state — see
+    /// <c>DesignBindingService.TryBootRestore</c>. It lives here rather than in design_bindings.json
+    /// because it is rewritten on every apply and every revert, and that file reaches tens of MB and is
+    /// serialized under the binding lock.
+    /// </summary>
+    public Guid? LastActiveDesignId { get; set; } = null;
+
     /// <summary>Optional explicit path to Glamourer's designs directory; null = derive from the config dir.</summary>
     public string? GlamourerDesignDirOverride { get; set; } = null;
 

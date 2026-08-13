@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 339;
+    public const int BuildNumber = 343;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -142,11 +142,21 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Open the Proteus overlay compositor status window.",
         });
 
-        // Recomposite on startup only if Penumbra's mod list is already readable.
-        // At early load GetPlayerCollectionId() returns null and discovery returns empty,
-        // which would wipe the existing output. OnPenumbraReady handles the normal boot
-        // path; this covers plugin-reload where PenumbraReady won't fire again.
-        if (config.PluginEnabled && penumbra.IsAvailable && discovery.DiscoverEnabled().Count > 0)
+        // The boot composite is held from CompositorService's construction (see BootCompositeHold) so
+        // the design-binding boot restore can publish its overrides before the first composite reads
+        // them. Nothing armed a restore → nothing to wait for, release it now.
+        if (!designBindings.BootRestoreArmed)
+            compositor.BootCompositeHold = false;
+
+        // Recomposite on startup only if Penumbra's mod list is already readable, and only when nothing
+        // holds the boot composite — a composite that ran before the overrides landed would paint
+        // metadata colours and have to be redone, i.e. two multi-second pipelines and two redraws per
+        // load. At early load GetPlayerCollectionId() returns null and discovery returns empty, which
+        // would wipe the existing output. OnPenumbraReady handles the normal boot path; this covers
+        // plugin-reload where PenumbraReady won't fire again (and OnBootPoll covers the held case,
+        // once FinishBootRestore releases it).
+        if (config.PluginEnabled && penumbra.IsAvailable && !compositor.BootCompositeHold
+            && discovery.DiscoverEnabled().Count > 0)
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
