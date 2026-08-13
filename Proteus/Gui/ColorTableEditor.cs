@@ -91,7 +91,9 @@ public static class ColorTableEditor
                 "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow scales it.\n" +
                 "Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
         if (effects.Count == 0)
-            ImGui.TextDisabled("No effects found — drop images into the Effects library (Settings),\nor the mod's Proteus/Effects/ folder.");
+            // Names the Settings button verbatim: this is the exact moment someone needs that folder, so
+            // the message has to point at a control they can actually find on screen.
+            ImGui.TextDisabled("No effects found — drop images into the folder the Glow Effect Textures\nbutton opens (Settings), or the mod's own Proteus/Effects/ folder.");
 
         // Scroll speed / tiling — only meaningful once glowing.
         if (mode == RenderMode.Glow)

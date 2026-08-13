@@ -410,20 +410,28 @@ public class StatusWindow : Window
                 "isn't showing up — e.g. you re-exported an overlay at the same size and the\n" +
                 "change won't appear without restarting the plugin.");
 
-        // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure.
+        // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
+        // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small
+        // "Open" tacked on the end; greyed text reads as status rather than a control, and "Open" next
+        // to a long absolute path is easy to miss entirely. Name it after what it holds instead, and
+        // keep the path in the tooltip — that line was the only place it was shown.
+        //
+        // Null means Penumbra's mod directory isn't available, so there is genuinely nothing to open.
+        // Otherwise EffectsLibraryPath has already created the folder, so this never opens nothing.
         var lib = discovery.EffectsLibraryPath();
         if (lib != null)
         {
-            ImGui.TextDisabled($"Effects library: {lib}");
+            ImGui.SameLine();
+            if (ImGui.Button("Glow Effect Textures"))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(lib) { UseShellExecute = true }); }
+                catch { /* no file manager — the path is in the tooltip anyway */ }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Drop scroll maps (the \"_o\" textures that ARE the animated glow) in here and\n" +
-                                 "they appear in every gear overlay's Effect dropdown.\n" +
+                ImGui.SetTooltip("Open the folder Proteus reads animated-glow scroll maps from — the \"_o\"\n" +
+                                 "textures that ARE the glow. Anything dropped in here appears in every\n" +
+                                 "gear overlay's Effect dropdown.\n\n" +
+                                 $"{lib}\n\n" +
                                  "Accepts .tex, .dds, .png, .jpg, .bmp, .tga, .psd and .gif.\n" +
                                  "A mod's own Proteus/Effects/ folder takes precedence over it.");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Open"))
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(lib) { UseShellExecute = true }); }
-                catch { /* no file manager — the path is shown anyway */ }
         }
 
         // Skin-tint suppression strength (global multiplier). The per-pixel amount is weighted by

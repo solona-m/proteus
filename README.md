@@ -73,12 +73,11 @@ Texture slots the chosen material can't actually use are greyed out.
 | Texture cache (MB) | How much decoded texture data to keep in memory between composites. |
 | Hide Connector Meshes | Skips a body's joint reinforcement rings on the second skin. Only needed for Neolithe. |
 
-Two buttons here are worth knowing about:
+Three buttons here are worth knowing about:
 
 - **Restore changed accessory** — forces a full redraw if a second skin ever gets stuck on a ring or bracelet after disabling or swapping.
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
-
-The **Effects library** path is also shown here. Drop scroll maps in it and they appear in every gear overlay's Effect dropdown.
+- **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
 
 ### Color Editor
 
