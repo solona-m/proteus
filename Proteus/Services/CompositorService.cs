@@ -3901,6 +3901,10 @@ public class CompositorService : IDisposable
             // each reconcile below is driven by where the shell went, not by the feature toggle alone.
             bool shellOnFacewear = false;
             string? shellRingSlot = null;   // "rir"/"ril" when the shell went to the Emperor's ring
+            // The shell's own model + material game paths, checked against Penumbra's resolver once the
+            // publish has landed. See VerifyShellLive: publishing a host path is not the same as WINNING
+            // it, and every other signal we log reports success either way.
+            List<string> shellVerifyPaths = [];
             var tGear = PhaseCounter.Begin();
             if (gearOverlays.Count > 0)
             {
@@ -4052,6 +4056,11 @@ public class CompositorService : IDisposable
                             glassesPreHosted = invisibleGlassesSet is int && metModels.Count == 0;
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
+                            // Models and materials only — the textures hang off the materials, so if those
+                            // two resolve to us the rest follows, and listing every ss_*.tex would bury it.
+                            shellVerifyPaths = [.. shells.Redirects.Keys.Where(k =>
+                                k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+                             || k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))];
                             manipulations = shells.Manipulations;
                             _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
@@ -4078,7 +4087,24 @@ public class CompositorService : IDisposable
                             bool hostsChanged = !hostPaths.SetEquals(_lastShellHostPaths);
                             _lastShellHostPaths = hostPaths;
 
-                            _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged;
+                            // A FORCED trigger that produced NO change at all is the user pressing
+                            // recomposite and getting byte-identical output. That is precisely the state an
+                            // in-place reload cannot repair: it never re-fetches an accessory .mdl, so a
+                            // shell whose host model the game has not reloaded since we redirected it stays
+                            // invisible, every retry is another no-op, and the manual button they are
+                            // reaching for is the one thing guaranteed not to help.
+                            //
+                            // Gated on "nothing changed" rather than on `force` alone: a colorset edit is
+                            // also forced, and treating THAT as a new model is what used to cost a redraw
+                            // and its flicker on every colour change (see above). Here there is nothing to
+                            // flicker away from — the output is identical either way.
+                            bool nothingChanged = !shells.ModelChanged && !shapesChanged && !hostsChanged
+                                               && !shells.ShellChanged;
+                            _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
+                                           || (force && nothingChanged);
+                            if (force && nothingChanged)
+                                log.Debug("[Proteus] second skin unchanged on a forced composite — redrawing "
+                                        + "anyway, since an in-place reload can't reload a host accessory");
                             if (shells.ModelChanged)
                                 log.Debug("[Proteus] second skin model changed — forcing a full redraw");
                             else if (shapesChanged)
@@ -4144,6 +4170,8 @@ public class CompositorService : IDisposable
             // at the top of the NEXT one, by which point the reload below has long since landed. See
             // PruneSupersededOutput for why an immediate prune could not be made safe.
             ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
+
+            VerifyShellLive(shellVerifyPaths);
 
             // Published: from here the manifest on disk is the output of exactly these inputs, so an ambient
             // trigger that hashes to the same thing has nothing to do. Set only on this path — a cancelled or
@@ -4464,6 +4492,44 @@ public class CompositorService : IDisposable
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         try { return Path.GetFullPath(path); } catch { return null; }
+    }
+
+    /// <summary>
+    /// After publishing, ask Penumbra what it ACTUALLY resolves each shell path to, and say so.
+    ///
+    /// A shell hosted on a worn accessory publishes to a path the player's own mods can claim as well —
+    /// "[neo] Mine" redirecting chara/accessory/a0016/model/c0201a0016_nek.mdl is the ordinary case, not
+    /// an exotic one. Penumbra settles that by mod priority, and if we lose, NOTHING else we log notices:
+    /// the shell builds, the manifest publishes, the reload succeeds, the redraw fires, and the character
+    /// renders the other mod's necklace with no suit on it. Every line reads healthy.
+    ///
+    /// Cheap (one IPC per model/material, a handful per composite) and it converts that silent loss into
+    /// the one message that names the winning file — which is also the fix, since the answer is to raise
+    /// the managed mod's priority above whatever owns the path.
+    /// </summary>
+    private void VerifyShellLive(IReadOnlyList<string> gamePaths)
+    {
+        if (gamePaths.Count == 0) return;
+
+        int lost = 0;
+        foreach (var gamePath in gamePaths)
+        {
+            var disk = penumbra.ResolvePlayer(gamePath);
+            // Unredirected resolves echo the game path straight back, which is a loss too: it means our
+            // entry is not in the winning collection at all, not that the file is vanilla-but-fine.
+            bool ours = disk != null
+                     && !string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase)
+                     && IsOwnOutput(disk);
+            if (ours) continue;
+
+            lost++;
+            log.Warning("[Proteus] shell NOT live: {0} resolves to {1} — another mod wins this path, so the "
+                      + "shell cannot render. Raise the Proteus managed mod's priority in Penumbra above "
+                      + "the mod that owns it.", gamePath, disk ?? "(nothing)");
+        }
+
+        if (lost == 0)
+            log.Debug("[Proteus] shell live: all {0} model/material path(s) resolve to our output", gamePaths.Count);
     }
 
     /// <summary>
