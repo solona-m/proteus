@@ -27,6 +27,14 @@
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- CI builds against the Dalamud STAGING SDK (test.yml downloads dalamud-distrib/stg/latest),
+         which escalates warnings to errors; a local build uses whatever sits in Hooks/dev and does
+         not. That gap let six warnings accumulate here and only surface as a red build on push, with
+         nothing to reproduce them locally. Escalating here closes it: the same warning now fails at
+         your desk, before the commit, on the same machine that can fix it. Deliberately NOT set in
+         Proteus.Tests.csproj — a test project's warnings are its own business and blocking `dotnet
+         test` on one helps nobody. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Dalamud plugin manifest -->
     <Name>Proteus</Name>
     <Author>Solona</Author>
