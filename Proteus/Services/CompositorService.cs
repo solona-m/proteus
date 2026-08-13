@@ -2292,6 +2292,15 @@ public class CompositorService : IDisposable
             int texturesPatched = 0;
             // Accumulated across the parallel per-material loop; published to _skinGlowTargets after it.
             var skinGlow = new ConcurrentDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>();
+            // Same, for ChannelContributions — what each material's channels actually received, as opposed to
+            // which of them got a redirect published. Touched carries the passes that edit a buffer without
+            // being an overlay (AO, skin-tint suppression), so a material those alone reached reads as worked
+            // on rather than as an all-zero row.
+            //
+            // Keyed by material rather than a bag: there are two Add sites (the no-textures bail and the end
+            // of the loop), so "one entry per material" is worth making structural instead of relying on the
+            // two staying mutually exclusive.
+            var contributions = new ConcurrentDictionary<string, ChannelContribution>(StringComparer.OrdinalIgnoreCase);
 
             // Output filenames carry a CONTENT hash, not a per-run id — see ContentTag for why. Changed
             // bytes still get a new path (the cache miss the old GUID existed for); unchanged bytes keep
@@ -2559,6 +2568,12 @@ public class CompositorService : IDisposable
 
             var tSetupEnd = PhaseCounter.Begin();
 
+            // Drop the previous run's answers BEFORE producing this run's. Every cancellation check below sits
+            // between here and the assignment after the loop, so without this a cancelled composite would
+            // leave the panel showing a full, plausible set of contributions for a composite that no longer
+            // describes the character. Empty reads as "no answer yet", which is the truth.
+            _channelContributions = [];
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -2776,11 +2791,79 @@ public class CompositorService : IDisposable
                 if (texPaths.Diffuse == null && texPaths.Normal == null && texPaths.Mask == null)
                 {
                     log.Warning("[Proteus] No textures found for material: {0}", mtrlGamePath);
+                    // Record it before bailing. This is the most broken a material can be, and leaving it out
+                    // of the panel meant the rows most worth seeing were the ones that never appeared.
+                    contributions[mtrlGamePath] = new ChannelContribution(mtrlGamePath, 0, 0, 0,
+                        DiffuseWanted: pairs.Any(p => p.Overlay.Descriptor.Diffuse != null), Touched: false);
                     return;
                 }
 
                 byte[]? baseD = null, baseN = null, baseM = null;
                 int wD = 0, hD = 0, wN = 0, hN = 0, wM = 0, hM = 0;
+
+                // Whether the base diffuse has been ASKED for yet, which is not the same question as whether
+                // baseD is null: a failed load leaves Array.Empty behind, which is non-null. Several sites
+                // used to load this buffer with slightly different guards — `baseD == null` in the overlay
+                // loop, in the Masks pass and in the disabled tint block, `baseD == null || baseD.Length == 0`
+                // in the AO pass, so that one alone re-attempted a load that had already failed. They agree
+                // now because they all go through EnsureBaseDiffuse below.
+                //
+                // Behaviourally this is a wash for the overlay loop — Array.Empty made the old guard skip the
+                // reload just as this does — but it is what lets the failure be reported ONCE per material
+                // instead of once per overlay, and it removes the triplicated load.
+                bool baseDTried = false;
+
+                // Whether an overlay actually BLENDED into each buffer, as opposed to the buffer merely
+                // existing. The publish block below used to key off "buffer is non-empty", which is true the
+                // moment a base texture decodes — so a composite that applied nothing and one that applied
+                // everything produced identical logs and identical redirects. Content-hashed output names make
+                // that indistinguishable on disk too (unchanged bytes keep their name). These are locals on a
+                // single material's task inside the Parallel.ForEach, so a plain bool is the right tool.
+                //
+                // Deliberately "a blend pass RAN", not "the bytes changed". A fully transparent overlay still
+                // sets the flag and still publishes a copy of the base — provably a no-op, since
+                // ApplyFlatOverlay skips zero-alpha pixels. Proving the stronger claim means hashing the base
+                // before and after, a second full pass over a buffer up to 4096×4096, to catch a fault nobody
+                // has reported. The question this answers is "did an overlay reach this channel at all", which
+                // is the one that was unanswerable.
+                bool diffuseBlended = false, normalBlended = false, maskBlended = false;
+                int diffuseContributors = 0, normalContributors = 0, maskContributors = 0;
+
+                // At least one overlay on this material ASKED for a diffuse. Paired with a zero contributor
+                // count that is the whole reported fault — the author meant to paint the skin and nothing
+                // reached it — and it is the one combination worth colouring red in the UI.
+                bool diffuseWanted = false;
+
+                // The "this material has no diffuse sampler" warning is about the MATERIAL, so it says the
+                // same thing however many overlays trip it. Ten overlays on one body used to mean ten
+                // identical lines, on every equipment change and every zone.
+                bool warnedNoDiffuseSampler = false;
+
+                // Load the material's base diffuse at most once, remembering a failure so no later overlay or
+                // pass re-attempts it. Returns the buffer, or null when there is nothing to composite onto —
+                // a buffer rather than a bool because the compiler cannot carry a captured local's
+                // nullability across a local-function call, and `baseD!` at every use is a worse answer.
+                byte[]? EnsureBaseDiffuse()
+                {
+                    if (baseDTried) return baseD is { Length: > 0 } ? baseD : null;
+                    baseDTried = true;
+                    if (texPaths.Diffuse == null) { baseD = Array.Empty<byte>(); return null; }
+
+                    var diffDisk = ResolveUpstream(texPaths.Diffuse);
+                    var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                    if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                    baseD ??= Array.Empty<byte>();
+
+                    // A skin mod's paths are invented (chara/bibo_mid_base.tex is in no game index), so there
+                    // is no SqPack fallback behind a failed upstream resolve: this is the whole diffuse for
+                    // the whole material, gone, and it used to go without a word.
+                    if (baseD.Length == 0)
+                        log.Warning("[Proteus] Base diffuse failed to load for {0}: {1} resolved to {2} — no "
+                                  + "diffuse can be composited onto this material",
+                            mtrlGamePath, texPaths.Diffuse, diffDisk ?? "(nothing)");
+
+                    return baseD.Length > 0 ? baseD : null;
+                }
 
                 // Captured per mod as the loop below runs, for the Masks-driven relief pass
                 // afterwards (masks are mod-level, not tied to one overlay descriptor).
@@ -2963,6 +3046,10 @@ public class CompositorService : IDisposable
 
                     lastSrcBodyTypeByMod[entry.ModDirectory] = srcBodyType;
 
+                    // How this overlay is named in the diagnostics below. Both halves are nullable — an
+                    // overlay in a mod's default data belongs to no group and no option.
+                    var optLabel = $"{resolved.OptionGroup ?? "(default)"}/{resolved.Option ?? "(default)"}";
+
                     byte[]? diffuseOv = null;
                     byte[]? normalOv  = null;
 
@@ -2974,16 +3061,26 @@ public class CompositorService : IDisposable
                     int covW = 0, covH = 0;
 
                     // ── Step 1: load diffuse overlay (establishes coverage) ───
+                    // The material having no diffuse SAMPLER is a different failure from the overlay art not
+                    // loading, and it is the quieter of the two: the guard below is an AND, so a body material
+                    // with no diffuse/ColorMap0 sampler skips this block entirely, Step 2 synthesizes coverage
+                    // off the normal, and the normal composites perfectly while the diffuse silently cannot.
+                    // The all-three-null case warns above; this one had nothing, even though the exactly
+                    // analogous mask-only case has warned for ages.
+                    if (desc.Diffuse != null) diffuseWanted = true;
+
+                    if (desc.Diffuse != null && texPaths.Diffuse == null && !warnedNoDiffuseSampler)
+                    {
+                        warnedNoDiffuseSampler = true;
+                        log.Warning("[Proteus] Overlay declares a diffuse but the material has no diffuse "
+                                  + "sampler, so it cannot be painted onto the skin: {0} (first seen on mod "
+                                  + "{1}, {2}) — set the overlay to Cloth to render it on a gear shell instead",
+                            mtrlGamePath, entry.ModDirectory, optLabel);
+                    }
+
                     if (desc.Diffuse != null && texPaths.Diffuse != null)
                     {
-                        if (baseD == null)
-                        {
-                            var diffDisk = ResolveUpstream(texPaths.Diffuse);
-                            var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                            baseD ??= Array.Empty<byte>();
-                        }
-                        if (baseD.Length > 0)
+                        if (EnsureBaseDiffuse() != null)
                         {
                             var diffPath = Path.Combine(entry.SidecarRoot, desc.Diffuse);
                             diffuseOv = RemapIfNeeded(LoadPng(diffPath, wD, hD), wD, hD, srcBodyType, diffPath);
@@ -2993,6 +3090,15 @@ public class CompositorService : IDisposable
                                 // in the block below, so the user's transparency slider always scales
                                 // the mask result rather than the mask overriding the slider.
                                 covSrc = diffuseOv; covW = wD; covH = hD;
+                            }
+                            else
+                            {
+                                // RemapIfNeeded only ever returns null when its INPUT is null, so this is
+                                // precisely a LoadPng failure. TextureLoader does log it — unprefixed, and
+                                // cached, so it appears once per session and vanishes from a filtered log.
+                                log.Warning("[Proteus] Overlay diffuse failed to load: {0} (mod {1}, {2}) — "
+                                          + "the skin diffuse is left untouched",
+                                    diffPath, entry.ModDirectory, optLabel);
                             }
                         }
                     }
@@ -3054,7 +3160,16 @@ public class CompositorService : IDisposable
                         log.Warning("[Proteus] Mask-only overlay but material has no mask texture: {0}", mtrlGamePath);
                     }
 
-                    if (covSrc == null) continue; // no coverage — nothing to composite
+                    if (covSrc == null)
+                    {
+                        // Nothing to composite — but "this overlay contributed nothing at all" is a real
+                        // outcome, not a non-event, and it used to leave no trace whatsoever. Every art
+                        // source either was not declared or failed to load; the specific reason has already
+                        // been warned about above if there was one.
+                        log.Debug("[Proteus] No coverage for {0} on {1} ({2}) — overlay contributes nothing",
+                            entry.ModDirectory, mtrlGamePath, optLabel);
+                        continue;
+                    }
 
                     // ── Per-mod transparency masks + opacity ─────────────────
                     // diffuseOv is consumed directly by Phase A, so apply mask and opacity here.
@@ -3196,34 +3311,49 @@ public class CompositorService : IDisposable
                             else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
                         }
                         else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                        diffuseBlended = true; diffuseContributors++;
+                    }
+                    else if (desc.Diffuse == null && normalOv != null)
+                    {
+                        // Deliberate, per the disabled synthesis below — but indistinguishable in the log from
+                        // a diffuse that was MEANT to apply and failed, which is exactly the report this came
+                        // from ("the normal applies, but they see the base skin diffuse"). Say which it is.
+                        log.Debug("[Proteus] Normal-only overlay {0} ({1}) on {2} — skin diffuse left "
+                                + "untouched by design",
+                            entry.ModDirectory, optLabel, mtrlGamePath);
                     }
                     // Normal-only (and mask-only) overlays no longer synthesize a diffuse tint: the author
                     // wants just the normal (and any mask) applied, leaving the skin diffuse untouched. The
                     // Row-16-colour synthesis below is disabled per request — kept for reference.
+                    //
+                    // Kept CURRENT rather than frozen, because dead code that no longer compiles against the
+                    // live invariants is a trap for whoever revives it: it goes through EnsureBaseDiffuse like
+                    // every other load site, and it sets diffuseBlended, without which the writer's gate would
+                    // compute the tint correctly and then discard the whole buffer.
                     /*
                     else if (desc.Diffuse == null && normalOv != null && texPaths.Diffuse != null && desc.GenerateDiffuse)
                     {
                         // Normal-only overlay: apply synthesized tint (Row 16 color) to the diffuse
                         // channel. Skipped when GenerateDiffuse is false — the author wants the normal
                         // (and any mask) applied without altering the skin diffuse.
-                        if (baseD == null)
-                        {
-                            var diffDisk = ResolveUpstream(texPaths.Diffuse);
-                            var loaded   = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                            if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                            baseD ??= Array.Empty<byte>();
-                        }
-                        if (baseD.Length > 0)
+                        if (EnsureBaseDiffuse() is { } tintBaseD)
                         {
                             var tint = CovAt(wD, hD);
-                            if (tint != null) ApplyFlatOverlay(baseD, tint, row16A, wD, hD);
+                            if (tint != null)
+                            {
+                                ApplyFlatOverlay(tintBaseD, tint, row16A, wD, hD);
+                                diffuseBlended = true; diffuseContributors++;
+                            }
                         }
                     }
                     */
 
                     // ── Phase B: normal composite ─────────────────────────────
                     if (normalOv != null && baseN is { Length: > 0 })
+                    {
                         CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
+                        normalBlended = true; normalContributors++;
+                    }
 
                     // ── Phase B2: suppress skin-color influence under the overlay ──
                     // skin.shpk reads the normal map's BLUE channel as "skin color influence":
@@ -3252,6 +3382,10 @@ public class CompositorService : IDisposable
                                     ? (wD == wN && hD == hN ? baseD : textureLoader.ScaleRgba(baseD, wD, hD, wN, hN))
                                     : null;
                                 SuppressSkinColorInfluence(baseN, scMask, diffAtN, wN, hN, skinMask);
+                                // A real rewrite of the normal buffer, even for a diffuse-only overlay that
+                                // never reached Phase B — so the normal is genuinely ours to publish. Not a
+                                // contributor bump: it is the same overlay Phase B already counted.
+                                normalBlended = true;
                             }
                         }
                     }
@@ -3269,7 +3403,11 @@ public class CompositorService : IDisposable
                         {
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = RemapIfNeeded(LoadPng(maskPathD, wM, hM), wM, hM, srcBodyType, maskPathD);
-                            if (ov != null) AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
+                            if (ov != null)
+                            {
+                                AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
+                                maskBlended = true; maskContributors++;
+                            }
                         }
                     }
                 }
@@ -3355,14 +3493,7 @@ public class CompositorService : IDisposable
                     if (!assets.Any(a => a.IndexPath != null)) continue;
                     lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
 
-                    if (baseD == null)
-                    {
-                        var diffDisk = ResolveUpstream(texPaths.Diffuse);
-                        var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
-                        if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                        baseD ??= Array.Empty<byte>();
-                    }
-                    if (baseD.Length == 0) continue;
+                    if (EnsureBaseDiffuse() is not { } maskBaseD) continue;
 
                     // Combine the masks into ONE coverage (paint alpha) + ONE _id, top-territory-wins. Bottom
                     // masks first so the top one (assets are highest-priority-first) lands last and overrides.
@@ -3405,7 +3536,8 @@ public class CompositorService : IDisposable
                             art[i + 3] = cov[i >> 2];
                         }
                     });
-                    ApplyIndexedOverlay(baseD, art, cid, maskRows, false, wD, hD);
+                    ApplyIndexedOverlay(maskBaseD, art, cid, maskRows, false, wD, hD);
+                    diffuseBlended = true; diffuseContributors++;
 
                     // Glow row-map from the same combined coverage + _id. 0 = no glow (hole/outside), else
                     // 0x80 | (A?0x40) | pairIdx — same format as overlays.
@@ -3457,6 +3589,42 @@ public class CompositorService : IDisposable
                     // from the body mesh — so they only describe a garment when the material being composited
                     // shares that UV space. See GarmentSilhouette, which gates gear the same way.
                     bool bodyUvMaterial = IsBodyUvMaterial(mtrlGamePath);
+
+                    // Qualify every mod ONCE, keeping the only flag the loop still needs (masks pick the
+                    // silhouette: a masked garment traces its trim, everything else its own coverage). The
+                    // Skin term walks allOverlays, so evaluating this per mod per use — the load gate, the
+                    // loop's continue, and the mask flag — swept it three times for nothing.
+                    //
+                    // This has to happen BEFORE the island precompute below, because that reads baseD and the
+                    // base is loaded off the back of this. It used to sit after, so on a material whose skin
+                    // overlays are all normal-only — nothing else having loaded the diffuse yet — the island
+                    // labelling was skipped and the AO shadow fell back to a plain blur that bleeds across the
+                    // UV gutter. AoSources is a local function, so it is usable above its definition.
+                    var aoQualified = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var modDir in aoModsList)
+                    {
+                        // Opt-IN: the user's explicit choice, else what the pack declared, else off.
+                        aoDeclaredBy.TryGetValue(modDir, out bool? declared);
+                        if (!config.AmbientOcclusionEnabledFor(modDir, declared)) continue;
+                        var (m, g, s) = AoSources(modDir);
+                        if (m || g || s) aoQualified[modDir] = m;
+                    }
+
+                    log.Debug("[Proteus] AO on {0}: strength={1:F3} normal={2:F4} softness={3:F4} — {4}/{5} mod(s) qualified [{6}]",
+                              mtrlGamePath, aoStrength, aoNormal, aoSoftness,
+                              aoQualified.Count, aoModsList.Count, string.Join(", ", aoQualified.Keys));
+
+                    // The base body diffuse — needed for the shadow, for the island precompute below, AND for
+                    // the shared "covered above" mask's dimensions, so load it up front even when only the
+                    // normal indent is enabled.
+                    //
+                    // Only when some mod actually qualifies, though. Loading it unconditionally left baseD
+                    // non-empty for every material this pass touched, and the writer at the end of the
+                    // composite used to republish (and re-encode) any non-empty buffer — so a face material
+                    // whose mod supplies nothing but a mask still got a Proteus-written, BC7-recompressed _d.
+                    // The diffuseBlended gate at the writer now catches that case generally; this stays as the
+                    // cheaper guard, since not loading at all beats loading and discarding.
+                    if (aoQualified.Count > 0) EnsureBaseDiffuse();
 
                     // The UV islands at the diffuse resolution: a 0/255 plane to tell body from padding, plus
                     // the per-island labelling BlurCoverageWithinIslands needs to keep each blur window on
@@ -3582,37 +3750,6 @@ public class CompositorService : IDisposable
                             && o.Overlay.Descriptor.Diffuse != null
                             && o.Overlay.Descriptor.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase)));
 
-                    // Qualify every mod ONCE, keeping the only flag the loop still needs (masks pick the
-                    // silhouette: a masked garment traces its trim, everything else its own coverage). The
-                    // Skin term walks allOverlays, so evaluating this per mod per use — the load gate, the
-                    // loop's continue, and the mask flag — swept it three times for nothing.
-                    var aoQualified = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var modDir in aoModsList)
-                    {
-                        // Opt-IN: the user's explicit choice, else what the pack declared, else off.
-                        aoDeclaredBy.TryGetValue(modDir, out bool? declared);
-                        if (!config.AmbientOcclusionEnabledFor(modDir, declared)) continue;
-                        var (m, g, s) = AoSources(modDir);
-                        if (m || g || s) aoQualified[modDir] = m;
-                    }
-
-                    log.Debug("[Proteus] AO on {0}: strength={1:F3} normal={2:F4} softness={3:F4} — {4}/{5} mod(s) qualified [{6}]",
-                              mtrlGamePath, aoStrength, aoNormal, aoSoftness,
-                              aoQualified.Count, aoModsList.Count, string.Join(", ", aoQualified.Keys));
-
-                    // The base body diffuse — needed for the shadow AND for the shared "covered above" mask's
-                    // dimensions, so load it up front even when only the normal indent is enabled.
-                    //
-                    // Only when some mod actually qualifies, though. Loading it unconditionally left baseD
-                    // non-empty for every material this pass touched, and the writer at the end of the
-                    // composite republishes (and re-encodes) any non-empty buffer — so a face material whose
-                    // mod supplies nothing but a mask still got a Proteus-written, BC7-recompressed _d.
-                    if ((baseD == null || baseD.Length == 0) && texPaths.Diffuse != null && aoQualified.Count > 0)
-                    {
-                        var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Diffuse), texPaths.Diffuse);
-                        if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
-                    }
-
                     // Union of the opaque coverage of every garment ABOVE the one being processed: a lower
                     // garment's contact shadow / indent is suppressed where a higher garment already covers the
                     // skin. Process TOP→BOTTOM — gate each garment by what's accumulated, then add its own
@@ -3679,6 +3816,9 @@ public class CompositorService : IDisposable
                                                                 bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD, islandBlurCache)
                                     : BlurCoverage(strapD, wD, hD, radiusD);
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
+                                // AO is a real edit to the skin diffuse in its own right — a gear-layer mod
+                                // with no skin overlay at all still legitimately owns the buffer through it.
+                                diffuseBlended = true;
                             }
                         }
 
@@ -3769,6 +3909,18 @@ public class CompositorService : IDisposable
                 // Only distinguished when compressing, so a backend flip can't churn uncompressed output.
                 int encSalt = compress ? (TextureLoader.NativeEncoderAvailable ? 1 : 2) : 0;
 
+                // Nothing edited the diffuse — hand the buffer back exactly as the AO pass does for the normal
+                // above. Publishing it anyway meant redirecting the skin mod's own texture path at a BC7
+                // re-encode of its own pixels: lossy, pointless, and worst of all invisible, because a
+                // healthy-looking redirect is what a normal-only overlay and a BROKEN diffuse overlay both
+                // produced. Now the diffuse's absence from the redirects line below IS the signal.
+                if (!diffuseBlended && baseD is { Length: > 0 })
+                {
+                    log.Debug("[Proteus] Nothing composited into the diffuse of {0} — leaving the base texture "
+                            + "in place rather than republishing it", mtrlGamePath);
+                    baseD = null;
+                }
+
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
                     var name = baseName + "_" + ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion) + "_d.tex";
@@ -3777,7 +3929,8 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
+                        redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched);
+                        channels.Append(" diffuse(").Append(diffuseContributors).Append(')');
                         published.Add($"{texPaths.Diffuse} -> {relPath}");
 
                         // Publish the glow recipes captured during the diffuse phase, now that the on-disk
@@ -3798,7 +3951,8 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal");
+                        redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched);
+                        channels.Append(" normal(").Append(normalContributors).Append(')');
                         published.Add($"{texPaths.Normal} -> {relPath}");
                     }
                 }
@@ -3810,10 +3964,15 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask");
+                        redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched);
+                        channels.Append(" mask(").Append(maskContributors).Append(')');
                         published.Add($"{texPaths.Mask} -> {relPath}");
                     }
                 }
+
+                contributions[mtrlGamePath] = new ChannelContribution(mtrlGamePath,
+                    diffuseContributors, normalContributors, maskContributors,
+                    diffuseWanted, diffuseBlended || normalBlended || maskBlended);
 
                 if (channels.Length > 0)
                 {
@@ -3821,7 +3980,28 @@ public class CompositorService : IDisposable
                     log.Debug("[Proteus]   redirects: {0}", string.Join(" | ", published));
                 }
 
+                // The headline fault this instrumentation exists for, stated in one line rather than left to
+                // be inferred from a channel missing off a list. An overlay asked to paint the skin and not
+                // one pixel of it reached the diffuse; every specific reason has already been warned about
+                // above, so this is the summary that points at them.
+                if (diffuseWanted && !diffuseBlended)
+                    log.Warning("[Proteus] Nothing reached the diffuse of {0} although an overlay declared one "
+                              + "— the body will render its base skin colour (normal: {1}, mask: {2})",
+                        mtrlGamePath, normalBlended ? "applied" : "not applied", maskBlended ? "applied" : "not applied");
+
             });
+
+            // Filtered and sorted here, once per composite, so the status window can render it straight — that
+            // panel redraws every frame and has no business doing either.
+            //
+            // Inert rows are dropped at the source: the AO top-up pass adds the character's own body materials
+            // to the composite with no overlays attached, and those would render as "diffuse 0, normal 0,
+            // mask 0" — a line that looks like a fault and is nothing of the kind. A row survives if something
+            // reached it, or if something meant to.
+            _channelContributions = contributions.Values
+                .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
+                .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             LogPhaseBreakdown(tRunStart, tSetupEnd, byMaterial.Count);
 
@@ -4568,6 +4748,40 @@ public class CompositorService : IDisposable
     private static readonly TimeSpan PrimeNarrowTimeout = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
+    /// One body material's outcome on the last composite: how many overlays actually BLENDED into each
+    /// channel, whether any overlay asked for a diffuse, and whether a non-overlay pass (AO, skin-tint
+    /// suppression) edited a buffer.
+    /// <para/>
+    /// Two combinations carry the meaning. <c>DiffuseWanted &amp;&amp; Diffuse == 0</c> is the exact state behind
+    /// "the normal applies but I still see the base skin". <c>Touched</c> with no contributors at all is a
+    /// material only AO or skin-tint suppression reached — real work, but no overlay art, so it must not be
+    /// rendered as a bare row of zeros.
+    /// <para/>
+    /// The inert combination — nothing reached it and nothing meant to — is filtered out by
+    /// <see cref="ChannelContributions"/> and never reaches a caller, so don't branch on it.
+    /// </summary>
+    public readonly record struct ChannelContribution(
+        string Material, int Diffuse, int Normal, int Mask, bool DiffuseWanted, bool Touched);
+
+    /// <summary>
+    /// What the last composite actually did to each body material's channels, ready to render: already
+    /// filtered and sorted, because the status window redraws this every frame.
+    ///
+    /// The mirror image of <see cref="BaseUpstreams"/>: that says which file we read, this says what we did
+    /// to it. Both exist for the same reason — a composite that applied nothing is visually and textually
+    /// identical to one that applied everything, because the "Composited …" line only ever proved a buffer
+    /// existed and a redirect was published.
+    ///
+    /// NOT one row per composited material: inert materials are dropped, so this count is lower than
+    /// <c>byMaterial.Count</c> and than the <c>N material(s)</c> figure in the phase-breakdown line. Empty
+    /// while a composite is in flight, and left empty by one that cancels or throws, so a stale set is never
+    /// shown as if it described the character on screen.
+    /// </summary>
+    public IReadOnlyList<ChannelContribution> ChannelContributions() => _channelContributions;
+
+    private volatile IReadOnlyList<ChannelContribution> _channelContributions = [];
+
+    /// <summary>
     /// What each base game path currently resolves to, as (path, mod folder, settled) — the files the
     /// composite is standing ON. Surfaced in the status window because the composite gives no visual clue
     /// which skin mod it read: an overlay painted onto the wrong body looks like a correct composite of a
@@ -5192,7 +5406,24 @@ public class CompositorService : IDisposable
             probe = gamePath; expectedFull = full; break;
         }
 
-        if (probe == null || expectedFull == null)
+        // A REMOVED key is a change too, and scanning only the new manifest cannot see one. That used to be
+        // theoretical — every composite added or rewrote something — but withholding the diffuse redirect for
+        // a material no overlay painted makes removal-only composites routine, and this function's answer for
+        // them was "nothing to wait for": it redrew immediately and could render the composite it had just
+        // withdrawn. Here the wait inverts — hold until the path STOPS resolving to the file we dropped.
+        string? goneProbe = null, goneFull = null;
+        if (probe == null && previous != null)
+        {
+            foreach (var (gamePath, rel) in previous)
+            {
+                if (redirects.ContainsKey(gamePath)) continue;
+                var full = TryCanonicalise(Path.Combine(managedModDir, rel));
+                if (full == null) continue;
+                goneProbe = gamePath; goneFull = full; break;
+            }
+        }
+
+        if (probe == null && goneProbe == null)
         {
             log.Debug("[Proteus] no redirect changed this composite — nothing to wait for");
             return;
@@ -5201,19 +5432,35 @@ public class CompositorService : IDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (sw.Elapsed < ManifestLiveTimeout)
         {
-            var resolved = TryCanonicalise(penumbra.ResolvePlayer(probe));
-            if (resolved != null && string.Equals(resolved, expectedFull, StringComparison.OrdinalIgnoreCase))
+            if (probe != null)
             {
-                log.Debug("[Proteus] manifest live after {0}ms", sw.ElapsedMilliseconds);
-                return;
+                var resolved = TryCanonicalise(penumbra.ResolvePlayer(probe));
+                if (resolved != null && string.Equals(resolved, expectedFull, StringComparison.OrdinalIgnoreCase))
+                {
+                    log.Debug("[Proteus] manifest live after {0}ms", sw.ElapsedMilliseconds);
+                    return;
+                }
+            }
+            else
+            {
+                // Anything other than the withdrawn file means the removal landed — including a null answer,
+                // which is the legitimate "nobody provides this now" for a skin mod's invented path.
+                var resolved = TryCanonicalise(penumbra.ResolvePlayer(goneProbe!));
+                if (resolved == null || !string.Equals(resolved, goneFull, StringComparison.OrdinalIgnoreCase))
+                {
+                    log.Debug("[Proteus] withdrawn redirect cleared after {0}ms ({1})",
+                        sw.ElapsedMilliseconds, goneProbe!);
+                    return;
+                }
             }
             Thread.Sleep(15);
         }
 
         // Distinct from the success line on purpose: a timeout means the redraw below may render the
         // PREVIOUS composite, and that should be legible in the log rather than buried in a shared message.
+        // One of the two probes is non-null — the early return above is the only path where both are.
         log.Warning("[Proteus] manifest not live after {0}ms (probe {1}) — redrawing anyway",
-                    sw.ElapsedMilliseconds, probe);
+                    sw.ElapsedMilliseconds, probe ?? goneProbe!);
     }
 
     // After a composite, verify it used the settled body state. The snapshot at trigger time can

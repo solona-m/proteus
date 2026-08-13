@@ -472,6 +472,36 @@ public class StatusWindow : Window
             ImGui.TextDisabled("The mod each base texture is read from. Hover for the game path.");
         }
 
+        // The mirror of "Base skin": that names the file we READ, this says what we DID to it. Both exist
+        // because a composite that applied nothing looks exactly like one that applied everything — the log
+        // only ever proved a redirect was published, not that a pixel was blended. The red row is the whole
+        // point: an overlay declared a diffuse and none of it reached the skin, which renders as the plain
+        // base body with the overlay's normal on top.
+        //
+        // Already filtered and sorted by the composite — nothing here but formatting, because this runs on
+        // every frame the window is open.
+        var contributions = compositor.ChannelContributions();
+        if (contributions.Count > 0 && ImGui.CollapsingHeader($"Overlay reach ({contributions.Count})"))
+        {
+            foreach (var c in contributions)
+            {
+                var name = System.IO.Path.GetFileNameWithoutExtension(c.Material);
+                if (c.DiffuseWanted && c.Diffuse == 0)
+                    ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f),
+                        $"{name} — diffuse {c.Diffuse}, normal {c.Normal}, mask {c.Mask} (diffuse did not apply)");
+                else if (c.Diffuse + c.Normal + c.Mask == 0)
+                    // Reached only by ambient occlusion or skin-tint suppression — a gear-layer mod casting a
+                    // contact shadow onto skin no overlay paints. Without the label this is three zeros and
+                    // no way to tell it from a material nothing reached at all.
+                    ImGui.TextDisabled($"{name} — effects only (no overlay art)");
+                else
+                    ImGui.TextUnformatted($"{name} — diffuse {c.Diffuse}, normal {c.Normal}, mask {c.Mask}");
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(c.Material);
+            }
+            ImGui.TextDisabled("How many overlays actually reached each channel. Hover for the material.");
+        }
+
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small
         // "Open" tacked on the end; greyed text reads as status rather than a control, and "Open" next

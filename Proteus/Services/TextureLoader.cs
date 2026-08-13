@@ -440,7 +440,7 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to parse mtrl bytes: {0}", gamePath);
+            log.Error(ex, "[Proteus] Failed to parse mtrl bytes: {0}", gamePath);
             return new MtrlTexturePaths(null, null, null);
         }
     }
@@ -526,7 +526,7 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to load .tex: {0}", diskPath);
+            log.Error(ex, "[Proteus] Failed to load .tex: {0}", diskPath);
             return null;
         }
     }
@@ -546,7 +546,7 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to load .dds: {0}", diskPath);
+            log.Error(ex, "[Proteus] Failed to load .dds: {0}", diskPath);
             return null;
         }
     }
@@ -717,7 +717,7 @@ public class TextureLoader
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to load base texture from game data: {0}", gamePath);
+                log.Error(ex, "[Proteus] Failed to load base texture from game data: {0}", gamePath);
                 return null;
             }
         });
@@ -794,7 +794,7 @@ public class TextureLoader
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to load overlay image: {0}", path);
+                log.Error(ex, "[Proteus] Failed to load overlay image: {0}", path);
                 return null;
             }
         }
@@ -958,7 +958,7 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to write .tex: {0}", outputPath);
+            log.Error(ex, "[Proteus] Failed to write .tex: {0}", outputPath);
             return false;
         }
     }
@@ -1060,7 +1060,7 @@ public class TextureLoader
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to write PNG: {0}", outputPath);
+            log.Error(ex, "[Proteus] Failed to write PNG: {0}", outputPath);
             return false;
         }
     }
@@ -1183,10 +1183,10 @@ public class TextureLoader
         if (diskPath != null && File.Exists(diskPath))
         {
             try { return File.ReadAllBytes(diskPath); }
-            catch (Exception ex) { log.Error(ex, "Failed to read raw file: {0}", diskPath); }
+            catch (Exception ex) { log.Error(ex, "[Proteus] Failed to read raw file: {0}", diskPath); }
         }
         try { return dataManager.GetFile(gamePath)?.Data; }
-        catch (Exception ex) { log.Error(ex, "Failed to load raw file from game: {0}", gamePath); return null; }
+        catch (Exception ex) { log.Error(ex, "[Proteus] Failed to load raw file from game: {0}", gamePath); return null; }
     }
 
     // Returns (patchedBytes, true) when the key was found and the value replaced,
