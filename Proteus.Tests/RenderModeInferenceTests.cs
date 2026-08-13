@@ -20,10 +20,20 @@ public class RenderModeInferenceTests
 
     [Fact]
     public void PlainSubRow_IsNotCloth()
-        => Assert.False(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Diffuse = "#FFF", Emissive = 0.5f }));
+        => Assert.False(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Diffuse = "#FFF" }));
 
     [Fact]
     public void NullSubRow_IsNotCloth() => Assert.False(RenderModeInference.IsClothSub(null));
+
+    // Skin can no longer emit — the normal-alpha bake and the skin.shpk glow key are gone — so glow is
+    // a Cloth feature like any other the skin shader can't do. This assertion used to read False.
+    [Fact]
+    public void Glow_IsCloth()
+        => Assert.True(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Diffuse = "#FFF", Emissive = 0.5f }));
+
+    [Fact]
+    public void ZeroGlow_IsNotCloth()
+        => Assert.False(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Emissive = 0f }));
 
     [Theory]
     [MemberData(nameof(ClothSubRows))]
@@ -57,6 +67,18 @@ public class RenderModeInferenceTests
     public void SphereMap_ImpliesCloth()
         => Assert.Equal(RenderMode.Cloth,
             RenderModeInference.Infer(Rows(new ColorTableSubRowPreset { SphereMap = 3 }),
+                new[] { Desc() }, null, RenderMode.Skin, FeatureEdit.Cloth));
+
+    [Fact]
+    public void GlowOnSkinRow_ImpliesCloth()
+        => Assert.Equal(RenderMode.Cloth,
+            RenderModeInference.Infer(Rows(new ColorTableSubRowPreset { Emissive = 0.5f }),
+                new[] { Desc() }, null, RenderMode.Skin, FeatureEdit.Cloth));
+
+    [Fact]
+    public void ZeroGlowOnSkinRow_StaysSkin()
+        => Assert.Equal(RenderMode.Skin,
+            RenderModeInference.Infer(Rows(new ColorTableSubRowPreset { Emissive = 0f }),
                 new[] { Desc() }, null, RenderMode.Skin, FeatureEdit.Cloth));
 
     [Fact]
@@ -116,6 +138,33 @@ public class RenderModeInferenceTests
     [InlineData(OverlayLayer.Gear, "characterscroll.shpk", RenderMode.Glow)]
     public void ModeOf_MapsLayerShader(OverlayLayer layer, string? shader, RenderMode expected)
         => Assert.Equal(expected, RenderModeInference.ModeOf(layer, shader));
+
+    // ── ShouldPromoteToGear — what the compositor and the editor both gate on ───
+
+    [Fact]
+    public void Promote_GlowOnSkinOverlay_NeedsShell()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Emissive = 0.5f }), aboveGear: false));
+
+    [Fact]
+    public void Promote_GlowButPinned_StaysSkin()   // the user's pin outranks the inference
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
+            Rows(new ColorTableSubRowPreset { Emissive = 0.5f }), aboveGear: false));
+
+    [Fact]
+    public void Promote_ZeroGlow_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Emissive = 0f }), aboveGear: false));
+
+    [Fact]
+    public void Promote_PlainSkinAboveGear_StillPromotes()   // the pre-existing stacking reason
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(), aboveGear: true));
+
+    [Fact]
+    public void Promote_AlreadyGear_IsNotPromotedAgain()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Gear, pinned: false,
+            Rows(new ColorTableSubRowPreset { Emissive = 0.5f }), aboveGear: true));
 
     // ── Override path (design binding) reads the override, not the descriptor ───
 

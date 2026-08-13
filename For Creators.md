@@ -82,7 +82,7 @@ Color table rows control how Proteus tints and illuminates the overlay. Rows are
 ```
 
 - **Diffuse**: hex color (`#RRGGBB` or `#RGB`). Multiplied against the overlay pixel. White = natural colors. Black = invisible. Any other color tints.
-- **Emissive**: glow intensity 0–1. When any row has emissive > 0, Proteus also patches the material's shader key and color table to enable the emissive pass.
+- **Emissive**: glow intensity 0–1. Skin cannot glow, so any row with emissive > 0 promotes the overlay to a cloth layer — a shell with its own material — and it renders there. The promotion happens automatically, whether you declare it here or the user sets it in the editor.
 
 Users can override these values at any time from the Proteus status window. Their changes are written back to your `metadata.json` inside their local mod installation.
 

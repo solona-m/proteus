@@ -107,7 +107,7 @@ Each row has two sub-rows:
 
 For each sub-row:
 - **Diffuse** (color swatch) — multiplicative tint applied to the overlay. White (`#FFFFFF`) shows the overlay's natural colors. Any other color tints it. You can recolor a plain grayscale stocking by picking a color here.
-- **Emissive** (0–1 slider) — how strongly the overlay glows, with its own color.
+- **Emissive** (0–1 slider) — how strongly the overlay glows, with its own color. Skin can't glow, so setting this switches the overlay to a cloth layer, the same way a sphere map does.
 - **Opacity** (-100 to 100 slider) — 0 is the mod default. -100 is transparent. 100 is fully opaque.
 - **Sphere map / Metalness / Roughness / Specular** — available on Cloth. Setting any of them switches the overlay to a second skin.
 

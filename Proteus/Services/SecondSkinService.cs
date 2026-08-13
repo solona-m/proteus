@@ -884,7 +884,10 @@ public sealed class SecondSkinService
                   + $"but only {totalCapacity} fit across your accessories (Proteus's invisible fallback ring already "
                   + $"included). Turn off some layers, or equip another pair of glasses / ring / bracelet / necklace so "
                   + $"the rest fit.";
-                Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build());   // 25 = yellow
+                // Marshalled: the shell build runs off the framework thread, and ChatGui's queue is not
+                // safe to enqueue into concurrently with the tick that drains it.
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));   // 25 = yellow
             }
             log.Warning("[Proteus] second skin: {0} layers exceed total accessory capacity {1} — {2} dropped",
                 placed + overBudget, totalCapacity, overBudget);

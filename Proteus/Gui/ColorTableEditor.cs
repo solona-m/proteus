@@ -643,6 +643,12 @@ public static class ColorTableEditor
         if (ImGui.DragFloat($"Glow##e_{id}", ref emPct, 2.5f, 0f, 1000f, "%.1f%%"))
         {
             Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 10f);
+            // Skin cannot emit, so asking for glow asks for a shell: classify the edit as Cloth and let
+            // the inference move the overlay there, exactly as a sphere map or metalness does. The one
+            // exception is Animated glow, where this slider is the scroll effect's GATE rather than a
+            // feature request — treating it as Cloth there would kick the overlay out of Glow the moment
+            // the author tuned the gate.
+            edited = mode == RenderMode.Glow ? FeatureEdit.Neutral : FeatureEdit.Cloth;
             changed = true;
         }
         if (gear && ImGui.IsItemHovered())

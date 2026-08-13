@@ -1742,18 +1742,25 @@ public class StatusWindow : Window
         var modeBefore = EffectiveMode(activeOpt.Overlays, gearOvrOpt);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
 
-        // Auto skin-above-gear promotion — mirror the compositor (CompositorService split): a skin overlay
-        // on auto (not pinned) stacked above a gear layer renders as a gear shell, so the editor must treat
-        // it as gear too. activeOptions is already sorted top-first, so any option below this one (index >
-        // selIdx) that is gear means this one sits above gear. Without this the Glow button never shows —
-        // it keys off shell materials for gear vs skin-glow targets for skin, and the compositor built the
-        // former, not the latter.
+        // Auto promotion — mirror the compositor through the SAME predicate it uses
+        // (RenderModeInference.ShouldPromoteToGear), so the editor can't disagree with what was actually
+        // composited: a skin overlay on auto (not pinned) renders as a gear shell when it sits above a gear
+        // layer, or when its rows ask for something skin.shpk can't do (sphere/metal/specular/glow).
+        // activeOptions is already sorted top-first, so any option below this one (index > selIdx) that is
+        // gear means this one sits above gear. Without this the Glow button never shows — it keys off shell
+        // materials for gear vs skin-glow targets for skin, and the compositor built the former, not the latter.
         bool promotedToGear = false;
         if (!gear)
         {
-            bool pinned = gearOvrOpt?.ManualShaderLock ?? activeOpt.Overlays.FirstOrDefault()?.ManualShaderLock ?? false;
+            // !gear means the effective layer (override first) is Skin — the state the promotion acts on.
+            // The binding's pin, when one is being edited, outranks the descriptor's.
+            bool pinned = gearOvrOpt?.ManualShaderLock
+                ?? activeOpt.Overlays.FirstOrDefault()?.ManualShaderLock ?? false;
             bool aboveGear = activeOptions.Skip(selIdx + 1).Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
-            if (!pinned && aboveGear) { gear = true; shader = OverlayDescriptor.DefaultGearShader; promotedToGear = true; }
+            if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear))
+            {
+                gear = true; shader = OverlayDescriptor.DefaultGearShader; promotedToGear = true;
+            }
         }
 
         bool changed = false;
@@ -1850,6 +1857,16 @@ public class StatusWindow : Window
 
         var cur  = RenderModeInference.ModeOf(ovr?.Layer ?? overlays[0].Layer,
                                               ovr != null ? ovr.Shader : overlays[0].Shader);
+
+        // Leaving Animated glow (the effect was just cleared): drop the Glow those rows carry BEFORE
+        // inferring. ApplyGlowTransition zeroes it, but only after this runs — and since Glow now counts
+        // as a Cloth feature, the 150% this mode put there itself would otherwise infer Cloth and strand
+        // the overlay in a mode the user never asked for, with nothing cloth-like left to justify it.
+        // Safe to do unconditionally here: a pinned overlay already returned above, and `edited` proves
+        // this frame carries a real edit, so it can't fight an author tuning a Glow-pinned overlay.
+        if (cur == RenderMode.Glow && !RenderModeInference.HasGlow(overlays, ovr))
+            SetRowsEmissive(rows, 0f);
+
         var want = RenderModeInference.Infer(rows, overlays, ovr, cur, edited);
         if (want == cur) return false;
 

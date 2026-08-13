@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
 using Proteus.Interop;
@@ -190,6 +191,11 @@ public class CompositorService : IDisposable
     // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by IsBodyMod
     // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
     private readonly object _bodyModConfigLock = new();
+    // Mods already told (this session) that their skin Glow now renders as a cloth layer. The promotion
+    // itself is recomputed every composite, so without this the notice would repeat on every run.
+    // Concurrent because two composites genuinely overlap (see _compositesInFlight) and both walk the
+    // promotion loop — a plain HashSet resizing under two threads loses entries or corrupts its buckets.
+    private readonly ConcurrentDictionary<string, byte> _glowPromotedMods = new(StringComparer.OrdinalIgnoreCase);
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -1866,8 +1872,7 @@ public class CompositorService : IDisposable
             // peer at all and the invisibility sticks on their side. Content-hashed filenames are what make
             // keeping the old files safe: changed content writes to a DIFFERENT name, so old and new coexist
             // and no live redirect is ever dangling.
-            var texturesDirEarly  = Path.Combine(managedModDir, "textures");
-            var materialsDirEarly = Path.Combine(managedModDir, "materials");
+            var texturesDirEarly = Path.Combine(managedModDir, "textures");
 
             // Collect what the last published manifest no longer names. Doing it HERE, a composite late,
             // is deliberate — see PruneSupersededOutput. It also sweeps up anything a cancelled run wrote,
@@ -2038,13 +2043,18 @@ public class CompositorService : IDisposable
                 foreach (var overlay in overlays)
                 {
                     var ov = overlay;
-                    if (overlay.Descriptor.Layer == OverlayLayer.Skin
-                        && !overlay.Descriptor.ManualShaderLock
-                        && lowestGear.HasValue && Rank(overlay).CompareTo(lowestGear.Value) < 0)
+                    bool aboveGear = lowestGear.HasValue && Rank(overlay).CompareTo(lowestGear.Value) < 0;
+                    if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
                         ov = overlay with { Descriptor = promoted };
+
+                        // Only when GLOW is what moved it: an overlay already promoted for sitting above
+                        // gear was rendering through a shell before this too, so nothing changed for it
+                        // and the notice would be noise.
+                        if (!aboveGear) NotifyGlowPromoted(entry, overlay.ColorTableRows);
                     }
 
                     allOverlays.Add((entry, ov));
@@ -2236,8 +2246,7 @@ public class CompositorService : IDisposable
 
             if (ct.IsCancellationRequested) return;
 
-            var texturesDir  = texturesDirEarly;
-            var materialsDir = materialsDirEarly;
+            var texturesDir = texturesDirEarly;
             Directory.CreateDirectory(texturesDir);
 
             var redirects = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -2363,6 +2372,18 @@ public class CompositorService : IDisposable
             // Also promote an ALL-SKIN mod whose Masks tab was given its own Cloth/Glow mode
             // (MaskDescriptor.Layer == Gear): the mask becomes a dedicated shell even with no other gear
             // overlay to ride over. The synthesis below seeds it without a sibling gear overlay.
+            //
+            // Deliberately a RECORDED mode, not one inferred from the mask's colorset the way overlays are
+            // (RenderModeInference.ShouldPromoteToGear). Two reasons. Mask glow never worked on skin in the
+            // first place — the emissive bake only ever read the OVERLAY rows, never MaskColorTableRows —
+            // so there is no existing look to preserve here, only a new one to opt into. And a mask that
+            // moves to a shell stops being painted into the skin diffuse/relief (see the maskShellMods
+            // skips below), so it lifts off the body onto a pushed-out surface and needs a free accessory
+            // to exist at all. Inferring that from a stray Emissive an author left in a colorset would
+            // change how the mask renders — or lose it entirely — for a value that used to be inert.
+            // The editor still gets there: setting Glow on the Masks tab infers Cloth and persists
+            // MaskDescriptor.Layer = Gear (the mask branch of StatusWindow.DrawColorEditor), which is
+            // exactly what this reads.
             foreach (var entry in entries)
                 if (maskAssetsByMod.TryGetValue(entry.ModDirectory, out var mA2)
                     && mA2.Any(a => a.IndexPath != null || a.NormalPath != null)
@@ -2719,14 +2740,6 @@ public class CompositorService : IDisposable
                     return;
                 }
 
-                // If any entry in this material's stack uses emissive, the normal alpha must
-                // start at 0 so that only overlay-covered pixels receive emissive intensity.
-                // (BC5-decoded normals have alpha=255 everywhere; without this reset, the
-                // entire material would glow when the emissive shader key is active.)
-                bool anyEmissive = pairs.Any(p =>
-                    p.Overlay.ColorTableRows?.Any(r =>
-                        r.SubRowA?.Emissive > 0.001f || r.SubRowB?.Emissive > 0.001f) == true);
-
                 byte[]? baseD = null, baseN = null, baseM = null;
                 int wD = 0, hD = 0, wN = 0, hN = 0, wM = 0, hM = 0;
 
@@ -2948,12 +2961,7 @@ public class CompositorService : IDisposable
                     // ── Step 2: load normal overlay; synthesize coverage if needed ──
                     if (desc.Normal != null && texPaths.Normal != null)
                     {
-                        if (baseN == null)
-                        {
-                            baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                            if (anyEmissive && baseN.Length > 0)
-                                for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
-                        }
+                        baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
                             var normPath = Path.Combine(entry.SidecarRoot, desc.Normal);
@@ -3192,12 +3200,7 @@ public class CompositorService : IDisposable
                     float skinMask = config.SkinColorSuppression * (desc.SkinToneMask ?? 1f);
                     if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f)
                     {
-                        if (baseN == null)
-                        {
-                            baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                            if (anyEmissive && baseN.Length > 0)
-                                for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
-                        }
+                        baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
                             var scMask = CovAt(wN, hN);
@@ -3210,45 +3213,6 @@ public class CompositorService : IDisposable
                                     ? (wD == wN && hD == hN ? baseD : textureLoader.ScaleRgba(baseD, wD, hD, wN, hN))
                                     : null;
                                 SuppressSkinColorInfluence(baseN, scMask, diffAtN, wN, hN, skinMask);
-                            }
-                        }
-                    }
-
-                    // ── Phase C: emissive → normal alpha ──────────────────────
-                    // skin.shpk: normal alpha = per-pixel emissive intensity (key 0x380CAED0).
-                    bool thisOverlayHasEmissive = rows.Values.Any(r => r.A.Emissive > 0.001f || r.B.Emissive > 0.001f);
-                    if (thisOverlayHasEmissive)
-                    {
-                        if (texPaths.Normal == null)
-                        {
-                            log.Warning("[Proteus] Emissive set but material has no normal texture: {0}", mtrlGamePath);
-                        }
-                        else
-                        {
-                            if (baseN == null)
-                            {
-                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                                if (anyEmissive && baseN.Length > 0)
-                                    for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
-                            }
-                            if (baseN.Length > 0)
-                            {
-                                if (desc.Index != null)
-                                {
-                                    // Index texture maps each pixel to a color table row.
-                                    // Write configured emissive for that row to normal alpha.
-                                    // Pixels outside the overlay have R=0 → unmapped → stay at 0.
-                                    var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                                    var idN = LoadIndexMerged(idxPath, wN, hN, srcBodyType, entry.ModDirectory);
-                                    var emMask = CovAt(wN, hN);
-                                    if (idN != null && emMask != null) ApplyIndexedEmissive(baseN, idN, emMask, rows, wN, hN);
-                                }
-                                else
-                                {
-                                    var emMask = CovAt(wN, hN);
-                                    if (emMask != null) ApplyFlatEmissive(baseN, emMask, row16A, wN, hN);
-                                    else log.Warning("[Proteus] No emissive mask for: {0}", texPaths.Normal);
-                                }
                             }
                         }
                     }
@@ -3290,12 +3254,7 @@ public class CompositorService : IDisposable
                     if (texPaths.Normal == null || !assets.Any(a => a.NormalPath != null)) continue;
                     lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
 
-                    if (baseN == null)
-                    {
-                        baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                        if (anyEmissive && baseN.Length > 0)
-                            for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
-                    }
+                    baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                     if (baseN.Length > 0)
                     {
                         // Snapshot before any mask relief — the combined masks-group coverage
@@ -3697,8 +3656,6 @@ public class CompositorService : IDisposable
                             {
                                 aoLoadedNormal = true;
                                 baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
-                                if (anyEmissive && baseN.Length > 0)
-                                    for (int ai = 3; ai < baseN.Length; ai += 4) baseN[ai] = 0;
                             }
                             if (baseN.Length > 0)
                             {
@@ -3823,60 +3780,6 @@ public class CompositorService : IDisposable
                 {
                     log.Debug("[Proteus] Composited {0}:{1}", mtrlGamePath, channels);
                     log.Debug("[Proteus]   redirects: {0}", string.Join(" | ", published));
-                }
-
-                // Patch .mtrl with emissive shader key + color table if any row has Emissive > 0
-                bool needsEmissive = pairs.Any(p =>
-                    p.Overlay.ColorTableRows?.Any(r =>
-                        r.SubRowA?.Emissive > 0.001f || r.SubRowB?.Emissive > 0.001f) == true);
-
-                if (needsEmissive)
-                {
-                    var raw = textureLoader.LoadRawMtrl(mtrlDisk, mtrlGamePath);
-                    if (raw == null)
-                    {
-                        log.Warning("[Proteus] Could not load raw mtrl for emissive patch: {0}", mtrlGamePath);
-                    }
-                    else
-                    {
-                        var combinedRows = new Dictionary<int, ColorTableRowOverride>();
-                        foreach (var (_, ov2) in pairs)
-                        {
-                            var dict = BuildRowDict(ov2.ColorTableRows);
-                            foreach (var (pairIdx, row) in dict)
-                                if (!combinedRows.ContainsKey(pairIdx))
-                                    combinedRows[pairIdx] = row;
-                        }
-
-                        // Switch the skin-type shader key to the glow variant; this is what enables
-                        // emissive on skin.shpk (body skin-type is 0x2BDB45F1). Values below mirror
-                        // the canonical LooseTextureCompiler skin_glow.mtrl.
-                        raw = TextureLoader.EnsureShaderKey(raw, 0x380CAED0u, 0x72E697CDu);
-                        raw = TextureLoader.PatchColorTableEmissive(raw, combinedRows);
-
-                        // The body sets 0x2E60B071 to [200,200]; under the glow skin-type that value
-                        // makes the material render so that seams between separate body models (e.g.
-                        // a split torso/legs) become visible. skin_glow.mtrl uses [100,100].
-                        raw = TextureLoader.PatchConstantValues(raw, 0x2E60B071u, 100f, 100f).data;
-
-                        // Emissive color constant: the per-pixel glow is this color masked by the
-                        // normal-map alpha, so it must be non-zero. White makes the glow take the
-                        // configured per-row color. Add the constant if the material lacks it.
-                        var (rawEmConst, emConstPatched) = TextureLoader.PatchEmissiveColorConstant(raw, 1f, 1f, 1f);
-                        raw = emConstPatched ? rawEmConst : TextureLoader.EnsureEmissiveColorConstant(raw, 1f, 1f, 1f);
-
-                        Directory.CreateDirectory(materialsDir);
-                        // Hashed over the patched bytes, independent of the textures above: the material
-                        // changes on a colour-table or shader-key edit that leaves the textures untouched,
-                        // and vice versa.
-                        var name = baseName + "_" + ContentTag(raw, OutputFormatVersion) + ".mtrl";
-                        var outPath = Path.Combine(materialsDir, name);
-                        var relPath = "materials/" + name;
-                        // Written verbatim, so its expected length is simply the buffer's — the .tex
-                        // header check has nothing to read here.
-                        if (AlreadyWritten(outPath, raw.Length) || textureLoader.WriteMtrl(raw, outPath))
-                            redirects[mtrlGamePath] = relPath;
-                    }
                 }
 
             });
@@ -4447,11 +4350,7 @@ public class CompositorService : IDisposable
     /// success, the redirect goes live, and the game quietly fails to load the texture. Rewriting costs
     /// one encode; not rewriting costs the user a broken skin until they delete the file by hand.
     /// </summary>
-    /// <param name="expectedLength">
-    /// Exact byte count the file should have, for outputs that are written verbatim (.mtrl). Omit for
-    /// .tex, whose length is derived from its own header by <see cref="TextureLoader.IsCompleteTex"/>.
-    /// </param>
-    private bool AlreadyWritten(string outPath, long expectedLength = -1)
+    private bool AlreadyWritten(string outPath)
     {
         bool complete;
         try
@@ -4460,9 +4359,7 @@ public class CompositorService : IDisposable
             // IsCompleteTex overload below reuses that snapshot instead of re-stat'ing the path.
             var fi = new FileInfo(outPath);
             if (!fi.Exists) return false;      // absent is the normal first-run case, not damage — no warning
-            complete = expectedLength >= 0
-                ? fi.Length == expectedLength
-                : TextureLoader.IsCompleteTex(fi);
+            complete = TextureLoader.IsCompleteTex(fi);
         }
         catch { return false; }   // unreadable — rewrite rather than trust it
 
@@ -5179,44 +5076,6 @@ public class CompositorService : IDisposable
                 baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
                 baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
                 baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
-            }
-        });
-    }
-
-    // Write emissive intensity to the normal map alpha where the overlay is opaque.
-    internal static void ApplyFlatEmissive(byte[] baseN, byte[] ov, ColorTableSubRow row, int w, int h)
-    {
-        if (row.Emissive <= 0.001f) return;
-        byte intensity = (byte)(row.Emissive * 255f);
-        ParallelPixels(0, w * h * 4, 4, (from, to) =>
-        {
-            for (int i = from; i < to; i += 4)
-                if (ov[i + 3] > 0)
-                    baseN[i + 3] = Math.Max(baseN[i + 3], intensity);
-        });
-    }
-
-    // Write emissive intensity to normal alpha driven by index texture row mapping.
-    // cov gates which pixels belong to this overlay (diffuse alpha > 0 = inside overlay).
-    // For covered pixels, pairIdx (idx R/17) selects the row; only rows in `rows` with
-    // emissive > 0 write a value. All other pixels remain at 0 (set by the anyEmissive reset).
-    internal static void ApplyIndexedEmissive(
-        byte[] baseN, byte[] idx, byte[] cov,
-        Dictionary<int, ColorTableRowOverride> rows,
-        int w, int h)
-    {
-        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
-        ParallelPixels(0, w * h * 4, 4, (from, to) =>
-        {
-            for (int i = from; i < to; i += 4)
-            {
-                if (cov[i + 3] == 0) continue; // outside this overlay's coverage
-                int pairIdx = idx[i] / 17;
-                if (!rows.TryGetValue(pairIdx, out var pair)) continue;
-                float blendA = idx[i + 1] / 255f;
-                float em = pair.B.Emissive + (pair.A.Emissive - pair.B.Emissive) * blendA;
-                if (em > 0.001f)
-                    baseN[i + 3] = Math.Max(baseN[i + 3], (byte)(em * 255f));
             }
         });
     }
@@ -6215,6 +6074,31 @@ public class CompositorService : IDisposable
         }
     }
 
+    /// <summary>Any sub-row in this option asks for glow. Narrower than
+    /// <see cref="RenderModeInference.HasCloth"/>, which also answers true for sphere/metal — used only to
+    /// decide whether the promotion notice is about glow specifically.</summary>
+    private static bool HasEmissiveRow(List<ColorTableRowPreset>? rows)
+        => rows?.Any(r => r.SubRowA?.Emissive > 0f || r.SubRowB?.Emissive > 0f) == true;
+
+    /// <summary>
+    /// Tell the author, once per mod per session, that a Glow they declared on a skin layer now renders as
+    /// a cloth shell. Silent unless glow is actually what moved it — sphere/metal promoted before this
+    /// change too, so saying "your look changed" for those would be noise.
+    /// <para/>
+    /// Marshalled onto the framework thread: the composite runs off it, and ChatGui's queue is not
+    /// safe to enqueue into concurrently with the tick that drains it.
+    /// </summary>
+    private void NotifyGlowPromoted(OverlayEntry entry, List<ColorTableRowPreset>? rows)
+    {
+        if (!HasEmissiveRow(rows) || !_glowPromotedMods.TryAdd(entry.ModDirectory, 0)) return;
+
+        var msg = $"[Proteus] \"{entry.ModName}\" sets Glow on a skin layer. Skin can no longer glow, so "
+                + "that option now renders as a cloth layer — it needs a free accessory to sit on, and its "
+                + "surface will look slightly different.";
+        _ = Plugin.Framework.RunOnFrameworkThread(
+            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+    }
+
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
     {
         var dict = new Dictionary<int, ColorTableRowOverride>();
@@ -6355,7 +6239,7 @@ public class CompositorService : IDisposable
 
     /// <summary>
     /// Bump this whenever the WRITER's output changes for identical inputs — the .tex header layout, the
-    /// mip policy, the BC7 encoder, or anything WriteMtrl does to the bytes handed to it.
+    /// mip policy, or the BC7 encoder.
     ///
     /// It is folded into every output filename because a content hash alone only covers the inputs. Change
     /// the encoder without bumping this and the new bytes land under the OLD name: the file on disk is

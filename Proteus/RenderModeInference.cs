@@ -17,7 +17,7 @@ public enum RenderMode
 /// <summary>Which class of feature a single edit touched, for the last-edit-wins conflict rule.</summary>
 public enum FeatureEdit
 {
-    /// <summary>Nothing that affects the mode (diffuse, opacity, plain glow %).</summary>
+    /// <summary>Nothing that affects the mode (diffuse, opacity, glow colour).</summary>
     Neutral,
     /// <summary>A Cloth-only feature (sphere/metal/specular).</summary>
     Cloth,
@@ -36,19 +36,43 @@ public static class RenderModeInference
     public const string ClothShader = OverlayDescriptor.DefaultGearShader;   // character.shpk
     public const string GlowShader  = "characterscroll.shpk";
 
-    /// <summary>A sub-row uses a feature that genuinely needs the gear shader — a sphere map, metalness, or a
-    /// specular colour (skin.shpk can't do those). Roughness is NOT counted: skin has roughness too, and a
-    /// bare/zero roughness does nothing on its own, so it shouldn't force Cloth.</summary>
+    /// <summary>A sub-row uses a feature that genuinely needs the gear shader — a sphere map, metalness, a
+    /// specular colour, or glow (skin.shpk can't do those). Roughness is NOT counted: skin has roughness
+    /// too, and a bare/zero roughness does nothing on its own, so it shouldn't force Cloth.
+    /// <para/>
+    /// Glow counts because skin no longer emits: the emissive bake into the skin normal's alpha (and the
+    /// skin.shpk glow shader key that read it) is gone, so the only surface that can glow is a gear shell
+    /// with its own material. Setting Glow therefore has to move the overlay onto one.</summary>
     public static bool IsClothSub(ColorTableSubRowPreset? s)
         => s != null
         && (s.Specular != null
          || s.Metalness.GetValueOrDefault() > 0f
          || s.SphereMap.GetValueOrDefault() > 0
-         || s.SphereIntensity.GetValueOrDefault() > 0f);
+         || s.SphereIntensity.GetValueOrDefault() > 0f
+         || s.Emissive > 0f);
 
-    /// <summary>Any Cloth feature (sphere/metal/specular) is set across the option's rows.</summary>
+    /// <summary>Any Cloth feature (sphere/metal/specular/glow) is set across the option's rows.</summary>
     public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows)
         => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
+
+    /// <summary>
+    /// Whether a stored Skin overlay has to be composited as a gear shell instead. Two reasons, both
+    /// recomputed every composite so either can revert on its own:
+    /// <list type="bullet">
+    /// <item><paramref name="aboveGear"/> — it sits above a gear layer in the stack, so there is no skin
+    /// left underneath it to paint into.</item>
+    /// <item>Its rows use a feature skin.shpk can't render — sphere, metal, specular, or glow. Glow is
+    /// why authored metadata gets promoted: skin no longer emits, so a declared glow would just go dark.</item>
+    /// </list>
+    /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
+    /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
+    /// override the pin, and the two callers learn that from different places.
+    /// </summary>
+    public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
+        IEnumerable<ColorTableRowPreset>? rows, bool aboveGear)
+        => layer == OverlayLayer.Skin
+        && !pinned
+        && (aboveGear || HasCloth(rows ?? []));
 
     /// <summary>An animated-glow effect (scroll map) is selected.</summary>
     public static bool HasGlow(IEnumerable<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
