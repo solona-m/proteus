@@ -3906,7 +3906,14 @@ public class CompositorService : IDisposable
             // it, and every other signal we log reports success either way.
             List<string> shellVerifyPaths = [];
             var tGear = PhaseCounter.Begin();
-            if (gearOverlays.Count > 0)
+            // maskShellMods too, not just gear overlays. A mod whose Masks tab was promoted to Cloth/Glow
+            // while all its other layers stayed on Skin has NO gear overlay — that is the whole point of the
+            // promotion at maskShellMods' second loop — so gating purely on gearOverlays skipped the mask
+            // shell synthesis below and left the mask nowhere: the skin relief and diffuse passes had
+            // already skipped it ("mask lives on the shell"), and the shell it was deferred to was never
+            // built. The masked region then rendered as plain body skin, which is exactly what it looks
+            // like. The synthesis adds to gearOverlays itself, and Build still no-ops on an empty list.
+            if (gearOverlays.Count > 0 || maskShellMods.Count > 0)
             {
                 // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
                 // user's per-group stack order (top-first). SecondSkinService assigns shell letters in this
@@ -3930,6 +3937,12 @@ public class CompositorService : IDisposable
                     // (an all-skin mod whose mask was promoted to Cloth/Glow on its own). Only SourceBodyType
                     // and GroupOrder are read off the seed; everything else is overridden below.
                     var seed = gearOverlays.FirstOrDefault(g => g.Entry.ModDirectory == mod);
+                    // Whether the seed is a real GEAR sibling decides if its colorset means anything to a
+                    // mask. A fabric's colours describe cloth and are worth inheriting; a SKIN overlay's
+                    // describe skin, and inheriting those painted the mask in the body's own tone — which
+                    // is the "mask renders the body skin texture" report, on a mod whose Masks tab was set
+                    // to Cloth while its fabric stayed on Skin (the all-skin promotion above).
+                    bool seededFromGear = seed.Entry != null;
                     if (seed.Entry == null) seed = allOverlays.FirstOrDefault(g => g.Entry.ModDirectory == mod);
                     if (seed.Entry == null) continue;   // no overlay to source a body type from
 
@@ -3951,9 +3964,13 @@ public class CompositorService : IDisposable
                     var maskResolved = seed.Overlay with
                     {
                         Descriptor     = maskDesc,
-                        // Its own Masks colorset if set, else inherit the fabric/overlay colorset the legacy
-                        // merge would have used — so a mask with no colours of its own still shows (the fabric's).
-                        ColorTableRows = MaskRowsFor(seed.Entry) ?? seed.Overlay.ColorTableRows,
+                        // Its own Masks colorset if set, else inherit the FABRIC's — the colours the legacy
+                        // merge would have used, so a mask with no colours of its own still shows. Only from
+                        // a gear sibling: with none, null falls through to the neutral-white baseline
+                        // (BuildRows' neutralWhenEmpty), which multiplies to the base diffuse instead of
+                        // painting the mask a skin tone.
+                        ColorTableRows = MaskRowsFor(seed.Entry)
+                                      ?? (seededFromGear ? seed.Overlay.ColorTableRows : null),
                         OptionGroup    = SidecarDiscoveryService.MaskGroupName,
                         Option         = "Masks",
                     };

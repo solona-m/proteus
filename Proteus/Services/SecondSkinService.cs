@@ -846,7 +846,7 @@ public sealed class SecondSkinService
             // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
             // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
             // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, neutralWhenEmpty: isMaskShell), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
@@ -1395,19 +1395,34 @@ public sealed class SecondSkinService
         return paths;
     }
 
-    /// <summary>Map the metadata's 1-based row/sub-row presets onto 0-based color table rows.</summary>
-    private static Dictionary<int, GearColorRow>? BuildRows(List<ColorTableRowPreset>? presets)
+    /// <summary>
+    /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
+    /// colour. The index texture can select ANY pair — one the colorset never defined, or the undefined
+    /// sub-row of a pair that set only the other — and that row must not paint something the author never
+    /// chose, exactly as the skin layer defaults its rows to white. (16 pairs = 32 sub-rows.)
+    /// </summary>
+    private static Dictionary<int, GearColorRow> NeutralRows()
     {
-        if (presets == null || presets.Count == 0) return null;
         var rows = new Dictionary<int, GearColorRow>();
-
-        // Initialize EVERY color-table row to neutral white first, so no row keeps the gear template's default
-        // (often dark) colour. The index can select ANY pair — one the colorset never defined, or the
-        // undefined sub-row of a pair that set only the other — and it must show the base diffuse there
-        // (base × white = base), exactly as the skin layer defaults its rows to white. The presets below
-        // overwrite the rows they define. (16 colour-table pairs = 32 sub-rows.)
         for (int r = 0; r < 32; r++)
             rows[r] = new GearColorRow { Diffuse = (1f, 1f, 1f), Emissive = (0f, 0f, 0f) };
+        return rows;
+    }
+
+    /// <summary>Map the metadata's 1-based row/sub-row presets onto 0-based color table rows.</summary>
+    /// <param name="neutralWhenEmpty">
+    /// With no presets, return the all-white baseline instead of null. Null means "keep the gear template's
+    /// own colour table", which is right for an ordinary shell — its template belongs to the look being
+    /// worn — and wrong for a MASK shell, which has no look of its own. A mask shell is a WHITE base plus
+    /// whatever the colorset says (see the Build call), so white rows are its blank canvas: it starts
+    /// uncoloured and the Masks colorset dyes it from there. Inheriting the template's table instead would
+    /// start it at some arbitrary dark colour the author never picked. Only the mask-shell caller passes true.
+    /// </param>
+    private static Dictionary<int, GearColorRow>? BuildRows(List<ColorTableRowPreset>? presets,
+                                                            bool neutralWhenEmpty = false)
+    {
+        if (presets == null || presets.Count == 0) return neutralWhenEmpty ? NeutralRows() : null;
+        var rows = NeutralRows();
 
         foreach (var p in presets)
         {
