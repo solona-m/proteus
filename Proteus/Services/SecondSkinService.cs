@@ -934,6 +934,12 @@ public sealed class SecondSkinService
             // One published path per host, except the invisible-carrier case below. An earlier version
             // hedged by publishing every shell at a second code; that alias came back as an equipped
             // accessory next composite and poisoned the model-race vote above. Don't re-add it generally.
+            //
+            // The carrier exception below DOES publish two codes, and that includes the Emperor's ring —
+            // which looks like exactly the re-add this warns against. It is safe for one specific reason:
+            // a{EmperorSetId} is filtered out of the model-race vote at its source (see the .Where on
+            // equippedPaths), so no alias of it can reach the vote whatever code it loads under. Nothing
+            // else enjoys that exemption, so the warning still stands for every other path.
             var mdlGamePath = host.ModelPath
                 ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{cutCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
@@ -957,38 +963,60 @@ public sealed class SecondSkinService
             // item, and emptying its entry would swap their frames for a deformed Midlander pair. Those
             // keep the size warning from LoadCandidate instead.
             bool carrier = host.BaseModel == null;
-            // The Emperor's ring has no resolved path to read a code off, so it takes the character's REAL
-            // race — the one whose EQDP entry the game consults. NOT charCode: that is the shared body code
-            // (c0201 for a Miqo'te), and emptying Midlander Female's entry would leave c0801's alone and
-            // the ring would still load natively, a race-size wrong with nothing in the log to say why.
-            var hostRace = host.ModelPath != null ? PathCharCode(host.ModelPath) : (drawnRaceCode ?? charCode);
-            if (carrier && hostRace != null && !string.Equals(hostRace, cutCode, StringComparison.OrdinalIgnoreCase))
+            // The race whose EQDP entry the game consults: the CHARACTER's real one, never the code of the
+            // path the model happens to load from right now.
+            //
+            // Reading it off host.ModelPath — what this did — is a feedback loop against our own fix, and
+            // it alternated in the wild on a Miqo'te wearing the injected glasses carrier:
+            //
+            //   composite A  the walk sees c0801e5501_met (her native facewear). 0801 != cutCode 0201, so
+            //                this fires: c0801 is emptied, the shell is published at both codes, and the
+            //                game duly falls through to the c0201 twin. Suit on.
+            //   composite B  the walk now sees c0201e5501_met — because of A. 0201 == cutCode, so this test
+            //                goes FALSE, no manipulation is emitted, and only the c0201 path is published.
+            //                With c0801's entry no longer emptied the game asks for c0801 again, where we
+            //                publish nothing. Suit off.
+            //   composite C  the walk sees c0801 again… and round it goes.
+            //
+            // That is exactly "the suit disappears when I drag a slider, and comes back when I refresh":
+            // consecutive composites land alternately in A and B. drawnRaceCode is read off the drawn
+            // chara/human model, which our redirects cannot move, so the decision is stable.
+            //
+            // The path code stays as a FALLBACK for the window where drawnRaceCode is not known yet — the
+            // first composite of a login, before any walk has returned a human model. Falling straight to
+            // charCode there would be worse than the bug this replaces: charCode is the shared BODY code,
+            // which for every race this branch exists to serve IS cutCode, so the test below would go false
+            // and the carrier would get no EQDP and no native-path copy at all. Reinstating the old,
+            // loop-prone read is the better degradation — it was at least correct while it was the only
+            // input, and one composite later drawnRaceCode takes over and closes the loop for good.
+            var hostRace = drawnRaceCode
+                        ?? (host.ModelPath != null ? PathCharCode(host.ModelPath) : null)
+                        ?? charCode;
+            if (carrier && !string.Equals(hostRace, cutCode, StringComparison.OrdinalIgnoreCase))
             {
                 manipulations.Add(EqdpManipulation(cutCode,  host.EqdpSlot, host.SetId));
                 manipulations.Add(EqdpManipulation(hostRace, host.EqdpSlot, host.SetId, hasModel: false));
 
-                // Publish at the cut-space twin AS WELL as the native path the game asks for today. If the
-                // emptied entry takes, the game loads the twin and deforms it (right size); if this slot
-                // turns out not to be EQDP-driven — facewear is a bonus item and may not be — it loads the
-                // native copy and we are exactly where we were, rather than losing the shell to a path
-                // nobody asks for. The alias is only ever loaded when the fallthrough worked, in which case
-                // its code IS cutCode, so it cannot pull the model-race vote anywhere new.
-                if (host.ModelPath != null)
+                // Publish at BOTH codes, derived from hostRace/cutCode rather than from whatever the walk
+                // resolved. If the emptied entry takes, the game loads the cut-space copy and deforms it
+                // (right size); if this slot turns out not to be EQDP-driven — facewear is a bonus item and
+                // may not be — it loads the native copy and we are no worse off than before. Deriving the
+                // pair instead of reusing host.ModelPath is what stops the published set from shrinking on
+                // the composites where the walk has already been steered onto the twin.
+                string PathFor(string code)
+                    => $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/"
+                     + $"c{code}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
+
+                foreach (var code in new[] { cutCode, hostRace })
                 {
-                    var twin = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/"
-                             + $"c{cutCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
-                    redirects[twin] = Rel(outputRoot, mdlDisk);
-                    hostModelPaths.Add(twin);
-                    log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model, c{4} "
-                                  + "emptied so the game falls through to it -> {5} (native copy kept at {6})",
-                        host.EqdpSlot, host.Prefix, host.SetId, cutCode, hostRace, twin, mdlGamePath);
+                    var p = PathFor(code);
+                    if (redirects.ContainsKey(p)) continue;
+                    redirects[p] = Rel(outputRoot, mdlDisk);
+                    hostModelPaths.Add(p);
                 }
-                else
-                {
-                    log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model, c{4} "
-                                  + "emptied so the game falls through to it -> {5}",
-                        host.EqdpSlot, host.Prefix, host.SetId, cutCode, hostRace, mdlGamePath);
-                }
+                log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model, c{4} "
+                              + "emptied so the game falls through to it -> {5} (native copy kept at {6})",
+                    host.EqdpSlot, host.Prefix, host.SetId, cutCode, hostRace, PathFor(cutCode), PathFor(hostRace));
             }
             else if (carrier && host.Prefix == 'a')
             {
@@ -1644,6 +1672,11 @@ public sealed class SecondSkinService
         //    visible, but ONLY when they already load in the shell's own space. One that doesn't would
         //    render the shell a race-size wrong, and unlike a carrier we cannot fix it, so it is held back
         //    for step 4 and the Emperor's ring gets first refusal.
+        //
+        //    Build #320 briefly moved the Emperor's ring AHEAD of these, on the theory that appending into
+        //    a worn item was what stopped the shell rendering. That was wrong: a REPLACE carrier host
+        //    (e5501/met, append=False) reproduces the same symptom, so the append/carrier split explains
+        //    nothing and the reorder was reverted rather than left in on a dead rationale.
         foreach (var (slot, eqdp) in new[] { ("rir", "RFinger"), ("ril", "LFinger"), ("wrs", "Wrists"), ("nek", "Neck") })
         {
             if (Consider(slot, eqdp) is not { } acc) continue;
