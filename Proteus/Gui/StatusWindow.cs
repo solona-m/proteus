@@ -416,7 +416,27 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Drop all cached decoded textures and recomposite now. Use if a texture edit\n" +
                 "isn't showing up — e.g. you re-exported an overlay at the same size and the\n" +
-                "change won't appear without restarting the plugin.");
+                "change won't appear without restarting the plugin.\n\n" +
+                "Also re-derives which mod each base skin texture comes from — use this if the\n" +
+                "Base skin below names the wrong mod.");
+
+        // WHICH skin the overlays are painted onto. Nothing else surfaces this, and a composite built on
+        // the wrong body mod looks like a perfectly good composite of a skin you didn't pick — so the
+        // failure is invisible unless the source is named somewhere.
+        var upstreams = compositor.BaseUpstreams();
+        if (upstreams.Count > 0 && ImGui.CollapsingHeader($"Base skin ({upstreams.Count})"))
+        {
+            foreach (var (gamePath, source, settled) in upstreams)
+            {
+                if (settled)
+                    ImGui.TextUnformatted($"{source}");
+                else
+                    ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f), $"{source} (unconfirmed)");
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(gamePath);
+            }
+            ImGui.TextDisabled("The mod each base texture is read from. Hover for the game path.");
+        }
 
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small

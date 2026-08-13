@@ -522,6 +522,12 @@ public class CompositorService : IDisposable
         // (a different file behind a base path) is caught instead by the upstream identity the fingerprint
         // carries: PrimeUpstreamCache re-resolves these paths before the gate reads them, so a body mod
         // that genuinely moved shows up as a different disk path or mtime and the composite runs.
+        // Cleared alongside the memo: with nothing remembered, needPrime re-admits every path on the
+        // !ContainsKey clause anyway, so keeping retry marks here would only let the set grow forever.
+        // _upstreamSettled must go too — it outranks live resolves, so leaving it set would keep asserting a
+        // value derived from the collection we were just told has changed.
+        _upstreamUnsettled.Clear();
+        _upstreamSettled.Clear();
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
@@ -996,6 +1002,11 @@ public class CompositorService : IDisposable
         // the things that can't see it, so drop it too. (The trigger below is forced anyway — belt and braces
         // for an escape hatch whose whole job is to bypass every optimisation.)
         _lastCompositeFingerprint = null;
+        // And re-derive WHICH file each base path resolves to, not just re-decode the one we remembered.
+        // Without this the button rebuilds from the same remembered upstream, so the one failure a user is
+        // most likely to reach for it over — the composite standing on the wrong skin mod — was the one
+        // thing it could not fix.
+        InvalidateUpstreamCache("clear-texture-cache");
         TriggerRecomposite("clear-texture-cache", 0);
         return dropped;
     }
@@ -4460,7 +4471,26 @@ public class CompositorService : IDisposable
 
         if (disk != null && !IsOwnOutput(disk))
         {
-            // Freshest truth: remember it for the runs where our own redirect masks it.
+            // A live answer is normally the freshest truth — but not while Penumbra is rebuilding the
+            // collection, when a contested path transiently resolves to whichever contributor happens to be
+            // applied so far. That window is open RIGHT HERE: PrimeUpstreamCache's finally block republishes
+            // the full manifest and reloads immediately before the blend loop starts calling this, so the
+            // first resolves after a prime land mid-rebuild. Overwriting here would undo the settle the prime
+            // just did and put the composite back on the wrong skin mod by a different route.
+            //
+            // So a settled value wins over a live one for the rest of the composite. It is only ever set by
+            // SettleUpstreams, which has already waited for the answer to stop moving, and any real change to
+            // the collection clears it via InvalidateUpstreamCache.
+            if (_upstreamSettled.ContainsKey(gamePath)
+                && _upstreamByGamePath.TryGetValue(gamePath, out var settled)
+                && !string.Equals(settled, disk, StringComparison.OrdinalIgnoreCase)
+                && File.Exists(settled))
+            {
+                log.Debug("[Proteus] resolve for {0} returned {1}, disagreeing with the settled upstream {2} "
+                        + "— keeping the settled one", gamePath, disk, settled);
+                return settled;
+            }
+
             _upstreamByGamePath[gamePath] = disk;
             return disk;
         }
@@ -4479,8 +4509,208 @@ public class CompositorService : IDisposable
         return null;
     }
 
-    /// <summary>How long to wait for the narrowed manifest to land before priming anyway.</summary>
-    private static readonly TimeSpan PrimeLiveTimeout = TimeSpan.FromMilliseconds(500);
+    /// <summary>
+    /// How long the prime may spend waiting for Penumbra's resolution to SETTLE before giving up on a path.
+    ///
+    /// Was 500ms when the loop only waited for the narrowed manifest to land. Settling needs longer because
+    /// it is waiting on a different event: not "our redirect is gone" (which happens almost immediately) but
+    /// "Penumbra has finished recomputing the collection and the winner has stopped moving". Two seconds is
+    /// far more than a rebuild takes, and it is only ever paid on a cold cache — the warm path returns at
+    /// the needPrime.Count == 0 check without touching this.
+    ///
+    /// Only paths that have already unmasked can spend this budget; see <see cref="PrimeNarrowTimeout"/> for
+    /// the shorter one that governs getting there.
+    /// </summary>
+    private static readonly TimeSpan PrimeLiveTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long the sample must stay unchanged before we believe it. See <see cref="SettleUpstreams"/>.</summary>
+    private static readonly TimeSpan PrimeSettleInterval = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>
+    /// How long a path gets to shed OUR OWN redirect after the reload before we give up on it entirely.
+    ///
+    /// Separate from <see cref="PrimeLiveTimeout"/> because the two are waiting on different events with
+    /// different costs. Unmasking is bounded by Penumbra processing one ReloadMod and is normally tens of
+    /// milliseconds; settling is bounded by a whole collection rebuild. Sharing one budget meant a path
+    /// Penumbra never unmasks at all — the reload dropped, the key not in the collection — sat in the loop
+    /// for the full settle budget, holding the narrowed manifest live the entire time for an answer that was
+    /// never going to arrive. The narrow window is the expensive thing here: while it is open the base
+    /// textures are unredirected, so the character renders un-composited.
+    /// </summary>
+    private static readonly TimeSpan PrimeNarrowTimeout = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// What each base game path currently resolves to, as (path, mod folder, settled) — the files the
+    /// composite is standing ON. Surfaced in the status window because the composite gives no visual clue
+    /// which skin mod it read: an overlay painted onto the wrong body looks like a correct composite of a
+    /// skin the user didn't choose, and the only other evidence is a debug log line.
+    ///
+    /// Model/material shell paths are filtered out; they are written, not read as a base.
+    /// </summary>
+    public IReadOnlyList<(string GamePath, string Source, bool Settled)> BaseUpstreams()
+    {
+        var root = modsRoot;
+        return _upstreamByGamePath
+            .Where(kv => kv.Key.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kv =>
+            {
+                // The mod FOLDER is the answer to "which mod is this?"; the rest of the path is noise in a
+                // one-line row. Fall back to the full path when it isn't under the mod directory at all.
+                var source = kv.Value;
+                if (!string.IsNullOrEmpty(root)
+                    && source.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                {
+                    var rel = source[root.Length..].TrimStart('/', '\\');
+                    var cut = rel.IndexOfAny(['/', '\\']);
+                    source = cut > 0 ? rel[..cut] : rel;
+                }
+                return (kv.Key, source, !_upstreamUnsettled.ContainsKey(kv.Key));
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Base paths whose last prime never settled, so whatever is in <see cref="_upstreamByGamePath"/> for
+    /// them (if anything) was read while Penumbra was still recomputing and must not be trusted as final.
+    ///
+    /// Exists because the memo is otherwise permanent: <see cref="ResolveUpstream"/> returns a remembered
+    /// value for as long as the file exists, and the needPrime filter skips any path already remembered, so
+    /// one bad read would never be re-asked for the rest of the session. Membership here forces the next
+    /// composite to prime the path again.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _upstreamUnsettled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Base paths whose entry in <see cref="_upstreamByGamePath"/> came from <see cref="SettleUpstreams"/>,
+    /// i.e. from a read that was verified to have stopped moving.
+    ///
+    /// <see cref="ResolveUpstream"/> treats these as authoritative and will not overwrite them with a live
+    /// answer, because the resolves that immediately follow a prime land while Penumbra is rebuilding the
+    /// collection from the restored manifest — the same mid-rebuild window the settle exists to see past.
+    /// Cleared wholesale by <see cref="InvalidateUpstreamCache"/>, so a genuine collection change still wins.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _upstreamSettled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolve <paramref name="paths"/> to their real upstreams while our own redirects are narrowed away,
+    /// waiting until the answer STOPS CHANGING rather than accepting the first non-Proteus value.
+    ///
+    /// The distinction is the whole point of this method. <c>ReloadMod</c> makes Penumbra recompute the
+    /// collection cache asynchronously, and while that is in flight a contested path resolves to whichever
+    /// contributor has been applied so far — not to the highest-priority one. The old loop broke out on the
+    /// first answer that wasn't ours, which is satisfied by any contributor, so a path claimed by several
+    /// mods came back effectively at random: observed resolving to the correct mod, to the mod one priority
+    /// step below it, and to one four steps below it on three consecutive plugin loads with identical
+    /// settings, the FASTEST prime giving the WORST answer.
+    ///
+    /// So: require two consecutive identical reads a quiet interval apart. A mid-rebuild read disagrees with
+    /// the next one and is discarded; a settled read agrees and is kept.
+    ///
+    /// Settling is tracked PER PATH, not for the batch as a whole. Paths converge at different moments, and
+    /// one that never unmasks — Penumbra not processing that key, an undecidable path that IsOwnOutput
+    /// pessimistically calls ours — must not cost its neighbours the answers they already reached, which is
+    /// what an all-or-nothing return does on every composite for as long as the condition lasts.
+    /// </summary>
+    /// <returns>The settled upstreams. Paths that never settled are absent — deliberately, so the caller
+    /// can leave them unmemoised and retry rather than bake in a value read mid-rebuild.</returns>
+    private Dictionary<string, string> SettleUpstreams(IReadOnlyList<string> paths, System.Diagnostics.Stopwatch sw)
+    {
+        // Per path, the previous answer of an unbroken streak of unmasked reads. Absent means there is no
+        // streak — we haven't seen an answer yet, or the last read still showed our own redirect. A null
+        // VALUE is different from absent: it means "answered, and the answer is that nobody provides this",
+        // which is a legitimate thing for two consecutive reads to agree on.
+        var previous = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var settled  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var pending  = new List<string>(paths);
+        var unmasked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        List<string>? stuck = null;
+        int samples  = 0;
+
+        // Two failure modes, reported separately because they mean different things: a path Penumbra never
+        // unmasked says the reload didn't reach it, while a path that kept changing says the collection was
+        // still rebuilding. Both end the same way — unresolved, retried next composite.
+        void WarnUnresolved(List<string>? neverUnmasked, List<string>? stillMoving)
+        {
+            if (neverUnmasked is { Count: > 0 })
+                log.Warning("[Proteus] upstream prime: {0} path(s) never shed our own redirect within {1}ms — "
+                          + "Penumbra did not apply the narrowed manifest to them; leaving them unresolved so "
+                          + "the next composite retries: {2}",
+                    neverUnmasked.Count, (int)PrimeNarrowTimeout.TotalMilliseconds, string.Join(", ", neverUnmasked));
+            if (stillMoving is { Count: > 0 })
+                log.Warning("[Proteus] upstream did NOT settle for {0} path(s) within {1}ms — the resolved "
+                          + "winner was still changing; leaving them unresolved so the next composite "
+                          + "retries: {2}",
+                    stillMoving.Count, sw.ElapsedMilliseconds, string.Join(", ", stillMoving));
+        }
+
+        while (true)
+        {
+            samples++;
+            bool narrowExpired = sw.Elapsed >= PrimeNarrowTimeout;
+
+            for (int i = pending.Count - 1; i >= 0; i--)
+            {
+                var p = pending[i];
+                var d = penumbra.ResolvePlayer(p);
+
+                // Still masked by our own redirect, or no answer at all: this read tells us nothing, so break
+                // the streak. Without the reset a read taken before the narrow landed could pair with one
+                // taken after it and "settle" on the empty answer the two happen to share — concluding
+                // "nobody provides this" when the truth is only that we hadn't looked yet.
+                if (d == null || IsOwnOutput(d))
+                {
+                    previous.Remove(p);
+
+                    // Out of narrow budget without this path EVER having unmasked. Waiting the full settle
+                    // budget for it would keep the narrow open for an answer that isn't coming; drop it and
+                    // let the paths that did unmask finish. When every path is stuck this empties pending on
+                    // the spot, so the manifest is restored at the narrow deadline rather than the settle one.
+                    if (narrowExpired && !unmasked.Contains(p))
+                    {
+                        (stuck ??= []).Add(p);
+                        pending.RemoveAt(i);
+                    }
+                    continue;
+                }
+
+                unmasked.Add(p);
+
+                // An unredirected path echoes the game path straight back. That is "nobody else provides
+                // this", not a disk file — memoising it would put a non-existent path in the upstream cache.
+                var value = string.Equals(d, p, StringComparison.OrdinalIgnoreCase) ? null : d;
+
+                if (previous.TryGetValue(p, out var prev)
+                    && string.Equals(prev, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (value != null) settled[p] = value;
+                    pending.RemoveAt(i);
+                    continue;
+                }
+
+                previous[p] = value;
+            }
+
+            if (pending.Count == 0)
+            {
+                WarnUnresolved(stuck, null);
+                log.Debug("[Proteus] upstream settled: {0} of {1} path(s) resolved after {2} sample(s) in {3}ms",
+                    settled.Count, paths.Count, samples, sw.ElapsedMilliseconds);
+                return settled;
+            }
+
+            if (sw.Elapsed >= PrimeLiveTimeout)
+            {
+                // Only what is still moving is dropped. An unsettled answer is not a weaker answer, it is a
+                // wrong one, and memoising it is what strands a whole session on the wrong skin — but that is
+                // a reason to discard THAT path, not the ones that already stood still.
+                WarnUnresolved(stuck, pending);
+                return settled;
+            }
+
+            Thread.Sleep((int)PrimeSettleInterval.TotalMilliseconds);
+        }
+    }
 
     /// <summary>
     /// Make sure every game path we currently redirect and are about to READ has a known upstream, so the
@@ -4557,8 +4787,14 @@ public class CompositorService : IDisposable
 
             // A path only needs the narrow-and-restore dance if OUR OWN manifest currently masks it. Anything
             // else already resolves to its real upstream, so a plain ResolveUpstream call is enough.
+            //
+            // _upstreamUnsettled re-admits paths we already "know", because for those the memo holds a value
+            // read while Penumbra was mid-rebuild. Without this clause the needPrime filter would see them as
+            // known and never ask again, which is exactly how one racy read used to survive a whole session.
             var needPrime = live is { } lv
-                ? baseKeys.Where(p => lv.Files.ContainsKey(p) && !_upstreamByGamePath.ContainsKey(p)).ToList()
+                ? baseKeys.Where(p => lv.Files.ContainsKey(p)
+                                   && (!_upstreamByGamePath.ContainsKey(p) || _upstreamUnsettled.ContainsKey(p)))
+                          .ToList()
                 : [];
 
             if (needPrime.Count > 0)
@@ -4576,23 +4812,43 @@ public class CompositorService : IDisposable
                     WriteManagedModJson(narrowed, manips);
                     penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
 
-                    // Poll rather than sleep a fixed interval — the reload is processed asynchronously on
-                    // Penumbra's framework handler, and one probe unmasking means the whole write landed.
-                    var probe = needPrime[0];
-                    while (sw.Elapsed < PrimeLiveTimeout)
-                    {
-                        var d = penumbra.ResolvePlayer(probe);
-                        if (d == null || !IsOwnOutput(d)) break;
-                        Thread.Sleep(15);
-                    }
+                    // Wait for the answer to stop moving, not merely for our redirect to disappear — see
+                    // SettleUpstreams for why the difference decides which skin mod the composite lands on.
+                    var settled = SettleUpstreams(needPrime, sw);
 
                     int missed = 0;
                     foreach (var p in needPrime)
-                        if (ResolveUpstream(p) == null) missed++;   // populates _upstreamByGamePath en route
+                    {
+                        if (settled.TryGetValue(p, out var disk))
+                        {
+                            // Log the transition, not just the value: a genuine skin change and a racy read
+                            // produce identical output, and this line is what tells them apart afterwards.
+                            if (_upstreamByGamePath.TryGetValue(p, out var was)
+                                && !string.Equals(was, disk, StringComparison.OrdinalIgnoreCase))
+                                log.Information("[Proteus] base upstream CHANGED: {0}\n    was {1}\n    now {2}",
+                                    p, was, disk);
+                            else
+                                log.Information("[Proteus] base upstream: {0} <- {1}", p, disk);
+
+                            _upstreamByGamePath[p] = disk;
+                            _upstreamSettled[p] = 0;
+                            _upstreamUnsettled.TryRemove(p, out _);
+                        }
+                        else
+                        {
+                            // Unsettled, or genuinely provided by nobody. Either way don't memoise a guess:
+                            // mark it for retry. Drop any earlier settled mark too — whatever the memo still
+                            // holds for this path was not confirmed by THIS prime, so it must not go on
+                            // outranking live resolves.
+                            missed++;
+                            _upstreamUnsettled[p] = 0;
+                            _upstreamSettled.TryRemove(p, out _);
+                        }
+                    }
 
                     log.Information("[Proteus] upstream prime: {0} path(s) in {1}ms{2}",
                         needPrime.Count, sw.ElapsedMilliseconds,
-                        missed > 0 ? $" — {missed} still unresolved (will composite on game data)" : "");
+                        missed > 0 ? $" — {missed} still unresolved (will composite on game data, retrying next composite)" : "");
                 }
                 finally
                 {
