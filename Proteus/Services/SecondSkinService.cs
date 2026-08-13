@@ -26,6 +26,15 @@ public sealed class SecondSkinService
     private readonly Configuration config;
     private readonly IPluginLog log;
 
+    /// <summary>
+    /// Resolve a game path to the file we should read as a BASE — never our own previous output, and
+    /// never past a mod the player actually installed. See CompositorService.ResolveUpstream: it
+    /// remembers the file that was behind a path BEFORE our redirect started masking it, which is the
+    /// only way an append host that the player has modded keeps its own appearance across composites.
+    /// Null (tests, or no upstream known) falls back to a plain resolve plus the own-output guard.
+    /// </summary>
+    private readonly Func<string, string?>? resolveUpstream;
+
     /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
     // internal so the compositor can prefetch this phase's art at the right size; see PrefetchAhead.
     internal const int TexSize = 2048;
@@ -66,7 +75,8 @@ public sealed class SecondSkinService
 
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
-        UVRemapService uvRemap, Configuration config, IPluginLog log)
+        UVRemapService uvRemap, Configuration config, IPluginLog log,
+        Func<string, string?>? resolveUpstream = null)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
@@ -74,6 +84,7 @@ public sealed class SecondSkinService
         this.uvRemap = uvRemap;
         this.config = config;
         this.log = log;
+        this.resolveUpstream = resolveUpstream;
     }
 
     /// <summary>
@@ -95,7 +106,13 @@ public sealed class SecondSkinService
         // The game model paths hosting a shell this composite (one per host that got layers). When this set
         // SHRINKS between composites — a spill host dropped as the layer count fell — the vacated accessory
         // must reload its real model, which only a full redraw does; the compositor forces one on any change.
-        List<string> HostModelPaths);
+        List<string> HostModelPaths,
+        // The subset of HostModelPaths we APPEND into — an item the player is wearing, whose own model we
+        // read back as the base for the merge. These are the only host paths that have an upstream worth
+        // recovering, so they are the only ones PrimeUpstreamCache should ever unpublish to go looking (see
+        // there). A CARRIER host is replaced outright and its base is never read, so priming it would blank
+        // the shell for the width of the prime and learn nothing.
+        List<string> AppendHostModelPaths);
 
     /// <summary>
     /// Write only if the content differs; reports whether it did.
@@ -333,8 +350,43 @@ public sealed class SecondSkinService
                 .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+        // Resolve the winner, breaking an exact tie with evidence the main vote didn't get to see.
+        //
+        // The old tie-break was <see cref="CodeVotes"/>'s lexicographic ThenBy, which is arbitrary: on a
+        // Miqo'te wearing one c0201 necklace and one c0101 ring it picked c0101 purely because "0101"
+        // sorts first, then reported her own c0201 equipment as race-deformed. That is not an exotic
+        // input — many vanilla accessories ship at c0101 ONLY, whatever the wearer's race, so a 1-1 split
+        // across two worn accessories is the ordinary shape of this vote on a character wearing no gear.
+        string PickCode(List<IGrouping<string, string>> votes, bool votedOnBare)
+        {
+            int best = votes[0].Count();
+            var tied = votes.Where(g => g.Count() == best).Select(g => g.Key).ToList();
+            if (tied.Count == 1) return tied[0];
+
+            // Runoff 1 — the bare-body parts the game is DRAWING. Same kind of evidence as the main vote
+            // (the race the game resolved this character's equipment to), held out of it because
+            // uncovered slots outnumber worn items and would drown real gear. When the worn items split
+            // exactly, that objection is gone and this is the only tiebreaker that is about equipment at
+            // all. Skipped when the main vote already WAS the bare parts — it would just restage the tie.
+            if (!votedOnBare)
+            {
+                var bare = CodeVotes(bareBodyModels?.Values ?? Enumerable.Empty<string>())
+                    .Where(g => tied.Contains(g.Key, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (bare.Count == 1 || (bare.Count > 1 && bare[0].Count() > bare[1].Count()))
+                    return bare[0].Key;
+            }
+
+            // Runoff 2 — the character's own body code, when the evidence is still balanced. Home beats
+            // foreign: a shell hosted in the space the character already draws in needs no deformation,
+            // so on a genuine coin-flip it is the choice with the smaller failure.
+            if (tied.Contains(charCode, StringComparer.OrdinalIgnoreCase)) return charCode;
+
+            return tied[0];   // deterministic last resort — CodeVotes already ordered these by key
+        }
+
         var codeVotes = CodeVotes(equippedPaths);
         var voteSource = "equipped";
+        var votedOnBare = false;
 
         // Wearing nothing: the e0000 parts the game is DRAWING are the only evidence left, and they are
         // evidence of the same kind — the race the game resolved this character's equipment to. Without
@@ -350,13 +402,17 @@ public sealed class SecondSkinService
         {
             codeVotes = CodeVotes(bareBodyModels?.Values ?? Enumerable.Empty<string>());
             voteSource = "drawn bare-body";
+            votedOnBare = true;
         }
 
-        if (codeVotes.Count > 1)
-            log.Warning("[Proteus] second skin: {0} models disagree on a model code [{1}] — using c{2}",
-                voteSource, string.Join(", ", codeVotes.Select(g => $"{g.Key}x{g.Count()}")), codeVotes[0].Key);
-
-        var modelCode = codeVotes.Count > 0 ? codeVotes[0].Key : null;
+        string? modelCode = null;
+        if (codeVotes.Count > 0)
+        {
+            modelCode = PickCode(codeVotes, votedOnBare);
+            if (codeVotes.Count > 1)
+                log.Warning("[Proteus] second skin: {0} models disagree on a model code [{1}] — using c{2}",
+                    voteSource, string.Join(", ", codeVotes.Select(g => $"{g.Key}x{g.Count()}")), modelCode);
+        }
         if (modelCode == null)
         {
             // Nothing equipped, so there is no resolved path to read it off — and defaulting to charCode
@@ -841,6 +897,7 @@ public sealed class SecondSkinService
         var bodyShapes = bodies.Select(b => b.Shapes).ToList();
         bool modelChangedAny = false;
         var hostModelPaths = new List<string>();
+        var appendHostModelPaths = new List<string>();
         for (int h = 0; h < hosts.Count; h++)
         {
             if (perHostLayers[h].Count == 0) continue;
@@ -885,6 +942,9 @@ public sealed class SecondSkinService
             modelChangedAny |= modelChanged;
             redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
             hostModelPaths.Add(mdlGamePath);
+            // Append hosts only: BaseModel non-null means we merged into the player's own item, so this
+            // path has a real upstream (their necklace/ring mod) that later composites must read back.
+            if (host.BaseModel != null) appendHostModelPaths.Add(mdlGamePath);
 
             // ── carrier hosts: make the game load our copy from CUT space ─────────────────────────
             // A host whose model we REPLACE has no appearance of its own to protect — the Emperor's ring is
@@ -943,7 +1003,8 @@ public sealed class SecondSkinService
         }
         if (hostModelPaths.Count == 0) return null;
 
-        return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny, hostModelPaths);
+        return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
+                          hostModelPaths, appendHostModelPaths);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
@@ -1438,12 +1499,21 @@ public sealed class SecondSkinService
             // to our own previous output. Taking that as the "base" is a feedback loop: on the append path
             // it would merge the shell into the shell again every composite, doubling the model each run.
             // The composite clears redirects and reloads before getting here, but that's async and races —
-            // observed in the wild resolving to an 875 KB "glasses" model (our 854 KB shell). Ignore any
-            // resolved file inside our own mod directory and read the game's original instead.
-            var disk = penumbra.ResolvePlayer(gamePath);
+            // observed in the wild resolving to an 875 KB "glasses" model (our 854 KB shell).
+            //
+            // Go through the upstream resolver, NOT a plain resolve. An append host is an item the player
+            // chose, and they may well have modded it: this path has to come back as THEIR necklace/ring
+            // file even on the composites where our own redirect masks it. Reading the game's original
+            // instead — what this did before — silently reverted a modded host to vanilla from the second
+            // composite onward, and took the appended shell with it.
+            var disk = resolveUpstream?.Invoke(gamePath) ?? penumbra.ResolvePlayer(gamePath);
+            // Defence in depth: ResolveUpstream already biases toward "ours" and returns null rather than
+            // hand back our output, so this should not fire — but a null resolver (tests) still needs it,
+            // and appending the shell to itself is the one failure that compounds silently every run.
             if (disk != null && IsInsideOutputRoot(disk, outputRoot))
             {
-                log.Debug("[Proteus] host: {0} resolved to our own output ({1}) — reading the game's original instead", slot, disk);
+                log.Debug("[Proteus] host: {0} resolved to our own output ({1}) and no upstream is known — "
+                        + "reading the game's original instead", slot, disk);
                 disk = null;
             }
 

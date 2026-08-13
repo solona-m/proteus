@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Proteus.Services;
 using Xunit;
 
@@ -85,4 +86,80 @@ public class TexHeaderSanitizeTests
         var result = TextureLoader.SanitizeTexBytes(tex);
         Assert.Equal(1, MipCountOf(result));
     }
+
+    // ── IsCompleteTex ────────────────────────────────────────────────────────
+    //
+    // Output filenames carry a content hash, so a damaged file keeps a name that promises content it no
+    // longer has. Without a completeness check the compositor re-approves it on every run for the rest of
+    // the install's life, and the game silently fails to load the texture.
+
+    // A single-surface .tex exactly as WriteTex emits it: 80-byte header, then the payload.
+    private static byte[] MakeSurface(uint format, int w, int h)
+    {
+        long payload = format == Bgra8 ? (long)w * h * 4 : (long)w * h;   // BC5/BC7: 16 bytes per 4×4 block
+        var b = new byte[80 + payload];
+        BitConverter.TryWriteBytes(b.AsSpan(0), 0x00800000u);
+        BitConverter.TryWriteBytes(b.AsSpan(4), format);
+        BitConverter.TryWriteBytes(b.AsSpan(8),  (ushort)w);
+        BitConverter.TryWriteBytes(b.AsSpan(10), (ushort)h);
+        BitConverter.TryWriteBytes(b.AsSpan(12), (ushort)1);
+        b[14] = 1;
+        BitConverter.TryWriteBytes(b.AsSpan(28), 80u);
+        return b;
+    }
+
+    private static bool CheckFile(byte[] bytes)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "proteus_tex_" + Guid.NewGuid().ToString("N") + ".tex");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            return TextureLoader.IsCompleteTex(path);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Theory]
+    [InlineData(Bgra8, 64, 64)]     // uncompressed
+    [InlineData(Bc7, 64, 64)]       // block compressed
+    [InlineData(Bgra8, 16, 16)]     // the flat-colour shrink WriteTex applies to solid buffers
+    public void CompleteTex_IsAccepted(uint format, int w, int h)
+        => Assert.True(CheckFile(MakeSurface(format, w, h)));
+
+    [Fact]
+    public void TruncatedPayload_IsRejected()
+    {
+        var full = MakeSurface(Bc7, 64, 64);
+        Assert.False(CheckFile(full[..(full.Length / 2)]));
+    }
+
+    [Fact]
+    public void HeaderOnly_IsRejected()
+        => Assert.False(CheckFile(MakeSurface(Bgra8, 64, 64)[..80]));
+
+    [Fact]
+    public void ShorterThanAHeader_IsRejected()
+        => Assert.False(CheckFile(new byte[16]));
+
+    [Fact]
+    public void EmptyFile_IsRejected()
+        => Assert.False(CheckFile(Array.Empty<byte>()));
+
+    // Trailing bytes are as wrong as missing ones: the length must be exactly what the header describes.
+    [Fact]
+    public void OversizedPayload_IsRejected()
+    {
+        var full = MakeSurface(Bgra8, 32, 32);
+        Assert.False(CheckFile([.. full, .. new byte[64]]));
+    }
+
+    // A format WriteTex never emits means the file did not come from us, so its length proves nothing.
+    [Fact]
+    public void UnknownFormat_IsRejected()
+        => Assert.False(CheckFile(MakeSurface(0x1131u, 64, 64)));
+
+    [Fact]
+    public void MissingFile_IsRejected()
+        => Assert.False(TextureLoader.IsCompleteTex(
+            Path.Combine(Path.GetTempPath(), "proteus_absent_" + Guid.NewGuid().ToString("N") + ".tex")));
 }

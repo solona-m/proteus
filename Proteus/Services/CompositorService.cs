@@ -270,8 +270,18 @@ public class CompositorService : IDisposable
         this.config = config;
         this.log = log;
         this.uvRemap = uvRemap;
-        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log);
+        // ResolveUpstream, not a bare resolver: the shell's append host is an item the player picked and
+        // may have modded, so SecondSkinService has to read THEIR file as its base even on the composites
+        // where our own redirect masks the path. Safe as a method group here even though managedModDir is
+        // assigned below — the delegate is only invoked during a composite, long after this returns.
+        this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
+                                                ResolveUpstream);
         this.seamMaps  = new UvSeamMapService(log);
+
+        // Seeded before the first composite: the manifest on disk already masks last session's append
+        // hosts, so PrimeUpstreamCache needs to know which they are before any shell has been rebuilt.
+        if (config.AppendHostModelPaths is { Count: > 0 } appendHosts)
+            _appendHostModelPaths = new HashSet<string>(appendHosts, StringComparer.OrdinalIgnoreCase);
 
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
@@ -2055,8 +2065,12 @@ public class CompositorService : IDisposable
             //   - If a body material's type is NOT in the snapshot at all → keep (mid-switch: the
             //     new body type hasn't appeared yet; post-redraw check will clean up if needed).
             var activeMtrl = _activeMtrlSnapshot;
+            // Declared out here so the sibling-synthesis pass below can tell "this body type isn't loaded
+            // at all" from "the type is loaded, but not the material this sibling would target" — the two
+            // read identically in the logs otherwise, and the distinction is the whole answer when a
+            // vanilla sibling silently stops being synthesized.
+            var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             {
-                var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 if (activeMtrl != null)
                     foreach (var m in activeMtrl)
                     {
@@ -2165,7 +2179,17 @@ public class CompositorService : IDisposable
                         // The snapshot must be settled for this to be correct — see the post-composite
                         // re-verification in SchedulePostRedrawBodyTypeCheck.
                         if (!activeMtrl.Contains(dstPath))
+                        {
+                            // Worth a line only when the body type IS loaded somewhere but this material
+                            // is not: that is the case that looks like a contradiction in the log ("active
+                            // types=bibo,gen2" yet no vanilla sibling), and it means the type came from a
+                            // different race or body id. The plain "that body isn't loaded" case is the
+                            // normal state for every character and would drown the log.
+                            if (activeBodyTypes.Contains(bodyType))
+                                log.Debug("[Proteus] No sibling synthesized ({0} is loaded, but not this material): {1}",
+                                    bodyType, dstPath);
                             continue;
+                        }
 
                         bool vanilla = bodyType == "gen2";
                         var dstPairs = pairs.Where(p => vanilla
@@ -3721,6 +3745,11 @@ public class CompositorService : IDisposable
 
                 var baseName = SanitizeName(mtrlGamePath);
                 var channels = new System.Text.StringBuilder();
+                // WHICH game path each channel was published to. The material's texture paths are read out
+                // of the .mtrl, so they are not derivable from anything else in the log — and they are the
+                // one link that decides whether the game ever reads our output. Without them, confirming
+                // "we composited" says nothing about "the character samples it".
+                var published = new List<string>(3);
 
                 // Compression (opt-in): BC7 for every skin channel — the skin normal uses its B/A channels
                 // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
@@ -3743,6 +3772,7 @@ public class CompositorService : IDisposable
                      || textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
                         redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" diffuse");
+                        published.Add($"{texPaths.Diffuse} -> {relPath}");
 
                         // Publish the glow recipes captured during the diffuse phase, now that the on-disk
                         // path (what the live texture resource reports) is known.
@@ -3761,7 +3791,10 @@ public class CompositorService : IDisposable
                     var relPath = "textures/" + name;
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
-                    { redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal"); }
+                    {
+                        redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" normal");
+                        published.Add($"{texPaths.Normal} -> {relPath}");
+                    }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
                 {
@@ -3770,11 +3803,17 @@ public class CompositorService : IDisposable
                     var relPath = "textures/" + name;
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
-                    { redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask"); }
+                    {
+                        redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched); channels.Append(" mask");
+                        published.Add($"{texPaths.Mask} -> {relPath}");
+                    }
                 }
 
                 if (channels.Length > 0)
+                {
                     log.Debug("[Proteus] Composited {0}:{1}", mtrlGamePath, channels);
+                    log.Debug("[Proteus]   redirects: {0}", string.Join(" | ", published));
+                }
 
                 // Patch .mtrl with emissive shader key + color table if any row has Emissive > 0
                 bool needsEmissive = pairs.Any(p =>
@@ -3823,7 +3862,9 @@ public class CompositorService : IDisposable
                         var name = baseName + "_" + ContentTag(raw, OutputFormatVersion) + ".mtrl";
                         var outPath = Path.Combine(materialsDir, name);
                         var relPath = "materials/" + name;
-                        if (AlreadyWritten(outPath) || textureLoader.WriteMtrl(raw, outPath))
+                        // Written verbatim, so its expected length is simply the buffer's — the .tex
+                        // header check has nothing to read here.
+                        if (AlreadyWritten(outPath, raw.Length) || textureLoader.WriteMtrl(raw, outPath))
                             redirects[mtrlGamePath] = relPath;
                     }
                 }
@@ -4039,6 +4080,31 @@ public class CompositorService : IDisposable
                             else if (shells.ShellChanged)
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
+
+                            // Which of the hosts we APPENDED into, for PrimeUpstreamCache. Persisted, not
+                            // just held in memory: the manifest outlives the session and masks these paths
+                            // from the first composite after a restart, when nothing has been built yet to
+                            // tell an append host from a carrier. Written only on a real change — this runs
+                            // on every composite and config.Save() is disk I/O.
+                            //
+                            // LAST in this block, and under the same lock every other off-thread save takes
+                            // (see _bodyModConfigLock). Save() serializes the whole Configuration, so an
+                            // unsynchronized one can throw "collection was modified" while IsBodyMod mutates
+                            // KnownBodyMods on its own thread — and thrown from higher up this block it would
+                            // be swallowed as "second skin build failed" and skip _needFullRedraw, leaving a
+                            // changed shell model to an in-place reload that never re-fetches an accessory
+                            // .mdl. Everything load-bearing is already assigned above; this can only lose
+                            // the persisted hint, which the next composite rewrites.
+                            var appendHosts = new HashSet<string>(shells.AppendHostModelPaths, StringComparer.OrdinalIgnoreCase);
+                            if (!appendHosts.SetEquals(_appendHostModelPaths))
+                            {
+                                _appendHostModelPaths = appendHosts;
+                                lock (_bodyModConfigLock)
+                                {
+                                    config.AppendHostModelPaths = [.. appendHosts];
+                                    config.Save();
+                                }
+                            }
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
@@ -4317,8 +4383,39 @@ public class CompositorService : IDisposable
     /// and, just as importantly, leaves LastWriteTime alone — sync plugins invalidate their file cache on
     /// any modtime change (PSync: FileCacheManager.ValidateFileCacheEntity), so rewriting identical bytes
     /// would force a re-hash of the whole skin set on every slider drag.
+    /// <para/>
+    /// The name is only a promise about content, though, so the file is also checked for COMPLETENESS.
+    /// <c>TextureLoader.WriteWithRetry</c> publishes through a .tmp and an atomic move, so our own
+    /// writing cannot leave a torn file here — but anything that damages one AFTERWARDS (antivirus, a
+    /// half-restored backup, a failing disk, a sync tool mid-copy) is permanent without this: a bare
+    /// existence test re-approves the damaged file on every composite from then on, the composite reports
+    /// success, the redirect goes live, and the game quietly fails to load the texture. Rewriting costs
+    /// one encode; not rewriting costs the user a broken skin until they delete the file by hand.
     /// </summary>
-    private static bool AlreadyWritten(string outPath) => File.Exists(outPath);
+    /// <param name="expectedLength">
+    /// Exact byte count the file should have, for outputs that are written verbatim (.mtrl). Omit for
+    /// .tex, whose length is derived from its own header by <see cref="TextureLoader.IsCompleteTex"/>.
+    /// </param>
+    private bool AlreadyWritten(string outPath, long expectedLength = -1)
+    {
+        bool complete;
+        try
+        {
+            // ONE stat for the whole check: FileInfo caches Exists/Length from its first access, and the
+            // IsCompleteTex overload below reuses that snapshot instead of re-stat'ing the path.
+            var fi = new FileInfo(outPath);
+            if (!fi.Exists) return false;      // absent is the normal first-run case, not damage — no warning
+            complete = expectedLength >= 0
+                ? fi.Length == expectedLength
+                : TextureLoader.IsCompleteTex(fi);
+        }
+        catch { return false; }   // unreadable — rewrite rather than trust it
+
+        if (complete) return true;
+
+        log.Warning("[Proteus] output present but incomplete — rewriting: {0}", outPath);
+        return false;
+    }
 
     /// <summary>
     /// True when <paramref name="diskPath"/> is a file this plugin wrote into the managed mod. Compared on
@@ -4427,12 +4524,26 @@ public class CompositorService : IDisposable
     private List<string> PrimeUpstreamCache(IEnumerable<string> materialPaths)
     {
         // Only paths we might read as a BASE matter here. Shell files under chara/equipment|accessory are
-        // write-only from the composite's point of view — the sole host-model read is already guarded by
-        // SecondSkinService's own IsInsideOutputRoot check — and excluding them also stops a new shell
-        // texture name from forcing a prime every time the shell changes.
-        static bool IsReadableBase(string p)
-            => !p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
-            && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase);
+        // write-only from the composite's point of view, and excluding them stops a new shell texture name
+        // from forcing a prime every time the shell changes.
+        //
+        // The one exception is an APPEND host's model: we read that back as the base we merge into, so it
+        // has a real upstream (the player's own necklace/ring mod) that has to survive our redirect. It
+        // used to be excluded too, on the grounds that SecondSkinService's IsInsideOutputRoot check
+        // "guarded" it — but that check only refuses our output, it does not recover what was behind it,
+        // so with a cold cache and a live manifest the merge was rebuilt from VANILLA and the player's
+        // modded necklace lost its appearance (taking the appended shell with it).
+        //
+        // CARRIER hosts are deliberately NOT admitted, even though they are .mdl under the same trees.
+        // Their model is replaced outright and never read, so priming one learns nothing — while the
+        // narrow below would drop its redirect for the width of the prime, and since the EQDP rows are
+        // carried across, the game would load the real (invisible) Emperor ring and the shell would blink
+        // out. That is why this tests the append set rather than the extension.
+        var appendHosts = _appendHostModelPaths;
+        bool IsReadableBase(string p)
+            => (!p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
+             && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
+            || appendHosts.Contains(p);
 
         List<string> baseKeys;
 
@@ -4664,6 +4775,16 @@ public class CompositorService : IDisposable
     /// added or (crucially) dropped as the layer count fell — the vacated accessory must reload its real model,
     /// which only a full redraw does. Compared each composite to force one; an in-place reload can't do it.</summary>
     private HashSet<string> _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The subset of <see cref="_lastShellHostPaths"/> we APPENDED into — the player's own worn item, whose
+    /// model is read back as the base of the merge. These are the only published .mdl paths with an upstream
+    /// worth recovering, so they are the only ones <see cref="PrimeUpstreamCache"/> may unpublish to go and
+    /// look for it. Seeded from config at construction because the manifest outlives the session: on the
+    /// first composite after a restart it already masks these paths, and nothing has been built yet to say
+    /// which they are.
+    /// </summary>
+    private volatile HashSet<string> _appendHostModelPaths = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Restore any accessory whose model the second skin replaced back to its original geometry, by

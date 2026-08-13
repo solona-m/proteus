@@ -217,6 +217,15 @@ public class Configuration : IPluginConfiguration
     /// real redraw).</summary>
     public List<string>? CachedActiveMaterialPaths { get; set; } = null;
 
+    /// <summary>Game model paths the second skin last APPENDED into — the player's own necklace/ring,
+    /// whose model we read back as the base for the merge. Persisted because the managed mod's manifest
+    /// survives a restart and masks these paths from the very first composite of a session, while the
+    /// in-memory upstream cache starts empty: without this, PrimeUpstreamCache cannot tell which host
+    /// paths are worth unmasking before a shell has been built, and the first composite of every session
+    /// would rebuild a modded host from vanilla. Carrier hosts are deliberately absent — their model is
+    /// replaced, never read, so unmasking one only blanks the shell.</summary>
+    public List<string>? AppendHostModelPaths { get; set; } = null;
+
     /// <summary>User-chosen stacking order for overlays within one Penumbra multi-select group, keyed by
     /// <see cref="StackKey"/> → option names TOP-FIRST. Options in the same group otherwise share a
     /// <c>GroupOrder</c> and stack in arbitrary order; this breaks that tie. Options not listed keep their

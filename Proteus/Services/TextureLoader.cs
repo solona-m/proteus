@@ -809,6 +809,73 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// Whether <paramref name="path"/> holds a COMPLETE .tex written by <see cref="WriteTex"/> — its
+    /// length is exactly what its own header describes. False for anything missing, truncated, or written
+    /// in a format this never emits.
+    /// <para/>
+    /// The header is self-describing (format at +4, dimensions at +8/+10), so no caller has to know how
+    /// many bytes the encode produced. Both block formats are 16 bytes per 4×4 block, and compression is
+    /// only ever chosen for 4-aligned dimensions, so the payload is w·h for either of them.
+    /// <para/>
+    /// Exists because a write interrupted partway — a crash, a full disk, antivirus — leaves a file whose
+    /// NAME promises content it does not have. Output names carry a content hash, so an existence check
+    /// alone re-approves that file on every composite afterwards: the damage is permanent, silent, and
+    /// only clearable by deleting the file by hand. Wrong answers here are cheap in one direction only
+    /// (a needless re-encode) and expensive in the other, so anything unrecognised reads as incomplete.
+    /// </summary>
+    public static bool IsCompleteTex(string path)
+    {
+        // The FileInfo construction is inside the try, not an expression-bodied hand-off: it throws on an
+        // empty or malformed path, and this returns false for "anything missing" — a caller asking about a
+        // junk path wants that answer, not an exception from what reads like a predicate.
+        try { return IsCompleteTex(new FileInfo(path)); }
+        catch { return false; }
+    }
+
+    /// <inheritdoc cref="IsCompleteTex(string)"/>
+    /// <remarks>
+    /// Takes the <see cref="FileInfo"/> so a caller that has already stat'd the file doesn't pay for a
+    /// second one — <see cref="FileInfo.Exists"/> and <see cref="FileInfo.Length"/> are served from the
+    /// snapshot taken on first access. The header read cannot be avoided in the same way: the only other
+    /// route to an expected length is re-deriving it from the source buffer, which means repeating
+    /// <see cref="IsSolidColor"/>'s scan over the whole image to find the flat-colour shrink — far more
+    /// expensive than reading 16 bytes.
+    /// </remarks>
+    public static bool IsCompleteTex(FileInfo fi)
+    {
+        try
+        {
+            if (!fi.Exists || fi.Length < 80) return false;
+
+            var header = new byte[16];
+            using (var fs = new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                int read = 0;
+                while (read < header.Length)
+                {
+                    int n = fs.Read(header, read, header.Length - read);
+                    if (n <= 0) return false;
+                    read += n;
+                }
+            }
+
+            var format = BitConverter.ToUInt32(header, 4);
+            int  w     = BitConverter.ToUInt16(header, 8);
+            int  h     = BitConverter.ToUInt16(header, 10);
+            if (w <= 0 || h <= 0) return false;
+
+            long payload = format switch
+            {
+                0x1450u            => (long)w * h * 4,   // B8G8R8A8
+                0x6230u or 0x6432u => (long)w * h,       // BC5 / BC7: 16 bytes per 4×4 block
+                _                  => -1,
+            };
+            return payload >= 0 && fi.Length == 80 + payload;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
     /// Write an RGBA8 buffer as an uncompressed B8G8R8A8 .tex file.
     /// The game and Penumbra accept this format natively without any conversion.
     /// Returns true on success.
