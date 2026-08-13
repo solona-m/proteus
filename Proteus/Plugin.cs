@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 343;
+    public const int BuildNumber = 345;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -136,10 +136,11 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.DisableGposeUiHide = true;
         pluginInterface.UiBuilder.Draw += DrawUi;
         pluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
+        pluginInterface.UiBuilder.OpenConfigUi += OpenConfigUi;
 
         commandManager.AddHandler(CommandName, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
-            HelpMessage = "Open the Proteus overlay compositor status window.",
+            HelpMessage = "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings.",
         });
 
         // The boot composite is held from CompositorService's construction (see BootCompositeHold) so
@@ -165,10 +166,29 @@ public sealed class Plugin : IDalamudPlugin
 
     private void DrawUi() => windowSystem.Draw();
 
-    private void OpenMainUi() => statusWindow.IsOpen = true;
+    private void OpenMainUi() => statusWindow.Show();
+
+    // The gear icon in the plugin installer — settings live in the status window's Settings tab.
+    private void OpenConfigUi() => statusWindow.OpenToSettings();
 
     private void OnCommand(string command, string args)
-        => statusWindow.IsOpen = !statusWindow.IsOpen;
+    {
+        // "/proteus config" is a request to see the settings, so it opens rather than toggles — typing it
+        // while the window is already up would otherwise close it, the opposite of what was asked.
+        switch (args.Trim())
+        {
+            case "config":
+            case "settings":
+                statusWindow.OpenToSettings();
+                break;
+            default:
+                if (statusWindow.IsOpen)
+                    statusWindow.IsOpen = false;
+                else
+                    statusWindow.Show();
+                break;
+        }
+    }
 
     public void Dispose()
     {
@@ -176,6 +196,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
+        PluginInterface.UiBuilder.OpenConfigUi -= OpenConfigUi;
 
         windowSystem.RemoveAllWindows();
         Gui.ColorTableEditor.Spheres = null;

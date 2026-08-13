@@ -31,6 +31,10 @@ public class StatusWindow : Window
     // Indexed by (int)SiblingSynthesisMode: Off=0, BiboGen3Only=1, AllBodies=2.
     private static readonly string[] SiblingModeLabels = { "Off", "bibo+gen3", "All bodies" };
 
+    // Set by the plugin-installer gear icon (UiBuilder.OpenConfigUi) so the window opens on Settings.
+    // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
+    private bool _forceSettingsTab;
+
     // Key: absolute index-texture path → 1-based row numbers that appear in it.
     // Cleared per-entry on each popup open so option switches are reflected.
     private readonly Dictionary<string, HashSet<int>> _indexRowCache = new();
@@ -143,8 +147,34 @@ public class StatusWindow : Window
         };
     }
 
+    /// <summary>Open the window with the Settings tab selected (the plugin-installer gear icon).</summary>
+    public void OpenToSettings()
+    {
+        _forceSettingsTab = true;
+        Show();
+    }
+
+    /// <summary>
+    /// Make the window actually visible, not just "open". A collapsed window never reaches
+    /// <see cref="Draw"/>, and an already-open one sits behind whatever the user clicked from (the plugin
+    /// installer), so setting <see cref="Window.IsOpen"/> alone reads as "the button did nothing".
+    /// </summary>
+    public void Show()
+    {
+        IsOpen = true;
+        // One-shot un-collapse: Collapsed is re-applied every frame while it has a value, so leaving it
+        // set would make the title bar permanently un-collapsible. Draw() clears it once it has landed.
+        Collapsed = false;
+        CollapsedCondition = ImGuiCond.Always;
+        BringToFront();   // after IsOpen — Dalamud ignores the request on a closed window
+    }
+
     public override void Draw()
     {
+        // Reaching Draw means the window is uncollapsed, so Show()'s forced state has done its job —
+        // release it or the user could never collapse the window again.
+        Collapsed = null;
+
         // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
         // padding as coverage — drop them and let this frame recompute the rows accurately.
         if (_islandMapArrived)
@@ -176,8 +206,12 @@ public class StatusWindow : Window
                 using (var t = ImRaii.TabItem("Create"))
                     if (t) DrawCreateTab();
 
-                using (var t = ImRaii.TabItem("Settings"))
+                using (var t = ImRaii.TabItem("Settings",
+                           _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+                {
+                    _forceSettingsTab = false;
                     if (t) DrawSettingsTab();
+                }
             }
         }
 
