@@ -933,18 +933,11 @@ public class DesignBindingService : IDisposable
                 return;
             }
 
-            // No binding matched, so overrides get dropped and gear dyes revert to metadata. This is the
-            // apply-match false-negative that silently clears a correctly-dyed design on a redraw, so log
-            // the FIRST field that rejected each candidate — the usual culprit and hard to spot otherwise.
-            foreach (var id in candidateIds)
-            {
-                var d = GetDesignCached(id);
-                if (d == null) continue;
-                string name;
-                lock (gate) name = (store.Bindings.TryGetValue(id, out var b) ? b.DesignName : null) ?? id.ToString()[..8];
-                StateMatches(d, state, out _, why =>
-                    log.Warning("[Proteus] design match REJECTED '{0}': {1}", name, why));
-            }
+            // No binding matched, so overrides get dropped and gear dyes revert to metadata. A per-candidate
+            // "REJECTED: <first field that differed>" line used to be emitted here for every binding the
+            // player owns; it fired on the ordinary path (most designs are SUPPOSED not to match the state
+            // being applied), so it was many warnings per apply describing correct behaviour. The summary
+            // below is the part that reports something actually went wrong.
             log.Warning("[Proteus] design-binding: NO binding matched the applied state — dropping colour/gear overrides (dyes revert to metadata white).");
             HandleUnboundDesign();
             return;
@@ -1014,6 +1007,16 @@ public class DesignBindingService : IDisposable
     internal static bool StateMatches(JObject design, JObject state, out int specificity, Action<string>? onMismatch)
     {
         specificity = 0;
+        // A plain string, deliberately, even though onMismatch has no caller today (the per-candidate
+        // REJECTED log it fed was removed as noise) and the message is therefore always discarded.
+        //
+        // Taking Func<string> to defer it looks like the obvious saving and is the opposite: the lambdas
+        // capture the foreach variable, and a captured per-iteration variable makes Roslyn allocate its
+        // display class at the TOP OF EVERY ITERATION, whether or not a Fail is reached. That is one
+        // allocation per equipment slot on every call — including the matching design, which reaches no
+        // Fail at all and previously allocated nothing — to avoid one interpolated string on the failing
+        // branch. Capturing gearSlots also hoists it out of a register and into a heap field for the
+        // duration of the loop. Measured in shape rather than in numbers, but the direction is not close.
         bool Fail(string why) { onMismatch?.Invoke(why); return false; }
 
         if (design["Equipment"] is not JObject dEquip || state["Equipment"] is not JObject sEquip)
