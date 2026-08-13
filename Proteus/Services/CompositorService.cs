@@ -2574,6 +2574,22 @@ public class CompositorService : IDisposable
             // describes the character. Empty reads as "no answer yet", which is the truth.
             _channelContributions = [];
 
+            // Compression (opt-in): BC7 for every skin channel — the skin normal uses its B/A channels
+            // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
+            bool compress = config.EnableCompression;
+
+            // Salted with the dimensions and how the bytes will be encoded — both change the written
+            // file without changing the RGBA buffer, and a stale path would leave the game on the old
+            // format. 0 = uncompressed, 1 = BC7 via the native shim, 2 = BC7 via managed BCnEncoder:
+            // the two encoders differ byte-for-byte, so a session that fell back to managed must not
+            // silently reuse a native-encoded file under a name that claims to describe its content.
+            // Only distinguished when compressing, so a backend flip can't churn uncompressed output.
+            //
+            // Loop-invariant, so hoisted out of the per-material body — and it has to be, because the base
+            // diffuse is now fingerprinted at LOAD time with the same salts the output name uses, and that
+            // happens long before the publish block where these used to be declared.
+            int encSalt = compress ? (TextureLoader.NativeEncoderAvailable ? 1 : 2) : 0;
+
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -2813,6 +2829,17 @@ public class CompositorService : IDisposable
                 // instead of once per overlay, and it removes the triplicated load.
                 bool baseDTried = false;
 
+                // The base diffuse's content tag as it stood before anything blended into it — computed with
+                // the SAME salts the output filename uses, so it can be compared to the published tag for
+                // free at the end. Taken by SnapshotBaseDiffuse at the first edit, not at load.
+                //
+                // This is what separates the last two ways the reported fault can happen once the diagnostics
+                // above come back clean: an overlay that blended and CHANGED the skin, versus one that ran a
+                // blend pass which turned out to be a no-op (coverage masked to nothing, opacity at -100, art
+                // that is fully transparent). Both report diffuse(1); only the tags tell them apart. One extra
+                // hash of the base is the whole cost, and the question is no longer hypothetical.
+                string? baseDiffuseTag = null;
+
                 // Whether an overlay actually BLENDED into each buffer, as opposed to the buffer merely
                 // existing. The publish block below used to key off "buffer is non-empty", which is true the
                 // moment a base texture decodes — so a composite that applied nothing and one that applied
@@ -2863,6 +2890,17 @@ public class CompositorService : IDisposable
                             mtrlGamePath, texPaths.Diffuse, diffDisk ?? "(nothing)");
 
                     return baseD.Length > 0 ? baseD : null;
+                }
+
+                // Fingerprint the base immediately BEFORE the first edit, not at load. Called from each of the
+                // three sites that mutate the buffer, because "loaded" and "about to be changed" are different
+                // events: a material loaded only for the AO pass's dimensions, or one whose every overlay's
+                // art failed to decode, would otherwise pay a full FNV pass over as much as 64 MB for a value
+                // discarded moments later with the buffer itself.
+                void SnapshotBaseDiffuse()
+                {
+                    if (baseDiffuseTag == null && baseD is { Length: > 0 })
+                        baseDiffuseTag = ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
                 }
 
                 // Captured per mod as the loop below runs, for the Masks-driven relief pass
@@ -3282,6 +3320,7 @@ public class CompositorService : IDisposable
                     // ── Phase A: diffuse composite ────────────────────────────
                     if (desc.Diffuse != null && diffuseOv != null && baseD is { Length: > 0 })
                     {
+                        SnapshotBaseDiffuse();
                         if (desc.Index != null)
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
@@ -3341,6 +3380,7 @@ public class CompositorService : IDisposable
                             var tint = CovAt(wD, hD);
                             if (tint != null)
                             {
+                                SnapshotBaseDiffuse();
                                 ApplyFlatOverlay(tintBaseD, tint, row16A, wD, hD);
                                 diffuseBlended = true; diffuseContributors++;
                             }
@@ -3536,6 +3576,7 @@ public class CompositorService : IDisposable
                             art[i + 3] = cov[i >> 2];
                         }
                     });
+                    SnapshotBaseDiffuse();
                     ApplyIndexedOverlay(maskBaseD, art, cid, maskRows, false, wD, hD);
                     diffuseBlended = true; diffuseContributors++;
 
@@ -3815,6 +3856,7 @@ public class CompositorService : IDisposable
                                     ? BlurCoverageWithinIslands(strapD, islandLabels, islandOwner, islandCount, insidePlane,
                                                                 bodyMdls == null ? null : seamMaps.SeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD, islandBlurCache)
                                     : BlurCoverage(strapD, wD, hD, radiusD);
+                                SnapshotBaseDiffuse();
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
                                 // AO is a real edit to the skin diffuse in its own right — a gear-layer mod
                                 // with no skin overlay at all still legitimately owns the buffer through it.
@@ -3897,18 +3939,6 @@ public class CompositorService : IDisposable
                 // "we composited" says nothing about "the character samples it".
                 var published = new List<string>(3);
 
-                // Compression (opt-in): BC7 for every skin channel — the skin normal uses its B/A channels
-                // too, so BC5 (2-channel) would corrupt it. Off ⇒ uncompressed, byte-identical to before.
-                bool compress = config.EnableCompression;
-
-                // Salted with the dimensions and how the bytes will be encoded — both change the written
-                // file without changing the RGBA buffer, and a stale path would leave the game on the old
-                // format. 0 = uncompressed, 1 = BC7 via the native shim, 2 = BC7 via managed BCnEncoder:
-                // the two encoders differ byte-for-byte, so a session that fell back to managed must not
-                // silently reuse a native-encoded file under a name that claims to describe its content.
-                // Only distinguished when compressing, so a backend flip can't churn uncompressed output.
-                int encSalt = compress ? (TextureLoader.NativeEncoderAvailable ? 1 : 2) : 0;
-
                 // Nothing edited the diffuse — hand the buffer back exactly as the AO pass does for the normal
                 // above. Publishing it anyway meant redirecting the skin mod's own texture path at a BC7
                 // re-encode of its own pixels: lossy, pointless, and worst of all invisible, because a
@@ -3923,7 +3953,20 @@ public class CompositorService : IDisposable
 
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
-                    var name = baseName + "_" + ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion) + "_d.tex";
+                    var tag = ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
+
+                    // Blended, but to no effect: the pass ran and left the bytes exactly as it found them.
+                    // Reported at Warning because from the outside it is indistinguishable from the overlay
+                    // not applying at all — the body renders its plain base skin — and every other line in
+                    // the log says the composite succeeded. The usual causes are a coverage mask that carved
+                    // the overlay away entirely, an opacity of -100, or art that is fully transparent.
+                    if (diffuseBlended && baseDiffuseTag != null && tag == baseDiffuseTag)
+                        log.Warning("[Proteus] Diffuse of {0} is byte-identical to the base skin after {1} "
+                                  + "overlay(s) blended into it — the blend was a no-op, so the body will "
+                                  + "render as if nothing applied (check coverage masks and opacity)",
+                            mtrlGamePath, diffuseContributors);
+
+                    var name = baseName + "_" + tag + "_d.tex";
                     var outPath = Path.Combine(texturesDir, name);
                     var relPath = "textures/" + name;
                     if (AlreadyWritten(outPath)
@@ -4025,10 +4068,6 @@ public class CompositorService : IDisposable
             // each reconcile below is driven by where the shell went, not by the feature toggle alone.
             bool shellOnFacewear = false;
             string? shellRingSlot = null;   // "rir"/"ril" when the shell went to the Emperor's ring
-            // The shell's own model + material game paths, checked against Penumbra's resolver once the
-            // publish has landed. See VerifyShellLive: publishing a host path is not the same as WINNING
-            // it, and every other signal we log reports success either way.
-            List<string> shellVerifyPaths = [];
             var tGear = PhaseCounter.Begin();
             // maskShellMods too, not just gear overlays. A mod whose Masks tab was promoted to Cloth/Glow
             // while all its other layers stayed on Skin has NO gear overlay — that is the whole point of the
@@ -4195,13 +4234,13 @@ public class CompositorService : IDisposable
                             // Mirrors ChooseHost's pending-injection branch: feature on and the "_met"
                             // slot empty means the shell was built for glasses we are about to equip.
                             glassesPreHosted = invisibleGlassesSet is int && metModels.Count == 0;
+                            // Verified after publishing along with everything else — see VerifyRedirectsLive.
+                            // This used to build a narrowed list of just the .mdl/.mtrl keys, on the reasoning
+                            // that the textures hang off the materials so listing every ss_*.tex would bury
+                            // the signal. That narrowing is gone because the skin textures now need checking
+                            // too, and they are exactly the ones a body mod can take from us.
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
-                            // Models and materials only — the textures hang off the materials, so if those
-                            // two resolve to us the rest follows, and listing every ss_*.tex would bury it.
-                            shellVerifyPaths = [.. shells.Redirects.Keys.Where(k =>
-                                k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
-                             || k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))];
                             manipulations = shells.Manipulations;
                             _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
@@ -4310,9 +4349,7 @@ public class CompositorService : IDisposable
             // Publish only. Nothing is deleted in this composite: whatever this map supersedes is collected
             // at the top of the NEXT one, by which point the reload below has long since landed. See
             // PruneSupersededOutput for why an immediate prune could not be made safe.
-            ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
-
-            VerifyShellLive(shellVerifyPaths);
+            bool manifestConfirmedLive = ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
 
             // Published: from here the manifest on disk is the output of exactly these inputs, so an ambient
             // trigger that hashes to the same thing has nothing to do. Set only on this path — a cancelled or
@@ -4332,6 +4369,22 @@ public class CompositorService : IDisposable
                                  shellBuilt ? shellRingSlot : null);
             ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt, shellOnFacewear, glassesPreHosted);
             ReconcileEmperorRing(gearOverlays.Count > 0, shellBuilt, shellBuilt ? shellRingSlot : null);
+
+            // Every path, not just the shell's. The shell paths were verified from the start because a worn
+            // accessory is obviously contested; the skin textures were not, on the unexamined assumption that
+            // a path we redirect is a path we own. It isn't — the body mod invented chara/bibo_mid_*.tex and
+            // still publishes it, so we hold those only by priority, and losing one is invisible everywhere
+            // else in the log. The shell paths are in this map too, so this subsumes the old narrower check.
+            //
+            // Below the reconciles on purpose. It is pure diagnostics and can block for up to
+            // VerifySettleTimeout waiting on Penumbra, while those two equip and unequip real items and want
+            // to run as soon after the publish as possible.
+            //
+            // Which is also why it takes ct: the reconciles equip and unequip, Glamourer fires state events,
+            // and OnGlamourerStateChanged can start a NEW composite that republishes the manifest. Judging
+            // our resolves against a superseded expectation would manufacture exactly the false accusation
+            // this check is hardened against, so a cancelled token means stand down and say nothing.
+            VerifyRedirectsLive(redirects, manifestConfirmedLive, ct);
 
             LastResult = new CompositorResult
             {
@@ -4630,41 +4683,161 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
-    /// After publishing, ask Penumbra what it ACTUALLY resolves each shell path to, and say so.
+    /// How long <see cref="VerifyRedirectsLive"/> may spend waiting for the published manifest to go live
+    /// before giving up and calling the result undetermined. Usually unspent: the reload has normally landed
+    /// by the time it runs, so the first pass finds a match and never sleeps.
     ///
-    /// A shell hosted on a worn accessory publishes to a path the player's own mods can claim as well —
-    /// "[neo] Mine" redirecting chara/accessory/a0016/model/c0201a0016_nek.mdl is the ordinary case, not
-    /// an exotic one. Penumbra settles that by mod priority, and if we lose, NOTHING else we log notices:
-    /// the shell builds, the manifest publishes, the reload succeeds, the redraw fires, and the character
-    /// renders the other mod's necklace with no suit on it. Every line reads healthy.
-    ///
-    /// Cheap (one IPC per model/material, a handful per composite) and it converts that silent loss into
-    /// the one message that names the winning file — which is also the fix, since the answer is to raise
-    /// the managed mod's priority above whatever owns the path.
+    /// Much shorter than <see cref="PrimeLiveTimeout"/>, and deliberately so: the prime's answer decides which
+    /// skin the composite is BUILT on, so it is worth blocking for. This one only decides what a log line
+    /// says, runs after the redraw and the host-item reconciles, and reports "undetermined" rather than
+    /// guessing — so a slow rebuild should cost the user a vague message, not a stall.
     /// </summary>
-    private void VerifyShellLive(IReadOnlyList<string> gamePaths)
+    private static readonly TimeSpan VerifySettleTimeout = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>
+    /// After publishing, ask Penumbra what it ACTUALLY resolves each path we redirect to, and say so.
+    ///
+    /// Publishing a path is not the same as WINNING it. A shell hosted on a worn accessory claims a path the
+    /// player's own mods can claim too — "[neo] Mine" redirecting chara/accessory/a0016/model/c0201a0016_nek.mdl
+    /// is the ordinary case, not an exotic one — and a composited skin texture claims a path the BODY MOD
+    /// itself owns, which is not an edge case at all: chara/bibo_mid_base.tex belongs to Bibo+, and Proteus
+    /// only sits on top of it by out-prioritising it. Penumbra settles both by mod priority, and if we lose,
+    /// NOTHING else we log notices: the composite blends, the manifest publishes, the reload succeeds, the
+    /// redraw fires, and the character renders the other mod's texture. Every line reads healthy.
+    ///
+    /// It is also per PATH, which is why the failure presents so oddly — the normal can be ours while the
+    /// diffuse is not, and the body then shows an overlay's relief over untouched skin colour.
+    ///
+    /// It converts that silent loss into the one message that names the winning file — which is also the fix,
+    /// since the answer is to raise the managed mod's priority above whatever owns the path.
+    ///
+    /// ANCHORED ON THE EXPECTED TARGET, which is what makes the answer trustworthy. This runs straight after
+    /// <c>ReloadModDirectory</c>, which Penumbra processes asynchronously, and the caller does not reliably
+    /// wait first: under DisableAutoRedraw nothing waits at all, and WaitForManifestLive returns immediately
+    /// whenever no redirect changed. Sampling until the answer merely STOPS MOVING is not enough — a reload
+    /// still sitting in Penumbra's queue gives a perfectly stable PRE-reload answer, so "settled" and "never
+    /// started" read identically, and a newly published path would be reported as lost to the very mod it was
+    /// published over.
+    ///
+    /// So compare against the file the manifest names instead. A path resolving to exactly what we just
+    /// published is proof, needing no settling at all, and one such path proves the reload landed.
+    ///
+    /// That is necessary but NOT sufficient, because the rebuild is progressive rather than atomic — see
+    /// <see cref="SettleUpstreams"/>, where a contested path was observed resolving to three different mods
+    /// on three loads with identical settings. A neighbour reading correctly does not mean this path has been
+    /// reconsidered yet. So a path that does NOT match must also repeat its answer before it is called lost,
+    /// which is the other half and the reason both mechanisms are here.
+    ///
+    /// <paramref name="manifestConfirmedLive"/> is the second source of liveness, and it is what makes the
+    /// worst case reportable instead of merely slow. A local match cannot exist when we are outranked on
+    /// EVERY path, so on its own this check could never tell that apart from a reload still in Penumbra's
+    /// queue: it re-read the same settled answer for the whole budget and then shrugged. The caller may
+    /// already have proven liveness by probing a changed path, and when it has, "nothing resolves to us"
+    /// means exactly what it looks like.
+    ///
+    /// What stays unproven is reported as UNDETERMINED and never as a loss, and the message says so without
+    /// naming a cause it hasn't established — this signal is meant to be actionable (it names the mod to
+    /// raise priority over), so a confident wrong answer would point at an innocent mod.
+    /// </summary>
+    private void VerifyRedirectsLive(IDictionary<string, string> redirects, bool manifestConfirmedLive,
+                                     CancellationToken ct)
     {
-        if (gamePaths.Count == 0) return;
+        if (redirects.Count == 0 || ct.IsCancellationRequested) return;
 
-        int lost = 0;
-        foreach (var gamePath in gamePaths)
+        // What each path SHOULD resolve to, canonicalised once. Same construction WaitForManifestLive uses.
+        var expected = new Dictionary<string, string>(redirects.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (gamePath, rel) in redirects)
+            if (TryCanonicalise(Path.Combine(managedModDir, rel)) is { } full)
+                expected[gamePath] = full;
+        if (expected.Count == 0) return;
+
+        // The raw resolve per path from the final round, so the warnings below quote what Penumbra actually
+        // said rather than a canonicalised form of it. An unredirected resolve echoes the game path straight
+        // back, which canonicalises against the working directory into something meaningless — fine for the
+        // comparison (it cannot equal our output) but not for a message.
+        var raw  = new Dictionary<string, string?>(expected.Count, StringComparer.OrdinalIgnoreCase);
+        var prev = new Dictionary<string, string?>(expected.Count, StringComparer.OrdinalIgnoreCase);
+        var matched  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unstable = new List<string>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        while (true)
         {
-            var disk = penumbra.ResolvePlayer(gamePath);
-            // Unredirected resolves echo the game path straight back, which is a loss too: it means our
-            // entry is not in the winning collection at all, not that the file is vanilla-but-fine.
-            bool ours = disk != null
-                     && !string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase)
-                     && IsOwnOutput(disk);
-            if (ours) continue;
+            matched.Clear();
+            unstable.Clear();
+            foreach (var (gamePath, full) in expected)
+            {
+                var disk = penumbra.ResolvePlayer(gamePath);
+                if (TryCanonicalise(disk) is { } got
+                    && string.Equals(got, full, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Already the end state we are waiting for; no repeat read can improve on it.
+                    matched.Add(gamePath);
+                }
+                else if (!prev.TryGetValue(gamePath, out var was)
+                      || !string.Equals(was, disk, StringComparison.OrdinalIgnoreCase))
+                {
+                    // A path that is NOT ours has to say so twice. Mid-rebuild it reports whichever
+                    // contributor has been applied so far — see SettleUpstreams, where the same path was
+                    // observed resolving to three different mods on three loads with identical settings.
+                    unstable.Add(gamePath);
+                }
+                prev[gamePath] = disk;
+                raw[gamePath]  = disk;
+            }
 
-            lost++;
-            log.Warning("[Proteus] shell NOT live: {0} resolves to {1} — another mod wins this path, so the "
-                      + "shell cannot render. Raise the Proteus managed mod's priority in Penumbra above "
-                      + "the mod that owns it.", gamePath, disk ?? "(nothing)");
+            // Two things must hold before a verdict is worth anything. The manifest has to be live, and each
+            // non-matching path has to have stopped moving — a match alone cannot give the second, because
+            // the rebuild applies progressively and a path can still show an intermediate winner while its
+            // neighbour already reads correctly.
+            //
+            // Liveness comes from either source: the caller may already have PROVEN it by probing a changed
+            // path, and failing that a path resolving to our file proves it here. Both are needed, because
+            // each covers the other's blind spot — the caller has nothing to probe when no redirect changed,
+            // and the local check finds nothing when we are outranked everywhere. Without the caller's
+            // answer, that second case is indistinguishable from a reload still sitting in Penumbra's queue,
+            // and used to burn the entire budget re-reading a question already settled.
+            //
+            // When everything matches — the normal case — unstable is empty on the first pass and this costs
+            // one IPC per redirect and no sleep at all.
+            bool live = manifestConfirmedLive || matched.Count > 0;
+            if ((live && unstable.Count == 0) || sw.Elapsed >= VerifySettleTimeout) break;
+            if (ct.IsCancellationRequested) return;
+            Thread.Sleep((int)PrimeSettleInterval.TotalMilliseconds);
         }
 
-        if (lost == 0)
-            log.Debug("[Proteus] shell live: all {0} model/material path(s) resolve to our output", gamePaths.Count);
+        if (!manifestConfirmedLive && matched.Count == 0)
+        {
+            // Deliberately does NOT claim which. Two different faults produce this exact observation, and
+            // saying "the reload had not landed" — as this used to — sends someone chasing Penumbra timing
+            // when the real answer may be that they are outranked on every path they publish.
+            log.Warning("[Proteus] redirect check UNDETERMINED after {0}ms — not one of {1} published path(s) "
+                      + "resolves to the file we wrote for it. EITHER the reload has not landed yet, OR we "
+                      + "are outranked on every path we publish; this check cannot tell them apart. A "
+                      + "\"manifest live after Nms\" line above means the reload DID land, so the cause is "
+                      + "priority.",
+                sw.ElapsedMilliseconds, expected.Count);
+            return;
+        }
+
+        int lost = 0;
+        foreach (var gamePath in expected.Keys)
+        {
+            if (matched.Contains(gamePath) || unstable.Contains(gamePath)) continue;
+            lost++;
+            log.Warning("[Proteus] redirect NOT live: {0} resolves to {1} — another mod wins this path, so "
+                      + "what we composited for it cannot render. Raise the Proteus managed mod's priority "
+                      + "in Penumbra above the mod that owns it.", gamePath, raw[gamePath] ?? "(nothing)");
+        }
+
+        if (unstable.Count > 0)
+            log.Warning("[Proteus] redirect check UNDETERMINED for {0} path(s) after {1}ms — they do not "
+                      + "resolve to our output but the answer was still changing, so this is NOT evidence of "
+                      + "a loss: {2}", unstable.Count, sw.ElapsedMilliseconds, string.Join(", ", unstable));
+
+        if (lost == 0 && unstable.Count == 0)
+            log.Debug("[Proteus] all {0} redirect(s) live — every path we publish resolves to our output",
+                expected.Count);
     }
 
     /// <summary>
@@ -5360,17 +5533,25 @@ public class CompositorService : IDisposable
     // the redraw, poll until Penumbra has actually processed the new redirects. Penumbra applies a
     // ReloadMod asynchronously on its framework handler; the redraw re-requests textures through
     // ResolvePlayer, so redrawing before the reload lands renders the previous composite.
-    private void ReloadAndRedrawWhenReady(IDictionary<string, string> redirects,
+    /// <returns>
+    /// Whether the published manifest was OBSERVED to be live — a probe resolving to the file we just wrote,
+    /// or a withdrawn path confirmed gone. False means unproven, not disproven: nothing changed so there was
+    /// nothing to probe, the wait timed out, or DisableAutoRedraw skipped it. <see cref="VerifyRedirectsLive"/>
+    /// needs the distinction, because "no path resolves to us" means we are outranked everywhere if the
+    /// manifest is known live, and means nothing at all if it isn't.
+    /// </returns>
+    private bool ReloadAndRedrawWhenReady(IDictionary<string, string> redirects,
                                           IDictionary<string, string>? previous)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (config.DisableAutoRedraw) return;
+        if (config.DisableAutoRedraw) return false;
 
-        WaitForManifestLive(redirects, previous);
+        bool live = WaitForManifestLive(redirects, previous);
 
         RefreshPlayerTextures();
         SchedulePostRedrawBodyTypeCheck();
+        return live;
     }
 
     /// <summary>
@@ -5392,7 +5573,9 @@ public class CompositorService : IDisposable
     /// to the file the previous manifest already pointed at; matching on one proves nothing about which
     /// manifest is live. When nothing changed there is genuinely nothing to wait for.
     /// </summary>
-    private void WaitForManifestLive(IDictionary<string, string> redirects,
+    /// <returns>True only when a probe actually confirmed the manifest is live. "Nothing to wait for" and a
+    /// timeout both return false — unproven, which is not the same as disproven.</returns>
+    private bool WaitForManifestLive(IDictionary<string, string> redirects,
                                      IDictionary<string, string>? previous)
     {
         string? probe = null, expectedFull = null;
@@ -5426,7 +5609,7 @@ public class CompositorService : IDisposable
         if (probe == null && goneProbe == null)
         {
             log.Debug("[Proteus] no redirect changed this composite — nothing to wait for");
-            return;
+            return false;
         }
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -5438,7 +5621,7 @@ public class CompositorService : IDisposable
                 if (resolved != null && string.Equals(resolved, expectedFull, StringComparison.OrdinalIgnoreCase))
                 {
                     log.Debug("[Proteus] manifest live after {0}ms", sw.ElapsedMilliseconds);
-                    return;
+                    return true;
                 }
             }
             else
@@ -5450,7 +5633,7 @@ public class CompositorService : IDisposable
                 {
                     log.Debug("[Proteus] withdrawn redirect cleared after {0}ms ({1})",
                         sw.ElapsedMilliseconds, goneProbe!);
-                    return;
+                    return true;
                 }
             }
             Thread.Sleep(15);
@@ -5461,6 +5644,7 @@ public class CompositorService : IDisposable
         // One of the two probes is non-null — the early return above is the only path where both are.
         log.Warning("[Proteus] manifest not live after {0}ms (probe {1}) — redrawing anyway",
                     sw.ElapsedMilliseconds, probe ?? goneProbe!);
+        return false;
     }
 
     // After a composite, verify it used the settled body state. The snapshot at trigger time can
