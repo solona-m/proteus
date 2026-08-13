@@ -57,11 +57,11 @@ public class CompositorService : IDisposable
     private string modsRoot;
     private string managedModDir;
 
-    private CancellationTokenSource? currentCts;
+    // Debounce slot for the recomposite trigger: cancels the pending run and issues the new one's token.
+    private readonly DebounceGate recompositeGate = new();
     private readonly SecondSkinService secondSkin;
     private readonly UvSeamMapService seamMaps;
 
-    private readonly object triggerLock = new();
     private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
     private long _lastOwnReapplyTick = 0; // TickCount64 when we last called Glamourer ReapplyState()
 
@@ -443,8 +443,7 @@ public class CompositorService : IDisposable
         glamourer.LocalPlayerCustomizationChanged -= OnGlamourerCustomizationChanged;
         Plugin.Framework.Update -= OnBootPoll;
 
-        currentCts?.Cancel();
-        currentCts?.Dispose();
+        recompositeGate.Stop();
     }
 
     // ── Event handlers ───────────────────────────────────────────────────────
@@ -1062,7 +1061,7 @@ public class CompositorService : IDisposable
     /// </param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true)
     {
-        if (!config.PluginEnabled || !penumbra.IsAvailable) return;
+        if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
         Highlighter?.Clear();
 
         // A forced composite that gets cancelled by an ambient one must not be lost. Without this latch the
@@ -1071,16 +1070,12 @@ public class CompositorService : IDisposable
         // cleared only when a composite actually publishes.
         if (force) Interlocked.Exchange(ref _forcePending, 1);
 
-        CancellationTokenSource cts;
-        lock (triggerLock)
-        {
-            currentCts?.Cancel();
-            currentCts?.Dispose();
-            cts = currentCts = new CancellationTokenSource();
-        }
+        // Cancels whatever composite was pending and gives us the token for this one. The token is read
+        // under the gate's own lock — doing it out here, off a source another thread can replace, is what
+        // used to throw ObjectDisposedException out of the plugin constructor. See DebounceGate.
+        var token = recompositeGate.Next();
 
         log.Debug("[Proteus] Recomposite triggered: {0} (delay {1}ms)", reason, delayMs);
-        var token = cts.Token;
         Task.Run(async () =>
         {
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }

@@ -21,7 +21,16 @@ public sealed class GlamourerDesignWatcher : IDisposable
     private readonly DesignBindingService bindingService;
     private readonly IPluginLog log;
     private readonly FileSystemWatcher? watcher;
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> debounce = new();
+    // One debounce slot per design GUID. Kept for the session rather than removed when a run fires:
+    // the gate IS the per-GUID slot, and dropping it mid-flight would let a concurrent Schedule build a
+    // second gate that can't cancel the first. Bounded by the number of designs touched in a session.
+    private readonly ConcurrentDictionary<Guid, DebounceGate> debounce = new();
+
+    // Set first thing in Dispose. Stopping the gates we already hold is not enough on its own: a
+    // FileSystemWatcher event dispatched to the pool just before the handlers came off can still be
+    // inside Schedule, and its GetOrAdd would mint a BRAND-NEW gate that the teardown loop never sees —
+    // then fire OnDesignSaved at a DesignBindingService the plugin has already torn down.
+    private volatile bool stopped;
 
     public GlamourerDesignWatcher(DesignBindingService bindingService, string? designsDir, IPluginLog log)
     {
@@ -63,18 +72,25 @@ public sealed class GlamourerDesignWatcher : IDisposable
 
     private void Schedule(string fullPath)
     {
+        if (stopped) return; // tearing down — see the field
         if (!Guid.TryParse(Path.GetFileNameWithoutExtension(fullPath), out var id))
             return; // not a {guid}.json design file
 
-        var cts = new CancellationTokenSource();
-        debounce.AddOrUpdate(id, cts, (_, prev) => { prev.Cancel(); prev.Dispose(); return cts; });
-        var token = cts.Token;
+        var gate = debounce.GetOrAdd(id, _ => new DebounceGate());
+        // Second half of the teardown check: Dispose can have run between the check above and this
+        // GetOrAdd, and a gate inserted after its loop is one nothing else will ever stop. Stop it here.
+        if (stopped) { gate.Stop(); return; }
+
+        // Supersedes the pending run for this design and issues our token, both under the gate's lock.
+        // Glamourer saves by deleting and recreating the file, so several events for one GUID arrive
+        // within milliseconds — the previous hand-rolled version could dispose this call's own source
+        // before it read .Token, throwing out of a FileSystemWatcher event handler. See DebounceGate.
+        var token = gate.Next();
 
         _ = Task.Run(async () =>
         {
             try { await Task.Delay(DebounceMs, token); }
             catch (OperationCanceledException) { return; }
-            debounce.TryRemove(id, out _);
             // Decide save vs delete by the final state: if the file is present after the
             // debounce window, treat as save (covers Glamourer's atomic "delete + recreate"
             // save flow); if it's gone, the design was actually deleted.
@@ -87,6 +103,7 @@ public sealed class GlamourerDesignWatcher : IDisposable
 
     public void Dispose()
     {
+        stopped = true;   // before anything else, so a Schedule already in flight bails or self-stops
         if (watcher != null)
         {
             watcher.EnableRaisingEvents = false;
@@ -97,11 +114,8 @@ public sealed class GlamourerDesignWatcher : IDisposable
             watcher.Error   -= OnError;
             watcher.Dispose();
         }
-        foreach (var cts in debounce.Values)
-        {
-            cts.Cancel();
-            cts.Dispose();
-        }
+        foreach (var gate in debounce.Values)
+            gate.Stop();
         debounce.Clear();
     }
 }
