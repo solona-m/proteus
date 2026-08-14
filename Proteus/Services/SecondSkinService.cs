@@ -1006,6 +1006,51 @@ public sealed class SecondSkinService
                 ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{cutCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
             var modelChanged = WriteIfChanged(mdlDisk, shell);
+
+            // What the model ON DISK asks the game for — read back from the FILE, not from the bytes we just
+            // built, because those are different questions and only the file is what the game loads.
+            //
+            // A carrier was observed drawing with no material at all, and Penumbra named the request:
+            // chara/equipment/e5501/material/v0001/mt_c0201a0053_rir_a.mtrl — the GLASSES directory with the
+            // EMPEROR RING's material name. Shell files are keyed by host INDEX (secondskin_{h}.mdl) and the
+            // host list changes between composites, so index 0 is the ring one composite and the glasses the
+            // next. Reading the built bytes would have agreed with itself and proved nothing; reading the
+            // file catches a write that did not land.
+            try
+            {
+                // Re-read ONLY after a write. When WriteIfChanged reports unchanged it has already read the
+                // file and proven it equals `shell`, so `shell` IS the disk contents and a second read would
+                // buy nothing at a few megabytes a composite. When it reports changed we have just written,
+                // and re-reading is the one thing that can catch a write reporting success without landing —
+                // which is the anomaly this exists for.
+                var onDisk = shell;
+                if (modelChanged)
+                {
+                    onDisk = File.ReadAllBytes(mdlDisk);
+                    if (!onDisk.AsSpan().SequenceEqual(shell))
+                        log.Warning("[Proteus] shell file {0} does NOT match the bytes just built for host "
+                                  + "{1}{2:D4}/{3} — the write did not land, so the game is loading a stale shell",
+                            Path.GetFileName(mdlDisk), host.Prefix, host.SetId, host.Slot);
+                }
+
+                var declared = SecondSkinWriter.MaterialNames(onDisk);
+                // Slot as well as set: one accessory set covers _nek, _ear, _wrs and _rir, so matching the set
+                // alone would list a sibling piece's material under this host — the same conflation the
+                // variant lookup had to be narrowed for.
+                var published = redirects.Keys.Where(k =>
+                    k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)
+                 && k.Contains($"{host.Prefix}{host.SetId:D4}/", StringComparison.OrdinalIgnoreCase)
+                 && k.Contains($"_{host.Slot}_", StringComparison.OrdinalIgnoreCase));
+
+                log.Information("[Proteus] second skin host {0}{1:D4}/{2}: model declares {3} material(s) [{4}] "
+                              + "— published [{5}]",
+                    host.Prefix, host.SetId, host.Slot, declared.Count, string.Join(", ", declared),
+                    string.Join(", ", published));
+            }
+            catch (System.Exception ex)
+            {
+                log.Warning("[Proteus] could not read back the shell model's material names: {0}", ex.Message);
+            }
             shellChanged   |= modelChanged;
             modelChangedAny |= modelChanged;
             redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
