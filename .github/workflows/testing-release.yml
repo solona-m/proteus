@@ -41,6 +41,9 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
+          # Restore the annotated tag object that actions/checkout flattens into a lightweight one —
+          # see release.yml for the full explanation.
+          git fetch --force --tags origin
           if ((git cat-file -t $tag) -eq 'tag') {
             $env:Changelog = ((git tag -l --format='%(contents)' $tag) -join "`n").Trim()
           } else {

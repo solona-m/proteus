@@ -42,6 +42,13 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
+          # actions/checkout fetches the tag's COMMIT sha and maps it straight onto refs/tags/<name>,
+          # so every annotated tag arrives here flattened to a lightweight one and its message is
+          # simply absent — fetch-depth: 0 does not help, because v4 also passes --no-tags. Without
+          # this re-fetch the check below fails on correctly-annotated tags, and reading %(contents)
+          # anyway would ship the tagged commit's subject to every user as the changelog.
+          # --force is required: the lightweight tag already occupies the name.
+          git fetch --force --tags origin
           if ((git cat-file -t $tag) -ne 'tag') {
             throw "$tag is a lightweight tag and carries no changelog. Re-tag it with: git tag -a $tag -F notes.md"
           }
