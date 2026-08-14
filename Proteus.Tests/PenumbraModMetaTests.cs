@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Proteus.Services;
 using Xunit;
@@ -200,5 +201,159 @@ public class PenumbraModMetaTests
         PenumbraModMeta.AtomicWrite(tmp.File("x.json"), "{}");
         Assert.Equal("{}", File.ReadAllText(tmp.File("x.json")));
         Assert.Empty(Directory.EnumerateFiles(tmp.Path, "*.tmp"));
+    }
+
+    // ── Option groups ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void WriteSingleSelectGroup_on_a_v3_folder_writes_a_numbered_group_file()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", ["bibo", "gen3"], 1);
+
+        // group_001_… : ReadGroupOrder takes the ordinal from THIS number on an unmigrated folder.
+        var file = tmp.File("group_001_body uv.json");
+        Assert.True(File.Exists(file));
+        var g = JsonDocument.Parse(File.ReadAllText(file)).RootElement;
+        Assert.Equal("Body UV", g.GetProperty("Name").GetString());
+        Assert.Equal("Single", g.GetProperty("Type").GetString());
+        Assert.Equal(1, g.GetProperty("DefaultSettings").GetInt32());
+        Assert.Equal(["bibo", "gen3"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        // Options carry no redirects — the group exists so Penumbra shows a selector.
+        Assert.Empty(g.GetProperty("Options")[0].GetProperty("Files").EnumerateObject());
+
+        // v3 stays v3: no surprise upgrade to a format an older Penumbra can't read.
+        Assert.Equal(3, JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
+            .RootElement.GetProperty("FileVersion").GetInt32());
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_on_a_v4_folder_splices_at_the_requested_ordinal()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Identifier":"abc-123","Name":"Ven","ModTags":["keep"],
+             "Groups":[{"Name":"First","Type":"Single"},{"Name":"Second","Type":"Single"}]}
+            """);
+
+        // Ordinal 1 = between the two. ReadGroupOrder reads a v4 group's priority from its ARRAY POSITION,
+        // so appending instead would silently give it the lowest priority in the mod.
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 1, "Body UV", ["bibo", "gen3"], 0);
+
+        var meta = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement;
+        Assert.Equal(["First", "Body UV", "Second"],
+            meta.GetProperty("Groups").EnumerateArray().Select(g => g.GetProperty("Name").GetString()));
+
+        // And the ordinal the discovery side derives matches what was asked for.
+        Assert.Equal(1, SidecarDiscoveryService.ReadGroupOrder(tmp.Path)["Body UV"]);
+
+        // Every other key survives — Identifier above all, since it's how Penumbra keys the mod.
+        Assert.Equal("abc-123", meta.GetProperty("Identifier").GetString());
+        Assert.Equal("keep", meta.GetProperty("ModTags")[0].GetString());
+        Assert.False(File.Exists(tmp.File("group_002_body uv.json")));
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_replaces_a_group_of_the_same_name_rather_than_duplicating_it()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Identifier":"abc-123","Name":"Ven",
+             "Groups":[{"Name":"body uv","Type":"Single","Options":[{"Name":"stale"}]},
+                       {"Name":"Other","Type":"Single"}]}
+            """);
+
+        // Past the end clamps to last, and the case-insensitive name match drops the old one.
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 99, "Body UV", ["bibo"], 0);
+
+        var groups = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray().ToList();
+        Assert.Equal(2, groups.Count);
+        Assert.Equal(["Other", "Body UV"], groups.Select(g => g.GetProperty("Name").GetString()));
+        Assert.Equal("bibo", groups[1].GetProperty("Options")[0].GetProperty("Name").GetString());
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_on_a_v3_folder_replaces_a_same_named_group_at_another_ordinal()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+        File.WriteAllText(tmp.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
+        File.WriteAllText(tmp.File("group_003_body uv.json"),
+            """{"Name":"Body UV","Type":"Single","Options":[{"Name":"stale"}]}""");
+
+        // Writing the same group at another ordinal changes its filename. Without deleting the old file the
+        // folder would hold TWO groups named "Body UV", and ReadGroupOrder's name→number map would take
+        // whichever file the directory enumeration yielded last.
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 1, "Body UV", ["bibo", "gen3"], 0);
+
+        Assert.False(File.Exists(tmp.File("group_003_body uv.json")));
+        Assert.True(File.Exists(tmp.File("group_002_body uv.json")));
+        Assert.True(File.Exists(tmp.File("group_001_fabric.json")));   // someone else's group is untouched
+
+        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
+        Assert.Equal(2, order["Body UV"]);
+        Assert.Equal(1, order["Fabric"]);
+        var g = JsonDocument.Parse(File.ReadAllText(tmp.File("group_002_body uv.json"))).RootElement;
+        Assert.Equal(["bibo", "gen3"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_on_a_v3_folder_never_collides_with_another_groups_number()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+        File.WriteAllText(tmp.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
+        File.WriteAllText(tmp.File("group_002_trim.json"), """{"Name":"Trim","Type":"Single","Options":[]}""");
+
+        // Ordinal 0 is taken. v3 cannot insert BEFORE another author's group without renumbering their
+        // files, so it walks up to the first free number instead — two files numbered 001 would make
+        // ReadGroupOrder report both groups at the same ordinal.
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", ["bibo"], 0);
+
+        Assert.True(File.Exists(tmp.File("group_003_body uv.json")));
+        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
+        Assert.Equal([1, 2, 3], new[] { order["Fabric"], order["Trim"], order["Body UV"] });
+        Assert.Equal(2, JsonDocument.Parse(File.ReadAllText(tmp.File("group_003_body uv.json")))
+            .RootElement.GetProperty("Priority").GetInt32());
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_puts_an_out_of_range_ordinal_last_in_both_formats()
+    {
+        // v3: 99 is free, so it is taken verbatim — and 100 sorts after the existing 001 either way.
+        using var v3 = new TempDir();
+        File.WriteAllText(v3.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+        File.WriteAllText(v3.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
+        PenumbraModMeta.WriteSingleSelectGroup(v3.Path, 99, "Body UV", ["bibo"], 0);
+
+        var v3Order = SidecarDiscoveryService.ReadGroupOrder(v3.Path);
+        Assert.True(v3Order["Body UV"] > v3Order["Fabric"]);
+
+        // v4: appended, so also last. The formats need not produce the same NUMBER — only the same order.
+        using var v4 = new TempDir();
+        File.WriteAllText(v4.File("meta.json"), """
+            {"FileVersion":4,"Identifier":"abc-123","Name":"Ven","Groups":[{"Name":"Fabric","Type":"Single"}]}
+            """);
+        PenumbraModMeta.WriteSingleSelectGroup(v4.Path, 99, "Body UV", ["bibo"], 0);
+
+        var groups = JsonDocument.Parse(File.ReadAllText(v4.File("meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray().ToList();
+        Assert.Equal(["Fabric", "Body UV"], groups.Select(g => g.GetProperty("Name").GetString()));
+        var v4Order = SidecarDiscoveryService.ReadGroupOrder(v4.Path);
+        Assert.True(v4Order["Body UV"] > v4Order["Fabric"]);
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_with_no_options_writes_nothing()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", [], 0);
+        Assert.Empty(Directory.EnumerateFiles(tmp.Path, "group_*.json"));
     }
 }

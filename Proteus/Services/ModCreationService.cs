@@ -36,7 +36,7 @@ public sealed class ModCreationService
     /// "Panties for Proteus" template rather than self-swapping the target body material (which for bibo/
     /// gen3 is a modded, non-vanilla path).
     /// </summary>
-    private const string DummySwapPath =
+    internal const string DummySwapPath =
         "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl";
 
     public ModCreationService(PenumbraBridge penumbra, CompositorService compositor, Configuration config,

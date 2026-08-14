@@ -45,6 +45,15 @@ public static class ColorTableEditor
     /// Null hides the button entirely.
     /// </param>
     /// <param name="resetDisabledReason">Non-null renders the reset button greyed out and explains why.</param>
+    /// <param name="drawExtraAdvanced">
+    /// Extra per-MOD settings to render inside the Advanced disclosure, above the reset button. Supplied by
+    /// the caller because this editor is scoped to one option and knows nothing about the mod around it.
+    /// Drawn on every option tab of the same mod — the value is the mod's, so it reads the same wherever it
+    /// is opened from. It commits and recomposites for itself rather than reporting back through this
+    /// method's return: what it edits isn't this option's colours, and folding it into that flag would make
+    /// every caller save option metadata (or install a design-binding override) for a change that has
+    /// nothing to do with either.
+    /// </param>
     public static bool DrawGlowFooter(
         string idScope,
         IReadOnlyList<OverlayDescriptor> overlays,
@@ -53,6 +62,7 @@ public static class ColorTableEditor
         out FeatureEdit edited,
         Func<bool>? onReset = null,
         string? resetDisabledReason = null,
+        Action? drawExtraAdvanced = null,
         // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
         // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
         bool promotedToGear = false)
@@ -154,6 +164,14 @@ public static class ColorTableEditor
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth — character.shpk (sphere, metal).\n" +
                                  "Animated glow — characterscroll.shpk. Pinning stops the auto mode-switch.");
+
+            // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
+            // everything above this line is per-option and everything below it is not.
+            if (drawExtraAdvanced != null)
+            {
+                ImGui.Separator();
+                drawExtraAdvanced();
+            }
 
             if (onReset != null)
             {

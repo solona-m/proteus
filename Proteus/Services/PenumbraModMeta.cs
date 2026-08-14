@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 
@@ -158,17 +159,205 @@ internal static class PenumbraModMeta
         => FileVersionOf(ReadManifest(modRoot));
 
     /// <summary>A fresh manifest. See the type remarks for why this is v3 and not v4.</summary>
-    public static string NewMetaJson(string name, string author, string description)
+    /// <param name="version">The mod's own version string, when the source carries one (an imported pack).</param>
+    /// <param name="website">The mod's home page, when the source carries one.</param>
+    public static string NewMetaJson(string name, string author, string description,
+        string? version = null, string? website = null)
         => JsonSerializer.Serialize(new
         {
             FileVersion = LegacyFileVersion,
             Name        = name,
             Author      = author,
             Description = description,
-            Version     = "",
-            Website     = "",
+            Version     = version ?? "",
+            Website     = website ?? "",
             ModTags     = Array.Empty<string>(),
         }, WriteOptions);
+
+    /// <summary>
+    /// Writes one single-select option group, in whichever format the folder is already in — the group
+    /// counterpart to <see cref="WriteRedirects"/>, and the only group writer. Every option is empty of
+    /// redirects: the group exists purely so Penumbra shows a selector, and Proteus reads the SELECTION
+    /// back through <c>OverlayOptionGroup.PenumbraGroupName</c> to decide which overlays to composite.
+    /// <para/>
+    /// <paramref name="index"/> is the group's ordinal (0-based); LOWER means higher priority.
+    /// <c>SidecarDiscoveryService.ReadGroupOrder</c> reads it from the ARRAY POSITION in v4 and from the
+    /// <c>group_NNN_</c> FILENAME in v3, and the two formats can only honour it to different degrees:
+    /// <list type="bullet">
+    /// <item><b>v4</b> splices at exactly <paramref name="index"/>, shifting the groups after it. Past the
+    /// end appends.</item>
+    /// <item><b>v3</b> takes file number <c>index + 1</c> if it is free, else the next free number above
+    /// it. It CANNOT insert between two existing groups, because that would mean renumbering files this
+    /// mod's author owns and Proteus didn't write. So on a populated v3 folder a colliding ordinal lands
+    /// AFTER the group already holding it, not before.</item>
+    /// </list>
+    /// On a folder with no other groups — the importer's case, and the only one Proteus creates — both
+    /// formats give the same answer.
+    /// </summary>
+    public static void WriteSingleSelectGroup(
+        string modRoot, int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+    {
+        if (optionNames.Count == 0) return;
+        if (defaultIndex < 0 || defaultIndex >= optionNames.Count) defaultIndex = 0;
+        if (index < 0) index = 0;
+
+        var manifest = ReadManifest(modRoot);
+        if (FileVersionOf(manifest) >= SingleFileVersion)
+            WriteGroupIntoManifest(modRoot, manifest, index, name, optionNames, defaultIndex);
+        else
+            WriteLegacyGroupFile(modRoot, index, name, optionNames, defaultIndex);
+    }
+
+    /// <summary>
+    /// The pre-v4 form: one <c>group_NNN_name.json</c> per group. Two things this has to get right:
+    /// <list type="bullet">
+    /// <item>Any earlier file for the SAME group name is deleted first. Writing at a different ordinal
+    /// changes the filename, and leaving the old file behind would give Penumbra two groups of the same
+    /// name and make the ordinal <c>ReadGroupOrder</c> derives depend on directory enumeration order. The
+    /// v4 branch replaces by name for the same reason.</item>
+    /// <item>The number must not collide with a group Proteus didn't write, for exactly the same reason —
+    /// two files numbered 001 make <c>ReadGroupOrder</c> report both at ordinal 1. The requested number is
+    /// therefore taken only if free, and otherwise the search walks UP. Walking up rather than renumbering
+    /// the folder is deliberate: renaming another author's group files to make room is not this method's
+    /// to do, and a half-completed renumber would leave their mod broken.</item>
+    /// </list>
+    /// </summary>
+    private static void WriteLegacyGroupFile(
+        string modRoot, int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+    {
+        var taken = new HashSet<int>();
+        try
+        {
+            // ToList: the enumeration is being deleted from. Every file carrying this group's name goes,
+            // the one we're about to write included — AtomicWrite recreates it.
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json").ToList())
+            {
+                if (string.Equals(GroupNameOf(file), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(file); } catch { /* AtomicWrite still overwrites a same-named file */ }
+                    continue;
+                }
+                // Same parse ReadGroupOrder uses: group_002_fabric.json -> 2. A file we can't read a number
+                // out of can't be collided with either, so it simply doesn't reserve one.
+                var parts = Path.GetFileNameWithoutExtension(file).Split('_');
+                if (parts.Length >= 2 && int.TryParse(parts[1], out var n)) taken.Add(n);
+            }
+        }
+        catch { /* modRoot missing or unreadable — the write below creates what it needs */ }
+
+        var number = index + 1;
+        while (taken.Contains(number)) number++;
+
+        AtomicWrite(
+            Path.Combine(modRoot, LegacyGroupFileName(number - 1, name)),
+            JsonSerializer.Serialize(BuildGroup(number - 1, name, optionNames, defaultIndex), WriteOptions));
+    }
+
+    /// <summary>The <c>Name</c> inside a v3 group file, or null when it can't be read.</summary>
+    private static string? GroupNameOf(string groupFile)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(groupFile));
+            return doc.RootElement.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                ? n.GetString()
+                : null;
+        }
+        catch { return null; /* malformed — leave it alone rather than delete something unread */ }
+    }
+
+    /// <summary>
+    /// The v3 group filename: <c>group_001_stocking pattern.json</c>. Penumbra reads the name from the
+    /// file's <c>Name</c> field, not the filename, so the sanitisation here only has to produce something
+    /// the filesystem accepts.
+    /// </summary>
+    private static string LegacyGroupFileName(int index, string name)
+    {
+        var safe = new string(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+        return $"group_{index + 1:000}_{safe.ToLowerInvariant()}.json";
+    }
+
+    /// <summary>
+    /// The shape both formats share. <c>DefaultSettings</c> is the selected option's INDEX for a Single
+    /// group (it is a bitmask only for Multi), and each option carries no redirects of its own.
+    /// </summary>
+    private static object BuildGroup(int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+        => new
+        {
+            Version         = 0,
+            Name            = name,
+            Description     = "",
+            Image           = "",
+            Page            = 0,
+            Priority        = index,
+            Type            = "Single",
+            DefaultSettings = defaultIndex,
+            Options         = optionNames.Select(o => new
+            {
+                Name          = o,
+                Description   = "",
+                Files         = new Dictionary<string, string>(),
+                FileSwaps     = new Dictionary<string, string>(),
+                Manipulations = Array.Empty<object>(),
+            }).ToArray(),
+        };
+
+    /// <summary>
+    /// Splices the group into a v4 manifest's <c>Groups</c> array AT <paramref name="index"/>, replacing any
+    /// group of the same name and preserving every other key — the same care <see cref="WriteDefaultData"/>
+    /// takes, and for the same reason: <c>Identifier</c> is how Penumbra keys the mod.
+    /// </summary>
+    private static void WriteGroupIntoManifest(
+        string modRoot, Dictionary<string, JsonElement> preserved,
+        int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+    {
+        // The surviving groups in order. Any group of the same name is DROPPED rather than kept alongside
+        // the new one — a duplicate name is something Penumbra would have to disambiguate, and it would
+        // also make the ordinal this method promises ambiguous.
+        var others = new List<JsonElement>();
+        if (preserved.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+            foreach (var g in groups.EnumerateArray())
+                if (!(g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                      && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase)))
+                    others.Add(g);
+
+        // Clamped, not rejected: an index past the end is the ordinary "put it last" request, and a caller
+        // that removed a group since computing the index shouldn't fail over an off-by-one.
+        var slot = Math.Clamp(index, 0, others.Count);
+
+        using var stream = new MemoryStream();
+        using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            w.WriteStartObject();
+            w.WriteNumber("FileVersion", SingleFileVersion);
+            w.WriteString("Identifier",
+                preserved.TryGetValue("Identifier", out var id) && id.ValueKind == JsonValueKind.String
+                    ? id.GetString()!
+                    : Guid.NewGuid().ToString());
+
+            foreach (var (key, value) in preserved)
+            {
+                if (key is "FileVersion" or "Identifier" or "Groups") continue;
+                w.WritePropertyName(key);
+                value.WriteTo(w);
+            }
+
+            w.WritePropertyName("Groups");
+            w.WriteStartArray();
+            for (int i = 0; i < others.Count; i++)
+            {
+                if (i == slot) JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, defaultIndex));
+                others[i].WriteTo(w);
+            }
+            if (slot >= others.Count)
+                JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, defaultIndex));
+            w.WriteEndArray();
+
+            w.WriteEndObject();
+        }
+
+        AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+    }
 
     /// <summary>
     /// Writes the mod's always-applied redirects in whatever format the folder is already in: the

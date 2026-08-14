@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 363;
+    public const int BuildNumber = 369;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -128,7 +128,13 @@ public sealed class Plugin : IDalamudPlugin
         shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter);
 
         var modCreation = new ModCreationService(penumbra, compositor, config, textureLoader, log);
-        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap, modCreation);
+        // Body catalogue for imports: probes the game data for the human bodies that exist, so an imported
+        // overlay can name every race's material without anyone maintaining a race table.
+        var bodyCatalog = new BodyMaterialCatalog(DataManager.FileExists);
+        var onionImport = new OnionImportService(
+            penumbra, compositor, modCreation, textureLoader, bodyCatalog, config, log);
+        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
+            modCreation, onionImport);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
@@ -164,7 +170,14 @@ public sealed class Plugin : IDalamudPlugin
         ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
     }
 
-    private void DrawUi() => windowSystem.Draw();
+    private void DrawUi()
+    {
+        // Before the window system, and unconditionally: an .omp import writes its mod on the thread pool,
+        // and Dalamud stops calling a CLOSED window's Draw — so pumping this from the window itself would
+        // strand a mod that finished copying after the user closed Proteus. See StatusWindow.TickImport.
+        statusWindow.TickImport();
+        windowSystem.Draw();
+    }
 
     private void OpenMainUi() => statusWindow.Show();
 
@@ -193,6 +206,14 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         _disposed = true;
+
+        // Last chance for an import whose disk work landed after the final frame: the mod is already
+        // written into Penumbra's directory, and unloading without registering it would leave a folder
+        // Penumbra never adds — enabled by nobody, with no layout selected, painting nothing. "unloading"
+        // keeps it to the registration: no window, and above all no recomposite, which would still pass
+        // CompositorService's disposal guard (that runs further down) and wake into a torn-down plugin.
+        try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }
+
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;

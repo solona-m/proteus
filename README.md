@@ -38,7 +38,6 @@ Lists every Penumbra mod that contains a Proteus sidecar. Click any column heade
 | Mod | The mod's display name. Click it to jump to the mod in Penumbra. |
 | Pri | Priority within Proteus's composite stack. Lower numbers go first (bottom layer). Drag to change; Ctrl-click to type. |
 | Colors | Opens the color editor for that mod. |
-| Bodies | Which body types to synthesize this mod for — All bodies, bibo+gen3 (default), or Off. |
 | Skindent | Ambient-occlusion shadow and normal indent for this mod's strap edges. "Pack" follows what the mod asked for; On/Off overrides it. |
 
 Click **Refresh** to force a re-composite manually. Proteus also re-composites automatically whenever you change a Penumbra option or mod setting, change gear, or change race/body.
@@ -94,6 +93,18 @@ Proteus works out how each overlay should render from the features you actually 
 - **Animated glow** — a second skin with a scrolling glow effect.
 
 You don't have to pick — setting a sphere map turns it into Cloth on its own. If you need to force it, open **Advanced** and pin a mode. **Reset to defaults** there restores the mod's authored settings.
+
+#### Advanced
+
+Below the rows, **Advanced** holds the settings that apply to the whole mod rather than to one row:
+
+| Setting | What it does |
+|---------|-------------|
+| Force render mode | Pins Skin / Cloth / Animated glow instead of letting the features pick. **Back to auto** releases it. |
+| Bodies | Which body types this mod is baked onto — **All bodies** (sibling body bibo↔gen3/Eve, plus vanilla gen2), **bibo+gen3** (the sibling body only — the default), or **Off**. Applies to the whole mod, and it's a global setting: design bindings don't capture it. |
+| Reset to defaults | Restores this option's colors, glow and mode to the settings Proteus first recorded for the mod. Hold Ctrl to arm it. |
+
+If a mod has no active option there are no colors to show, but **Advanced** still appears so **Bodies** stays reachable.
 
 #### Rows
 

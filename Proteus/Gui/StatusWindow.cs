@@ -24,9 +24,13 @@ public class StatusWindow : Window
     private readonly UVMapDownloadService uvMapDl;
     private readonly UVRemapService uvRemap;
     private readonly ModCreationService modCreation;
+    private readonly OnionImportService onionImport;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static readonly Vector4 BindingAccent = new(0.45f, 0.75f, 1f, 1f);
+
+    /// <summary>Amber for "this worked, but read it" — the Import tab's pack warnings and its result line.</summary>
+    private static readonly Vector4 ImportWarnColour = new(1f, 0.85f, 0.4f, 1f);
 
     // Indexed by (int)SiblingSynthesisMode: Off=0, BiboGen3Only=1, AllBodies=2.
     private static readonly string[] SiblingModeLabels = { "Off", "bibo+gen3", "All bodies" };
@@ -98,6 +102,30 @@ public class StatusWindow : Window
     private string? _createStatus;        // last create result message
     private bool _createStatusOk;
 
+    // ── Import tab state ──
+    // The parsed pack, held across frames from Browse until Import. Null = nothing picked yet.
+    private OnionImportService.ImportPreview? _importPreview;
+    // The material paths the pack's layouts will target, resolved ONCE per pick alongside the preview.
+    // Resolving it walks 72 game-data probes on the first call and rebuilds a list per layout on every
+    // one, so it can't sit in the draw — same rule as the Create tab's material picker above.
+    private IReadOnlyDictionary<string, IReadOnlyList<string>>? _importMaterials;
+    // Whether that list came from the game data or from the hardcoded female-only fallback. A fallback
+    // list looks perfectly legitimate in the UI while naming no male body at all, so it has to be said.
+    private bool _importMaterialsFromGameData;
+    private string _importPath = "";      // what the dialog returned, kept so a parse failure can name it
+    private string _importName = "";      // editable mod name, pre-filled from the pack
+    private string _importAuthor = "";
+    private bool _importAsTex;            // convert layers to BC7 .tex instead of keeping the pack's PNGs
+    private string? _importStatus;
+    private bool _importStatusOk;
+    // The import worked but the user still has to act (e.g. pick a body layout Penumbra refused to select
+    // for them). Amber, not green — a message ending "or nothing will paint" gets skimmed past in green.
+    private bool _importStatusWarn;
+    private bool _importBusy;             // an import is running on the pool — the button is inert meanwhile
+    // Written by the pool task that does the disk work, read (and cleared) by PumpImport on the framework
+    // thread. A plain reference assignment is the whole handoff; nothing else touches it.
+    private volatile OnionImportService.PreparedImport? _importPrepared;
+
     // ── Material-target picker ──
     // Built ONCE on the frame the picker opens. BeginCombo returns true on EVERY frame it stays open, so
     // querying there unguarded would run a multi-ms Penumbra resource walk at frame rate. Null = not built.
@@ -123,7 +151,8 @@ public class StatusWindow : Window
         DesignBindingService designBindings,
         UVMapDownloadService uvMapDl,
         UVRemapService uvRemap,
-        ModCreationService modCreation)
+        ModCreationService modCreation,
+        OnionImportService onionImport)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -137,6 +166,7 @@ public class StatusWindow : Window
         this.uvMapDl        = uvMapDl;
         this.uvRemap        = uvRemap;
         this.modCreation    = modCreation;
+        this.onionImport    = onionImport;
 
         SizeConstraints = new WindowSizeConstraints
         {
@@ -205,6 +235,9 @@ public class StatusWindow : Window
 
                 using (var t = ImRaii.TabItem("Create"))
                     if (t) DrawCreateTab();
+
+                using (var t = ImRaii.TabItem("Import"))
+                    if (t) DrawImportTab();
 
                 using (var t = ImRaii.TabItem("Settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -921,6 +954,320 @@ public class StatusWindow : Window
 
     private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
+    // ── Import tab ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Finish an import whose disk work completed on the pool: register the written mod with Penumbra and
+    /// report the outcome.
+    /// <para/>
+    /// Driven from <see cref="Plugin.DrawUi"/> rather than from <see cref="Draw"/>, because Dalamud only
+    /// calls <see cref="Draw"/> while the window is OPEN — and closing Proteus the moment you press Import
+    /// is the natural thing to do, since Penumbra is about to take over. Pumping from the window would
+    /// leave the mod written into Penumbra's directory but never added, never enabled, with no layout
+    /// selected and no message anywhere; a later reopen would then pop Penumbra open for no visible reason.
+    /// The registration itself is Penumbra IPC and must stay on the framework thread, which this is.
+    /// </summary>
+    /// <param name="unloading">
+    /// Called from <see cref="Plugin.Dispose"/> rather than from a frame. Registers the mod so it isn't
+    /// orphaned and does nothing else: no Penumbra window, no recomposite, and no touching this window —
+    /// there is no ImGui frame in scope during teardown, and nobody left to read a status message.
+    /// </param>
+    public void TickImport(bool unloading = false)
+    {
+        var done = _importPrepared;
+        if (done == null) return;
+        _importPrepared = null;
+        _importBusy = false;
+
+        var r = onionImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        // Clear the picked pack on success so the tab can't re-import the same file into a name that now
+        // exists; a failure keeps it so the user can fix the name and retry. Guarded on identity because
+        // Browse stays live during an import: if the user has since picked a DIFFERENT pack, that one is
+        // not the one that just finished and must not be thrown away.
+        if (r.Ok && ReferenceEquals(_importPreview, done.Preview))
+        {
+            _importPreview = null;
+            _importMaterials = null;
+        }
+
+        // The result is worth nothing if it lands on a window the user closed. Show it — they asked for
+        // this, and Penumbra is opening at the same moment anyway.
+        if (!IsOpen) Show();
+    }
+
+    private void DrawImportTab()
+    {
+        ImGui.TextWrapped("Import an Onion overlay pack (.omp). Proteus reads the pack's layers and writes " +
+            "a new Penumbra mod with a Proteus sidecar — the original file isn't modified.");
+        ImGui.Separator();
+
+        if (ImGui.Button("Browse for a pack"))
+            _fileDialog.OpenFileDialog("Select an Onion pack", "Onion pack{.omp}", (ok, paths) =>
+            {
+                if (!ok) return;
+                var picked = paths.FirstOrDefault();
+                if (string.IsNullOrEmpty(picked)) return;
+                LoadOnionPack(picked);
+            }, 1);
+
+        if (_importPath.Length > 0)
+        {
+            ImGui.SameLine();
+            ImGui.TextUnformatted(Path.GetFileName(_importPath));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+        }
+
+        var preview = _importPreview;
+        if (preview == null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled("Pick an .omp file to see what it contains.");
+            DrawImportStatus();
+            return;
+        }
+
+        ImGui.Spacing();
+        ImGui.InputText("Mod name", ref _importName, 128);
+        ImGui.InputText("Author", ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled("Description");
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Carried into the mod's Penumbra page.");
+        }
+
+        ImGui.Separator();
+        DrawImportLayers(preview);
+
+        var layouts = preview.Layouts;
+        if (layouts.Count > 1)
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped($"The pack has {layouts.Count} UV layouts, so the mod gets a single-select " +
+                $"\"{OnionImportService.LayoutGroupName}\" group in Penumbra ({string.Join(", ", layouts)}). " +
+                $"Only one composites at a time.");
+            if (preview.DefaultLayoutMatchedBody && preview.DefaultLayout != null)
+                ImGui.TextDisabled($"\"{preview.DefaultLayout}\" will be selected — it matches the body you're wearing.");
+        }
+
+        DrawImportBodyFit(preview);
+        DrawImportMaterials();
+
+        ImGui.Spacing();
+        using (ImRaii.Disabled(!TextureLoader.NativeEncoderAvailable))
+            ImGui.Checkbox("Convert layers to BC7 .tex", ref _importAsTex);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable
+                ? "Roughly a quarter of the disk size, and no PNG decode at composite time.\n" +
+                  "Block compression is lossy — leave it off to keep the pack's images exactly as authored."
+                : "The native block compressor isn't loaded, so BC7 encoding would take minutes.");
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? "Importing…" : "Import"))
+                StartImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable
+                ? "Enter a mod name."
+                : "No layer in this pack can be imported.");
+
+        DrawImportStatus();
+    }
+
+    /// <summary>
+    /// Parse a picked pack into the preview, or report why it isn't one. Both the parse and the material
+    /// resolve are done HERE, on the one frame the file dialog reports a pick — they're multi-ms, and the
+    /// draw runs them at frame rate otherwise.
+    /// </summary>
+    private void LoadOnionPack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importMaterials = null;
+        try
+        {
+            var preview = onionImport.Inspect(path);
+            _importPreview = preview;
+            _importName = preview.Name;
+            _importAuthor = preview.Author;
+            // Best effort: a failure here only costs the "Material targets" list, not the import, which
+            // resolves them again for itself.
+            try
+            {
+                _importMaterials = onionImport.MaterialsFor(preview);
+                _importMaterialsFromGameData = onionImport.BodiesFromGameData;
+            }
+            catch { /* preview only */ }
+        }
+        catch (Exception ex)
+        {
+            _importPreview = null;
+            _importStatus = $"Couldn't read that pack: {ex.Message}";
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>
+    /// Hand the disk work to the pool. Copying a pack is tens of megabytes (and, with BC7 on, several 4K
+    /// encodes) — doing that inline would stall the game for seconds. <see cref="PumpImport"/> picks the
+    /// result up and registers it.
+    /// </summary>
+    private void StartImport(OnionImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        // Copy the editable fields now: the user can keep typing while the write runs.
+        var (name, author, asTex) = (_importName, _importAuthor, _importAsTex);
+        Task.Run(() =>
+        {
+            try { _importPrepared = onionImport.Prepare(preview, name, author, asTex); }
+            catch (Exception ex) { _importPrepared = new(false, $"Import failed: {ex.Message}", null, null, 0, 0); }
+        });
+    }
+
+    /// <summary>One row per pack layer: what it is, and — dimmed — why it won't be imported.</summary>
+    private static void DrawImportLayers(OnionImportService.ImportPreview preview)
+    {
+        var kept = preview.Layers.Count(l => l.Import);
+        ImGui.TextUnformatted($"Layers: {kept} of {preview.Layers.Count}");
+
+        using var table = ImRaii.Table("##onionLayers", 4, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg);
+        if (!table) return;   // EndTable is only legal when BeginTable returned true
+
+        foreach (var l in preview.Layers)
+        {
+            ImGui.TableNextRow();
+            using var dim = ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * (l.Import ? 1f : 0.5f));
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(l.LayoutToken.Length == 0 ? "(no layout)" : l.LayoutToken);
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(l.Slot ?? (l.MapToken.Length == 0 ? "(no map)" : l.MapToken));
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(l.Opacity < 0.999f ? $"{l.ModeToken}  {l.Opacity:0.##}" : l.ModeToken);
+            ImGui.TableNextColumn();
+            if (l.Import)
+                ImGui.TextDisabled($"{l.Bytes / 1024f / 1024f:0.#} MB");
+            else
+                ImGui.TextColored(ImportWarnColour, "skipped");
+
+            // Hovering the last column (the size / "skipped" tag) explains the layer. The rows are only
+            // DIMMED, never ImGui-disabled, so a plain hover test reaches a skipped one too — and the skip
+            // reason is a sentence, far too long to sit in a column of its own.
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(l.SkipReason == null
+                    ? $"{l.File}\nImported as {l.Slot} in {l.BodyType} UV space."
+                    : $"{l.File}\nSkipped: {l.SkipReason}");
+        }
+    }
+
+    /// <summary>
+    /// What happens when the pack has nothing painted for the body the user is actually wearing.
+    /// <para/>
+    /// Drawn for EVERY pack, not just multi-layout ones: a single-layout bibo pack landing on a vanilla
+    /// body is the case that most needs saying, and it has no option group to hang the note off. And the
+    /// three outcomes genuinely differ — bibo↔gen3 is remapped with no action, gen2 needs the mod's
+    /// sibling mode raised, and an undrawn character means Proteus simply doesn't know yet. Saying
+    /// "Proteus will remap it" for all three would be wrong for two of them.
+    /// </summary>
+    private static void DrawImportBodyFit(OnionImportService.ImportPreview preview)
+    {
+        if (preview.DefaultLayout == null || preview.DefaultLayoutMatchedBody) return;
+
+        ImGui.Spacing();
+        if (preview.WearerBodyType == null)
+        {
+            ImGui.TextDisabled($"Your character isn't drawn yet, so Proteus picked \"{preview.DefaultLayout}\" " +
+                "by preference rather than by your body. Check the result once you're in game.");
+        }
+        else if (preview.NeedsAllBodies)
+        {
+            // The one case that needs an action, and the one Proteus takes for the user on import.
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour,
+                $"This pack has nothing painted for your vanilla body — \"{preview.DefaultLayout}\" will be " +
+                "used instead. Baking onto a vanilla body is off by default, so Proteus will set this mod's " +
+                "\"Bodies\" to \"All bodies\" on import (Colors → Advanced); without that it would paint nothing.");
+            ImGui.PopTextWrapPos();
+        }
+        else
+        {
+            ImGui.TextDisabled($"This pack has nothing for your {preview.WearerBodyType} body, so " +
+                $"\"{preview.DefaultLayout}\" will be remapped onto it automatically.");
+        }
+    }
+
+    /// <summary>The material paths the imported overlays will claim, collapsed by default.</summary>
+    private void DrawImportMaterials()
+    {
+        var mats = _importMaterials;
+        if (mats == null || mats.Count == 0) return;   // unresolved or unreadable — the import still works
+
+        // Outside the collapsing header: a fallback list is exactly what the user won't expand to check,
+        // and it silently names no male body.
+        if (!_importMaterialsFromGameData)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour,
+                "Proteus couldn't read the game's body list, so this import will target a known-good set of " +
+                "female bodies only. Reopen this pack once you're in game to pick up every race.");
+            ImGui.PopTextWrapPos();
+        }
+
+        var total = mats.Values.Sum(v => v.Count);
+        if (!ImGui.CollapsingHeader($"Material targets ({total})##onionMats")) return;
+
+        ImGui.TextWrapped(_importMaterialsFromGameData
+            ? "Every body the game defines, so the overlay follows you across races. " +
+              "Bodies you aren't wearing are ignored at composite time."
+            : "Fallback list — the game data couldn't be read when this pack was opened.");
+        foreach (var (layout, paths) in mats)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled($"{layout}  ({paths.Count})");
+            foreach (var p in paths)
+            {
+                ImGui.Bullet();
+                ImGui.TextUnformatted(Path.GetFileName(p));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
+            }
+        }
+    }
+
+    private void DrawImportStatus()
+    {
+        if (_importStatus == null) return;
+        var colour = !_importStatusOk ? new Vector4(1f, 0.5f, 0.4f, 1f)       // failed
+                   : _importStatusWarn ? ImportWarnColour                      // worked, but act on it
+                   : new Vector4(0.4f, 0.9f, 0.4f, 1f);                        // clean
+        ImGui.PushTextWrapPos(0);
+        ImGui.TextColored(colour, _importStatus);
+        ImGui.PopTextWrapPos();
+    }
+
     /// <summary>
     /// Is this a material an overlay would paint skin onto — the player's body or face?
     /// <para/>
@@ -1008,13 +1355,14 @@ public class StatusWindow : Window
             // EndTable is only legal when BeginTable returned true — it returns false when the table is
             // skipped (clipped away, or the host window isn't rendering), and calling EndTable anyway
             // trips an ImGui assertion in debug and corrupts table state in release.
-            if (!ImGui.BeginTable("##mods", 6, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
+            // Bodies is NOT here: it moved into the colour panel's Advanced disclosure, beside the other
+            // per-mod knob that decides how the overlay renders rather than what it is.
+            if (!ImGui.BeginTable("##mods", 5, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
                 return;
             ImGui.TableSetupColumn("On",     ImGuiTableColumnFlags.WidthFixed, 32);
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, 60);
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, 60);
-            ImGui.TableSetupColumn("Bodies", ImGuiTableColumnFlags.WidthFixed, 110);
             ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, 78);
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
@@ -1035,7 +1383,6 @@ public class StatusWindow : Window
             SortableHeader("Mod", ModSort.Name);
             SortableHeader("Pri", ModSort.Priority);
             ImGui.TableNextColumn(); ImGui.TableHeader("Colors");
-            ImGui.TableNextColumn(); ImGui.TableHeader("Bodies");
             ImGui.TableNextColumn(); ImGui.TableHeader("Skindent");
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
@@ -1106,34 +1453,11 @@ public class StatusWindow : Window
                 if (bindingDriven && ImGui.IsItemHovered())
                     ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update binding\" to save them. Base colors are unchanged.");
 
-                // Sibling-synthesis mode (which body types to generate for this mod).
-                ImGui.TableNextColumn();
-                var mode = config.SiblingModeFor(entry.ModDirectory);
-                ImGui.SetNextItemWidth(105);
-                if (ImGui.BeginCombo($"##bodies_{entry.ModDirectory}", SiblingModeLabels[(int)mode]))
-                {
-                    foreach (var opt in new[] { SiblingSynthesisMode.AllBodies, SiblingSynthesisMode.BiboGen3Only, SiblingSynthesisMode.Off })
-                    {
-                        if (ImGui.Selectable(SiblingModeLabels[(int)opt], opt == mode) && opt != mode)
-                        {
-                            config.SiblingSynthesis[entry.ModDirectory] = opt;
-                            config.Save();
-                            compositor.TriggerRecomposite("sibling-mode");
-                        }
-                    }
-                    ImGui.EndCombo();
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Which body types to synthesize for this mod:\n" +
-                        "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
-                        "bibo+gen3 = bake to the sibling body only (default)\n" +
-                        "Off = no synthesis");
-
                 // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
-                // "the pack decides", "forced on", "forced off" — so this is a combo, like the Bodies column
-                // beside it, and not a checkbox: a checkbox can't show the difference between "ticked
-                // because the pack asked" and "ticked because you said so", and offers nowhere to put the
-                // third state except a hidden modifier gesture.
+                // "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox: a
+                // checkbox can't show the difference between "ticked because the pack asked" and "ticked
+                // because you said so", and offers nowhere to put the third state except a hidden modifier
+                // gesture.
                 ImGui.TableNextColumn();
                 bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
                 // The user's stored opinion: the new override, else a legacy opt-out, else none.
@@ -1335,10 +1659,12 @@ public class StatusWindow : Window
             var activeId = designBindings.ActiveDesignId;
             var name = designBindings.Bindings.FirstOrDefault(b => b.DesignId == activeId)?.DesignName
                        ?? activeId?.ToString()[..8] ?? "?";
-            // Note the Reset caveat: it is the one control here that DOES rewrite the mod's own settings,
-            // so the blanket "base colors unchanged" promise would be a lie next to it.
+            // Both Advanced caveats, because the blanket "base colors unchanged" promise would be a lie
+            // next to either: Reset rewrites the mod's own settings, and Bodies isn't a colour at all —
+            // it's global config that no binding captures or restores.
             ImGui.TextColored(BindingAccent, $"Editing binding '{name}' — previewing live; click \"Update binding\" to save.");
-            ImGui.TextColored(BindingAccent, "Base colors unchanged, except \"Reset to defaults\" (Advanced), which rewrites them.");
+            ImGui.TextColored(BindingAccent, "Base colors unchanged — except in Advanced, where \"Reset to " +
+                "defaults\" rewrites them and \"Bodies\" is a global setting no binding captures.");
         }
 
         ImGui.Separator();
@@ -1414,7 +1740,8 @@ public class StatusWindow : Window
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
                 entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple,
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
-                resetDisabledReason: ResetBlockedReason(entry));
+                resetDisabledReason: ResetBlockedReason(entry),
+                drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -1486,7 +1813,17 @@ public class StatusWindow : Window
         var maskAssets = discovery.ResolveActiveMaskAssets(entry);
         bool anyMaskWithId = maskAssets.Any(a => a.IndexPath != null);
 
-        if (activeOptions.Count == 0 && !anyMaskWithId) return;
+        if (activeOptions.Count == 0 && !anyMaskWithId)
+        {
+            // Nothing selected means there are no colours to edit — but Bodies is a MOD-wide setting and
+            // this panel is now its only home, so it can't leave with the tabs. An all-"None" mod is a mod
+            // that isn't painting, and "the bake never reached my body type" is one of the reasons why, so
+            // the control would otherwise disappear in exactly the state that sends someone looking for it.
+            ImGui.TextDisabled("No active options — select one in Penumbra to edit its colours.");
+            if (ImGui.TreeNodeEx($"Advanced##noopt_{entry.ModDirectory}", ImGuiTreeNodeFlags.NoTreePushOnOpen))
+                DrawBodiesAdvanced(entry);
+            return;
+        }
 
         // Show the tabs in TRUE stacking order, top-first — the same ordering the compositor applies,
         // just reversed (it composites last-on-top). Until this, the strip listed groups in metadata
@@ -1796,7 +2133,8 @@ public class StatusWindow : Window
                 // Same footer as the overlay tabs: the "Rendering as" badge + Advanced force-mode radios +
                 // glow-effect picker. No per-option reset (the mask has no defaults cache) → onReset null.
                 maskFooterChanged = ColorTableEditor.DrawGlowFooter(maskScope, [maskDesc], maskGearOvr, effects,
-                    out var maskFooterEdit, onReset: null);
+                    out var maskFooterEdit, onReset: null,
+                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
                 maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
                     maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
                 ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
@@ -1902,6 +2240,7 @@ public class StatusWindow : Window
         bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
+            drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             promotedToGear: promotedToGear);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
@@ -1936,6 +2275,51 @@ public class StatusWindow : Window
             if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
             else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
         }
+    }
+
+    /// <summary>
+    /// The mod's sibling-synthesis mode — which body types its overlays get baked onto — drawn inside the
+    /// colour panel's Advanced disclosure.
+    /// <para/>
+    /// It lives here rather than in the Mods table because it is not a property of the mod so much as of
+    /// how its overlay renders, which is what the colour panel is for; and because getting it wrong looks
+    /// like "the overlay doesn't paint", which is diagnosed in front of the colours, not in a list. Per-MOD
+    /// while everything else in that disclosure is per-option, so it repeats identically on every option
+    /// tab, and it commits for itself: what it edits is neither this option's colours nor its metadata, so
+    /// reporting back through the footer's change flag would make every caller save option metadata — or
+    /// install a design-binding override — for something that has nothing to do with either.
+    /// </summary>
+    private void DrawBodiesAdvanced(OverlayEntry entry)
+    {
+        var mode = config.SiblingModeFor(entry.ModDirectory);
+
+        ImGui.SetNextItemWidth(120);
+        if (ImGui.BeginCombo($"Bodies##bodies_{entry.ModDirectory}", SiblingModeLabels[(int)mode]))
+        {
+            foreach (var opt in new[] { SiblingSynthesisMode.AllBodies, SiblingSynthesisMode.BiboGen3Only, SiblingSynthesisMode.Off })
+            {
+                if (ImGui.Selectable(SiblingModeLabels[(int)opt], opt == mode) && opt != mode)
+                {
+                    config.SiblingSynthesis[entry.ModDirectory] = opt;
+                    config.Save();
+                    compositor.TriggerRecomposite("sibling-mode");
+                }
+            }
+            ImGui.EndCombo();
+        }
+        bool binding = designBindings.IsOverrideActiveFor(entry.ModDirectory);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Which body types to bake this mod onto:\n" +
+                "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
+                "bibo+gen3 = bake to the sibling body only (default)\n" +
+                "Off = no synthesis\n\n" +
+                "Applies to the whole mod, not just this option." +
+                (binding ? "\nGlobal — this one is NOT part of the binding you're editing." : ""));
+
+        // Said in the panel, not only on hover: everything else in this window previews into the binding,
+        // so a control that quietly writes global config instead has to break that expectation out loud.
+        if (binding)
+            ImGui.TextDisabled("Saved globally — bindings don't capture this.");
     }
 
     /// <summary>
