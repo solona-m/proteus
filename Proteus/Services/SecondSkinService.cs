@@ -286,9 +286,66 @@ public sealed class SecondSkinService
         // code — c0201 for every "Midlander-bodied" female — so it cannot name the race whose metadata
         // entry has to be emptied for a carrier host. Null falls back to charCode, which is right for the
         // races that ship their own body (Au Ra, Viera, Hrothgar) and merely does nothing for the rest.
-        string? drawnRaceCode = null)
+        string? drawnRaceCode = null,
+        // The .mtrl game paths the character is CURRENTLY drawing. Used for one thing: reading the material
+        // VARIANT folder a host actually loads under. See VariantFolderFor — the model references our
+        // material variant-relatively, so publishing it under the wrong variant means the game never asks
+        // for it and the appended mesh renders with no material at all.
+        IReadOnlySet<string>? activeMaterials = null,
+        // The two CARRIERS' material variants, off their sheets. See HostAccessory.KnownVariant: a carrier
+        // is equipped after the shell is built, so the live tree cannot answer for it.
+        int? emperorRingVariant = null,
+        int? invisibleGlassesVariant = null)
     {
         if (gearOverlays.Count == 0) return null;
+
+        // Which "v####" folder the game will ask for a host's materials under.
+        //
+        // The shell's material is stored in the model with a LEADING SLASH (see SecondSkinLayer.MaterialName
+        // below), which is the variant-relative form: the game builds
+        // chara/{tree}/{set}/material/v{variant}/{name} using the EQUIPPED ITEM's variant, not anything in
+        // the model. This was hardcoded to v0001, so a host on any other variant had our material published
+        // at a path the game never requests — and the failure was invisible from every angle we could see:
+        // the redirect resolved perfectly (nothing else claims that path), the model was ours and drew, and
+        // only the appended meshes silently had no material.
+        //
+        // Read from the live resource tree rather than guessed, so it is whatever the game actually asked
+        // for. A CARRIER is the case the tree cannot answer — it is equipped after the shell is built — so
+        // those pass their variant in from their item sheet; see HostAccessory.KnownVariant.
+        string VariantFolderFor(HostAccessory h)
+        {
+            var dir = $"chara/{h.Tree}/{h.Prefix}{h.SetId:D4}/material/v";
+
+            // The variant belongs to the EQUIPPED ITEM IN THIS SLOT, not to the set, so only a material the
+            // game loaded for this slot answers the question outright. An accessory set is a jewellery set —
+            // one id covers _nek, _ear, _wrs and _rir — and each worn piece carries its own variant, so
+            // matching the set alone would take whichever piece the (unordered) set enumerated first and
+            // publish the shell under a neighbour's variant, differently from run to run. The slot is in the
+            // material's own name, so the exact answer is cheap to insist on.
+            //
+            // Set-wide is kept only as a recovery for the host's materials being briefly absent — a stale
+            // snapshot — and ONLY when every piece of the set agrees on one variant, which is the single
+            // shape in which a neighbour cannot be lying about this slot. Disagreement means the set spans
+            // variants and no neighbour can speak for us, so fall through rather than flip a coin.
+            var slotTag = $"_{h.Slot}_";
+            string? setVariant = null;
+            bool setDisagrees = false;
+            if (activeMaterials != null)
+                foreach (var m in activeMaterials)
+                {
+                    if (!m.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) continue;
+                    int end = m.IndexOf('/', dir.Length);
+                    if (end <= dir.Length) continue;
+                    var folder = m[(dir.Length - 1)..end];
+                    if (m.Contains(slotTag, StringComparison.OrdinalIgnoreCase)) return folder;
+                    if (setVariant == null) setVariant = folder;
+                    else if (!string.Equals(setVariant, folder, StringComparison.OrdinalIgnoreCase))
+                        setDisagrees = true;
+                }
+
+            if (setVariant != null && !setDisagrees) return setVariant;
+            return h.KnownVariant is { } v ? $"v{v:D4}" : "v0001";
+        }
 
         // A mask OCCLUDES everything beneath it (matches CompositorService.MaskAdds): in a mask's territory
         // every gear overlay — top group included — is erased (its coverage drops to cov·W, and W=0 where the
@@ -704,7 +761,8 @@ public sealed class SecondSkinService
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
-        var hosts = ChooseHosts(cutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot);
+        var hosts = ChooseHosts(cutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
+            emperorRingVariant, invisibleGlassesVariant);
         // Cap total placeable layers at the single-char base-36 disk-id space (0-9a-z = 36). Any excess
         // folds into the over-budget drop path below, so a disk id can never run past 'z' into filesystem-
         // reserved chars. 36 is far beyond the practical geometric limit (~15 stacked shells).
@@ -797,16 +855,17 @@ public sealed class SecondSkinService
             // letters matching the base's own material names instead of mixing two codes inside one model.
             var hostCode = host.ModelPath != null ? PathCharCode(host.ModelPath) ?? cutCode : cutCode;
             string matName = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
-            string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/v0001/{matName}";
+            string matVariant = VariantFolderFor(host);
+            string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
             string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
 
             // Which UV space is this art painted in? A mod listing only *_bibo.mtrl is bibo art; the gear
             // layer has no material-match gate like the skin layer, so remap into the body's UV explicitly.
             var srcType = ov.Descriptor.SourceBodyType ?? InferOverlayBodyType(ov.Descriptor);
-            log.Information("[Proteus] gear layer mat={0}/disk={1} -> host {2}{3:D4}/{4}: shader={5} UV {6}->{7}{8}{9}",
+            log.Information("[Proteus] gear layer mat={0}/{10}/disk={1} -> host {2}{3:D4}/{4}: shader={5} UV {6}->{7}{8}{9}",
                 matLetter, diskChar, host.Prefix, host.SetId, host.Slot, shader, srcType ?? "(unknown)", bodyType ?? "(unknown)",
                 srcType != null && bodyType != null && !string.Equals(srcType, bodyType, StringComparison.OrdinalIgnoreCase) ? " [REMAP]" : "",
-                isMaskShell ? " [MASK SHELL]" : "");
+                isMaskShell ? " [MASK SHELL]" : "", matVariant);
 
             // The mask shell's coverage IS the mask; other shells' coverage is the overlay's art shaped by masks.
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
@@ -1489,7 +1548,12 @@ public sealed class SecondSkinService
     // Emperor fallback, whose EQDP edit forces the player-race model, making the rebuilt path correct.
     private readonly record struct HostAccessory(
         int SetId, string Slot, string EqdpSlot, byte[]? BaseModel, int BaseMatCount, string Tree, char Prefix,
-        string? ModelPath = null);
+        string? ModelPath = null,
+        // The material variant to publish under, when the live resource tree cannot answer. Only a CARRIER
+        // needs this: it is equipped after the shell is built, so its materials are not in the tree yet and
+        // VariantFolderFor would fall back to v0001 — wrong for any carrier item that is not variant 1, and
+        // wrong in a way that renders nothing at all. Null for worn hosts, which the tree does answer for.
+        int? KnownVariant = null);
 
     /// <summary>
     /// Every model the shell can be hosted on, in FILL priority — the policy is written out at the top of
@@ -1506,7 +1570,8 @@ public sealed class SecondSkinService
     /// </summary>
     private List<HostAccessory> ChooseHosts(string cutCode, string equipCode,
         IReadOnlyDictionary<string, string>? equipped,
-        IReadOnlyList<string>? metModels, int? invisibleGlassesSet, string outputRoot)
+        IReadOnlyList<string>? metModels, int? invisibleGlassesSet, string outputRoot,
+        int? emperorRingVariant, int? invisibleGlassesVariant)
     {
         log.Information("[Proteus] host: choosing from equipped accessories [{0}], head/glasses [{1}]",
             equipped == null ? "(null)" : string.Join(", ", equipped.Select(kv => $"{kv.Key}={kv.Value}")),
@@ -1681,7 +1746,8 @@ public sealed class SecondSkinService
             // space (a Miqo'te's facewear ships native at c0801 even though her body parts are c0201).
             var pendingPath = $"chara/equipment/e{pending:D4}/model/c{equipCode}e{pending:D4}_met.mdl";
             log.Information("[Proteus] host: invisible glasses e{0:D4} (met, REPLACE — pending injection)", pending);
-            hosts.Add(new HostAccessory(pending, "met", "Head", null, 0, "equipment", 'e', pendingPath));
+            hosts.Add(new HostAccessory(pending, "met", "Head", null, 0, "equipment", 'e', pendingPath,
+                KnownVariant: invisibleGlassesVariant));
         }
         // (No invisible-glasses-from-nothing route for a slot we don't fill ourselves: an empty head/facewear
         // slot loads NO model, so there's nothing to redirect.)
@@ -1718,7 +1784,8 @@ public sealed class SecondSkinService
             // Ours counts as free: it is the ring we equipped for exactly this on an earlier composite.
             .FirstOrDefault(r => r.Worn == null || ParseSetId(r.Worn, 'a') == EmperorSetId);
         if (freeRing.Slot != null)
-            hosts.Add(new HostAccessory(EmperorSetId, freeRing.Slot, freeRing.Eqdp, null, 0, "accessory", 'a'));
+            hosts.Add(new HostAccessory(EmperorSetId, freeRing.Slot, freeRing.Eqdp, null, 0, "accessory", 'a',
+                KnownVariant: emperorRingVariant));
         else
             log.Information("[Proteus] host: both ring slots hold the player's own rings — no free slot for "
                           + "the Emperor's ring");

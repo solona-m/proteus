@@ -13,7 +13,11 @@ namespace Proteus.Services;
 /// </summary>
 public static class InvisibleGlasses
 {
-    public readonly record struct Identity(ulong ItemId, int ModelSet);
+    /// <param name="Variant">The item's material variant. The shell's material is referenced from the model
+    /// variant-relatively, so the game asks for it under chara/equipment/e{set}/material/v{Variant}/. Needed
+    /// because the PENDING-injection host (see SecondSkinService.ChooseHosts) builds the shell before the
+    /// pair is equipped, so the live resource tree cannot answer for it and a v0001 guess renders nothing.</param>
+    public readonly record struct Identity(ulong ItemId, int ModelSet, int Variant);
 
     private static readonly object Gate = new();
     private static Identity? cached;
@@ -78,9 +82,10 @@ public static class InvisibleGlasses
                     int packed = (int)row.Model;
                     int set = packed & 0xFFFF;
                     if (set <= 0) continue;
-                    cached = new Identity(row.RowId, set);
-                    log.Information("[Proteus] invisible glasses: using item #{0} (packed {1} -> set e{2:D4})",
-                        row.RowId, packed, set);
+                    int variant = (packed >> 16) & 0xFFFF;
+                    cached = new Identity(row.RowId, set, variant);
+                    log.Information("[Proteus] invisible glasses: using item #{0} (packed {1} -> set e{2:D4}, variant v{3:D4})",
+                        row.RowId, packed, set, variant);
                     return cached;
                 }
                 WarnOnce(log, "no Glasses row with a model found");

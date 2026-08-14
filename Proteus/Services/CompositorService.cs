@@ -4309,7 +4309,9 @@ public class CompositorService : IDisposable
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
                             modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
-                            _drawnRaceCode);
+                            _drawnRaceCode, activeMtrl,
+                            InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
+                            InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant);
                         if (shells != null)
                         {
                             shellBuilt = true;

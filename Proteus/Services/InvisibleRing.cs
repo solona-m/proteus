@@ -21,7 +21,12 @@ namespace Proteus.Services;
 /// </summary>
 public static class InvisibleRing
 {
-    public readonly record struct Identity(ulong ItemId, int ModelSet);
+    /// <param name="Variant">The item's material variant. The shell's material is referenced from the model
+    /// variant-relatively, so the game asks for it under chara/accessory/a0053/material/v{Variant}/ — publish
+    /// it anywhere else and the carrier's mesh loads with no material and renders nothing. Not discoverable
+    /// from the live resource tree the way a worn host's is, because the carrier is equipped AFTER the shell
+    /// is built, so it has to come from the sheet.</param>
+    public readonly record struct Identity(ulong ItemId, int ModelSet, int Variant);
 
     /// <summary>Emperor's New Ring model set — the same a0053 the shell's EQDP entry targets.</summary>
     public const int EmperorSetId = 53;
@@ -58,8 +63,10 @@ public static class InvisibleRing
                     // ModelMain packs set | variant<<16 | … exactly like the Glasses sheet's Model column.
                     int set = (int)(row.ModelMain & 0xFFFF);
                     if (set != EmperorSetId) continue;
-                    cached = new Identity(row.RowId, set);
-                    log.Information("[Proteus] invisible ring: using item #{0} (model a{1:D4})", row.RowId, set);
+                    int variant = (int)((row.ModelMain >> 16) & 0xFFFF);
+                    cached = new Identity(row.RowId, set, variant);
+                    log.Information("[Proteus] invisible ring: using item #{0} (model a{1:D4}, variant v{2:D4})",
+                        row.RowId, set, variant);
                     return cached;
                 }
 
