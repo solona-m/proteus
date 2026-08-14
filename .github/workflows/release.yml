@@ -33,8 +33,20 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      # The manifest's Changelog comes from the annotated tag's message, picked up as an MSBuild
+      # property via the environment. It cannot come from the GitHub release body — that release is
+      # created further down this job, long after the build. The tag type is asserted because a
+      # lightweight tag carries no message and %(contents) silently falls through to the tagged
+      # COMMIT's message, which would ship a random commit subject to every user as the changelog.
       - name: Build
-        run: dotnet build Proteus/Proteus.csproj -c Release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ((git cat-file -t $tag) -ne 'tag') {
+            throw "$tag is a lightweight tag and carries no changelog. Re-tag it with: git tag -a $tag -F notes.md"
+          }
+          $env:Changelog = ((git tag -l --format='%(contents)' $tag) -join "`n").Trim()
+          dotnet build Proteus/Proteus.csproj -c Release
 
       - name: Read version
         id: version

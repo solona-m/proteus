@@ -44,6 +44,20 @@
     <DalamudApiLevel>15</DalamudApiLevel>
     <Tags>texture;overlay;compositor;penumbra;skin;mod</Tags>
     <CategoryTags>utility</CategoryTags>
+    <!-- The icon shown in /xlplugins. Dalamud only reads the on-disk images\icon.png for DEV
+         plugins; for anyone who installed from the plugin repo it fetches this URL instead, so
+         the file has to exist on main under this exact (case-sensitive) path. Note that the
+         end-user listing in solona-m/plugins/repo.json carries its own IconUrl — this property
+         does not propagate there. -->
+    <IconUrl>https://raw.githubusercontent.com/solona-m/proteus/main/Proteus/images/icon.png</IconUrl>
+    <RepoUrl>https://github.com/solona-m/proteus</RepoUrl>
+    <!-- Shown under the plugin entry after an update. Deliberately empty here: the value comes from
+         the annotated tag's message, which release.yml reads into a Changelog environment variable
+         before invoking dotnet build (MSBuild surfaces environment variables as properties, and this
+         Condition yields to one when set). It cannot come from the GitHub release body — that
+         release is created by the workflow long after the build. Hardcoding text here would ship the
+         same stale line on every later release; an absent changelog is honest, a wrong one is not. -->
+    <Changelog Condition="'$(Changelog)' == ''"></Changelog>
   </PropertyGroup>
 
   <ItemGroup>
@@ -77,7 +91,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="images\icon.png" Condition="Exists('images\icon.png')">
+    <!-- Lands next to the DLL as bin\...\images\icon.png, which is where Dalamud looks when the
+         plugin is dev-loaded (PluginImageCache reads <DllDir>\images\icon.png for IsDev plugins
+         only). Deliberately unconditional: a missing file should fail the build rather than
+         silently ship an iconless plugin. Must stay square and <= 512x512 or Dalamud rejects it. -->
+    <None Include="images\icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

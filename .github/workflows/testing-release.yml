@@ -33,8 +33,20 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      # Same tag-message changelog as release.yml, but tolerant rather than fatal: testing tags are
+      # disposable and usually lightweight, and a testing build with no changelog is fine. The tag
+      # type is still checked — %(contents) on a lightweight tag returns the tagged commit's message,
+      # not a changelog.
       - name: Build
-        run: dotnet build Proteus/Proteus.csproj -c Release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ((git cat-file -t $tag) -eq 'tag') {
+            $env:Changelog = ((git tag -l --format='%(contents)' $tag) -join "`n").Trim()
+          } else {
+            Write-Host "::notice::$tag is a lightweight tag - building without a changelog."
+          }
+          dotnet build Proteus/Proteus.csproj -c Release
 
       - name: Read version
         id: version
