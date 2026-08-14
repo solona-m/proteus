@@ -343,7 +343,7 @@ public class StatusWindow : Window
             compositor.SetEnabled(enabled);   // clears output, redraws, then toggles the Penumbra mod
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Turning this off clears Proteus's output, redraws you without it,\n" +
+            ImGui.SetTooltip("Turning this off clears Proteus' output, redraws you without it,\n" +
                              "and disables the managed \"Proteus\" mod in Penumbra.");
 
         var disableRedraw = config.DisableAutoRedraw;
@@ -374,7 +374,7 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("When another mod is confirmed to be overriding a skin texture Proteus composites\n" +
                              "into — a tattoo or skin pack shipping its own copy of the body texture — raise\n" +
-                             "Proteus's Penumbra priority above it automatically, and say so in chat.\n\n" +
+                             "Proteus' Penumbra priority above it automatically, and say so in chat.\n\n" +
                              "That override is otherwise invisible: overlays half-apply (the bumps land, the\n" +
                              "colour doesn't) and every log line still reads as a success.\n\n" +
                              "Turn off only if you deliberately want another mod to win a path Proteus\n" +

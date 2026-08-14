@@ -4924,6 +4924,7 @@ public class CompositorService : IDisposable
 
         int lost = 0;
         var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unclaimed = new List<string>();
         foreach (var gamePath in expected.Keys)
         {
             if (matched.Contains(gamePath))
@@ -4936,13 +4937,45 @@ public class CompositorService : IDisposable
             if (unstable.Contains(gamePath)) continue;
 
             lost++;
+
+            // TWO DIFFERENT FAULTS, and conflating them produced nonsense. Penumbra echoes the game path
+            // straight back when NOTHING provides it — our entry simply isn't in the winning collection —
+            // and a null answer means the same. Treating that as "another mod wins" printed the path as its
+            // own culprit: «"chara/accessory/a0053/texture/ss_0_id.tex" overrides ss_0_id.tex», advising the
+            // user to outrank a mod that does not exist. Nobody is winning these; they are not published to
+            // the collection at all, which is a different problem with a different fix.
+            var disk = raw[gamePath];
+            bool nobodyProvides = disk == null
+                               || string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase);
+
+            if (nobodyProvides)
+            {
+                unclaimed.Add(gamePath);
+                log.Warning("[Proteus] redirect NOT live: {0} resolves to nothing — our entry is not in the "
+                          + "winning collection at all, so this is not another mod outranking us. The managed "
+                          + "mod is disabled, or the path was withdrawn between publish and check.", gamePath);
+                continue;
+            }
+
             log.Warning("[Proteus] redirect NOT live: {0} resolves to {1} — another mod wins this path, so "
                       + "what we composited for it cannot render. Raise the Proteus managed mod's priority "
-                      + "in Penumbra above the mod that owns it.", gamePath, raw[gamePath] ?? "(nothing)");
+                      + "in Penumbra above the mod that owns it.", gamePath, disk!);
 
-            if (ModFolderOf(raw[gamePath]) is { } owner) owners.Add(owner);
-            else NotifyRedirectLost(gamePath, raw[gamePath]);   // not a mod we can outrank — just say so
+            if (ModFolderOf(disk) is { } owner) owners.Add(owner);
+            else NotifyRedirectLost(gamePath, disk);   // a real file, but not under the mod root
         }
+
+        // ONE line, not one per path. The shell alone publishes a model, a material and up to five textures,
+        // and the previous per-path notice turned a single fault into a seven-message wall of red.
+        if (unclaimed.Count > 0 && _reportedRedirectLosses.TryAdd("\0unclaimed", "1"))
+        {
+            var msg = $"[Proteus] {unclaimed.Count} of the files Proteus publishes aren't reaching the game — "
+                    + "they resolve to nothing at all, which usually means the \"Proteus\" mod is disabled in "
+                    + "your current Penumbra collection. Check it is enabled there.";
+            _ = Plugin.Framework.RunOnFrameworkThread(
+                () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
+        }
+        if (unclaimed.Count == 0) _reportedRedirectLosses.TryRemove("\0unclaimed", out _);
 
         // Raising is the fix, so prefer doing it over describing it. Only when we know WHICH mod to outrank:
         // a path resolving to nothing, or to a file outside the mod directory, has no priority to beat.
@@ -5813,6 +5846,7 @@ public class CompositorService : IDisposable
             {
                 List<string> missing = [];
                 bool hostEverDrawn = false;
+                HashSet<string>? hostMaterials = null;
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     await Task.Delay(800).ConfigureAwait(false);
@@ -5846,6 +5880,7 @@ public class CompositorService : IDisposable
                             expected.Materials.Count);
                         return;
                     }
+                    hostMaterials = materials;
                 }
 
                 if (!hostEverDrawn)
@@ -5856,13 +5891,47 @@ public class CompositorService : IDisposable
                     return;
                 }
 
+                // A carrier we equipped DURING this composite is still settling: the equip fires its own
+                // redraw, and the model can be back in the draw object before its materials are. The host
+                // being drawn is therefore not enough to call the material missing here, and the next
+                // composite re-runs this check with everything landed. Without the guard, the one case that
+                // needs no host at all — nothing equipped, so the shell rides the Emperor's ring we just put
+                // on — reports failure every time on nothing more than timing.
+                var sinceCarrier = unchecked(Environment.TickCount64
+                    - Math.Max(_lastRingInjectTick, _lastGlassesInjectTick));
+                if (sinceCarrier >= 0 && sinceCarrier < RingInjectCooldownMs)
+                {
+                    log.Debug("[Proteus] second skin drawn check deferred — a carrier was equipped {0}ms ago "
+                            + "and is still loading; the next composite re-checks", sinceCarrier);
+                    return;
+                }
+
+                // What the host DID load, so the next question is answerable from this line alone. The
+                // material is referenced variant-relatively, so the usual reason a published path is never
+                // requested is that we published it under the wrong v#### — and that is only visible by
+                // comparing against the variant the host's own materials came in under. Listing them turns
+                // "it isn't drawn" into "it isn't drawn, and here is the folder the game was actually
+                // reading from".
+                var hostDir = missing
+                    .Select(p => p[..(p.LastIndexOf('/') + 1)])
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var siblings = hostMaterials == null ? [] : hostMaterials
+                    .Where(m => hostDir.Any(d => m.StartsWith(
+                        d[..(d.IndexOf("/material/", StringComparison.OrdinalIgnoreCase) + 10)],
+                        StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
                 log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
                           + "shell material(s) never appeared on the character: {2}. The host accessory it "
-                          + "was appended into is drawn, but not our copy of it.",
-                    missing.Count, expected.Materials.Count, string.Join(", ", missing));
+                          + "was appended into is drawn, but not our copy of it. The host's OWN materials in "
+                          + "the draw object are: {3}",
+                    missing.Count, expected.Materials.Count, string.Join(", ", missing),
+                    siblings.Count == 0 ? "(none — the host loads no material of its own)" : string.Join(", ", siblings));
 
                 var msg = "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
-                        + "it rides on is equipped, yet the character isn't loading Proteus's version. Try "
+                        + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
                         + "unequipping and re-equipping that accessory, or pick a different one.";
                 _ = Plugin.Framework.RunOnFrameworkThread(
                     () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
@@ -7117,8 +7186,8 @@ public class CompositorService : IDisposable
         var names = outranked == 1 ? $"\"{highestOwner}\""
                                    : $"\"{highestOwner}\" and {outranked - 1} other mod(s)";
         var msg = $"[Proteus] {names} was overriding the skin textures Proteus composites your overlays "
-                + $"into, so they could not show up. Raised Proteus's Penumbra priority to {target} to fix "
-                + "it. (Turn off \"Auto-raise mod priority\" in Proteus's settings if you'd rather it "
+                + $"into, so they could not show up. Raised Proteus' Penumbra priority to {target} to fix "
+                + "it. (Turn off \"Auto-raise mod priority\" in Proteus' settings if you'd rather it "
                 + "didn't.)";
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 45).Build()));

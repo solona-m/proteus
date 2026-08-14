@@ -940,7 +940,7 @@ public sealed class SecondSkinService
                 _lastOverBudgetLayers = totalLayers;
                 var msg =
                     $"[Proteus] This look has {totalLayers} layers ({totalMask} Mask, {totalLayers - totalMask} Cloth), "
-                  + $"but only {totalCapacity} fit across your accessories (Proteus's invisible fallback ring already "
+                  + $"but only {totalCapacity} fit across your accessories (Proteus' invisible fallback ring already "
                   + $"included). Turn off some layers, or equip another pair of glasses / ring / bracelet / necklace so "
                   + $"the rest fit.";
                 // Marshalled: the shell build runs off the framework thread, and ChatGui's queue is not
