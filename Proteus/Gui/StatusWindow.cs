@@ -25,6 +25,7 @@ public class StatusWindow : Window
     private readonly UVRemapService uvRemap;
     private readonly ModCreationService modCreation;
     private readonly OnionImportService onionImport;
+    private readonly ModExportService modExport;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static readonly Vector4 BindingAccent = new(0.45f, 0.75f, 1f, 1f);
@@ -126,6 +127,32 @@ public class StatusWindow : Window
     // thread. A plain reference assignment is the whole handoff; nothing else touches it.
     private volatile OnionImportService.PreparedImport? _importPrepared;
 
+    // ── Export tab state ──
+    // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
+    // can reorder, and an index would then quietly point at a different mod than the one on screen.
+    private string _exportModDir = "";
+    // Live only while the mod combo's popup is open — cleared each time it opens, so a filter left behind
+    // from last time can never present an empty list as "you have no mods".
+    private string _exportFilter = "";
+    private string? _exportStatus;
+    private bool _exportStatusOk;
+
+    /// <summary>
+    /// How far along an export is. Three states, not two: the seconds the FILE BROWSER is open are the
+    /// window a second click actually lands in, so "busy" has to start there and not at the write. A flag
+    /// raised only once a path was chosen leaves the button live throughout the dialog, and a double-click
+    /// then stacks two dialogs and can run two zips onto the same target.
+    /// <para/>
+    /// Only ever written from the framework thread — here and in the dialog callback, which
+    /// <c>FileDialogManager.Draw</c> invokes inline. The pool task writes <see cref="_exportDone"/> instead.
+    /// </summary>
+    private enum ExportPhase { Idle, Choosing, Writing }
+    private ExportPhase _exportPhase = ExportPhase.Idle;
+    // Written by that pool task, read and cleared by DrawExportTab. Unlike an import there is no Penumbra
+    // IPC afterwards, so nothing has to be pumped from Plugin.DrawUi — the tab itself can finish it, and
+    // leaving the result parked until the user looks costs nothing.
+    private volatile ModExportService.ExportResult? _exportDone;
+
     // ── Material-target picker ──
     // Built ONCE on the frame the picker opens. BeginCombo returns true on EVERY frame it stays open, so
     // querying there unguarded would run a multi-ms Penumbra resource walk at frame rate. Null = not built.
@@ -152,7 +179,8 @@ public class StatusWindow : Window
         UVMapDownloadService uvMapDl,
         UVRemapService uvRemap,
         ModCreationService modCreation,
-        OnionImportService onionImport)
+        OnionImportService onionImport,
+        ModExportService modExport)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -167,6 +195,7 @@ public class StatusWindow : Window
         this.uvRemap        = uvRemap;
         this.modCreation    = modCreation;
         this.onionImport    = onionImport;
+        this.modExport      = modExport;
 
         SizeConstraints = new WindowSizeConstraints
         {
@@ -238,6 +267,9 @@ public class StatusWindow : Window
 
                 using (var t = ImRaii.TabItem("Import"))
                     if (t) DrawImportTab();
+
+                using (var t = ImRaii.TabItem("Export"))
+                    if (t) DrawExportTab();
 
                 using (var t = ImRaii.TabItem("Settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -1255,6 +1287,178 @@ public class StatusWindow : Window
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
             }
         }
+    }
+
+    // ── Export tab ───────────────────────────────────────────────────────────
+
+    private void DrawExportTab()
+    {
+        // The pool task parked its result; adopt it. Done here rather than pumped from Plugin.DrawUi (as
+        // the import is) because nothing is left to do afterwards — no Penumbra registration, nothing that
+        // can be stranded by the user closing the window. The file is already on disk either way.
+        if (_exportDone is { } done)
+        {
+            _exportDone = null;
+            _exportPhase = ExportPhase.Idle;
+            _exportStatus = done.Message;
+            _exportStatusOk = done.Ok;
+        }
+
+        ImGui.TextWrapped("Save one of your Proteus mods as a Penumbra mod pack (.pmp) to share it. " +
+            "Everything goes in — options, colours, masks and glow effects — and the file installs " +
+            "straight into Penumbra.");
+        ImGui.Separator();
+
+        var mods = compositor.LastDiscovered;
+        if (!config.PluginEnabled)
+        {
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.2f, 1f), "Proteus is disabled — enable it in Settings.");
+            return;
+        }
+        if (mods.Count == 0)
+        {
+            ImGui.TextDisabled("No Proteus sidecar mods detected.");
+            return;
+        }
+
+        // Selection is held by directory, so a re-discovery that reorders or drops mods can't leave the
+        // combo pointing at a different one than it shows. An unknown/stale directory falls back to the
+        // first mod rather than exporting nothing.
+        var selected = mods.FirstOrDefault(m =>
+            string.Equals(m.ModDirectory, _exportModDir, StringComparison.OrdinalIgnoreCase)) ?? mods[0];
+        _exportModDir = selected.ModDirectory;
+
+        ImGui.SetNextItemWidth(360);
+        // The height cap has to be explicit: BeginCombo applies its own row limit ONLY when the caller
+        // supplied no size constraint, so passing a width silently disables it and the popup would grow one
+        // row per mod, past the window on a big collection. Same trap as the Create tab's material picker.
+        var popupMaxH = ImGui.GetTextLineHeightWithSpacing() * 18 + ImGui.GetStyle().WindowPadding.Y * 2;
+        ImGui.SetNextWindowSizeConstraints(new Vector2(360, 0), new Vector2(620, popupMaxH));
+        if (ImGui.BeginCombo("Mod##exportmod", selected.ModName))
+        {
+            // Fresh filter each open, with the caret already in the box so the list can just be typed at.
+            // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
+            bool appearing = ImGui.IsWindowAppearing();
+            if (appearing) _exportFilter = "";
+            ImGui.SetNextItemWidth(-1);
+            if (appearing) ImGui.SetKeyboardFocusHere();
+            ImGui.InputTextWithHint("##exportfilter", "Filter…", ref _exportFilter, 64);
+            ImGui.Separator();
+
+            int shown = 0;
+            foreach (var m in mods.OrderBy(m => m.ModName, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!MatchesExportFilter(m)) continue;
+                shown++;
+                // ##dir: two mods can share a display name, and duplicate ImGui ids would route the click
+                // to the wrong row.
+                if (ImGui.Selectable($"{m.ModName}##{m.ModDirectory}",
+                        string.Equals(m.ModDirectory, _exportModDir, StringComparison.OrdinalIgnoreCase)))
+                    _exportModDir = m.ModDirectory;
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(m.Enabled ? m.ModDirectory : $"{m.ModDirectory}\n(disabled in Penumbra)");
+            }
+            if (shown == 0)
+                ImGui.TextDisabled($"Nothing matches \"{_exportFilter}\".");
+            ImGui.EndCombo();
+        }
+        if (!selected.Enabled)
+            ImGui.TextDisabled("This mod is disabled in Penumbra — it exports the same either way.");
+
+        ImGui.Spacing();
+        var label = _exportPhase switch
+        {
+            ExportPhase.Choosing => "Choose a location…",
+            ExportPhase.Writing  => "Exporting…",
+            _                    => "Export",
+        };
+        using (ImRaii.Disabled(_exportPhase != ExportPhase.Idle))
+            if (ImGui.Button(label))
+                BrowseForExport(selected);
+
+        if (_exportStatus != null)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(
+                _exportStatusOk ? new Vector4(0.4f, 0.9f, 0.4f, 1f) : new Vector4(1f, 0.5f, 0.4f, 1f),
+                _exportStatus);
+            ImGui.PopTextWrapPos();
+        }
+    }
+
+    /// <summary>
+    /// Does this mod survive the export combo's filter? Matches the display name AND the folder name:
+    /// they routinely differ (Penumbra's folder is a sanitised form of the name, and the user can rename
+    /// either), so filtering on the label alone hides mods the user is searching for by folder.
+    /// <para/>
+    /// Null-tolerant even though both fields are declared non-nullable: everything else that touches them
+    /// interpolates them into a string, where a null from Penumbra prints empty — this is the one place it
+    /// would throw, and a throw inside Draw takes the whole window down for the rest of the session.
+    /// </summary>
+    private bool MatchesExportFilter(OverlayEntry m)
+        => _exportFilter.Length == 0
+        || m.ModName?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true
+        || m.ModDirectory?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// Ask where to save, then zip on the pool. The dialog callback runs on the framework thread, inline
+    /// from <c>_fileDialog.Draw()</c>, so everything it touches here is single-threaded with the draw.
+    /// </summary>
+    private void BrowseForExport(OverlayEntry entry)
+    {
+        _exportStatus = null;
+        // Claimed BEFORE the dialog opens, so a second click during the seconds the browser is up finds the
+        // button already disabled. Released again on cancel, below.
+        _exportPhase = ExportPhase.Choosing;
+
+        _fileDialog.SaveFileDialog(
+            "Export Proteus mod", "Penumbra mod pack{.pmp}",
+            ModExportService.SuggestedFileName(entry), ModExportService.Extension,
+            (ok, path) =>
+            {
+                if (!ok || string.IsNullOrEmpty(path))
+                {
+                    _exportPhase = ExportPhase.Idle;   // cancelled — hand the button back
+                    return;
+                }
+
+                // Remember where they put it BEFORE the write: the directory is what the next dialog wants,
+                // and it is just as useful after a failed write as after a successful one.
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !string.Equals(dir, config.LastExportDirectory, StringComparison.OrdinalIgnoreCase))
+                {
+                    config.LastExportDirectory = dir;
+                    config.Save();
+                }
+
+                _exportPhase = ExportPhase.Writing;
+                Task.Run(() =>
+                {
+                    try { _exportDone = modExport.Export(entry, path); }
+                    catch (Exception ex) { _exportDone = new ModExportService.ExportResult(false, $"Export failed: {ex.Message}"); }
+                });
+            },
+            ExportStartDirectory());
+    }
+
+    /// <summary>
+    /// Where the save dialog opens: last used, else the desktop. Null hands the choice back to the dialog,
+    /// which reuses whatever path it was last in — better than forcing it somewhere arbitrary.
+    /// </summary>
+    private string? ExportStartDirectory()
+    {
+        var last = config.LastExportDirectory;
+        if (!string.IsNullOrEmpty(last) && Directory.Exists(last)) return last;
+
+        // DesktopDirectory is the physical path and follows a OneDrive-redirected desktop; Desktop is the
+        // virtual shell folder and can come back empty on some setups, so it's only the fallback.
+        foreach (var folder in new[] { Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.Desktop })
+        {
+            var path = Environment.GetFolderPath(folder);
+            if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) return path;
+        }
+        return null;
     }
 
     private void DrawImportStatus()

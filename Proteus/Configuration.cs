@@ -214,6 +214,12 @@ public class Configuration : IPluginConfiguration
     /// <summary>Optional explicit path to Glamourer's designs directory; null = derive from the config dir.</summary>
     public string? GlamourerDesignDirOverride { get; set; } = null;
 
+    /// <summary>
+    /// Directory the last <c>.pmp</c> export was saved to, so the save dialog reopens where the user left
+    /// it. Null (or a path that no longer exists) falls back to the desktop.
+    /// </summary>
+    public string? LastExportDirectory { get; set; } = null;
+
     /// <summary>Per-mod sibling-synthesis mode, keyed by Penumbra mod directory.
     /// Absent = BiboGen3Only (default, = legacy behavior: gen3 bake, no vanilla).</summary>
     public Dictionary<string, SiblingSynthesisMode> SiblingSynthesis { get; set; } = new();

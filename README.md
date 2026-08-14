@@ -56,6 +56,18 @@ Authors a basic overlay mod without leaving the game. Give it a name, an author,
 
 Texture slots the chosen material can't actually use are greyed out.
 
+#### Import
+
+Turns an Onion overlay pack (`.omp`) into a Proteus mod. Browse to the file and Proteus shows what's inside — every layer, its UV layout, and whether it can be imported — before writing anything.
+
+A pack that ships the same artwork in several UV layouts (bibo, gen3, vanilla) becomes a single-select **Body UV** group in Penumbra, pre-set to the layout matching the body you're wearing, so only one composites at a time. Layer opacity is baked into the image; a layer with a blend mode other than Normal is skipped and said so, because Proteus composites alpha-over only. Onion's own option groups and race filters aren't imported.
+
+#### Export
+
+Saves one of your Proteus mods as a Penumbra mod pack (`.pmp`) to share. Pick the mod from the dropdown, press **Export**, and choose where to put it — the file name is filled in from the mod name, and the dialog opens on your desktop the first time and wherever you saved last after that.
+
+The pack is a straight copy of the mod folder, so nothing is lost: options, colour tables, masks, glow effects and gear layers all come along, and the recipient's Proteus picks it up as soon as Penumbra installs it. Disabled mods can be exported too.
+
 #### Settings
 
 | Setting | What it does |
