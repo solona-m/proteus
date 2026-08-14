@@ -145,6 +145,25 @@ public class CompositorService : IDisposable
     public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
         => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
 
+    /// <summary>
+    /// What the last shell build published, split by kind, for the drawn check after the redraw — see
+    /// <see cref="SchedulePostRedrawShellCheck"/>.
+    ///
+    /// Both halves are needed and they answer different questions. <paramref name="Materials"/> is the test:
+    /// an appended material only enters the character's resource tree when the mesh referencing it is
+    /// actually drawn. <paramref name="Models"/> is the ANCHOR: the host accessory's model loads whether or
+    /// not our version of it won, so its presence is what separates "our mesh didn't load" from "the redraw
+    /// hasn't finished yet" — and without that separation the check cannot tell a real failure from a slow
+    /// disk.
+    /// </summary>
+    private sealed record ShellDrawnProbe(IReadOnlyList<string> Materials, IReadOnlyList<string> Models);
+
+    /// <summary>
+    /// The last shell build's probe, or null when no shell was built. Same publish contract as
+    /// <see cref="_shellMaterials"/>: assembled on the composite thread, swapped in as one reference.
+    /// </summary>
+    private volatile ShellDrawnProbe? _shellDrawnCheck;
+
     // Per skin-overlay "glow" recipe (which composited-diffuse pixels map to each colour-table row),
     // keyed by (mod, group, option), from the last composite. Lets the colorset editor's glow button
     // light up a row's region on the live body diffuse via a texture rebind (no recomposite). Same
@@ -1466,8 +1485,26 @@ public class CompositorService : IDisposable
     // the player with the redirect that made it invisible already gone. Only ever acted on when the walk
     // cannot contradict it — if it says another item is in that slot, that is the player's and we keep our
     // hands off. Reset on a successful removal.
-    private volatile string? _injectedRingSlot;   // "rir"/"ril", or null if we have not equipped one
+    // Ring ownership is PERSISTED (see Configuration.InjectedRingSlot), unlike the glasses flag below. The
+    // Emperor's New Ring is an ordinary item people wear by choice, so the model alone cannot say whose it
+    // is, and the answer has to survive a plugin reload — in memory only it would be null on the next
+    // composite with our ring still on the player, which is precisely when it is needed.
+    private string? _injectedRingSlot
+    {
+        get => config.InjectedRingSlot;
+        set
+        {
+            if (config.InjectedRingSlot == value) return;
+            config.InjectedRingSlot = value;
+            config.Save();
+        }
+    }
+
     private volatile bool _injectedGlasses;
+
+    // Ring slots reported as holding an Emperor's ring we have no record of equipping. Once per slot per
+    // session — the reconcile runs on every composite and this is a standing state, not an event.
+    private readonly ConcurrentDictionary<string, byte> _unclaimedRingSlots = new(StringComparer.OrdinalIgnoreCase);
 
     // What the last composite decided about hosting, remembered so a reconcile can be re-run WITHOUT one.
     // The carriers are equipped with ApplyFlag.Once, so any redraw the game does on its own — zoning is the
@@ -1754,16 +1791,42 @@ public class CompositorService : IDisposable
             // Only the "shell moved" removal can be undone by the very next composite, so only that one
             // charges the cooldown (see the glasses). Turning the feature off, or having no gear at all,
             // is a settled state — stamping there would stall an immediate re-tick with nothing to retry it.
+            // ONLY a ring we equipped. IsOurRingWorn just asks whether a0053 is in the slot, which is not
+            // ownership: The Emperor's New Ring is an ordinary obtainable item and people wear it by choice
+            // for invisible hands. Without the _injectedRingSlot test, a player wearing their own one had it
+            // silently taken off the moment a shell built onto some OTHER host — a necklace, say — because
+            // that is the same "we don't need our ring any more" branch. Now persisted, so the reload that
+            // used to clear this no longer strands a ring we really did equip.
             bool hostMoved = config.AutoEmperorRing && gearWanted && shellBuilt;
             if (!config.AutoEmperorRing || !gearWanted || shellBuilt)
                 foreach (var slot in new[] { "rir", "ril" })
-                    if (IsOurRingWorn(slot, r.ModelSet) && SetRingOnFramework(0, leftHand: slot == "ril"))
+                {
+                    if (!IsOurRingWorn(slot, r.ModelSet)) continue;
+
+                    // The ring is worn but no record says we put it there. Two ways to arrive: the player
+                    // equipped it themselves, or WE did before ownership was persisted (the record used to
+                    // live only in memory, so a plugin reload lost it). Indistinguishable from here, and the
+                    // two call for opposite actions — so do nothing and say so once, rather than guess and
+                    // pull a ring off someone who chose it. Silence was the old bug's other half: the ring
+                    // just sat there with nothing in the log to explain it.
+                    if (_injectedRingSlot != slot)
+                    {
+                        if (_unclaimedRingSlots.TryAdd(slot, 0))
+                            log.Information("[Proteus] Emperor's ring: a{0:D4} is worn in {1} but Proteus has no "
+                                          + "record of equipping it — leaving it alone. If you did not put it "
+                                          + "there yourself (an older build could equip one and forget), take "
+                                          + "it off manually.", r.ModelSet, slot);
+                        continue;
+                    }
+
+                    if (SetRingOnFramework(0, leftHand: slot == "ril"))
                     {
                         if (hostMoved) _lastRingInjectTick = Environment.TickCount64;
-                        if (_injectedRingSlot == slot) _injectedRingSlot = null;
+                        _injectedRingSlot = null;
                         log.Information("[Proteus] Emperor's ring: removed our injected ring (a{0:D4}) from {1}",
                             r.ModelSet, slot);
                     }
+                }
 
             // The shell went to the ring — the only host left — but we are not allowed to equip it. Say so:
             // nothing renders until the player wears The Emperor's New Ring themselves, and "my tattoos
@@ -1792,9 +1855,11 @@ public class CompositorService : IDisposable
         if (InvisibleRing.Resolve(Plugin.DataManager, log) is not { } r) return;
         foreach (var slot in new[] { "rir", "ril" })
         {
-            bool ours = IsOurRingWorn(slot, r.ModelSet)
-                     || (!AccessorySnapshotKnown && _injectedRingSlot == slot);
-            if (ours && SetRingOnFramework(0, leftHand: slot == "ril") && _injectedRingSlot == slot)
+            // Teardown takes back only what we equipped, for the same reason the reconcile does — the model
+            // is not ownership. The walk-silent clause stays: it is already keyed on our own record.
+            bool ours = _injectedRingSlot == slot
+                     && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
+            if (ours && SetRingOnFramework(0, leftHand: slot == "ril"))
                 _injectedRingSlot = null;
         }
     }
@@ -3951,21 +4016,46 @@ public class CompositorService : IDisposable
                     baseD = null;
                 }
 
+                // Edited, but to no effect — and WHICH pass edited it decides whether that is a fault.
+                //
+                // An OVERLAY that blended and changed nothing is the reported bug: from the outside it is
+                // indistinguishable from the overlay not applying at all, and every other line says success.
+                //
+                // Ambient occlusion changing nothing is not a fault at all. AO qualifies for a material
+                // whenever a gear or mask mod could cast onto it, and then legitimately does nothing when the
+                // garment covers the whole body — coveredAbove suppresses the shadow everywhere there is
+                // gear over the skin. That fired the warning on a perfectly healthy composite, telling the
+                // user to "check coverage masks and opacity" for overlays they do not have. It is only ever
+                // reachable with zero contributors, since Phase A and the Masks pass both increment.
+                string? diffuseTag = null;
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
-                    var tag = ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
+                    diffuseTag = ContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
 
-                    // Blended, but to no effect: the pass ran and left the bytes exactly as it found them.
-                    // Reported at Warning because from the outside it is indistinguishable from the overlay
-                    // not applying at all — the body renders its plain base skin — and every other line in
-                    // the log says the composite succeeded. The usual causes are a coverage mask that carved
-                    // the overlay away entirely, an opacity of -100, or art that is fully transparent.
-                    if (diffuseBlended && baseDiffuseTag != null && tag == baseDiffuseTag)
-                        log.Warning("[Proteus] Diffuse of {0} is byte-identical to the base skin after {1} "
-                                  + "overlay(s) blended into it — the blend was a no-op, so the body will "
-                                  + "render as if nothing applied (check coverage masks and opacity)",
-                            mtrlGamePath, diffuseContributors);
+                    if (baseDiffuseTag != null && diffuseTag == baseDiffuseTag)
+                    {
+                        if (diffuseContributors > 0)
+                            log.Warning("[Proteus] Diffuse of {0} is byte-identical to the base skin after {1} "
+                                      + "overlay(s) blended into it — the blend was a no-op, so the body will "
+                                      + "render as if nothing applied (check coverage masks and opacity)",
+                                mtrlGamePath, diffuseContributors);
+                        else
+                        {
+                            // No contributors means no glow maps either (both sites that add them increment),
+                            // so nothing downstream needs the published path. Hand it back like the untouched
+                            // case above: publishing a byte-identical BC7 re-encode of the skin mod's own
+                            // texture is the pointless lossy round-trip that gate exists to avoid.
+                            log.Debug("[Proteus] Diffuse of {0} unchanged — only ambient occlusion reached it "
+                                    + "and it had nothing to darken (gear covers the skin, or strength is 0). "
+                                    + "Leaving the base texture in place.", mtrlGamePath);
+                            baseD = null;
+                        }
+                    }
+                }
 
+                if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
+                {
+                    var tag = diffuseTag!;
                     var name = baseName + "_" + tag + "_d.tex";
                     var outPath = Path.Combine(texturesDir, name);
                     var relPath = "textures/" + name;
@@ -4058,6 +4148,7 @@ public class CompositorService : IDisposable
             _needFullRedraw = false;
             _secondSkinActive = false;
             _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
+            _shellDrawnCheck = null;   // same: no shell this composite means nothing to check for on-screen
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
             // branch). The injection below then needs no follow-up recomposite — the redirect is already
@@ -4295,6 +4386,11 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
 
+                            // Materials to test, models to anchor the test against — see ShellDrawnProbe.
+                            _shellDrawnCheck = new ShellDrawnProbe(
+                                [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))],
+                                [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))]);
+
                             // Which of the hosts we APPENDED into, for PrimeUpstreamCache. Persisted, not
                             // just held in memory: the manifest outlives the session and masks these paths
                             // from the first composite after a restart, when nothing has been built yet to
@@ -4385,6 +4481,10 @@ public class CompositorService : IDisposable
             // our resolves against a superseded expectation would manufacture exactly the false accusation
             // this check is hardened against, so a cancelled token means stand down and say nothing.
             VerifyRedirectsLive(redirects, manifestConfirmedLive, ct);
+
+            // And one step further out than that check can see: winning the path is not the same as the game
+            // having drawn what is behind it. Fires its own delayed task — the redraw is still in flight here.
+            SchedulePostRedrawShellCheck();
 
             LastResult = new CompositorResult
             {
@@ -5684,6 +5784,92 @@ public class CompositorService : IDisposable
     // event) after a settle delay, and re-composites once if the settled body-type set differs from
     // what was composited. It converges: the re-composite records the settled body type as
     // _lastCompositedBodyType, so the check that follows it finds no change and stops.
+    /// <summary>
+    /// After the redraw, ask the CHARACTER whether the second skin is actually being drawn.
+    ///
+    /// The last link in a chain this session has been walking outwards one step at a time. The composite
+    /// proving it blended something says nothing about the redirect being published; the redirect being
+    /// published says nothing about Penumbra serving it (VerifyRedirectsLive); and Penumbra serving it says
+    /// nothing about the game having LOADED it. A gear shell can pass every one of those and still not
+    /// appear, because it is appended into a worn accessory and only renders if the game draws that host.
+    ///
+    /// Materials are the probe, not models: the host accessory's model loads whether or not our version won,
+    /// but the appended material only enters the resource tree when the mesh referencing it is actually
+    /// drawn. Missing means the suit is not on the character, whatever the rest of the log says.
+    ///
+    /// Sampled twice, because a full redraw is not instant and a single early read would call a healthy
+    /// shell missing — the same discipline every other check here settled on.
+    /// </summary>
+    private void SchedulePostRedrawShellCheck()
+    {
+        var expected = _shellDrawnCheck;
+        if (expected == null || expected.Materials.Count == 0) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                List<string> missing = [];
+                bool hostEverDrawn = false;
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    await Task.Delay(800).ConfigureAwait(false);
+                    if (_disposed) return;
+
+                    // Superseded by a newer build — that composite runs its own check.
+                    if (!ReferenceEquals(_shellDrawnCheck, expected)) return;
+
+                    HashSet<string>? materials, models;
+                    try
+                    {
+                        materials = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult();
+                        models    = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
+                    }
+                    catch (OperationCanceledException) { return; }
+                    if (materials == null || models == null) return;   // not in game / IPC down — no answer
+
+                    // THE ANCHOR. The composite that scheduled this usually forced a full redraw, and a
+                    // despawn-and-reload of the character plus a multi-megabyte accessory model is not
+                    // reliably done within the sampling window. Until the host model is back in the draw
+                    // object, a missing material means "not loaded YET", and warning on it would tell someone
+                    // to re-equip an accessory that was about to work. Only once the host is drawn does its
+                    // absence mean our mesh did not load.
+                    if (!expected.Models.Any(models.Contains)) continue;
+                    hostEverDrawn = true;
+
+                    missing = expected.Materials.Where(p => !materials.Contains(p)).ToList();
+                    if (missing.Count == 0)
+                    {
+                        log.Debug("[Proteus] second skin is drawn: all {0} shell material(s) are on the character",
+                            expected.Materials.Count);
+                        return;
+                    }
+                }
+
+                if (!hostEverDrawn)
+                {
+                    log.Debug("[Proteus] second skin drawn check inconclusive — the host accessory was not back "
+                            + "in the draw object within the sampling window, so whether our mesh loaded is "
+                            + "unknown (not a failure)");
+                    return;
+                }
+
+                log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
+                          + "shell material(s) never appeared on the character: {2}. The host accessory it "
+                          + "was appended into is drawn, but not our copy of it.",
+                    missing.Count, expected.Materials.Count, string.Join(", ", missing));
+
+                var msg = "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
+                        + "it rides on is equipped, yet the character isn't loading Proteus's version. Try "
+                        + "unequipping and re-equipping that accessory, or pick a different one.";
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
+            }
+            catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { }
+            catch (Exception ex) { log.Error(ex, "[Proteus] post-redraw shell check failed"); }
+        });
+    }
+
     private void SchedulePostRedrawBodyTypeCheck()
     {
         _ = Task.Run(async () =>

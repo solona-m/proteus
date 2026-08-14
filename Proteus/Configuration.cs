@@ -186,6 +186,18 @@ public class Configuration : IPluginConfiguration
     public bool AutoEmperorRing { get; set; } = true;
 
     /// <summary>
+    /// Which ring slot ("rir"/"ril") holds an Emperor's New Ring that PROTEUS equipped, or null.
+    ///
+    /// Persisted because it is the only thing separating our ring from the player's. The ring is an ordinary
+    /// obtainable item that plenty of people wear by choice for invisible hands, so "a ring whose model is
+    /// a0053 is in this slot" cannot answer ownership — and that was the test the removal path used, which
+    /// meant Proteus unequipped a ring the player had put on themselves the moment a shell went to some other
+    /// host. In memory alone this was useless for the job: a plugin reload cleared it while our ring stayed
+    /// equipped, so gating removal on it would have stranded the ring instead.
+    /// </summary>
+    public string? InjectedRingSlot { get; set; }
+
+    /// <summary>
     /// The Glamourer design whose Proteus binding was active when the plugin last ran, so a reload can
     /// pick it back up — Glamourer raises no apply signal for a design that is ALREADY applied, so
     /// without this the overrides stay null and the first composite paints metadata colours over a
