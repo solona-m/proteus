@@ -192,6 +192,75 @@ public static class ProteusStyle
         ImGui.Dummy(pill);
     }
 
+    /// <summary>
+    /// <c>BeginTabBar</c> in the display face, so a tab strip reads as part of the same design language
+    /// as <see cref="SectionHeader"/> rather than as stock ImGui.
+    /// </summary>
+    /// <remarks>
+    /// The font is pushed for the <c>Begin</c> CALL and popped before the scope is handed back — which is
+    /// the whole point of the helper existing. The returned scope spans the tab's CONTENT, and content
+    /// must stay on the default font: Jupiter is a display face with narrow coverage (see
+    /// <see cref="ProteusFonts"/>), so a mod name with an accent or any CJK inside a tab would render as
+    /// boxes. <c>using (…) return x;</c> disposes after the return expression is evaluated, so the push
+    /// covers exactly the one call and nothing else.
+    /// <para/>
+    /// <c>BeginTabBar</c> needs the push as much as the items do, and it is the load-bearing one: ImGui
+    /// sizes the bar rect as <c>g.FontSize + FramePadding.y * 2</c> at Begin time, and that single height
+    /// then fixes the separator's y, the origin of every tab shape, the space reserved in the window, and
+    /// where content resumes. Sized for the default font while the labels drew in Jupiter, the tabs would
+    /// hang below their own bar and overdraw the separator.
+    /// <para/>
+    /// <c>EndTabBar</c> does NOT need it. The bar's deferred width layout runs at the top of the FIRST
+    /// <c>BeginTabItem</c> of the frame, not at the end — the End path is a fallback for when no tab item
+    /// was submitted at all. That fallback is unreachable only because the call site submits all six items
+    /// unconditionally; if any of them ever becomes conditional, either keep one unconditional or wrap the
+    /// End as well. That first-item layout also re-measures every tab from the names stored last frame,
+    /// which is why the widths self-correct one frame after the font atlas finishes building.
+    /// <para/>
+    /// Returns the concrete <c>ImRaii.TabBarDisposable</c> rather than an interface deliberately: it is a
+    /// ref struct, so widening it to <c>IDisposable</c> is not merely wasteful but illegal — and it would
+    /// throw away the implicit bool conversion the <c>if (tabs)</c> at the call site depends on.
+    /// </remarks>
+    public static ImRaii.TabBarDisposable HeaderTabBar(string id)
+    {
+        using (Fonts?.PushHeader())
+            return ImRaii.TabBar(id);
+    }
+
+    /// <summary><c>BeginTabItem</c> in the display face. See <see cref="HeaderTabBar"/> for why the font
+    /// is popped before the scope is returned.</summary>
+    /// <remarks>Every item needs the push, not just the first: ImGui measures each label with
+    /// <c>CalcTextSize</c> and draws its glyphs inside <c>TabItemEx</c>. The first call additionally runs
+    /// the whole bar's layout, which wrapping each call covers at no extra cost.</remarks>
+    public static ImRaii.TabItemDisposable HeaderTabItem(string label, ImGuiTabItemFlags flags = ImGuiTabItemFlags.None)
+    {
+        using (Fonts?.PushHeader())
+            return ImRaii.TabItem(label, flags);
+    }
+
+    /// <summary>
+    /// The brand tint for a tab bar. Unlike a font push this is safe to wrap the whole
+    /// BeginTabBar/EndTabBar scope: <c>ImGuiCol.Tab*</c> is read in exactly two places, both inside
+    /// <c>BeginTabBar</c>/<c>BeginTabItem</c>, so it cannot leak into tab content — whereas <c>g.Font</c>
+    /// is read by every text draw there is. Do not "tidy" the two into one helper; that asymmetry is the
+    /// whole reason they are scoped differently. One push per frame rather than one per item because
+    /// <c>ImRaii.ColorDisposable</c> is a class, not a struct.
+    /// <para/>
+    /// Tinting <see cref="ImGuiCol.TabActive"/> also recolours the rule ImGui draws under the whole bar,
+    /// which lands close to the accent rule <see cref="SectionHeader"/> hand-draws — for free, and at full
+    /// window width. Uses the alpha'd <see cref="AccentFill"/> family rather than the solid
+    /// <see cref="Accent"/> for the same reason <see cref="Selected"/> does: these sit behind label text,
+    /// and full-strength orange behind text is illegible under a light Dalamud style.
+    /// </summary>
+    public static ImRaii.ColorDisposable TabAccent() =>
+        ImRaii.PushColor(ImGuiCol.Tab,          ImGui.GetColorU32(AccentSoft))
+              .Push(ImGuiCol.TabHovered,        ImGui.GetColorU32(AccentFillHover))
+              .Push(ImGuiCol.TabActive,         ImGui.GetColorU32(AccentFill))
+              // Unfocused = the window doesn't have focus. Same hierarchy, pulled back so an inactive
+              // window's tabs don't compete with the focused one's.
+              .Push(ImGuiCol.TabUnfocused,       ImGui.GetColorU32(AccentSoft.WithAlpha(0.10f)))
+              .Push(ImGuiCol.TabUnfocusedActive, ImGui.GetColorU32(AccentFill.WithAlpha(0.25f)));
+
     /// <summary>The "this button is the current selection" idiom, previously copy-pasted four times.</summary>
     public static ImRaii.ColorDisposable Selected(bool on) =>
         ImRaii.PushColor(ImGuiCol.Button,        ImGui.GetColorU32(AccentFill),       on)

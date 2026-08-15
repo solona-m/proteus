@@ -284,26 +284,38 @@ public class StatusWindow : Window
         BrandHeader.Reserve(band.Min);
         ImGui.Spacing();
 
-        using (var tabs = ImRaii.TabBar("##proteusTabs"))
+        // Labels in the game's Jupiter face and the selection in the brand orange, matching
+        // ProteusStyle.SectionHeader — the tab strip was the last stock-ImGui element in the window. The
+        // font lives inside the Header* helpers so it covers only the Begin calls; the colour scope can
+        // safely wrap everything, since ImGuiCol.Tab* is never read while tab content draws.
+        //
+        // barTop is captured BEFORE the bar so the refresh button can be centred on its line. The bar's
+        // height is FontSize + FramePadding*2 measured in JUPITER (HeaderTabBar pushes it), which is not
+        // what ImGui.GetFrameHeight() reports — that answers for the default font.
+        var barTop = ImGui.GetCursorPosY();
+        using (ProteusStyle.TabAccent())
+        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs"))
         {
             if (tabs)
             {
-                using (var t = ImRaii.TabItem("Mods"))
+                DrawTabBarRefresh(barTop);
+
+                using (var t = ProteusStyle.HeaderTabItem("Mods"))
                     if (t) DrawModsTab();
 
-                using (var t = ImRaii.TabItem("Bindings"))
+                using (var t = ProteusStyle.HeaderTabItem("Bindings"))
                     if (t) DrawBindingsTab();
 
-                using (var t = ImRaii.TabItem("Create"))
+                using (var t = ProteusStyle.HeaderTabItem("Create"))
                     if (t) DrawCreateTab();
 
-                using (var t = ImRaii.TabItem("Import"))
+                using (var t = ProteusStyle.HeaderTabItem("Import"))
                     if (t) DrawImportTab();
 
-                using (var t = ImRaii.TabItem("Export"))
+                using (var t = ProteusStyle.HeaderTabItem("Export"))
                     if (t) DrawExportTab();
 
-                using (var t = ImRaii.TabItem("Settings",
+                using (var t = ProteusStyle.HeaderTabItem("Settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
                 {
                     _forceSettingsTab = false;
@@ -348,12 +360,51 @@ public class StatusWindow : Window
     private const string DiscordUrl = "https://discord.gg/solona";
 
     /// <summary>
+    /// The recomposite control, right-aligned onto the tab bar's OWN line instead of costing a row of its
+    /// own inside a tab. Now that it rides the bar it is reachable from every tab, which suits it — a
+    /// recomposite is a whole-plugin action, not a Mods-tab one.
+    /// </summary>
+    /// <remarks>
+    /// Call immediately after <c>BeginTabBar</c> succeeds and before the first tab item. At that moment
+    /// ImGui has reserved the bar and parked the cursor just below it, so this hops back up onto the bar,
+    /// draws, and restores the cursor exactly — tab content then starts where ImGui intended. Drawing
+    /// between BeginTabBar and the first BeginTabItem is legal; the bar's deferred layout runs inside that
+    /// first item and does not read our cursor.
+    /// <para/>
+    /// Right-aligned against <c>GetContentRegionMax</c> rather than a measured window width. The window is
+    /// AlwaysAutoResize, so an item that ends exactly at the current content edge keeps the required width
+    /// where it already was — no feedback loop of the kind BrandHeader documents.
+    /// </remarks>
+    /// <param name="barTop">Cursor Y from before <c>BeginTabBar</c> — see the call site for why
+    /// <c>GetFrameHeight</c> cannot stand in for the bar's real height.</param>
+    private void DrawTabBarRefresh(float barTop)
+    {
+        var resume = ImGui.GetCursorPos();
+        var barH   = (resume.Y - ImGui.GetStyle().ItemSpacing.Y) - barTop;
+        var btnW   = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.SyncAlt, "Refresh");
+        var btnH   = ImGui.GetFrameHeight();
+
+        ImGui.SetCursorPos(new Vector2(
+            ImGui.GetContentRegionMax().X - btnW,
+            barTop + ((barH - btnH) * 0.5f)));
+
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
+            compositor.TriggerRecomposite("manual");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Recomposite now");
+
+        ImGui.SetCursorPos(resume);
+    }
+
+    /// <summary>
     /// The wordmark, the live status pills, and the Discord link, laid into the band's rect.
     /// <para/>
     /// This absorbs what used to be two separate pieces: a status banner that rendered NOTHING in the
     /// normal case (so the window opened onto a bare tab bar with no identity), and a right-aligned
     /// Discord button that had to rewind the cursor so the tab bar could share its row. Both now live in
-    /// the band, which costs no extra vertical space and lets the tab bar have its own line.
+    /// the band, which costs no extra vertical space. The tab bar's line is shared only with the refresh
+    /// control (<see cref="DrawTabBarRefresh"/>), which rewinds the cursor the same way the Discord button
+    /// used to — worth knowing before adding a third thing to that row.
     /// </summary>
     private void DrawBandContent(Vector2 min, Vector2 max)
     {
@@ -378,33 +429,39 @@ public class StatusWindow : Window
 
         var afterMark = ImGui.GetItemRectMax().X;
 
-        // Version under the wordmark, matching the title bar's (assembly version, not the dev build
-        // number). Truncated rather than tooltipped when it does not fit: the title bar is already showing
-        // the same version, so nothing is lost.
+        // Caption under the wordmark. Deliberately NOT carrying the version: the title bar renders the
+        // same assembly version a few pixels above (see the base() call), and saying it twice in one
+        // corner of the window is noise. Still ellipsized, because Dalamud's font size is configurable
+        // independently of UI scale — a large enough font runs even this under the Discord button.
         var captionX = min.X + padX;
         ImGui.SetCursorScreenPos(new Vector2(captionX, ImGui.GetItemRectMax().Y - ProteusStyle.S(2f)));
-        ImGui.TextDisabled(ProteusStyle.Ellipsize(
-            $"overlay compositor  ·  v{typeof(Plugin).Assembly.GetName().Version}",
-            btnX - captionX - padX));
+        ImGui.TextDisabled(ProteusStyle.Ellipsize("overlay compositor", btnX - captionX - padX));
 
         // ── status pills ─────────────────────────────────────────────────────
-        // Always at least one pill, so the band never reads as empty chrome.
+        // Only when something needs doing. There used to be a green "active" pill here so the band never
+        // read as empty chrome, but a badge lit on every frame of normal use stops being read at all —
+        // and it spent horizontal room next to the wordmark to say nothing. The two states that are
+        // ACTIONABLE keep their pill, and the band is still the one place visible from every tab.
         var pillX = afterMark + (padX * 1.5f);
-        ImGui.SetCursorScreenPos(new Vector2(pillX, min.Y + padY + ProteusStyle.S(3f)));
+        var pillY = min.Y + padY + ProteusStyle.S(3f);
+        ImGui.SetCursorScreenPos(new Vector2(pillX, pillY));
 
-        (string Text, Vector4 Colour) state =
+        (string Text, Vector4 Colour)? state =
               !config.PluginEnabled ? ("disabled",    ProteusStyle.Warn)
             : !penumbra.IsAvailable ? ("no Penumbra", ProteusStyle.Bad)
-            :                         ("active",      ProteusStyle.Ok);
-        ProteusStyle.Pill(state.Text, state.Colour);
+            :                         null;
+        if (state is { } s)
+            ProteusStyle.Pill(s.Text, s.Colour);
 
         if (uvMapDl.State is UVMapDownloadState.Downloading or UVMapDownloadState.Failed)
         {
             var failed = uvMapDl.State == UVMapDownloadState.Failed;
 
             // Whatever is left between the state pill and the button, less the Retry button the failure
-            // path also needs room for.
-            var used   = ImGui.GetItemRectMax().X;
+            // path also needs room for. With no state pill drawn the last submitted item is the CAPTION,
+            // a line above and the full band wide, so its rect would report almost no room left and
+            // ellipsize this pill to nothing. Fall back to the cursor we parked at instead.
+            var used   = state != null ? ImGui.GetItemRectMax().X : pillX;
             var retryW = failed ? ImGui.CalcTextSize("Retry").X + (ImGui.GetStyle().FramePadding.X * 2)
                                     + ImGui.GetStyle().ItemSpacing.X
                                 : 0f;
@@ -418,7 +475,13 @@ public class StatusWindow : Window
             // the failure path keeps its Retry button, which is the part that is actionable.
             if (shown.Length > 0)
             {
-                ImGui.SameLine();
+                // SameLine only follows a pill that actually exists. Without one it would put this on the
+                // caption's line; the cursor is still parked where the state pill would have gone, and
+                // ProteusStyle.Pill draws at the current cursor, so leaving it alone lands correctly.
+                if (state != null)
+                    ImGui.SameLine();
+                else
+                    ImGui.SetCursorScreenPos(new Vector2(pillX, pillY));
                 ProteusStyle.Pill(shown, failed ? ProteusStyle.Bad : ProteusStyle.Warn);
                 // Only when something was actually cut — an untruncated pill already says everything.
                 if (shown != full && ImGui.IsItemHovered())
@@ -1697,14 +1760,12 @@ public class StatusWindow : Window
 
     private void DrawModsTab()
     {
-        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
-            compositor.TriggerRecomposite("manual");
-
         // ── Overlay mod list ─────────────────────────────────────────────────
-        // The list comes from the last composite, so while the plugin is off it stays empty — say so
-        // rather than claiming there are no sidecar mods.
+        // No section header and no Refresh button: the tab names the list, and Refresh moved onto the tab
+        // bar's own line (DrawTabBarRefresh). The list comes from the last composite, so while the plugin
+        // is off it stays empty — say so rather than claiming there are no sidecar mods.
         var mods = compositor.LastDiscovered;
-        ProteusStyle.SectionHeader("Overlay mods");
+        ImGui.Spacing();
         if (!config.PluginEnabled)
         {
             ImGui.TextColored(ProteusStyle.Warn, "Proteus is disabled — enable it in Settings.");
@@ -1746,12 +1807,23 @@ public class StatusWindow : Window
 
             // Display-only sort of a COPY (never mutate LastDiscovered). Sorts by the committed
             // entry.Priority, not the in-progress _priorityEdits value, so a row won't jump mid-drag.
+            //
+            // Active mods are pinned to the top whatever the column: a disabled mod contributes nothing
+            // to the composite, and a name or priority sort that interleaves the two buries the handful
+            // of rows that are actually doing something. The chosen column orders WITHIN each group.
+            //
+            // Sorting by "On" is the deliberate exception — that header is the one control whose whole
+            // job is the enabled state, so it keeps honouring its own direction and ascending still
+            // brings the disabled ones up. Pinning there too would leave a sortable header that does
+            // nothing when clicked.
+            var byActive = mods.OrderByDescending(e => e.Enabled);
             IOrderedEnumerable<OverlayEntry> ordered = _modSort switch
             {
-                ModSort.Enabled => _modSortDesc ? mods.OrderByDescending(e => e.Enabled) : mods.OrderBy(e => e.Enabled),
-                ModSort.Name    => _modSortDesc ? mods.OrderByDescending(e => e.ModName, StringComparer.OrdinalIgnoreCase)
-                                                : mods.OrderBy(e => e.ModName, StringComparer.OrdinalIgnoreCase),
-                _               => _modSortDesc ? mods.OrderByDescending(e => e.Priority) : mods.OrderBy(e => e.Priority),
+                ModSort.Enabled => _modSortDesc ? byActive : mods.OrderBy(e => e.Enabled),
+                ModSort.Name    => _modSortDesc ? byActive.ThenByDescending(e => e.ModName, StringComparer.OrdinalIgnoreCase)
+                                                : byActive.ThenBy(e => e.ModName, StringComparer.OrdinalIgnoreCase),
+                _               => _modSortDesc ? byActive.ThenByDescending(e => e.Priority)
+                                                : byActive.ThenBy(e => e.Priority),
             };
             var displayMods = ordered.ThenBy(e => e.ModName, StringComparer.OrdinalIgnoreCase).ToList();
 
