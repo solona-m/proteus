@@ -81,6 +81,103 @@ public class UVRemapService
     public readonly PhaseCounter RemapStats = new();
 
     /// <summary>
+    /// A per-VERTEX UV converter — the geometry counterpart of <see cref="Remap"/>, which moves pixels.
+    /// Takes a UV authored in <paramref name="from"/> space and answers where that same point on the body
+    /// sits in <paramref name="to"/> space, or null for a point the maps have no correspondence for.
+    /// Returns null outright when the pair needs no conversion or no transfer map covers it, in which case
+    /// the caller must leave its UVs alone.
+    /// <para/>
+    /// The map that converts a UV OUT of space S is the one whose DESTINATION is S — the reverse of the
+    /// one <see cref="Remap"/> uses to move art INTO S — because a transfer map is indexed by its
+    /// destination pixel and stores the source coordinate. gen2 is not a transfer-map space at all: it is
+    /// the right half of bibo (see <see cref="CropRightHalf"/>), so it enters and leaves by halving U.
+    /// </summary>
+    public Func<float, float, (float U, float V)?>? UvConverter(string? from, string? to)
+    {
+        if (from == null || to == null) return null;
+        if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return null;
+
+        bool fromGen2 = string.Equals(from, "gen2", StringComparison.OrdinalIgnoreCase);
+        bool toGen2   = string.Equals(to,   "gen2", StringComparison.OrdinalIgnoreCase);
+        var srcSpace  = fromGen2 ? "bibo" : from;   // gen2 is already in bibo space after the affine
+        var dstSpace  = toGen2   ? "bibo" : to;
+
+        // Null when both ends land in bibo (gen2↔bibo) — then the affine IS the whole conversion.
+        TransferMap? map = null;
+        if (!string.Equals(srcSpace, dstSpace, StringComparison.OrdinalIgnoreCase))
+        {
+            map = GetMap(dstSpace, srcSpace);   // indexed by a srcSpace pixel, stores the dstSpace coord
+            if (map == null) return null;
+        }
+
+        // The writer rebuilds the same source's vertices once per layer per host, and a miss walks up to
+        // UvLookupReach rings — so memoize. Keyed on the exact UV, which repeats bit-for-bit across those
+        // rebuilds, giving a full hit rate after the first pass. Concurrent because the converter outlives
+        // one Build call and composites parallelise elsewhere.
+        var memo = new System.Collections.Concurrent.ConcurrentDictionary<(float U, float V), (float U, float V)?>();
+        return (u, v) => memo.GetOrAdd((u, v), static (key, s) =>
+        {
+            var (u, v) = key;
+            if (s.FromGen2) u = 0.5f + u * 0.5f;
+            if (s.Map != null && !TryLookupUv(s.Map, u, v, out u, out v)) return null;
+            if (s.ToGen2)
+            {
+                // Vanilla space is only the RIGHT half of bibo; the left half is bibo's own added detail
+                // area and has no vanilla home at all. Without this guard the affine hands such a point a
+                // NEGATIVE u, which the sampler wraps to the far edge of the sheet — so the triangle spans
+                // the whole texture, survives the coverage trim (its box trips AnyVisible's bail-out) and
+                // renders as a smeared band. Report it unmapped instead: the vertex then keeps its
+                // authored UV like any other point the maps can't place.
+                if (u < 0.5f) return null;
+                u = (u - 0.5f) * 2f;
+            }
+            return (u, v);
+        }, (Map: map, FromGen2: fromGen2, ToGen2: toGen2));
+    }
+
+    /// <summary>
+    /// How far <see cref="TryLookupUv"/> widens its search, in map pixels (~1.2% of a 4096 map). Vertices
+    /// sit ON island borders at least as often as inside them, and a border pixel's own cell is often
+    /// outside every island, so an exact hit is not enough. Bounded because past this the body really is
+    /// unmapped there, and snapping a vertex across that gap would smear its triangles over the texture.
+    /// </summary>
+    private const int UvLookupReach = 48;
+
+    /// <summary>Nearest valid correspondence to (u,v) in <paramref name="map"/>'s index space.</summary>
+    private static bool TryLookupUv(TransferMap map, float u, float v, out float su, out float sv)
+    {
+        su = u; sv = v;
+        int x0 = (int)MathF.Round(Math.Clamp(u, 0f, 1f) * (map.W - 1));
+        int y0 = (int)MathF.Round(Math.Clamp(v, 0f, 1f) * (map.H - 1));
+        for (int r = 0; r <= UvLookupReach; r++)
+        {
+            for (int dy = -r; dy <= r; dy++)
+            {
+                int y = y0 + dy;
+                if (y < 0 || y >= map.H) continue;
+                // Interior rows contribute only their two edge columns — the rest were covered by
+                // a smaller r, so each ring visits its perimeter and nothing else.
+                int step = Math.Abs(dy) == r ? 1 : Math.Max(1, 2 * r);
+                for (int dx = -r; dx <= r; dx += step)
+                {
+                    int x = x0 + dx;
+                    if (x < 0 || x >= map.W) continue;
+                    int i = y * map.W + x;
+                    if (!map.Valid[i]) continue;
+                    // A grossly mismapped pixel (level 2) points a third of the texture away. Art can
+                    // absorb that as one stray texel; a VERTEX drags its whole triangle there, so the
+                    // search steps over those rather than snapping to one.
+                    if (map.DropLevel != null && map.DropLevel[i] >= 2) continue;
+                    su = (float)map.X[i] / 65535f;
+                    sv = (float)map.Y[i] / 65535f;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Returns the right half (x = w/2 .. w-1) of a 4-channel RGBA image as a (w/2 × h) buffer.
     /// Used for bibo→gen2: the right half of a 4096×4096 bibo overlay is in vanilla UV space.
     /// </summary>

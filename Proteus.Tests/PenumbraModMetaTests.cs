@@ -356,4 +356,46 @@ public class PenumbraModMetaTests
         PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", [], 0);
         Assert.Empty(Directory.EnumerateFiles(tmp.Path, "group_*.json"));
     }
+
+    /// <summary>
+    /// The sweep has to cover every AtomicWrite target, not just default_mod.json's — meta.json in the mod
+    /// root and metadata.json in the sidecar folder both strand temps when a write is interrupted. It also
+    /// has to leave a mod's own .tmp alone, which is why it matches the full &lt;name&gt;.&lt;32 hex&gt;.tmp
+    /// shape rather than a bare *.tmp.
+    /// </summary>
+    [Fact]
+    public void CleanLegacyFiles_sweeps_atomic_temps_in_the_root_and_the_sidecar_folder()
+    {
+        using var tmp = new TempDir();
+        var sidecar = Path.Combine(tmp.Path, SidecarDiscoveryService.SidecarSubdir);
+        Directory.CreateDirectory(sidecar);
+        var guid = Guid.NewGuid().ToString("N");
+
+        File.WriteAllText(tmp.File($"meta.json.{guid}.tmp"), "{}");
+        File.WriteAllText(tmp.File($"default_mod.json.{guid}.tmp"), "{}");
+        File.WriteAllText(Path.Combine(sidecar, $"metadata.json.{guid}.tmp"), "{}");
+        // Not ours: no guid segment, a short one, and a non-hex one of the right length.
+        File.WriteAllText(tmp.File("scratch.tmp"), "keep");
+        File.WriteAllText(tmp.File("meta.json.abc.tmp"), "keep");
+        File.WriteAllText(tmp.File($"meta.json.{new string('z', 32)}.tmp"), "keep");
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+
+        PenumbraModMeta.CleanLegacyFiles(tmp.Path);
+
+        Assert.False(File.Exists(tmp.File($"meta.json.{guid}.tmp")));
+        Assert.False(File.Exists(tmp.File($"default_mod.json.{guid}.tmp")));
+        Assert.False(File.Exists(Path.Combine(sidecar, $"metadata.json.{guid}.tmp")));
+        Assert.True(File.Exists(tmp.File("scratch.tmp")));
+        Assert.True(File.Exists(tmp.File("meta.json.abc.tmp")));
+        Assert.True(File.Exists(tmp.File($"meta.json.{new string('z', 32)}.tmp")));
+        Assert.True(File.Exists(tmp.File("meta.json")));
+    }
+
+    [Fact]
+    public void CleanLegacyFiles_is_quiet_when_there_is_no_sidecar_folder()
+    {
+        using var tmp = new TempDir();
+        PenumbraModMeta.CleanLegacyFiles(tmp.Path);   // must not throw on a mod with no Proteus/ subdir
+        Assert.Empty(Directory.EnumerateFiles(tmp.Path));
+    }
 }

@@ -487,22 +487,56 @@ internal static class PenumbraModMeta
     /// <summary>
     /// Writes via a sibling temp file + atomic move, retrying with backoff: Penumbra's own file watcher
     /// can hold the target open for a moment right after a reload.
+    /// <para/>
+    /// The temp file is flushed to the DEVICE before the move, not merely handed to the OS cache. A
+    /// rename is ordered, the data behind it is not: NTFS can commit the directory entry while the
+    /// file's blocks are still unwritten, so a crash or power loss in that window leaves a file of the
+    /// right length filled with zeros. Penumbra reports reading one as
+    /// <c>'0x00' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0</c> and drops
+    /// the mod — after which Proteus publishes redirects into a mod Penumbra has never heard of, and
+    /// every path we own silently resolves elsewhere. Cheap insurance: these files are a few KB, and
+    /// they are written once per composite at most.
     /// </summary>
-    public static void AtomicWrite(string target, string contents)
+    /// <param name="maxRetries">
+    /// How many times to re-attempt the MOVE, sleeping 50 ms and doubling between tries. The default
+    /// spends up to ~1.55 s outlasting Penumbra's watcher, which is the right trade for a background
+    /// write — nobody is waiting on it.
+    /// <para/>
+    /// A caller on the ImGui draw thread or the framework thread must pass a small budget instead: those
+    /// sleeps are frozen frames, and the editor provokes exactly the contention this loop waits out (it
+    /// saves and then immediately recomposites, so Penumbra reloads and grabs the file just as the next
+    /// edit lands). Losing that race costs one save that the next edit rewrites anyway; spending a second
+    /// and a half of someone's colour-slider drag to win it does not pay.
+    /// </param>
+    public static void AtomicWrite(string target, string contents, int maxRetries = 5)
     {
-        var tmp = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(tmp, contents);
+        var tmp = target + "." + Guid.NewGuid().ToString("N") + TempSuffix;
+
+        // UTF-8 without a BOM, matching what File.WriteAllText would have produced.
+        var bytes = new System.Text.UTF8Encoding(false).GetBytes(contents);
+        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None,
+                   bufferSize: 4096, FileOptions.WriteThrough))
+        {
+            fs.Write(bytes, 0, bytes.Length);
+            fs.Flush(flushToDisk: true);
+        }
+
         for (int i = 0; ; i++)
         {
             try { File.Move(tmp, target, overwrite: true); return; }
-            catch (Exception) when (i < 5) { Thread.Sleep(50 << i); } // 50 100 200 400 800ms
+            // Shift clamped at 5 so an oversized budget backs off to 1.6 s a try, never overflows into one.
+            catch (Exception) when (i < maxRetries) { Thread.Sleep(50 << Math.Min(i, 5)); }
             catch { try { File.Delete(tmp); } catch { } throw; }      // don't leave the temp behind
         }
     }
 
+    /// <summary>Extension <see cref="AtomicWrite"/> gives its sibling temp file, which is named
+    /// <c>&lt;target&gt;.&lt;32 hex&gt;.tmp</c>. Shared with the sweep so the two can't drift.</summary>
+    private const string TempSuffix = ".tmp";
+
     /// <summary>
-    /// Removes a v3 <c>default_mod.json</c> now superseded by <c>DefaultData</c>, plus any orphaned
-    /// <c>.tmp</c> siblings left by an interrupted <see cref="AtomicWrite"/> before this cleanup existed.
+    /// Removes a v3 <c>default_mod.json</c> now superseded by <c>DefaultData</c>, plus any orphaned temp
+    /// files left by an interrupted <see cref="AtomicWrite"/>.
     /// </summary>
     public static void CleanLegacyFiles(string modRoot)
     {
@@ -510,8 +544,36 @@ internal static class PenumbraModMeta
         {
             var legacy = Path.Combine(modRoot, LegacyDefaultMod);
             if (File.Exists(legacy)) File.Delete(legacy);
-            foreach (var tmp in Directory.EnumerateFiles(modRoot, LegacyDefaultMod + ".*.tmp"))
+        }
+        catch { /* best effort — a locked legacy file must not skip the sweep below */ }
+
+        // EVERY AtomicWrite target, not just default_mod.json's: the sweep used to name that one file, so
+        // once meta.json and metadata.json started going through AtomicWrite their temps were stranded for
+        // good. meta.json sits in the mod root, metadata.json one level down in the sidecar folder.
+        SweepAtomicTemps(modRoot);
+        SweepAtomicTemps(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir));
+    }
+
+    /// <summary>
+    /// Deletes <see cref="AtomicWrite"/> temp files orphaned in <paramref name="dir"/> (non-recursive).
+    /// Matched on the full <c>&lt;name&gt;.&lt;32 hex&gt;.tmp</c> shape rather than a bare <c>*.tmp</c>,
+    /// so a mod that ships a .tmp of its own is never touched.
+    /// </summary>
+    private static void SweepAtomicTemps(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir)) return;
+            foreach (var tmp in Directory.EnumerateFiles(dir, "*" + TempSuffix))
+            {
+                var stem = Path.GetFileNameWithoutExtension(tmp);   // drops ".tmp"
+                int dot = stem.LastIndexOf('.');
+                if (dot < 1 || stem.Length - dot - 1 != 32) continue;
+                bool hex = true;
+                for (int i = dot + 1; i < stem.Length && hex; i++) hex = Uri.IsHexDigit(stem[i]);
+                if (!hex) continue;
                 try { File.Delete(tmp); } catch { }
+            }
         }
         catch { /* best effort — leftovers are inert */ }
     }

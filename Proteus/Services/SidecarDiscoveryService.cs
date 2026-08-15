@@ -40,7 +40,9 @@ public class SidecarDiscoveryService
     private readonly PenumbraBridge penumbra;
     private readonly IPluginLog log;
 
-    private const string SidecarSubdir = "Proteus";
+    // Public so PenumbraModMeta.CleanLegacyFiles can sweep this folder too — metadata.json is written
+    // through AtomicWrite and strands its temp file here, one level below the mod root.
+    public const string SidecarSubdir = "Proteus";
     private const string MetadataFile  = "metadata.json";
     // The mod's settings as Proteus first found them, copied aside just before our first write so the
     // editor's "Reset to defaults" can restore them. Discovery only ever looks for MetadataFile by exact
@@ -573,7 +575,21 @@ public class SidecarDiscoveryService
                 WriteIndented = true,
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
             });
-            File.WriteAllText(path, json);
+            // AtomicWrite, not File.WriteAllText: this is the authored overlay — material paths, body
+            // type, shader, colour rows — and nothing can rebuild it. Truncating it in place to refill
+            // it means a crash mid-save loses the mod's whole descriptor, and the editor saves often.
+            //
+            // Interactive retry budget, NOT the default: every caller of this reaches it from a thread the
+            // user can feel — the editor saves from the ImGui draw path, and IpcProvider from whichever
+            // thread a peer plugin called on. The full ~1.55 s backoff would show up as a hung colour
+            // slider. 150 ms still beats the File.WriteAllText this replaced (which got one attempt and no
+            // retry at all), and a save that still loses is rewritten by the next edit.
+            //
+            // Synchronous on purpose. Deferring it to a background task would be the obvious way to spend
+            // nothing here, but Discover re-reads this file from disk (see the metaPath parse above) and
+            // the editor recomposites as soon as it returns — so a write still in flight means the
+            // composite picks up the PREVIOUS metadata and the edit looks like it did nothing.
+            PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);
         }
         catch (Exception ex)
         {

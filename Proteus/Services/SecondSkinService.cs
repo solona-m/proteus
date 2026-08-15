@@ -518,7 +518,7 @@ public sealed class SecondSkinService
         // writer bakes only the morphs the game is actually applying to that part, and the game path it
         // was cut from — the path's race code is what decides how the game deforms this geometry, and the
         // shell has to be hosted in that same space (see cutCode below).
-        var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes, string Path)>();
+        var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes, string Path, string? Uv)>();
         string? modelType = null;   // UV space of the first kept part, from its own skin material
         // Bare-body slots attempted vs. missing — the whole-body fallback below fires only when EVERY one
         // of them came back missing (see there for why "any one missing" is the wrong trigger).
@@ -577,9 +577,10 @@ public sealed class SecondSkinService
                 continue;
             }
             // Each part's own UV space, resolved path and size — the shell takes ONE uv space (the first
-            // kept part's, below) and maps every part's art with it, so a part whose space differs here is
-            // rendered with the wrong UVs. Logged per part because the fallback paths resolve through
-            // Penumbra to whatever body mod owns them, which can differ slot to slot.
+            // kept part's, below) and maps every part's art with it, so a part whose space differs here
+            // has its VERTICES converted into that space instead (see uvConverters below). Logged per part
+            // because the fallback paths resolve through Penumbra to whatever body mod owns them, which
+            // can differ slot to slot: a Bibo+ heel's foot beside a gen3 torso is an ordinary wardrobe.
             // A shape FINGERPRINT of the skin geometry we are about to cut from. The shell only conforms if
             // this is the same mesh the game draws, and the two ways that fails look identical in game —
             // the body pokes through the fabric either way:
@@ -616,7 +617,7 @@ public sealed class SecondSkinService
             HashSet<string>? partShapes = null;
             enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(bodyGamePath), out partShapes);
 
-            bodies.Add((bytes, partShapes, bodyGamePath));
+            bodies.Add((bytes, partShapes, bodyGamePath, partType));
             modelType ??= partType;
         }
 
@@ -709,7 +710,7 @@ public sealed class SecondSkinService
                                   + "the whole shell from {1} instead, replacing {2} part(s) cut above",
                                   charCode, whole.Path, bodies.Count);
                     bodies.Clear();
-                    bodies.Add((whole.Bytes, wholeShapes, whole.Path));
+                    bodies.Add((whole.Bytes, wholeShapes, whole.Path, wholeType));
                     modelType = wholeType;
                 }
             }
@@ -734,6 +735,36 @@ public sealed class SecondSkinService
             log.Information("[Proteus] second skin: body UV is {0} per the model's material (was {1})",
                 modelType, bodyType ?? "unknown");
             bodyType = modelType;
+        }
+
+        // ── one shell, one UV space ───────────────────────────────────────────────────────────
+        // The shell is ONE mesh set painted by ONE art set, and that art is remapped into `bodyType`
+        // once — so every part's UVs have to be in that space or the art lands somewhere else on it.
+        // Parts routinely disagree: the slots are cut from whatever mod owns each one, so a Bibo+ heel
+        // (bibo UV feet) sits beside a gen3 torso perfectly normally. Left alone, the odd part samples
+        // the art at coordinates meant for another layout — which reads as the garment simply MISSING
+        // there, because the art it lands in is the empty 80% of the sheet, not as visible smearing.
+        //
+        // Fix it on the geometry rather than the art: rewrite that part's vertices into the shell's
+        // space. Converting the art per part instead would need a second material per divergent space,
+        // and materials are the scarce resource here (10 per host, shared with the layer stack).
+        //
+        // Also repairs the coverage trim for free — it tests each triangle's UV footprint against the
+        // art, so with the UVs corrected the divergent part stops being trimmed against the wrong region.
+        var uvConverters = new List<Func<float, float, (float U, float V)?>?>(bodies.Count);
+        foreach (var b in bodies)
+        {
+            var conv = uvRemap.UvConverter(b.Uv, bodyType);
+            uvConverters.Add(conv);
+            if (b.Uv == null || string.Equals(b.Uv, bodyType, StringComparison.OrdinalIgnoreCase)) continue;
+            string partUv = b.Uv, shellUv = bodyType ?? "unknown";
+            if (conv != null)
+                log.Information("[Proteus] second skin: {0} is {1}-UV in a {2}-UV shell — converting its "
+                              + "vertices to {2}", b.Path, partUv, shellUv);
+            else
+                // Not fatal, and not silent: this part renders as if the overlay had no art there.
+                log.Warning("[Proteus] second skin: {0} is {1}-UV in a {2}-UV shell and no transfer map "
+                          + "covers that pair — the overlay will not land on this part", b.Path, partUv, shellUv);
         }
 
         // ── the space the geometry is IN ──────────────────────────────────────────────────────
@@ -1057,7 +1088,7 @@ public sealed class SecondSkinService
             try
             {
                 shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
-                    out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg));
+                    out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg), uvConverters);
             }
             catch (Exception ex)
             {

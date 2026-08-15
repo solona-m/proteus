@@ -277,11 +277,16 @@ public sealed class ModCreationService
             WriteIndented = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         });
-        File.WriteAllText(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
+        // AtomicWrite for the same reason as the manifest below, and with more at stake: meta.json is
+        // regenerable boilerplate, whereas this descriptor is the authored overlay itself. A zero-filled
+        // one leaves a mod that loads in Penumbra and does nothing in Proteus.
+        PenumbraModMeta.AtomicWrite(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
 
         // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. Written in the older
         // layout on purpose: every Penumbra can read it, and a new one migrates it into meta.json on load.
-        File.WriteAllText(
+        // Via AtomicWrite for durability — a manifest left truncated or zero-filled by a crash makes
+        // Penumbra drop the whole mod, with only a parse error in its Messages tab to say why.
+        PenumbraModMeta.AtomicWrite(
             Path.Combine(root, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(modName, author, "Created for Proteus."));
 

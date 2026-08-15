@@ -237,6 +237,11 @@ public static class SecondSkinWriter
         // vertex (Replace). Enabled shapes for THIS body model (from BodyShapeReader); only these bake.
         public Dictionary<string, List<ShapeMeshEntry>> Shapes = new(StringComparer.Ordinal);
         public HashSet<string>? EnabledShapes;
+
+        // Set when THIS source's UVs are in a different body UV space than the shell's (a bibo-UV heel's
+        // foot beside a gen3 torso). Rewrites each vertex's uv0 into the shell space so one art set —
+        // already remapped into that space — lands correctly on every part. Null = same space, leave alone.
+        public Func<float, float, (float U, float V)?>? UvConv;
     }
 
     /// <summary>One mesh's index edits for a shape: for the mesh whose index range begins at
@@ -272,7 +277,10 @@ public static class SecondSkinWriter
     /// </summary>
     public static byte[] Build(IReadOnlyList<byte[]> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, bool skipConnectors, out Stats stats,
-        IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null)
+        IReadOnlyList<HashSet<string>?>? enabledShapes = null, Action<string>? diag = null,
+        // Per-source UV-space converter, parallel to `sources`; null entries are already in shell space.
+        // See Source.UvConv.
+        IReadOnlyList<Func<float, float, (float U, float V)?>?>? uvConverters = null)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
@@ -286,6 +294,7 @@ public static class SecondSkinWriter
         {
             var en = enabledShapes != null && i < enabledShapes.Count ? enabledShapes[i] : null;
             parsed[i].EnabledShapes = en;
+            parsed[i].UvConv = uvConverters != null && i < uvConverters.Count ? uvConverters[i] : null;
             // Warn only on the failure case: an enabled shape the .mdl doesn't actually contain (nothing to
             // bake). The success path is silent — the shell simply follows the body.
             if (en == null || en.Count == 0 || diag == null) continue;
@@ -328,6 +337,8 @@ public static class SecondSkinWriter
         ushort subCursor = 0;
         int triIn = 0, triOut = 0, vertOut = 0;
         int shapedTotal = 0;   // index entries rewired to a morphed vertex by an enabled body shape key
+        int uvMoved = 0, uvUnmapped = 0;   // vertices put through a UV-space conversion, and those it couldn't place
+        int uvRetangented = 0;             // meshes whose tangent frame was re-fitted to the converted UVs
 
         // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
         // byte copy, keep every triangle, keep the authored material index) and the shell layers
@@ -353,6 +364,7 @@ public static class SecondSkinWriter
 
             byte[][] outStreams; byte[] outStrides; byte[] declBlock;
             (float U, float V)[] uv;
+            (float U, float V)[]? uvPre = null;
             if (preserve)
             {
                 CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
@@ -361,8 +373,9 @@ public static class SecondSkinWriter
             }
             else
             {
-                BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
-                    out outStreams, out outStrides, out declBlock, out uv);
+                uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
+                    out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv);
+                if (src.UvConv != null) uvMoved += vc;
             }
 
             // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
@@ -435,6 +448,11 @@ public static class SecondSkinWriter
                 keptPerSub.Add(keep.ToArray());
             }
             if (keptPerSub.All(k => k.Length == 0)) return;   // paints nothing here
+
+            // The UVs just moved to another layout, so the tangent frame copied in with them no longer
+            // describes them. Re-fit before compaction, while indices still address the source's vertices.
+            if (uvPre != null && RetangentMesh(outStreams, outStrides, decl, vc, uvPre, uv, keptPerSub))
+                uvRetangented++;
 
             if (!mapAppended)
             {
@@ -698,6 +716,12 @@ public static class SecondSkinWriter
         _ = mhPos;
 
         if (shapedTotal > 0) diag?.Invoke($"shape bake: {shapedTotal} index entries rewired to morphed vertices");
+        // Per LAYER, not per vertex: every layer rebuilds the same sources, so these count each source's
+        // vertices once for each of them. Divided back out so the number means what it says.
+        if (uvMoved > 0)
+            diag?.Invoke($"uv conversion: {uvMoved / layers.Count} vertices moved into the shell's UV space"
+                       + (uvUnmapped > 0 ? $", {uvUnmapped / layers.Count} left as authored (no correspondence)" : "")
+                       + $", {uvRetangented / layers.Count} mesh(es) re-tangented");
 
         stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut);
         return o;
@@ -981,10 +1005,18 @@ public static class SecondSkinWriter
         Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
     }
 
-    private static void BuildVerbatim(
+    /// <summary>Returns the number of vertices <paramref name="uvConv"/> had no correspondence for (0 when
+    /// there is no conversion). Those keep their original UV — see the normalization block.
+    /// <paramref name="uvsPreConv"/> holds the UVs as they were BEFORE the conversion (null when there was
+    /// none): <see cref="RetangentMesh"/> needs both layouts to re-fit the tangent frame.</summary>
+    private static int BuildVerbatim(
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
-        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs)
+        out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
+        out (float U, float V)[]? uvsPreConv,
+        Func<float, float, (float U, float V)?>? uvConv = null)
     {
+        int uvUnmapped = 0;
+        uvsPreConv = null;
         VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
         foreach (var el in decl)
             switch (el.Usage)
@@ -1066,9 +1098,22 @@ public static class SecondSkinWriter
             for (int i = 0; i < vc; i++) { minU = MathF.Min(minU, uvs[i].U); minV = MathF.Min(minV, uvs[i].V); }
             float uOff = MathF.Floor(minU), vOff = MathF.Floor(minV);
             bool uv0Half = u0e.Type is 13 or 14;
+            if (uvConv != null) uvsPreConv = new (float, float)[vc];
             for (int i = 0; i < vc; i++)
             {
                 float u = uvs[i].U - uOff, v = uvs[i].V - vOff;
+                // Then, for a part whose UVs are in another body's space, move each vertex to where the
+                // same point on the body sits in the SHELL's space. Done after the tile shift because the
+                // transfer maps are indexed over [0,1]; the result is already on the shell's tile, so no
+                // second normalization follows. A vertex the maps can't place keeps its original UV —
+                // pulling it to some far-off "nearest" would drag its triangles across the texture.
+                if (uvConv != null)
+                {
+                    uvsPreConv![i] = (u, v);
+                    var moved = uvConv(u, v);
+                    if (moved is { } mv) { u = mv.U; v = mv.V; }
+                    else uvUnmapped++;
+                }
                 uvs[i] = (u, v);
                 int so = i * outStrides[u0e.Stream];
                 WriteUV2(outStreams[u0e.Stream], so + u0e.Offset, uv0Half, u, v);   // uv0.xy (normalized)
@@ -1095,6 +1140,197 @@ public static class SecondSkinWriter
                 if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
                 break;
             }
+        return uvUnmapped;
+    }
+
+    /// <summary>
+    /// Re-fit a converted mesh's tangent frame to its NEW UVs.
+    /// <para/>
+    /// A tangent basis is DEFINED by the UV parameterization, and <see cref="BuildVerbatim"/> copies every
+    /// vertex stream byte-for-byte before overwriting position/colour/UV — so a mesh whose UVs were moved
+    /// into another body's layout is left describing the layout it came from. The shell samples its normal
+    /// map in tangent space (relief in R/G, the coverage gate in blue), so a stale frame lights the fabric
+    /// from the wrong direction, and a MIRRORED island (bibo's foot against gen3's, say) flips handedness
+    /// and reads as an inverted normal map on that part alone while the rest of the shell looks right.
+    /// <para/>
+    /// Rather than author a frame from scratch — which would mean committing to the game's sign and slot
+    /// conventions, and getting either backwards inverts every converted part — this READS the convention
+    /// off the source and reapplies it. Per vertex it derives the surface tangent/binormal twice, from the
+    /// old UVs and from the new, takes the sign the stored vector had against the OLD direction, and writes
+    /// that same sign against the NEW one. Handedness (the .w lane) flips only when the two frames' own
+    /// handedness disagrees. Whatever usage 5 and 6 mean to the shader, the geometry is what changed and
+    /// the geometry is all this touches.
+    /// <para/>
+    /// Only triangles that survived the coverage trim contribute, so vertices no longer referenced get no
+    /// accumulation and are left alone — the compaction below drops them anyway. Returns true when at
+    /// least one vertex was re-fitted.
+    /// </summary>
+    private static bool RetangentMesh(
+        byte[][] outStreams, byte[] outStrides, VElem[] decl, ushort vc,
+        (float U, float V)[] uvOld, (float U, float V)[] uvNew, List<ushort[]> keptPerSub)
+    {
+        VElem? pos = null, norm = null, tanEl = null, binEl = null;
+        foreach (var el in decl)
+            switch (el.Usage)
+            {
+                case UsePosition: pos ??= el; break;
+                case UseNormal:   norm ??= el; break;
+                case UseTangent2: tanEl ??= el; break;   // usage 5 — tracks dP/du
+                case UseTangent1: binEl ??= el; break;   // usage 6 — tracks dP/dv (the one bodies carry)
+            }
+        if (pos is not { } pe || norm is not { } ne) return false;
+        if (tanEl == null && binEl == null) return false;   // nothing to re-fit
+
+        // Positions here are the PUSHED ones the shell will ship, which is the surface the frame belongs
+        // to. The push is along the normal and identical for both UV sets, so it can't skew the comparison.
+        var px = new float[vc * 3];
+        var nrm = new float[vc * 3];
+        Span<float> tmp = stackalloc float[4];
+        for (int i = 0; i < vc; i++)
+        {
+            ReadTyped(outStreams[pe.Stream], i * outStrides[pe.Stream] + pe.Offset, pe.Type, tmp);
+            px[i * 3] = tmp[0]; px[i * 3 + 1] = tmp[1]; px[i * 3 + 2] = tmp[2];
+            ReadTyped(outStreams[ne.Stream], i * outStrides[ne.Stream] + ne.Offset, ne.Type, tmp);
+            float a = tmp[0], b = tmp[1], c = tmp[2];
+            if (ne.Type == 8) { a = a * 2 - 1; b = b * 2 - 1; c = c * 2 - 1; }
+            nrm[i * 3] = a; nrm[i * 3 + 1] = b; nrm[i * 3 + 2] = c;
+        }
+
+        var tOld = new float[vc * 3]; var bOld = new float[vc * 3];
+        var tNew = new float[vc * 3]; var bNew = new float[vc * 3];
+        AccumulateFrames(px, uvOld, keptPerSub, tOld, bOld);
+        AccumulateFrames(px, uvNew, keptPerSub, tNew, bNew);
+
+        int fixedUp = 0;
+        for (int i = 0; i < vc; i++)
+        {
+            int o = i * 3;
+            float nx = nrm[o], ny = nrm[o + 1], nz = nrm[o + 2];
+            float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+            if (nl < 1e-8f) continue;
+            nx /= nl; ny /= nl; nz /= nl;
+
+            // All four directions must be well-defined: a vertex touched only by UV-degenerate triangles
+            // has no measurable frame either side, and guessing one is worse than keeping what it had.
+            if (!InTangentPlane(tOld, o, nx, ny, nz, out var tox, out var toy, out var toz)) continue;
+            if (!InTangentPlane(bOld, o, nx, ny, nz, out var box, out var boy, out var boz)) continue;
+            if (!InTangentPlane(tNew, o, nx, ny, nz, out var tnx, out var tny, out var tnz)) continue;
+            if (!InTangentPlane(bNew, o, nx, ny, nz, out var bnx, out var bny, out var bnz)) continue;
+
+            // (N x B) . T — positive or negative tells the two frames apart; disagreement means the new
+            // island is mirrored relative to the old one.
+            float hOld = (ny * boz - nz * boy) * tox + (nz * box - nx * boz) * toy + (nx * boy - ny * box) * toz;
+            float hNew = (ny * bnz - nz * bny) * tnx + (nz * bnx - nx * bnz) * tny + (nx * bny - ny * bnx) * tnz;
+            bool mirrored = hOld * hNew < 0;
+
+            bool any = false;
+            if (binEl is { } be)
+                any |= Refit(outStreams[be.Stream], i * outStrides[be.Stream] + be.Offset, be.Type,
+                             box, boy, boz, bnx, bny, bnz, mirrored);
+            if (tanEl is { } te)
+                any |= Refit(outStreams[te.Stream], i * outStrides[te.Stream] + te.Offset, te.Type,
+                             tox, toy, toz, tnx, tny, tnz, mirrored);
+            if (any) fixedUp++;
+        }
+        return fixedUp > 0;
+    }
+
+    /// <summary>
+    /// Sum each triangle's surface derivatives (dP/du, dP/dv) onto its three vertices, the standard
+    /// area-weighted tangent accumulation. Triangles with no UV area contribute no direction and are
+    /// skipped rather than dividing by ~0.
+    /// </summary>
+    private static void AccumulateFrames(float[] p, (float U, float V)[] uv, List<ushort[]> keptPerSub,
+                                         float[] tAcc, float[] bAcc)
+    {
+        foreach (var keep in keptPerSub)
+            for (int k = 0; k + 2 < keep.Length; k += 3)
+            {
+                int ia = keep[k], ib = keep[k + 1], ic = keep[k + 2];
+                int a = ia * 3, b = ib * 3, c = ic * 3;
+                float e1x = p[b] - p[a], e1y = p[b + 1] - p[a + 1], e1z = p[b + 2] - p[a + 2];
+                float e2x = p[c] - p[a], e2y = p[c + 1] - p[a + 1], e2z = p[c + 2] - p[a + 2];
+                float du1 = uv[ib].U - uv[ia].U, dv1 = uv[ib].V - uv[ia].V;
+                float du2 = uv[ic].U - uv[ia].U, dv2 = uv[ic].V - uv[ia].V;
+                float det = du1 * dv2 - du2 * dv1;
+                if (MathF.Abs(det) < 1e-12f) continue;
+                float r = 1f / det;
+                float tx = (e1x * dv2 - e2x * dv1) * r, ty = (e1y * dv2 - e2y * dv1) * r, tz = (e1z * dv2 - e2z * dv1) * r;
+                float bx = (e2x * du1 - e1x * du2) * r, by = (e2y * du1 - e1y * du2) * r, bz = (e2z * du1 - e1z * du2) * r;
+                foreach (var v in (ReadOnlySpan<int>)[a, b, c])
+                {
+                    tAcc[v] += tx; tAcc[v + 1] += ty; tAcc[v + 2] += tz;
+                    bAcc[v] += bx; bAcc[v + 1] += by; bAcc[v + 2] += bz;
+                }
+            }
+    }
+
+    /// <summary>Gram-Schmidt an accumulated derivative into the plane of the normal and normalize it.
+    /// False when nothing measurable survives (a vertex with no non-degenerate triangle).</summary>
+    private static bool InTangentPlane(float[] acc, int o, float nx, float ny, float nz,
+                                       out float x, out float y, out float z)
+    {
+        x = acc[o]; y = acc[o + 1]; z = acc[o + 2];
+        float d = x * nx + y * ny + z * nz;
+        x -= nx * d; y -= ny * d; z -= nz * d;
+        float len = MathF.Sqrt(x * x + y * y + z * z);
+        if (len < 1e-8f) return false;
+        x /= len; y /= len; z /= len;
+        return true;
+    }
+
+    /// <summary>
+    /// Rewrite one stored frame vector so it points along <c>new*</c> instead of <c>old*</c>, keeping the
+    /// sign it had relative to the old direction — that sign IS the source's convention, whatever it is.
+    /// <paramref name="mirrored"/> flips the .w handedness lane. Returns false for an element type we have
+    /// no encoder for, leaving it byte-identical rather than writing something malformed.
+    /// </summary>
+    private static bool Refit(byte[] a, int off, byte type,
+                              float ox, float oy, float oz, float nx, float ny, float nz, bool mirrored)
+    {
+        Span<float> cur = stackalloc float[4];
+        ReadTyped(a, off, type, cur);
+        bool byteNorm = type == 8;
+        float sx = cur[0], sy = cur[1], sz = cur[2], sw = cur[3];
+        if (byteNorm) { sx = sx * 2 - 1; sy = sy * 2 - 1; sz = sz * 2 - 1; sw = sw * 2 - 1; }
+        float sign = sx * ox + sy * oy + sz * oz >= 0f ? 1f : -1f;
+        float w = mirrored ? -sw : sw;
+        return WriteVec4Typed(a, off, type, sign * nx, sign * ny, sign * nz, w);
+    }
+
+    /// <summary>Encode a signed 4-vector into a vertex element. False for a type this can't write.</summary>
+    private static bool WriteVec4Typed(byte[] a, int off, byte type, float x, float y, float z, float w)
+    {
+        static byte B(float v) => (byte)Math.Clamp((int)MathF.Round((v * 0.5f + 0.5f) * 255f), 0, 255);
+        switch (type)
+        {
+            case 8:            // Ubyte4n — what character models actually use for tangent/binormal
+                a[off] = B(x); a[off + 1] = B(y); a[off + 2] = B(z); a[off + 3] = B(w);
+                return true;
+            case 10:           // Short4n
+                W16(a, off,     (ushort)(short)Math.Clamp((int)MathF.Round(x * 32767f), -32767, 32767));
+                W16(a, off + 2, (ushort)(short)Math.Clamp((int)MathF.Round(y * 32767f), -32767, 32767));
+                W16(a, off + 4, (ushort)(short)Math.Clamp((int)MathF.Round(z * 32767f), -32767, 32767));
+                W16(a, off + 6, (ushort)(short)Math.Clamp((int)MathF.Round(w * 32767f), -32767, 32767));
+                return true;
+            case 14:           // Half4
+                W16(a, off, Half(x)); W16(a, off + 2, Half(y));
+                W16(a, off + 4, Half(z)); W16(a, off + 6, Half(w));
+                return true;
+            case 3:            // Float4
+                W32(a, off,      (uint)BitConverter.SingleToInt32Bits(x));
+                W32(a, off + 4,  (uint)BitConverter.SingleToInt32Bits(y));
+                W32(a, off + 8,  (uint)BitConverter.SingleToInt32Bits(z));
+                W32(a, off + 12, (uint)BitConverter.SingleToInt32Bits(w));
+                return true;
+            case 2:            // Float3 (no handedness lane to keep)
+                W32(a, off,     (uint)BitConverter.SingleToInt32Bits(x));
+                W32(a, off + 4, (uint)BitConverter.SingleToInt32Bits(y));
+                W32(a, off + 8, (uint)BitConverter.SingleToInt32Bits(z));
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>Write a 2-component UV (u,v) at <paramref name="off"/>, as two halves or two floats.</summary>

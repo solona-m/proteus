@@ -4699,7 +4699,11 @@ public class CompositorService : IDisposable
         Directory.CreateDirectory(managedModDir);
         Directory.CreateDirectory(Path.Combine(managedModDir, "textures"));
 
-        File.WriteAllText(
+        // Through AtomicWrite like every other manifest write, NOT File.WriteAllText: that truncates the
+        // target in place and refills it, so a crash mid-write leaves a half or zero-filled meta.json —
+        // and a manifest Penumbra can't parse means it drops the mod entirely, which is the failure this
+        // whole repair path exists to recover from. No reason to be the one who causes it.
+        PenumbraModMeta.AtomicWrite(
             Path.Combine(managedModDir, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(
                 SidecarDiscoveryService.ManagedModDir, "Proteus",
