@@ -4672,45 +4672,201 @@ public class CompositorService : IDisposable
         // restores the redirects this clears.
         var metaPath = Path.Combine(managedModDir, PenumbraModMeta.MetaFile);
         if (File.Exists(metaPath)) return;
+
         var repairing = Directory.Exists(managedModDir);
-
-        Directory.CreateDirectory(managedModDir);
-        Directory.CreateDirectory(Path.Combine(managedModDir, "textures"));
-
-        var verb = repairing ? "Repaired" : "Created";
         if (repairing)
             log.Warning("[Proteus] Managed mod at \"{0}\" was missing its {1} — recreating it",
                 managedModDir, PenumbraModMeta.MetaFile);
 
+        WriteManagedModFiles();
+        RegisterManagedMod(repairing ? "Repaired" : "Created");
+    }
+
+    /// <summary>
+    /// The managed mod's folder and a FRESH <see cref="PenumbraModMeta.MetaFile"/> — everything
+    /// Penumbra needs to list the mod, and nothing else.
+    /// <para/>
+    /// DESTRUCTIVE, and only legitimate when there is no readable manifest to lose. From
+    /// <see cref="PenumbraModMeta.SingleFileVersion"/> on, the manifest is also where the redirects
+    /// live (as <c>DefaultData</c>), and it carries the <c>Identifier</c> Penumbra keys the mod by —
+    /// a fresh one has neither, so writing this over a manifest that parses unpublishes everything we
+    /// own and orphans the mod's settings. Callers must gate on
+    /// <see cref="PenumbraModMeta.HasReadableManifest"/>; <see cref="WriteManagedModJson"/> is the
+    /// non-destructive way to touch a live folder, preserving every key it doesn't own.
+    /// </summary>
+    private void WriteManagedModMeta()
+    {
+        Directory.CreateDirectory(managedModDir);
+        Directory.CreateDirectory(Path.Combine(managedModDir, "textures"));
+
         File.WriteAllText(
-            metaPath,
+            Path.Combine(managedModDir, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(
                 SidecarDiscoveryService.ManagedModDir, "Proteus",
                 "Managed by the Proteus overlay compositor plugin."));
+    }
 
+    /// <summary>
+    /// The manifest plus an empty redirect set, for a mod being created from nothing. Only safe from
+    /// <see cref="EnsureManagedModExists"/>, which runs BEFORE a composite's no-unpublish region and
+    /// is always followed by a republish.
+    /// </summary>
+    private void WriteManagedModFiles()
+    {
+        WriteManagedModMeta();
         WriteManagedModJson(new Dictionary<string, string>());
+    }
 
+    /// <summary>
+    /// Whether Penumbra currently LISTS the managed mod. Null when the query itself failed (Penumbra
+    /// down, IPC error) — that says nothing about registration, so a caller must not read it as
+    /// "missing" and start churning AddMod. Deliberately not called on the healthy path: the whole
+    /// mod list is marshalled across IPC, and <see cref="CheckManagedModHealth"/> already has a
+    /// one-mod symptom check that says when it is worth asking.
+    /// </summary>
+    private bool? IsListedByPenumbra()
+    {
+        var mods = penumbra.GetAllMods();
+        if (mods == null) return null;
+        return mods.Keys.Any(d => string.Equals(d, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether the "Penumbra took the mod but still won't list it" repair has actually rewritten the
+    /// manifest this session. One attempt is the useful one: if a freshly written manifest doesn't get
+    /// the mod loaded, repeating it every composite won't either.
+    /// <para/>
+    /// Set ONLY where a rewrite really happens. A pass that inspects the manifest and decides against
+    /// rewriting must not consume it: the two are hours apart in the case that matters — an early
+    /// false alarm (Penumbra polled mid-rediscovery, manifest perfectly fine) would otherwise disarm
+    /// the repair for the rest of the session, so a manifest corrupted later by a crash could never be
+    /// fixed and the mod would stay unlistable until the plugin is reloaded.
+    /// </summary>
+    private bool _manifestRewriteAttempted;
+
+    /// <summary>
+    /// Whether the "unlisted, but the manifest reads fine" notice has been logged this session. Its own
+    /// flag rather than <see cref="_manifestRewriteAttempted"/>, so silencing a repeat of the message
+    /// cannot also silence the repair. The condition itself stays visible either way —
+    /// <see cref="CheckManagedModHealth"/> reports it every composite for as long as it lasts.
+    /// </summary>
+    private bool _manifestIntactNoticeLogged;
+
+    /// <summary>
+    /// The priority to assert whenever we (re)establish the managed mod's settings. Never below what
+    /// <see cref="TryRaisePriorityAbove"/> has already achieved this session: writing the config
+    /// baseline over a completed raise hands the contested paths straight back to whatever outranked
+    /// us, and <see cref="_highestPriorityRaiseAttempted"/> would then refuse to raise again — it
+    /// latches on the attempt and only clears once every redirect is live, which by then it isn't.
+    /// The mod would sit at the baseline for the rest of the session while the log blamed a
+    /// temporary collection for a change we undid ourselves.
+    /// </summary>
+    private int WantedManagedModPriority
+        => Math.Max(config.ManagedModPriority, _highestPriorityRaiseAttempted);
+
+    /// <summary>
+    /// AddMod the managed directory, then enable it at our priority in the player's collection.
+    /// The error codes are logged rather than dropped: if AddMod fails (folder outside Penumbra's
+    /// root, say) nothing downstream can work, and silence there is what made this hard to diagnose.
+    /// </summary>
+    private void RegisterManagedMod(string verb)
+    {
         var ec = penumbra.AddModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Information("[Proteus] AddMod({0}) -> {1}", managedModDir, ec);
+
+        if (ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
+        {
+            log.Warning("[Proteus] Penumbra refused to add the managed mod ({0}). It is usually because "
+                      + "\"{1}\" is not inside Penumbra's mod root — overlays cannot apply until it is.",
+                ec, managedModDir);
+        }
+        else if (!_manifestRewriteAttempted && IsListedByPenumbra() == false)
+        {
+            // Success from AddMod means the CALL worked, not that the mod LOADED — Penumbra's own
+            // contract: "success does only imply a successful call, not a successful mod load"
+            // (IPenumbraApiMods.AddMod). The way that happens is a manifest Penumbra can't read: it
+            // takes the request and drops the folder. EnsureManagedModExists would never notice,
+            // because meta.json exists on disk — it just can't be parsed. Without this rewrite the
+            // repair has nothing left to try and every composite re-runs the same failing AddMod.
+            //
+            // The rewrite latch is tested FIRST so that once the one useful attempt is spent we don't
+            // marshal the whole mod list on every later call to learn something we can no longer act on.
+            // The condition itself keeps being reported either way — CheckManagedModHealth logs it on
+            // every composite for as long as it lasts.
+            //
+            // Rewriting is only justified when the manifest is what Penumbra choked on. A manifest that
+            // PARSES is not: from FileVersion 4 the redirects live in it as DefaultData, so replacing it
+            // with a fresh one unpublishes every path we own — and this runs mid-composite from the
+            // health check, inside the region where a cancellation would strand them unpublished (see
+            // the "NOTHING IS UNPUBLISHED HERE" block in Recomposite). It would also drop the Identifier
+            // Penumbra keys the mod by, orphaning its settings. So: repair the unreadable case, and for
+            // the readable one say what we know and stop, rather than break the mod to prove a theory.
+            if (PenumbraModMeta.HasReadableManifest(managedModDir))
+            {
+                // Deliberately does NOT set _manifestRewriteAttempted — see that field. This costs a
+                // mod-list query per composite for as long as the state lasts, which is the right trade:
+                // overlays are already not applying, and keeping the repair armed matters more.
+                if (!_manifestIntactNoticeLogged)
+                {
+                    _manifestIntactNoticeLogged = true;
+                    log.Warning("[Proteus] Penumbra accepted the managed mod but does not list it, and its "
+                              + "\"{0}\" reads fine — so the manifest is not what is stopping the load. Check "
+                              + "that \"{1}\" is inside Penumbra's mod root, then press Rediscover Mods in "
+                              + "Penumbra's settings.", PenumbraModMeta.MetaFile, managedModDir);
+                }
+            }
+            else
+            {
+                _manifestRewriteAttempted = true;
+                log.Warning("[Proteus] Penumbra accepted the managed mod but does not list it — its \"{0}\" "
+                          + "is unreadable. Rewriting it and retrying once.", PenumbraModMeta.MetaFile);
+
+                // Safe here precisely because nothing readable is being overwritten: an unparseable
+                // manifest publishes nothing, so there is no live redirect set to lose.
+                WriteManagedModMeta();
+                ec = penumbra.AddModDirectory(SidecarDiscoveryService.ManagedModDir);
+                log.Information("[Proteus] AddMod retry -> {0}", ec);
+
+                if (IsListedByPenumbra() == false)
+                    log.Warning("[Proteus] Penumbra still does not list the managed mod after its \"{0}\" was "
+                              + "rewritten — overlays cannot apply. Check that \"{1}\" is inside Penumbra's mod "
+                              + "root, then press Rediscover Mods in Penumbra's settings.",
+                        PenumbraModMeta.MetaFile, managedModDir);
+            }
+        }
 
         // Log which collection the new mod was enabled in, and where it landed. Both are the first
         // things to check when composited textures don't show up: the mod has to be enabled in the
         // collection the player is actually using, and the folder has to be under Penumbra's root.
         var coll = penumbra.GetPlayerCollection();
-        if (coll.HasValue)
-        {
-            var (collId, collName) = coll.Value;
-            penumbra.SetModEnabled(collId, SidecarDiscoveryService.ManagedModDir, true);
-            penumbra.SetModPriority(collId, SidecarDiscoveryService.ManagedModDir, config.ManagedModPriority);
-            log.Information("[Proteus] {0} managed mod at \"{1}\", enabled in collection \"{2}\" ({3}) at priority {4}",
-                verb, managedModDir, collName, collId, config.ManagedModPriority);
-        }
-        else
+        if (!coll.HasValue)
         {
             log.Warning("[Proteus] {0} managed mod at \"{1}\", but the player's collection could not be "
                       + "determined — it has not been enabled anywhere. Overlays will not apply until it is.",
                 verb, managedModDir);
+            return;
         }
+
+        var (collId, collName) = coll.Value;
+        var priority = WantedManagedModPriority;
+
+        // Enabling is where an unregistered mod actually shows up as a failure: TrySetMod answers
+        // ModMissing and changes nothing. Reporting "enabled in collection …" without reading that
+        // back is the same false claim the old health check made — and on this path it would be the
+        // ONLY line printed per composite, so a log reader would rule registration out and go looking
+        // somewhere else entirely.
+        var enabled = penumbra.SetModEnabled(collId, SidecarDiscoveryService.ManagedModDir, true);
+        if (enabled is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
+        {
+            log.Warning("[Proteus] {0} managed mod at \"{1}\", but Penumbra would not enable it in "
+                      + "collection \"{2}\" ({3}) — overlays will not apply.",
+                verb, managedModDir, collName, enabled);
+            return;
+        }
+
+        penumbra.SetModPriority(collId, SidecarDiscoveryService.ManagedModDir, priority);
+        log.Information("[Proteus] {0} managed mod at \"{1}\", enabled in collection \"{2}\" ({3}) at priority {4}",
+            verb, managedModDir, collName, collId, priority);
     }
 
     private void CheckManagedModHealth(List<OverlayEntry> overlayEntries)
@@ -4721,8 +4877,30 @@ public class CompositorService : IDisposable
         var settings = penumbra.GetModSettings(collId.Value, SidecarDiscoveryService.ManagedModDir);
         if (settings == null)
         {
-            log.Warning("[Proteus] Managed mod not found in player collection — re-adding");
-            penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+            // Two different failures land here and they need different repairs. Penumbra may not have
+            // the mod AT ALL, in which case there is nothing to enable — TrySetMod answers ModMissing
+            // and the state is unchanged; or it has the mod with no settings yet in this collection,
+            // where enabling is the whole fix. This branch used to assume the second and only ever
+            // call SetModEnabled, so the first case looped: "re-adding" every composite, never adding.
+            //
+            // This is also the ONLY place that asks Penumbra for its mod list, and it is the right one:
+            // null settings is the cheap one-mod symptom of an unregistered mod, so the expensive
+            // whole-list query is paid for exactly when something is already wrong, never per composite.
+            log.Warning("[Proteus] Managed mod has no settings in the player collection — repairing");
+            if (IsListedByPenumbra() == false)
+            {
+                log.Warning("[Proteus] Penumbra does not list the managed mod at \"{0}\" — registering it",
+                    managedModDir);
+                RegisterManagedMod("Re-registered");   // enables and sets priority itself
+                return;
+            }
+
+            var ec = penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, true);
+            if (ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
+                log.Warning("[Proteus] Managed mod could not be enabled in the player collection ({0}) "
+                          + "— composited textures will not apply", ec);
+            else
+                penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, WantedManagedModPriority);
             return;
         }
 

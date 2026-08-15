@@ -37,6 +37,26 @@ internal static class PenumbraModMeta
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
     /// <summary>
+    /// Whether the folder has a manifest that actually parses. False both when there is none and when
+    /// it is corrupt — a caller repairing a manifest needs those two separated from "readable", which
+    /// <see cref="ReadFileVersion"/> cannot give it: that collapses missing and unparseable into the
+    /// same <see cref="LegacyFileVersion"/>. The distinction matters because from
+    /// <see cref="SingleFileVersion"/> on, the manifest is also where the redirects live, so
+    /// overwriting a READABLE one throws away live published state.
+    /// </summary>
+    public static bool HasReadableManifest(string modRoot)
+    {
+        try
+        {
+            var path = Path.Combine(modRoot, MetaFile);
+            if (!File.Exists(path)) return false;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
     /// The mod's option groups in <c>Groups</c> array order, as (name, raw element) pairs. Null — not an
     /// empty list — when there is no v4 <c>Groups</c> array to read, which is the caller's signal to fall
     /// back to the v3 <c>group_*.json</c> layout. An empty list means "v4, and it genuinely has no groups".
