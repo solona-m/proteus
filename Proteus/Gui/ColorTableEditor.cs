@@ -301,7 +301,7 @@ public static class ColorTableEditor
         };
         ImGui.TextUnformatted("Rendering as:");
         ImGui.SameLine();
-        ImGui.TextColored(badgeColor, ModeName(mode));
+        ProteusStyle.Pill(ModeName(mode), badgeColor);
     }
 
     /// <summary>Point the descriptors' (or the live design-binding override's) Layer+Shader at
@@ -361,7 +361,9 @@ public static class ColorTableEditor
 
         // Wrap to whatever width the window actually has, rather than a fixed count that falls off the
         // right edge when the window is narrow.
-        var btn = new Vector2(70, 30);
+        // Scaled together with the swatch insets in DrawRowSwatches — those are measured off this button's
+        // rect, so the two must move as one or the swatches drift out of their button at non-1.0 UI scale.
+        var btn = ProteusStyle.S(70f, 30f);
         float avail = ImGui.GetContentRegionAvail().X;
         int perLine = Math.Max(1, (int)((avail + ImGui.GetStyle().ItemSpacing.X) / (btn.X + ImGui.GetStyle().ItemSpacing.X)));
 
@@ -371,7 +373,7 @@ public static class ColorTableEditor
 
             bool used = InUse(row);
             using (ImRaii.Disabled(!used))
-            using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), row == selectedRow))
+            using (ProteusStyle.Selected(row == selectedRow))
             {
                 if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", btn))
                     selectedRow = row;
@@ -410,7 +412,9 @@ public static class ColorTableEditor
         else if (ImGui.IsItemHovered())
             ImGui.SetTooltip($"Overwrite row {selectedRow} (both sub-rows) with the copied row.");
 
-        if (ImGui.BeginTable($"##ab_{idScope}", 2, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchSame))
+        using (ImRaii.PushColor(ImGuiCol.TableHeaderBg, ImGui.GetColorU32(ProteusStyle.AccentSoft)))
+        if (ImGui.BeginTable($"##ab_{idScope}", 2,
+                ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.RowBg))
         {
             ImGui.TableSetupColumn($"Row {selectedRow}A");
             ImGui.TableSetupColumn($"Row {selectedRow}B");
@@ -487,9 +491,11 @@ public static class ColorTableEditor
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var draw = ImGui.GetWindowDrawList();
 
-        // The label sits on the left; swatches fill the right half of the button.
-        float x0 = min.X + 34f, x1 = max.X - 3f;
-        float y0 = min.Y + 3f, y1 = max.Y - 3f;
+        // The label sits on the left; swatches fill the right half of the button. Scaled to match the
+        // button size in DrawRows — an unscaled 34px inset leaves the swatches overlapping the label at
+        // 1.5x and floating away from it at 0.75x.
+        float x0 = min.X + ProteusStyle.S(34f), x1 = max.X - ProteusStyle.S(3f);
+        float y0 = min.Y + ProteusStyle.S(3f), y1 = max.Y - ProteusStyle.S(3f);
         if (x1 <= x0) return;
 
         float colW = (x1 - x0) / 3f;
@@ -577,7 +583,7 @@ public static class ColorTableEditor
             int gameRow = (row - 1) * 2 + (isA ? 0 : 1);
             bool active = Highlighter.IsTarget(shellMaterialLeaves, gameRow);
             ImGui.SameLine();
-            using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), active))
+            using (ProteusStyle.Selected(active))
                 if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
                 {
                     if (active) Highlighter.Clear();
@@ -593,7 +599,7 @@ public static class ColorTableEditor
         {
             bool active = SkinGlow.IsTarget(skinGlowTargets, row, isA);
             ImGui.SameLine();
-            using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive), active))
+            using (ProteusStyle.Selected(active))
                 if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
                 {
                     if (active) SkinGlow.Clear();

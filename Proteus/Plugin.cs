@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 374;
+    public const int BuildNumber = 382;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -58,6 +58,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
+    private readonly Gui.ProteusFonts fonts;
     private readonly ColorTableHighlighter highlighter;
     private readonly SkinDiffuseGlow skinGlow;
     private readonly ShellNormalGhost shellGhost;
@@ -105,6 +106,11 @@ public sealed class Plugin : IDalamudPlugin
         // Sphere-map thumbnails for the colour table editor.
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
+
+        // Display typography (the game's Jupiter) for section headings and the header band. The atlas
+        // builds asynchronously; drawing before it lands falls back to the default font on its own.
+        fonts = new Gui.ProteusFonts(pluginInterface);
+        Gui.ProteusStyle.Fonts = fonts;
 
         // Glow-effect thumbnails (loaded per-file, cached by Dalamud's texture provider).
         Gui.ColorTableEditor.EffectThumbs = new Gui.EffectPreview(TextureProvider);
@@ -225,11 +231,13 @@ public sealed class Plugin : IDalamudPlugin
         Gui.ColorTableEditor.EffectThumbs = null;
         Gui.ColorTableEditor.Highlighter = null;
         Gui.ColorTableEditor.SkinGlow = null;
+        Gui.ProteusStyle.Fonts = null;   // before the dispose below, matching the null-then-dispose order above
         skinGlow.Dispose();
         shellColorset.Dispose();   // before the highlighter it references
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
+        fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
         designBindings.Dispose();

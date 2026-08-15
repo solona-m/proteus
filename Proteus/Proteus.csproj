@@ -88,6 +88,12 @@
     <EmbeddedResource Include="Resources\sphere_d_array.png" />
     <!-- Shown for sphere-map index 0 ("no sphere") in the picker, so it doesn't look like a real sphere. -->
     <EmbeddedResource Include="Resources\none.png" />
+    <!-- The status window's header band: a 512x128 crop from the middle of images\icon.png, where the
+         logo's yellow-to-red sweep is widest. Cropped offline rather than embedding the 512x512 original
+         and sampling it at draw time — a fifth of the size, and the framing is a decision rather than an
+         accident. Separate from the images\icon.png None item below, which must keep landing on disk
+         because that is where Dalamud reads a dev-loaded plugin's installer icon from. -->
+    <EmbeddedResource Include="Resources\header.png" />
   </ItemGroup>
 
   <ItemGroup>
