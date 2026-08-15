@@ -438,6 +438,16 @@ public sealed class SecondSkinService
             // so on a genuine coin-flip it is the choice with the smaller failure.
             if (tied.Contains(charCode, StringComparer.OrdinalIgnoreCase)) return charCode;
 
+            // Runoff 3 — on a male/female coin flip, take the female. The alternative is CodeVotes'
+            // lexicographic order, which always hands it to the male code because "0101" sorts before
+            // "0201", and that is the losing side of the bet twice over: c0201 is the space nearly every
+            // body mod is authored in, and being wrong toward c0101 is the failure that SHRINKS a shell
+            // (male->female is a downward deform, applied to geometry already cut female — the reported
+            // bug). Being wrong toward c0201 on an actually-male character is the same magnitude in the
+            // other direction, but it is by far the rarer input.
+            var female = tied.FirstOrDefault(c => RaceIndex(c) is { } n && n % 2 == 0);
+            if (female != null) return female;
+
             return tied[0];   // deterministic last resort — CodeVotes already ordered these by key
         }
 
@@ -755,14 +765,78 @@ public sealed class SecondSkinService
             log.Warning("[Proteus] second skin: the cut parts are in more than one model space [{0}] — hosting "
                       + "in c{1}; the other part(s) will be deformed differently from the body they copy",
                 string.Join(", ", cutVotes.Select(g => $"{g.Key}x{g.Count()}")), cutCode);
-        log.Information("[Proteus] second skin: cut in c{0} space ({1} part(s)) — a host that loads under a "
-                      + "different code will render it a race-size wrong", cutCode, bodies.Count);
+        // The tally, ALWAYS — not just on the multi-space warning above. A unanimous vote can still be
+        // unanimously wrong (every bare part rebuilt from a bad modelCode votes the same bad code, which
+        // is how a c0101 cutCode reached a Midlander female), and without the breakdown the log said only
+        // WHICH code won, never on what evidence. That is the difference between a report that identifies
+        // the bug and one that just confirms the symptom.
+        log.Information("[Proteus] second skin: cut in c{0} space ({1} part(s), votes [{2}]) — a host that "
+                      + "loads under a different code will render it a race-size wrong",
+            cutCode, bodies.Count,
+            cutVotes.Count > 0
+                ? string.Join(", ", cutVotes.Select(g => $"c{g.Key}x{g.Count()}"))
+                : $"no readable path codes, fell back to the equipment code c{modelCode}");
 
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
         var hosts = ChooseHosts(cutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
             emperorRingVariant, invisibleGlassesVariant);
+
+        // ── per-host publish decision, resolved once for BOTH loops below ──────────────────────────────
+        // The material loop names the materials baked into each shell, and the host loop publishes the
+        // model — and the two MUST agree on the race code, because a material is looked up under the code
+        // its model loads at. Deciding this inside the host loop (where it started) left the material loop
+        // still naming everything at cutCode while the model went out at hostRace, which is a shell with
+        // materials the game will never find. One computation, both consumers.
+        //
+        // hostRace: the race whose EQDP entry the game consults — the CHARACTER's real one, never the code
+        // of the path the model happens to load from right now. Reading it off host.ModelPath was a feedback
+        // loop against our own fix, and it alternated in the wild on a Miqo'te wearing the injected glasses:
+        //
+        //   composite A  the walk sees c0801e5501_met (her native facewear). 0801 != cutCode 0201, so the
+        //                pair fires: c0801 is emptied, the shell is published at both codes, and the game
+        //                duly falls through to the c0201 twin. Suit on.
+        //   composite B  the walk now sees c0201e5501_met — because of A. 0201 == cutCode, so the test goes
+        //                FALSE, no manipulation is emitted, and only the c0201 path is published. With
+        //                c0801's entry no longer emptied the game asks for c0801, where we publish nothing.
+        //                Suit off.
+        //   composite C  the walk sees c0801 again… and round it goes.
+        //
+        // That is "the suit disappears when I drag a slider, and comes back when I refresh". drawnRaceCode
+        // is read off the drawn chara/human model, which our redirects cannot move, so it is stable. The
+        // path code stays as a FALLBACK for the first composite of a login, before any walk has returned a
+        // human model; charCode is the last resort.
+        //
+        // Native: cut space is NOT on the wearer's fall-through chain, so the usual trick — empty the
+        // wearer's entry and let the game walk to cut space, inheriting the deform — would land it on the
+        // wrong body. Put a c0101 shell in front of a Midlander female and vanilla fall-through (c0201 ->
+        // c0101 is the game's own hop) applies the male->female deform to geometry already cut female: it
+        // renders, shrunk and low, which is exactly what two Midlanders reported. cutCode is only a VOTE
+        // over the paths the parts came from — a label — while the geometry was copied from what this
+        // character actually draws, so when the label is incoherent with the wearer, trust the wearer:
+        // publish at hostRace, declare THAT race has the model, and the game loads it with no deform.
+        //
+        // Carriers only. An APPEND host redirects host.ModelPath — the path the game already resolved for
+        // the player's own item — so a mismatch there renders a race-size wrong rather than wrong-bodied,
+        // which build #294 established beats no shell. Those keep WarnForeignAppendHost and are untouched.
+        var plan = new (string HostRace, bool Native, string PublishCode)[hosts.Count];
+        for (int i = 0; i < hosts.Count; i++)
+        {
+            var h0 = hosts[i];
+            var race = drawnRaceCode
+                    ?? (h0.ModelPath != null ? PathCharCode(h0.ModelPath) : null)
+                    ?? charCode;
+            bool native = h0.BaseModel == null
+                       && !string.Equals(race, cutCode, StringComparison.OrdinalIgnoreCase)
+                       && !CanFallThrough(race, cutCode);
+            if (native)
+                log.Warning("[Proteus] second skin: host {0}{1:D4}/{2} — the shell claims to be cut in c{3}, "
+                          + "which is not on c{4}'s fall-through chain. Publishing NATIVELY at c{4} instead "
+                          + "(no deform); one of the two codes is wrong and c{3} is the suspect",
+                    h0.Prefix, h0.SetId, h0.Slot, cutCode, race);
+            plan[i] = (race, native, native ? race : cutCode);
+        }
         // Cap total placeable layers at the single-char base-36 disk-id space (0-9a-z = 36). Any excess
         // folds into the over-budget drop path below, so a disk id can never run past 'z' into filesystem-
         // reserved chars. 36 is far beyond the practical geometric limit (~15 stacked shells).
@@ -850,10 +924,17 @@ public sealed class SecondSkinService
             char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);   // in-model material index (per-host, <= 'j')
             char diskChar  = DiskId(diskLetter);                               // globally-unique disk id (base-36, 0-9a-z)
             // Materials live INSIDE the host's own model, so name them with the code that model is loaded
-            // under — the equipped host's real resolved path, or cutCode for the Emperor rebuild, which is
-            // published in cut space (see mdlGamePath below). On an append host this also keeps our added
-            // letters matching the base's own material names instead of mixing two codes inside one model.
-            var hostCode = host.ModelPath != null ? PathCharCode(host.ModelPath) ?? cutCode : cutCode;
+            // under — the equipped host's real resolved path, or the rebuild's publish code for a carrier
+            // (see mdlGamePath below). On an append host this also keeps our added letters matching the
+            // base's own material names instead of mixing two codes inside one model.
+            //
+            // plan[hIdx].PublishCode, NOT cutCode: the two are the same except on the native-publish path,
+            // and hardcoding cutCode there names materials the game would look for under a different code
+            // and never find. That is why the plan is computed before this loop rather than inside the
+            // host loop below.
+            var hostCode = host.ModelPath != null
+                ? PathCharCode(host.ModelPath) ?? plan[hIdx].PublishCode
+                : plan[hIdx].PublishCode;
             string matName = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
             string matVariant = VariantFolderFor(host);
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
@@ -965,6 +1046,12 @@ public sealed class SecondSkinService
             if (perHostLayers[h].Count == 0) continue;
             var host = hosts[h];
 
+            // All three resolved above the material loop, so the materials baked into this shell and the
+            // path it is published at agree on a race code. See the plan block after ChooseHosts.
+            bool carrier = host.BaseModel == null;
+            var (hostRace, nativeAtHostRace, publishCode) = plan[h];
+            bool differs = !string.Equals(hostRace, cutCode, StringComparison.OrdinalIgnoreCase);
+
             byte[] shell;
             SecondSkinWriter.Stats stats;
             try
@@ -1003,7 +1090,7 @@ public sealed class SecondSkinService
             // equippedPaths), so no alias of it can reach the vote whatever code it loads under. Nothing
             // else enjoys that exemption, so the warning still stands for every other path.
             var mdlGamePath = host.ModelPath
-                ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{cutCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
+                ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{publishCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
             var modelChanged = WriteIfChanged(mdlDisk, shell);
 
@@ -1069,37 +1156,38 @@ public sealed class SecondSkinService
             // NOT done for an APPEND host (real glasses, a worn ring): there we merge into the player's own
             // item, and emptying its entry would swap their frames for a deformed Midlander pair. Those
             // keep the size warning from LoadCandidate instead.
-            bool carrier = host.BaseModel == null;
-            // The race whose EQDP entry the game consults: the CHARACTER's real one, never the code of the
-            // path the model happens to load from right now.
             //
-            // Reading it off host.ModelPath — what this did — is a feedback loop against our own fix, and
-            // it alternated in the wild on a Miqo'te wearing the injected glasses carrier:
-            //
-            //   composite A  the walk sees c0801e5501_met (her native facewear). 0801 != cutCode 0201, so
-            //                this fires: c0801 is emptied, the shell is published at both codes, and the
-            //                game duly falls through to the c0201 twin. Suit on.
-            //   composite B  the walk now sees c0201e5501_met — because of A. 0201 == cutCode, so this test
-            //                goes FALSE, no manipulation is emitted, and only the c0201 path is published.
-            //                With c0801's entry no longer emptied the game asks for c0801 again, where we
-            //                publish nothing. Suit off.
-            //   composite C  the walk sees c0801 again… and round it goes.
-            //
-            // That is exactly "the suit disappears when I drag a slider, and comes back when I refresh":
-            // consecutive composites land alternately in A and B. drawnRaceCode is read off the drawn
-            // chara/human model, which our redirects cannot move, so the decision is stable.
-            //
-            // The path code stays as a FALLBACK for the window where drawnRaceCode is not known yet — the
-            // first composite of a login, before any walk has returned a human model. Falling straight to
-            // charCode there would be worse than the bug this replaces: charCode is the shared BODY code,
-            // which for every race this branch exists to serve IS cutCode, so the test below would go false
-            // and the carrier would get no EQDP and no native-path copy at all. Reinstating the old,
-            // loop-prone read is the better degradation — it was at least correct while it was the only
-            // input, and one composite later drawnRaceCode takes over and closes the loop for good.
-            var hostRace = drawnRaceCode
-                        ?? (host.ModelPath != null ? PathCharCode(host.ModelPath) : null)
-                        ?? charCode;
-            if (carrier && !string.Equals(hostRace, cutCode, StringComparison.OrdinalIgnoreCase))
+            // carrier/hostRace/differs/nativeAtHostRace are computed at the top of the loop — a fall-through
+            // pair is only ever emitted for codes the guard there has already proven reach each other.
+            if (carrier && nativeAtHostRace)
+            {
+                // Cut space was rejected, so there is no fall-through to arrange: the shell is published at
+                // the wearer's own code and this entry is what makes the game load it from there. Nothing
+                // is emptied — an empty entry is a request to be deformed, and the whole point here is to
+                // take the geometry at face value and skip the deform.
+                manipulations.Add(EqdpManipulation(hostRace, host.EqdpSlot, host.SetId));
+
+                // Publish at c{hostRace} EXPLICITLY rather than trusting mdlGamePath. For the Emperor ring
+                // (ModelPath null) they are already the same path and this is a no-op. For a facewear
+                // carrier they are NOT: mdlGamePath is the resolved — or, for a pending injection, the
+                // predicted — path, which is built from equipCode and can name a different race than the
+                // entry we just wrote. Declaring hostRace has a model while publishing only at equipCode
+                // is a redirect the game never asks for, so derive the path from the same code as the
+                // manipulation. Whatever mdlGamePath already registered stays, on the same reasoning the
+                // pair branch keeps its native copy: if this slot turns out not to be EQDP-driven, the
+                // resolved path is still there and we are no worse off.
+                var nativePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/"
+                               + $"c{hostRace}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
+                if (!redirects.ContainsKey(nativePath))
+                {
+                    redirects[nativePath] = Rel(outputRoot, mdlDisk);
+                    hostModelPaths.Add(nativePath);
+                }
+                log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model, loaded "
+                              + "natively with no fall-through -> {4}",
+                    host.EqdpSlot, host.Prefix, host.SetId, hostRace, nativePath);
+            }
+            else if (carrier && differs)
             {
                 manipulations.Add(EqdpManipulation(cutCode,  host.EqdpSlot, host.SetId));
                 manipulations.Add(EqdpManipulation(hostRace, host.EqdpSlot, host.SetId, hasModel: false));
@@ -1918,6 +2006,64 @@ public sealed class SecondSkinService
         _ => 0,
     };
 
+    /// <summary>The leading race/gender index of a char code ("0801" → 8), or null when it carries none.
+    /// Two digits, matching how the game numbers them: odd = male, even = female, and (n-1)/2 indexes
+    /// <see cref="RaceNames"/>.
+    /// <para/>
+    /// Bounded to the playable range 1..18. Out of it there is no race, so callers get null rather than a
+    /// number: unbounded, <see cref="EqdpFallbackIndex"/>'s catch-all arm made every unknown index look
+    /// like a child of Midlander, so <see cref="CanFallThrough"/> waved through pairs like c9101 -> c0101.
+    /// A guard that decides how a shell is published should not accept a race that cannot exist.</summary>
+    private static int? RaceIndex(string? code)
+        => code is { Length: >= 2 } && int.TryParse(code.AsSpan(0, 2), out var n)
+        && n > 0 && n <= RaceNames.Length * 2 ? n : null;
+
+    /// <summary>
+    /// The race the game falls through to when a set declares no model for <paramref name="n"/>, or 0 at
+    /// the root. Mirrors the game's own table (the same one Penumbra.GameData's <c>GenderRace.Fallback</c>
+    /// encodes): most races fall to their own gender's Midlander, with three exceptions — Hrothgar males
+    /// go to Roegadyn males, Lalafell females to Lalafell males, and Midlander females to Midlander males.
+    /// </summary>
+    private static int EqdpFallbackIndex(int n) => n switch
+    {
+        1  => 0,   // Midlander male — the root, nothing below it
+        2  => 1,   // Midlander female -> Midlander male
+        11 => 1,   // Lalafell male    -> Midlander male
+        12 => 11,  // Lalafell female  -> Lalafell male
+        15 => 9,   // Hrothgar male    -> Roegadyn male
+        _  => n % 2 == 1 ? 1 : 2,
+    };
+
+    /// <summary>
+    /// Would emptying <paramref name="from"/>'s entry actually land the game on <paramref name="to"/>?
+    /// <para/>
+    /// The carrier branch in Build empties the WEARER's own EQDP entry to pull the shell into cut space.
+    /// That is only sound when cut space is somewhere on the wearer's fall-through chain — otherwise the
+    /// empty sends the game somewhere we publish nothing, or (worse) somewhere we publish a shell cut for
+    /// a different body, which arrives race-deformed. Two Midlanders reported exactly that: a shell sitting
+    /// too low, as if scaled, cleared by a plugin reload. Nothing validated the pair before this.
+    /// <para/>
+    /// Same gender is required on top of reachability. The chain does contain two cross-gender hops
+    /// (Midlander female -> Midlander male, Lalafell female -> Lalafell male), but arriving at one means
+    /// the shell was cut from the other gender's body parts — a cutCode vote that is wrong at its source,
+    /// not a deform worth inheriting. Emptying c0201 on a Midlander female to land her on c0101 is the
+    /// single worst case the guard rejects, and the one the reports match.
+    /// </summary>
+    internal static bool CanFallThrough(string? from, string? to)
+    {
+        if (RaceIndex(from) is not { } f || RaceIndex(to) is not { } t) return false;
+        if (f % 2 != t % 2) return false;
+        // The chain is at most a few hops and always shrinks toward the root; the bound is a guard against
+        // a malformed index steering it into a cycle, not a real depth.
+        for (int i = 0, cur = f; i < 8; i++)
+        {
+            cur = EqdpFallbackIndex(cur);
+            if (cur == 0) return false;
+            if (cur == t) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Declare whether a set has a model for a given race/gender. Char codes run c0101 = Midlander male,
     /// c0201 = Midlander female, c0301 = Highlander male, and so on.
@@ -1933,7 +2079,7 @@ public sealed class SecondSkinService
     /// </summary>
     private static object EqdpManipulation(string charCode, string slot, int setId, bool hasModel = true)
     {
-        int n = int.TryParse(charCode.AsSpan(0, 2), out var parsed) ? parsed : 2;
+        int n = RaceIndex(charCode) ?? 2;
         string race = RaceNames[Math.Clamp((n - 1) / 2, 0, RaceNames.Length - 1)];
         string gender = n % 2 == 1 ? "Male" : "Female";
 

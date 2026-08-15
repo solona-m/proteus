@@ -184,6 +184,26 @@ public class CompositorService : IDisposable
     // The character's real race code ("0801"), from the same walk. Distinct from charCode, which is the
     // shared BODY code. See DrawnRaceCodeFromModels.
     private volatile string? _drawnRaceCode;
+    // WHO _drawnRaceCode was read off. The cache is deliberately sticky — a walk that carried no human
+    // model keeps the last value rather than reporting "unknown" (see the assignments below) — but sticky
+    // with no owner means the PREVIOUS character's race survives a character switch, and nothing ever
+    // cleared it: the plugin subscribes to no login/logout event, so only a reload dropped it.
+    //
+    // That is not a harmless staleness. _drawnRaceCode becomes hostRace in SecondSkinService.Build, and
+    // its sibling caches on the same walk (_equippedPartModels/_bareBodyModels) are assigned
+    // UNCONDITIONALLY while this one is not — so a walk that resolves a new character's body parts before
+    // its chara/human models leaves the two describing different people. hostRace and cutCode then
+    // disagree for a reason that is pure bookkeeping, and the carrier branch empties the wearer's own EQDP
+    // entry on the strength of it. Binding the value to an owner is what stops it crossing characters;
+    // SecondSkinService.CanFallThrough is the second line of defence for the intra-walk case.
+    private volatile string? _drawnRaceOwner;
+    // Serializes the _drawnRaceCode/_drawnRaceOwner pair. They are two fields but one fact, and the two
+    // callers of UpdateDrawnRaceCode are on different threads (the redraw hook on the framework thread,
+    // the composite off it, and composites overlap — see _compositesInFlight). Interleaved, the stores
+    // tear into a new owner beside an old code, which every later call then treats as matching and KEEPS.
+    // That is the original bug with a longer life, so the pair moves under a lock. Readers still read
+    // _drawnRaceCode unlocked: they only ever see one whole value or the other, never a mismatch.
+    private readonly object _drawnRaceLock = new();
     // Enabled shape keys per drawn body model (normalized filename -> shape names), captured on the
     // framework thread each redraw. Used to bake body morphs (e.g. "Remove Hip Dips") into the second-skin
     // shell so it follows the body instead of diverging. See BodyShapeReader.
@@ -718,7 +738,8 @@ public class CompositorService : IDisposable
                 _equippedAccessoryModels = accessories;
                 _equippedMetModels = metModels;
                 _bareBodyModels = bare;
-                _drawnRaceCode = DrawnRaceCodeFromModels(modelPaths) ?? _drawnRaceCode;
+                // Framework thread (this is the redraw hook), so the owner can be read inline.
+                UpdateDrawnRaceCode(modelPaths, Plugin.ObjectTable.LocalPlayer?.Name.TextValue);
                 var sig = EquipSignature(equipped, accessories, metModels, bare);
                 equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
                 _lastEquipSignature = sig;
@@ -787,10 +808,28 @@ public class CompositorService : IDisposable
             var state = glamourer.GetObjectState(0);
             var cust  = state?["Customize"];
             if (cust == null) { _glamourerCharCode = null; return; }
-            var race  = cust["Race"]?["Value"]?.ToObject<byte>() ?? 0;
-            var tribe = cust["Clan"]?["Value"]?.ToObject<byte>() ?? 0;
-            var sex   = cust["Gender"]?["Value"]?.ToObject<byte>() ?? 0;
-            _glamourerCharCode = BodyCodeFromCustomize(race, tribe, sex);
+            // No zero defaults. Gender 0 is MALE, so a Gender field that fails to read — a partial state,
+            // an actor mid-load, a Glamourer schema change — used to turn a Midlander female into a
+            // perfectly plausible "c0101" rather than an error. Nothing downstream can tell that apart
+            // from a real male: the probe in SecondSkinService accepts c0101 (its e0000 models exist),
+            // the bare parts are rebuilt at c0101, and those paths then win the cutCode vote unanimously.
+            // The shell is published male-cut, the game deforms it male->female on load, and it arrives
+            // shrunk and low — the reported bug, from one missing JSON field.
+            //
+            // Unknown must therefore mean unknown. A null char code falls back to _lastCompositedCharCodes,
+            // which is read off the drawn body materials and cannot get the gender wrong.
+            var race  = cust["Race"]?["Value"]?.ToObject<byte>();
+            var tribe = cust["Clan"]?["Value"]?.ToObject<byte>();
+            var sex   = cust["Gender"]?["Value"]?.ToObject<byte>();
+            if (race == null || tribe == null || sex == null)
+            {
+                Plugin.Log.Warning("[Proteus] Glamourer customize is incomplete (race={0}, clan={1}, "
+                                 + "gender={2}) — treating the char code as unknown rather than guessing",
+                    race?.ToString() ?? "missing", tribe?.ToString() ?? "missing", sex?.ToString() ?? "missing");
+                _glamourerCharCode = null;
+                return;
+            }
+            _glamourerCharCode = BodyCodeFromCustomize(race.Value, tribe.Value, sex.Value);
         }
         catch { _glamourerCharCode = null; }
     }
@@ -1108,7 +1147,13 @@ public class CompositorService : IDisposable
             // null so a mid-reload blank draw object doesn't wipe a good set.
             try
             {
-                var equipped = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
+                // Who the walk saw is captured INSIDE the framework call, with the paths themselves — this
+                // method runs off-thread, so a later object-table read could name a different character
+                // than the one these models came from, which is the very confusion being guarded against.
+                var walk = Plugin.Framework.RunOnFrameworkThread(() =>
+                    (Paths: penumbra.GetActivePlayerModelPaths(),
+                     Owner: Plugin.ObjectTable.LocalPlayer?.Name.TextValue)).GetAwaiter().GetResult();
+                var equipped = walk.Paths;
                 if (equipped != null)
                 {
                     _equippedPartModels = EquippedPartModelsFromModels(equipped);
@@ -1117,7 +1162,8 @@ public class CompositorService : IDisposable
                     _bareBodyModels = BareBodyModelsFromModels(equipped);
                     // Keep the last known race on a walk that carried no human model: it only changes on a
                     // race change, which redraws, and "unknown" would send the shell back to charCode.
-                    _drawnRaceCode = DrawnRaceCodeFromModels(equipped) ?? _drawnRaceCode;
+                    // Bounded by the owner check, so "keep" never means "keep someone else's".
+                    UpdateDrawnRaceCode(equipped, walk.Owner);
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -1420,6 +1466,39 @@ public class CompositorService : IDisposable
     // must be emptied for the shell to fall through into cut space. Any human model will do — they all
     // carry the same code — and only .mdl paths reach here, so a c0201 body MATERIAL can't be mistaken
     // for one.
+    /// <summary>
+    /// Record the race code a model walk saw, keeping the last known one when the walk carried no human
+    /// model — but only while it still belongs to the same character.
+    /// <para/>
+    /// <paramref name="owner"/> must be read on the FRAMEWORK THREAD, in the same walk that produced
+    /// <paramref name="modelPaths"/>; pass it in rather than reading the object table here, because one
+    /// caller updates these caches off-thread from a walk it marshalled separately.
+    /// <para/>
+    /// A changed owner takes the new reading even when it is null. Keeping a value across a switch is the
+    /// bug this exists to close: the code is sticky by design, so before this it could only be replaced,
+    /// never dropped, and a character swap left the old race in place until the plugin reloaded.
+    /// </summary>
+    private void UpdateDrawnRaceCode(HashSet<string>? modelPaths, string? owner)
+    {
+        var code = DrawnRaceCodeFromModels(modelPaths);
+        // Read-decide-write over both fields, so it runs under the lock as one step. See _drawnRaceLock.
+        lock (_drawnRaceLock)
+        {
+            // Null owner (draw object gone mid-switch) counts as "not the same character": that is
+            // precisely the window where the cached code is least trustworthy, so it is dropped not held.
+            if (owner == null || !string.Equals(owner, _drawnRaceOwner, StringComparison.Ordinal))
+            {
+                if (_drawnRaceCode != null && code == null)
+                    Plugin.Log.Information("[Proteus] drawn race code c{0} dropped — read off {1}, now {2}",
+                        _drawnRaceCode, _drawnRaceOwner ?? "(nobody)", owner ?? "(nobody)");
+                _drawnRaceCode  = code;
+                _drawnRaceOwner = owner;
+                return;
+            }
+            _drawnRaceCode = code ?? _drawnRaceCode;
+        }
+    }
+
     private static string? DrawnRaceCodeFromModels(HashSet<string>? modelPaths)
     {
         if (modelPaths == null) return null;
