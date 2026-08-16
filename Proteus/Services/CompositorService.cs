@@ -255,6 +255,18 @@ public class CompositorService : IDisposable
     // Null when Glamourer isn't available or hasn't overridden the race.
     private volatile string? _glamourerCharCode;
 
+    /// <summary>A "displayed race|snapshot races" pair, and the tick after which the observation goes stale.</summary>
+    private sealed record UnsettledRace(string Pair, long ExpiresAtTick);
+
+    /// <summary>
+    /// The pair <see cref="WaitForRaceToSettle"/> waited out without the snapshot ever catching up, so the
+    /// wait can be skipped next time. Expires, because the observation is only PROBABLY a permanent Glamourer
+    /// display override — a load slow enough to blow the window looks identical, and that must not silently
+    /// disable the wait for the rest of the session.
+    /// </summary>
+    private volatile UnsettledRace? _unsettledRace;
+    private const int UnsettledRaceMemoMs = 60_000;
+
     public CompositorResult? LastResult { get; private set; }
     public List<OverlayEntry> LastDiscovered { get; private set; } = [];
     public event Action? ResultChanged;
@@ -1139,6 +1151,20 @@ public class CompositorService : IDisposable
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
 
+            // FIRST, before anything below reads the draw object. Everything this lambda gathers — equipped
+            // models, the drawn race code, enabled shape keys, the material snapshot — has to describe the
+            // SAME character, and mid-race-change they don't: the walks would capture the outgoing race
+            // while the wait settles the materials to the incoming one, and the composite would be built
+            // from the mix. Worse, settling the materials is exactly what stops
+            // SchedulePostRedrawBodyTypeCheck noticing the change, so the stale walks would never be
+            // corrected the way they used to be.
+            //
+            // await, not GetResult() — and that is not a violation of the rule below. What that rule guards
+            // against is a continuation resuming INLINE on the framework thread and dragging Recomposite
+            // onto a frame with it. This task can only complete on a pool thread: its awaits are all
+            // Task.Delay, and it blocks on GetResult() for the framework calls exactly as this lambda does.
+            if (!await WaitForRaceToSettle(token).ConfigureAwait(false)) return;
+
             // Refresh the equipped gear models the second skin sources its shells from, EVERY composite.
             // Unlike the material snapshot this can't be gated on cold/dirty: equipping an item fires no
             // mod/collection event, and a composite can be triggered while no redraw has repopulated the
@@ -1258,6 +1284,118 @@ public class CompositorService : IDisposable
             }
             Recomposite(token, force);
         });
+    }
+
+    /// <summary>
+    /// A race change costs TWO full composites unless this waits.
+    ///
+    /// The active-material snapshot can be perfectly CLEAN and still be the old race's: OnLocalPlayerRedrawn
+    /// stamps it (and clears the dirty flag) the moment the draw object is recreated, which on a race change
+    /// is before the new race's body/face materials have loaded. Nothing downstream can tell that apart from
+    /// a settled snapshot, so the composite runs on the old race, publishes, redraws — and then
+    /// SchedulePostRedrawBodyTypeCheck sees the char code move and rebuilds the whole thing from scratch.
+    /// Two composites, two redraws, several seconds, for one race change.
+    ///
+    /// Glamourer's displayed char code is read on the framework thread the instant the customize event fires,
+    /// so it is the authority on which race is COMING. When the snapshot's body materials don't mention it,
+    /// the snapshot demonstrably hasn't settled — so poll for it rather than compositing something we already
+    /// know is about to be thrown away. Same shape as the body-type settle loop in the caller, and
+    /// SchedulePostRedrawBodyTypeCheck stays the backstop for a load slower than this window.
+    ///
+    /// Runs FIRST in the caller, ahead of the draw-object walks, so those describe the settled character
+    /// too — see the call site for why a half-settled composite would go uncorrected.
+    /// </summary>
+    /// <returns>False only if the wait was cancelled — the caller must not composite on a dead token.</returns>
+    private async Task<bool> WaitForRaceToSettle(CancellationToken token)
+    {
+        var glamCode = _glamourerCharCode;
+        var snapshot = _activeMtrlSnapshot;
+        if (glamCode == null || snapshot == null) return true;
+
+        var codes = CharCodeSet(snapshot);
+        // No body materials at all means there is nothing to disagree with — not a stale snapshot.
+        if (codes.Count == 0 || codes.Contains(glamCode)) { _unsettledRace = null; return true; }
+
+        // Glamourer can display a race the draw object genuinely never adopts, in which case the snapshot
+        // never catches up and every composite from here on would pay the full timeout. Take a pair we have
+        // already waited out at its word — until the memo expires, since a slow load looks the same.
+        var codeKey = CharCodeKey(codes)!;   // non-null: the empty case returned above
+        var pair = $"{glamCode}|{codeKey}";
+        var memo = _unsettledRace;
+        if (memo != null && memo.Pair == pair && Environment.TickCount64 < memo.ExpiresAtTick) return true;
+
+        log.Debug("[Proteus] snapshot is mid-race-change (snapshot={0}, Glamourer displays {1}) — "
+                + "waiting for the new race's materials before compositing", codeKey, glamCode);
+
+        // Read BEFORE the wait. Anything that arrives DURING it and marks the snapshot dirty is talking
+        // about ITS OWN materials, which this walk knows nothing about — see the publish below.
+        bool wasDirty = _activeMtrlSnapshotDirty;
+
+        int consecutiveNulls = 0;
+        for (int i = 0; i < 12; i++) // up to ~3s, then composite anyway (the post-settle check covers misses)
+        {
+            // Teardown gets the same treatment as cancellation, and needs saying out loud because this wait
+            // is the one place the lambda can sit for seconds: the plugin can be unloaded mid-poll, and then
+            // the framework call raises ObjectDisposedException (or an unloading load context, which the CLR
+            // hands over as a bare InvalidOperationException). Neither is an OperationCanceledException, so
+            // without these they escape the async lambda and fault a task nobody awaits.
+            try { await Task.Delay(250, token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return false; }
+
+            HashSet<string>? next;
+            try { next = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult(); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return false; }
+
+            // A null walk means there is no drawable player right now — and that is AMBIGUOUS, in a way worth
+            // being careful about. A race change IS the draw object being destroyed and recreated (see the
+            // null-guard in OnLocalPlayerRedrawn), so a null here is the single most likely observation during
+            // exactly the window this wait exists for. Bailing on the first one would make the feature a
+            // no-op for its primary case. But a loading screen or a cutscene is also null, and staying for
+            // the full 3s there is the stall this budget exists to avoid — so tolerate a redraw-sized gap
+            // (~1s) and give up only once it looks persistent. No memo either way: a null run learned
+            // nothing about whether this pair can settle.
+            if (next == null)
+            {
+                if (++consecutiveNulls >= 4) return true;
+                continue;
+            }
+            consecutiveNulls = 0;
+
+            // Scanned rather than CharCodeSet(next).Contains(...): the question is one bit, and building a
+            // whole set per poll to read it back is the loop describing itself badly.
+            if (!next.Any(m => UVRemapService.InferBodyType(m) != null
+                            && glamCode.Equals(ExtractHumanCharCode(m), StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            // Settled — publish so the caller's composite builds straight from the new race.
+            //
+            // The token check is the same one the body-type settle loop makes before ITS publish: a trigger
+            // that superseded us has already cancelled this token, and writing the snapshot after that point
+            // hands the run that replaced us a stale one it will then trust.
+            if (token.IsCancellationRequested) return false;
+            _activeMtrlSnapshot = next;
+            // Only clear dirty if it was clear when we started. If something set it mid-wait, its materials
+            // may still be loading — this walk is no evidence they arrived, and clearing the flag would make
+            // the next trigger skip the refresh that exists to catch exactly that.
+            if (!wasDirty) _activeMtrlSnapshotDirty = false;
+            // No lock, unlike the body-type settle loop — which is written above this method but RUNS after
+            // it, since this wait goes first in the caller. That one holds _bodyModConfigLock for the
+            // config.Save() beside it, which serializes a whole collection while another thread may be
+            // mutating it. This is a bare atomic reference swap with no Save, so taking the lock here would
+            // only imply a hazard that isn't present.
+            config.CachedActiveMaterialPaths = next.ToList();
+            _unsettledRace = null;
+            log.Debug("[Proteus] race settled to {0} after {1}ms — compositing once", glamCode, (i + 1) * 250);
+            return true;
+        }
+
+        // The full window elapsed with the race never adopted, so this is most likely a real display
+        // override rather than a slow load — but only most likely, hence the expiry on the memo.
+        _unsettledRace = new UnsettledRace(pair, Environment.TickCount64 + UnsettledRaceMemoMs);
+        log.Debug("[Proteus] race never settled to {0} within 3s — compositing on the snapshot as-is", glamCode);
+        return true;
     }
 
     /// <summary>
@@ -2001,6 +2139,29 @@ public class CompositorService : IDisposable
         return types.Count > 0 ? string.Join(",", types) : null;
     }
 
+    /// <summary>The character codes (e.g. "c1401") of the body materials in a snapshot.</summary>
+    private static HashSet<string> CharCodeSet(HashSet<string> snapshot)
+    {
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in snapshot)
+        {
+            if (UVRemapService.InferBodyType(m) == null) continue;
+            var code = ExtractHumanCharCode(m);
+            if (code != null) codes.Add(code);
+        }
+        return codes;
+    }
+
+    /// <summary>
+    /// <paramref name="codes"/> as one comparable key, or null when there are none.
+    ///
+    /// Every site that asks "which races is the character drawn as" must build this the same way or they
+    /// will disagree — WaitForRaceToSettle calling a race settled while SchedulePostRedrawBodyTypeCheck
+    /// still reads it as changed would leave the two triggering each other indefinitely.
+    /// </summary>
+    private static string? CharCodeKey(HashSet<string> codes)
+        => codes.Count > 0 ? string.Join(",", codes.OrderBy(x => x)) : null;
+
     // ── Core compositor ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -2287,19 +2448,12 @@ public class CompositorService : IDisposable
 
                 if (activeMtrl != null)
                 {
-                    // Collect the active character codes (e.g. "c0101") from body materials in the
-                    // snapshot. Used below to filter wrong-race materials in the mid-switch branch,
-                    // and stored for the post-redraw race-change check.
-                    var activeCharCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var m in activeMtrl)
-                        if (UVRemapService.InferBodyType(m) != null)
-                        {
-                            var code = ExtractHumanCharCode(m);
-                            if (code != null) activeCharCodes.Add(code);
-                        }
-                    _lastCompositedCharCodes = activeCharCodes.Count > 0
-                        ? string.Join(",", activeCharCodes.OrderBy(x => x))
-                        : null;
+                    // The active character codes (e.g. "c0101") from body materials in the snapshot. Used
+                    // below to filter wrong-race materials in the mid-switch branch, and stored for the
+                    // post-redraw race-change check — which compares against CharCodeKey, so this must be
+                    // built by it too.
+                    var activeCharCodes = CharCodeSet(activeMtrl);
+                    _lastCompositedCharCodes = CharCodeKey(activeCharCodes);
 
                     // Glamourer may be displaying a different race than the draw object uses
                     // (GetGameObjectResourcePaths returns the actual race, not the visual override).
@@ -6217,20 +6371,10 @@ public class CompositorService : IDisposable
                 catch (OperationCanceledException) { return; }
                 if (snapshot == null) return;
 
-                var newBodyTypes  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var newCharCodes  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var m in snapshot)
-                {
-                    var bt = UVRemapService.InferBodyType(m);
-                    if (bt != null)
-                    {
-                        newBodyTypes.Add(bt);
-                        var code = ExtractHumanCharCode(m);
-                        if (code != null) newCharCodes.Add(code);
-                    }
-                }
-                var newBodyTypeKey  = newBodyTypes.Count > 0 ? string.Join(",", newBodyTypes.OrderBy(x => x))  : null;
-                var newCharCodeKey  = newCharCodes.Count > 0 ? string.Join(",", newCharCodes.OrderBy(x => x))  : null;
+                // Same builders WaitForRaceToSettle and Recomposite use — see CharCodeKey for why sharing
+                // them is load-bearing rather than tidiness.
+                var newBodyTypeKey = BodyTypeKey(snapshot);
+                var newCharCodeKey = CharCodeKey(CharCodeSet(snapshot));
 
                 bool bodyTypeChanged = newBodyTypeKey != null &&
                     !string.Equals(newBodyTypeKey, _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase);
