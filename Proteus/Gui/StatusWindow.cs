@@ -1861,7 +1861,7 @@ public class StatusWindow : Window
                         _colorWindowMod = _colorWindowMod == entry.ModDirectory ? null : entry.ModDirectory;
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update binding\" to save them. Base colors are unchanged.");
+                    ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update\" on the Bindings tab to save them. Base colors are unchanged.");
 
                 // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
                 // "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox: a
@@ -1952,12 +1952,6 @@ public class StatusWindow : Window
         {
             var act = bindings.FirstOrDefault(b => b.DesignId == activeId.Value);
             ImGui.TextDisabled($"Active: {act?.DesignName ?? activeId.Value.ToString()[..8]}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Update binding"))
-                designBindings.UpdateActiveBindingFromCurrentState();
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Snapshot the current Proteus state (enable / priority / options / colors)\n" +
-                                 "into the active binding. Manual edits only persist when you click this.");
         }
 
         if (bindings.Count == 0)
@@ -1974,8 +1968,8 @@ public class StatusWindow : Window
             return;
         ImGui.TableSetupColumn("Design",   ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("Captured", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(90f));
-        // Wider than the old 120: the action buttons now carry icons as well as text.
-        ImGui.TableSetupColumn("##act",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(170f));
+        // Wide enough for three icon+text buttons (Apply / Update / Unbind).
+        ImGui.TableSetupColumn("##act",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(255f));
 
         // Clickable sort headers, same idiom as the Mods tab: clicking the active column flips direction,
         // switching column picks the sensible default for that column — name ascending, dates descending.
@@ -1999,6 +1993,7 @@ public class StatusWindow : Window
         var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
 
         Guid? toApply = null, toRemove = null;
+        bool toUpdate = false;
         foreach (var b in shown)
         {
             ImGui.TableNextRow();
@@ -2041,6 +2036,21 @@ public class StatusWindow : Window
                         "Proteus mods NOT in the binding are switched off, so this replaces the current\n" +
                         "look rather than adding to it.");
                 ImGui.SameLine();
+                // Only the active binding can be re-captured — the snapshot comes from the live state, so
+                // writing it into a binding that isn't driving that state would overwrite it with a look
+                // the user never applied. Drawn disabled rather than hidden so Unbind keeps its position.
+                using (ImRaii.Disabled(!isActive))
+                {
+                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Save, "Update"))
+                        toUpdate = true;
+                }
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(isActive
+                        ? "Snapshot the current Proteus state (enable / priority / options / colors)\n" +
+                          "into this binding. Manual edits only persist when you click this."
+                        : "Only the active binding can be updated from the current state.\n" +
+                          "Apply this design first.");
+                ImGui.SameLine();
                 if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Unlink, "Unbind"))
                     toRemove = b.DesignId;
                 if (ImGui.IsItemHovered())
@@ -2049,7 +2059,9 @@ public class StatusWindow : Window
         }
         ImGui.EndTable();
 
-        // Both deferred past the loop: each mutates the binding state the rows are drawn from.
+        // All deferred past the loop: each mutates the binding state the rows are drawn from.
+        if (toUpdate)
+            designBindings.UpdateActiveBindingFromCurrentState();
         if (toApply.HasValue)
             designBindings.Restore(toApply.Value);
         if (toRemove.HasValue)
@@ -2078,7 +2090,7 @@ public class StatusWindow : Window
             {
                 ProteusStyle.Pill("binding", ProteusStyle.Binding);
                 ImGui.SameLine();
-                ImGui.TextColored(BindingAccent, $"Editing '{name}' — previewing live; click \"Update binding\" to save.");
+                ImGui.TextColored(BindingAccent, $"Editing '{name}' — previewing live; click \"Update\" on the Bindings tab to save.");
                 ImGui.TextColored(BindingAccent, "Base colors unchanged — except in Advanced, where \"Reset to " +
                     "defaults\" rewrites them and \"Bodies\" is a global setting no binding captures.");
             }

@@ -4037,12 +4037,24 @@ public class CompositorService : IDisposable
                             art[i + 3] = cov[i >> 2];
                         }
                     });
+
+                    // Per-row Opacity from the Masks colorset — coverage shapes the mask, THEN the row's
+                    // transparency scales it, the same order the overlay path uses after its own mask pass.
+                    // ApplyIndexedOverlay reads colour and emissive from the row but never opacity, so
+                    // without this the Masks tab's opacity slider moved nothing on skin, while the identical
+                    // row faded a mask SHELL correctly (SecondSkinService's per-row opacity pass). Reordering
+                    // the option in the group could not help: order decides which mask owns a texel, not how
+                    // transparent the winner is.
+                    if (maskRows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
+                        art = ApplyIndexedOpacity(art, cid, maskRows);
+
                     SnapshotBaseDiffuse();
                     ApplyIndexedOverlay(maskBaseD, art, cid, maskRows, false, wD, hD);
                     diffuseBlended = true; diffuseContributors++;
 
-                    // Glow row-map from the same combined coverage + _id. 0 = no glow (hole/outside), else
-                    // 0x80 | (A?0x40) | pairIdx — same format as overlays.
+                    // Glow row-map from the same PAINTED alpha + _id. 0 = no glow (hole/outside/faded out),
+                    // else 0x80 | (A?0x40) | pairIdx — same format as overlays. Reads the post-opacity alpha
+                    // rather than raw coverage so a mask a row fades to nothing stops glowing too.
                     int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
                     var gmap = new byte[gw * gh];
                     bool anyGlow = false;
@@ -4053,8 +4065,8 @@ public class CompositorService : IDisposable
                         {
                             int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
                             int sp = sy * wD + sx;
-                            if (cov[sp] == 0) continue;   // hole/outside = no glow
                             int so = sp * 4;
+                            if (art[so + 3] == 0) continue;   // hole/outside/faded out = no glow
                             gmap[my * gw + mx] = (byte)(0x80 | (cid[so + 1] >= 128 ? 0x40 : 0) | ((cid[so] / 17) & 0x0F));
                             anyGlow = true;
                         }
