@@ -67,11 +67,23 @@ public static class RenderModeInference
     /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
     /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
     /// override the pin, and the two callers learn that from different places.
+    /// <para/>
+    /// <paramref name="canShell"/> is the veto neither reason can override: it is false when the overlay
+    /// paints something no shell can be cut from — gear, an accessory, a weapon, a mount — as opposed to the
+    /// character's own skin (body, face, hair, tail, ears), which all have geometry a shell is cut from.
+    /// Such an overlay stays skin and simply doesn't glow.
+    /// <para/>
+    /// Historical note, because the parameter's shape only makes sense with it: this began life meaning
+    /// "isn't the body". While the builder could cut from the body alone, promoting a FACE overlay produced a
+    /// body shell wearing the face's art in body UV — the whole character lit up wearing a face texture. The
+    /// veto was the right answer to "there is nowhere to put this", never a claim that faces cannot glow, and
+    /// it narrowed to its present meaning once the other surfaces could be cut.
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
-        IEnumerable<ColorTableRowPreset>? rows, bool aboveGear)
+        IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true)
         => layer == OverlayLayer.Skin
         && !pinned
+        && canShell
         && (aboveGear || HasCloth(rows ?? []));
 
     /// <summary>An animated-glow effect (scroll map) is selected.</summary>

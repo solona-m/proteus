@@ -735,19 +735,6 @@ public class StatusWindow : Window
                              "ring. This writes a (hidden) bonus item to your Glamourer state; it's removed\n" +
                              "when you disable Proteus, equip real glasses, or turn this off.");
 
-        bool autoRing = config.AutoEmperorRing;
-        if (ImGui.Checkbox("Host on the Emperor's New Ring when nothing else can", ref autoRing))
-        {
-            config.AutoEmperorRing = autoRing;
-            config.Save();
-            // Recomposite so the injection/removal reconciles now (turning it off pulls the ring).
-            compositor.TriggerRecomposite("auto-ring-toggle");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("When on and nothing you wear can host the second skin, Proteus has Glamourer\n" +
-                             "equip the invisible Emperor's New Ring in your FREE right ring slot and hosts\n" +
-                             "there. A ring you're already wearing is never taken. Removed when you disable\n" +
-                             "Proteus or turn this off.");
 
         // The second skin rides on an equipped ring/bracelet (its model is redirected to our merged
         // shell). An in-place reload can't reload that .mdl, so if a shell ever gets stuck on the
@@ -1713,17 +1700,13 @@ public class StatusWindow : Window
     /// no game data, so it's free to call while drawing.</summary>
     private static string SlotHint(string p)
     {
-        // Weapons FIRST: chara/weapon/w0801/obj/body/b0006/... carries an /obj/body/ segment of its own, so
-        // testing that first would tag an equipped greatsword "Body" — and it sorts into the non-skin group,
-        // making a "Body" row appear below the Skin separator.
+        // The skin surfaces come from the shared taxonomy, so the tag the user reads here and the surface
+        // the shell builder actually cuts from can never disagree. It handles the weapon trap itself:
+        // chara/weapon/w0801/obj/body/b0006/... carries an /obj/body/ segment of its own, so a body-first
+        // test would file an equipped greatsword as "Body" — and it sorts into the skin group, putting a
+        // "Body" row above the Skin separator.
+        if (ShellSurface.KeyFor(p) is { } surface) return ShellSurface.Label(surface.Kind);
         if (p.Contains("chara/weapon/", StringComparison.OrdinalIgnoreCase)) return "Weapon";
-        // Then /obj/<slot>/ ahead of chara/equipment/: a body mod can route body-UV skin through an
-        // equipment slot, and that should still read as Body rather than Gear.
-        if (p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)) return "Body";
-        if (p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase)) return "Face";
-        if (p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase)) return "Hair";
-        if (p.Contains("/obj/tail/", StringComparison.OrdinalIgnoreCase)) return "Tail";
-        if (p.Contains("/obj/zear/", StringComparison.OrdinalIgnoreCase)) return "Ear";
         if (p.Contains("chara/equipment/", StringComparison.OrdinalIgnoreCase)) return "Gear";
         if (p.Contains("chara/accessory/", StringComparison.OrdinalIgnoreCase)) return "Accessory";
         return "Other";
@@ -2620,6 +2603,16 @@ public class StatusWindow : Window
         // activeOptions is already sorted top-first, so any option below this one (index > selIdx) that is
         // gear means this one sits above gear. Without this the Glow button never shows — it keys off shell
         // materials for gear vs skin-glow targets for skin, and the compositor built the former, not the latter.
+        // Whether a cloth/glow layer is reachable for this option at all. Shells are cut from your own skin —
+        // body, face, hair, tail, ears — so an option painting gear, an accessory or a weapon has no surface
+        // to become one, and the compositor refuses it either way (CanRenderAsShell). Path-based, so this
+        // answer is stable rather than flickering with whatever the draw-object walk last saw.
+        bool canShell = activeOpt.Overlays.Count == 0
+                     || activeOpt.Overlays.Any(CompositorService.CanRenderAsShell);
+        var noShellReason = canShell ? null
+            : "This overlay paints something Proteus can't build a layer over — gear, an accessory or a\n"
+            + "weapon. Glow and Cloth need a layer over your own skin: body, face, hair, tail or ears.";
+
         bool promotedToGear = false;
         if (!gear)
         {
@@ -2628,10 +2621,16 @@ public class StatusWindow : Window
             bool pinned = gearOvrOpt?.ManualShaderLock
                 ?? activeOpt.Overlays.FirstOrDefault()?.ManualShaderLock ?? false;
             bool aboveGear = activeOptions.Skip(selIdx + 1).Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
-            if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear))
+            if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell))
             {
                 gear = true; shader = OverlayDescriptor.DefaultGearShader; promotedToGear = true;
             }
+        }
+        // A stored Gear layer on a surface no shell can cover renders as skin (the compositor demotes it),
+        // so the colour panel below has to read as skin too — otherwise it edits a shell that isn't there.
+        else if (!canShell)
+        {
+            gear = false; shader = OverlayDescriptor.SkinShader;
         }
 
         bool changed = false;
@@ -2675,7 +2674,8 @@ public class StatusWindow : Window
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
-            promotedToGear: promotedToGear);
+            promotedToGear: promotedToGear,
+            noShellReason: noShellReason);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).
@@ -2683,7 +2683,7 @@ public class StatusWindow : Window
         if (!resetOpt)
         {
             modeChanged = ReconcileMode(activeOpt.Overlays, gearOvrOpt, editRows,
-                rowEdit != FeatureEdit.Neutral ? rowEdit : footerEdit);
+                rowEdit != FeatureEdit.Neutral ? rowEdit : footerEdit, canShell);
 
             // Default every row's Glow to 150%/white only when the mode actually ENTERS Animated glow, and zero
             // it only when it LEAVES — not on an effect-to-effect swap (which would wipe custom glow).
@@ -2763,7 +2763,7 @@ public class StatusWindow : Window
     /// binding is being edited, else the descriptors. Returns true when the mode actually changed.
     /// </summary>
     private static bool ReconcileMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr,
-        List<ColorTableRowPreset> rows, FeatureEdit edited)
+        List<ColorTableRowPreset> rows, FeatureEdit edited, bool canShell = true)
     {
         // Only respond to an actual mode-relevant edit this frame. Running on every frame would force a
         // deliberately plain Gear overlay (no sphere/metal/scroll — used for shell transparency) to Skin.
@@ -2785,6 +2785,17 @@ public class StatusWindow : Window
             SetRowsEmissive(rows, 0f);
 
         var want = RenderModeInference.Infer(rows, overlays, ovr, cur, edited);
+        // An option we cannot build a layer for renders as skin — but that is the COMPOSITOR's call to make,
+        // every composite, from what it can actually cut (see CompositorService's demotion). The editor must
+        // not write the downgrade into the mod.
+        //
+        // It did, and it was destructive. While the shell builder was body-only, this clamped every face
+        // overlay to Skin and SaveMetadata persisted it — silently erasing Layer/Shader/Scroll from all 14
+        // overlays of a scale mod whose author had set them to animated glow, with no undo and nothing in
+        // the defaults file to restore from (it predates the Layer field). The user's own recorded settings
+        // are not ours to rewrite because we currently happen to be unable to honour them; support for the
+        // surface can arrive later, and then the setting is right again.
+        if (!canShell) return false;
         if (want == cur) return false;
 
         ColorTableEditor.ApplyMode(overlays, ovr, want);

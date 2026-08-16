@@ -65,7 +65,12 @@ public static class ColorTableEditor
         Action? drawExtraAdvanced = null,
         // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
         // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
-        bool promotedToGear = false)
+        bool promotedToGear = false,
+        // Non-null when this option can't be a cloth/glow layer at all — it paints gear, an accessory or a
+        // weapon rather than the character's own skin, and only skin (body, face, hair, tail, ears) has
+        // geometry a shell can be cut from. Disables the controls that would move it there, and its text is
+        // shown beneath the picker: a DISABLED item never reports hover, so a tooltip could not carry it.
+        string? noShellReason = null)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -88,19 +93,26 @@ public static class ColorTableEditor
         void SetLock(bool v)            { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
 
         // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
-        DrawEffectPicker(idScope, effects, curScroll, out bool effChanged, out string? newScroll);
-        if (effChanged)
+        using (ImRaii.Disabled(noShellReason != null))
         {
-            SetScroll(newScroll);
-            edited = FeatureEdit.Glow;
-            changed = true;
+            DrawEffectPicker(idScope, effects, curScroll, out bool effChanged, out string? newScroll);
+            if (effChanged)
+            {
+                SetScroll(newScroll);
+                edited = FeatureEdit.Glow;
+                changed = true;
+            }
         }
+        // Only reachable when the picker is ENABLED — ImGui reports no hover for a disabled item — so this
+        // deliberately does not try to carry noShellReason. That is printed below instead.
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(
                 "Pick a scrolling map to make this overlay GLOW and animate — that switches it to\n" +
                 "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow scales it.\n" +
                 "Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
-        if (effects.Count == 0)
+        if (noShellReason != null)
+            ImGui.TextDisabled(noShellReason);
+        else if (effects.Count == 0)
             // Names the Settings button verbatim: this is the exact moment someone needs that folder, so
             // the message has to point at a control they can actually find on screen.
             ImGui.TextDisabled("No effects found — drop images into the folder the Glow Effect Textures\nbutton opens (Settings), or the mod's own Proteus/Effects/ folder.");
@@ -153,11 +165,16 @@ public static class ColorTableEditor
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
             {
                 bool sel = curLock && mode == m;
-                if (ImGui.RadioButton($"{ModeName(m)}##force_{idScope}_{m}", sel) && !sel)
+                // Pinning is the user's override of the inference — but it can't conjure a surface. With no
+                // body to cut a shell from, Cloth and Glow are simply not reachable modes for this option.
+                using (ImRaii.Disabled(noShellReason != null && m != RenderMode.Skin))
                 {
-                    ApplyMode(overlays, ovr, m);
-                    SetLock(true);
-                    changed = true;
+                    if (ImGui.RadioButton($"{ModeName(m)}##force_{idScope}_{m}", sel) && !sel)
+                    {
+                        ApplyMode(overlays, ovr, m);
+                        SetLock(true);
+                        changed = true;
+                    }
                 }
                 if (m != RenderMode.Glow) ImGui.SameLine();
             }

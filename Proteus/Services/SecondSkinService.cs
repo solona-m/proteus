@@ -115,6 +115,25 @@ public sealed class SecondSkinService
         List<string> AppendHostModelPaths);
 
     /// <summary>
+    /// One surface, resolved: the geometry a shell for it is cut from, and the two spaces that geometry
+    /// lives in. Every source here shares one UV layout and one race code — that is what makes them a single
+    /// surface, and it is why a host can serve only one of these at a time.
+    /// <para/>
+    /// The race code is the load-bearing field. The game deforms a model according to the race code of the
+    /// PATH it loaded it from, so a body (cut from shared c0201 equipment models and DEPENDING on that
+    /// deform to fit the wearer) and a face (authored at the character's own c1401 and already the right
+    /// shape) demand opposite treatment from their host. Their EQDP manipulations are direct contradictions
+    /// on the same set and slot: the body wants the wearer's entry EMPTIED so the game falls through to cut
+    /// space and deforms, the face wants it SET so the model loads natively and does not.
+    /// </summary>
+    private sealed record ResolvedSurface(
+        ShellSurfaceKey Key,
+        IReadOnlyList<SecondSkinWriter.SourceSpec> Sources,
+        IReadOnlyList<string> SourcePaths,
+        string CutCode,
+        string? UvSpace);
+
+    /// <summary>
     /// Write only if the content differs; reports whether it did.
     ///
     /// Via a temp file and an atomic move, NOT WriteAllBytes. Shell output names are stable
@@ -154,6 +173,11 @@ public sealed class SecondSkinService
     // Layer count last warned about as over the host's material budget — so the chat guidance prints once
     // per changed situation, not every composite. -1 = not currently over budget.
     private int _lastOverBudgetLayers = -1;
+
+    // Surfaces last warned about as unhostable, joined, so that guidance prints once per changed situation
+    // too. Keyed on the SET rather than a count: swapping one face overlay for another keeps the count at 1
+    // while being a different thing to report. Null = nothing currently unhosted.
+    private string? _lastUnhostedSurfaces;
 
     private static ulong Hash(byte[] data)
     {
@@ -295,7 +319,12 @@ public sealed class SecondSkinService
         // The two CARRIERS' material variants, off their sheets. See HostAccessory.KnownVariant: a carrier
         // is equipped after the shell is built, so the live tree cannot answer for it.
         int? emperorRingVariant = null,
-        int? invisibleGlassesVariant = null)
+        int? invisibleGlassesVariant = null,
+        // The character's own face/hair/tail/ear models, exactly as the live walk reported them (see
+        // CompositorService.HumanPartModelsFromModels). These are the ONLY source of non-body geometry —
+        // there is no rebuild-from-a-code fallback, because a human part loads from its literal path and an
+        // absence here means the character genuinely is not drawing it.
+        IReadOnlyList<string>? humanPartModels = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -808,11 +837,183 @@ public sealed class SecondSkinService
                 ? string.Join(", ", cutVotes.Select(g => $"c{g.Key}x{g.Count()}"))
                 : $"no readable path codes, fell back to the equipment code c{modelCode}");
 
+        // ── the surfaces this build cuts from ─────────────────────────────────────────────────
+        // The body first — it is the only surface assembled from everything resolved above, and the only one
+        // that can span several hosts. Human-part surfaces are appended below as the layers that need them
+        // are grouped. The list is why the code beneath stops reading `bodies`/`cutCode`/`bodyType` as
+        // ambient facts about "the" shell and asks a surface instead.
+        //
+        // Every source is a BODY part, so all of them take the default body-skin mesh filter and the
+        // configured connector heuristic. Those were three arrays index-aligned with `bodies` by convention;
+        // see SecondSkinWriter.SourceSpec for why they are one thing now.
+        bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
+        var bodySurface = new ResolvedSurface(
+            new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty),
+            bodies.Select((b, i) => new SecondSkinWriter.SourceSpec(
+                b.Bytes,
+                KeepMaterial: null,
+                EnabledShapes: b.Shapes,
+                UvConv: i < uvConverters.Count ? uvConverters[i] : null,
+                DropConnectors: skipConnectors)).ToList(),
+            bodies.Select(b => b.Path).ToList(),
+            cutCode,
+            bodyType);
+        var surfaces = new List<ResolvedSurface> { bodySurface };
+
+        // ── which surface each layer paints ───────────────────────────────────────────────────
+        // From the overlay's own declared material, which is the only statement a mod makes about where it
+        // lives. Two fall back to the body: a synthesized MASK shell (its coverage art is body-UV by
+        // construction and it names no material), and an overlay naming no material at all — the latter
+        // could not be placed either way, so it keeps the behaviour it had.
+        ShellSurfaceKey SurfaceKeyOf(ResolvedOverlay ov)
+        {
+            if (ov.Descriptor.IsMaskShell) return bodySurface.Key;
+            var keys = ShellSurface.KeysFor(ov.Descriptor.MaterialGamePaths);
+            if (keys.Count == 0) return bodySurface.Key;
+            if (keys.Count > 1)
+                // One overlay painting two surfaces needs one layer per surface — each has its own geometry
+                // and its own coverage — and that split is not built yet. Take the first and SAY so, rather
+                // than silently painting one surface's art onto another's mesh.
+                log.Warning("[Proteus] second skin: overlay \"{0}/{1}\" names {2} surfaces [{3}] — only {4} is "
+                          + "cut; split it into one overlay per surface to get the rest",
+                    ov.OptionGroup ?? "", ov.Option ?? "", keys.Count, string.Join(", ", keys), keys[0]);
+            return keys[0];
+        }
+
+        // The .mdl folder a human part's models live under, matching ShellSurfaceKind.
+        static string PartFolder(ShellSurfaceKind kind) => kind switch
+        {
+            ShellSurfaceKind.Face => "face",
+            ShellSurfaceKind.Hair => "hair",
+            ShellSurfaceKind.Tail => "tail",
+            _                     => "zear",
+        };
+
+        // Resolve one human-part surface: the model the character is DRAWING for it, cut down to the meshes
+        // bound to the material the overlay named.
+        //
+        // No fallbacks, unlike the body. Every fallback in the body resolver exists because equipment is
+        // EQDP-indirected and the direct path can legitimately miss; a human part is loaded from its literal
+        // path, so if the live walk did not report it the character is not wearing it and there is nothing
+        // to cut. Guessing here would cut a shell for a face she isn't wearing.
+        ResolvedSurface? ResolveHumanSurface(ShellSurfaceKey key, IReadOnlySet<string> targetLeaves)
+        {
+            var folder = $"/obj/{PartFolder(key.Kind)}/{key.Id}/";
+            var candidates = (humanPartModels ?? [])
+                .Where(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (candidates.Count == 0)
+            {
+                log.Warning("[Proteus] second skin: {0} overlay(s) skipped — the character is not drawing a "
+                          + "model for {1} (live walk saw [{2}])",
+                    key, key, string.Join(", ", humanPartModels ?? []));
+                return null;
+            }
+
+            // A part can draw several models (a face ships eyes and brows beside the face itself). Take the
+            // one that actually DECLARES the targeted material rather than the first — the material is what
+            // the overlay named, so it is the only unambiguous way to say which model it meant.
+            string? pick = null;
+            byte[]? pickBytes = null;
+            foreach (var cand in candidates)
+            {
+                var bytes = textureLoader.LoadRawFile(penumbra.ResolvePlayer(cand), cand);
+                if (bytes == null) continue;
+                pickBytes ??= bytes; pick ??= cand;      // first loadable, as the fallback
+                List<string> mats;
+                try { mats = SecondSkinWriter.MaterialNames(bytes); }
+                catch { continue; }
+                if (!mats.Any(m => targetLeaves.Contains(m.TrimStart('/')))) continue;
+                pick = cand; pickBytes = bytes;
+                break;
+            }
+            if (pick == null || pickBytes == null)
+            {
+                log.Warning("[Proteus] second skin: {0} — none of the {1} drawn model(s) could be read, skipping",
+                    key, candidates.Count);
+                return null;
+            }
+
+            var keep = SecondSkinWriter.KeepByLeaf(targetLeaves);
+            var shape = "(no matching geometry)";
+            if (SecondSkinWriter.TryReadLod0Geometry(pickBytes, out var hPos, out _, out var hTri, keep)
+                && hPos.Length >= 3)
+                shape = $"{hPos.Length / 3}v/{hTri.Length / 3}t";
+
+            HashSet<string>? partShapes = null;
+            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(pick), out partShapes);
+
+            // Its own path's race code, with no vote: there is one source and it is authored at the
+            // character's own race, which is exactly why it must be hosted with no deform.
+            var hCut = PathCharCode(pick) ?? charCode;
+            log.Information("[Proteus] second skin part {0}: {1} ({2} KB) geometry={3} materials=[{4}] cut in c{5}",
+                key, pick, pickBytes.Length / 1024, shape, string.Join(", ", targetLeaves), hCut);
+
+            if (shape == "(no matching geometry)")
+            {
+                log.Warning("[Proteus] second skin: {0} — no mesh in {1} uses [{2}], so there is nothing to "
+                          + "cut. The overlay names a material this model does not carry",
+                    key, pick, string.Join(", ", targetLeaves));
+                return null;
+            }
+
+            return new ResolvedSurface(
+                key,
+                [new SecondSkinWriter.SourceSpec(
+                    pickBytes,
+                    KeepMaterial: keep,
+                    EnabledShapes: partShapes,
+                    UvConv: null,             // native: a face's art is authored in the face's own layout
+                    DropConnectors: false)],  // the connector heuristic is body-tuned; it eats real geometry here
+                [pick],
+                hCut,
+                null);                        // no remappable UV space — there are no transfer maps for a face
+        }
+
+        // Group the layers by surface, resolving each non-body surface once. A layer whose surface cannot be
+        // resolved is dropped here, before it can consume a host slot or a disk letter.
+        //
+        // layerSurfaceName remembers each layer's surface as TEXT, so nothing downstream has to re-derive it:
+        // SurfaceKeyOf logs when an overlay spans two surfaces, and calling it a second time to build a
+        // message logged that warning twice.
+        var layerSurface = new int[gearOverlays.Count];
+        var layerSurfaceName = new string[gearOverlays.Count];
+        var resolvedByKey = new Dictionary<ShellSurfaceKey, int> { [bodySurface.Key] = 0 };
+        var droppedLayers = new HashSet<int>();
+        for (int i = 0; i < gearOverlays.Count; i++)
+        {
+            var key = SurfaceKeyOf(gearOverlays[i].Overlay);
+            layerSurfaceName[i] = key.ToString();
+            if (resolvedByKey.TryGetValue(key, out var known)) { layerSurface[i] = known; continue; }
+
+            var leaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (_, ov) in gearOverlays)
+                if (SurfaceKeyOf(ov).Equals(key))
+                    foreach (var mp in ov.Descriptor.MaterialGamePaths)
+                        if (!string.IsNullOrEmpty(mp)) leaves.Add(Path.GetFileName(mp));
+
+            var resolved = ResolveHumanSurface(key, leaves);
+            if (resolved == null) { resolvedByKey[key] = -1; layerSurface[i] = -1; continue; }
+            surfaces.Add(resolved);
+            resolvedByKey[key] = surfaces.Count - 1;
+            layerSurface[i] = surfaces.Count - 1;
+        }
+        for (int i = 0; i < gearOverlays.Count; i++)
+            if (layerSurface[i] < 0) droppedLayers.Add(i);
+
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
-        var hosts = ChooseHosts(cutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
+        //
+        // Chosen against the BODY's cut space. With one surface that is simply the shell's space; with more
+        // than one, the body is the surface that has to be able to spill across several hosts, and the
+        // others are carrier-only anyway (ShellSurfaceKey.RequiresNativeHost).
+        var hosts = ChooseHosts(bodySurface.CutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
             emperorRingVariant, invisibleGlassesVariant);
+
+        // Which surface each host carries. A host is one model at one path with one EQDP entry, so it can
+        // only ever serve layers whose surfaces agree on a race code — hence an index per host rather than a
+        // free-for-all. All body today.
+        var hostSurface = new int[hosts.Count];
 
         // ── per-host publish decision, resolved once for BOTH loops below ──────────────────────────────
         // The material loop names the materials baked into each shell, and the host loop publishes the
@@ -851,23 +1052,6 @@ public sealed class SecondSkinService
         // Carriers only. An APPEND host redirects host.ModelPath — the path the game already resolved for
         // the player's own item — so a mismatch there renders a race-size wrong rather than wrong-bodied,
         // which build #294 established beats no shell. Those keep WarnForeignAppendHost and are untouched.
-        var plan = new (string HostRace, bool Native, string PublishCode)[hosts.Count];
-        for (int i = 0; i < hosts.Count; i++)
-        {
-            var h0 = hosts[i];
-            var race = drawnRaceCode
-                    ?? (h0.ModelPath != null ? PathCharCode(h0.ModelPath) : null)
-                    ?? charCode;
-            bool native = h0.BaseModel == null
-                       && !string.Equals(race, cutCode, StringComparison.OrdinalIgnoreCase)
-                       && !CanFallThrough(race, cutCode);
-            if (native)
-                log.Warning("[Proteus] second skin: host {0}{1:D4}/{2} — the shell claims to be cut in c{3}, "
-                          + "which is not on c{4}'s fall-through chain. Publishing NATIVELY at c{4} instead "
-                          + "(no deform); one of the two codes is wrong and c{3} is the suspect",
-                    h0.Prefix, h0.SetId, h0.Slot, cutCode, race);
-            plan[i] = (race, native, native ? race : cutCode);
-        }
         // Cap total placeable layers at the single-char base-36 disk-id space (0-9a-z = 36). Any excess
         // folds into the over-budget drop path below, so a disk id can never run past 'z' into filesystem-
         // reserved chars. 36 is far beyond the practical geometric limit (~15 stacked shells).
@@ -886,6 +1070,12 @@ public sealed class SecondSkinService
         int diskLetter = 0;
         int maskLayers = 0, clothLayers = 0;    // successfully placed
         int overBudget = 0, overBudgetMask = 0; // real layers that ran out of accessory capacity
+        // Layers with no host that could carry their SURFACE — a different failure from running out of
+        // capacity, and one the over-budget advice cannot fix. Recorded as the actual layer indices so the
+        // count and the surface names below come from one source: deriving the names from "everything not in
+        // work" instead swept up capacity-dropped layers, so a look that overflowed by two body layers
+        // reported "Body" as unhostable and told the user to free a ring slot, which would not help.
+        var unhostedLayers = new List<int>();
 
         // ── Layer → host distribution ──────────────────────────────────────────
         // Layers arrive bottom-first with the mask LAST (it must render on top). Accessory hosts draw in the
@@ -895,24 +1085,122 @@ public sealed class SecondSkinService
         // Within a host the layers stay in stack order so the topmost gets the highest material index (= drawn
         // last = on top). If the look exceeds total capacity the BOTTOM layers drop, never the mask. A look
         // that fits on ONE host is unchanged (same order as before).
-        int layerCount = gearOverlays.Count;
-        int placeable   = Math.Min(layerCount, totalCapacity);
-        int dropCount   = layerCount - placeable;   // bottom layers with no room
+        //
+        // Now done per SURFACE, body first. Two rules make that necessary rather than tidy:
+        //   - a host is one model at one path with ONE EQDP entry, so it can only carry layers whose surfaces
+        //     agree on a race code (see ResolvedSurface);
+        //   - a natively-authored surface needs its host published with no deform, which only a CARRIER can
+        //     promise — an append host's metadata belongs to the player's own item and is not ours to move.
+        // Body runs first and takes exactly what it always took, so a character with no human-part overlays
+        // gets a bit-identical allocation.
+        var remaining = new int[hosts.Count];
+        for (int i = 0; i < hosts.Count; i++)
+            remaining[i] = SecondSkinWriter.MaxMaterials - hosts[i].BaseMatCount;
+        var hostClaim = new int?[hosts.Count];     // surface index that has taken this host
+        int diskBudget = DiskIdSpace;              // the base-36 cap, now enforced across all surfaces
 
-        var work = new List<(int LayerIdx, int HostIdx)>(placeable);
-        int cursor = layerCount - 1;                  // the TOP layer (mask)
-        for (int h = 0; h < hosts.Count && cursor >= dropCount; h++)
+        var work = new List<(int LayerIdx, int HostIdx)>();
+        // Surface order: body, then the rest in the order they were resolved. Body's priority is absolute —
+        // it never yields a host to a human part.
+        foreach (var surfIdx in Enumerable.Range(0, surfaces.Count))
         {
-            int cap  = SecondSkinWriter.MaxMaterials - hosts[h].BaseMatCount;
-            int take = Math.Min(cap, cursor - dropCount + 1);
-            for (int k = cursor - take + 1; k <= cursor; k++)   // ascending → topmost lands last (highest idx)
-                work.Add((k, h));
-            cursor -= take;
+            var surf = surfaces[surfIdx];
+            var layerIdxs = new List<int>();
+            for (int i = 0; i < gearOverlays.Count; i++)
+                if (layerSurface[i] == surfIdx) layerIdxs.Add(i);
+            if (layerIdxs.Count == 0) continue;
+
+            bool carrierOnly = surf.Key.RequiresNativeHost;
+            var eligible = new List<int>();
+            for (int i = 0; i < hosts.Count; i++)
+            {
+                if (remaining[i] <= 0) continue;
+                // A carrier is the only host whose EQDP we may rewrite, so it is the only one that can
+                // publish a native surface undeformed.
+                if (carrierOnly && hosts[i].BaseModel != null) continue;
+                // Already taken by ANOTHER SURFACE. Identity, not cut-code equality — a host is built from
+                // exactly one surface's sources (hostSurface below), so two surfaces sharing it means the
+                // second one's geometry silently replaces the first's for every layer on that host.
+                //
+                // Matching cut codes are not sufficient and testing them here was a real bug: they only make
+                // the EQDP publish compatible, which says nothing about the GEOMETRY. On a Midlander female
+                // the body cuts at c0201 and her face is c0201f0002 — same code — so a face layer would join
+                // a carrier the body had partly filled, the host would be rebuilt from the single face model,
+                // and her body layers would render cut from face geometry. It does not reproduce on a race
+                // whose face code differs from its equipment code (an Au Ra cuts body c0201, face c1401),
+                // which is exactly why in-game testing did not surface it.
+                if (hostClaim[i] is { } claimed && claimed != surfIdx) continue;
+                eligible.Add(i);
+            }
+
+            int capacity = Math.Min(eligible.Sum(i => remaining[i]), diskBudget);
+            if (capacity == 0 && carrierOnly)
+            {
+                // Skipped, not squeezed. A native surface on a deforming host renders visibly wrong — a face
+                // shell scaled by a race delta sits off the face — and unlike the body there is no version of
+                // that worth shipping. Reported separately from a capacity overflow, because the remedy is
+                // different: free a ring or facewear SLOT, not "equip another accessory".
+                unhostedLayers.AddRange(layerIdxs);
+                log.Warning("[Proteus] second skin: {0} — {1} layer(s) skipped, no host can carry it. It must "
+                          + "not be race-deformed, so it needs a slot Proteus can replace outright (a free "
+                          + "ring, or the facewear slot); the {2} host(s) available are all append hosts or "
+                          + "already full",
+                    surf.Key, layerIdxs.Count, hosts.Count);
+                continue;
+            }
+
+            int placeable = Math.Min(layerIdxs.Count, capacity);
+            int dropCount = layerIdxs.Count - placeable;
+            int cursor = layerIdxs.Count - 1;              // the TOP layer of THIS surface (its mask)
+            foreach (var h in eligible)
+            {
+                if (cursor < dropCount) break;
+                int take = Math.Min(remaining[h], cursor - dropCount + 1);
+                take = Math.Min(take, diskBudget);
+                if (take <= 0) break;
+                for (int k = cursor - take + 1; k <= cursor; k++)   // ascending → topmost lands last (highest idx)
+                    work.Add((layerIdxs[k], h));
+                remaining[h] -= take;
+                diskBudget -= take;
+                hostClaim[h] = surfIdx;
+                hostSurface[h] = surfIdx;
+                cursor -= take;
+            }
+            for (int k = 0; k < dropCount; k++)            // the dropped bottom layers = over budget
+            {
+                overBudget++;
+                if (gearOverlays[layerIdxs[k]].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
+            }
         }
-        for (int k = 0; k < dropCount; k++)          // the dropped bottom layers = over budget
+        // Layers whose surface could not be resolved at all (the character isn't drawing that part, or its
+        // model names no such material). Already logged in detail by the resolver.
+        unhostedLayers.AddRange(droppedLayers);
+
+        // Per host, and reading THAT host's surface's cut code — not an ambient one. Computed AFTER the
+        // allocation, because which surface a host carries is what the allocation decides. This is what lets
+        // a host carrying a natively-authored surface reach the no-deform branch while a body host beside it
+        // still arranges its fall-through.
+        var plan = new (string HostRace, bool Native, string PublishCode)[hosts.Count];
+        for (int i = 0; i < hosts.Count; i++)
         {
-            overBudget++;
-            if (gearOverlays[k].Overlay.Descriptor.IsMaskShell) overBudgetMask++;
+            var h0 = hosts[i];
+            var hSurf = surfaces[hostSurface[i]];
+            var hCut = hSurf.CutCode;
+            var race = drawnRaceCode
+                    ?? (h0.ModelPath != null ? PathCharCode(h0.ModelPath) : null)
+                    ?? charCode;
+            // A natively-authored surface is ALREADY the right shape for this character, so any deform is
+            // damage — never fall through, whatever the codes happen to say.
+            bool native = h0.BaseModel == null
+                       && (hSurf.Key.RequiresNativeHost
+                        || (!string.Equals(race, hCut, StringComparison.OrdinalIgnoreCase)
+                            && !CanFallThrough(race, hCut)));
+            if (native && !hSurf.Key.RequiresNativeHost)
+                log.Warning("[Proteus] second skin: host {0}{1:D4}/{2} — the shell claims to be cut in c{3}, "
+                          + "which is not on c{4}'s fall-through chain. Publishing NATIVELY at c{4} instead "
+                          + "(no deform); one of the two codes is wrong and c{3} is the suspect",
+                    h0.Prefix, h0.SetId, h0.Slot, hCut, race);
+            plan[i] = (race, native, native ? race : hCut);
         }
 
         // ── Sibling-relief pre-pass ──────────────────────────────────────────────
@@ -925,6 +1213,19 @@ public sealed class SecondSkinService
         //
         // Coverage (BuildAlpha) is computed here ONCE per non-mask overlay and reused as the shell's own alpha
         // below, so it isn't computed — or logged — twice.
+        // The UV space a layer's ART must end up in: its own surface's. For the body that is the shell's body
+        // type and the art is remapped into it. For every human part it is NATIVE — a face overlay is painted
+        // in that face's own layout, there is no transfer map to or from it, and there never will be. Both
+        // ends are forced to null there, because a stray SourceBodyType left in a mod's metadata would
+        // otherwise run a bibo->gen3 BODY remap across face art.
+        (string? Src, string? Dst) UvFor(int layerIdx, OverlayDescriptor d)
+        {
+            var s = surfaces[layerSurface[layerIdx] >= 0 ? layerSurface[layerIdx] : 0];
+            return s.Key.IsBody
+                ? (d.SourceBodyType ?? InferOverlayBodyType(d), s.UvSpace)
+                : (null, null);
+        }
+
         byte[]?[] alphaByLayer = new byte[gearOverlays.Count][];
         var reliefContribs = new List<(string ModDir, int LayerIdx, byte[] Normal)>();
         for (int i = 0; i < gearOverlays.Count; i++)
@@ -932,11 +1233,12 @@ public sealed class SecondSkinService
             var (rEntry, rOv) = gearOverlays[i];
             var rd = rOv.Descriptor;
             if (rd.IsMaskShell) continue;   // mask coverage/relief is handled by BuildMaskCoverage
-            var rSrc = rd.SourceBodyType ?? InferOverlayBodyType(rd);
-            var rAlpha = BuildAlpha(rd, rEntry, rSrc, bodyType, TexSize, TexSize, MaskAdds(rEntry, rOv));
+            if (layerSurface[i] < 0) continue;   // surface unresolved — the layer is not being built
+            var (rSrc, rDst) = UvFor(i, rd);
+            var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, TexSize, TexSize, MaskAdds(rEntry, rOv));
             alphaByLayer[i] = rAlpha;
             if (rd.Normal == null || rAlpha == null) continue;
-            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, bodyType, TexSize, TexSize);
+            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, TexSize, TexSize);
             if (rNormal == null) continue;
             rNormal = (byte[])rNormal.Clone();   // LoadRemapped may hand back a shared cached buffer
             int nn = Math.Min(rAlpha.Length, rNormal.Length / 4);
@@ -971,18 +1273,20 @@ public sealed class SecondSkinService
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
             string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
 
-            // Which UV space is this art painted in? A mod listing only *_bibo.mtrl is bibo art; the gear
-            // layer has no material-match gate like the skin layer, so remap into the body's UV explicitly.
-            var srcType = ov.Descriptor.SourceBodyType ?? InferOverlayBodyType(ov.Descriptor);
-            log.Information("[Proteus] gear layer mat={0}/{10}/disk={1} -> host {2}{3:D4}/{4}: shader={5} UV {6}->{7}{8}{9}",
-                matLetter, diskChar, host.Prefix, host.SetId, host.Slot, shader, srcType ?? "(unknown)", bodyType ?? "(unknown)",
-                srcType != null && bodyType != null && !string.Equals(srcType, bodyType, StringComparison.OrdinalIgnoreCase) ? " [REMAP]" : "",
-                isMaskShell ? " [MASK SHELL]" : "", matVariant);
+            // Which UV space is this art painted in, and which must it end up in? A mod listing only
+            // *_bibo.mtrl is bibo art; the gear layer has no material-match gate like the skin layer, so the
+            // remap into the body's UV is explicit. A human-part layer is native at both ends — see UvFor.
+            var layerSurf = surfaces[layerSurface[i] >= 0 ? layerSurface[i] : 0];
+            var (srcType, dstType) = UvFor(i, ov.Descriptor);
+            log.Information("[Proteus] gear layer mat={0}/{10}/disk={1} -> host {2}{3:D4}/{4}: shader={5} UV {6}->{7}{8}{9} [{11}]",
+                matLetter, diskChar, host.Prefix, host.SetId, host.Slot, shader, srcType ?? "(unknown)", dstType ?? "(native)",
+                srcType != null && dstType != null && !string.Equals(srcType, dstType, StringComparison.OrdinalIgnoreCase) ? " [REMAP]" : "",
+                isMaskShell ? " [MASK SHELL]" : "", matVariant, layerSurf.Key);
 
             // The mask shell's coverage IS the mask; other shells' coverage is the overlay's art shaped by masks.
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
             var alpha = isMaskShell
-                ? BuildMaskCoverage(entry, srcType, bodyType, TexSize, TexSize)
+                ? BuildMaskCoverage(entry, srcType, dstType, TexSize, TexSize)
                 : alphaByLayer[i];   // computed once in the sibling-relief pre-pass above
 
             // Error-drops (below) don't consume a host slot — inHost/diskLetter only advance on a full success.
@@ -994,14 +1298,18 @@ public sealed class SecondSkinService
 
             // Same-mod siblings' relief compounds into this fabric shell (never into a mask shell — its normal
             // IS the mask relief). Self is excluded so a shell doesn't double-stamp its own normal.
+            // Same SURFACE as well as same mod. A sibling's normal is stamped at the sibling's own UV
+            // coordinates, so compounding a face overlay's relief into a body shell would carve face detail
+            // across the torso at face UVs — the surface check is what keeps relief inside one atlas.
             var siblingReliefs = isMaskShell
                 ? null
-                : reliefContribs.Where(c => c.LayerIdx != i &&
-                        string.Equals(c.ModDir, entry.ModDirectory, StringComparison.OrdinalIgnoreCase))
+                : reliefContribs.Where(c => c.LayerIdx != i
+                        && layerSurface[c.LayerIdx] == layerSurface[i]
+                        && string.Equals(c.ModDir, entry.ModDirectory, StringComparison.OrdinalIgnoreCase))
                     .Select(c => c.Normal).ToList();
 
             var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, bodyType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs);
+                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs);
             if (texPaths == null) continue;
 
             var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
@@ -1042,6 +1350,35 @@ public sealed class SecondSkinService
         int placed = maskLayers + clothLayers;
         if (placed == 0) return null;
 
+        // Layers whose SURFACE could not be hosted, reported apart from a capacity overflow because the
+        // remedy is different. Overflow says "equip another accessory"; this needs a slot Proteus can replace
+        // OUTRIGHT — a free ring, or the facewear slot — since only there may we rewrite the metadata that
+        // stops the game deforming a face-shaped shell into the wrong shape. Telling someone to equip another
+        // ring when both their ring slots are full would be advice that cannot work.
+        //
+        // Deduped on the SET of unhosted surfaces rather than a count: the count is stable while the user
+        // shuffles which face overlay is on, and would suppress the notice for a genuinely different one.
+        if (unhostedLayers.Count > 0)
+        {
+            // Names taken from the SAME layers the count came from — see unhostedLayers.
+            var keys = string.Join(", ", unhostedLayers
+                .Select(i => layerSurfaceName[i])
+                .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+            if (!string.Equals(_lastUnhostedSurfaces, keys, StringComparison.Ordinal))
+            {
+                _lastUnhostedSurfaces = keys;
+                var msg =
+                    $"[Proteus] {unhostedLayers.Count} layer(s) on your {keys} could not be placed. Those must "
+                  + "not be race-deformed, so they need a slot Proteus can replace outright: free a ring slot "
+                  + "(either hand) or your facewear slot and they will appear.";
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+            }
+            log.Warning("[Proteus] second skin: {0} layer(s) unhosted on surface(s) [{1}]",
+                unhostedLayers.Count, keys);
+        }
+        else _lastUnhostedSurfaces = null;
+
         // Guidance when even all equipped accessories can't hold the look (deduped by total layer count).
         if (overBudget > 0)
         {
@@ -1066,9 +1403,6 @@ public sealed class SecondSkinService
         else _lastOverBudgetLayers = -1;
 
         // Build one shell model per host that got layers; fold each into the single Result.
-        bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
-        var bodyBytes  = bodies.Select(b => b.Bytes).ToList();
-        var bodyShapes = bodies.Select(b => b.Shapes).ToList();
         bool modelChangedAny = false;
         var hostModelPaths = new List<string>();
         var appendHostModelPaths = new List<string>();
@@ -1076,19 +1410,23 @@ public sealed class SecondSkinService
         {
             if (perHostLayers[h].Count == 0) continue;
             var host = hosts[h];
+            // The surface THIS host carries: its geometry, and the race space every decision below is made
+            // against. Previously every host was built from every source and measured against one ambient
+            // cut code, which is exactly the assumption a second surface breaks.
+            var surface = surfaces[hostSurface[h]];
 
             // All three resolved above the material loop, so the materials baked into this shell and the
             // path it is published at agree on a race code. See the plan block after ChooseHosts.
             bool carrier = host.BaseModel == null;
             var (hostRace, nativeAtHostRace, publishCode) = plan[h];
-            bool differs = !string.Equals(hostRace, cutCode, StringComparison.OrdinalIgnoreCase);
+            bool differs = !string.Equals(hostRace, surface.CutCode, StringComparison.OrdinalIgnoreCase);
 
             byte[] shell;
             SecondSkinWriter.Stats stats;
             try
             {
-                shell = SecondSkinWriter.Build(bodyBytes, perHostLayers[h], host.BaseModel, skipConnectors,
-                    out stats, bodyShapes, msg => log.Debug("[Proteus] second skin: {0}", msg), uvConverters);
+                shell = SecondSkinWriter.Build(surface.Sources, perHostLayers[h], host.BaseModel,
+                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
             }
             catch (Exception ex)
             {
@@ -1220,7 +1558,7 @@ public sealed class SecondSkinService
             }
             else if (carrier && differs)
             {
-                manipulations.Add(EqdpManipulation(cutCode,  host.EqdpSlot, host.SetId));
+                manipulations.Add(EqdpManipulation(surface.CutCode, host.EqdpSlot, host.SetId));
                 manipulations.Add(EqdpManipulation(hostRace, host.EqdpSlot, host.SetId, hasModel: false));
 
                 // Publish at BOTH codes, derived from hostRace/cutCode rather than from whatever the walk
@@ -1233,7 +1571,7 @@ public sealed class SecondSkinService
                     => $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/"
                      + $"c{code}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
 
-                foreach (var code in new[] { cutCode, hostRace })
+                foreach (var code in new[] { surface.CutCode, hostRace })
                 {
                     var p = PathFor(code);
                     if (redirects.ContainsKey(p)) continue;
@@ -1242,15 +1580,16 @@ public sealed class SecondSkinService
                 }
                 log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model, c{4} "
                               + "emptied so the game falls through to it -> {5} (native copy kept at {6})",
-                    host.EqdpSlot, host.Prefix, host.SetId, cutCode, hostRace, PathFor(cutCode), PathFor(hostRace));
+                    host.EqdpSlot, host.Prefix, host.SetId, surface.CutCode, hostRace,
+                    PathFor(surface.CutCode), PathFor(hostRace));
             }
             else if (carrier && host.Prefix == 'a')
             {
                 // Emperor's ring in a race that is already cut-space (Midlander/Miqo'te/Elezen/Roegadyn
                 // females all read c0201 here): it loads no model at all without an entry saying it has one.
-                manipulations.Add(EqdpManipulation(cutCode, host.EqdpSlot, host.SetId));
+                manipulations.Add(EqdpManipulation(surface.CutCode, host.EqdpSlot, host.SetId));
                 log.Information("[Proteus] second skin: EQDP for {0} {1}{2:D4} — c{3} has the model -> {4}",
-                    host.EqdpSlot, host.Prefix, host.SetId, cutCode, mdlGamePath);
+                    host.EqdpSlot, host.Prefix, host.SetId, surface.CutCode, mdlGamePath);
             }
             log.Information("[Proteus] second skin: host {0}{1:D4}/{2} <- {3} layer(s) -> {4} meshes, {5} KB (append={6})",
                 host.Prefix, host.SetId, host.Slot, perHostLayers[h].Count, stats.Meshes, shell.Length / 1024, host.BaseModel != null);
@@ -1939,20 +2278,55 @@ public sealed class SecondSkinService
             hosts.Add(acc);
         }
 
-        // 3. The invisible Emperor's New Ring (replace + EQDP), in the first ring slot that is FREE — right,
-        //    then left. A slot holding the player's own ring is not ours to take. Offered even when step 2
-        //    found hosts, since it is also the spill capacity for a look too big for them.
-        var freeRing = new[] { (Slot: "rir", Eqdp: "RFinger"), (Slot: "ril", Eqdp: "LFinger") }
-            .Select(r => (r.Slot, r.Eqdp,
-                Worn: equipped != null && equipped.TryGetValue(r.Slot, out var wp) ? wp : null))
-            // Ours counts as free: it is the ring we equipped for exactly this on an earlier composite.
-            .FirstOrDefault(r => r.Worn == null || ParseSetId(r.Worn, 'a') == EmperorSetId);
-        if (freeRing.Slot != null)
-            hosts.Add(new HostAccessory(EmperorSetId, freeRing.Slot, freeRing.Eqdp, null, 0, "accessory", 'a',
-                KnownVariant: emperorRingVariant));
-        else
-            log.Information("[Proteus] host: both ring slots hold the player's own rings — no free slot for "
-                          + "the Emperor's ring");
+        // 3. Invisible "Emperor's New" CARRIERS (replace + EQDP), in every accessory slot that is FREE —
+        //    right ring, left ring, bracelet, necklace, in that order. A slot holding the player's own piece
+        //    is not ours to take. Offered even when step 2 found hosts, since these are also the spill
+        //    capacity for a look too big for them.
+        //
+        //    ALL free slots are offered, not just the first. A carrier is the only host whose EQDP we may
+        //    rewrite, so it is the only kind that can publish a natively-authored surface (a face, hair, a
+        //    tail) with no deform — see ShellSurfaceKey.RequiresNativeHost. With one carrier the body's
+        //    layers took it and every human-part layer was skipped for want of a host, which on a character
+        //    wearing two rings and a real pair of glasses meant a face overlay could never render at all.
+        //
+        //    Resolved per slot rather than assumed: an accessory SET covers every accessory slot, so the
+        //    Emperor's New pieces are normally all a0053 — but a slot whose invisible piece isn't in the
+        //    sheet is simply not offered, because equipping a VISIBLE item as a carrier would put jewellery
+        //    on the player that they never chose and then hide it behind our shell.
+        // The invisible piece for a slot. Rings keep the variant the caller read off the sheet (it is the
+        // same item for both hands); the others resolve their own, since a set's pieces need not share one.
+        InvisibleRing.Identity? carrierFor(string slot)
+        {
+            var id = InvisibleRing.ResolveFor(Plugin.DataManager, log, slot);
+            if (id == null) return null;
+            return slot is "rir" or "ril" && emperorRingVariant is { } v
+                ? id.Value with { Variant = v }
+                : id;
+        }
+
+        int freeCarriers = 0;
+        foreach (var (slot, eqdpSlot, _) in InvisibleRing.CarrierSlots)
+        {
+            var worn = equipped != null && equipped.TryGetValue(slot, out var wp) ? wp : null;
+            // Ours counts as free: it is the piece we equipped for exactly this on an earlier composite.
+            if (worn != null && ParseSetId(worn, 'a') != EmperorSetId) continue;
+            if (carrierFor(slot) is not { } id) continue;
+            hosts.Add(new HostAccessory(id.ModelSet, slot, eqdpSlot, null, 0, "accessory", 'a',
+                KnownVariant: id.Variant));
+            freeCarriers++;
+        }
+        if (freeCarriers == 0)
+        {
+            // Two very different causes, so say which. "Every slot is occupied" sends the reader to their
+            // equipment; "no invisible piece exists" sends them to the resolver's own line — and blaming
+            // their jewellery when they are wearing none would be flatly wrong.
+            bool anyPieceExists = InvisibleRing.CarrierSlots.Any(c => carrierFor(c.Slot) != null);
+            log.Information(anyPieceExists
+                ? "[Proteus] host: every accessory slot holds the player's own piece — no free slot for an "
+                + "invisible carrier"
+                : "[Proteus] host: no invisible carrier item could be resolved for any accessory slot — see "
+                + "the \"invisible carrier\" lines above; nothing can host a natively-authored surface");
+        }
 
         // 4. Last resort: every ring slot full AND nothing above usable. Host on a held-back accessory
         //    anyway — a shell a race-size wrong beats no shell at all, which is what rejecting outright
@@ -1994,7 +2368,13 @@ public sealed class SecondSkinService
         // 'b' as well as 'a'/'e': the whole-body fallback cuts from chara/human/…/c1401b0001_top.mdl, and
         // that path's code is just as much "the space this geometry is in" as an equipment path's is —
         // there it happens to be the character's own race, which is why that geometry hosts natively.
-        var m = System.Text.RegularExpressions.Regex.Match(gamePath, @"/c(\d+)[abe]\d+_");
+        //
+        // 'f'/'h'/'t'/'z' for the same reason, one surface further out: a human part is cut from
+        // chara/human/c1401/obj/face/f0001/model/c1401f0001_fac.mdl and friends. Without them the match
+        // fails and the caller reads "no readable path code" — which does not fail loudly, it falls back
+        // to the EQUIPMENT code, and a face would then be hosted in c0201 and race-deformed on a c1401
+        // character. Silent, and wrong in exactly the way that is hardest to see from a log.
+        var m = System.Text.RegularExpressions.Regex.Match(gamePath, @"/c(\d+)[abefhtz]\d+_");
         return m.Success ? m.Groups[1].Value : null;
     }
 

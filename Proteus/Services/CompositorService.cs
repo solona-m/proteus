@@ -220,6 +220,10 @@ public class CompositorService : IDisposable
     // path but is a different slot and is filtered OUT (see EquippedMetModelsFromModels) — only facewear can
     // host the shell. A list because real glasses + our injected pair are both facewear and could coexist.
     private volatile IReadOnlyList<string>? _equippedMetModels;
+    // The character's own face/hair/tail/ear models, sorted (see HumanPartModelsFromModels). Captured by the
+    // same walk as the maps above. Currently observed only — logged, and folded into the equip signature so
+    // a face or hairstyle change triggers a recomposite the way an equipment change does.
+    private volatile IReadOnlyList<string>? _humanPartModels;
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
     // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
@@ -244,6 +248,9 @@ public class CompositorService : IDisposable
     // Concurrent because two composites genuinely overlap (see _compositesInFlight) and both walk the
     // promotion loop — a plain HashSet resizing under two threads loses entries or corrupts its buckets.
     private readonly ConcurrentDictionary<string, byte> _glowPromotedMods = new(StringComparer.OrdinalIgnoreCase);
+    // Same, for mods whose skin overlay WANTED a shell but has no body surface to put one on (a face
+    // overlay). Separate set so the two notices don't suppress each other on a mod that does both.
+    private readonly ConcurrentDictionary<string, byte> _noShellMods = new(StringComparer.OrdinalIgnoreCase);
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -714,13 +721,15 @@ public class CompositorService : IDisposable
     // it's piggybacking on work Penumbra/the game already did, not an extra query. Only write
     // non-null: GameObjectRedrawn can fire mid-redraw while the draw object is being destroyed, at
     // which point GetActivePlayerMaterialPaths returns null. Writing null would clear a valid cached
-    // snapshot and trigger the all-races bug.
+    // snapshot and trigger the all-races bug. An EMPTY walk is that same mid-redraw moment wearing a
+    // different mask — a drawable character always has materials — and it does the identical damage while
+    // passing a null test, so both are rejected here.
     private void OnLocalPlayerRedrawn()
     {
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
         bool equipChanged = false;
         bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below
-        if (snapshot != null)
+        if (snapshot is { Count: > 0 })
         {
             _activeMtrlSnapshot = snapshot;
             _activeMtrlSnapshotDirty = false;
@@ -740,19 +749,24 @@ public class CompositorService : IDisposable
             // builds the shell from nothing. Same reasoning as the material snapshot above; keep the last
             // values and claim no change, since TriggerRecomposite re-walks before it composites anyway.
             var modelPaths = penumbra.GetActivePlayerModelPaths();
-            if (modelPaths != null)
+            // Empty is the same failure as null — see the composite-side walk. Testing only for null here
+            // meant the paragraph above described the right hazard and then let it through: an empty set
+            // wipes all five maps and reports a full unequip that never happened.
+            if (modelPaths is { Count: > 0 })
             {
                 var equipped = EquippedPartModelsFromModels(modelPaths);
                 var accessories = EquippedAccessoryModelsFromModels(modelPaths);
                 var metModels = EquippedMetModelsFromModels(modelPaths, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
                 var bare = BareBodyModelsFromModels(modelPaths);
+                var humanParts = HumanPartModelsFromModels(modelPaths);
                 _equippedPartModels = equipped;
                 _equippedAccessoryModels = accessories;
                 _equippedMetModels = metModels;
                 _bareBodyModels = bare;
+                _humanPartModels = humanParts;
                 // Framework thread (this is the redraw hook), so the owner can be read inline.
                 UpdateDrawnRaceCode(modelPaths, Plugin.ObjectTable.LocalPlayer?.Name.TextValue);
-                var sig = EquipSignature(equipped, accessories, metModels, bare);
+                var sig = EquipSignature(equipped, accessories, metModels, bare, humanParts);
                 equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
                 _lastEquipSignature = sig;
                 modelWalkOk = true;
@@ -775,7 +789,7 @@ public class CompositorService : IDisposable
             && Volatile.Read(ref _compositesInFlight) == 0)
         {
             var (gearWanted, shellBuilt, onFacewear, ringSlot) =
-                (_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear, _lastShellRingSlot);
+                (_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear, _lastShellCarrierSlots);
             Task.Run(() =>
             {
                 try
@@ -914,11 +928,32 @@ public class CompositorService : IDisposable
     // any thread. It's driven off the framework thread (EvaluateBodyModOffThread) because the
     // manifest reads + config.Save on a cache miss shouldn't block the game's main thread.
 
+    // Bumped whenever BodyMaterialPattern below changes what it matches. It seeds every mod's fingerprint,
+    // so raising it invalidates the whole cached classification — including the entries restored from
+    // config.KnownBodyMods — and forces one re-scan per mod. Without it, widening the pattern would change
+    // nothing for any mod already on disk: their manifests are untouched, so their fingerprints still match
+    // and the stale "not a body mod" verdict is returned forever.
+    private const int SurfaceModClassifierVersion = 3;
+
     private static readonly Regex BodyMaterialPattern = new(
-        // BodySuffixes entries look like "_bibo.mtrl" / "_b.mtrl" — strip the leading "_" and
-        // trailing ".mtrl" to get the alternation core ("bibo", "b", "eve", "a").
-        @"obj[/\\]body[/\\][^""]*?_(" + string.Join('|', BodySuffixes
-            .Select(s => Regex.Escape(s.Suffix[1..^".mtrl".Length]))) + @")\.mtrl",
+        // Every SKIN surface, not just the body. The snapshot this guards (_activeMtrlSnapshot) is what
+        // answers "is this material currently on the character", and a face/hair/tail/ear mod moves those
+        // answers exactly as a body mod moves the body's. Matching only obj/body/ meant a mod that redirects
+        // face files never marked the snapshot dirty, so it went stale and stayed stale — invisible until
+        // something asks whether a given face is drawn.
+        //
+        // And any file under those trees, not only ".mtrl". Requiring a material was already a narrow test
+        // for the body and is a WRONG one for the rest: face and hair mods overwhelmingly ship textures
+        // alone (obj/face/f0001/texture/…_base.tex) and never touch a material, so a ".mtrl" requirement
+        // classified the most common shape of face mod as "not a surface mod" and skipped the very
+        // invalidation this exists for. The cost of the wider match is one extra ~2-8 ms walk when such a
+        // mod is toggled, which is the same cost a body mod already pays; the cost of the narrow one is a
+        // stale snapshot with nothing in the log.
+        //
+        // BodySuffixes is no longer consulted here. It describes body-TYPE suffixes (bibo/eve/b/a) for
+        // naming a UV space, which has nothing to do with whether a mod touches a surface at all, and
+        // leaning on it is what tied this test to materials in the first place.
+        @"obj[/\\](body|face|hair|tail|zear)[/\\]",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // A mod's own redirect manifest(s). Penumbra v4 keeps everything in meta.json; the legacy
@@ -933,7 +968,9 @@ public class CompositorService : IDisposable
     // KnownBodyMods entry once; that's a one-time rescan, and self-healing.
     private static long ComputeModFingerprint(string modRoot)
     {
-        long fp = 0;
+        // Seeded with the classifier version, not 0, so widening what counts as a surface material retires
+        // every cached verdict at once (see SurfaceModClassifierVersion).
+        long fp = SurfaceModClassifierVersion;
         try
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
@@ -1071,7 +1108,7 @@ public class CompositorService : IDisposable
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
                 // Nothing is hosted any more, so the redraw hook must not re-equip a carrier for a shell
                 // that no longer exists.
-                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, ringSlot: null);
+                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);
                 if (restoreAccessory) _needFullRedraw = true;
                 ReloadAndRedraw();   // character reverts to un-composited
                 _secondSkinActive = false;
@@ -1180,12 +1217,22 @@ public class CompositorService : IDisposable
                     (Paths: penumbra.GetActivePlayerModelPaths(),
                      Owner: Plugin.ObjectTable.LocalPlayer?.Name.TextValue)).GetAwaiter().GetResult();
                 var equipped = walk.Paths;
-                if (equipped != null)
+                // EMPTY counts as failure, not as "wearing nothing". A character that exists always draws
+                // models — a face at the very least — so an empty set only ever means the walk caught the
+                // draw object mid-teardown. Guarding on null alone let that through, and the damage is not
+                // subtle: all five maps are wiped, so the shell is rebuilt from rebuilt-by-default paths.
+                // Seen in a post-settle composite — the equipped heel (e6039, 2158v of posed foot) silently
+                // became the bare foot model (e0000_sho, 6710v), the host list collapsed from four items to
+                // the Emperor-ring fallback, and the invisible glasses were injected — all reported as a
+                // perfectly successful build, because from here it looks exactly like a naked character.
+                // The redraw hook has always documented this hazard; it just tested the wrong condition.
+                if (equipped is { Count: > 0 })
                 {
                     _equippedPartModels = EquippedPartModelsFromModels(equipped);
                     _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
                     _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
                     _bareBodyModels = BareBodyModelsFromModels(equipped);
+                    _humanPartModels = HumanPartModelsFromModels(equipped);
                     // Keep the last known race on a walk that carried no human model: it only changes on a
                     // race change, which redraws, and "unknown" would send the shell back to charCode.
                     // Bounded by the owner check, so "keep" never means "keep someone else's".
@@ -1266,7 +1313,12 @@ public class CompositorService : IDisposable
                 }
 
                 if (token.IsCancellationRequested) return;
-                if (fresh != null)
+                // Empty is a mid-teardown walk, not a character with no materials — same rule as the model
+                // walk above, and the same damage: publishing it as the snapshot makes every material look
+                // unloaded, so overlays are dropped as "non-equipped" and the dirty flag is cleared as
+                // though the answer were trustworthy. Leaving the previous snapshot in place keeps the flag
+                // set, so the next composite retries instead of settling on nothing.
+                if (fresh is { Count: > 0 })
                 {
                     _activeMtrlSnapshot = fresh;
                     _activeMtrlSnapshotDirty = false;
@@ -1577,6 +1629,27 @@ public class CompositorService : IDisposable
         return met;
     }
 
+    // The character's own HUMAN part models — face, hair, tail, Viera ears. These arrive in the same walk as
+    // everything above (GetActivePlayerModelPaths filters on nothing but the .mdl extension) and have always
+    // been thrown away here: they match none of the three regexes above, so the only thing ever read off them
+    // was five characters of race code in DrawnRaceCodeFromModels.
+    //
+    // A face draws SEVERAL models — _fac beside _iri, _etc and a race's extras — so this is a list, not a
+    // by-slot map. Which of them a given overlay wants is decided by the material it targets, not by the slot.
+    private static readonly System.Text.RegularExpressions.Regex HumanPartModelRe = new(
+        @"chara/human/c\d+/obj/(face|hair|tail|zear)/[fhtz]\d+/model/c\d+[fhtz]\d+_\w+\.mdl",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static List<string> HumanPartModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var parts = new List<string>();
+        if (modelPaths == null) return parts;
+        foreach (var p in modelPaths)
+            if (HumanPartModelRe.IsMatch(p)) parts.Add(p);
+        parts.Sort(StringComparer.OrdinalIgnoreCase);   // stable order, same reason as the met list
+        return parts;
+    }
+
     private static Dictionary<string, string> EquippedPartModelsFromModels(HashSet<string>? modelPaths)
     {
         var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1706,15 +1779,36 @@ public class CompositorService : IDisposable
     // Emperor's New Ring is an ordinary item people wear by choice, so the model alone cannot say whose it
     // is, and the answer has to survive a plugin reload — in memory only it would be null on the next
     // composite with our ring still on the player, which is precisely when it is needed.
-    private string? _injectedRingSlot
+    // Comma-joined so the single-slot config field carries a SET without a schema change — an older config
+    // holding "rir" still reads back as exactly that one slot. There can be several now: each free accessory
+    // slot is offered as a carrier, and a carrier is the only host that can publish a natively-authored
+    // surface undeformed, so a face and a body layer routinely need one each.
+    private IReadOnlyList<string> _injectedCarrierSlots
     {
-        get => config.InjectedRingSlot;
+        get => config.InjectedRingSlot is { Length: > 0 } s
+            ? s.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            : [];
         set
         {
-            if (config.InjectedRingSlot == value) return;
-            config.InjectedRingSlot = value;
+            var joined = value.Count == 0
+                ? null
+                : string.Join(",", value.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+            if (config.InjectedRingSlot == joined) return;
+            config.InjectedRingSlot = joined;
             config.Save();
         }
+    }
+
+    private void MarkCarrierInjected(string slot)
+    {
+        if (_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
+        _injectedCarrierSlots = [.. _injectedCarrierSlots, slot];
+    }
+
+    private void MarkCarrierRemoved(string slot)
+    {
+        if (!_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)) return;
+        _injectedCarrierSlots = _injectedCarrierSlots.Where(s => s != slot).ToList();
     }
 
     private volatile bool _injectedGlasses;
@@ -1731,15 +1825,18 @@ public class CompositorService : IDisposable
     private volatile bool _lastGearWanted;
     private volatile bool _lastShellBuilt;
     private volatile bool _lastShellOnFacewear;
-    private volatile string? _lastShellRingSlot;
+    // An array, not a List: volatile publishes the swapped-in reference and the contents are never mutated
+    // after assignment, which is the same contract the shell-material map uses.
+    private volatile string[] _lastShellCarrierSlots = [];
 
     /// <summary>Remember this composite's hosting decision for the cheap reconciles above.</summary>
-    private void RememberHostDecision(bool gearWanted, bool shellBuilt, bool onFacewear, string? ringSlot)
+    private void RememberHostDecision(bool gearWanted, bool shellBuilt, bool onFacewear,
+        IReadOnlyList<string> carrierSlots)
     {
-        _lastGearWanted      = gearWanted;
-        _lastShellBuilt      = shellBuilt;
-        _lastShellOnFacewear = onFacewear;
-        _lastShellRingSlot   = ringSlot;
+        _lastGearWanted         = gearWanted;
+        _lastShellBuilt         = shellBuilt;
+        _lastShellOnFacewear    = onFacewear;
+        _lastShellCarrierSlots  = [.. carrierSlots];
     }
 
     /// <summary>At most one outstanding <see cref="ScheduleCarrierRetry"/>; extra requests coalesce onto it.</summary>
@@ -1776,7 +1873,7 @@ public class CompositorService : IDisposable
                     if (Volatile.Read(ref _compositesInFlight) > 0) return;
                     ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
                                               alreadyHosted: true);
-                    ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellRingSlot);
+                    ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellCarrierSlots);
                 }
                 catch (Exception ex) { log.Debug("[Proteus] carrier retry failed: {0}", ex.Message); }
             });
@@ -1932,132 +2029,151 @@ public class CompositorService : IDisposable
         => _injectedGlasses ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId : null;
 
     /// <inheritdoc cref="InjectedGlassesItemId"/>
-    public ulong? InjectedRingItemId
-        => _injectedRingSlot != null ? InvisibleRing.Resolve(Plugin.DataManager, log)?.ItemId : null;
+    /// <remarks>A list now: a look can need a carrier in more than one accessory slot, and each slot is a
+    /// DIFFERENT item (the Emperor's New Ring, Bracelets and Necklace share a model set, not a row id), so
+    /// one id could not blank them all out of the compared state.</remarks>
+    public IReadOnlyList<ulong> InjectedCarrierItemIds
+        => _injectedCarrierSlots
+            .Select(s => InvisibleRing.ResolveFor(Plugin.DataManager, log, s)?.ItemId)
+            .Where(id => id != null).Select(id => id!.Value).ToList();
 
     /// <summary>Does this ring slot hold the Emperor's ring WE equipped?</summary>
     private bool IsOurRingWorn(string slot, int modelSet)
         => RingModel(slot) is { } p && p.Contains($"a{modelSet:D4}", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Keep the Emperor's-ring injection in line with the current composite, mirroring
-    /// <see cref="ReconcileInvisibleGlasses"/>. The ring is the host that makes non-Midlander races FIT
-    /// (see <see cref="Configuration.AutoEmperorRing"/>), but it only renders while it is actually worn, so
-    /// when the shell was published onto it we equip it here — into the very slot the shell chose, which is
-    /// one ChooseHosts already established is free. Idempotent; framework-thread game write.
+    /// Keep the invisible-carrier injections in line with the current composite, mirroring
+    /// <see cref="ReconcileInvisibleGlasses"/>. A carrier is the host that makes non-Midlander races FIT, and
+    /// the only host that can carry a face/hair/tail layer undeformed — but it renders only while actually
+    /// worn, so when the shell was published onto one we equip it here, into the very slot ChooseHosts
+    /// already established is free. Idempotent; framework-thread game write.
     /// </summary>
     /// <param name="gearWanted">Gear overlays are active, so a shell is supposed to exist.</param>
     /// <param name="shellBuilt">A shell actually built this composite.</param>
-    /// <param name="ringSlot">"rir"/"ril" when the shell was published onto the Emperor's ring, else null.</param>
-    private void ReconcileEmperorRing(bool gearWanted, bool shellBuilt, string? ringSlot)
+    /// <param name="carrierSlots">The accessory slots the shell published a carrier onto; empty for none.</param>
+    private void ReconcileEmperorRing(bool gearWanted, bool shellBuilt, IReadOnlyList<string>? carrierSlots)
     {
-        if (InvisibleRing.Resolve(Plugin.DataManager, log) is not { } r) return;
-        bool want = config.AutoEmperorRing && ringSlot != null;
+        // One pass per slot the shell published a carrier onto, then one removal sweep. Each slot resolves
+        // its OWN invisible piece: they share the accessory set but are different items, and Glamourer is
+        // told an item id, not a model.
+        foreach (var slot in carrierSlots ?? [])
+            ReconcileOneCarrier(slot);
 
-        if (want)
+        SweepUnusedCarriers(gearWanted, shellBuilt, carrierSlots ?? []);
+    }
+
+    /// <summary>
+    /// Equip the invisible piece for ONE slot the shell published a carrier onto. The shell renders only
+    /// while the piece is actually worn, so this is what makes a carrier host real. Idempotent.
+    /// </summary>
+    private void ReconcileOneCarrier(string ringSlot)
+    {
+        if (InvisibleRing.ResolveFor(Plugin.DataManager, log, ringSlot) is not { } r) return;
+
+        // An invisible piece of that set is ALREADY in the slot, so there is nothing to equip — our redirect
+        // is what its model loads, and the shell renders on it either way.
+        //
+        // Crucially this does NOT claim ownership. It used to, on the reasoning that a plugin reload lost the
+        // in-memory record while the piece stayed on; ownership is persisted now, so that case is covered
+        // without guessing. And the guess was harmful: plenty of people wear the Emperor's New pieces by
+        // choice (invisible hands, invisible arms), so adopting one meant that when the shell later moved
+        // elsewhere the sweep took THEIR glamour off. Left unclaimed, we simply stop redirecting its model —
+        // our mesh disappears from it and the piece stays exactly as they equipped it, which is the right
+        // outcome whoever put it there.
+        if (IsOurRingWorn(ringSlot, r.ModelSet)) return;
+
+        // Never write to a slot we have not SEEN to be empty. Before the first successful draw-object walk
+        // the accessory map is null, which ChooseHosts reads as "nothing worn" — equipping on that would
+        // replace a piece the player is actually wearing, and our own removal path would then clear the slot
+        // rather than give it back.
+        if (!AccessorySnapshotKnown)
         {
-            // Already worn (ours) in that slot — nothing to do; the redirect above is what it loads.
-            // Ours is already in that slot and the shell is published onto it. Adopt it — after a plugin
-            // reload the flag is gone while the ring stays equipped, and without this neither teardown nor
-            // design matching would recognise it as Proteus's.
-            if (IsOurRingWorn(ringSlot!, r.ModelSet)) { _injectedRingSlot = ringSlot; return; }
-            // Never write to a slot we have not SEEN to be empty. Before the first successful draw-object
-            // walk the accessory map is null, which ChooseHosts reads as "no rings worn" — equipping on
-            // that would replace a ring the player is actually wearing, and our own removal path would
-            // then clear the slot rather than give it back.
-            if (!AccessorySnapshotKnown)
-            {
-                // ! like RingModel(ringSlot!) below: `want` is only true when ringSlot is non-null, but
-                // that flows through a bool local the compiler cannot follow back to the null check.
-                log.Debug("[Proteus] Emperor's ring: no accessory snapshot yet — not equipping into {0} until "
-                        + "a walk confirms it is empty", ringSlot!);
-                return;
-            }
-            // Occupied by the player's own ring: not ours to take. ChooseHosts only picks a free slot, so
-            // this means the walk and the build disagree — leave it be rather than overwrite their ring.
-            if (RingModel(ringSlot!) != null) return;
-            // Same cooldown reasoning as the glasses: the composite this triggers can run before the game
-            // has loaded and captured the ring model, and without the guard we would equip again and again.
-            // And, as there, a retry has to be scheduled behind it — the millisecond-scale callers can all
-            // land inside the window and leave the shell hostless with nothing to come back for it.
-            var sinceRing = unchecked(Environment.TickCount64 - _lastRingInjectTick);
-            if (sinceRing <= RingInjectCooldownMs)
-            {
-                ScheduleCarrierRetry((int)(RingInjectCooldownMs - sinceRing));
-                return;
-            }
-
-            if (SetRingOnFramework(r.ItemId, leftHand: ringSlot == "ril"))
-            {
-                _lastRingInjectTick = Environment.TickCount64;
-                _injectedRingSlot = ringSlot;
-                // No follow-up recomposite: the shell is ALREADY published at the path this ring loads, so
-                // the equip's own redraw lands on the finished shell (the glasses path needs one only when
-                // it guessed the host before the item existed).
-                log.Information("[Proteus] Emperor's ring: equipped item #{0} (model a{1:D4}) in {2} — shell already hosted on it",
-                    r.ItemId, r.ModelSet, ringSlot!);
-            }
+            log.Debug("[Proteus] invisible carrier: no accessory snapshot yet — not equipping into {0} until "
+                    + "a walk confirms it is empty", ringSlot);
+            return;
         }
-        else
+
+        // Occupied by the player's own piece: not ours to take. ChooseHosts only picks a free slot, so this
+        // means the walk and the build disagree — leave it be rather than overwrite their jewellery.
+        if (RingModel(ringSlot) != null) return;
+
+        // Same cooldown reasoning as the glasses: the composite this triggers can run before the game has
+        // loaded and captured the model, and without the guard we would equip again and again. And, as there,
+        // a retry has to be scheduled behind it — the millisecond-scale callers can all land inside the
+        // window and leave the shell hostless with nothing to come back for it.
+        var sinceRing = unchecked(Environment.TickCount64 - _lastRingInjectTick);
+        if (sinceRing <= RingInjectCooldownMs)
         {
-            // Take OUR ring back off when the feature is off, when there is nothing to host at all, or when
-            // a shell DID build and went somewhere else (the player equipped a ring of their own that hosts
-            // it, say) — otherwise ours would sit in their equipment forever. Deliberately not keyed on a
-            // composite that merely failed to produce a shell: that is transient, and unequipping there
-            // would flip the ring off and straight back on.
-            // Only the "shell moved" removal can be undone by the very next composite, so only that one
-            // charges the cooldown (see the glasses). Turning the feature off, or having no gear at all,
-            // is a settled state — stamping there would stall an immediate re-tick with nothing to retry it.
-            // ONLY a ring we equipped. IsOurRingWorn just asks whether a0053 is in the slot, which is not
-            // ownership: The Emperor's New Ring is an ordinary obtainable item and people wear it by choice
-            // for invisible hands. Without the _injectedRingSlot test, a player wearing their own one had it
-            // silently taken off the moment a shell built onto some OTHER host — a necklace, say — because
-            // that is the same "we don't need our ring any more" branch. Now persisted, so the reload that
-            // used to clear this no longer strands a ring we really did equip.
-            bool hostMoved = config.AutoEmperorRing && gearWanted && shellBuilt;
-            if (!config.AutoEmperorRing || !gearWanted || shellBuilt)
-                foreach (var slot in new[] { "rir", "ril" })
-                {
-                    if (!IsOurRingWorn(slot, r.ModelSet)) continue;
+            ScheduleCarrierRetry((int)(RingInjectCooldownMs - sinceRing));
+            return;
+        }
 
-                    // The ring is worn but no record says we put it there. Two ways to arrive: the player
-                    // equipped it themselves, or WE did before ownership was persisted (the record used to
-                    // live only in memory, so a plugin reload lost it). Indistinguishable from here, and the
-                    // two call for opposite actions — so do nothing and say so once, rather than guess and
-                    // pull a ring off someone who chose it. Silence was the old bug's other half: the ring
-                    // just sat there with nothing in the log to explain it.
-                    if (_injectedRingSlot != slot)
-                    {
-                        if (_unclaimedRingSlots.TryAdd(slot, 0))
-                            log.Information("[Proteus] Emperor's ring: a{0:D4} is worn in {1} but Proteus has no "
-                                          + "record of equipping it — leaving it alone. If you did not put it "
-                                          + "there yourself (an older build could equip one and forget), take "
-                                          + "it off manually.", r.ModelSet, slot);
-                        continue;
-                    }
-
-                    if (SetRingOnFramework(0, leftHand: slot == "ril"))
-                    {
-                        if (hostMoved) _lastRingInjectTick = Environment.TickCount64;
-                        _injectedRingSlot = null;
-                        log.Information("[Proteus] Emperor's ring: removed our injected ring (a{0:D4}) from {1}",
-                            r.ModelSet, slot);
-                    }
-                }
-
-            // The shell went to the ring — the only host left — but we are not allowed to equip it. Say so:
-            // nothing renders until the player wears The Emperor's New Ring themselves, and "my tattoos
-            // vanished after I unticked a box" is otherwise a silent failure.
-            if (ringSlot != null && !config.AutoEmperorRing && !IsOurRingWorn(ringSlot, r.ModelSet))
-                log.Warning("[Proteus] Emperor's ring: the shell is hosted on it but auto-equip is off — equip "
-                          + "The Emperor's New Ring yourself, or re-enable the option, or nothing will render");
+        if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+        {
+            _lastRingInjectTick = Environment.TickCount64;
+            MarkCarrierInjected(ringSlot);
+            // No follow-up recomposite: the shell is ALREADY published at the path this piece loads, so the
+            // equip's own redraw lands on the finished shell (the glasses path needs one only when it
+            // guessed the host before the item existed).
+            log.Information("[Proteus] invisible carrier: equipped item #{0} (model a{1:D4}) in {2} — shell already hosted on it",
+                r.ItemId, r.ModelSet, ringSlot);
         }
     }
 
-    private bool SetRingOnFramework(ulong itemId, bool leftHand)
+    /// <summary>
+    /// Take back every carrier we equipped that this composite no longer hosts on. Split out from the
+    /// per-slot pass because it is a decision about the build AS A WHOLE — a slot is only abandoned once we
+    /// know nothing was published onto it — and because it has to sweep slots the current build never
+    /// mentioned, which a loop over the build's own slots cannot reach.
+    /// </summary>
+    private void SweepUnusedCarriers(bool gearWanted, bool shellBuilt, IReadOnlyList<string> inUse)
     {
-        try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetRing(itemId, leftHand)).GetAwaiter().GetResult(); }
-        catch (Exception ex) { log.Warning(ex, "[Proteus] Emperor's ring: SetItem({0}) failed", itemId); return false; }
+        // Take OUR piece back off when there is nothing to host at all, or when a shell DID build and went
+        // somewhere else (the player equipped a ring of their own that hosts it, say) — otherwise ours would
+        // sit in their equipment forever. Deliberately not keyed on a composite that merely failed to produce
+        // a shell: that is transient, and unequipping there would flip the piece off and straight back on.
+        // Only the "shell moved" removal can be undone by the very next composite, so only that one charges
+        // the cooldown (see the glasses). Having no gear at all is a settled state — stamping there would
+        // stall an immediate re-tick with nothing to retry it.
+        bool hostMoved = gearWanted && shellBuilt;
+        if (gearWanted && !shellBuilt) return;
+
+        foreach (var (slot, _, _) in InvisibleRing.CarrierSlots)
+        {
+            // Still hosting on it — leave it on.
+            if (inUse.Contains(slot, StringComparer.Ordinal)) continue;
+            if (InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is not { } r) continue;
+            if (!IsOurRingWorn(slot, r.ModelSet)) continue;
+
+            // The piece is worn but no record says we put it there. Two ways to arrive: the player equipped
+            // it themselves, or WE did before ownership was persisted (the record used to live only in
+            // memory, so a plugin reload lost it). Indistinguishable from here, and the two call for opposite
+            // actions — so do nothing and say so once, rather than guess and pull jewellery off someone who
+            // chose it. Silence was the old bug's other half: it just sat there with nothing in the log.
+            if (!_injectedCarrierSlots.Contains(slot, StringComparer.Ordinal))
+            {
+                if (_unclaimedRingSlots.TryAdd(slot, 0))
+                    log.Information("[Proteus] invisible carrier: a{0:D4} is worn in {1} but Proteus has no "
+                                  + "record of equipping it — leaving it alone. If you did not put it "
+                                  + "there yourself (an older build could equip one and forget), take "
+                                  + "it off manually.", r.ModelSet, slot);
+                continue;
+            }
+
+            if (SetAccessoryOnFramework(0, slot))
+            {
+                if (hostMoved) _lastRingInjectTick = Environment.TickCount64;
+                MarkCarrierRemoved(slot);
+                log.Information("[Proteus] invisible carrier: removed our injected piece (a{0:D4}) from {1}",
+                    r.ModelSet, slot);
+            }
+        }
+    }
+
+    private bool SetAccessoryOnFramework(ulong itemId, string slot)
+    {
+        try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetAccessory(itemId, slot)).GetAwaiter().GetResult(); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] invisible carrier: SetItem({0},{1}) failed", slot, itemId); return false; }
     }
 
     /// <summary>
@@ -2069,15 +2185,15 @@ public class CompositorService : IDisposable
     /// </summary>
     public void RemoveInjectedRing()
     {
-        if (InvisibleRing.Resolve(Plugin.DataManager, log) is not { } r) return;
-        foreach (var slot in new[] { "rir", "ril" })
+        foreach (var (slot, _, _) in InvisibleRing.CarrierSlots)
         {
+            if (InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is not { } r) continue;
             // Teardown takes back only what we equipped, for the same reason the reconcile does — the model
             // is not ownership. The walk-silent clause stays: it is already keyed on our own record.
-            bool ours = _injectedRingSlot == slot
+            bool ours = _injectedCarrierSlots.Contains(slot, StringComparer.Ordinal)
                      && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
-            if (ours && SetRingOnFramework(0, leftHand: slot == "ril"))
-                _injectedRingSlot = null;
+            if (ours && SetAccessoryOnFramework(0, slot))
+                MarkCarrierRemoved(slot);
         }
     }
 
@@ -2110,7 +2226,12 @@ public class CompositorService : IDisposable
     // and the reconcile adopts it, so there is nothing for that composite to have done.
     private string EquipSignature(
         IReadOnlyDictionary<string, string>? models, IReadOnlyDictionary<string, string>? accessories = null,
-        IReadOnlyList<string>? metModels = null, IReadOnlyDictionary<string, string>? bareBody = null)
+        IReadOnlyList<string>? metModels = null, IReadOnlyDictionary<string, string>? bareBody = null,
+        // The character's own face/hair/tail/ear models. Folded in for the same reason as everything else
+        // here: they are geometry a shell can be cut from, so changing face or hairstyle has to invalidate
+        // it. Left out, a shell would keep the mesh it cut from the PREVIOUS face and there would be no
+        // event anywhere in the plugin that noticed.
+        IReadOnlyList<string>? humanParts = null)
     {
         var glassesSet = InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet;
         bool IsOurCarrier(string modelPath)
@@ -2125,7 +2246,8 @@ public class CompositorService : IDisposable
             .Concat((metModels ?? []).Where(p => !IsOurCarrier(p)).Select(p => $"met={p}"))
             .Concat((bareBody ?? new Dictionary<string, string>())
                 .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-                .Select(kv => $"bare:{kv.Key}={kv.Value}")));
+                .Select(kv => $"bare:{kv.Key}={kv.Value}"))
+            .Concat((humanParts ?? []).Select(p => $"human={p}")));
     }
 
     private static string? BodyTypeKey(HashSet<string> snapshot)
@@ -2274,7 +2396,7 @@ public class CompositorService : IDisposable
                 Interlocked.Exchange(ref _forcePending, 0);
                 // Nothing is hosted any more, so the redraw hook must not put a carrier back for a shell
                 // that no longer exists.
-                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, ringSlot: null);
+                RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);
 
                 // Nothing is hosted, and the empty manifest above dropped the redirect that renders our
                 // invisible-glasses carrier as the shell. Leaving it equipped would put a REAL pair of
@@ -2282,7 +2404,7 @@ public class CompositorService : IDisposable
                 // This early return skips the reconcile at the end of the method, hence the explicit call.
                 // The ring is invisible either way, but it is still not the player's choice to be wearing.
                 ReconcileInvisibleGlasses(gearWanted: false, shellBuilt: false, hostedOnFacewear: false);
-                ReconcileEmperorRing(gearWanted: false, shellBuilt: false, ringSlot: null);
+                ReconcileEmperorRing(gearWanted: false, shellBuilt: false, carrierSlots: []);
 
                 ReloadAndRedraw();
                 LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
@@ -2388,8 +2510,27 @@ public class CompositorService : IDisposable
                 {
                     var ov = overlay;
                     bool aboveGear = lowestGear.HasValue && Rank(overlay).CompareTo(lowestGear.Value) < 0;
-                    if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
-                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear))
+                    // A shell is cut from the body, so only a body-UV overlay has one to move onto (see
+                    // CanRenderAsShell). An overlay that paints the face has to stay on its own material
+                    // whatever its layer says — including a stored Gear layer, which the editor could write
+                    // before it knew better and which is still sitting in mods on disk. Demoting here is what
+                    // stops it: the shell builder is not material-aware, so a face overlay reaching it built
+                    // a BODY shell and pasted the face art across the whole character.
+                    bool canShell = CanRenderAsShell(overlay.Descriptor);
+                    if (!canShell && overlay.Descriptor.Layer == OverlayLayer.Gear)
+                    {
+                        var demoted = CloneDescriptor(overlay.Descriptor);
+                        demoted.Layer = OverlayLayer.Skin;   // ShaderPackage → skin.shpk; Scroll goes unread
+                        ov = overlay with { Descriptor = demoted };
+                        NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
+                    }
+                    // Same surface, the other direction: the auto-promotion is vetoed, so tell the user when
+                    // that is what silenced a glow they just set — it looks broken with no word anywhere.
+                    else if (!canShell && !overlay.Descriptor.ManualShaderLock
+                        && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
+                        NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
+                    else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
@@ -2501,6 +2642,28 @@ public class CompositorService : IDisposable
                         }
                         else
                         {
+                            // A material on one of the character's OWN non-body surfaces — face, hair, tail,
+                            // ears — gets the same mid-switch tolerance the body branch above gets, and for
+                            // the same reason: the snapshot is a walk that can be stale or still settling,
+                            // so its silence about a face is not evidence the face isn't there.
+                            //
+                            // Dropping it outright made the face flap in and out on EVERY trigger. The first
+                            // composite ran against a snapshot that reported charCode "none" and body type
+                            // "gen2", dropped the face material on that basis, and withdrew its redirects —
+                            // then forced a full redraw, so the character reloaded with the unredirected
+                            // face. The post-settle composite corrected the snapshot to c1401/"bibo,gen2",
+                            // recomposited the face and republished the redirects, but behind an in-place
+                            // reload, which does not re-fetch a texture that was withdrawn and restored. Net
+                            // result: a face overlay that composites perfectly (byte-identical output to a
+                            // run where it rendered) and never reaches the character.
+                            //
+                            // Equipment and accessory materials keep the strict exact-path rule — for those
+                            // the snapshot IS authoritative, which is what the comment at the top says.
+                            var keyRace = ExtractHumanCharCode(key);
+                            if (keyRace != null
+                                && (effectiveCharCodes.Count == 0 || effectiveCharCodes.Contains(keyRace)))
+                                continue;   // keep — ours, and the snapshot simply hasn't caught up
+
                             log.Debug("[Proteus] Skipping non-equipped material: {0}", key);
                             byMaterial.Remove(key);
                         }
@@ -2814,7 +2977,7 @@ public class CompositorService : IDisposable
                 // the redraw hook already did it costs nothing.
                 ReconcileInvisibleGlasses(_lastGearWanted, _lastShellBuilt, _lastShellOnFacewear,
                                           alreadyHosted: true);
-                ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellRingSlot);
+                ReconcileEmperorRing(_lastGearWanted, _lastShellBuilt, _lastShellCarrierSlots);
 
                 // Nothing published, so nothing to record: RecordPublish here would make _publishHistory
                 // describe a manifest that was never written, and PruneSupersededOutput would eventually
@@ -4391,7 +4554,9 @@ public class CompositorService : IDisposable
             // rides the facewear slot, and the Emperor's ring only renders once it is actually WORN — so
             // each reconcile below is driven by where the shell went, not by the feature toggle alone.
             bool shellOnFacewear = false;
-            string? shellRingSlot = null;   // "rir"/"ril" when the shell went to the Emperor's ring
+            // The accessory slots the shell published a CARRIER onto (may be several — each free accessory slot
+        // is offered, and a natively-authored surface can only ride a carrier).
+        List<string> shellCarrierSlots = [];
             var tGear = PhaseCounter.Begin();
             // maskShellMods too, not just gear overlays. A mod whose Masks tab was promoted to Cloth/Glow
             // while all its other layers stayed on Skin has NO gear overlay — that is the whole point of the
@@ -4526,6 +4691,12 @@ public class CompositorService : IDisposable
                             string.Join(", ", metModels),
                             string.Join(", ", bareBodyModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
+                        // Observed only for now — nothing cuts from these yet. Logged because the whole
+                        // multi-surface plan rests on this walk actually reporting them, and this is the
+                        // line that says whether it does: whether a Viera's ears show up, whether a face
+                        // really does draw several models, and what the ids look like.
+                        log.Information("[Proteus] second skin: human part models [{0}]",
+                            string.Join(", ", _humanPartModels ?? []));
 
                         // Our injected invisible-glasses set (when the feature is on) so the shell REPLACES it
                         // — hiding the carrier item's frames — rather than appending. See ChooseHost.
@@ -4544,7 +4715,8 @@ public class CompositorService : IDisposable
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
-                            InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant);
+                            InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
+                            _humanPartModels);
                         if (shells != null)
                         {
                             shellBuilt = true;
@@ -4552,11 +4724,13 @@ public class CompositorService : IDisposable
                             // re-derived: these drive which item we have to equip for it to render at all.
                             shellOnFacewear = shells.HostModelPaths.Any(
                                 p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));
-                            // …and on WHICH hand, since the shell only loads from the slot it published for.
-                            var ringPath = shells.HostModelPaths.FirstOrDefault(
-                                p => p.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase));
-                            shellRingSlot = ringPath == null ? null
-                                : ringPath.EndsWith("_ril.mdl", StringComparison.OrdinalIgnoreCase) ? "ril" : "rir";
+                            // …and in WHICH slots, since a carrier only loads from the slot it published for,
+                            // and there can be several now (each free accessory is offered as a carrier).
+                            shellCarrierSlots = InvisibleRing.CarrierSlots
+                                .Where(c => shells.HostModelPaths.Any(p =>
+                                    p.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase)
+                                 && p.EndsWith($"_{c.Slot}.mdl", StringComparison.OrdinalIgnoreCase)))
+                                .Select(c => c.Slot).ToList();
                             // Mirrors ChooseHost's pending-injection branch: feature on and the "_met"
                             // slot empty means the shell was built for glasses we are about to equip.
                             glassesPreHosted = invisibleGlassesSet is int && metModels.Count == 0;
@@ -4697,9 +4871,9 @@ public class CompositorService : IDisposable
             // facewear ships native the shell goes to the ring instead, and equipping a pair we don't host
             // on would just put real frames on the player's face.
             RememberHostDecision(gearOverlays.Count > 0, shellBuilt, shellOnFacewear,
-                                 shellBuilt ? shellRingSlot : null);
+                                 shellBuilt ? shellCarrierSlots : []);
             ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt, shellOnFacewear, glassesPreHosted);
-            ReconcileEmperorRing(gearOverlays.Count > 0, shellBuilt, shellBuilt ? shellRingSlot : null);
+            ReconcileEmperorRing(gearOverlays.Count > 0, shellBuilt, shellBuilt ? shellCarrierSlots : []);
 
             // Every path, not just the shell's. The shell paths were verified from the start because a worn
             // accessory is obviously contested; the skin textures were not, on the unexamined assumption that
@@ -6369,7 +6543,12 @@ public class CompositorService : IDisposable
                 HashSet<string>? snapshot;
                 try { snapshot = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerMaterialPaths).GetAwaiter().GetResult(); }
                 catch (OperationCanceledException) { return; }
-                if (snapshot == null) return;
+                // Empty as well as null: this is the post-redraw settle check, so it runs precisely when the
+                // draw object may still be coming up. An empty walk yields no body type and no char code,
+                // which reads as "everything changed" and drives a corrective composite off nothing. That is
+                // the "post-settle correction: charCode c1401 -> none" seen in the wild, and the composite it
+                // launched rebuilt the shell from defaults.
+                if (snapshot is not { Count: > 0 }) return;
 
                 // Same builders WaitForRaceToSettle and Recomposite use — see CharCodeKey for why sharing
                 // them is load-bearing rather than tidiness.
@@ -6879,6 +7058,24 @@ public class CompositorService : IDisposable
     internal static bool IsBodyUvMaterial(string mtrlGamePath)
         => UVRemapService.InferBodyType(mtrlGamePath) != null
         || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a shell can be cut for this overlay at all — the precondition on the auto-promotion in
+    /// <see cref="RenderModeInference.ShouldPromoteToGear"/>. True for every surface the shell builder knows
+    /// how to cut: the body, and the character's own face, hair, tail and ears. False for gear, accessories,
+    /// weapons, mounts and minions, which have no shell path and never will.
+    /// <para/>
+    /// Deliberately PATH-based only, never "is that surface loaded right now". The editor mirrors this
+    /// predicate to enable or grey its Cloth/Glow controls, and a live-state-dependent answer would make
+    /// those flicker as the draw-object walk comes and goes. "This can never be shelled" and "this isn't
+    /// drawn at the moment" are different failures with different remedies; the second is the shell
+    /// builder's to report, and it does (see ResolveHumanSurface).
+    /// <para/>
+    /// An overlay that names no material at all is left shellable: it can't be placed either way, so this
+    /// keeps the prior behaviour rather than silently dropping a feature from it.
+    /// </summary>
+    internal static bool CanRenderAsShell(OverlayDescriptor d)
+        => ShellSurface.CanShell(d.MaterialGamePaths);
 
     /// <summary>
     /// Replace an AO silhouette's values OUTSIDE the UV islands with a smooth extension of the values just
@@ -7652,6 +7849,31 @@ public class CompositorService : IDisposable
         var msg = $"[Proteus] \"{entry.ModName}\" sets Glow on a skin layer. Skin can no longer glow, so "
                 + "that option now renders as a cloth layer — it needs a free accessory to sit on, and its "
                 + "surface will look slightly different.";
+        _ = Plugin.Framework.RunOnFrameworkThread(
+            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+    }
+
+    /// <summary>
+    /// A skin overlay asked for something only a shell can render (glow, sphere, metal, specular — or it
+    /// sits above gear), but it paints a surface no shell can be cut from: the face, hair, or a tail. The
+    /// overlay stays skin and loses that feature, which is the only correct outcome — the alternative,
+    /// promoting it anyway, wrapped the body in a shell carrying the face's art.
+    /// </summary>
+    private void NotifyNoShellSurface(OverlayEntry entry, List<ColorTableRowPreset>? rows, OverlayDescriptor d)
+    {
+        if (!_noShellMods.TryAdd(entry.ModDirectory, 0)) return;
+
+        log.Information("[Proteus] no shell surface for \"{0}\" (layer {1}): overlay targets [{2}] — not a "
+            + "surface a shell can be cut from, so it stays skin and its Glow/Cloth features go unrendered",
+            entry.ModName, d.Layer, string.Join(", ", d.MaterialGamePaths));
+
+        // Chat only when a glow is what's being lost: that is the visible symptom the user came for. A plain
+        // Cloth overlay loses only sphere/metal, which never showed there in the first place.
+        if (!HasEmissiveRow(rows)) return;
+
+        var msg = $"[Proteus] \"{entry.ModName}\" sets Glow on an overlay Proteus cannot build a layer for. "
+                + "Glow needs a layer over the mesh, and that only works on your own skin — body, face, "
+                + "hair, tail or ears — not on gear, accessories or weapons.";
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
     }

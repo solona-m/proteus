@@ -940,4 +940,48 @@ public class CompositorMathTests
         Assert.NotEqual(CompositorService.ContentTag(data, 128, 128, 0),
                         CompositorService.ContentTag(data, 128, 128, 1));
     }
+
+    // ── CanRenderAsShell — which overlays a shell can be cut for ───────────────
+    // Every surface the shell builder knows: the character's own body, face, hair, tail and ears. Nothing
+    // else, ever — gear, accessories and weapons have no shell path.
+    //
+    // Face was FALSE here until the multi-surface work landed, and the reason is worth keeping: while the
+    // builder could only cut from the body, promoting a face overlay cut a BODY shell and pasted the face
+    // art across the whole character. The veto was the correct answer to "there is nowhere to put this",
+    // not a statement that faces can't glow.
+
+    private static OverlayDescriptor Target(params string[] mtrl)
+        => new() { MaterialGamePaths = [.. mtrl] };
+
+    [Theory]
+    [InlineData("chara/human/c1401/obj/body/b0001/material/v0001/mt_c1401b0001_bibo.mtrl")]
+    [InlineData("chara/human/c1401/obj/face/f0001/material/mt_c1401f0001_fac_a.mtrl")]
+    [InlineData("chara/human/c1401/obj/hair/h0133/material/v0001/mt_c1401h0133_hir_a.mtrl")]
+    [InlineData("chara/human/c1401/obj/tail/t0001/material/v0001/mt_c1401t0001_etc_a.mtrl")]
+    [InlineData("chara/human/c1801/obj/zear/z0001/material/mt_c1801z0001_zer_a.mtrl")]
+    public void CanRenderAsShell_OwnSkinSurfaces_Yes(string mtrl)
+        => Assert.True(CompositorService.CanRenderAsShell(Target(mtrl)));
+
+    [Fact]
+    public void CanRenderAsShell_BodyUvThroughAnEquipmentSlot_Yes()   // body mods route skin through gear paths
+        => Assert.True(CompositorService.CanRenderAsShell(
+            Target("chara/equipment/e0001/material/v0001/mt_c0201e0001_top_bibo.mtrl")));
+
+    [Theory]
+    [InlineData("chara/equipment/e6039/material/v0001/mt_c0201e6039_sho_a.mtrl")]
+    [InlineData("chara/accessory/a0053/material/v0001/mt_c0101a0053_rir_a.mtrl")]
+    [InlineData("chara/weapon/w0801/obj/body/b0006/material/v0001/mt_w0801b0006_a.mtrl")]
+    [InlineData("chara/monster/m0361/obj/body/b0001/material/v0001/mt_m0361b0001_a.mtrl")]
+    public void CanRenderAsShell_NotOurSkin_No(string mtrl)
+        => Assert.False(CompositorService.CanRenderAsShell(Target(mtrl)));
+
+    [Fact]
+    public void CanRenderAsShell_MixedFaceAndBody_Yes()   // both halves have somewhere to go now
+        => Assert.True(CompositorService.CanRenderAsShell(
+            Target("chara/human/c1401/obj/face/f0001/material/mt_c1401f0001_fac_a.mtrl",
+                   "chara/human/c1401/obj/body/b0001/material/v0001/mt_c1401b0001_bibo.mtrl")));
+
+    [Fact]
+    public void CanRenderAsShell_NoMaterialNamed_Yes()   // can't place it — keep the prior behaviour
+        => Assert.True(CompositorService.CanRenderAsShell(Target()));
 }

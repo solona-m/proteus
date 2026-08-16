@@ -631,7 +631,7 @@ public class DesignBindingTests
 
         Assert.False(Matches(design, state));
 
-        var stripped = DesignBindingService.StripCarriers(design, null, ring);
+        var stripped = DesignBindingService.StripCarriers(design, null, [ring]);
         Assert.True(Matches(stripped, state));
     }
 
@@ -649,12 +649,12 @@ public class DesignBindingTests
 
         Assert.False(Matches(design, worn));                                   // our ring, unneutralized
 
-        var zeroed = DesignBindingService.NeutralizeProteusOwnedState(worn, null, ring);
+        var zeroed = DesignBindingService.NeutralizeProteusOwnedState(worn, null, [ring]);
         Assert.True(Matches(design, zeroed));                                  // what the boot path does
 
         // Stripping the state instead is the regression this guards: the slot vanishes and the design's
         // RFinger has nothing to compare against.
-        var strippedState = DesignBindingService.StripCarriers(worn, null, ring);
+        var strippedState = DesignBindingService.StripCarriers(worn, null, [ring]);
         Assert.False(Matches(design, strippedState));
     }
 
@@ -662,6 +662,6 @@ public class DesignBindingTests
     public void StripCarriers_NoCarrierPresent_ReturnsTheSameInstance()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
-        Assert.Same(design, DesignBindingService.StripCarriers(design, CarrierGlassesRow, 9295));
+        Assert.Same(design, DesignBindingService.StripCarriers(design, CarrierGlassesRow, [9295UL]));
     }
 }

@@ -34,9 +34,90 @@ public static class InvisibleRing
     /// <summary>EquipSlotCategory row for rings (Penumbra.GameData EquipSlot.RFinger = 12).</summary>
     private const uint RingSlotCategory = 12;
 
+    /// <summary>
+    /// The accessory slots an invisible carrier can be injected into, in the order the host chooser should
+    /// try them, with the EquipSlotCategory row that names each in the Item sheet.
+    /// <para/>
+    /// Rings are BOTH listed under RFinger (12) — the sheet files a ring against the right finger and the
+    /// game lets it be worn on either hand — so "ril" resolves the same item as "rir" and only the equip
+    /// slot differs.
+    /// <para/>
+    /// An accessory SET covers every accessory slot (one id serves _ear, _nek, _wrs and _rir), so the
+    /// Emperor's New pieces are looked for by that set in each slot rather than by name. A slot whose
+    /// invisible piece cannot be found simply is not offered — see <see cref="ResolveFor"/>.
+    /// </summary>
+    public static readonly (string Slot, string EqdpSlot, uint Category)[] CarrierSlots =
+    {
+        ("rir", "RFinger", 12),
+        ("ril", "LFinger", 12),
+        ("wrs", "Wrists",  11),
+        ("nek", "Neck",    10),
+    };
+
     private static readonly object Gate = new();
     private static Identity? cached;
+    private static readonly System.Collections.Generic.Dictionary<string, Identity?> cachedBySlot = new();
     private static bool warned;
+    private static readonly System.Collections.Generic.HashSet<string> warnedSlots = new();
+
+    /// <summary>
+    /// The invisible carrier item for one accessory slot, or null when this slot has no such piece (or the
+    /// sheet isn't readable yet). Callers must treat null as "don't offer this slot" rather than substitute
+    /// anything: equipping a VISIBLE item as a carrier would put jewellery on the player that they never
+    /// chose, and the shell replaces the carrier's model outright so they would never see it to remove it.
+    /// <para/>
+    /// Memoised per slot, and — unlike the single-slot path below — a definitive ABSENCE is memoised too.
+    /// The memoise-on-success-only rule exists to survive a sheet that isn't readable yet; it is not meant to
+    /// re-derive "this slot has no invisible piece" forever. Without the negative cache each call re-scanned
+    /// the whole Item sheet, and the callers are not occasional: the carrier sweep walks all four slots on
+    /// every redraw, so two unresolvable slots meant two full sheet scans per zone change and per gearset
+    /// swap. A missing sheet still returns null UNCACHED, so it retries.
+    /// </summary>
+    public static Identity? ResolveFor(IDataManager data, IPluginLog log, string slot)
+    {
+        var entry = System.Array.Find(CarrierSlots, c => c.Slot == slot);
+        if (entry.Slot == null) return null;
+
+        lock (Gate)
+        {
+            // Present-and-null is a settled "no such piece", so this returns it rather than rescanning.
+            if (cachedBySlot.TryGetValue(slot, out var hit)) return hit;
+            try
+            {
+                var sheet = data.GetExcelSheet<Item>();
+                if (sheet == null) return null;   // not readable YET — deliberately not cached
+
+                foreach (var row in sheet.Where(r => r.EquipSlotCategory.RowId == entry.Category)
+                             .OrderBy(r => r.RowId))
+                {
+                    int set = (int)(row.ModelMain & 0xFFFF);
+                    if (set != EmperorSetId) continue;
+                    int variant = (int)((row.ModelMain >> 16) & 0xFFFF);
+                    var id = new Identity(row.RowId, set, variant);
+                    cachedBySlot[slot] = id;
+                    log.Information("[Proteus] invisible carrier: {0} -> item #{1} (model a{2:D4}, variant v{3:D4})",
+                        slot, row.RowId, set, variant);
+                    return id;
+                }
+
+                // Scanned the whole sheet and it is not there. That answer cannot change while the game is
+                // running, so cache it — this is the branch that was costing a full rescan per redraw.
+                cachedBySlot[slot] = null;
+                if (warnedSlots.Add(slot))
+                    log.Information("[Proteus] invisible carrier: no {0} item with model set a{1:D4} — that slot "
+                                  + "will not be offered as a carrier", slot, EmperorSetId);
+                return null;
+            }
+            catch (System.Exception ex)
+            {
+                // NOT cached: a throw is transient (a sheet mid-load, a Lumina hiccup), and latching it would
+                // disable the slot for the session on one bad read.
+                if (warnedSlots.Add(slot))
+                    log.Warning("[Proteus] invisible carrier: {0} sheet read failed: {1}", slot, ex.Message);
+                return null;
+            }
+        }
+    }
 
     /// <summary>
     /// The (item id, model set) of the Emperor's New Ring, or null if the Item sheet isn't readable yet.

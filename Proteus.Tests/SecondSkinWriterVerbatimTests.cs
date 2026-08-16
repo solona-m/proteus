@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Proteus.Services;
 using Xunit;
@@ -108,6 +109,130 @@ public class SecondSkinWriterVerbatimTests
         Validate(trimmedBytes);
     }
 
+    /// <summary>
+    /// Every submesh bone map entry must name a bone that exists in the merged model's union bone list.
+    /// <para/>
+    /// This is the regression guard for the map's ENTRIES being bone indices in each SOURCE's own namespace:
+    /// they are remapped by name onto the union list, exactly as the per-mesh bone tables are. Appending them
+    /// verbatim was correct only for whichever source seeded the union list first, so a merged build could
+    /// name arbitrary bones — invisible on today's body parts, which happen to share a bone list in the same
+    /// order, and not invisible at all once a model with a different skeleton subset joins them.
+    /// <para/>
+    /// The obvious companion check — that each submesh's [boneStart, boneStart+boneCount) window fits inside
+    /// the map — is deliberately absent. Real body models fail it as authored: a Neolithe e0000 top declares
+    /// five submeshes with boneStart 0/23/46/69/92 and boneCount 23, reaching 115, against a 35-entry map.
+    /// Those are the source's own numbers and shells carrying them render fine, so the game does not read
+    /// that field as the struct layout implies. Asserting it would fail every fixture and prove nothing.
+    /// </summary>
+    private static void ValidateBoneMap(byte[] m, int mh, int meshStart, int meshCount)
+    {
+        ushort U16(int o) => BitConverter.ToUInt16(m, o);
+        uint U32(int o) => BitConverter.ToUInt32(m, o);
+
+        int submeshCount    = U16(mh + 8);
+        int matCount        = U16(mh + 10);
+        int boneCount       = U16(mh + 12);
+        int boneTableCount  = U16(mh + 14);
+        int boneTableShorts = U16(mh + 44);
+
+        int subStart = meshStart + meshCount * 36;
+        int p = subStart + submeshCount * 16
+              + matCount * 4                                   // material name offsets
+              + boneCount * 4                                  // bone name offsets
+              + boneTableCount * 4 + boneTableShorts * 2;      // v6 bone tables: headers then data
+
+        int mapCount = (int)U32(p) / 2;
+        p += 4;
+
+        for (int i = 0; i < mapCount; i++)
+        {
+            int bone = U16(p + i * 2);
+            Assert.True(bone < boneCount,
+                $"submesh bone map[{i}] = {bone}, past the {boneCount}-bone union list");
+        }
+    }
+
+    // ── SourceSpec: the per-source refactor must change nothing ────────────────
+
+    [Fact]
+    public void SourceSpec_api_matches_the_legacy_api_byte_for_byte()
+    {
+        // The whole safety argument for collapsing the parallel arrays (enabled shapes, uv converters, one
+        // shared connector flag) into SourceSpec: the same inputs must still produce the same model. Run
+        // over a MERGED build, since misalignment between per-source arrays is exactly what could not
+        // happen with one source.
+        if (!File.Exists(NeoTop) || !File.Exists(BiboTop)) return;
+
+        var neo = File.ReadAllBytes(NeoTop);
+        var bibo = File.ReadAllBytes(BiboTop);
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+
+        var legacy = SecondSkinWriter.Build(new[] { neo, bibo }, layers, null, true, out var legacyStats);
+        var spec = SecondSkinWriter.Build(
+            new[]
+            {
+                new SecondSkinWriter.SourceSpec(neo,  DropConnectors: true),
+                new SecondSkinWriter.SourceSpec(bibo, DropConnectors: true),
+            },
+            layers, null, out var specStats);
+
+        Assert.Equal(legacy.Length, spec.Length);
+        Assert.True(legacy.AsSpan().SequenceEqual(spec), "SourceSpec build differs from the legacy build");
+        Assert.Equal(legacyStats.Meshes, specStats.Meshes);
+        Assert.Equal(legacyStats.TrianglesOut, specStats.TrianglesOut);
+    }
+
+    [Fact]
+    public void DropConnectors_is_per_source()
+    {
+        // The connector heuristic is Neolithe-tuned ("under 200 triangles, and the last submesh") and is
+        // wrong for anything that is not a body. Proving it is now per-source is what lets a face or tail
+        // source sit beside a body one without being eaten by it.
+        if (!File.Exists(NeoTop) || !File.Exists(BiboTop)) return;
+
+        var neo = File.ReadAllBytes(NeoTop);
+        var bibo = File.ReadAllBytes(BiboTop);
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+
+        SecondSkinWriter.Build(new[] { neo, bibo }, layers, null, false, out var neither);
+        SecondSkinWriter.Build(new[] { neo, bibo }, layers, null, true, out var both);
+        SecondSkinWriter.Build(
+            new[]
+            {
+                new SecondSkinWriter.SourceSpec(neo,  DropConnectors: true),
+                new SecondSkinWriter.SourceSpec(bibo, DropConnectors: false),
+            },
+            layers, null, out var onlyNeo);
+
+        // Trimming one source of the two lands strictly between trimming neither and trimming both.
+        Assert.True(onlyNeo.TrianglesOut < neither.TrianglesOut, "the trimmed source kept every triangle");
+        Assert.True(onlyNeo.TrianglesOut > both.TrianglesOut, "the untrimmed source was trimmed anyway");
+    }
+
+    [Fact]
+    public void KeepByLeaf_selects_only_the_named_material()
+    {
+        // How every non-body surface picks its geometry: name the material the overlay targets and get
+        // exactly the meshes bound to it. Here it is pointed at a name no mesh carries, which must select
+        // nothing at all — and a shell with no geometry is an error, not a silently empty model.
+        if (!File.Exists(NeoTop)) return;
+
+        var neo = File.ReadAllBytes(NeoTop);
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        var keepNothing = SecondSkinWriter.KeepByLeaf(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mt_c1401f0001_fac_a.mtrl" });
+
+        Assert.Throws<InvalidOperationException>(() => SecondSkinWriter.Build(
+            new[] { new SecondSkinWriter.SourceSpec(neo, KeepMaterial: keepNothing) },
+            layers, null, out _));
+
+        // And the body default still selects the body's skin, so the leaf filter is opt-in.
+        var body = SecondSkinWriter.Build(
+            new[] { new SecondSkinWriter.SourceSpec(neo) }, layers, null, out var stats);
+        Assert.True(stats.Meshes > 0);
+        Validate(body);
+    }
+
     private static void Validate(byte[] m)
     {
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
@@ -124,6 +249,8 @@ public class SecondSkinWriterVerbatimTests
         int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
 
         Assert.Equal(declCount, meshCount);   // one declaration per mesh
+
+        ValidateBoneMap(m, mh, meshStart, meshCount);
 
         int TypeSize(byte t) => t switch
         {

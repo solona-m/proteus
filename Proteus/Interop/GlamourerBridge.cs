@@ -213,11 +213,31 @@ public class GlamourerBridge : IDisposable
     /// RFinger (c….a0053_rir.mdl) or LFinger (…_ril.mdl), and the game only loads the one it asked for.
     /// </summary>
     public bool SetRing(ulong itemId, bool leftHand)
+        => SetAccessory(itemId, leftHand ? "ril" : "rir");
+
+    /// <summary>
+    /// As <see cref="SetRing"/>, for any accessory slot a carrier can ride: "rir", "ril", "wrs", "nek".
+    /// Same contract in every respect — the slot must match the one the shell was published for, because its
+    /// path and EQDP entry name that slot (c….a0053_wrs.mdl) and the game only loads the one it asked for.
+    /// </summary>
+    public bool SetAccessory(ulong itemId, string slotName)
     {
         if (!IsAvailable) return false;
         // Nothing to equip on without a drawn player, and no reason to pay the IPC to be told so.
         if (objectTable.LocalPlayer == null) return false;
-        var slot = leftHand ? ApiEquipSlot.LFinger : ApiEquipSlot.RFinger;
+        var slot = slotName switch
+        {
+            "ril" => ApiEquipSlot.LFinger,
+            "rir" => ApiEquipSlot.RFinger,
+            "wrs" => ApiEquipSlot.Wrists,
+            "nek" => ApiEquipSlot.Neck,
+            _     => ApiEquipSlot.Unknown,
+        };
+        if (slot == ApiEquipSlot.Unknown)
+        {
+            log.Warning("[Proteus] SetAccessory: unknown slot \"{0}\"", slotName);
+            return false;
+        }
         try
         {
             // Two explicit zero stains, NOT an empty list. Semantically identical — an invisible ring has

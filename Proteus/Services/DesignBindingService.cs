@@ -1012,7 +1012,7 @@ public class DesignBindingService : IDisposable
         // the feature is off would erase the player's OWN Emperor's New Ring — a common invisible-ring
         // glamour — from every comparison. Both mistakes end in a design that matches nothing.
         state = NeutralizeProteusOwnedState(state,
-            compositor.InjectedGlassesItemId, compositor.InjectedRingItemId);
+            compositor.InjectedGlassesItemId, compositor.InjectedCarrierItemIds);
 
         var pick = MatchBinding(state);
 
@@ -1056,7 +1056,7 @@ public class DesignBindingService : IDisposable
     /// <see cref="StripCarriers"/>. The caller must have stripped the state with the same ids. Only the
     /// boot restore passes this; the live path compares designs as saved.
     /// </param>
-    private Guid? MatchBinding(JObject neutralizedState, (ulong? Glasses, ulong? Ring)? stripCarriers = null)
+    private Guid? MatchBinding(JObject neutralizedState, (ulong? Glasses, IReadOnlyList<ulong> Accessories)? stripCarriers = null)
     {
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
@@ -1066,7 +1066,7 @@ public class DesignBindingService : IDisposable
         {
             var design = GetDesignCached(id);
             if (design == null) continue;
-            if (stripCarriers is { } c) design = StripCarriers(design, c.Glasses, c.Ring);
+            if (stripCarriers is { } c) design = StripCarriers(design, c.Glasses, c.Accessories);
             if (StateMatches(design, neutralizedState, out var spec))
                 matches.Add((id, spec));
         }
@@ -1162,7 +1162,7 @@ public class DesignBindingService : IDisposable
         // Carrier ids come from the game sheets rather than the compositor's injection flags, which are
         // still false at boot because no composite has run to set them.
         var carriers = BootCarriers();
-        var state    = NeutralizeProteusOwnedState(rawState, carriers.Glasses, carriers.Ring);
+        var state    = NeutralizeProteusOwnedState(rawState, carriers.Glasses, carriers.Accessories);
 
         // 1. The design we were on when we unloaded, VERIFIED against the live state.
         if (config.LastActiveDesignId is { } lastId)
@@ -1184,7 +1184,7 @@ public class DesignBindingService : IDisposable
             }
             else
             {
-                design = StripCarriers(design, carriers.Glasses, carriers.Ring);
+                design = StripCarriers(design, carriers.Glasses, carriers.Accessories);
                 string? why = null;
                 if (BootIdStillApplies(design, state, r => why ??= r))
                 {
@@ -1406,7 +1406,7 @@ public class DesignBindingService : IDisposable
     /// The item id of the Emperor's-ring host, when that feature has one equipped in the right ring slot.
     /// </param>
     internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId,
-        ulong? syntheticRingId = null)
+        IReadOnlyList<ulong>? syntheticAccessoryIds = null)
     {
         JObject? copy = null;
 
@@ -1424,20 +1424,23 @@ public class DesignBindingService : IDisposable
             }
         }
 
-        // Same for the ring we equip to host the shell in cut space — either hand, since it goes to
-        // whichever slot was free. Nothing zero-ish about the id: a design that saved an empty ring stores
-        // ItemId 0, so that is what "not the player's choice" has to look like here — otherwise wearing
-        // our ring makes every such design mismatch.
-        if (syntheticRingId is { } ring)
+        // Same for every invisible accessory we equip to host a shell — either hand, the bracelet, the
+        // necklace, since a carrier goes to whichever slots were free. Nothing zero-ish about the ids: a
+        // design that saved an empty ring stores ItemId 0, so that is what "not the player's choice" has to
+        // look like here — otherwise wearing our carrier makes every such design mismatch.
+        //
+        // A LIST of ids, because the pieces share an accessory model set but are separate items; matching on
+        // one id would leave the others looking like deliberate jewellery.
+        if (syntheticAccessoryIds is { Count: > 0 } carriers)
         {
-            foreach (var finger in new[] { "RFinger", "LFinger" })
+            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
             {
                 if ((copy ?? state)["Equipment"] is not JObject equip
-                    || equip[finger] is not JObject slot
-                    || slot["ItemId"] is not { } rid || rid.ToObject<ulong>() != ring)
+                    || equip[accessorySlot] is not JObject slot
+                    || slot["ItemId"] is not { } rid || !carriers.Contains(rid.ToObject<ulong>()))
                     continue;
                 copy ??= (JObject)state.DeepClone();
-                if (((JObject?)copy["Equipment"])?[finger] is JObject target)
+                if (((JObject?)copy["Equipment"])?[accessorySlot] is JObject target)
                     target["ItemId"] = 0;
             }
         }
@@ -1475,7 +1478,7 @@ public class DesignBindingService : IDisposable
     /// safe in this direction: the worst case is that a player who genuinely wears the carrier item
     /// stops having it count toward a match, which loosens specificity rather than fabricating one.
     /// </summary>
-    internal static JObject StripCarriers(JObject design, ulong? glassesRow, ulong? ringItem)
+    internal static JObject StripCarriers(JObject design, ulong? glassesRow, IReadOnlyList<ulong>? accessoryItems)
     {
         List<(string Container, string Slot)>? drop = null;
 
@@ -1485,10 +1488,12 @@ public class DesignBindingService : IDisposable
                     && (id.ToObject<ulong>() & BonusIdRowMask) == g)
                     (drop ??= []).Add(("Bonus", p.Name));
 
-        if (ringItem is { } r && design["Equipment"] is JObject equip)
-            foreach (var finger in RingSlots)
-                if (equip[finger] is JObject s && s["ItemId"] is { } iid && iid.ToObject<ulong>() == r)
-                    (drop ??= []).Add(("Equipment", finger));
+        // Every accessory slot a carrier can ride, not just the fingers — see NeutralizeProteusOwnedState.
+        if (accessoryItems is { Count: > 0 } carriers && design["Equipment"] is JObject equip)
+            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
+                if (equip[accessorySlot] is JObject s && s["ItemId"] is { } iid
+                    && carriers.Contains(iid.ToObject<ulong>()))
+                    (drop ??= []).Add(("Equipment", accessorySlot));
 
         if (drop == null) return design;
 
@@ -1499,9 +1504,14 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>The carrier ids to strip at boot, straight from the game sheets.</summary>
-    private (ulong? Glasses, ulong? Ring) BootCarriers()
+    // Every accessory slot's invisible piece, not just the ring: at boot we cannot know which slots a
+    // carrier was left in, so all of them are neutralized. Harmless for a slot we never used — the id only
+    // matches if that exact item is actually worn.
+    private (ulong? Glasses, IReadOnlyList<ulong> Accessories) BootCarriers()
         => (InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId,
-            InvisibleRing.Resolve(Plugin.DataManager, log)?.ItemId);
+            InvisibleRing.CarrierSlots
+                .Select(c => InvisibleRing.ResolveFor(Plugin.DataManager, log, c.Slot)?.ItemId)
+                .Where(id => id != null).Select(id => id!.Value).Distinct().ToList());
 
     // Compare whichever numeric colour fields the design entry carries against the state entry, with
     // a small tolerance to absorb float round-trip noise. A field present on the design but missing

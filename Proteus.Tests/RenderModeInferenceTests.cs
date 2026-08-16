@@ -166,6 +166,18 @@ public class RenderModeInferenceTests
         => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Gear, pinned: false,
             Rows(new ColorTableSubRowPreset { Emissive = 0.5f }), aboveGear: true));
 
+    // A shell is cut from the body, so a face overlay has nothing to be promoted ONTO. Both reasons are
+    // vetoed — promoting one anyway built a body shell carrying the face's art.
+    [Fact]
+    public void Promote_GlowWithNoShellSurface_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Emissive = 0.5f }), aboveGear: false, canShell: false));
+
+    [Fact]
+    public void Promote_AboveGearWithNoShellSurface_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(), aboveGear: true, canShell: false));
+
     // ── Override path (design binding) reads the override, not the descriptor ───
 
     [Fact]

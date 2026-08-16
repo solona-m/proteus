@@ -172,28 +172,36 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoInvisibleGlasses { get; set; } = true;
 
-    /// <summary>
-    /// When true and nothing the player wears can host the shell in its own model space, Proteus has
-    /// Glamourer equip the (invisible) Emperor's New Ring in the free RIGHT ring slot and hosts there.
-    /// <para/>
-    /// This is what makes non-Midlander races fit. The game race-deforms a model by the race code of the
-    /// path it loaded it from: facewear and most accessories ship per-race, so a shell cut from c0201 body
-    /// parts hosted on them gets no deform and renders a race-size wrong. We write the ring's EQDP entry
-    /// ourselves, so we can leave the wearer's own race empty and let the lookup fall through to the c0201
-    /// model we publish — inheriting the same deform the body already gets. Never steals an occupied right
-    /// ring slot; same ApplyFlag.Once/removal contract as <see cref="AutoInvisibleGlasses"/>.
-    /// </summary>
-    public bool AutoEmperorRing { get; set; } = true;
+    // AutoEmperorRing was removed. It gated whether the reconcile would EQUIP an invisible carrier, but not
+    // whether ChooseHosts would offer one as a host — so turning it off did not stop layers being assigned to
+    // carriers, it only stopped those carriers from ever being worn. The layers then rendered nothing, and
+    // the "no host can carry it" warning could not fire because they had been given a host. That was survivable
+    // while one ring was the only accessory carrier and every other host was something already on the player;
+    // it stopped being survivable when face/hair/tail surfaces arrived, since those can ONLY ride a carrier.
+    // Rather than thread the flag into host selection, the option is gone: an invisible piece in a slot the
+    // player left empty is the mechanism the feature is built on, and it is removed again the moment it stops
+    // hosting.
 
     /// <summary>
-    /// Which ring slot ("rir"/"ril") holds an Emperor's New Ring that PROTEUS equipped, or null.
-    ///
-    /// Persisted because it is the only thing separating our ring from the player's. The ring is an ordinary
-    /// obtainable item that plenty of people wear by choice for invisible hands, so "a ring whose model is
-    /// a0053 is in this slot" cannot answer ownership — and that was the test the removal path used, which
-    /// meant Proteus unequipped a ring the player had put on themselves the moment a shell went to some other
-    /// host. In memory alone this was useless for the job: a plugin reload cleared it while our ring stayed
-    /// equipped, so gating removal on it would have stranded the ring instead.
+    /// Which accessory slots hold an invisible "Emperor's New" piece that PROTEUS equipped — a COMMA-JOINED
+    /// SET drawn from "rir", "ril", "wrs", "nek" (e.g. <c>"nek,wrs"</c>), or null for none.
+    /// <para/>
+    /// A set, not one slot: a look can need a carrier in more than one place, because a carrier is the only
+    /// host whose EQDP entry is ours to rewrite and therefore the only one that can carry a face, hair or
+    /// tail layer without the game deforming it. The pieces are separate items (Ring, Bracelets, Necklace)
+    /// that merely share the a0053 accessory model set, so the slot is what identifies each one.
+    /// <para/>
+    /// The NAME is deliberately stale. Renaming it would silently discard the value in every existing
+    /// config, and the value is an ownership record — losing it strands a piece on the player with nothing
+    /// left that knows we put it there. The comma-joined encoding is backward compatible for the same
+    /// reason: an older config holding <c>"rir"</c> reads back as exactly that one slot.
+    /// <para/>
+    /// Persisted because it is the only thing separating our piece from the player's. These are ordinary
+    /// obtainable items that plenty of people wear by choice (invisible hands, invisible arms), so "an a0053
+    /// model is in this slot" cannot answer ownership — and that was the test the removal path used, which
+    /// meant Proteus unequipped jewellery the player had put on themselves the moment a shell went to some
+    /// other host. In memory alone it was useless for the job: a plugin reload cleared it while our piece
+    /// stayed equipped, so gating removal on it would have stranded the piece instead.
     /// </summary>
     public string? InjectedRingSlot { get; set; }
 

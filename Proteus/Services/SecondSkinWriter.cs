@@ -89,9 +89,16 @@ public static class SecondSkinWriter
     /// <para/>
     /// Returns false rather than throwing on a model this can't read — a missing position or uv0 element,
     /// a truncated buffer, anything Parse rejects. The caller treats that as "no seam data" and falls back.
+    /// <para/>
+    /// <paramref name="keepMaterial"/> selects which meshes count, defaulting to body skin. The two callers
+    /// genuinely want different answers and must not be unified: the seam map is built for the SKIN bake and
+    /// is body-only by nature, while the shell's shape fingerprint has to describe whatever surface is being
+    /// cut, or a face logs "(no skin geometry)" and the most useful diagnostic in the build goes dark.
     /// </summary>
-    public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs, out int[] triangles)
+    public static bool TryReadLod0Geometry(byte[] mdl, out float[] positions, out float[] uvs, out int[] triangles,
+        Func<string, bool>? keepMaterial = null)
     {
+        keepMaterial ??= IsBodySkinMaterial;
         positions = []; uvs = []; triangles = [];
         Source src;
         try { src = Parse(mdl); }
@@ -121,7 +128,7 @@ public static class SecondSkinWriter
             if (vc == 0 || ic < 3) continue;
 
             ushort matIdx = BitConverter.ToUInt16(s, mo + 8);
-            if (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null) continue;
+            if (matIdx >= matNames.Count || !keepMaterial(matNames[matIdx])) continue;
 
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
             VElem? posEl = null, uvEl = null;
@@ -203,6 +210,48 @@ public static class SecondSkinWriter
     }
 
     /// <summary>
+    /// The default mesh filter: body skin only. Split out from <see cref="SkinMaterialBodyType"/> because
+    /// that function was answering two unrelated questions with one return value — "does this mesh belong in
+    /// a shell" (a bool, asked per mesh) and "what UV space is this model in" (a string, asked per model).
+    /// Only the caller ever wanted the string, and only this predicate is what a non-body surface needs to
+    /// replace.
+    /// </summary>
+    public static bool IsBodySkinMaterial(string materialName) => SkinMaterialBodyType(materialName) != null;
+
+    /// <summary>
+    /// A mesh filter that keeps exactly the meshes bound to the named materials, compared by leaf name
+    /// (the model stores them with a leading slash). This is what a non-body surface uses: a face model
+    /// carries eyes, lashes and brows beside the face itself, each with its own material AND its own UV
+    /// layout, so an overlay that declares it paints <c>mt_c1401f0001_fac_a.mtrl</c> must get that mesh and
+    /// nothing else. Naming the material is stricter than any suffix rule and cannot drift with the game's
+    /// naming conventions, because it is the mod's own declared target.
+    /// </summary>
+    public static Func<string, bool> KeepByLeaf(IReadOnlySet<string> leaves)
+        => n => leaves.Contains(n.TrimStart('/'));
+
+    /// <summary>
+    /// One source model and everything the merge needs to know about it. Replaces the parallel arrays this
+    /// used to take (enabled shapes, UV converters, and a single connector flag shared by every source):
+    /// they were index-aligned by convention, and each new per-source concern was another chance to
+    /// misalign them. It also makes the per-source-ness explicit where it matters — a shell cut from a face
+    /// and one cut from a body do not want the same mesh filter or the same connector heuristic.
+    /// </summary>
+    /// <param name="Model">The .mdl bytes.</param>
+    /// <param name="KeepMaterial">Which meshes to copy, by material name. Null = <see cref="IsBodySkinMaterial"/>.</param>
+    /// <param name="EnabledShapes">Shape keys the game has enabled on this model, to bake.</param>
+    /// <param name="UvConv">Vertex UV conversion into the shell's space. Null = already there, leave alone.</param>
+    /// <param name="DropConnectors">
+    /// Drop this source's redundant connector geometry. A Neolithe-tuned heuristic (see the emit loop), so
+    /// it is only ever right for a BODY source — pointed at a face, tail or ear it deletes real geometry.
+    /// </param>
+    public readonly record struct SourceSpec(
+        byte[] Model,
+        Func<string, bool>? KeepMaterial = null,
+        HashSet<string>? EnabledShapes = null,
+        Func<float, float, (float U, float V)?>? UvConv = null,
+        bool DropConnectors = false);
+
+    /// <summary>
     /// One entry of a mesh's vertex declaration: where and in what format a given attribute (Usage) sits
     /// within its vertex stream. Read so the transcoder can locate attributes by declaration instead of
     /// assuming a fixed layout — vanilla and modded models declare different offsets and types (half vs
@@ -242,6 +291,11 @@ public static class SecondSkinWriter
         // foot beside a gen3 torso). Rewrites each vertex's uv0 into the shell space so one art set —
         // already remapped into that space — lands correctly on every part. Null = same space, leave alone.
         public Func<float, float, (float U, float V)?>? UvConv;
+
+        // Which of this source's meshes belong in the shell, and whether its connector heuristic runs.
+        // Both per-source: see SourceSpec.
+        public Func<string, bool> Keep = IsBodySkinMaterial;
+        public bool DropConnectors;
     }
 
     /// <summary>One mesh's index edits for a shape: for the mesh whose index range begins at
@@ -281,20 +335,37 @@ public static class SecondSkinWriter
         // Per-source UV-space converter, parallel to `sources`; null entries are already in shell space.
         // See Source.UvConv.
         IReadOnlyList<Func<float, float, (float U, float V)?>?>? uvConverters = null)
+        => Build(
+            sources.Select((m, i) => new SourceSpec(
+                m,
+                KeepMaterial: null,   // body-skin filter, the behaviour every existing caller expects
+                EnabledShapes: enabledShapes != null && i < enabledShapes.Count ? enabledShapes[i] : null,
+                UvConv: uvConverters != null && i < uvConverters.Count ? uvConverters[i] : null,
+                DropConnectors: skipConnectors)).ToList(),
+            layers, baseModel, out stats, diag);
+
+    /// <summary>
+    /// Build the merged shell from fully-described sources. Every layer is applied to every source, so all
+    /// sources here must share one UV space and one race space — that is what makes them one surface.
+    /// </summary>
+    public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
+        byte[]? baseModel, out Stats stats, Action<string>? diag = null)
     {
         if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
 
-        var parsed = sources.Select(Parse).ToList();
+        var parsed = sources.Select(s => Parse(s.Model)).ToList();
 
         // Attach each source's enabled shape keys and (Stage 2a) verify the parse against them: does the
         // .mdl actually contain the enabled shape, and how many of its index edits resolve to in-range
         // positions/vertices. This confirms the format read before any geometry is mutated.
         for (int i = 0; i < parsed.Count; i++)
         {
-            var en = enabledShapes != null && i < enabledShapes.Count ? enabledShapes[i] : null;
+            var en = sources[i].EnabledShapes;
             parsed[i].EnabledShapes = en;
-            parsed[i].UvConv = uvConverters != null && i < uvConverters.Count ? uvConverters[i] : null;
+            parsed[i].UvConv = sources[i].UvConv;
+            parsed[i].Keep = sources[i].KeepMaterial ?? IsBodySkinMaterial;
+            parsed[i].DropConnectors = sources[i].DropConnectors;
             // Warn only on the failure case: an enabled shape the .mdl doesn't actually contain (nothing to
             // bake). The success path is silent — the shell simply follows the body.
             if (en == null || en.Count == 0 || diag == null) continue;
@@ -376,6 +447,26 @@ public static class SecondSkinWriter
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv);
                 if (src.UvConv != null) uvMoved += vc;
+
+                // The tile normalization above shifts a mesh by the integer floor of its MINIMUM uv, which
+                // brings it onto [0,1] only if the whole mesh sits inside one integer cell. Body meshes do;
+                // an atlassed or tiled layout (hair especially) may not, and then part of the mesh keeps a
+                // coordinate past 1 and samples the art through the sampler's wrap — art in the wrong place
+                // on one mesh, which looks like a dozen other faults. Reported, not corrected: correcting it
+                // per-island is real work and no body model has ever needed it. This is the line that says
+                // whether a new surface does.
+                if (uv.Length > 0)
+                {
+                    float uLo = float.MaxValue, uHi = float.MinValue, vLo = float.MaxValue, vHi = float.MinValue;
+                    foreach (var (cu, cv) in uv)
+                    {
+                        if (cu < uLo) uLo = cu; if (cu > uHi) uHi = cu;
+                        if (cv < vLo) vLo = cv; if (cv > vHi) vHi = cv;
+                    }
+                    if (uHi - uLo > 1f || vHi - vLo > 1f)
+                        diag?.Invoke($"mesh {m} straddles a UV cell (u {uLo:F2}..{uHi:F2}, v {vLo:F2}..{vHi:F2}) "
+                                   + "— the per-mesh tile shift cannot bring all of it onto [0,1]");
+                }
             }
 
             // Bake enabled body shape keys (e.g. "Remove Hip Dips" = shpx_yam_softbutt) into the shell. A
@@ -456,7 +547,20 @@ public static class SecondSkinWriter
 
             if (!mapAppended)
             {
-                submeshBoneMap.AddRange(src.SubmeshBoneMap);
+                // The map's ENTRIES are indices into THIS source's own bone-name list, so they need the same
+                // by-name remap onto the union list that the mesh bone tables get below — only the OFFSETS
+                // into the map are rebased (mapBase, written into the submesh header as boneStart).
+                //
+                // Appended verbatim, they were identity-correct for exactly one source: whichever seeded the
+                // union list first (the host when appending, else source 0). Every later source's entries
+                // then named arbitrary union bones. It has never shown because today's sources are body parts
+                // from one body mod, whose bone lists match in both content and order — merge a model with a
+                // genuinely different skeleton subset beside them and the identity is gone.
+                foreach (var b in src.SubmeshBoneMap)
+                {
+                    var bn = b < src.BoneNames.Length ? src.BoneNames[b] : null;
+                    submeshBoneMap.Add(bn != null && boneIndex.TryGetValue(bn, out var bi) ? bi : (ushort)0);
+                }
                 mapAppended = true;
             }
 
@@ -579,15 +683,20 @@ public static class SecondSkinWriter
                     int mo = src.MeshStart + m * 36;
                     if (U16(mo) == 0) continue;   // empty mesh
 
-                    // SKIN ONLY. A body model also holds the smallclothes/undies mesh (gear UV), nails,
-                    // piercings and pubes; duplicating those and painting them with a body-UV overlay
-                    // smears the art across the hips and hands.
+                    // Which meshes of this source belong in the shell — see SourceSpec.KeepMaterial. For a
+                    // body that is SKIN ONLY: a body model also holds the smallclothes/undies mesh (gear
+                    // UV), nails, piercings and pubes, and duplicating those to paint them with a body-UV
+                    // overlay smears the art across the hips and hands. For a face or a tail it is the
+                    // material the overlay named, which excludes eyes and lashes on the same reasoning.
+                    //
+                    // The range guard stays OUTSIDE the predicate: a mesh whose material index is out of
+                    // range has no name to hand it.
                     ushort srcMat = U16(mo + 8);
-                    if (srcMat >= src.MatNames.Count || SkinMaterialBodyType(src.MatNames[srcMat]) == null)
+                    if (srcMat >= src.MatNames.Count || !src.Keep(src.MatNames[srcMat]))
                         continue;
 
                     EmitMesh(src, m, matIndex, push, preserve: false, cov: def, mapBase, ref mapAppended,
-                        dropConnectors: skipConnectors);
+                        dropConnectors: src.DropConnectors);
                 }
             }
         }
@@ -625,7 +734,25 @@ public static class SecondSkinWriter
         while (strMs.Position % 4 != 0) strMs.WriteByte(0);
         byte[] strings = strMs.ToArray();
 
+        // Flags, the 0x44 file header and the LOD block still come from source 0. That is a real choice, not
+        // an accident: source 0 is the surface this shell was cut from, and its flags are the ones that
+        // describe the geometry we are actually emitting. (The host's would describe a ring.)
         var head = parsed[0];
+
+        // The CULLING quantities are different — they are about extent, and the merged model's extent is the
+        // union of everything in it, exactly as UnionModelBBoxes already treats the bounding boxes. Taking
+        // source 0's alone understates them the moment the sources differ in size, and understating a radius
+        // or a clip distance means the game culls the shell while the body it copies is still on screen —
+        // the shell blinking out at an angle or a distance, with nothing in the log. Max is the only safe
+        // direction here: too large costs a little overdraw, too small loses the shell.
+        float radius = head.Radius, modelClip = head.ModelClip, shadowClip = head.ShadowClip;
+        foreach (var src in (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed))
+        {
+            if (src.Radius     > radius)     radius     = src.Radius;
+            if (src.ModelClip  > modelClip)  modelClip  = src.ModelClip;
+            if (src.ShadowClip > shadowClip) shadowClip = src.ShadowClip;
+        }
+
         uint stackSize = (uint)(meshCount * DeclSize);
 
         var ms = new MemoryStream();
@@ -639,7 +766,7 @@ public static class SecondSkinWriter
 
         long mhPos = ms.Position;
         var mh = new byte[56];
-        BitConverter.GetBytes(head.Radius).CopyTo(mh, 0);
+        BitConverter.GetBytes(radius).CopyTo(mh, 0);
         W16(mh, 4, (ushort)meshCount);
         W16(mh, 6, 0);                                              // attributes dropped
         W16(mh, 8, (ushort)subOut.Count);
@@ -652,8 +779,8 @@ public static class SecondSkinWriter
         W16(mh, 24, 0);                                             // elementIdCount
         mh[26] = 0;                                                 // terrain shadow meshes
         mh[27] = (byte)(head.Flags2 & ~0x10);                       // no extra LODs
-        BitConverter.GetBytes(head.ModelClip).CopyTo(mh, 28);
-        BitConverter.GetBytes(head.ShadowClip).CopyTo(mh, 32);
+        BitConverter.GetBytes(modelClip).CopyTo(mh, 28);
+        BitConverter.GetBytes(shadowClip).CopyTo(mh, 32);
         int boneTableShorts = boneTables.Sum(t => (t.Length + 1) & ~1);
         W16(mh, 44, (ushort)boneTableShorts);                       // BoneTableArrayCountTotal
         ms.Write(mh);
@@ -714,6 +841,28 @@ public static class SecondSkinWriter
             W16(o, p + 2, 0);
         }
         _ = mhPos;
+
+        // Every submesh bone map entry must name a bone that exists in the union list. This is the invariant
+        // the by-name remap above is responsible for, and the one whose failure would be ours.
+        //
+        // Deliberately NOT also checking that each submesh's [boneStart, boneStart+boneCount) window fits
+        // inside the map. That check was written, run, and thrown away on the evidence: real body models
+        // fail it as authored. A Neolithe e0000 top declares one mesh of five submeshes with boneStart
+        // 0/23/46/69/92 and boneCount 23 — windows reaching 115 — against a submesh bone map of 35 entries.
+        // Those numbers are the SOURCE's own, carried through unchanged, and shells built from them have
+        // been rendering in game for hundreds of builds. So the game does not read that field the way the
+        // struct layout suggests, and flagging it would fire on every composite while describing nothing.
+        //
+        // Worth knowing rather than just worth silencing: it means the submesh bone map is largely inert for
+        // these models, so the remap above is defence, not load-bearing machinery. If a merged-skeleton
+        // shell ever does misbehave, this is evidence that the bone TABLES (which are honoured) are where
+        // to look first.
+        {
+            int badEntry = submeshBoneMap.Count(v => v >= boneNames.Count);
+            if (badEntry > 0)
+                diag?.Invoke($"BONE MAP: {badEntry} entry(ies) name a bone past the {boneNames.Count}-bone "
+                           + "union list — the by-name remap failed to place them");
+        }
 
         if (shapedTotal > 0) diag?.Invoke($"shape bake: {shapedTotal} index entries rewired to morphed vertices");
         // Per LAYER, not per vertex: every layer rebuilds the same sources, so these count each source's
