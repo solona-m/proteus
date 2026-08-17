@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using CheapLoc;
 using Dalamud.Plugin.Services;
 
 namespace Proteus.Services;
@@ -54,7 +55,11 @@ public class UVMapDownloadService : IDisposable
         }
 
         State = UVMapDownloadState.Downloading;
-        StatusMessage = "Downloading UV maps...";
+        // Localized at PRODUCTION time, on a thread-pool thread, and then held as a plain string: switching
+        // language mid-download leaves this one pill in the old language until the next progress tick.
+        // Accepted deliberately — the alternative is storing a key plus boxed args and formatting at draw
+        // time, which is real machinery for a string that is replaced within seconds.
+        StatusMessage = Loc.Localize("Service.UVMaps.Downloading", "Downloading UV maps...");
         Task.Run(() => DownloadAll(onComplete), cts.Token);
     }
 
@@ -87,7 +92,8 @@ public class UVMapDownloadService : IDisposable
                 using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 if (!response.IsSuccessStatusCode)
                 {
-                    Fail($"Download failed: HTTP {(int)response.StatusCode} for {file}");
+                    Fail(string.Format(Loc.Localize("Service.UVMaps.HttpFailed.Fmt",
+                        "Download failed: HTTP {0} for {1}"), (int)response.StatusCode, file));
                     return;
                 }
 
@@ -110,7 +116,8 @@ public class UVMapDownloadService : IDisposable
                         {
                             var mb    = totalDownloaded / (1024 * 1024);
                             var total = totalExpected   / (1024 * 1024);
-                            StatusMessage = $"Downloading UV maps... ({mb} MB / {total} MB)";
+                            StatusMessage = string.Format(Loc.Localize("Service.UVMaps.Progress.Fmt",
+                                "Downloading UV maps... ({0} MB / {1} MB)"), mb, total);
                             nextReport += 5L * 1024 * 1024;
                         }
                     }
@@ -119,7 +126,8 @@ public class UVMapDownloadService : IDisposable
                 if (fileBytes < 100L * 1024 * 1024)
                 {
                     File.Delete(tmp);
-                    Fail($"Download too small ({fileBytes} bytes) for {file} — possible LFS pointer");
+                    Fail(string.Format(Loc.Localize("Service.UVMaps.TooSmall.Fmt",
+                        "Download too small ({0} bytes) for {1} — possible LFS pointer"), fileBytes, file));
                     return;
                 }
 
@@ -143,7 +151,7 @@ public class UVMapDownloadService : IDisposable
         }
         catch (Exception ex)
         {
-            Fail($"Download error: {ex.Message}");
+            Fail(string.Format(Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
         }
     }
 

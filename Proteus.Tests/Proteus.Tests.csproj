@@ -46,6 +46,16 @@
     <Reference Include="Microsoft.Extensions.ObjectPool">
       <HintPath>$(DalamudLibPath)Microsoft.Extensions.ObjectPool.dll</HintPath>
     </Reference>
+    <!-- LocalizationTests only. Mono.Cecil rather than reflection because the invariant being tested is an
+         IL-level one: CheapLoc's exporter reads the two instructions before each Loc.Localize call and both
+         must be ldstr, which is the one thing reflection cannot see. Both DLLs already sit in the Dalamud
+         dev folder that AssemblySearchPaths points at. -->
+    <Reference Include="CheapLoc">
+      <HintPath>$(DalamudLibPath)CheapLoc.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(DalamudLibPath)Mono.Cecil.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

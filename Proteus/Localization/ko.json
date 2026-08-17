@@ -1,0 +1,1150 @@
+{
+  "Band.Caption": {
+    "message": "오버레이 컴포지터",
+    "description": ""
+  },
+  "Band.Pill.Disabled": {
+    "message": "비활성",
+    "description": ""
+  },
+  "Band.Pill.NoPenumbra": {
+    "message": "Penumbra 없음",
+    "description": ""
+  },
+  "Band.Recomposite.Tip": {
+    "message": "지금 다시 합성",
+    "description": ""
+  },
+  "Band.Retry.Btn": {
+    "message": "다시 시도",
+    "description": ""
+  },
+  "Band.Settings.Tip": {
+    "message": "설정",
+    "description": ""
+  },
+  "Bindings.Active.Fmt": {
+    "message": "적용 중: {0}",
+    "description": ""
+  },
+  "Bindings.Apply.Btn": {
+    "message": "적용",
+    "description": ""
+  },
+  "Bindings.Apply.Tip": {
+    "message": "Glamourer를 거치지 않고 이 디자인의 Proteus 상태를 지금 복원합니다.\n기록된 모든 모드의 사용 여부 / 우선도 / 옵션 / 색상이 대상입니다.\n\n연결에 포함되지 않은 Proteus 모드는 꺼집니다. 즉 현재 모습에 더하는 것이\n아니라 대체합니다.",
+    "description": ""
+  },
+  "Bindings.Col.Captured": {
+    "message": "저장 시각",
+    "description": ""
+  },
+  "Bindings.Col.Design": {
+    "message": "디자인",
+    "description": ""
+  },
+  "Bindings.Enable.Label": {
+    "message": "Proteus 상태를 Glamourer 디자인에 연결",
+    "description": ""
+  },
+  "Bindings.Enable.Tip": {
+    "message": "켜면 Glamourer 디자인을 저장할 때 현재 Proteus 상태를 함께 기록합니다.\n나중에 그 디자인을 적용하면 복원됩니다(장비는 가능한 범위에서 일치시킵니다).",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Label": {
+    "message": "Glamourer 자동화 따르기(장비 세트 / 직업 변경)",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Tip": {
+    "message": "장비 세트나 직업이 바뀌어 자동화가 디자인을 적용할 때 Glamourer는 아무것도\n알리지 않으므로, Proteus는 도착하는 신호로부터 이를 추론합니다.\n\n연결을 복원하기만 하며, 결코 해제하지 않습니다.\nProteus 자신이 일으키는 다시 그리기는 제외되므로, 자신의 작업이 자동화\n적용으로 오인되지 않습니다.\n\n위의 \"Proteus 상태를 Glamourer 디자인에 연결\"이 필요합니다.",
+    "description": ""
+  },
+  "Bindings.HoursAgo.Fmt": {
+    "message": "{0}시간 전",
+    "description": ""
+  },
+  "Bindings.MinutesAgo.Fmt": {
+    "message": "{0}분 전",
+    "description": ""
+  },
+  "Bindings.None": {
+    "message": "아직 연결된 디자인이 없습니다.",
+    "description": ""
+  },
+  "Bindings.Pill.Active": {
+    "message": "적용 중",
+    "description": ""
+  },
+  "Bindings.SecondsAgo.Fmt": {
+    "message": "{0}초 전",
+    "description": ""
+  },
+  "Bindings.Unbind.Btn": {
+    "message": "연결 해제",
+    "description": ""
+  },
+  "Bindings.Unbind.Tip": {
+    "message": "이 연결을 버립니다. Glamourer 디자인 자체는 그대로 유지됩니다.",
+    "description": ""
+  },
+  "Bindings.Update.Btn": {
+    "message": "업데이트",
+    "description": ""
+  },
+  "Bindings.Update.Inactive.Tip": {
+    "message": "현재 상태로 업데이트할 수 있는 것은 적용 중인 연결뿐입니다.\n먼저 이 디자인을 적용하세요.",
+    "description": ""
+  },
+  "Bindings.Update.Tip": {
+    "message": "현재 Proteus 상태(사용 여부 / 우선도 / 옵션 / 색상)를 이 연결에 기록합니다.\n수동 편집은 여기를 클릭해야만 유지됩니다.",
+    "description": ""
+  },
+  "Chat.GlowPromoted.Fmt": {
+    "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
+    "description": ""
+  },
+  "Chat.NoShellSurface.Fmt": {
+    "message": "[Proteus] \"{0}\"이(가) Proteus가 레이어를 만들 수 없는 오버레이에 발광을 설정했습니다. 발광은 메시 위에 얹는 레이어가 필요하며, 이는 자신의 피부(몸, 얼굴, 머리카락, 꼬리, 귀)에서만 가능합니다. 장비, 장신구, 무기에서는 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Chat.OverBudget.Fmt": {
+    "message": "[Proteus] 이 모습은 {0}개의 레이어(Mask {1}, Cloth {2})로 이루어져 있지만, 장신구에는 {3}개만 들어갑니다(Proteus의 보이지 않는 예비 반지 포함). 일부 레이어를 끄거나 안경 / 반지 / 팔찌 / 목걸이를 하나 더 착용하면 나머지도 들어갑니다.",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Fmt": {
+    "message": "[Proteus] {0}이(가) Proteus가 오버레이를 합성해 넣는 피부 텍스처를 덮어쓰고 있어서 표시되지 않았습니다. 이를 해결하기 위해 Proteus의 Penumbra 우선도를 {1}(으)로 올렸습니다. (원하지 않으면 Proteus 설정에서 \"모드 우선도 자동 올리기\"를 끄세요.)",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Many.Fmt": {
+    "message": "\"{0}\" 외 {1}개",
+    "description": ""
+  },
+  "Chat.PriorityRaised.One.Fmt": {
+    "message": "\"{0}\"",
+    "description": ""
+  },
+  "Chat.RedirectLost.Fmt": {
+    "message": "[Proteus] \"{0}\"이(가) {1}을(를) 덮어쓰고 있습니다. 바로 그곳이 Proteus가 오버레이를 합성하는 지점이므로 표시되지 않습니다. 해결 방법: Penumbra에서 \"Proteus\" 모드의 우선도를 \"{0}\"보다 높게 설정하세요.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawing": {
+    "message": "[Proteus] 세컨드 스킨은 만들어졌지만 게임이 그리지 않고 있습니다. 그것을 얹은 장신구는 착용되어 있는데도 캐릭터가 Proteus 버전을 불러오지 않습니다. 해당 장신구를 벗었다가 다시 착용하거나 다른 것을 선택해 보세요.",
+    "description": ""
+  },
+  "Chat.UnclaimedRedirects.Fmt": {
+    "message": "[Proteus] Proteus가 게시한 파일 중 {0}개가 게임에 도달하지 못했습니다. 아무것도 연결되지 않은 상태로, 보통 현재 Penumbra 컬렉션에서 \"Proteus\" 모드가 비활성화되어 있다는 뜻입니다. 그곳에서 활성화되어 있는지 확인하세요.",
+    "description": ""
+  },
+  "Chat.UnhostedLayers.Fmt": {
+    "message": "[Proteus] {1}의 일부 레이어를 배치하지 못했습니다(레이어 수: {0}). 종족 변형을 받을 수 없는 레이어라 Proteus가 통째로 교체할 수 있는 칸이 필요합니다. 반지 칸(어느 손이든)이나 얼굴 장식 칸을 비우면 나타납니다.",
+    "description": ""
+  },
+  "Colors.Advanced": {
+    "message": "고급",
+    "description": ""
+  },
+  "Colors.Auto": {
+    "message": "(자동)",
+    "description": ""
+  },
+  "Colors.Auto.Tip": {
+    "message": "모드는 사용 중인 기능을 따릅니다. 스피어 맵이나 메탈 ⇒ Cloth,\n발광 효과 ⇒ 애니메이션 발광, 특별한 것이 없으면 ⇒ Skin.",
+    "description": ""
+  },
+  "Colors.BackToAuto.Btn": {
+    "message": "자동으로 되돌리기",
+    "description": ""
+  },
+  "Colors.BaseUnchanged": {
+    "message": "기본 색상은 그대로입니다. 단 \"고급\"의 \"기본값으로 되돌리기\"는 기본 색상을 덮어쓰며, \"바디\"는 어떤 연결도 기록하지 않는 전역 설정입니다.",
+    "description": ""
+  },
+  "Colors.Bodies.All": {
+    "message": "모든 바디",
+    "description": ""
+  },
+  "Colors.Bodies.BiboGen3": {
+    "message": "bibo+gen3",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalNote": {
+    "message": "전역으로 저장됩니다 — 연결은 이 항목을 기록하지 않습니다.",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalSuffix": {
+    "message": "\n전역 설정입니다 — 편집 중인 연결에는 포함되지 않습니다.",
+    "description": ""
+  },
+  "Colors.Bodies.Label": {
+    "message": "바디",
+    "description": ""
+  },
+  "Colors.Bodies.Off": {
+    "message": "끔",
+    "description": ""
+  },
+  "Colors.Bodies.Tip": {
+    "message": "이 모드를 어떤 바디 유형에 구울지:\n모든 바디 = 자매 바디(bibo↔gen3/Eve) + 기본(gen2)\nbibo+gen3 = 자매 바디에만 굽기(기본값)\n끔 = 합성하지 않음\n\n이 옵션뿐 아니라 모드 전체에 적용됩니다.",
+    "description": ""
+  },
+  "Colors.CopyRow.Btn": {
+    "message": "행 복사",
+    "description": ""
+  },
+  "Colors.CopyRow.Tip": {
+    "message": "이 행의 하위 행(A와 B)을 모두 복사합니다.",
+    "description": ""
+  },
+  "Colors.CopySub.Btn": {
+    "message": "복사",
+    "description": ""
+  },
+  "Colors.CopySub.Tip": {
+    "message": "이 하위 행의 값을 복사합니다.",
+    "description": ""
+  },
+  "Colors.Diffuse.Gear.Tip": {
+    "message": "발광 아래에 있는 표면입니다 — 오버레이 자체의 디퓨즈 이미지에 곱해집니다.\n\n발광 재질에서는 어둡게 유지하세요. 그렇지 않으면 발광이 돋보일 대상이 없어\n아무리 높여도 약해 보입니다. 기본 스크롤 재질도 거의 검은 디퓨즈와 밝은\n이미시브를 함께 쓰는 이유가 바로 이것입니다.",
+    "description": ""
+  },
+  "Colors.Diffuse.Label": {
+    "message": "디퓨즈",
+    "description": ""
+  },
+  "Colors.EditingBinding.Fmt": {
+    "message": "\"{0}\" 편집 중 — 실시간으로 미리 보는 중입니다. 저장하려면 연결 탭에서 \"업데이트\"를 클릭하세요.",
+    "description": ""
+  },
+  "Colors.Effect.FromMod.Fmt": {
+    "message": "{0}  (모드)",
+    "description": ""
+  },
+  "Colors.ForceMode.Hint": {
+    "message": "기능에 따라 정해지게 두지 않고 렌더 모드를 고정합니다:",
+    "description": ""
+  },
+  "Colors.ForceMode.Tip": {
+    "message": "Skin(그리기) — skin.shpk.  Cloth — character.shpk(스피어, 메탈).\n애니메이션 발광 — characterscroll.shpk. 고정하면 자동 모드 전환이 멈춥니다.",
+    "description": ""
+  },
+  "Colors.GlowAmount.Label": {
+    "message": "발광",
+    "description": ""
+  },
+  "Colors.GlowAmount.Tip": {
+    "message": "characterscroll에서 이 값은 밝기가 아니라 작은 게이트입니다:\n0 = 전혀 발광하지 않음. 값이 크면 스크롤 맵의 색이 날아갑니다.\n기본 애니메이션 재질은 약 0.025를 사용합니다.",
+    "description": ""
+  },
+  "Colors.GlowColour.Label": {
+    "message": "발광 색상",
+    "description": ""
+  },
+  "Colors.GlowColour.Tip": {
+    "message": "디퓨즈와는 별개인 발광 색상입니다 — 발광 재질은 보통 어두운 표면에\n밝은 발광을 조합합니다. 기본값은 디퓨즈와 같습니다.",
+    "description": ""
+  },
+  "Colors.GlowEffect.Label": {
+    "message": "발광 효과",
+    "description": ""
+  },
+  "Colors.GlowEffect.Tip": {
+    "message": "스크롤 맵을 선택하면 이 오버레이가 발광하고 움직이며, 애니메이션 발광으로\n전환됩니다. 맵 자체가 발광(색상, 무늬, 움직임)이며, 행의 발광 값이 그 세기를\n조절합니다. 효과는 모드의 Proteus/Effects/ 폴더에서, 그다음 사용자의 Effects\n폴더에서 불러옵니다.",
+    "description": ""
+  },
+  "Colors.GroupOption.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Colors.Highlight.Gear.Tip": {
+    "message": "이 하위 행의 메시를 캐릭터에서 발광시켜 게임 안에서 찾기 쉽게 합니다.\n다시 클릭하면 중지됩니다.",
+    "description": ""
+  },
+  "Colors.Highlight.Glow.Btn": {
+    "message": "발광",
+    "description": ""
+  },
+  "Colors.Highlight.Glowing.Btn": {
+    "message": "발광 중",
+    "description": ""
+  },
+  "Colors.Highlight.Skin.Tip": {
+    "message": "이 하위 행의 영역을 캐릭터 피부 위에 밝게 표시해 게임 안에서 찾기 쉽게\n합니다. 다시 클릭하면 중지됩니다. (처음에는 생성에 잠시 걸립니다.)",
+    "description": ""
+  },
+  "Colors.Mask.Forced": {
+    "message": "(강제)",
+    "description": ""
+  },
+  "Colors.Mask.Forced.Tip": {
+    "message": "이 모드의 다른 활성 옵션이 장비로 렌더링되므로 마스크는 그 셸 위에 얹혀야 하며,\n아래의 피부에 그려 넣을 수 없습니다. 해당 옵션들을 (각 탭의 고급에서) Skin으로\n바꾸면 마스크가 자신의 모드 선택을 되찾습니다.",
+    "description": ""
+  },
+  "Colors.MasksTab": {
+    "message": "마스크",
+    "description": ""
+  },
+  "Colors.Metal.Tip": {
+    "message": "메탈은 자체 디퓨즈 색이 없으며, 반사하는 것을 보여 줍니다.\n반사할 스피어 맵이 없으면 금속 표면은 그저 어두워집니다.",
+    "description": ""
+  },
+  "Colors.Metalness.Label": {
+    "message": "금속성",
+    "description": ""
+  },
+  "Colors.Mode.AnimatedGlow": {
+    "message": "애니메이션 발광",
+    "description": ""
+  },
+  "Colors.Mode.Cloth": {
+    "message": "Cloth",
+    "description": ""
+  },
+  "Colors.Mode.Skin": {
+    "message": "Skin(그리기)",
+    "description": ""
+  },
+  "Colors.NoActiveOptions": {
+    "message": "활성 옵션이 없습니다 — Penumbra에서 하나를 선택하면 색상을 편집할 수 있습니다.",
+    "description": ""
+  },
+  "Colors.NoEffects": {
+    "message": "효과를 찾을 수 없습니다 — 설정의 \"발광 효과 텍스처\" 버튼이 여는 폴더나\n모드 자체의 Proteus/Effects/ 폴더에 이미지를 넣으세요.",
+    "description": ""
+  },
+  "Colors.NoIndexTexture": {
+    "message": "인덱스 텍스처가 없습니다 — 16번 행만 적용됩니다.",
+    "description": ""
+  },
+  "Colors.None": {
+    "message": "없음",
+    "description": ""
+  },
+  "Colors.Opacity.Label": {
+    "message": "불투명도",
+    "description": ""
+  },
+  "Colors.Opacity.Tip": {
+    "message": "음수는 이 행을 투명하게, 양수는 불투명하게 만듭니다.",
+    "description": ""
+  },
+  "Colors.PasteRow.Btn": {
+    "message": "행 붙여넣기",
+    "description": ""
+  },
+  "Colors.PasteRow.NeedCopy": {
+    "message": "먼저 행을 복사하세요.",
+    "description": ""
+  },
+  "Colors.PasteRow.Tip.Fmt": {
+    "message": "복사한 행으로 {0}번 행(하위 행 둘 다)을 덮어씁니다.",
+    "description": ""
+  },
+  "Colors.PasteSub.Btn": {
+    "message": "붙여넣기",
+    "description": ""
+  },
+  "Colors.PasteSub.NeedCopy": {
+    "message": "먼저 하위 행을 복사하세요.",
+    "description": ""
+  },
+  "Colors.PasteSub.Tip": {
+    "message": "복사한 값으로 이 하위 행을 덮어씁니다.",
+    "description": ""
+  },
+  "Colors.Pill.Binding": {
+    "message": "연결",
+    "description": ""
+  },
+  "Colors.Pinned": {
+    "message": "(고정됨)",
+    "description": ""
+  },
+  "Colors.Pinned.Tip": {
+    "message": "고급에서 이 모드를 고정했으므로, 설정한 기능을 더 이상 따르지 않습니다.\n\"자동으로 되돌리기\"를 클릭하면 다시 적응합니다.",
+    "description": ""
+  },
+  "Colors.RenderingAs": {
+    "message": "렌더링 방식:",
+    "description": ""
+  },
+  "Colors.Reset.Btn": {
+    "message": "기본값으로 되돌리기",
+    "description": ""
+  },
+  "Colors.Reset.Tip": {
+    "message": "Ctrl을 누른 채 클릭하면 이 옵션의 색상, 발광, 모드를 Proteus가 이 모드를\n처음 저장했을 때의 설정으로 되돌립니다. 되돌릴 수 없습니다.\n\n디자인이 적용되어 있다면, 그 디자인이 이 옵션에 저장해 둔 재정의도 함께\n삭제됩니다. 그러지 않으면 디자인이 곧바로 다시 적용하기 때문입니다. 다른\n디자인의 설정은 그대로 유지됩니다.\n\n참고: 이 \"원래 설정\"은 Proteus가 이 모드를 처음 저장한 시점의 것입니다.\n그 전에 이미 편집했다면, 편집된 그 상태가 \"기본값\"이 됩니다.",
+    "description": ""
+  },
+  "Colors.Roughness.Label": {
+    "message": "거칠기",
+    "description": ""
+  },
+  "Colors.Row.Unused.Tip": {
+    "message": "이 오버레이의 인덱스 텍스처는 이 행을 선택하지 않으므로,\n편집해도 아무런 효과가 없습니다.",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Label": {
+    "message": "스크롤 속도",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Tip": {
+    "message": "효과가 흐르는 속도(X와 Y). 음수는 반대 방향, 0은 정지. 0.01 정도가 일반적입니다.",
+    "description": ""
+  },
+  "Colors.Section.Colours": {
+    "message": "색상",
+    "description": ""
+  },
+  "Colors.Section.Physical": {
+    "message": "물리 속성",
+    "description": ""
+  },
+  "Colors.Section.Physical.ClothSuffix": {
+    "message": "— Cloth",
+    "description": ""
+  },
+  "Colors.Section.SphereMap": {
+    "message": "스피어 맵",
+    "description": ""
+  },
+  "Colors.Specular.Label": {
+    "message": "스페큘러",
+    "description": ""
+  },
+  "Colors.Sphere.Index.Label": {
+    "message": "인덱스",
+    "description": ""
+  },
+  "Colors.Sphere.Intensity.Label": {
+    "message": "강도",
+    "description": ""
+  },
+  "Colors.Sphere.Tip": {
+    "message": "게임이 공유하는 스피어 맵 배열에서 한 장을 반사합니다.\n인덱스와 강도가 모두 0이 아니어야 하며, 아니면 아무 일도 일어나지 않습니다.\ncharacterscroll.shpk에서는 작동하지 않습니다 — character.shpk를 사용하세요.",
+    "description": ""
+  },
+  "Colors.Stack.Tip": {
+    "message": "이 모드의 오버레이가 몸 위에 쌓이는 순서를 그룹에 상관없이 바꿉니다.\n가장 왼쪽 탭 = 맨 위(가장 마지막에 합성되어 위에 놓입니다).",
+    "description": ""
+  },
+  "Colors.StackHint": {
+    "message": "오버레이 편집 중 (탭을 끌어 순서 변경 — 가장 왼쪽이 맨 위):",
+    "description": ""
+  },
+  "Colors.SubRowA.Fmt": {
+    "message": "{0}번 행 A",
+    "description": ""
+  },
+  "Colors.SubRowB.Fmt": {
+    "message": "{0}번 행 B",
+    "description": ""
+  },
+  "Colors.Tiling.Label": {
+    "message": "타일링",
+    "description": ""
+  },
+  "Colors.Tiling.Tip": {
+    "message": "효과가 표면에서 반복되는 횟수. 1 = 한 번.",
+    "description": ""
+  },
+  "Colors.TowardBottom.Btn": {
+    "message": "아래로",
+    "description": ""
+  },
+  "Colors.TowardTop.Btn": {
+    "message": "위로",
+    "description": ""
+  },
+  "Command.Help": {
+    "message": "Proteus 오버레이 컴포지터 상태 창을 켜거나 끕니다. \"/proteus config\"를 입력하면 설정 탭이 열립니다.",
+    "description": ""
+  },
+  "Common.Browse.Btn": {
+    "message": "찾아보기",
+    "description": ""
+  },
+  "Common.Clear.Btn": {
+    "message": "지우기",
+    "description": ""
+  },
+  "Common.None": {
+    "message": "(없음)",
+    "description": ""
+  },
+  "Create.Author.Label": {
+    "message": "제작자",
+    "description": ""
+  },
+  "Create.Create.Btn": {
+    "message": "만들기",
+    "description": ""
+  },
+  "Create.Create.DisabledTip": {
+    "message": "모드 이름과 머티리얼 대상을 입력하고 텍스처를 하나 이상 선택하세요.",
+    "description": ""
+  },
+  "Create.Error.FolderExists.Fmt": {
+    "message": "\"{0}\"(이)라는 이름의 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "Create.Error.MissingFile.Fmt": {
+    "message": "{0} 파일이 더 이상 존재하지 않습니다: {1}",
+    "description": ""
+  },
+  "Create.Error.NoMaterial": {
+    "message": "머티리얼 대상을 입력하세요.",
+    "description": ""
+  },
+  "Create.Error.NoName": {
+    "message": "모드 이름을 입력하세요.",
+    "description": ""
+  },
+  "Create.Error.NoTexture": {
+    "message": "텍스처를 하나 이상 선택하세요(디퓨즈, 마스크, 노멀 또는 인덱스).",
+    "description": ""
+  },
+  "Create.Error.ReservedName": {
+    "message": "\"Proteus\"는 예약된 이름입니다 — 다른 모드 이름을 선택하세요.",
+    "description": ""
+  },
+  "Create.Error.UnusableName": {
+    "message": "이 모드 이름에는 사용할 수 있는 문자가 없습니다 — 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "Create.Error.WriteFailed.Fmt": {
+    "message": "모드를 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Create.Intro": {
+    "message": "기본적인 Proteus 오버레이 모드를 만듭니다. 텍스처를 하나 이상 선택하면 Proteus가 새 Penumbra 모드를 작성하고 열어 주므로 바로 활성화하고 조정할 수 있습니다.",
+    "description": ""
+  },
+  "Create.MaterialTarget.Label": {
+    "message": "머티리얼 대상",
+    "description": ""
+  },
+  "Create.MaterialTarget.Tip": {
+    "message": "이 오버레이가 합성될 머티리얼입니다. 현재 착용 중인 바디에서 자동으로\n채워집니다. 목록에서 착용 중인 것을 고르거나, 지금 착용하지 않은 바디／종족을\n대상으로 하려면 경로를 직접 입력하세요.",
+    "description": ""
+  },
+  "Create.ModName.Label": {
+    "message": "모드 이름",
+    "description": ""
+  },
+  "Create.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 만들고 활성화한 뒤 Penumbra에서 열었습니다.",
+    "description": ""
+  },
+  "Create.PickTexture.Title.Fmt": {
+    "message": "{0} 텍스처 선택",
+    "description": ""
+  },
+  "Create.Picker.Empty": {
+    "message": "아직 착용 중인 머티리얼을 알 수 없습니다.\n지역을 이동하거나 다시 그린 뒤 이 목록을 다시 열어 주세요.",
+    "description": ""
+  },
+  "Create.Picker.SkinGroup": {
+    "message": "피부",
+    "description": ""
+  },
+  "Create.Picker.Stale": {
+    "message": "마지막으로 확인된 목록을 표시하고 있습니다 — 캐릭터가 그려지지 않았습니다.",
+    "description": ""
+  },
+  "Create.Redetect.Btn": {
+    "message": "다시 감지",
+    "description": ""
+  },
+  "Create.Redetect.Tip": {
+    "message": "바디 감지를 다시 실행하고 입력란을 덮어씁니다.",
+    "description": ""
+  },
+  "Create.Slot.Diffuse": {
+    "message": "디퓨즈",
+    "description": ""
+  },
+  "Create.Slot.Index": {
+    "message": "인덱스",
+    "description": ""
+  },
+  "Create.Slot.Mask": {
+    "message": "마스크",
+    "description": ""
+  },
+  "Create.Slot.NoDiffuse": {
+    "message": "이 머티리얼에는 디퓨즈 텍스처가 없습니다.",
+    "description": ""
+  },
+  "Create.Slot.NoIndex": {
+    "message": "이 머티리얼에는 인덱스 텍스처가 없으며, 피부도 얼굴도 아닙니다 —\n여기에는 컬러 테이블 행 선택자를 읽을 것이 없습니다.",
+    "description": ""
+  },
+  "Create.Slot.NoMask": {
+    "message": "이 머티리얼에는 마스크 텍스처가 없습니다.",
+    "description": ""
+  },
+  "Create.Slot.NoNormal": {
+    "message": "이 머티리얼에는 노멀 텍스처가 없습니다.",
+    "description": ""
+  },
+  "Create.Slot.Normal": {
+    "message": "노멀",
+    "description": ""
+  },
+  "Create.Slot.Unused": {
+    "message": "(이 머티리얼에서는 사용되지 않음)",
+    "description": ""
+  },
+  "Create.SlotsUnreadable": {
+    "message": "이 머티리얼을 읽지 못했습니다 — 모든 칸을 표시합니다.",
+    "description": ""
+  },
+  "Export.Dialog.Filter": {
+    "message": "Penumbra 모드 팩",
+    "description": ""
+  },
+  "Export.Dialog.Title": {
+    "message": "Proteus 모드 내보내기",
+    "description": ""
+  },
+  "Export.DisabledInPenumbra.Fmt": {
+    "message": "{0}\n(Penumbra에서 비활성화됨)",
+    "description": ""
+  },
+  "Export.Error.EmptyFolder": {
+    "message": "이 모드 폴더는 비어 있습니다 — 내보낼 것이 없습니다.",
+    "description": ""
+  },
+  "Export.Error.FolderGone.Fmt": {
+    "message": "모드 폴더가 사라졌습니다: {0}",
+    "description": ""
+  },
+  "Export.Error.NoPath": {
+    "message": "파일을 저장할 위치를 선택하세요.",
+    "description": ""
+  },
+  "Export.Error.WriteFailed.Fmt": {
+    "message": "파일을 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Export.Filter.Hint": {
+    "message": "검색…",
+    "description": ""
+  },
+  "Export.Intro": {
+    "message": "Proteus 모드 중 하나를 Penumbra 모드 팩(.pmp)으로 저장해 공유할 수 있습니다. 옵션, 색상, 마스크, 발광 효과까지 모두 포함되며, 이 파일은 Penumbra에 바로 설치됩니다.",
+    "description": ""
+  },
+  "Export.Mod.Label": {
+    "message": "모드",
+    "description": ""
+  },
+  "Export.ModDisabled.Note": {
+    "message": "이 모드는 Penumbra에서 비활성화되어 있지만, 내보내기 결과는 동일합니다.",
+    "description": ""
+  },
+  "Export.NoMatch.Fmt": {
+    "message": "\"{0}\"과(와) 일치하는 항목이 없습니다.",
+    "description": ""
+  },
+  "Export.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 내보냈습니다 — 파일 수: {1}, {2} MB.\n{3}",
+    "description": ""
+  },
+  "Export.Phase.Choosing": {
+    "message": "위치 선택…",
+    "description": ""
+  },
+  "Export.Phase.Idle": {
+    "message": "내보내기",
+    "description": ""
+  },
+  "Export.Phase.Writing": {
+    "message": "내보내는 중…",
+    "description": ""
+  },
+  "Footer.LastComposite.Fmt": {
+    "message": "마지막 합성: {0}   적용된 텍스처: {1}   모드: {2}",
+    "description": ""
+  },
+  "Footer.MinutesAgo.Fmt": {
+    "message": "{0}분 전",
+    "description": ""
+  },
+  "Footer.NoResult": {
+    "message": "아직 합성 결과가 없습니다.",
+    "description": ""
+  },
+  "Footer.Pill.Failed": {
+    "message": "실패",
+    "description": ""
+  },
+  "Footer.Pill.Ok": {
+    "message": "정상",
+    "description": ""
+  },
+  "Footer.SecondsAgo.Fmt": {
+    "message": "{0}초 전",
+    "description": ""
+  },
+  "Footer.UnknownError": {
+    "message": "알 수 없는 오류",
+    "description": ""
+  },
+  "Import.AsTex.Label": {
+    "message": "레이어를 BC7 .tex로 변환",
+    "description": ""
+  },
+  "Import.AsTex.Tip": {
+    "message": "디스크 용량이 약 4분의 1로 줄고, 합성할 때 PNG 디코딩이 필요 없습니다.\n블록 압축은 손실 방식입니다 — 팩의 이미지를 제작된 그대로 유지하려면 꺼 두세요.",
+    "description": ""
+  },
+  "Import.AsTex.Unavailable.Tip": {
+    "message": "네이티브 블록 압축기가 로드되지 않아 BC7 인코딩에 몇 분이 걸립니다.",
+    "description": ""
+  },
+  "Import.Author.Label": {
+    "message": "제작자",
+    "description": ""
+  },
+  "Import.BodyFit.NeedsAllBodies.Fmt": {
+    "message": "이 팩에는 기본 바디용으로 그려진 것이 없어 대신 \"{0}\"이(가) 사용됩니다. 기본 바디로 굽는 기능은 기본적으로 꺼져 있으므로, Proteus가 가져올 때 이 모드의 \"바디\"를 \"모든 바디\"로 설정합니다(색상 → 고급). 그러지 않으면 아무것도 그리지 않습니다.",
+    "description": ""
+  },
+  "Import.BodyFit.NotDrawn.Fmt": {
+    "message": "캐릭터가 아직 그려지지 않아 Proteus가 바디가 아닌 선호도에 따라 \"{0}\"을(를) 선택했습니다. 게임에 들어간 뒤 결과를 확인하세요.",
+    "description": ""
+  },
+  "Import.BodyFit.Remapped.Fmt": {
+    "message": "이 팩에는 사용 중인 {0} 바디용 항목이 없어 \"{1}\"이(가) 자동으로 다시 매핑됩니다.",
+    "description": ""
+  },
+  "Import.Browse.Btn": {
+    "message": "팩 찾아보기",
+    "description": ""
+  },
+  "Import.DefaultLayoutMatched.Fmt": {
+    "message": "\"{0}\"이(가) 선택됩니다 — 착용 중인 바디와 일치합니다.",
+    "description": ""
+  },
+  "Import.Description": {
+    "message": "설명",
+    "description": ""
+  },
+  "Import.Dialog.Filter": {
+    "message": "Onion 팩",
+    "description": ""
+  },
+  "Import.Dialog.Title": {
+    "message": "Onion 팩 선택",
+    "description": ""
+  },
+  "Import.Failed.Fmt": {
+    "message": "가져오기 실패: {0}",
+    "description": ""
+  },
+  "Import.Import.Btn": {
+    "message": "가져오기",
+    "description": ""
+  },
+  "Import.Importing.Btn": {
+    "message": "가져오는 중…",
+    "description": ""
+  },
+  "Import.Intro": {
+    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. Proteus가 팩의 레이어를 읽어 Proteus 사이드카가 포함된 새 Penumbra 모드를 작성합니다 — 원본 파일은 변경되지 않습니다.",
+    "description": ""
+  },
+  "Import.Layer.Imported.Fmt": {
+    "message": "{0}\n{2} UV 공간에서 {1}(으)로 가져옵니다.",
+    "description": ""
+  },
+  "Import.Layer.NoLayout": {
+    "message": "(레이아웃 없음)",
+    "description": ""
+  },
+  "Import.Layer.NoMap": {
+    "message": "(맵 없음)",
+    "description": ""
+  },
+  "Import.Layer.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Import.Layer.SkippedReason.Fmt": {
+    "message": "{0}\n건너뛴 이유: {1}",
+    "description": ""
+  },
+  "Import.LayerCount.Fmt": {
+    "message": "레이어: {1}개 중 {0}개",
+    "description": ""
+  },
+  "Import.Layouts.Fmt": {
+    "message": "이 팩에는 UV 레이아웃이 {0}개 있어 모드에 Penumbra 단일 선택 그룹 \"{1}\"이(가) 생깁니다({2}). 한 번에 하나만 합성됩니다.",
+    "description": ""
+  },
+  "Import.Materials.Fallback": {
+    "message": "Proteus가 게임의 바디 목록을 읽지 못해 이번 가져오기는 동작이 확인된 여성 바디만 대상으로 합니다. 게임에 들어간 뒤 이 팩을 다시 열면 모든 종족을 포함할 수 있습니다.",
+    "description": ""
+  },
+  "Import.Materials.FallbackNote": {
+    "message": "대체 목록 — 이 팩을 열 때 게임 데이터를 읽을 수 없었습니다.",
+    "description": ""
+  },
+  "Import.Materials.FromGame": {
+    "message": "게임이 정의하는 모든 바디로, 오버레이가 종족을 넘나들며 따라옵니다. 착용하지 않은 바디는 합성 시 무시됩니다.",
+    "description": ""
+  },
+  "Import.Materials.Header.Fmt": {
+    "message": "머티리얼 대상 ({0})",
+    "description": ""
+  },
+  "Import.Materials.Layout.Fmt": {
+    "message": "{0}  ({1})",
+    "description": ""
+  },
+  "Import.ModName.Label": {
+    "message": "모드 이름",
+    "description": ""
+  },
+  "Import.NeedName": {
+    "message": "모드 이름을 입력하세요.",
+    "description": ""
+  },
+  "Import.NoPack": {
+    "message": ".omp 파일을 선택하면 내용이 표시됩니다.",
+    "description": ""
+  },
+  "Import.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 레이어가 없습니다.",
+    "description": ""
+  },
+  "Import.Result.AllBodies.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 레이어: {1}{2}. 이 팩에는 기본 바디용으로 그려진 것이 없어, Proteus가 이 모드의 \"바디\"를 \"모든 바디\"로 설정해 구웠습니다(색상 → 고급). 이를 끄면 더 이상 그리지 않습니다.",
+    "description": ""
+  },
+  "Import.Result.NoLayout.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 레이어: {1}{2}. 다만 Proteus가 바디 레이아웃을 선택하지 못했습니다. Penumbra의 \"{3}\"에서 하나를 선택하지 않으면 아무것도 그려지지 않습니다.",
+    "description": ""
+  },
+  "Import.Result.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 레이어: {1}{2}. 활성화하고 Penumbra에서 열었습니다.",
+    "description": ""
+  },
+  "Import.Result.SkippedTail.Fmt": {
+    "message": " (건너뜀: {0})",
+    "description": ""
+  },
+  "Import.Warn.FormatVersion.Fmt": {
+    "message": "이 팩은 형식 버전 {0}을(를) 선언하지만, Proteus는 {1}까지만 검증했습니다. 가져온 뒤 결과를 확인하세요.",
+    "description": ""
+  },
+  "Import.Warn.Generated": {
+    "message": "일부 레이아웃은 직접 그린 것이 아니라 Onion이 다른 레이아웃에서 생성한 것입니다. 그대로 가져오지만, 결과가 흐릿해 보이면 직접 그린 레이아웃을 사용하세요.",
+    "description": ""
+  },
+  "Import.Warn.NothingImportable": {
+    "message": "이 팩에서 가져올 수 있는 레이어가 없습니다 — 위의 사유를 참고하세요.",
+    "description": ""
+  },
+  "Import.Warn.OptionGroups.Fmt": {
+    "message": "이 팩에는 Onion 옵션 그룹이 있습니다({0}). 이는 가져오지 않으며, 모든 레이어를 조건 없이 가져옵니다.",
+    "description": ""
+  },
+  "Import.Warn.RaceFilters": {
+    "message": "일부 레이어는 특정 종족으로 제한되어 있습니다. Proteus는 종족 필터를 이어받지 않으므로 모든 종족용으로 가져옵니다.",
+    "description": ""
+  },
+  "Import.Website.Tip": {
+    "message": "모드의 Penumbra 페이지로 이어집니다.",
+    "description": ""
+  },
+  "Mods.Ao.Off": {
+    "message": "끔",
+    "description": ""
+  },
+  "Mods.Ao.On": {
+    "message": "켬",
+    "description": ""
+  },
+  "Mods.Ao.Pack.Fmt": {
+    "message": "팩 ({0})",
+    "description": ""
+  },
+  "Mods.Ao.Tip.Fmt": {
+    "message": "이 모드의 끈／의상 가장자리에 적용되는 앰비언트 오클루전 그림자와 Skindenting\n노멀 눌림입니다. 덮인 부분을 피부에 눌린 천으로 취급하므로 문신이나 피부\n디테일에는 맞지 않습니다 — 그래서 요청하지 않는 한 꺼져 있습니다.\n\n{0} = 팩이 선언한 값(metadata.json의 \"AmbientOcclusion\";\n없으면 끔).\n켬 / 끔 = 이 모드에 대한 사용자의 설정으로, 팩보다 우선합니다.\n\n(전체 세기 슬라이더는 설정에 있습니다.)",
+    "description": ""
+  },
+  "Mods.Col.Colors": {
+    "message": "색상",
+    "description": ""
+  },
+  "Mods.Col.Mod": {
+    "message": "모드",
+    "description": ""
+  },
+  "Mods.Col.On": {
+    "message": "사용",
+    "description": ""
+  },
+  "Mods.Col.Priority": {
+    "message": "우선도",
+    "description": ""
+  },
+  "Mods.Col.Skindent": {
+    "message": "Skindent",
+    "description": ""
+  },
+  "Mods.Colors.BindingDriven.Tip": {
+    "message": "색상은 적용 중인 디자인 연결이 제어합니다.\n편집은 즉시 미리 보이며, 저장하려면 연결 탭에서 \"업데이트\"를 클릭하세요. 기본 색상은 변경되지 않습니다.",
+    "description": ""
+  },
+  "Mods.Colors.Btn": {
+    "message": "색상",
+    "description": ""
+  },
+  "Mods.NoSidecarMods": {
+    "message": "Proteus 사이드카가 있는 모드를 찾지 못했습니다.",
+    "description": ""
+  },
+  "Mods.PluginDisabled": {
+    "message": "Proteus가 비활성화되어 있습니다 — 설정에서 켜 주세요.",
+    "description": ""
+  },
+  "Service.NoPenumbraDir": {
+    "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Service.RegisterFailed.Fmt": {
+    "message": "모드는 작성되었지만 Penumbra가 등록하지 못했습니다({0}). Penumbra에서 모드를 다시 검색하세요.",
+    "description": ""
+  },
+  "Service.UVMaps.Downloading": {
+    "message": "UV 맵을 내려받는 중...",
+    "description": ""
+  },
+  "Service.UVMaps.Error.Fmt": {
+    "message": "다운로드 오류: {0}",
+    "description": ""
+  },
+  "Service.UVMaps.HttpFailed.Fmt": {
+    "message": "다운로드 실패: {1}에 대해 HTTP {0}",
+    "description": ""
+  },
+  "Service.UVMaps.Progress.Fmt": {
+    "message": "UV 맵을 내려받는 중... ({0} MB / {1} MB)",
+    "description": ""
+  },
+  "Service.UVMaps.TooSmall.Fmt": {
+    "message": "다운로드 크기가 너무 작습니다({0}바이트): {1} — LFS 포인터일 수 있습니다",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Header.Fmt": {
+    "message": "기본 피부 ({0})",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Note": {
+    "message": "각 기본 텍스처를 읽어 온 모드입니다. 마우스를 올리면 게임 경로가 표시됩니다.",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Unconfirmed.Fmt": {
+    "message": "{0} (미확인)",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Btn": {
+    "message": "텍스처 캐시 비우기",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Tip": {
+    "message": "캐시된 디코딩 텍스처를 모두 버리고 지금 다시 합성합니다. 텍스처 수정이\n반영되지 않을 때 사용하세요. 예를 들어 오버레이를 같은 크기로 다시 내보낸\n경우, 플러그인을 재시작하지 않으면 변경이 나타나지 않습니다.\n\n각 기본 피부 텍스처가 어느 모드에서 오는지도 다시 판별합니다. 아래의\n\"기본 피부\"가 잘못된 모드를 표시할 때 사용하세요.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.EffectsOnly.Fmt": {
+    "message": "{0} — 효과만 (오버레이 이미지 없음)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Failed.Fmt": {
+    "message": "{0} — 디퓨즈 {1}, 노멀 {2}, 마스크 {3} (디퓨즈가 적용되지 않음)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Header.Fmt": {
+    "message": "오버레이 적용 범위 ({0})",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Note": {
+    "message": "각 채널에 실제로 도달한 오버레이 수입니다. 머티리얼은 마우스를 올리면 표시됩니다.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Ok.Fmt": {
+    "message": "{0} — 디퓨즈 {1}, 노멀 {2}, 마스크 {3}",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Label": {
+    "message": "모드 우선도 자동 올리기",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Tip": {
+    "message": "Proteus가 합성해 넣는 피부 텍스처를 다른 모드가 덮어쓰고 있다고 확인되면\n— 자체 바디 텍스처 사본을 포함한 문신 팩이나 피부 팩 등 —\nProteus의 Penumbra 우선도를 그 위로 자동으로 올리고 채팅으로 알립니다.\n\n이 덮어쓰기는 평소에는 전혀 드러나지 않습니다. 오버레이가 절반만 적용되고\n(요철은 올라가는데 색은 올라가지 않음), 로그의 모든 줄은 여전히 성공으로 보입니다.\n\nProteus가 합성하는 경로를 다른 모드가 의도적으로 차지하게 하려는 경우에만\n끄세요. Proteus는 추측으로 움직이지 않으며, 확인된 덮어쓰기에만 반응합니다.",
+    "description": ""
+  },
+  "Settings.General.DisableAutoRedraw.Label": {
+    "message": "자동 다시 그리기 비활성화",
+    "description": ""
+  },
+  "Settings.General.Enabled.Label": {
+    "message": "사용",
+    "description": ""
+  },
+  "Settings.General.Enabled.Tip": {
+    "message": "이 설정을 끄면 Proteus의 출력을 지우고, 그것 없이 캐릭터를 다시 그리며,\nPenumbra의 관리 모드 \"Proteus\"를 비활성화합니다.",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Btn": {
+    "message": "발광 효과 텍스처",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Tip.Fmt": {
+    "message": "Proteus가 애니메이션 발광 스크롤 맵을 읽어 오는 폴더를 엽니다. 발광 그\n자체인 \"_o\" 텍스처입니다. 여기에 넣은 파일은 모든 장비 오버레이의 효과\n목록에 나타납니다.\n\n{0}\n\n.tex, .dds, .png, .jpg, .bmp, .tga, .psd, .gif를 지원합니다.\n모드 자체의 Proteus/Effects/ 폴더가 이곳보다 우선합니다.",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Label": {
+    "message": "제자리 다시 불러오기",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Tip": {
+    "message": "전체 다시 그리기 대신 Glamourer의 제자리 장비 다시 불러오기로 텍스처를\n새로 고쳐, 사라졌다 나타나는 깜빡임을 피합니다. Glamourer가 처리할 수 없을\n때는 자동으로 전체 다시 그리기로 되돌아갑니다.",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Label": {
+    "message": "변경 없는 재합성 건너뛰기",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Tip": {
+    "message": "지역 이동이나 다시 그리기로 시작된 재합성을, 출력에 영향을 주는 변경이\n전혀 없을 때 일찍 중단하도록 합니다. 직접 변경한 내용은 항상 재합성됩니다.\n수정이 반영되지 않는 원인을 가려낼 때만 끄세요.",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Label": {
+    "message": "투명 안경에 얹기 (반지를 비워 둠)",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Tip": {
+    "message": "이 설정이 켜져 있고 안경을 착용하지 않은 경우, Proteus는 Glamourer로 하여금\n투명 안경 아이템을 착용시켜 세컨드 스킨이 반지 대신 얼굴 장식 칸에 얹히도록\n합니다. 이는 Glamourer 상태에 (숨겨진) 보너스 아이템을 기록하며, Proteus를\n비활성화하거나 실제 안경을 착용하거나 이 설정을 끄면 제거됩니다.",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Btn": {
+    "message": "변경된 장신구 복원",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Tip": {
+    "message": "전체 다시 그리기를 강제하여 세컨드 스킨이 대체한 반지나 팔찌를 다시 불러와\n원래 모델로 되돌립니다. 비활성화하거나 교체한 뒤에도 장비 셸이 장신구에\n남아 있을 때 사용하세요.",
+    "description": ""
+  },
+  "Settings.Output.Compression.Label": {
+    "message": "압축 사용",
+    "description": ""
+  },
+  "Settings.Output.Compression.Tip": {
+    "message": "구운 텍스처를 블록 압축(BC7)하여 디스크와 VRAM에서 각각 비압축 크기의 약\n4분의 1로 줄입니다. 인덱스 텍스처는 정확한 행 값을 유지하기 위해 비압축\n상태로 남습니다. 끄면 = 비압축(이전과 바이트 단위로 동일).",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Label": {
+    "message": "커넥터 메시 숨기기",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Tip": {
+    "message": "장비 \"세컨드 스킨\"에서 각 신체 부위의 커넥터 링 — 관절(손목／발목／…)에 있는\n작은 추가 서브메시 — 을 건너뜁니다. 일부 바디(Neolithe)는 이미 완성된 몸과\n겹치는 링으로 관절을 보강하는데, 비치는 오버레이에서는 그 겹침이 두 겹이 되어\n더 불투명한 이음새로 보입니다. 다른 바디에서는 Off로 두세요 — 그런 바디에서\n그 서브메시는 실제 피부이므로 숨기면 틈이 생깁니다.",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Label": {
+    "message": "선명한 알파 (감상 모드의 스피어/메탈)",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Tip": {
+    "message": "실험적 기능. 셸 덮개를 부드러운 투명 대신 알파 테스트 방식의 딱딱한\n잘라내기로 렌더링하여, 스피어 맵과 금속 질감이 감상 모드에서도 남도록 합니다\n(감상 모드는 투명 표면에서 이를 버립니다). 대신 비치는 가장자리가 딱딱하고\n계단처럼 됩니다. 대체로 불투명한 천에 가장 적합하며, 아주 얇은 천은 거칠어\n보입니다. 전환한 뒤에는 다시 합성하세요.",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Label": {
+    "message": "텍스처 캐시(MB)",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Tip": {
+    "message": "합성과 합성 사이에 디코딩된 텍스처 데이터를 메모리에 얼마나 유지할지입니다.\n\n4K 텍스처는 디코딩 시 64 MB를 차지하므로 사실상 개수 설정입니다: 2048 MB ≈ 30장.\n한 번의 합성 전체를 담을 수 있어야만 효과가 있습니다. 그보다 적으면 실행할 때마다\n다음에 필요한 것을 밀어내어 아무것도 재사용되지 않습니다.\n\n재합성 로그의 \"cache N entries, M MB\" 값을 확인하세요. 아무것도 바꾸지 않은 두 번째\n합성에서도 미스가 보고되면 이 값을 올리세요. 게임이 페이징을 시작하면 낮추세요.\n60초간 사용하지 않으면 자동으로 해제됩니다.",
+    "description": ""
+  },
+  "Settings.Section.Diagnostics": {
+    "message": "진단",
+    "description": ""
+  },
+  "Settings.Section.General": {
+    "message": "일반",
+    "description": ""
+  },
+  "Settings.Section.Hosting": {
+    "message": "적재 위치",
+    "description": ""
+  },
+  "Settings.Section.Output": {
+    "message": "출력",
+    "description": ""
+  },
+  "Settings.Section.SkinEffects": {
+    "message": "피부 효과",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Label": {
+    "message": "앰비언트 오클루전",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Tip": {
+    "message": "마스크된 끈 가장자리 바로 바깥쪽 피부에 부드러운 접촉 그림자를 드리워 끈에 깊이를 줍니다.\n0.00이면 완전히 꺼집니다(피부 디퓨즈는 변경되지 않음).",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Label": {
+    "message": "그림자 부드러움",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Tip": {
+    "message": "앰비언트 오클루전 그림자가 끈 가장자리에서 얼마나 퍼지는지(텍스처 너비에 대한 비율).\n값이 클수록 넓고 부드러운 그림자가 됩니다. 그림자와 끈 눌림이 이 값을 함께 사용합니다.",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Label": {
+    "message": "피부색 억제",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Tip": {
+    "message": "오버레이가 피부색 물들임에 얼마나 저항할지(전역 배수).\n색상별로 픽셀 단위로 적용됩니다. 흰색이나 밝은 색은 어떤 피부색에서도 제작 당시의\n색을 유지하며(약간 더 광택이 납니다), 어두운 색은 자동으로 피부색으로 물들고\n무광으로 남습니다.\n0.00이면 완전히 꺼집니다(원래 모습).",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Label": {
+    "message": "Skindenting",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Tip": {
+    "message": "끈／의상 가장자리에서 피부 노멀을 눌러 끈이 피부에 파고든 것처럼 보이게 합니다.\n0.00이면 꺼집니다(피부 노멀은 변경되지 않음). 그림자와 같은 가장자리／부드러움을 사용합니다.",
+    "description": ""
+  },
+  "Tab.Bindings": {
+    "message": "연결",
+    "description": ""
+  },
+  "Tab.Create": {
+    "message": "만들기",
+    "description": ""
+  },
+  "Tab.Export": {
+    "message": "내보내기",
+    "description": ""
+  },
+  "Tab.Import": {
+    "message": "가져오기",
+    "description": ""
+  },
+  "Tab.Mods": {
+    "message": "모드",
+    "description": ""
+  },
+  "Tab.Settings": {
+    "message": "설정",
+    "description": ""
+  }
+}

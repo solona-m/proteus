@@ -1,0 +1,1150 @@
+{
+  "Band.Caption": {
+    "message": "сборщик наложений",
+    "description": ""
+  },
+  "Band.Pill.Disabled": {
+    "message": "выключено",
+    "description": ""
+  },
+  "Band.Pill.NoPenumbra": {
+    "message": "нет Penumbra",
+    "description": ""
+  },
+  "Band.Recomposite.Tip": {
+    "message": "Пересобрать сейчас",
+    "description": ""
+  },
+  "Band.Retry.Btn": {
+    "message": "Повторить",
+    "description": ""
+  },
+  "Band.Settings.Tip": {
+    "message": "Настройки",
+    "description": ""
+  },
+  "Bindings.Active.Fmt": {
+    "message": "Активно: {0}",
+    "description": ""
+  },
+  "Bindings.Apply.Btn": {
+    "message": "Применить",
+    "description": ""
+  },
+  "Bindings.Apply.Tip": {
+    "message": "Сразу восстанавливает состояние Proteus из этого дизайна, минуя Glamourer —\nвключение / приоритет / параметры / цвета для каждого записанного мода.\n\nМоды Proteus, которых НЕТ в привязке, выключаются: это заменяет текущий образ,\nа не дополняет его.",
+    "description": ""
+  },
+  "Bindings.Col.Captured": {
+    "message": "Записано",
+    "description": ""
+  },
+  "Bindings.Col.Design": {
+    "message": "Дизайн",
+    "description": ""
+  },
+  "Bindings.Enable.Label": {
+    "message": "Привязывать состояние Proteus к дизайнам Glamourer",
+    "description": ""
+  },
+  "Bindings.Enable.Tip": {
+    "message": "Когда включено, сохранение дизайна Glamourer записывает текущее состояние Proteus.\nПрименение этого дизайна позже восстановит его (экипировка сопоставляется по возможности).",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Label": {
+    "message": "Следовать автоматизации Glamourer (смена набора / профессии)",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Tip": {
+    "message": "Glamourer ничего не сообщает, когда автоматизация применяет дизайн при смене\nнабора экипировки или профессии, поэтому Proteus выводит это из приходящих сигналов.\n\nТолько восстанавливает привязку — и никогда её не снимает.\nЕдинственная перерисовка, которую вызывает сам Proteus, не учитывается, чтобы его\nсобственную работу нельзя было принять за применение автоматизации.\n\nТребуется «Привязывать состояние Proteus к дизайнам Glamourer» выше.",
+    "description": ""
+  },
+  "Bindings.HoursAgo.Fmt": {
+    "message": "{0} ч назад",
+    "description": ""
+  },
+  "Bindings.MinutesAgo.Fmt": {
+    "message": "{0} мин назад",
+    "description": ""
+  },
+  "Bindings.None": {
+    "message": "Привязанных дизайнов пока нет.",
+    "description": ""
+  },
+  "Bindings.Pill.Active": {
+    "message": "активно",
+    "description": ""
+  },
+  "Bindings.SecondsAgo.Fmt": {
+    "message": "{0} с назад",
+    "description": ""
+  },
+  "Bindings.Unbind.Btn": {
+    "message": "Отвязать",
+    "description": ""
+  },
+  "Bindings.Unbind.Tip": {
+    "message": "Забыть эту привязку. Сам дизайн Glamourer остаётся нетронутым.",
+    "description": ""
+  },
+  "Bindings.Update.Btn": {
+    "message": "Обновить",
+    "description": ""
+  },
+  "Bindings.Update.Inactive.Tip": {
+    "message": "Из текущего состояния можно обновить только активную привязку.\nСначала примените этот дизайн.",
+    "description": ""
+  },
+  "Bindings.Update.Tip": {
+    "message": "Записывает текущее состояние Proteus (включение / приоритет / параметры / цвета)\nв эту привязку. Ручные правки сохраняются только после нажатия здесь.",
+    "description": ""
+  },
+  "Chat.GlowPromoted.Fmt": {
+    "message": "[Proteus] «{0}» задаёт свечение на слое кожи. Кожа больше не может светиться, поэтому этот параметр теперь отрисовывается как тканевый слой — ему нужен свободный аксессуар, и поверхность будет выглядеть немного иначе.",
+    "description": ""
+  },
+  "Chat.NoShellSurface.Fmt": {
+    "message": "[Proteus] «{0}» задаёт свечение на наложении, для которого Proteus не может построить слой. Свечению нужен слой поверх меша, а это работает только на вашей собственной коже — теле, лице, волосах, хвосте или ушах — но не на экипировке, аксессуарах или оружии.",
+    "description": ""
+  },
+  "Chat.OverBudget.Fmt": {
+    "message": "[Proteus] В этом образе {0} слоёв ({1} Mask, {2} Cloth), но на ваши аксессуары помещается только {3} (невидимое запасное кольцо Proteus уже учтено). Отключите часть слоёв или наденьте ещё одни очки / кольцо / браслет / ожерелье, чтобы поместилось остальное.",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Fmt": {
+    "message": "[Proteus] {0} перекрывал текстуры кожи, в которые Proteus собирает ваши наложения, поэтому они не могли появиться. Приоритет Proteus в Penumbra поднят до {1}, чтобы это исправить. (Отключите «Автоматически повышать приоритет мода» в настройках Proteus, если предпочитаете обойтись без этого.)",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Many.Fmt": {
+    "message": "«{0}» и ещё {1}",
+    "description": ""
+  },
+  "Chat.PriorityRaised.One.Fmt": {
+    "message": "«{0}»",
+    "description": ""
+  },
+  "Chat.RedirectLost.Fmt": {
+    "message": "[Proteus] «{0}» перекрывает {1}, а именно туда Proteus собирает ваши наложения — поэтому они не появятся. Решение: в Penumbra поднимите приоритет мода «Proteus» выше «{0}».",
+    "description": ""
+  },
+  "Chat.ShellNotDrawing": {
+    "message": "[Proteus] Вторая кожа собрана, но игра её не отрисовывает. Аксессуар, на котором она держится, надет, однако персонаж не загружает версию Proteus. Снимите и наденьте этот аксессуар заново или выберите другой.",
+    "description": ""
+  },
+  "Chat.UnclaimedRedirects.Fmt": {
+    "message": "[Proteus] {0} из публикуемых Proteus файлов не доходят до игры — они не ведут никуда, что обычно означает, что мод «Proteus» отключён в вашей текущей коллекции Penumbra. Проверьте, включён ли он там.",
+    "description": ""
+  },
+  "Chat.UnhostedLayers.Fmt": {
+    "message": "[Proteus] Часть слоёв на вашем участке {1} не удалось разместить (слоёв: {0}). Они не должны деформироваться по расе, поэтому им нужен слот, который Proteus может заменить целиком: освободите слот кольца (на любой руке) или слот очков, и они появятся.",
+    "description": ""
+  },
+  "Colors.Advanced": {
+    "message": "Дополнительно",
+    "description": ""
+  },
+  "Colors.Auto": {
+    "message": "(авто)",
+    "description": ""
+  },
+  "Colors.Auto.Tip": {
+    "message": "Режим следует за тем, что вы используете: сфера-карта или металл ⇒ Cloth,\nэффект свечения ⇒ Анимированное свечение, ничего особенного ⇒ Skin.",
+    "description": ""
+  },
+  "Colors.BackToAuto.Btn": {
+    "message": "Вернуть авто",
+    "description": ""
+  },
+  "Colors.BaseUnchanged": {
+    "message": "Базовые цвета не меняются — кроме раздела «Дополнительно», где «Сбросить к значениям по умолчанию» перезаписывает их, а «Тела» — глобальная настройка, которую не сохраняет ни одна привязка.",
+    "description": ""
+  },
+  "Colors.Bodies.All": {
+    "message": "Все тела",
+    "description": ""
+  },
+  "Colors.Bodies.BiboGen3": {
+    "message": "bibo+gen3",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalNote": {
+    "message": "Сохраняется глобально — привязки этого не записывают.",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalSuffix": {
+    "message": "\nГлобальная настройка — она НЕ входит в привязку, которую вы редактируете.",
+    "description": ""
+  },
+  "Colors.Bodies.Label": {
+    "message": "Тела",
+    "description": ""
+  },
+  "Colors.Bodies.Off": {
+    "message": "Выкл.",
+    "description": ""
+  },
+  "Colors.Bodies.Tip": {
+    "message": "На какие типы тел запекать этот мод:\nВсе тела = родственное тело (bibo↔gen3/Eve) + стандартное (gen2)\nbibo+gen3 = запекать только на родственное тело (по умолчанию)\nВыкл. = без синтеза\n\nПрименяется ко всему моду, а не только к этому параметру.",
+    "description": ""
+  },
+  "Colors.CopyRow.Btn": {
+    "message": "Копировать строку",
+    "description": ""
+  },
+  "Colors.CopyRow.Tip": {
+    "message": "Копирует обе подстроки (A и B) этой строки.",
+    "description": ""
+  },
+  "Colors.CopySub.Btn": {
+    "message": "Копировать",
+    "description": ""
+  },
+  "Colors.CopySub.Tip": {
+    "message": "Копирует значения этой подстроки.",
+    "description": ""
+  },
+  "Colors.Diffuse.Gear.Tip": {
+    "message": "Поверхность ПОД свечением — она умножается на собственную диффузную графику наложения.\n\nДля светящегося материала держите её ТЁМНОЙ, иначе свечению не на чем выделяться\nи оно будет выглядеть тусклым, как бы сильно вы его ни подняли. В стандартных\nпрокручиваемых материалах почти чёрный диффуз сочетается с ярким свечением именно поэтому.",
+    "description": ""
+  },
+  "Colors.Diffuse.Label": {
+    "message": "Диффуз",
+    "description": ""
+  },
+  "Colors.EditingBinding.Fmt": {
+    "message": "Редактирование «{0}» — предпросмотр в реальном времени; нажмите «Обновить» на вкладке привязок, чтобы сохранить.",
+    "description": ""
+  },
+  "Colors.Effect.FromMod.Fmt": {
+    "message": "{0}  (мод)",
+    "description": ""
+  },
+  "Colors.ForceMode.Hint": {
+    "message": "Задать режим отрисовки вручную, не полагаясь на определение по возможностям:",
+    "description": ""
+  },
+  "Colors.ForceMode.Tip": {
+    "message": "Skin (роспись) — skin.shpk.  Cloth — character.shpk (сфера, металл).\nАнимированное свечение — characterscroll.shpk. Закрепление останавливает автосмену режима.",
+    "description": ""
+  },
+  "Colors.GlowAmount.Label": {
+    "message": "Свечение",
+    "description": ""
+  },
+  "Colors.GlowAmount.Tip": {
+    "message": "В characterscroll это небольшой ПОРОГ, а не яркость:\n0 = свечения нет совсем; большое значение вымывает цвет прокручиваемой карты.\nСтандартные анимированные материалы используют ~0,025.",
+    "description": ""
+  },
+  "Colors.GlowColour.Label": {
+    "message": "Цвет свечения",
+    "description": ""
+  },
+  "Colors.GlowColour.Tip": {
+    "message": "Цвет свечения, независимый от диффуза — светящемуся материалу обычно нужна\nТЁМНАЯ поверхность с ярким свечением. По умолчанию совпадает с диффузом.",
+    "description": ""
+  },
+  "Colors.GlowEffect.Label": {
+    "message": "Эффект свечения",
+    "description": ""
+  },
+  "Colors.GlowEffect.Tip": {
+    "message": "Выберите прокручиваемую карту, чтобы это наложение СВЕТИЛОСЬ и анимировалось —\nэто переключит его в Анимированное свечение. Карта и ЕСТЬ свечение (цвет, узор,\nдвижение); значение «Свечение» в строке задаёт его силу. Эффекты берутся из папки\nмода Proteus/Effects/, затем из вашей папки Effects.",
+    "description": ""
+  },
+  "Colors.GroupOption.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Colors.Highlight.Gear.Tip": {
+    "message": "Заставляет меш этой подстроки светиться на персонаже, чтобы вы нашли его\nв игре. Нажмите ещё раз, чтобы остановить.",
+    "description": ""
+  },
+  "Colors.Highlight.Glow.Btn": {
+    "message": "Подсветить",
+    "description": ""
+  },
+  "Colors.Highlight.Glowing.Btn": {
+    "message": "Подсвечено",
+    "description": ""
+  },
+  "Colors.Highlight.Skin.Tip": {
+    "message": "Подсвечивает область этой подстроки на коже персонажа, чтобы вы нашли её\nв игре. Нажмите ещё раз, чтобы остановить. (В первый раз потребуется момент.)",
+    "description": ""
+  },
+  "Colors.Mask.Forced": {
+    "message": "(принудительно)",
+    "description": ""
+  },
+  "Colors.Mask.Forced.Tip": {
+    "message": "Другой активный параметр этого мода отрисовывается как экипировка, поэтому маска\nдолжна лежать на этой оболочке — её нельзя нарисовать в коже под ней. Переключите\nте параметры на Skin (раздел «Дополнительно» на их вкладках), и маска снова получит\nсобственный выбор режима.",
+    "description": ""
+  },
+  "Colors.MasksTab": {
+    "message": "Маски",
+    "description": ""
+  },
+  "Colors.Metal.Tip": {
+    "message": "У металла нет собственного диффузного цвета — он показывает то, что отражает.\nБез сфера-карты для отражения металлическая поверхность просто темнеет.",
+    "description": ""
+  },
+  "Colors.Metalness.Label": {
+    "message": "Металличность",
+    "description": ""
+  },
+  "Colors.Mode.AnimatedGlow": {
+    "message": "Анимированное свечение",
+    "description": ""
+  },
+  "Colors.Mode.Cloth": {
+    "message": "Cloth",
+    "description": ""
+  },
+  "Colors.Mode.Skin": {
+    "message": "Skin (роспись)",
+    "description": ""
+  },
+  "Colors.NoActiveOptions": {
+    "message": "Активных параметров нет — выберите один в Penumbra, чтобы изменить его цвета.",
+    "description": ""
+  },
+  "Colors.NoEffects": {
+    "message": "Эффекты не найдены — положите изображения в папку, которую открывает кнопка\n«Текстуры эффекта свечения» (Настройки), или в папку мода Proteus/Effects/.",
+    "description": ""
+  },
+  "Colors.NoIndexTexture": {
+    "message": "Нет индексной текстуры — применяется только строка 16.",
+    "description": ""
+  },
+  "Colors.None": {
+    "message": "Нет",
+    "description": ""
+  },
+  "Colors.Opacity.Label": {
+    "message": "Непрозрачность",
+    "description": ""
+  },
+  "Colors.Opacity.Tip": {
+    "message": "Отрицательное значение делает строку прозрачнее, положительное — плотнее.",
+    "description": ""
+  },
+  "Colors.PasteRow.Btn": {
+    "message": "Вставить строку",
+    "description": ""
+  },
+  "Colors.PasteRow.NeedCopy": {
+    "message": "Сначала скопируйте строку.",
+    "description": ""
+  },
+  "Colors.PasteRow.Tip.Fmt": {
+    "message": "Заменяет строку {0} (обе подстроки) скопированной строкой.",
+    "description": ""
+  },
+  "Colors.PasteSub.Btn": {
+    "message": "Вставить",
+    "description": ""
+  },
+  "Colors.PasteSub.NeedCopy": {
+    "message": "Сначала скопируйте подстроку.",
+    "description": ""
+  },
+  "Colors.PasteSub.Tip": {
+    "message": "Заменяет эту подстроку скопированными значениями.",
+    "description": ""
+  },
+  "Colors.Pill.Binding": {
+    "message": "привязка",
+    "description": ""
+  },
+  "Colors.Pinned": {
+    "message": "(закреплено)",
+    "description": ""
+  },
+  "Colors.Pinned.Tip": {
+    "message": "Вы закрепили этот режим в разделе «Дополнительно» — он больше не следует за настройками.\nНажмите «Вернуть авто», чтобы он снова подстраивался.",
+    "description": ""
+  },
+  "Colors.RenderingAs": {
+    "message": "Отрисовка как:",
+    "description": ""
+  },
+  "Colors.Reset.Btn": {
+    "message": "Сбросить к значениям по умолчанию",
+    "description": ""
+  },
+  "Colors.Reset.Tip": {
+    "message": "Удерживая Ctrl, нажмите, чтобы вернуть цвета, свечение и режим этого параметра\nк настройкам, которые Proteus записал для этого мода в первый раз. Отменить нельзя.\n\nЕсли применён какой-то дизайн, это также удалит сохранённое им переопределение\nдля этого параметра — иначе дизайн тут же навязал бы его снова. У других дизайнов\nсвои переопределения сохранятся.\n\nПримечание: эти исходные значения были записаны, когда Proteus впервые сохранил\nэтот мод — если вы правили его до этого, то «значением по умолчанию» станет\nименно то изменённое состояние.",
+    "description": ""
+  },
+  "Colors.Roughness.Label": {
+    "message": "Шероховатость",
+    "description": ""
+  },
+  "Colors.Row.Unused.Tip": {
+    "message": "Индексная текстура этого наложения никогда не выбирает эту строку,\nпоэтому её изменение ни на что не повлияет.",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Label": {
+    "message": "Скорость прокрутки",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Tip": {
+    "message": "Насколько быстро течёт эффект по X и Y. Отрицательное значение меняет направление, 0 останавливает. ~0,01 — обычное значение.",
+    "description": ""
+  },
+  "Colors.Section.Colours": {
+    "message": "Цвета",
+    "description": ""
+  },
+  "Colors.Section.Physical": {
+    "message": "Физические свойства",
+    "description": ""
+  },
+  "Colors.Section.Physical.ClothSuffix": {
+    "message": "— Cloth",
+    "description": ""
+  },
+  "Colors.Section.SphereMap": {
+    "message": "Сфера-карта",
+    "description": ""
+  },
+  "Colors.Specular.Label": {
+    "message": "Блик",
+    "description": ""
+  },
+  "Colors.Sphere.Index.Label": {
+    "message": "Индекс",
+    "description": ""
+  },
+  "Colors.Sphere.Intensity.Label": {
+    "message": "Интенсивность",
+    "description": ""
+  },
+  "Colors.Sphere.Tip": {
+    "message": "Отражает один слой из общего массива сфера-карт игры.\nИ индекс, И интенсивность должны быть ненулевыми, иначе ничего не произойдёт.\nНЕ работает под characterscroll.shpk — используйте character.shpk.",
+    "description": ""
+  },
+  "Colors.Stack.Tip": {
+    "message": "Меняет порядок наложений этого мода на вашем теле, между группами.\nСамая левая вкладка = верх стопки (собирается последней, поверх остальных).",
+    "description": ""
+  },
+  "Colors.StackHint": {
+    "message": "Редактирование наложения  (перетащите вкладку, чтобы изменить порядок — крайняя слева сверху):",
+    "description": ""
+  },
+  "Colors.SubRowA.Fmt": {
+    "message": "Строка {0}A",
+    "description": ""
+  },
+  "Colors.SubRowB.Fmt": {
+    "message": "Строка {0}B",
+    "description": ""
+  },
+  "Colors.Tiling.Label": {
+    "message": "Тайлинг",
+    "description": ""
+  },
+  "Colors.Tiling.Tip": {
+    "message": "Сколько раз эффект повторяется по поверхности. 1 = один раз.",
+    "description": ""
+  },
+  "Colors.TowardBottom.Btn": {
+    "message": "Ниже",
+    "description": ""
+  },
+  "Colors.TowardTop.Btn": {
+    "message": "Выше",
+    "description": ""
+  },
+  "Command.Help": {
+    "message": "Открывает или закрывает окно состояния Proteus. «/proteus config» открывает его на вкладке настроек.",
+    "description": ""
+  },
+  "Common.Browse.Btn": {
+    "message": "Обзор",
+    "description": ""
+  },
+  "Common.Clear.Btn": {
+    "message": "Очистить",
+    "description": ""
+  },
+  "Common.None": {
+    "message": "(нет)",
+    "description": ""
+  },
+  "Create.Author.Label": {
+    "message": "Автор",
+    "description": ""
+  },
+  "Create.Create.Btn": {
+    "message": "Создать",
+    "description": ""
+  },
+  "Create.Create.DisabledTip": {
+    "message": "Введите название мода и целевой материал, а также выберите хотя бы одну текстуру.",
+    "description": ""
+  },
+  "Create.Error.FolderExists.Fmt": {
+    "message": "Папка мода с именем «{0}» уже существует.",
+    "description": ""
+  },
+  "Create.Error.MissingFile.Fmt": {
+    "message": "Файл {0} больше не существует: {1}",
+    "description": ""
+  },
+  "Create.Error.NoMaterial": {
+    "message": "Введите целевой материал.",
+    "description": ""
+  },
+  "Create.Error.NoName": {
+    "message": "Введите название мода.",
+    "description": ""
+  },
+  "Create.Error.NoTexture": {
+    "message": "Выберите хотя бы одну текстуру (диффуз, маска, нормали или индекс).",
+    "description": ""
+  },
+  "Create.Error.ReservedName": {
+    "message": "«Proteus» — зарезервированное имя, выберите другое название мода.",
+    "description": ""
+  },
+  "Create.Error.UnusableName": {
+    "message": "В этом названии мода нет пригодных символов — используйте буквы или цифры.",
+    "description": ""
+  },
+  "Create.Error.WriteFailed.Fmt": {
+    "message": "Не удалось записать мод: {0}",
+    "description": ""
+  },
+  "Create.Intro": {
+    "message": "Создайте простой мод-наложение Proteus. Выберите хотя бы одну текстуру; Proteus запишет новый мод Penumbra и откроет его, чтобы вы могли включить и настроить его.",
+    "description": ""
+  },
+  "Create.MaterialTarget.Label": {
+    "message": "Целевой материал",
+    "description": ""
+  },
+  "Create.MaterialTarget.Tip": {
+    "message": "Материал, в который собирается это наложение. Заполняется автоматически по телу,\nкоторое на вас сейчас надето; выберите надетый вариант из списка или введите путь\nвручную, чтобы нацелиться на тело или расу, которых на вас сейчас нет.",
+    "description": ""
+  },
+  "Create.ModName.Label": {
+    "message": "Название мода",
+    "description": ""
+  },
+  "Create.Ok.Fmt": {
+    "message": "«{0}» создан, включён и открыт в Penumbra.",
+    "description": ""
+  },
+  "Create.PickTexture.Title.Fmt": {
+    "message": "Выбрать текстуру: {0}",
+    "description": ""
+  },
+  "Create.Picker.Empty": {
+    "message": "Надетые материалы пока неизвестны.\nСмените зону или перерисуйтесь, затем откройте этот список снова.",
+    "description": ""
+  },
+  "Create.Picker.SkinGroup": {
+    "message": "Кожа",
+    "description": ""
+  },
+  "Create.Picker.Stale": {
+    "message": "Показан последний известный список — персонаж не отрисован.",
+    "description": ""
+  },
+  "Create.Redetect.Btn": {
+    "message": "Определить заново",
+    "description": ""
+  },
+  "Create.Redetect.Tip": {
+    "message": "Повторно определяет тело и перезаписывает поле.",
+    "description": ""
+  },
+  "Create.Slot.Diffuse": {
+    "message": "Диффуз",
+    "description": ""
+  },
+  "Create.Slot.Index": {
+    "message": "Индекс",
+    "description": ""
+  },
+  "Create.Slot.Mask": {
+    "message": "Маска",
+    "description": ""
+  },
+  "Create.Slot.NoDiffuse": {
+    "message": "У этого материала нет диффузной текстуры.",
+    "description": ""
+  },
+  "Create.Slot.NoIndex": {
+    "message": "У этого материала нет индексной текстуры, и это не кожа и не лицо —\nздесь ничто не станет читать выбор строки таблицы цветов.",
+    "description": ""
+  },
+  "Create.Slot.NoMask": {
+    "message": "У этого материала нет текстуры маски.",
+    "description": ""
+  },
+  "Create.Slot.NoNormal": {
+    "message": "У этого материала нет карты нормалей.",
+    "description": ""
+  },
+  "Create.Slot.Normal": {
+    "message": "Нормали",
+    "description": ""
+  },
+  "Create.Slot.Unused": {
+    "message": "(не используется этим материалом)",
+    "description": ""
+  },
+  "Create.SlotsUnreadable": {
+    "message": "Не удалось прочитать этот материал — предлагаются все слоты.",
+    "description": ""
+  },
+  "Export.Dialog.Filter": {
+    "message": "Пакет мода Penumbra",
+    "description": ""
+  },
+  "Export.Dialog.Title": {
+    "message": "Экспорт мода Proteus",
+    "description": ""
+  },
+  "Export.DisabledInPenumbra.Fmt": {
+    "message": "{0}\n(отключён в Penumbra)",
+    "description": ""
+  },
+  "Export.Error.EmptyFolder": {
+    "message": "Эта папка мода пуста — экспортировать нечего.",
+    "description": ""
+  },
+  "Export.Error.FolderGone.Fmt": {
+    "message": "Папка мода пропала: {0}",
+    "description": ""
+  },
+  "Export.Error.NoPath": {
+    "message": "Выберите, куда сохранить файл.",
+    "description": ""
+  },
+  "Export.Error.WriteFailed.Fmt": {
+    "message": "Не удалось записать файл: {0}",
+    "description": ""
+  },
+  "Export.Filter.Hint": {
+    "message": "Фильтр…",
+    "description": ""
+  },
+  "Export.Intro": {
+    "message": "Сохраните один из своих модов Proteus как пакет мода Penumbra (.pmp), чтобы поделиться им. Входит всё — параметры, цвета, маски и эффекты свечения — и файл устанавливается прямо в Penumbra.",
+    "description": ""
+  },
+  "Export.Mod.Label": {
+    "message": "Мод",
+    "description": ""
+  },
+  "Export.ModDisabled.Note": {
+    "message": "Этот мод отключён в Penumbra — на экспорт это никак не влияет.",
+    "description": ""
+  },
+  "Export.NoMatch.Fmt": {
+    "message": "Ничего не найдено по запросу «{0}».",
+    "description": ""
+  },
+  "Export.Ok.Fmt": {
+    "message": "«{0}» экспортирован — файлов: {1}, {2} МБ.\n{3}",
+    "description": ""
+  },
+  "Export.Phase.Choosing": {
+    "message": "Выбрать расположение…",
+    "description": ""
+  },
+  "Export.Phase.Idle": {
+    "message": "Экспорт",
+    "description": ""
+  },
+  "Export.Phase.Writing": {
+    "message": "Экспорт…",
+    "description": ""
+  },
+  "Footer.LastComposite.Fmt": {
+    "message": "Последняя сборка: {0}   обработано текстур: {1}   модов: {2}",
+    "description": ""
+  },
+  "Footer.MinutesAgo.Fmt": {
+    "message": "{0} мин назад",
+    "description": ""
+  },
+  "Footer.NoResult": {
+    "message": "Результата сборки пока нет.",
+    "description": ""
+  },
+  "Footer.Pill.Failed": {
+    "message": "ошибка",
+    "description": ""
+  },
+  "Footer.Pill.Ok": {
+    "message": "ок",
+    "description": ""
+  },
+  "Footer.SecondsAgo.Fmt": {
+    "message": "{0} с назад",
+    "description": ""
+  },
+  "Footer.UnknownError": {
+    "message": "неизвестная ошибка",
+    "description": ""
+  },
+  "Import.AsTex.Label": {
+    "message": "Преобразовать слои в BC7 .tex",
+    "description": ""
+  },
+  "Import.AsTex.Tip": {
+    "message": "Примерно четверть размера на диске и никакого декодирования PNG во время сборки.\nБлочное сжатие работает с потерями — оставьте выключенным, чтобы сохранить изображения\nпакета ровно такими, какими их создали.",
+    "description": ""
+  },
+  "Import.AsTex.Unavailable.Tip": {
+    "message": "Нативный блочный компрессор не загружен, поэтому кодирование в BC7 заняло бы минуты.",
+    "description": ""
+  },
+  "Import.Author.Label": {
+    "message": "Автор",
+    "description": ""
+  },
+  "Import.BodyFit.NeedsAllBodies.Fmt": {
+    "message": "В этом пакете ничего не нарисовано для вашего стандартного тела — вместо него будет использовано «{0}». Запекание на стандартное тело по умолчанию отключено, поэтому при импорте Proteus установит «Тела» этого мода в «Все тела» (Цвета → Дополнительно); без этого он ничего не нарисует.",
+    "description": ""
+  },
+  "Import.BodyFit.NotDrawn.Fmt": {
+    "message": "Ваш персонаж ещё не отрисован, поэтому Proteus выбрал «{0}» по предпочтению, а не по вашему телу. Проверьте результат, когда войдёте в игру.",
+    "description": ""
+  },
+  "Import.BodyFit.Remapped.Fmt": {
+    "message": "В этом пакете нет ничего для вашего тела {0}, поэтому «{1}» будет автоматически перенесено на него.",
+    "description": ""
+  },
+  "Import.Browse.Btn": {
+    "message": "Выбрать пакет",
+    "description": ""
+  },
+  "Import.DefaultLayoutMatched.Fmt": {
+    "message": "Будет выбрано «{0}» — оно соответствует телу, которое на вас надето.",
+    "description": ""
+  },
+  "Import.Description": {
+    "message": "Описание",
+    "description": ""
+  },
+  "Import.Dialog.Filter": {
+    "message": "Пакет Onion",
+    "description": ""
+  },
+  "Import.Dialog.Title": {
+    "message": "Выберите пакет Onion",
+    "description": ""
+  },
+  "Import.Failed.Fmt": {
+    "message": "Не удалось импортировать: {0}",
+    "description": ""
+  },
+  "Import.Import.Btn": {
+    "message": "Импорт",
+    "description": ""
+  },
+  "Import.Importing.Btn": {
+    "message": "Импорт…",
+    "description": ""
+  },
+  "Import.Intro": {
+    "message": "Импортируйте пакет наложений Onion (.omp). Proteus прочитает слои пакета и запишет новый мод Penumbra с сопроводительным файлом Proteus — исходный файл не изменяется.",
+    "description": ""
+  },
+  "Import.Layer.Imported.Fmt": {
+    "message": "{0}\nИмпортируется как {1} в UV-пространстве {2}.",
+    "description": ""
+  },
+  "Import.Layer.NoLayout": {
+    "message": "(нет раскладки)",
+    "description": ""
+  },
+  "Import.Layer.NoMap": {
+    "message": "(нет карты)",
+    "description": ""
+  },
+  "Import.Layer.Skipped": {
+    "message": "пропущено",
+    "description": ""
+  },
+  "Import.Layer.SkippedReason.Fmt": {
+    "message": "{0}\nПропущено: {1}",
+    "description": ""
+  },
+  "Import.LayerCount.Fmt": {
+    "message": "Слои: {0} из {1}",
+    "description": ""
+  },
+  "Import.Layouts.Fmt": {
+    "message": "В пакете {0} UV-раскладок, поэтому мод получает в Penumbra группу с единственным выбором «{1}» ({2}). Одновременно собирается только одна.",
+    "description": ""
+  },
+  "Import.Materials.Fallback": {
+    "message": "Proteus не смог прочитать список тел игры, поэтому этот импорт затронет только заведомо рабочий набор женских тел. Откройте этот пакет заново, когда войдёте в игру, чтобы охватить все расы.",
+    "description": ""
+  },
+  "Import.Materials.FallbackNote": {
+    "message": "Резервный список — при открытии этого пакета не удалось прочитать данные игры.",
+    "description": ""
+  },
+  "Import.Materials.FromGame": {
+    "message": "Все тела, которые определяет игра, чтобы наложение следовало за вами между расами. Тела, которые на вас не надеты, при сборке игнорируются.",
+    "description": ""
+  },
+  "Import.Materials.Header.Fmt": {
+    "message": "Целевые материалы ({0})",
+    "description": ""
+  },
+  "Import.Materials.Layout.Fmt": {
+    "message": "{0}  ({1})",
+    "description": ""
+  },
+  "Import.ModName.Label": {
+    "message": "Название мода",
+    "description": ""
+  },
+  "Import.NeedName": {
+    "message": "Введите название мода.",
+    "description": ""
+  },
+  "Import.NoPack": {
+    "message": "Выберите файл .omp, чтобы увидеть его содержимое.",
+    "description": ""
+  },
+  "Import.NothingUsable": {
+    "message": "Ни один слой из этого пакета нельзя импортировать.",
+    "description": ""
+  },
+  "Import.Result.AllBodies.Fmt": {
+    "message": "«{0}» импортирован — слоёв: {1}{2}. В пакете ничего не нарисовано для стандартного тела, поэтому Proteus установил «Тела» этого мода в «Все тела» (Цвета → Дополнительно), чтобы запечь его — если это отключить, он перестанет рисовать.",
+    "description": ""
+  },
+  "Import.Result.NoLayout.Fmt": {
+    "message": "«{0}» импортирован — слоёв: {1}{2}, но Proteus не смог выбрать за вас раскладку тела. Выберите одну в разделе «{3}» в Penumbra, иначе ничего не будет нарисовано.",
+    "description": ""
+  },
+  "Import.Result.Ok.Fmt": {
+    "message": "«{0}» импортирован — слоёв: {1}{2}. Включён и открыт в Penumbra.",
+    "description": ""
+  },
+  "Import.Result.SkippedTail.Fmt": {
+    "message": " (пропущено: {0})",
+    "description": ""
+  },
+  "Import.Warn.FormatVersion.Fmt": {
+    "message": "Пакет заявляет версию формата {0}; Proteus проверялся только с {1}. Импортируйте его и проверьте результат.",
+    "description": ""
+  },
+  "Import.Warn.Generated": {
+    "message": "Часть раскладок сгенерирована Onion из другой раскладки, а не нарисована. Они импортируются как есть; если результат выглядит размытым, используйте нарисованную раскладку.",
+    "description": ""
+  },
+  "Import.Warn.NothingImportable": {
+    "message": "Ни один слой из этого пакета нельзя импортировать — причины см. выше.",
+    "description": ""
+  },
+  "Import.Warn.OptionGroups.Fmt": {
+    "message": "В пакете есть группы параметров Onion ({0}). Они не импортируются — каждый слой переносится безусловно.",
+    "description": ""
+  },
+  "Import.Warn.RaceFilters": {
+    "message": "Часть слоёв ограничена определёнными расами. Proteus не переносит расовые фильтры, поэтому они импортируются для всех рас.",
+    "description": ""
+  },
+  "Import.Website.Tip": {
+    "message": "Переносится на страницу мода в Penumbra.",
+    "description": ""
+  },
+  "Mods.Ao.Off": {
+    "message": "Выкл.",
+    "description": ""
+  },
+  "Mods.Ao.On": {
+    "message": "Вкл.",
+    "description": ""
+  },
+  "Mods.Ao.Pack.Fmt": {
+    "message": "Пакет ({0})",
+    "description": ""
+  },
+  "Mods.Ao.Tip.Fmt": {
+    "message": "Тень объёмного затенения и вдавливание нормалей Skindenting по краям ремешков\nи одежды этого мода. Она трактует покрытие как ткань, вдавленную в кожу, что\nневерно для татуировок и деталей кожи — поэтому по умолчанию отключено.\n\n{0} = как объявляет пакет («AmbientOcclusion» в его\nmetadata.json; если не указано — выключено).\nВкл. / Выкл. = ваша собственная настройка для этого мода, она важнее пакета.\n\n(Глобальные ползунки силы находятся в настройках.)",
+    "description": ""
+  },
+  "Mods.Col.Colors": {
+    "message": "Цвета",
+    "description": ""
+  },
+  "Mods.Col.Mod": {
+    "message": "Мод",
+    "description": ""
+  },
+  "Mods.Col.On": {
+    "message": "Вкл",
+    "description": ""
+  },
+  "Mods.Col.Priority": {
+    "message": "Прио",
+    "description": ""
+  },
+  "Mods.Col.Skindent": {
+    "message": "Skindent",
+    "description": ""
+  },
+  "Mods.Colors.BindingDriven.Tip": {
+    "message": "Цветами управляет активная привязка дизайна.\nПравки видны сразу; нажмите «Обновить» на вкладке привязок, чтобы сохранить их. Базовые цвета не меняются.",
+    "description": ""
+  },
+  "Mods.Colors.Btn": {
+    "message": "Цвета",
+    "description": ""
+  },
+  "Mods.NoSidecarMods": {
+    "message": "Моды с сопроводительным файлом Proteus не найдены.",
+    "description": ""
+  },
+  "Mods.PluginDisabled": {
+    "message": "Proteus отключён — включите его в настройках.",
+    "description": ""
+  },
+  "Service.NoPenumbraDir": {
+    "message": "Каталог модов Penumbra недоступен.",
+    "description": ""
+  },
+  "Service.RegisterFailed.Fmt": {
+    "message": "Мод записан, но Penumbra не смогла его зарегистрировать ({0}). Пересканируйте моды в Penumbra.",
+    "description": ""
+  },
+  "Service.UVMaps.Downloading": {
+    "message": "Загрузка UV-карт...",
+    "description": ""
+  },
+  "Service.UVMaps.Error.Fmt": {
+    "message": "Ошибка загрузки: {0}",
+    "description": ""
+  },
+  "Service.UVMaps.HttpFailed.Fmt": {
+    "message": "Не удалось загрузить: HTTP {0} для {1}",
+    "description": ""
+  },
+  "Service.UVMaps.Progress.Fmt": {
+    "message": "Загрузка UV-карт... ({0} МБ / {1} МБ)",
+    "description": ""
+  },
+  "Service.UVMaps.TooSmall.Fmt": {
+    "message": "Загружено слишком мало ({0} байт) для {1} — возможно, это указатель LFS",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Header.Fmt": {
+    "message": "Базовая кожа ({0})",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Note": {
+    "message": "Мод, из которого читается каждая базовая текстура. Наведите курсор, чтобы увидеть игровой путь.",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Unconfirmed.Fmt": {
+    "message": "{0} (не подтверждено)",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Btn": {
+    "message": "Очистить кэш текстур",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Tip": {
+    "message": "Сбрасывает все декодированные текстуры из кэша и пересобирает прямо сейчас.\nПрименяйте, если правка текстуры не появляется — например, вы переэкспортировали\nналожение в том же размере, и без перезапуска плагина изменение не видно.\n\nТакже заново определяет, из какого мода взята каждая базовая текстура кожи —\nвоспользуйтесь этим, если «Базовая кожа» ниже называет не тот мод.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.EffectsOnly.Fmt": {
+    "message": "{0} — только эффекты (без графики наложения)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Failed.Fmt": {
+    "message": "{0} — диффуз {1}, нормали {2}, маска {3} (диффуз не применился)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Header.Fmt": {
+    "message": "Охват наложений ({0})",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Note": {
+    "message": "Сколько наложений действительно дошло до каждого канала. Наведите курсор, чтобы увидеть материал.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Ok.Fmt": {
+    "message": "{0} — диффуз {1}, нормали {2}, маска {3}",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Label": {
+    "message": "Автоматически повышать приоритет мода",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Tip": {
+    "message": "Когда подтверждено, что другой мод перекрывает текстуру кожи, в которую Proteus\nвыполняет сборку — например, набор татуировок или кожи со своей копией текстуры\nтела, — автоматически поднять приоритет Proteus в Penumbra выше и сообщить об\nэтом в чат.\n\nИначе такое перекрытие незаметно: наложения применяются наполовину (рельеф\nложится, цвет — нет), а каждая строка журнала по-прежнему выглядит как успех.\n\nОтключайте это только если вы намеренно хотите, чтобы другой мод выигрывал путь,\nкоторый собирает Proteus. Proteus никогда не действует по догадке — только при\nподтверждённом перекрытии.",
+    "description": ""
+  },
+  "Settings.General.DisableAutoRedraw.Label": {
+    "message": "Отключить автоматическую перерисовку",
+    "description": ""
+  },
+  "Settings.General.Enabled.Label": {
+    "message": "Включено",
+    "description": ""
+  },
+  "Settings.General.Enabled.Tip": {
+    "message": "Если выключить, вывод Proteus будет очищен, персонаж перерисован без него,\nа управляемый мод \"Proteus\" в Penumbra отключён.",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Btn": {
+    "message": "Текстуры эффекта свечения",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Tip.Fmt": {
+    "message": "Открывает папку, из которой Proteus читает карты прокрутки анимированного свечения —\nтекстуры «_o», которые и ЕСТЬ свечение. Всё, что сюда положено, появляется в списке\nЭффект у каждого наложения на экипировку.\n\n{0}\n\nПоддерживаются .tex, .dds, .png, .jpg, .bmp, .tga, .psd и .gif.\nСобственная папка мода Proteus/Effects/ имеет приоритет над этой.",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Label": {
+    "message": "Перезагрузка на месте",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Tip": {
+    "message": "Обновляет текстуры через перезагрузку экипировки на месте из Glamourer вместо полной\nперерисовки, избегая мерцания при исчезновении и появлении. Автоматически\nвозвращается к полной перерисовке, когда Glamourer не может это выполнить.",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Label": {
+    "message": "Пропускать пересборку без изменений",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Tip": {
+    "message": "Позволяет пересборке, вызванной сменой зоны или перерисовкой, завершиться раньше,\nкогда ничего влияющего на результат не изменилось. То, что вы меняете сами,\nпересобирается всегда. Отключайте только чтобы исключить эту причину, когда правка\nне вступает в силу.",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Label": {
+    "message": "Размещать на невидимых очках (оставить кольца свободными)",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Tip": {
+    "message": "Когда включено и очки не надеты, Proteus поручает Glamourer надеть невидимые очки,\nчтобы вторая кожа занимала слот лицевого аксессуара, а не кольцо. Это записывает\n(скрытый) бонусный предмет в состояние Glamourer; он снимается, когда вы отключаете\nProteus, надеваете настоящие очки или выключаете эту настройку.",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Btn": {
+    "message": "Восстановить изменённый аксессуар",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Tip": {
+    "message": "Принудительно выполняет полную перерисовку, чтобы перезагрузить кольцо или браслет,\nзамещённый второй кожей, и вернуть ему исходную модель. Пригодится, если оболочка\nэкипировки застряла на аксессуаре после отключения или смены.",
+    "description": ""
+  },
+  "Settings.Output.Compression.Label": {
+    "message": "Включить сжатие",
+    "description": ""
+  },
+  "Settings.Output.Compression.Tip": {
+    "message": "Поблочно сжимает собранные текстуры (BC7), уменьшая каждую примерно до четверти её\nнесжатого размера на диске и в видеопамяти. Индексная текстура остаётся несжатой,\nчтобы сохранить точные значения строк.\nВыключено = без сжатия (побайтово как раньше).",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Label": {
+    "message": "Скрывать соединительные меши",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Tip": {
+    "message": "Пропускает соединительное кольцо каждой части тела на «второй коже» экипировки —\nнебольшой дополнительный подмеш в суставе (запястье/лодыжка/…). Некоторые тела\n(Neolithe) укрепляют суставы кольцом, которое перекрывает уже готовое тело; на\nпрозрачном наложении перекрытие удваивается и выглядит как более плотный шов.\nДля остальных тел оставьте Off — там этот подмеш является настоящей кожей, и его\nсокрытие оставит просветы.",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Label": {
+    "message": "Резкая альфа (сфера/металл в групповой позе)",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Tip": {
+    "message": "ЭКСПЕРИМЕНТАЛЬНО. Отрисовывает покрытие оболочки как жёсткую вырезку по альфа-тесту\nвместо плавной прозрачности, чтобы сферические карты и металличность сохранялись в\nгрупповой позе (которая отбрасывает их на прозрачных поверхностях). Взамен полупрозрачные\nкрая становятся жёсткими и ступенчатыми. Лучше всего для почти непрозрачных тканей;\nочень тонкая ткань будет выглядеть грубо. После переключения пересоберите.",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Label": {
+    "message": "Кэш текстур (МБ)",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Tip": {
+    "message": "Сколько декодированных данных текстур Proteus держит в памяти между сборками.\n\nТекстура 4K в декодированном виде занимает 64 МБ, так что это скорее количество:\n2048 МБ ≈ 30 штук. Помогает, только если покрывает целую сборку — ниже этого каждый\nпроход вытесняет то, что понадобится следующему, и ничего не переиспользуется.\n\nПосмотрите значение «cache N entries, M MB» в журнале пересборки: если ВТОРАЯ сборка\nбез единого изменения по-прежнему сообщает о промахах, увеличьте значение. Уменьшите,\nесли игра начинает уходить в подкачку. Освобождается автоматически после 60 с простоя.",
+    "description": ""
+  },
+  "Settings.Section.Diagnostics": {
+    "message": "Диагностика",
+    "description": ""
+  },
+  "Settings.Section.General": {
+    "message": "Общие",
+    "description": ""
+  },
+  "Settings.Section.Hosting": {
+    "message": "Размещение",
+    "description": ""
+  },
+  "Settings.Section.Output": {
+    "message": "Вывод",
+    "description": ""
+  },
+  "Settings.Section.SkinEffects": {
+    "message": "Эффекты кожи",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Label": {
+    "message": "Объёмное затенение",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Tip": {
+    "message": "Мягкая контактная тень на коже сразу за краями маскированных ремешков, придающая им объём.\n0,00 полностью отключает её (диффуз кожи не меняется).",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Label": {
+    "message": "Мягкость тени",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Tip": {
+    "message": "Насколько далеко тень объёмного затенения расходится от края ремешка (доля ширины текстуры).\nБольше — шире и мягче тень. Общий параметр для тени и вдавливания ремешка.",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Label": {
+    "message": "Подавление тона кожи",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Tip": {
+    "message": "Насколько сильно наложения сопротивляются окрашиванию в тон кожи (глобальный множитель).\nПрименяется попиксельно по цвету: белые и яркие цвета сохраняют исходный цвет на любом\nтоне кожи (становясь чуть глянцевее), тёмные автоматически остаются окрашенными в тон\nкожи и матовыми.\n0,00 полностью отключает это (исходный вид).",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Label": {
+    "message": "Skindenting",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Tip": {
+    "message": "Вдавливает нормаль кожи по краям ремешков и одежды, чтобы они выглядели вжатыми в кожу.\n0,00 отключает это (нормаль кожи не меняется). Использует те же края и мягкость, что и тень.",
+    "description": ""
+  },
+  "Tab.Bindings": {
+    "message": "Привязки",
+    "description": ""
+  },
+  "Tab.Create": {
+    "message": "Создать",
+    "description": ""
+  },
+  "Tab.Export": {
+    "message": "Экспорт",
+    "description": ""
+  },
+  "Tab.Import": {
+    "message": "Импорт",
+    "description": ""
+  },
+  "Tab.Mods": {
+    "message": "Моды",
+    "description": ""
+  },
+  "Tab.Settings": {
+    "message": "Настройки",
+    "description": ""
+  }
+}

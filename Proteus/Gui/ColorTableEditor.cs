@@ -5,6 +5,7 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
+using Proteus.Localization;
 using Proteus.Services;
 
 namespace Proteus.Gui;
@@ -25,14 +26,10 @@ public static class ColorTableEditor
 {
     private static readonly string[] GearShaders = ["character.shpk", "characterscroll.shpk"];
 
-    private const string SphereTip =
-        "Reflects a slice of the game's shared sphere map array.\n" +
-        "Index AND intensity must both be non-zero, or nothing happens.\n" +
-        "Does NOT work under characterscroll.shpk — use character.shpk.";
-
-    private const string MetalTip =
-        "Metal has no diffuse colour of its own — it shows what it reflects.\n" +
-        "With no sphere map to reflect, a metallic surface just goes dark.";
+    // Were `const string`; a localized lookup is not a compile-time constant, so they read through the
+    // string table now. Still resolved once per language, not once per frame — see Strings.
+    private static string SphereTip => Strings.Colors.SphereTip;
+    private static string MetalTip  => Strings.Colors.MetalTip;
 
     /// <summary>
     /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling), the
@@ -105,17 +102,15 @@ public static class ColorTableEditor
         }
         // Only reachable when the picker is ENABLED — ImGui reports no hover for a disabled item — so this
         // deliberately does not try to carry noShellReason. That is printed below instead.
+        var cs = Strings.Colors;
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "Pick a scrolling map to make this overlay GLOW and animate — that switches it to\n" +
-                "Animated glow. The map IS the glow (colour, pattern, motion); the row's Glow scales it.\n" +
-                "Effects come from the mod's Proteus/Effects/ folder, then your Effects folder.");
+            ImGui.SetTooltip(cs.GlowEffectTip);
         if (noShellReason != null)
             ImGui.TextDisabled(noShellReason);
         else if (effects.Count == 0)
             // Names the Settings button verbatim: this is the exact moment someone needs that folder, so
             // the message has to point at a control they can actually find on screen.
-            ImGui.TextDisabled("No effects found — drop images into the folder the Glow Effect Textures\nbutton opens (Settings), or the mod's own Proteus/Effects/ folder.");
+            ImGui.TextDisabled(cs.NoEffects);
 
         // Scroll speed / tiling — only meaningful once glowing.
         if (mode == RenderMode.Glow)
@@ -124,44 +119,42 @@ public static class ColorTableEditor
             var tile  = new Vector2(curTileX ?? ScrollSettings.Default.TilingX, curTileY ?? ScrollSettings.Default.TilingY);
 
             ImGui.SetNextItemWidth(150);
-            if (ImGui.DragFloat2($"Scroll speed##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
+            if (ImGui.DragFloat2($"{cs.ScrollSpeed}##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
             {
                 SetSpeed(speed.X, speed.Y);
                 changed = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("How fast the effect flows, X and Y. Negative reverses; 0 holds it still. ~0.01 is normal.");
+                ImGui.SetTooltip(cs.ScrollSpeedTip);
 
             ImGui.SetNextItemWidth(150);
-            if (ImGui.DragFloat2($"Tiling##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
+            if (ImGui.DragFloat2($"{cs.Tiling}##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
             {
                 SetTile(tile.X, tile.Y);
                 changed = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("How many times the effect repeats across the surface. 1 = once.");
+                ImGui.SetTooltip(cs.TilingTip);
         }
 
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
-        bool advOpen = ImGui.TreeNodeEx($"Advanced##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
+        bool advOpen = ImGui.TreeNodeEx($"{cs.Advanced}##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
 
         ImGui.SameLine(0f, 24f);
         DrawRenderingAsBadge(mode);
         ImGui.SameLine();
-        ImGui.TextDisabled(curLock ? "(pinned)" : "(auto)");
+        ImGui.TextDisabled(curLock ? cs.Pinned : cs.Auto);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(curLock
-                ? "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again."
-                : "The mode follows what you use: a sphere map or metal ⇒ Cloth,\na glow effect ⇒ Animated glow, nothing special ⇒ Skin.");
+            ImGui.SetTooltip(curLock ? cs.PinnedTip : cs.AutoTip);
         if (curLock)
         {
             ImGui.SameLine();
-            if (ImGui.SmallButton($"Back to auto##{idScope}")) { SetLock(false); changed = true; }
+            if (ImGui.SmallButton($"{cs.BackToAuto}##{idScope}")) { SetLock(false); changed = true; }
         }
 
         if (advOpen)
         {
-            ImGui.TextDisabled("Force the render mode instead of letting the features pick it:");
+            ImGui.TextDisabled(cs.ForceModeHint);
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
             {
                 bool sel = curLock && mode == m;
@@ -179,8 +172,7 @@ public static class ColorTableEditor
                 if (m != RenderMode.Glow) ImGui.SameLine();
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Skin (painted) — skin.shpk.  Cloth — character.shpk (sphere, metal).\n" +
-                                 "Animated glow — characterscroll.shpk. Pinning stops the auto mode-switch.");
+                ImGui.SetTooltip(cs.ForceModeTip);
 
             // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
             // everything above this line is per-option and everything below it is not.
@@ -198,18 +190,11 @@ public static class ColorTableEditor
                 bool armed = !disabled && ImGui.GetIO().KeyCtrl;
                 using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * (armed ? 1f : 0.5f)))
                 {
-                    if (ImGui.Button($"Reset to defaults##reset_{idScope}") && armed && onReset())
+                    if (ImGui.Button($"{cs.ResetBtn}##reset_{idScope}") && armed && onReset())
                         changed = true;
                 }
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(disabled
-                        ? resetDisabledReason
-                        : "Hold Ctrl and click to restore this option's colours, glow and mode to the\n" +
-                          "settings Proteus first recorded for this mod. Cannot be undone.\n\n" +
-                          "If a design is applied, this also drops that design's saved override for this\n" +
-                          "option — otherwise the design would just re-impose it. Other designs keep theirs.\n\n" +
-                          "Note: those originals were captured the first time Proteus saved this mod —\n" +
-                          "if you had already edited it before then, that edited state is the \"default\".");
+                    ImGui.SetTooltip(disabled ? resetDisabledReason : cs.ResetTip);
             }
         }
 
@@ -235,9 +220,10 @@ public static class ColorTableEditor
             : cur.Path != null && EffectThumbs?.Draw(cur.Path, current) == true;
         if (drewBeside) ImGui.SameLine();
 
-        var label = curScroll == null ? "None" : Path.GetFileNameWithoutExtension(curScroll);
+        var cs = Strings.Colors;
+        var label = curScroll == null ? cs.None : Path.GetFileNameWithoutExtension(curScroll);
         ImGui.SetNextItemWidth(180);
-        if (ImGui.BeginCombo($"Glow effect##eff_{id}", label, ImGuiComboFlags.HeightLarge))
+        if (ImGui.BeginCombo($"{cs.GlowEffect}##eff_{id}", label, ImGuiComboFlags.HeightLarge))
         {
             // None entry with the shared "none" icon (matches the sphere-map picker).
             bool noneHas = false, noneClicked = false;
@@ -249,7 +235,7 @@ public static class ColorTableEditor
                 ImGui.CloseCurrentPopup();
             }
             if (noneHas) ImGui.SameLine();
-            if (ImGui.Selectable($"None##effnonesel_{id}", curScroll == null, ImGuiSelectableFlags.None,
+            if (ImGui.Selectable($"{cs.None}##effnonesel_{id}", curScroll == null, ImGuiSelectableFlags.None,
                     new Vector2(0, noneHas ? thumb : 0)) && curScroll != null)
             {
                 newScroll = null;
@@ -270,7 +256,9 @@ public static class ColorTableEditor
                 }
                 if (hasThumb) ImGui.SameLine();
 
-                var text = fromMod ? $"{Path.GetFileNameWithoutExtension(name)}  (mod)" : Path.GetFileNameWithoutExtension(name);
+                var text = fromMod
+                    ? string.Format(cs.EffectFromModFmt, Path.GetFileNameWithoutExtension(name))
+                    : Path.GetFileNameWithoutExtension(name);
                 if (ImGui.Selectable($"{text}##eff_{id}_{name}", selected, ImGuiSelectableFlags.None,
                         new Vector2(0, hasThumb ? thumb : 0)) && !selected)
                 {
@@ -302,9 +290,9 @@ public static class ColorTableEditor
     /// <summary>Friendly, mechanism-free mode name for the badge and Advanced labels.</summary>
     public static string ModeName(RenderMode m) => m switch
     {
-        RenderMode.Skin  => "Skin (painted)",
-        RenderMode.Cloth => "Cloth",
-        _                => "Animated glow",
+        RenderMode.Skin  => Strings.Colors.ModeSkin,
+        RenderMode.Cloth => Strings.Colors.ModeCloth,
+        _                => Strings.Colors.ModeGlow,
     };
 
     /// <summary>Draws the "Rendering as: &lt;mode&gt;" badge (same colours as the footer) on the current line.</summary>
@@ -316,7 +304,7 @@ public static class ColorTableEditor
             RenderMode.Glow  => new Vector4(0.96f, 0.77f, 0.19f, 1f),   // #F4C430 gold
             _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
         };
-        ImGui.TextUnformatted("Rendering as:");
+        ImGui.TextUnformatted(Strings.Colors.RenderingAs);
         ImGui.SameLine();
         ProteusStyle.Pill(ModeName(mode), badgeColor);
     }
@@ -382,6 +370,7 @@ public static class ColorTableEditor
         // rect, so the two must move as one or the swatches drift out of their button at non-1.0 UI scale.
         var btn = ProteusStyle.S(70f, 30f);
         float avail = ImGui.GetContentRegionAvail().X;
+        var cs = Strings.Colors;
         int perLine = Math.Max(1, (int)((avail + ImGui.GetStyle().ItemSpacing.X) / (btn.X + ImGui.GetStyle().ItemSpacing.X)));
 
         for (int row = 1; row <= 16; row++)
@@ -396,7 +385,7 @@ public static class ColorTableEditor
                     selectedRow = row;
             }
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip("This overlay's index texture never selects this row,\nso editing it would have no effect.");
+                ImGui.SetTooltip(cs.RowUnusedTip);
 
             DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used);
         }
@@ -408,15 +397,15 @@ public static class ColorTableEditor
         // another. The per-sub-row buttons below (in each A/B panel) do the same for a single column,
         // and share their clipboard, so you can copy sub-row A and paste it into B.
         int curRow = selectedRow;   // a ref param can't be captured by a lambda
-        if (ImGui.SmallButton($"Copy row##copyrow_{idScope}"))
+        if (ImGui.SmallButton($"{cs.CopyRow}##copyrow_{idScope}"))
             _rowClip = CloneRow(rows.FirstOrDefault(r => r.Row == curRow));
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Copy both sub-rows (A and B) of this row.");
+            ImGui.SetTooltip(cs.CopyRowTip);
 
         ImGui.SameLine();
         using (ImRaii.Disabled(_rowClip == null))
         {
-            if (ImGui.SmallButton($"Paste row##pasterow_{idScope}"))
+            if (ImGui.SmallButton($"{cs.PasteRow}##pasterow_{idScope}"))
             {
                 var p = EnsurePreset(rows, selectedRow);
                 p.SubRowA = _rowClip!.SubRowA is { } a ? Clone(a) : null;
@@ -425,16 +414,16 @@ public static class ColorTableEditor
             }
         }
         if (_rowClip == null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip("Copy a row first.");
+            ImGui.SetTooltip(cs.NeedRowCopy);
         else if (ImGui.IsItemHovered())
-            ImGui.SetTooltip($"Overwrite row {selectedRow} (both sub-rows) with the copied row.");
+            ImGui.SetTooltip(string.Format(cs.PasteRowTipFmt, selectedRow));
 
         using (ImRaii.PushColor(ImGuiCol.TableHeaderBg, ImGui.GetColorU32(ProteusStyle.AccentSoft)))
         if (ImGui.BeginTable($"##ab_{idScope}", 2,
                 ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.RowBg))
         {
-            ImGui.TableSetupColumn($"Row {selectedRow}A");
-            ImGui.TableSetupColumn($"Row {selectedRow}B");
+            ImGui.TableSetupColumn(string.Format(cs.SubRowAFmt, selectedRow));
+            ImGui.TableSetupColumn(string.Format(cs.SubRowBFmt, selectedRow));
             ImGui.TableHeadersRow();
             ImGui.TableNextRow();
 
@@ -471,7 +460,7 @@ public static class ColorTableEditor
         if (Spheres != null) ImGui.SameLine();
 
         ImGui.SetNextItemWidth(70);
-        if (ImGui.BeginCombo($"Index##sp_{id}", index.ToString(), ImGuiComboFlags.HeightLarge))
+        if (ImGui.BeginCombo($"{Strings.Colors.SphereIndex}##sp_{id}", index.ToString(), ImGuiComboFlags.HeightLarge))
         {
             for (int i = 0; i < SphereMapPreview.Count; i++)
             {
@@ -570,15 +559,16 @@ public static class ColorTableEditor
         // ── copy / paste this single sub-row (the "column") ──────────────────
         // The clipboard is shared with the other panel and with "Copy row", so copying sub-row A and
         // pasting into B works, and a row copied whole can seed a single sub-row here.
-        if (ImGui.SmallButton($"Copy##copysub_{id}"))
+        var cs = Strings.Colors;
+        if (ImGui.SmallButton($"{cs.CopySub}##copysub_{id}"))
             _subClip = Clone(sub ?? new ColorTableSubRowPreset());
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Copy this sub-row's values.");
+            ImGui.SetTooltip(cs.CopySubTip);
 
         ImGui.SameLine();
         using (ImRaii.Disabled(_subClip == null))
         {
-            if (ImGui.SmallButton($"Paste##pastesub_{id}"))
+            if (ImGui.SmallButton($"{cs.PasteSub}##pastesub_{id}"))
             {
                 var p = EnsurePreset(rows, row);
                 if (isA) p.SubRowA = Clone(_subClip!);
@@ -587,9 +577,9 @@ public static class ColorTableEditor
             }
         }
         if (_subClip == null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip("Copy a sub-row first.");
+            ImGui.SetTooltip(cs.NeedSubCopy);
         else if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Overwrite this sub-row with the copied values.");
+            ImGui.SetTooltip(cs.PasteSubTip);
 
         // ── glow / target: hue-cycle this sub-row's mesh on the live character ──
         // The overlay's colour table is baked into its shell material(s) ss_{letter}.mtrl; game row for
@@ -601,14 +591,13 @@ public static class ColorTableEditor
             bool active = Highlighter.IsTarget(shellMaterialLeaves, gameRow);
             ImGui.SameLine();
             using (ProteusStyle.Selected(active))
-                if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
+                if (ImGui.SmallButton($"{(active ? cs.Glowing : cs.Glow)}##glow_{id}"))
                 {
                     if (active) Highlighter.Clear();
                     else Highlighter.SetTarget(shellMaterialLeaves, gameRow);
                 }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Make this sub-row's mesh glow on your character so you can find it\n" +
-                                 "in-game. Click again to stop.");
+                ImGui.SetTooltip(cs.GlowGearTip);
         }
         // Skin overlays have no live colour table; SkinGlow rebinds the body diffuse instead. Static
         // bright (it can't hue-cycle — the highlight is a baked 4K texture, rebuilt only on click).
@@ -617,32 +606,27 @@ public static class ColorTableEditor
             bool active = SkinGlow.IsTarget(skinGlowTargets, row, isA);
             ImGui.SameLine();
             using (ProteusStyle.Selected(active))
-                if (ImGui.SmallButton($"{(active ? "Glowing" : "Glow")}##glow_{id}"))
+                if (ImGui.SmallButton($"{(active ? cs.Glowing : cs.Glow)}##glow_{id}"))
                 {
                     if (active) SkinGlow.Clear();
                     else SkinGlow.SetTarget(skinGlowTargets, row, isA);
                 }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Light up this sub-row's region on your character's skin so you can find\n" +
-                                 "it in-game. Click again to stop. (Takes a moment to build the first time.)");
+                ImGui.SetTooltip(cs.GlowSkinTip);
         }
 
         // ── Colours ──────────────────────────────────────────────────────────
-        ImGui.TextDisabled("Colours");
+        ImGui.TextDisabled(cs.Colours);
 
         var diffuse = HexToVec3(sub?.Diffuse);
         ImGui.SetNextItemWidth(22);
-        if (ImGui.ColorEdit3($"Diffuse##d_{id}", ref diffuse, ImGuiColorEditFlags.NoInputs))
+        if (ImGui.ColorEdit3($"{cs.Diffuse}##d_{id}", ref diffuse, ImGuiColorEditFlags.NoInputs))
         {
             Edit().Diffuse = Vec3ToHex(diffuse);
             changed = true;
         }
         if (gear && ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "The surface UNDER the glow — it multiplies the overlay's own diffuse art.\n\n" +
-                "Keep it DARK for a glowing material, or the glow has nothing to stand out\n" +
-                "against and looks faint however high you push it. The vanilla scrolling\n" +
-                "materials pair a near-black diffuse with a bright emissive for exactly this.");
+            ImGui.SetTooltip(cs.DiffuseGearTip);
 
         // Specular is a Cloth feature. Dimmed-but-clickable in Skin (touch to switch to Cloth), active in
         // Cloth. HIDDEN in Animated glow — like the Physical/Sphere block below — so a stray touch on a
@@ -652,7 +636,7 @@ public static class ColorTableEditor
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
             var spec = HexToVec3(sub?.Specular);
             ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"Specular##s_{id}", ref spec, ImGuiColorEditFlags.NoInputs))
+            if (ImGui.ColorEdit3($"{cs.Specular}##s_{id}", ref spec, ImGuiColorEditFlags.NoInputs))
             {
                 Edit().Specular = Vec3ToHex(spec);
                 edited = FeatureEdit.Cloth;
@@ -664,14 +648,13 @@ public static class ColorTableEditor
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, gear ? 1f : DimAlpha);
             var emCol = HexToVec3(sub?.EmissiveColor ?? sub?.Diffuse);
             ImGui.SetNextItemWidth(22);
-            if (ImGui.ColorEdit3($"Glow colour##ec_{id}", ref emCol, ImGuiColorEditFlags.NoInputs))
+            if (ImGui.ColorEdit3($"{cs.GlowColour}##ec_{id}", ref emCol, ImGuiColorEditFlags.NoInputs))
             {
                 Edit().EmissiveColor = Vec3ToHex(emCol);
                 changed = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Glow colour, independent of the diffuse — a glowing material usually\n" +
-                                 "wants a DARK surface with a bright glow. Defaults to the diffuse.");
+                ImGui.SetTooltip(cs.GlowColourTip);
         }
 
         // Shown as a percentage. Fine steps matter: characterscroll's glow gate sits at about 2.5%. The
@@ -681,7 +664,7 @@ public static class ColorTableEditor
         // Drag is coarse for a quick sweep of the wide range; ctrl+click to type the fine gate (~2.5%).
         float emPct = (sub?.Emissive ?? 0f) * 100f;
         ImGui.SetNextItemWidth(70);
-        if (ImGui.DragFloat($"Glow##e_{id}", ref emPct, 2.5f, 0f, 1000f, "%.1f%%"))
+        if (ImGui.DragFloat($"{cs.GlowAmount}##e_{id}", ref emPct, 2.5f, 0f, 1000f, "%.1f%%"))
         {
             Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 10f);
             // Skin cannot emit, so asking for glow asks for a shell: classify the edit as Cloth and let
@@ -693,21 +676,19 @@ public static class ColorTableEditor
             changed = true;
         }
         if (gear && ImGui.IsItemHovered())
-            ImGui.SetTooltip("Under characterscroll this is a small GATE, not the brightness:\n" +
-                             "0 = no glow at all; a large value washes the scroll map's colour out.\n" +
-                             "The vanilla animated materials use ~0.025.");
+            ImGui.SetTooltip(cs.GlowAmountTip);
 
         // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
         // coverage that becomes the normal map's blue channel (the transparency gate).
         int op = sub?.Opacity ?? 0;
         ImGui.SetNextItemWidth(70);
-        if (ImGui.DragInt($"Opacity##o_{id}", ref op, 1f, -100, 100, "%d%%"))
+        if (ImGui.DragInt($"{cs.Opacity}##o_{id}", ref op, 1f, -100, 100, "%d%%"))
         {
             Edit().Opacity = Math.Clamp(op, -100, 100);
             changed = true;
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Negative fades this row toward transparent; positive pushes it toward opaque.");
+            ImGui.SetTooltip(cs.OpacityTip);
 
         // Roughness / metalness / sphere map belong to Cloth. Dimmed-but-clickable in Skin (touch
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
@@ -717,12 +698,12 @@ public static class ColorTableEditor
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
-            ImGui.TextDisabled("Physical");
-            if (!material) { ImGui.SameLine(); ImGui.TextDisabled("— Cloth"); }
+            ImGui.TextDisabled(cs.Physical);
+            if (!material) { ImGui.SameLine(); ImGui.TextDisabled(cs.ClothSuffix); }
 
             float rough = sub?.Roughness ?? 0.5f;
             ImGui.SetNextItemWidth(70);
-            if (ImGui.DragFloat($"Roughness##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
+            if (ImGui.DragFloat($"{cs.Roughness}##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
             {
                 Edit().Roughness = Math.Clamp(rough, 0f, 1f);
                 // Roughness isn't a mode trigger (it does nothing without metal/sphere), so don't flip to Cloth.
@@ -731,7 +712,7 @@ public static class ColorTableEditor
 
             float metal = sub?.Metalness ?? 0f;
             ImGui.SetNextItemWidth(70);
-            if (ImGui.DragFloat($"Metalness##m_{id}", ref metal, 0.01f, 0f, 1f, "%.2f"))
+            if (ImGui.DragFloat($"{cs.Metalness}##m_{id}", ref metal, 0.01f, 0f, 1f, "%.2f"))
             {
                 Edit().Metalness = Math.Clamp(metal, 0f, 1f);
                 edited = FeatureEdit.Cloth;
@@ -740,7 +721,7 @@ public static class ColorTableEditor
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(MetalTip);
 
-            ImGui.TextDisabled("Sphere map");
+            ImGui.TextDisabled(cs.SphereMap);
 
             int sphere = sub?.SphereMap ?? 0;
             DrawSpherePicker(id, ref sphere, out bool sphereChanged);
@@ -760,7 +741,7 @@ public static class ColorTableEditor
             // drive the sphere-map contribution for a stronger effect than the vanilla 0–1 range allows.
             float sphereInt = sub?.SphereIntensity ?? 0f;
             ImGui.SetNextItemWidth(70);
-            if (ImGui.DragFloat($"Intensity##si_{id}", ref sphereInt, 0.05f, 0f, 10f, "%.2f"))
+            if (ImGui.DragFloat($"{cs.Intensity}##si_{id}", ref sphereInt, 0.05f, 0f, 10f, "%.2f"))
             {
                 Edit().SphereIntensity = Math.Clamp(sphereInt, 0f, 10f);
                 edited = FeatureEdit.Cloth;

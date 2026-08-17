@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using CheapLoc;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
 
@@ -65,7 +66,8 @@ public sealed class ModExportService
     /// </summary>
     public ExportResult Export(OverlayEntry entry, string targetPath)
     {
-        if (string.IsNullOrWhiteSpace(targetPath)) return new(false, "Pick somewhere to save the file.");
+        if (string.IsNullOrWhiteSpace(targetPath))
+            return new(false, Loc.Localize("Export.Error.NoPath", "Pick somewhere to save the file."));
 
         // The dialog's default extension only applies when the user leaves the name alone; someone who
         // types "Ven" gets a file Penumbra won't offer to install.
@@ -74,27 +76,35 @@ public sealed class ModExportService
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return new(false, "Penumbra's mod directory isn't available.");
+            return new(false, Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
 
         var modRoot = Path.Combine(modsRoot, entry.ModDirectory);
         if (!Directory.Exists(modRoot))
-            return new(false, $"The mod folder is gone: {modRoot}");
+            return new(false, string.Format(
+                Loc.Localize("Export.Error.FolderGone.Fmt", "The mod folder is gone: {0}"), modRoot));
 
         try
         {
             var count = WritePmp(modRoot, targetPath);
             if (count == 0)
-                return new(false, "That mod folder is empty — there's nothing to export.");
+                return new(false, Loc.Localize("Export.Error.EmptyFolder",
+                    "That mod folder is empty — there's nothing to export."));
 
             var size = new FileInfo(targetPath).Length / 1024f / 1024f;
             log.Information("[Proteus] exported {0} -> {1} ({2} file(s), {3:0.#} MB)",
                 entry.ModDirectory, targetPath, count, size);
-            return new(true, $"Exported \"{entry.ModName}\" — {count} file(s), {size:0.#} MB.\n{targetPath}");
+            // "{1} files" rather than English's inline "file(s)": a count glued to a noun has no correct
+            // translation into Russian (three plural forms) or Japanese (none), so the count is labelled
+            // instead of inflected.
+            return new(true, string.Format(
+                Loc.Localize("Export.Ok.Fmt", "Exported \"{0}\" — files: {1}, {2} MB.\n{3}"),
+                entry.ModName, count, size.ToString("0.#"), targetPath));
         }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] export failed for {0}", entry.ModDirectory);
-            return new(false, $"Couldn't write the file: {ex.Message}");
+            return new(false, string.Format(
+                Loc.Localize("Export.Error.WriteFailed.Fmt", "Couldn't write the file: {0}"), ex.Message));
         }
     }
 

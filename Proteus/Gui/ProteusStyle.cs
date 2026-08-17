@@ -29,6 +29,19 @@ public static class ProteusStyle
     /// unload, so every use is null-conditional.</summary>
     public static ProteusFonts? Fonts { get; set; }
 
+    /// <summary>
+    /// Whether the display face (Jupiter) can set the language currently in effect. Maintained by
+    /// <c>LocSetup</c> on every language change.
+    /// <para/>
+    /// Jupiter carries Latin only — <c>GameFontFamily.Jupiter</c> is documented as "Contains Latin
+    /// characters", and the game uses it for job names, nothing longer. Under Japanese, Chinese, Korean or
+    /// Russian every glyph it is asked for is missing, so the tab bar and the section headings — the two
+    /// places that push it — would render as boxes. Falling back to the default font there is not a
+    /// downgrade worth avoiding: Dalamud has already stocked that atlas with the right glyph ranges for
+    /// whatever language it is set to, which is exactly the coverage Jupiter lacks.
+    /// </summary>
+    public static bool DisplayFontUsable { get; set; } = true;
+
     // ---- brand -------------------------------------------------------------------------------------
 
     /// <summary>
@@ -97,7 +110,7 @@ public static class ProteusStyle
     /// with narrow coverage, so anything that might carry CJK or accents stays on the default font.</param>
     public static void SectionHeader(string text, bool display = true)
     {
-        using (var font = display ? Fonts?.PushHeader() : null)
+        using (var font = display && DisplayFontUsable ? Fonts?.PushHeader() : null)
             ImGui.TextUnformatted(text);
 
         // Measured from the item rect rather than from a predicted text size, so the rule tracks whatever
@@ -223,7 +236,10 @@ public static class ProteusStyle
     /// </remarks>
     public static ImRaii.TabBarDisposable HeaderTabBar(string id)
     {
-        using (Fonts?.PushHeader())
+        // Gated on the same latch as HeaderTabItem, and it has to be: the bar sizes itself from the font
+        // active during BeginTabBar. Pushing Jupiter here while the items fell back to the default face
+        // would lay the bar out to one font's metrics and draw the labels in another's.
+        using (DisplayFontUsable ? Fonts?.PushHeader() : null)
             return ImRaii.TabBar(id);
     }
 
@@ -232,10 +248,17 @@ public static class ProteusStyle
     /// <remarks>Every item needs the push, not just the first: ImGui measures each label with
     /// <c>CalcTextSize</c> and draws its glyphs inside <c>TabItemEx</c>. The first call additionally runs
     /// the whole bar's layout, which wrapping each call covers at no extra cost.</remarks>
-    public static ImRaii.TabItemDisposable HeaderTabItem(string label, ImGuiTabItemFlags flags = ImGuiTabItemFlags.None)
+    /// <param name="label">The visible text. Localized, so it changes with the UI language.</param>
+    /// <param name="id">A stable ASCII token, never translated. ImGui derives a widget's identity from its
+    /// label, so without this the six tabs would become six DIFFERENT tabs the moment the language changed
+    /// — losing the selection — and two labels that happened to translate alike would collide into one
+    /// item. <c>###</c> replaces the identity outright rather than appending to it, so only this token
+    /// counts.</param>
+    public static ImRaii.TabItemDisposable HeaderTabItem(
+        string label, string id, ImGuiTabItemFlags flags = ImGuiTabItemFlags.None)
     {
-        using (Fonts?.PushHeader())
-            return ImRaii.TabItem(label, flags);
+        using (DisplayFontUsable ? Fonts?.PushHeader() : null)
+            return ImRaii.TabItem($"{label}###{id}", flags);
     }
 
     /// <summary>
@@ -271,17 +294,23 @@ public static class ProteusStyle
     /// One sortable table-column header. Replaces the two near-identical local functions in the Mods and
     /// Bindings tabs, which differed only by enum.
     /// </summary>
-    public static void SortableHeader<T>(string label, T column, ref T current, ref bool desc, bool defaultDesc)
+    /// <param name="label">The visible text. Localized.</param>
+    /// <param name="id">A stable ASCII token, never translated. This used to be <paramref name="label"/>
+    /// itself, which was fine while the label was a hardcoded English constant; once it is translated the
+    /// id would move with the UI language and the header would again "silently become a different item",
+    /// which is the exact bug the <c>###</c> was added to fix.</param>
+    public static void SortableHeader<T>(
+        string label, string id, T column, ref T current, ref bool desc, bool defaultDesc)
         where T : struct, Enum
     {
         ImGui.TableNextColumn();
         var active = EqualityComparer<T>.Default.Equals(current, column);
         var arrow  = active ? (desc ? " ▼" : " ▲") : string.Empty;
 
-        // "###label" keeps the ImGui id stable across a direction flip — previously the arrow was part of
+        // "###id" keeps the ImGui id stable across a direction flip — previously the arrow was part of
         // the id, so the header silently became a different item every time it was clicked.
         using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(Accent), active))
-            ImGui.TableHeader($"{label}{arrow}###{label}");
+            ImGui.TableHeader($"{label}{arrow}###{id}");
 
         if (!ImGui.IsItemClicked())
             return;
@@ -290,6 +319,21 @@ public static class ProteusStyle
             desc = !desc;
         else
             (current, desc) = (column, defaultDesc);
+    }
+
+    /// <summary>
+    /// Dimmed explanatory text that wraps to the window instead of running off the right edge.
+    /// <para/>
+    /// <c>ImGui.TextDisabled</c> draws a single unwrapped line and lets the window clip whatever does not
+    /// fit, which is silent and looks fine right up until the text gets longer — so every full-sentence
+    /// notice goes through this rather than through TextDisabled directly. Localization is what made that
+    /// stop being hypothetical: German and Russian run about a third longer than the English these lines
+    /// were laid out against.
+    /// </summary>
+    public static void DisabledWrapped(string text)
+    {
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(text);
     }
 
     /// <summary>

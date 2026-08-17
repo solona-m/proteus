@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
 using Proteus.Interop;
@@ -170,30 +171,44 @@ public sealed class ModCreationService
         author = (author ?? "").Trim();
         materialTarget = (materialTarget ?? "").Trim();
 
-        if (string.IsNullOrWhiteSpace(modName)) return new(false, "Enter a mod name.");
-        if (string.IsNullOrWhiteSpace(materialTarget)) return new(false, "Enter a material target.");
+        // These run once per click on Create, not once per frame, so they read the string table directly
+        // rather than going through a cached holder — the message stays next to the branch that decides it.
+        if (string.IsNullOrWhiteSpace(modName))
+            return new(false, Loc.Localize("Create.Error.NoName", "Enter a mod name."));
+        if (string.IsNullOrWhiteSpace(materialTarget))
+            return new(false, Loc.Localize("Create.Error.NoMaterial", "Enter a material target."));
 
-        var sources = new (string slot, string? src)[]
-            { ("diffuse", diffuseSrc), ("mask", maskSrc), ("normal", normalSrc), ("index", indexSrc) };
+        // Each slot carries BOTH names: the label is what the error message shows the user, and it is
+        // translated; there is no invariant token needed here because nothing downstream switches on it.
+        // Interpolating the English identifier instead would put a bare "diffuse" inside an otherwise
+        // fully translated Russian sentence.
+        var cs = Localization.Strings.Create;
+        var sources = new (string label, string? src)[]
+            { (cs.SlotDiffuse, diffuseSrc), (cs.SlotMask, maskSrc), (cs.SlotNormal, normalSrc), (cs.SlotIndex, indexSrc) };
         if (!sources.Any(s => !string.IsNullOrWhiteSpace(s.src)))
-            return new(false, "Pick at least one texture (diffuse, mask, normal or index).");
-        foreach (var (slot, src) in sources)
+            return new(false, Loc.Localize("Create.Error.NoTexture",
+                "Pick at least one texture (diffuse, mask, normal or index)."));
+        foreach (var (label, src) in sources)
             if (!string.IsNullOrWhiteSpace(src) && !File.Exists(src))
-                return new(false, $"The {slot} file no longer exists: {src}");
+                return new(false, string.Format(
+                    Loc.Localize("Create.Error.MissingFile.Fmt", "The {0} file no longer exists: {1}"), label, src));
 
         var dirName = Sanitize(modName);
         if (dirName == null)
-            return new(false, "That mod name has no usable characters — use letters or numbers.");
+            return new(false, Loc.Localize("Create.Error.UnusableName",
+                "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return new(false, "\"Proteus\" is reserved — choose a different mod name.");
+            return new(false, Loc.Localize("Create.Error.ReservedName",
+                "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return new(false, "Penumbra's mod directory isn't available.");
+            return new(false, Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return new(false, $"A mod folder named \"{dirName}\" already exists.");
+            return new(false, string.Format(
+                Loc.Localize("Create.Error.FolderExists.Fmt", "A mod folder named \"{0}\" already exists."), dirName));
 
         try
         {
@@ -203,7 +218,8 @@ public sealed class ModCreationService
         {
             log.Error(ex, "[Proteus] create mod failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return new(false, $"Failed to write the mod: {ex.Message}");
+            return new(false, string.Format(
+                Loc.Localize("Create.Error.WriteFailed.Fmt", "Failed to write the mod: {0}"), ex.Message));
         }
 
         var ec = penumbra.AddModDirectory(dirName);
@@ -213,7 +229,8 @@ public sealed class ModCreationService
             // Roll the folder back so the name is free to retry — a half-registered mod on disk would
             // otherwise trip the "already exists" guard on the next attempt.
             try { Directory.Delete(root, true); } catch { /* best effort */ }
-            return new(false, $"Wrote the mod, but Penumbra couldn't register it ({ec}). Rescan mods in Penumbra.");
+            return new(false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
+                "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
         // Enable it in the player's collection so it takes effect immediately, then recomposite so Proteus
@@ -228,7 +245,8 @@ public sealed class ModCreationService
         penumbra.OpenToMod(dirName);
         compositor.TriggerRecomposite("mod-created");
         log.Information("[Proteus] created mod {0} ({1})", dirName, materialTarget);
-        return new(true, $"Created \"{modName}\", enabled it, and opened it in Penumbra.");
+        return new(true, string.Format(Loc.Localize("Create.Ok.Fmt",
+            "Created \"{0}\", enabled it, and opened it in Penumbra."), modName));
     }
 
     /// <summary>

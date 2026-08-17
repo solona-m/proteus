@@ -12,6 +12,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Proteus.Interop;
+using Proteus.Localization;
 using Proteus.Services;
 using StbImageSharp;
 
@@ -39,7 +40,15 @@ public class StatusWindow : Window
     private static Vector4 ImportWarnColour => ProteusStyle.Warn;
 
     // Indexed by (int)SiblingSynthesisMode: Off=0, BiboGen3Only=1, AllBodies=2.
-    private static readonly string[] SiblingModeLabels = { "Off", "bibo+gen3", "All bodies" };
+    // A METHOD, not the static readonly array this used to be: a static field captures its value once at
+    // type-init, so the labels would have frozen in whatever language was active when the window first
+    // drew and never followed a language change.
+    private static string SiblingModeLabel(int mode) => mode switch
+    {
+        0 => Strings.ColorPanel.BodiesOff,
+        1 => Strings.ColorPanel.BodiesSibling,
+        _ => Strings.ColorPanel.BodiesAll,
+    };
 
     // Set by the plugin-installer gear icon (UiBuilder.OpenConfigUi) so the window opens on Settings.
     // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
@@ -230,7 +239,7 @@ public class StatusWindow : Window
         {
             Icon = FontAwesomeIcon.Cog,
             IconOffset = new Vector2(2f, 1f),
-            ShowTooltip = () => ImGui.SetTooltip("Settings"),
+            ShowTooltip = () => ImGui.SetTooltip(Strings.Band.SettingsTip),
             Click = _ => OpenToSettings(),
         });
     }
@@ -300,22 +309,22 @@ public class StatusWindow : Window
             {
                 DrawTabBarRefresh(barTop);
 
-                using (var t = ProteusStyle.HeaderTabItem("Mods"))
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Mods, "mods"))
                     if (t) DrawModsTab();
 
-                using (var t = ProteusStyle.HeaderTabItem("Bindings"))
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
                     if (t) DrawBindingsTab();
 
-                using (var t = ProteusStyle.HeaderTabItem("Create"))
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
                     if (t) DrawCreateTab();
 
-                using (var t = ProteusStyle.HeaderTabItem("Import"))
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
                     if (t) DrawImportTab();
 
-                using (var t = ProteusStyle.HeaderTabItem("Export"))
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
                     if (t) DrawExportTab();
 
-                using (var t = ProteusStyle.HeaderTabItem("Settings",
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
                 {
                     _forceSettingsTab = false;
@@ -391,7 +400,7 @@ public class StatusWindow : Window
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
             compositor.TriggerRecomposite("manual");
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Recomposite now");
+            ImGui.SetTooltip(Strings.Band.RecompositeTip);
 
         ImGui.SetCursorPos(resume);
     }
@@ -435,7 +444,7 @@ public class StatusWindow : Window
         // independently of UI scale — a large enough font runs even this under the Discord button.
         var captionX = min.X + padX;
         ImGui.SetCursorScreenPos(new Vector2(captionX, ImGui.GetItemRectMax().Y - ProteusStyle.S(2f)));
-        ImGui.TextDisabled(ProteusStyle.Ellipsize("overlay compositor", btnX - captionX - padX));
+        ImGui.TextDisabled(ProteusStyle.Ellipsize(Strings.Band.Caption, btnX - captionX - padX));
 
         // ── status pills ─────────────────────────────────────────────────────
         // Only when something needs doing. There used to be a green "active" pill here so the band never
@@ -447,11 +456,24 @@ public class StatusWindow : Window
         ImGui.SetCursorScreenPos(new Vector2(pillX, pillY));
 
         (string Text, Vector4 Colour)? state =
-              !config.PluginEnabled ? ("disabled",    ProteusStyle.Warn)
-            : !penumbra.IsAvailable ? ("no Penumbra", ProteusStyle.Bad)
+              !config.PluginEnabled ? (Strings.Band.PillDisabled,   ProteusStyle.Warn)
+            : !penumbra.IsAvailable ? (Strings.Band.PillNoPenumbra, ProteusStyle.Bad)
             :                         null;
+        // Ellipsized like the download pill below, which it never used to be: "disabled" fit next to the
+        // Discord button in English, but "deaktiviert" and "отключено" do not, and an unbudgeted pill
+        // draws straight under the button rather than being clipped by it.
+        bool statePillDrawn = false;
         if (state is { } s)
-            ProteusStyle.Pill(s.Text, s.Colour);
+        {
+            // Same empty-result guard as the download pill: Ellipsize returns "" when not even the
+            // ellipsis fits, and drawing anyway would leave a bare coloured lozenge saying nothing.
+            var stateText = ProteusStyle.Ellipsize(s.Text, ProteusStyle.PillTextBudget(btnX - pillX - padX));
+            if (stateText.Length > 0)
+            {
+                ProteusStyle.Pill(stateText, s.Colour);
+                statePillDrawn = true;
+            }
+        }
 
         if (uvMapDl.State is UVMapDownloadState.Downloading or UVMapDownloadState.Failed)
         {
@@ -461,8 +483,13 @@ public class StatusWindow : Window
             // path also needs room for. With no state pill drawn the last submitted item is the CAPTION,
             // a line above and the full band wide, so its rect would report almost no room left and
             // ellipsize this pill to nothing. Fall back to the cursor we parked at instead.
-            var used   = state != null ? ImGui.GetItemRectMax().X : pillX;
-            var retryW = failed ? ImGui.CalcTextSize("Retry").X + (ImGui.GetStyle().FramePadding.X * 2)
+            // Keyed off whether the pill was actually DRAWN, not merely wanted: a state that ellipsized to
+            // nothing submitted no item, so GetItemRectMax would report the caption a line above and
+            // budget this pill against the wrong edge.
+            var used   = statePillDrawn ? ImGui.GetItemRectMax().X : pillX;
+            // Measured from the TRANSLATED caption — measuring the English literal while drawing the
+            // translated button would budget the wrong width in every other language.
+            var retryW = failed ? ImGui.CalcTextSize(Strings.Band.Retry).X + (ImGui.GetStyle().FramePadding.X * 2)
                                     + ImGui.GetStyle().ItemSpacing.X
                                 : 0f;
             var budget = ProteusStyle.PillTextBudget(btnX - used - ImGui.GetStyle().ItemSpacing.X - retryW - padX);
@@ -478,7 +505,7 @@ public class StatusWindow : Window
                 // SameLine only follows a pill that actually exists. Without one it would put this on the
                 // caption's line; the cursor is still parked where the state pill would have gone, and
                 // ProteusStyle.Pill draws at the current cursor, so leaving it alone lands correctly.
-                if (state != null)
+                if (statePillDrawn)
                     ImGui.SameLine();
                 else
                     ImGui.SetCursorScreenPos(new Vector2(pillX, pillY));
@@ -491,7 +518,7 @@ public class StatusWindow : Window
             if (failed)
             {
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Retry"))
+                if (ImGui.SmallButton(Strings.Band.Retry))
                     uvMapDl.EnsureMapsAsync();
             }
         }
@@ -523,31 +550,33 @@ public class StatusWindow : Window
         // rule under the tab content as well just adds a line to look at.
         ImGui.Spacing();
 
+        var f = Strings.Footer;
+
         var result = compositor.LastResult;
         if (result == null)
         {
-            ImGui.TextDisabled("No composite result yet.");
+            ImGui.TextDisabled(f.NoResult);
             return;
         }
 
         if (!result.Success)
         {
-            ProteusStyle.Pill("failed", ProteusStyle.Bad);
+            ProteusStyle.Pill(f.PillFailed, ProteusStyle.Bad);
             ImGui.SameLine();
-            ImGui.TextColored(ProteusStyle.Bad, result.ErrorMessage ?? "unknown error");
+            ImGui.TextColored(ProteusStyle.Bad, result.ErrorMessage ?? f.UnknownError);
             return;
         }
 
+        // The number is formatted here and the unit comes from the template, so a translator has one
+        // placeholder to move and no format specifier to break.
         var elapsed = DateTime.UtcNow - result.Timestamp;
         var timeStr = elapsed.TotalSeconds < 60
-            ? $"{elapsed.TotalSeconds:F1}s ago"
-            : $"{elapsed.TotalMinutes:F0}m ago";
+            ? string.Format(f.SecondsAgoFmt, elapsed.TotalSeconds.ToString("F1"))
+            : string.Format(f.MinutesAgoFmt, elapsed.TotalMinutes.ToString("F0"));
 
-        ProteusStyle.Pill("ok", ProteusStyle.Ok);
+        ProteusStyle.Pill(f.PillOk, ProteusStyle.Ok);
         ImGui.SameLine();
-        ImGui.TextDisabled($"Last composite: {timeStr}   " +
-                           $"{result.TexturesPatched} texture{(result.TexturesPatched != 1 ? "s" : "")} patched   " +
-                           $"{result.OverlayModsUsed} mod{(result.OverlayModsUsed != 1 ? "s" : "")}");
+        ImGui.TextDisabled(string.Format(f.LastCompositeFmt, timeStr, result.TexturesPatched, result.OverlayModsUsed));
     }
 
     /// <summary>
@@ -557,14 +586,15 @@ public class StatusWindow : Window
     /// </summary>
     private void DrawSettingsTab()
     {
-        ProteusStyle.SectionHeader("General");
+        var s = Strings.Settings;
+        ProteusStyle.SectionHeader(s.SecGeneral);
         using (ProteusStyle.Card())
         {
             var enabled = config.PluginEnabled;
             // The master switch, and the only toggle drawn as a switch: it governs the other nine, and a
             // tenth identical checkbox gave no hint of that.
-            const string enabledHelp = "Turning this off clears Proteus' output, redraws you without it,\n" +
-                                       "and disables the managed \"Proteus\" mod in Penumbra.";
+            // Was a `const string`; Loc.Localize is not a compile-time constant, so it is a local now.
+            var enabledHelp = s.EnabledTip;
             if (ImGuiComponents.ToggleButton("##enabled", ref enabled))
             {
                 config.PluginEnabled = enabled;
@@ -577,7 +607,7 @@ public class StatusWindow : Window
                 ImGui.SetTooltip(enabledHelp);
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
-            ImGui.TextUnformatted("Enabled");
+            ImGui.TextUnformatted(s.Enabled);
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(enabledHelp);
 
@@ -585,49 +615,49 @@ public class StatusWindow : Window
         }
 
         ImGui.Spacing();
-        ProteusStyle.SectionHeader("Output");
+        ProteusStyle.SectionHeader(s.SecOutput);
         using (ProteusStyle.Card())
             DrawOutputSettings();
 
         ImGui.Spacing();
-        ProteusStyle.SectionHeader("Skin effects");
+        ProteusStyle.SectionHeader(s.SecSkinEffects);
         using (ProteusStyle.Card())
             DrawSkinEffectSliders();
 
         ImGui.Spacing();
-        ProteusStyle.SectionHeader("Hosting");
+        ProteusStyle.SectionHeader(s.SecHosting);
         using (ProteusStyle.Card())
             DrawHostingSettings();
 
         ImGui.Spacing();
-        ProteusStyle.SectionHeader("Diagnostics");
+        ProteusStyle.SectionHeader(s.SecDiagnostics);
         using (ProteusStyle.Card())
             DrawDiagnostics();
     }
 
     private void DrawGeneralToggles()
     {
+        var s = Strings.Settings;
+
         var disableRedraw = config.DisableAutoRedraw;
-        if (ImGui.Checkbox("Disable auto redraw", ref disableRedraw))
+        if (ImGui.Checkbox(s.DisableAutoRedraw, ref disableRedraw))
         {
             config.DisableAutoRedraw = disableRedraw;
             config.Save();
         }
 
         var skipUnchanged = config.SkipUnchangedComposites;
-        if (ImGui.Checkbox("Skip unchanged recomposites", ref skipUnchanged))
+        if (ImGui.Checkbox(s.SkipUnchanged, ref skipUnchanged))
         {
             config.SkipUnchangedComposites = skipUnchanged;
             config.Save();
             compositor.TriggerRecomposite("skip-gate-toggle");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Let a recomposite triggered by zoning or a redraw stop early when nothing that\n" +
-                             "affects the output has changed. Anything you change yourself always recomposites.\n" +
-                             "Turn off only to rule this out when an edit isn't taking effect.");
+            ImGui.SetTooltip(s.SkipUnchangedTip);
 
         var autoRaise = config.AutoRaiseModPriority;
-        if (ImGui.Checkbox("Auto-raise mod priority", ref autoRaise))
+        if (ImGui.Checkbox(s.AutoRaise, ref autoRaise))
         {
             config.AutoRaiseModPriority = autoRaise;
             config.Save();
@@ -635,29 +665,19 @@ public class StatusWindow : Window
         // Both a visible (?) AND the original hover. The marker is for discovery — this describes a
         // failure nobody would think to hover for — but removing the hover took the explanation away from
         // anyone who already had the habit of pointing at the control itself.
-        const string autoRaiseHelp =
-            "When another mod is confirmed to be overriding a skin texture Proteus composites\n" +
-            "into — a tattoo or skin pack shipping its own copy of the body texture — raise\n" +
-            "Proteus' Penumbra priority above it automatically, and say so in chat.\n\n" +
-            "That override is otherwise invisible: overlays half-apply (the bumps land, the\n" +
-            "colour doesn't) and every log line still reads as a success.\n\n" +
-            "Turn off only if you deliberately want another mod to win a path Proteus\n" +
-            "composites. Proteus never acts on a guess — only on a confirmed override.";
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(autoRaiseHelp);
+            ImGui.SetTooltip(s.AutoRaiseTip);
         ImGui.SameLine();
-        ImGuiComponents.HelpMarker(autoRaiseHelp);
+        ImGuiComponents.HelpMarker(s.AutoRaiseTip);
 
         var inPlaceReload = config.UseInPlaceReload;
-        if (ImGui.Checkbox("In-place reload", ref inPlaceReload))
+        if (ImGui.Checkbox(s.InPlaceReload, ref inPlaceReload))
         {
             config.UseInPlaceReload = inPlaceReload;
             config.Save();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Refresh textures via Glamourer's in-place equipment reload instead of a full\n" +
-                "redraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\n" +
-                "automatically when Glamourer can't service it.");
+            ImGui.SetTooltip(s.InPlaceReloadTip);
 
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small
@@ -671,23 +691,20 @@ public class StatusWindow : Window
         if (lib != null)
         {
             ImGui.Spacing();
-            if (ImGui.Button("Glow Effect Textures"))
+            if (ImGui.Button(s.GlowLibrary))
                 try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(lib) { UseShellExecute = true }); }
                 catch { /* no file manager — the path is in the tooltip anyway */ }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Open the folder Proteus reads animated-glow scroll maps from — the \"_o\"\n" +
-                                 "textures that ARE the glow. Anything dropped in here appears in every\n" +
-                                 "gear overlay's Effect dropdown.\n\n" +
-                                 $"{lib}\n\n" +
-                                 "Accepts .tex, .dds, .png, .jpg, .bmp, .tga, .psd and .gif.\n" +
-                                 "A mod's own Proteus/Effects/ folder takes precedence over it.");
+                ImGui.SetTooltip(string.Format(s.GlowLibraryTipFmt, lib));
         }
     }
 
     private void DrawOutputSettings()
     {
+        var s = Strings.Settings;
+
         var enableCompression = config.EnableCompression;
-        if (ImGui.Checkbox("Enable Compression", ref enableCompression))
+        if (ImGui.Checkbox(s.Compression, ref enableCompression))
         {
             config.EnableCompression = enableCompression;
             config.Save();
@@ -695,34 +712,29 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("compression-toggle");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Block-compress the baked textures (BC7), cutting each to about a quarter of its\n" +
-                             "uncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\n" +
-                             "its exact row values. Off = uncompressed (byte-identical to before).");
+            ImGui.SetTooltip(s.CompressionTip);
 
         var cutoutAlpha = config.GearCutoutAlpha;
-        if (ImGui.Checkbox("Sharp alpha (gpose sphere/metal)", ref cutoutAlpha))
+        if (ImGui.Checkbox(s.SharpAlpha, ref cutoutAlpha))
         {
             config.GearCutoutAlpha = cutoutAlpha;
             config.Save();
             compositor.TriggerRecomposite("cutout-alpha-toggle");
         }
-        const string cutoutHelp =
-            "EXPERIMENTAL. Renders shell coverage as a hard alpha-test cutout instead of smooth\n" +
-            "transparency, so sphere maps and metalness survive gpose (which drops them on\n" +
-            "transparent surfaces). Trade-off: sheer edges become hard/aliased. Best for\n" +
-            "mostly-opaque fabrics; a very sheer fabric will look coarse. Recomposite after toggling.";
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cutoutHelp);
+            ImGui.SetTooltip(s.SharpAlphaTip);
         ImGui.SameLine();
-        ImGuiComponents.HelpMarker(cutoutHelp);
+        ImGuiComponents.HelpMarker(s.SharpAlphaTip);
 
         DrawCacheAndMeshSettings();
     }
 
     private void DrawHostingSettings()
     {
+        var s = Strings.Settings;
+
         bool autoGlasses = config.AutoInvisibleGlasses;
-        if (ImGui.Checkbox("Host on invisible glasses (keep rings free)", ref autoGlasses))
+        if (ImGui.Checkbox(s.InvisibleGlasses, ref autoGlasses))
         {
             config.AutoInvisibleGlasses = autoGlasses;
             config.Save();
@@ -730,21 +742,16 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("auto-glasses-toggle");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("When on and you have no glasses equipped, Proteus has Glamourer equip an\n" +
-                             "invisible glasses item so the second skin rides the facewear slot instead of a\n" +
-                             "ring. This writes a (hidden) bonus item to your Glamourer state; it's removed\n" +
-                             "when you disable Proteus, equip real glasses, or turn this off.");
+            ImGui.SetTooltip(s.InvisibleGlassesTip);
 
 
         // The second skin rides on an equipped ring/bracelet (its model is redirected to our merged
         // shell). An in-place reload can't reload that .mdl, so if a shell ever gets stuck on the
         // accessory this forces a full redraw to reload the accessory's original model.
-        if (ImGui.Button("Restore changed accessory"))
+        if (ImGui.Button(s.RestoreAccessory))
             compositor.RestoreChangedAccessory();
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Force a full redraw to reload any ring/bracelet the second skin replaced,\n" +
-                "restoring it to its original model. Use if a gear shell stays stuck on an\n" +
-                "accessory after disabling or swapping.");
+            ImGui.SetTooltip(s.RestoreAccessoryTip);
     }
 
     private void DrawDiagnostics()
@@ -752,31 +759,33 @@ public class StatusWindow : Window
         // Escape hatch for a stale texture: Proteus caches decoded textures keyed by file
         // timestamp + size, so a mod edit that preserves both can keep showing the old image
         // until this drops the cache and recomposites. Mod toggles/reinstalls evict automatically.
-        if (ImGui.Button("Clear texture cache"))
+        var s = Strings.Settings;
+
+        if (ImGui.Button(s.ClearCache))
             compositor.ClearTextureCacheAndRecomposite();
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Drop all cached decoded textures and recomposite now. Use if a texture edit\n" +
-                "isn't showing up — e.g. you re-exported an overlay at the same size and the\n" +
-                "change won't appear without restarting the plugin.\n\n" +
-                "Also re-derives which mod each base skin texture comes from — use this if the\n" +
-                "Base skin below names the wrong mod.");
+            ImGui.SetTooltip(s.ClearCacheTip);
 
         // WHICH skin the overlays are painted onto. Nothing else surfaces this, and a composite built on
         // the wrong body mod looks like a perfectly good composite of a skin you didn't pick — so the
         // failure is invisible unless the source is named somewhere.
         var upstreams = compositor.BaseUpstreams();
-        if (upstreams.Count > 0 && ImGui.CollapsingHeader($"Base skin ({upstreams.Count})"))
+        // "###baseSkin" pins the id. The count was previously part of it, so this header silently
+        // collapsed itself whenever a texture entered or left the list — and once the label is translated
+        // it would also reset on every language change.
+        if (upstreams.Count > 0 &&
+            ImGui.CollapsingHeader(string.Format(s.BaseSkinHeaderFmt, upstreams.Count) + "###baseSkin"))
         {
             foreach (var (gamePath, source, settled) in upstreams)
             {
                 if (settled)
                     ImGui.TextUnformatted($"{source}");
                 else
-                    ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f), $"{source} (unconfirmed)");
+                    ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f), string.Format(s.BaseSkinUnconfirmedFmt, source));
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(gamePath);
             }
-            ImGui.TextDisabled("The mod each base texture is read from. Hover for the game path.");
+            ImGui.TextDisabled(s.BaseSkinNote);
         }
 
         // The mirror of "Base skin": that names the file we READ, this says what we DID to it. Both exist
@@ -788,25 +797,26 @@ public class StatusWindow : Window
         // Already filtered and sorted by the composite — nothing here but formatting, because this runs on
         // every frame the window is open.
         var contributions = compositor.ChannelContributions();
-        if (contributions.Count > 0 && ImGui.CollapsingHeader($"Overlay reach ({contributions.Count})"))
+        if (contributions.Count > 0 &&
+            ImGui.CollapsingHeader(string.Format(s.ReachHeaderFmt, contributions.Count) + "###overlayReach"))
         {
             foreach (var c in contributions)
             {
                 var name = System.IO.Path.GetFileNameWithoutExtension(c.Material);
                 if (c.DiffuseWanted && c.Diffuse == 0)
                     ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f),
-                        $"{name} — diffuse {c.Diffuse}, normal {c.Normal}, mask {c.Mask} (diffuse did not apply)");
+                        string.Format(s.ReachFailedFmt, name, c.Diffuse, c.Normal, c.Mask));
                 else if (c.Diffuse + c.Normal + c.Mask == 0)
                     // Reached only by ambient occlusion or skin-tint suppression — a gear-layer mod casting a
                     // contact shadow onto skin no overlay paints. Without the label this is three zeros and
                     // no way to tell it from a material nothing reached at all.
-                    ImGui.TextDisabled($"{name} — effects only (no overlay art)");
+                    ImGui.TextDisabled(string.Format(s.ReachEffectsOnlyFmt, name));
                 else
-                    ImGui.TextUnformatted($"{name} — diffuse {c.Diffuse}, normal {c.Normal}, mask {c.Mask}");
+                    ImGui.TextUnformatted(string.Format(s.ReachOkFmt, name, c.Diffuse, c.Normal, c.Mask));
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(c.Material);
             }
-            ImGui.TextDisabled("How many overlays actually reached each channel. Hover for the material.");
+            ImGui.TextDisabled(s.ReachNote);
         }
     }
 
@@ -814,9 +824,13 @@ public class StatusWindow : Window
     {
         // Skin-tint suppression strength (global multiplier). The per-pixel amount is weighted by
         // overlay color: bright dyes get de-tinted, dark dyes are left skin-tinted and matte.
+        var s = Strings.Settings;
+
+        // Wider than the original 140px: ImGui draws a slider's label to its RIGHT, and the four labels
+        // here are among the longest in the window once translated.
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         float skinSup = config.SkinColorSuppression;
-        if (ImGui.SliderFloat("Skin-tint suppression", ref skinSup, 0f, 1f, "%.2f"))
+        if (ImGui.SliderFloat(s.SkinTint, ref skinSup, 0f, 1f, "%.2f"))
             config.SkinColorSuppression = Math.Clamp(skinSup, 0f, 1f);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
@@ -824,16 +838,12 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("skin-suppression");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "How strongly overlays resist skin-tone tinting (global multiplier).\n" +
-                "Applied per pixel by color: white/bright dyes keep their authored color on any\n" +
-                "skin tone (slightly shinier), dark dyes stay skin-tinted and matte automatically.\n" +
-                "0.00 disables it entirely (original look).");
+            ImGui.SetTooltip(s.SkinTintTip);
 
         // Ambient-occlusion contact shadow baked onto the skin around masked strap edges.
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         float aoStr = config.AmbientOcclusionStrength;
-        if (ImGui.SliderFloat("Ambient occlusion", ref aoStr, 0f, 2f, "%.2f"))
+        if (ImGui.SliderFloat(s.AmbientOcclusion, ref aoStr, 0f, 2f, "%.2f"))
             config.AmbientOcclusionStrength = Math.Clamp(aoStr, 0f, 2f);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
@@ -841,13 +851,11 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("ambient-occlusion");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "Soft contact shadow on the skin just outside masked strap edges, giving straps depth.\n" +
-                "0.00 disables it entirely (skin diffuse unchanged).");
+            ImGui.SetTooltip(s.AmbientOcclusionTip);
 
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         float aoSoft = config.AmbientOcclusionSoftness;
-        if (ImGui.SliderFloat("Shadow softness", ref aoSoft, 0.001f, 0.005f, "%.3f"))
+        if (ImGui.SliderFloat(s.ShadowSoftness, ref aoSoft, 0.001f, 0.005f, "%.3f"))
             config.AmbientOcclusionSoftness = Math.Clamp(aoSoft, 0.001f, 0.005f);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
@@ -855,13 +863,11 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("ambient-occlusion-softness");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "How far the ambient-occlusion shadow spreads from a strap edge (fraction of texture width).\n" +
-                "Larger = wider, softer shadow. Shared by the shadow and the strap indent.");
+            ImGui.SetTooltip(s.ShadowSoftnessTip);
 
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         float aoNrm = config.AmbientOcclusionNormalDepth;
-        if (ImGui.SliderFloat("Skindenting", ref aoNrm, 0f, 10f, "%.2f"))
+        if (ImGui.SliderFloat(s.Skindenting, ref aoNrm, 0f, 10f, "%.2f"))
             config.AmbientOcclusionNormalDepth = Math.Clamp(aoNrm, 0f, 10f);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
@@ -869,39 +875,33 @@ public class StatusWindow : Window
             compositor.TriggerRecomposite("ambient-occlusion-normal");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(
-                "Indents the skin normal at strap/garment edges so straps look pressed into the skin.\n" +
-                "0.00 disables it (skin normal unchanged). Uses the same edges/softness as the shadow.");
+            ImGui.SetTooltip(s.SkindentingTip);
     }
 
     private void DrawCacheAndMeshSettings()
     {
+        var s = Strings.Settings;
+
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         int cacheMb = config.DecodeCacheBudgetMb;
-        if (ImGui.SliderInt("Texture cache (MB)", ref cacheMb, 512, 4096))
+        if (ImGui.SliderInt(s.TextureCache, ref cacheMb, 512, 4096))
             config.DecodeCacheBudgetMb = Math.Clamp(cacheMb, 512, 4096);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             config.Save();
             compositor.ApplyDecodeCacheBudget();   // live — lowering it reclaims on the spot, no restart
         }
-        const string cacheHelp =
-            "How much decoded texture data Proteus keeps in memory between composites.\n\n" +
-            "A 4K texture costs 64 MB decoded, so this is really a count: 2048 MB ≈ 30 of them.\n" +
-            "It only helps if it covers a whole composite's worth — below that, every run evicts\n" +
-            "what the next one needs and nothing is reused.\n\n" +
-            "Check the \"cache N entries, M MB\" figure in the recomposite log: if a SECOND\n" +
-            "composite with nothing changed still reports misses, raise this. Lower it if the\n" +
-            "game starts paging. Released automatically after 60s idle.";
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cacheHelp);
+            ImGui.SetTooltip(s.TextureCacheTip);
         ImGui.SameLine();
-        ImGuiComponents.HelpMarker(cacheHelp);
+        ImGuiComponents.HelpMarker(s.TextureCacheTip);
 
         // Hide a body's redundant connector meshes on the gear shell (see Configuration).
         var connMode = config.HideConnectorMeshes;
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
-        if (ImGui.BeginCombo("Hide Connector Meshes", connMode.ToString()))
+        // The enum values (Off / Neolithe) stay untranslated: "Neolithe" is a body mod's name, and "Off"
+        // beside it would read oddly translated alone.
+        if (ImGui.BeginCombo(s.ConnectorMeshes, connMode.ToString()))
         {
             foreach (var opt in new[] { ConnectorMeshMode.Off, ConnectorMeshMode.Neolithe })
             {
@@ -914,27 +914,22 @@ public class StatusWindow : Window
             }
             ImGui.EndCombo();
         }
-        const string connectorHelp =
-            "Skip each body part's connector ring on the gear \"second skin\" — the small extra\n" +
-            "submesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\n" +
-            "that overlaps an already-complete body; on a sheer overlay the overlap doubles up and\n" +
-            "shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
-            "skin, and hiding it would leave gaps.";
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(connectorHelp);
+            ImGui.SetTooltip(s.ConnectorMeshesTip);
         ImGui.SameLine();
-        ImGuiComponents.HelpMarker(connectorHelp);
+        ImGuiComponents.HelpMarker(s.ConnectorMeshesTip);
     }
 
     /// <summary>Author a basic skin-overlay mod: name + author + up to three textures → a new Penumbra mod.</summary>
     private void DrawCreateTab()
     {
-        ImGui.TextWrapped("Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a " +
-            "new Penumbra mod and opens it so you can enable and tweak it.");
+        var cs = Strings.Create;
+
+        ImGui.TextWrapped(cs.Intro);
         ImGui.Separator();
 
-        ImGui.InputText("Mod name", ref _createName, 128);
-        ImGui.InputText("Author", ref _createAuthor, 128);
+        ImGui.InputText(cs.ModName, ref _createName, 128);
+        ImGui.InputText(cs.Author, ref _createAuthor, 128);
 
         // Material target — the exact body material the overlay paints on. Auto-fill from the body the
         // character is drawing. Detection returns null until the character loads, so keep polling (throttled)
@@ -965,11 +960,9 @@ public class StatusWindow : Window
             }
         }
         ImGui.SetNextItemWidth(560);
-        ImGui.InputText("Material target", ref _createMaterial, 256);
+        ImGui.InputText(cs.MaterialTarget, ref _createMaterial, 256);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("The material this overlay composites onto. Auto-filled from the body you're\n" +
-                "currently wearing; pick one you have equipped from the list, or type a path by hand to\n" +
-                "target a body/race you aren't wearing right now.");
+            ImGui.SetTooltip(cs.MaterialTargetTip);
 
         // Equipped-material picker. NoPreview renders just the arrow, so this reads as a companion to the
         // text box above rather than a second, competing field — ImGui has no editable combo.
@@ -980,7 +973,9 @@ public class StatusWindow : Window
         // supplied none, so passing a width constraint silently disables that path. Without this the popup
         // grows one row per equipped material, past the window on a full wardrobe.
         var pickerMaxH = ImGui.GetTextLineHeightWithSpacing() * 20 + ImGui.GetStyle().WindowPadding.Y * 2;
-        ImGui.SetNextWindowSizeConstraints(new Vector2(460, 0), new Vector2(760, pickerMaxH));
+        // Max widened for translation: the two notices inside are full sentences, and the popup does not
+        // wrap or scroll horizontally — it clips.
+        ImGui.SetNextWindowSizeConstraints(new Vector2(460, 0), new Vector2(950, pickerMaxH));
         bool pickerOpen = ImGui.BeginCombo("##matpick", "", ImGuiComboFlags.NoPreview);
         // Rising edge only. BeginCombo is true every frame the popup is open, so rebuilding unguarded would
         // run the Penumbra resource walk at frame rate. Assign after the test so the flag also falls on close.
@@ -992,15 +987,15 @@ public class StatusWindow : Window
             // Only when there IS a last-known list to show: the live query also reports "from cache" when
             // the cache is itself empty, and the two notices stacked would promise a list and then deny it.
             if (_matPickerStale && items is { Count: > 0 })
-                ImGui.TextDisabled("Showing the last known list — character isn't drawn.");
+                ImGui.TextDisabled(cs.PickerStale);
 
             if (items == null || items.Count == 0)
             {
-                ImGui.TextDisabled("No equipped materials known yet.\nZone in or redraw, then reopen this list.");
+                ImGui.TextDisabled(cs.PickerEmpty);
             }
             else
             {
-                if (items[0].Skin) ImGui.TextDisabled("Skin");
+                if (items[0].Skin) ImGui.TextDisabled(cs.PickerSkin);
                 // Starts true when nothing is skin, so a separator never leads the list.
                 bool separated = !items[0].Skin;
                 foreach (var it in items)
@@ -1023,14 +1018,14 @@ public class StatusWindow : Window
         }
 
         ImGui.SameLine();
-        if (ImGui.SmallButton("Re-detect"))
+        if (ImGui.SmallButton(cs.Redetect))
         {
             _createMaterial = _createMaterialAuto = modCreation.DetectBodyMaterial()
                 ?? modCreation.CachedBodyMaterial() ?? ModCreationService.DefaultBodyMaterial;
             _createMaterialLocked = true;   // explicit request — take this value and stop polling
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Re-run body detection and overwrite the field.");
+            ImGui.SetTooltip(cs.RedetectTip);
 
         // Which rows the picked material can actually consume.
         if (_createMaterial != _createSlotsFor)
@@ -1046,17 +1041,24 @@ public class StatusWindow : Window
         else _createSlotsNextTick = 0;
 
         ImGui.Spacing();
-        DrawTextureRow("Diffuse", ref _createDiffuse, SlotEnabled("Diffuse"), "This material has no diffuse texture.");
-        DrawTextureRow("Mask", ref _createMask, SlotEnabled("Mask"), "This material has no mask texture.");
-        DrawTextureRow("Normal", ref _createNormal, SlotEnabled("Normal"), "This material has no normal texture.");
-        DrawTextureRow("Index", ref _createIndex, SlotEnabled("Index"),
-            "This material has no index texture, and it isn't skin or face — nothing here\n" +
-            "would read a colour-table row selector.");
+        // ONE offset for all four rows, so the file names form a column instead of each sitting behind its
+        // own label. Never narrower than the original 90px, and widened only by however much the widest
+        // TRANSLATED label needs. Measured per frame because the font, the UI scale and the language can
+        // all change under us; measuring the label and the colon separately keeps it allocation-free.
+        var colonW = ImGui.CalcTextSize(":").X;
+        var labelColumn = MathF.Max(ProteusStyle.S(90f), ProteusStyle.S(12f) + colonW + MathF.Max(
+            MathF.Max(ImGui.CalcTextSize(cs.SlotDiffuse).X, ImGui.CalcTextSize(cs.SlotMask).X),
+            MathF.Max(ImGui.CalcTextSize(cs.SlotNormal).X, ImGui.CalcTextSize(cs.SlotIndex).X)));
+
+        DrawTextureRow("Diffuse", cs.SlotDiffuse, labelColumn, ref _createDiffuse, SlotEnabled("Diffuse"), cs.NoDiffuse);
+        DrawTextureRow("Mask",    cs.SlotMask,    labelColumn, ref _createMask,    SlotEnabled("Mask"),    cs.NoMask);
+        DrawTextureRow("Normal",  cs.SlotNormal,  labelColumn, ref _createNormal,  SlotEnabled("Normal"),  cs.NoNormal);
+        DrawTextureRow("Index",   cs.SlotIndex,   labelColumn, ref _createIndex,   SlotEnabled("Index"),   cs.NoIndex);
         // Only once a read has actually been ATTEMPTED for this exact material (_createSlotsFor tracks
         // that). Testing _createSlots alone announced a failure during the window before the read ran,
         // so the note flashed on every material change and then corrected itself.
         if (_createSlots == null && _createSlotsFor == _createMaterial && _createMaterial.Length > 0)
-            ImGui.TextDisabled("Couldn't read this material — offering every slot.");
+            ImGui.TextDisabled(cs.SlotsUnreadable);
 
         ImGui.Separator();
 
@@ -1071,7 +1073,7 @@ public class StatusWindow : Window
             && anyTexture;
 
         using (ImRaii.Disabled(!valid))
-            if (ImGui.Button("Create"))
+            if (ImGui.Button(cs.CreateBtn))
             {
                 var r = modCreation.Create(
                     _createName, _createAuthor, _createMaterial,
@@ -1085,7 +1087,7 @@ public class StatusWindow : Window
                     _createDiffuse = _createMask = _createNormal = _createIndex = "";
             }
         if (!valid && ImGui.IsItemHovered())
-            ImGui.SetTooltip("Enter a mod name, a material target, and pick at least one texture.");
+            ImGui.SetTooltip(cs.CreateDisabledTip);
 
         if (_createStatus != null)
             ImGui.TextColored(
@@ -1139,7 +1141,18 @@ public class StatusWindow : Window
     /// One texture slot: current file name, a Browse button, and a Clear button. A slot the material can't
     /// consume is dimmed and inert, with <paramref name="disabledReason"/> on hover.
     /// </summary>
-    private void DrawTextureRow(string label, ref string path, bool enabled = true, string? disabledReason = null)
+    /// <param name="slot">The invariant slot token — "Diffuse", "Mask", "Normal" or "Index". Never
+    /// translated: it is the ImGui id, and it is what the file-dialog callback below switches on to decide
+    /// which field the picked path lands in. These used to be one parameter with
+    /// <paramref name="label"/>, which meant a translated label would have matched none of the switch arms
+    /// and silently dropped every file the user picked.</param>
+    /// <param name="label">What the user reads. Localized.</param>
+    /// <param name="labelColumn">Where the file name starts, in pixels from the row's left edge. Passed in
+    /// rather than measured here so all four rows share ONE offset: measuring per row lines each file name
+    /// up behind its own label, which staggers the column as soon as the translated labels differ in width
+    /// (Japanese "インデックス:" is far wider than "マスク:").</param>
+    private void DrawTextureRow(string slot, string label, float labelColumn, ref string path,
+                                bool enabled = true, string? disabledReason = null)
     {
         // Dims the row's TEXT, which ImRaii.Disabled alone wouldn't reach — the label and file name sit
         // outside the disabled scope so their tooltips stay hoverable. The Browse button below is disabled
@@ -1151,26 +1164,27 @@ public class StatusWindow : Window
         // ProteusStyle.ReasonTooltip carries the AllowWhenDisabled reasoning.
         var reason = enabled ? null : disabledReason;
 
-        var shown = path.Length == 0 ? "(none)" : Path.GetFileName(path);
+        var shown = path.Length == 0 ? Strings.Common.None : Path.GetFileName(path);
         ImGui.TextUnformatted($"{label}:");
         ProteusStyle.ReasonTooltip(reason);
-        ImGui.SameLine(ProteusStyle.S(90f));
-        ImGui.TextUnformatted(enabled ? shown : "(not used by this material)");
+        ImGui.SameLine(labelColumn);
+        ImGui.TextUnformatted(enabled ? shown : Strings.Create.SlotUnused);
 
         ImGui.SameLine(ProteusStyle.S(360f));
-        // Capture the field by a local setter — ref can't cross the dialog callback. The label string is
+        // Capture the field by a local setter — ref can't cross the dialog callback. The SLOT string is
         // load-bearing here: this switch is how the picked path reaches the field. Don't rename them.
-        var captured = label;
+        var captured = slot;
         // ImRaii.Disabled, NOT `enabled && SmallButton(...)`: the short-circuit would skip submitting the
         // button entirely, and an unsubmitted item can't be hovered, so the reason tooltip would vanish.
         // This keeps the item in the layout, blocks the click properly, and still reads as pressable-off
         // rather than swallowing a press that looks like it landed.
         using (ImRaii.Disabled(!enabled))
         {
-            if (ImGui.SmallButton($"Browse##{label}"))
+            if (ImGui.SmallButton($"{Strings.Common.Browse}##browse_{slot}"))
             {
                 _fileDialog.OpenFileDialog(
-                    $"Select {label} texture", "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
+                    string.Format(Strings.Create.PickTextureTitleFmt, label),
+                    "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
                     (ok, paths) =>
                     {
                         if (!ok) return;
@@ -1189,7 +1203,7 @@ public class StatusWindow : Window
         if (enabled && path.Length > 0)
         {
             ImGui.SameLine();
-            if (ImGui.SmallButton($"Clear##{label}"))
+            if (ImGui.SmallButton($"{Strings.Common.Clear}##clear_{slot}"))
                 path = "";
         }
     }
@@ -1245,12 +1259,15 @@ public class StatusWindow : Window
 
     private void DrawImportTab()
     {
-        ImGui.TextWrapped("Import an Onion overlay pack (.omp). Proteus reads the pack's layers and writes " +
-            "a new Penumbra mod with a Proteus sidecar — the original file isn't modified.");
+        var ims = Strings.Import;
+
+        ImGui.TextWrapped(ims.Intro);
         ImGui.Separator();
 
-        if (ImGui.Button("Browse for a pack"))
-            _fileDialog.OpenFileDialog("Select an Onion pack", "Onion pack{.omp}", (ok, paths) =>
+        if (ImGui.Button(ims.BrowseBtn))
+            // The "{.omp}" suffix is the dialog's own filter syntax, not prose — it is appended here so a
+            // translator only ever sees the human half.
+            _fileDialog.OpenFileDialog(ims.DialogTitle, ims.DialogFilter + "{.omp}", (ok, paths) =>
             {
                 if (!ok) return;
                 var picked = paths.FirstOrDefault();
@@ -1269,25 +1286,25 @@ public class StatusWindow : Window
         if (preview == null)
         {
             ImGui.Spacing();
-            ImGui.TextDisabled("Pick an .omp file to see what it contains.");
+            ImGui.TextDisabled(ims.NoPack);
             DrawImportStatus();
             return;
         }
 
         ImGui.Spacing();
-        ImGui.InputText("Mod name", ref _importName, 128);
-        ImGui.InputText("Author", ref _importAuthor, 128);
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
 
         if (preview.Description != null)
         {
             ImGui.Spacing();
-            ImGui.TextDisabled("Description");
+            ImGui.TextDisabled(ims.Description);
             ImGui.TextWrapped(preview.Description);
         }
         if (preview.Website != null)
         {
             ImGui.TextDisabled(preview.Website);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Carried into the mod's Penumbra page.");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
         }
 
         ImGui.Separator();
@@ -1297,11 +1314,10 @@ public class StatusWindow : Window
         if (layouts.Count > 1)
         {
             ImGui.Spacing();
-            ImGui.TextWrapped($"The pack has {layouts.Count} UV layouts, so the mod gets a single-select " +
-                $"\"{OnionImportService.LayoutGroupName}\" group in Penumbra ({string.Join(", ", layouts)}). " +
-                $"Only one composites at a time.");
+            ImGui.TextWrapped(string.Format(ims.LayoutsFmt,
+                layouts.Count, OnionImportService.LayoutGroupName, string.Join(", ", layouts)));
             if (preview.DefaultLayoutMatchedBody && preview.DefaultLayout != null)
-                ImGui.TextDisabled($"\"{preview.DefaultLayout}\" will be selected — it matches the body you're wearing.");
+                ImGui.TextDisabled(string.Format(ims.DefaultLayoutMatchedFmt, preview.DefaultLayout));
         }
 
         DrawImportBodyFit(preview);
@@ -1309,12 +1325,9 @@ public class StatusWindow : Window
 
         ImGui.Spacing();
         using (ImRaii.Disabled(!TextureLoader.NativeEncoderAvailable))
-            ImGui.Checkbox("Convert layers to BC7 .tex", ref _importAsTex);
+            ImGui.Checkbox(ims.AsTex, ref _importAsTex);
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable
-                ? "Roughly a quarter of the disk size, and no PNG decode at composite time.\n" +
-                  "Block compression is lossy — leave it off to keep the pack's images exactly as authored."
-                : "The native block compressor isn't loaded, so BC7 encoding would take minutes.");
+            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable ? ims.AsTexTip : ims.AsTexUnavailableTip);
 
         foreach (var w in preview.Warnings)
         {
@@ -1328,12 +1341,12 @@ public class StatusWindow : Window
 
         bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
         using (ImRaii.Disabled(!valid))
-            if (ImGui.Button(_importBusy ? "Importing…" : "Import"))
+            // Both captions carry the same "###importGo" id, so the button stays one widget across the
+            // busy flip rather than becoming a different item mid-import.
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
                 StartImport(preview);
         if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(preview.AnyImportable
-                ? "Enter a mod name."
-                : "No layer in this pack can be imported.");
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : ims.NothingUsable);
 
         DrawImportStatus();
     }
@@ -1385,15 +1398,19 @@ public class StatusWindow : Window
         Task.Run(() =>
         {
             try { _importPrepared = onionImport.Prepare(preview, name, author, asTex); }
-            catch (Exception ex) { _importPrepared = new(false, $"Import failed: {ex.Message}", null, null, 0, 0); }
+            catch (Exception ex)
+            {
+                _importPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message), null, null, 0, 0);
+            }
         });
     }
 
     /// <summary>One row per pack layer: what it is, and — dimmed — why it won't be imported.</summary>
     private static void DrawImportLayers(OnionImportService.ImportPreview preview)
     {
+        var ims = Strings.Import;
         var kept = preview.Layers.Count(l => l.Import);
-        ImGui.TextUnformatted($"Layers: {kept} of {preview.Layers.Count}");
+        ImGui.TextUnformatted(string.Format(ims.LayerCountFmt, kept, preview.Layers.Count));
 
         using var table = ImRaii.Table("##onionLayers", 4, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg);
         if (!table) return;   // EndTable is only legal when BeginTable returned true
@@ -1404,24 +1421,24 @@ public class StatusWindow : Window
             using var dim = ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * (l.Import ? 1f : 0.5f));
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(l.LayoutToken.Length == 0 ? "(no layout)" : l.LayoutToken);
+            ImGui.TextUnformatted(l.LayoutToken.Length == 0 ? ims.NoLayout : l.LayoutToken);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(l.Slot ?? (l.MapToken.Length == 0 ? "(no map)" : l.MapToken));
+            ImGui.TextUnformatted(l.Slot ?? (l.MapToken.Length == 0 ? ims.NoMap : l.MapToken));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(l.Opacity < 0.999f ? $"{l.ModeToken}  {l.Opacity:0.##}" : l.ModeToken);
             ImGui.TableNextColumn();
             if (l.Import)
                 ImGui.TextDisabled($"{l.Bytes / 1024f / 1024f:0.#} MB");
             else
-                ImGui.TextColored(ImportWarnColour, "skipped");
+                ImGui.TextColored(ImportWarnColour, ims.Skipped);
 
             // Hovering the last column (the size / "skipped" tag) explains the layer. The rows are only
             // DIMMED, never ImGui-disabled, so a plain hover test reaches a skipped one too — and the skip
             // reason is a sentence, far too long to sit in a column of its own.
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(l.SkipReason == null
-                    ? $"{l.File}\nImported as {l.Slot} in {l.BodyType} UV space."
-                    : $"{l.File}\nSkipped: {l.SkipReason}");
+                    ? string.Format(ims.LayerImportedFmt, l.File, l.Slot, l.BodyType)
+                    : string.Format(ims.LayerSkippedFmt, l.File, l.SkipReason));
         }
     }
 
@@ -1438,26 +1455,23 @@ public class StatusWindow : Window
     {
         if (preview.DefaultLayout == null || preview.DefaultLayoutMatchedBody) return;
 
+        var ims = Strings.Import;
+
         ImGui.Spacing();
         if (preview.WearerBodyType == null)
         {
-            ImGui.TextDisabled($"Your character isn't drawn yet, so Proteus picked \"{preview.DefaultLayout}\" " +
-                "by preference rather than by your body. Check the result once you're in game.");
+            ImGui.TextDisabled(string.Format(ims.NotDrawnFmt, preview.DefaultLayout));
         }
         else if (preview.NeedsAllBodies)
         {
             // The one case that needs an action, and the one Proteus takes for the user on import.
             ImGui.PushTextWrapPos(0);
-            ImGui.TextColored(ImportWarnColour,
-                $"This pack has nothing painted for your vanilla body — \"{preview.DefaultLayout}\" will be " +
-                "used instead. Baking onto a vanilla body is off by default, so Proteus will set this mod's " +
-                "\"Bodies\" to \"All bodies\" on import (Colors → Advanced); without that it would paint nothing.");
+            ImGui.TextColored(ImportWarnColour, string.Format(ims.NeedsAllBodiesFmt, preview.DefaultLayout));
             ImGui.PopTextWrapPos();
         }
         else
         {
-            ImGui.TextDisabled($"This pack has nothing for your {preview.WearerBodyType} body, so " +
-                $"\"{preview.DefaultLayout}\" will be remapped onto it automatically.");
+            ImGui.TextDisabled(string.Format(ims.RemappedFmt, preview.WearerBodyType, preview.DefaultLayout));
         }
     }
 
@@ -1469,27 +1483,24 @@ public class StatusWindow : Window
 
         // Outside the collapsing header: a fallback list is exactly what the user won't expand to check,
         // and it silently names no male body.
+        var ims = Strings.Import;
+
         if (!_importMaterialsFromGameData)
         {
             ImGui.Spacing();
             ImGui.PushTextWrapPos(0);
-            ImGui.TextColored(ImportWarnColour,
-                "Proteus couldn't read the game's body list, so this import will target a known-good set of " +
-                "female bodies only. Reopen this pack once you're in game to pick up every race.");
+            ImGui.TextColored(ImportWarnColour, ims.FallbackBodies);
             ImGui.PopTextWrapPos();
         }
 
         var total = mats.Values.Sum(v => v.Count);
-        if (!ImGui.CollapsingHeader($"Material targets ({total})##onionMats")) return;
+        if (!ImGui.CollapsingHeader(string.Format(ims.MaterialTargetsFmt, total) + "###onionMats")) return;
 
-        ImGui.TextWrapped(_importMaterialsFromGameData
-            ? "Every body the game defines, so the overlay follows you across races. " +
-              "Bodies you aren't wearing are ignored at composite time."
-            : "Fallback list — the game data couldn't be read when this pack was opened.");
+        ImGui.TextWrapped(_importMaterialsFromGameData ? ims.MaterialsFromGame : ims.MaterialsFallbackNote);
         foreach (var (layout, paths) in mats)
         {
             ImGui.Spacing();
-            ImGui.TextDisabled($"{layout}  ({paths.Count})");
+            ImGui.TextDisabled(string.Format(ims.LayoutGroupFmt, layout, paths.Count));
             foreach (var p in paths)
             {
                 ImGui.Bullet();
@@ -1514,20 +1525,20 @@ public class StatusWindow : Window
             _exportStatusOk = done.Ok;
         }
 
-        ImGui.TextWrapped("Save one of your Proteus mods as a Penumbra mod pack (.pmp) to share it. " +
-            "Everything goes in — options, colours, masks and glow effects — and the file installs " +
-            "straight into Penumbra.");
+        var xs = Strings.Export;
+
+        ImGui.TextWrapped(xs.Intro);
         ImGui.Separator();
 
         var mods = compositor.LastDiscovered;
         if (!config.PluginEnabled)
         {
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.2f, 1f), "Proteus is disabled — enable it in Settings.");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.2f, 1f), Strings.ModsList.Disabled);
             return;
         }
         if (mods.Count == 0)
         {
-            ImGui.TextDisabled("No Proteus sidecar mods detected.");
+            ImGui.TextDisabled(Strings.ModsList.NoMods);
             return;
         }
 
@@ -1543,8 +1554,8 @@ public class StatusWindow : Window
         // supplied no size constraint, so passing a width silently disables it and the popup would grow one
         // row per mod, past the window on a big collection. Same trap as the Create tab's material picker.
         var popupMaxH = ImGui.GetTextLineHeightWithSpacing() * 18 + ImGui.GetStyle().WindowPadding.Y * 2;
-        ImGui.SetNextWindowSizeConstraints(new Vector2(360, 0), new Vector2(620, popupMaxH));
-        if (ImGui.BeginCombo("Mod##exportmod", selected.ModName))
+        ImGui.SetNextWindowSizeConstraints(new Vector2(360, 0), new Vector2(780, popupMaxH));
+        if (ImGui.BeginCombo(xs.ModCombo, selected.ModName))
         {
             // Fresh filter each open, with the caret already in the box so the list can just be typed at.
             // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
@@ -1552,7 +1563,7 @@ public class StatusWindow : Window
             if (appearing) _exportFilter = "";
             ImGui.SetNextItemWidth(-1);
             if (appearing) ImGui.SetKeyboardFocusHere();
-            ImGui.InputTextWithHint("##exportfilter", "Filter…", ref _exportFilter, 64);
+            ImGui.InputTextWithHint("##exportfilter", xs.FilterHint, ref _exportFilter, 64);
             ImGui.Separator();
 
             int shown = 0;
@@ -1566,21 +1577,23 @@ public class StatusWindow : Window
                         string.Equals(m.ModDirectory, _exportModDir, StringComparison.OrdinalIgnoreCase)))
                     _exportModDir = m.ModDirectory;
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(m.Enabled ? m.ModDirectory : $"{m.ModDirectory}\n(disabled in Penumbra)");
+                    ImGui.SetTooltip(m.Enabled
+                        ? m.ModDirectory
+                        : string.Format(xs.DisabledInPenumbraFmt, m.ModDirectory));
             }
             if (shown == 0)
-                ImGui.TextDisabled($"Nothing matches \"{_exportFilter}\".");
+                ImGui.TextDisabled(string.Format(xs.NoMatchFmt, _exportFilter));
             ImGui.EndCombo();
         }
         if (!selected.Enabled)
-            ImGui.TextDisabled("This mod is disabled in Penumbra — it exports the same either way.");
+            ImGui.TextDisabled(xs.ModDisabledNote);
 
         ImGui.Spacing();
         var label = _exportPhase switch
         {
-            ExportPhase.Choosing => "Choose a location…",
-            ExportPhase.Writing  => "Exporting…",
-            _                    => "Export",
+            ExportPhase.Choosing => xs.Choosing,
+            ExportPhase.Writing  => xs.Exporting,
+            _                    => xs.ExportBtn,
         };
         using (ImRaii.Disabled(_exportPhase != ExportPhase.Idle))
             if (ImGui.Button(label))
@@ -1623,7 +1636,7 @@ public class StatusWindow : Window
         _exportPhase = ExportPhase.Choosing;
 
         _fileDialog.SaveFileDialog(
-            "Export Proteus mod", "Penumbra mod pack{.pmp}",
+            Strings.Export.DialogTitle, Strings.Export.DialogFilter + "{.pmp}",
             ModExportService.SuggestedFileName(entry), ModExportService.Extension,
             (ok, path) =>
             {
@@ -1751,11 +1764,11 @@ public class StatusWindow : Window
         ImGui.Spacing();
         if (!config.PluginEnabled)
         {
-            ImGui.TextColored(ProteusStyle.Warn, "Proteus is disabled — enable it in Settings.");
+            ImGui.TextColored(ProteusStyle.Warn, Strings.ModsList.Disabled);
         }
         else if (mods.Count == 0)
         {
-            ImGui.TextDisabled("No Proteus sidecar mods detected.");
+            ImGui.TextDisabled(Strings.ModsList.NoMods);
         }
         else
         {
@@ -1768,21 +1781,27 @@ public class StatusWindow : Window
                     ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.RowBg))
                 return;
             // Widths are scaled: the table's text is, so unscaled columns clip their own headers at 1.5x.
+            // The names here are IDENTIFIERS, not display text — the header row below is drawn by hand, so
+            // these are never shown. Left in English on purpose: ImGui keys per-column state off them, and
+            // a translated name would reset widths and sort state every time the language changed.
+            // The three fixed widths carry headroom over what English needs, because the visible headers
+            // ARE translated and German/Russian run about a third longer.
             ImGui.TableSetupColumn("On",     ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(32f));
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(60f));
-            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(60f));
-            ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
+            ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
+            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
+            ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(96f));
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
             // column flips direction; switching column picks a sensible default direction — Name ascending,
             // the others descending.
             ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-            ProteusStyle.SortableHeader("On",  ModSort.Enabled,  ref _modSort, ref _modSortDesc, defaultDesc: true);
-            ProteusStyle.SortableHeader("Mod", ModSort.Name,     ref _modSort, ref _modSortDesc, defaultDesc: false);
-            ProteusStyle.SortableHeader("Pri", ModSort.Priority, ref _modSort, ref _modSortDesc, defaultDesc: true);
-            ImGui.TableNextColumn(); ImGui.TableHeader("Colors");
-            ImGui.TableNextColumn(); ImGui.TableHeader("Skindent");
+            var ms = Strings.Mods;
+            ProteusStyle.SortableHeader(ms.ColOn,       "modOn",   ModSort.Enabled,  ref _modSort, ref _modSortDesc, defaultDesc: true);
+            ProteusStyle.SortableHeader(ms.ColMod,      "modName", ModSort.Name,     ref _modSort, ref _modSortDesc, defaultDesc: false);
+            ProteusStyle.SortableHeader(ms.ColPriority, "modPri",  ModSort.Priority, ref _modSort, ref _modSortDesc, defaultDesc: true);
+            ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColColors);
+            ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColSkindent);
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
             // override state of its own); both reflect the mod's live Penumbra values.
@@ -1857,11 +1876,11 @@ public class StatusWindow : Window
                 bool bindingDriven = designBindings.IsOverrideActiveFor(entry.ModDirectory);
                 using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(BindingAccent with { W = 0.45f }), bindingDriven))
                 {
-                    if (ImGui.Button($"Colors##{entry.ModDirectory}"))
+                    if (ImGui.Button($"{ms.ColorsBtn}##colors_{entry.ModDirectory}"))
                         _colorWindowMod = _colorWindowMod == entry.ModDirectory ? null : entry.ModDirectory;
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Colors are driven by the active design binding.\nEdits preview live; click \"Update\" on the Bindings tab to save them. Base colors are unchanged.");
+                    ImGui.SetTooltip(ms.ColorsBindingDrivenTip);
 
                 // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
                 // "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox: a
@@ -1874,12 +1893,12 @@ public class StatusWindow : Window
                 bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
                     ? aoUser
                     : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
-                string aoPackLabel = $"Pack ({(aoDeclared == true ? "on" : "off")})";
-                ImGui.SetNextItemWidth(ProteusStyle.S(74f));
+                string aoPackLabel = string.Format(ms.AoPackFmt, aoDeclared == true ? ms.AoOn : ms.AoOff);
+                ImGui.SetNextItemWidth(ProteusStyle.S(90f));
                 if (ImGui.BeginCombo($"##ao_{entry.ModDirectory}",
-                        aoChoice == null ? aoPackLabel : aoChoice.Value ? "On" : "Off"))
+                        aoChoice == null ? aoPackLabel : aoChoice.Value ? ms.AoOn : ms.AoOff))
                 {
-                    foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), ("On", true), ("Off", false) })
+                    foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), (ms.AoOn, true), (ms.AoOff, false) })
                     {
                         if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
                         if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
@@ -1893,13 +1912,7 @@ public class StatusWindow : Window
                     ImGui.EndCombo();
                 }
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Ambient-occlusion shadow + Skindenting normal indent for this mod's\n" +
-                        "straps/garment edges. It treats coverage as cloth pressed into skin, which is\n" +
-                        "wrong for tattoos and skin details — so it is off unless asked for.\n\n" +
-                        $"{aoPackLabel} = whatever the pack declares (\"AmbientOcclusion\" in its\n" +
-                        "metadata.json; absent means off).\n" +
-                        "On / Off = your own setting for this mod, overriding the pack.\n\n" +
-                        "(The global strength sliders are in Settings.)");
+                    ImGui.SetTooltip(string.Format(ms.AoTipFmt, aoPackLabel));
             }
 
             ImGui.EndTable();
@@ -1908,8 +1921,10 @@ public class StatusWindow : Window
 
     private void DrawBindingsTab()
     {
+        var bs = Strings.Bindings;
+
         bool bindEnabled = config.DesignBindingEnabled;
-        if (ImGui.Checkbox("Bind Proteus state to Glamourer designs", ref bindEnabled))
+        if (ImGui.Checkbox(bs.Enable, ref bindEnabled))
         {
             config.DesignBindingEnabled = bindEnabled;
             config.Save();
@@ -1919,14 +1934,13 @@ public class StatusWindow : Window
                 designBindings.ClearColorOverride();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("When on, saving a Glamourer design snapshots the current Proteus state.\n" +
-                             "Applying that design later restores it (best-effort gear match).");
+            ImGui.SetTooltip(bs.EnableTip);
 
         ImGui.Indent();
         using (ImRaii.Disabled(!bindEnabled))
         {
             bool followAutomation = config.DesignBindingFollowsAutomation;
-            if (ImGui.Checkbox("Follow Glamourer automation (gearset / job changes)", ref followAutomation))
+            if (ImGui.Checkbox(bs.FollowAutomation, ref followAutomation))
             {
                 config.DesignBindingFollowsAutomation = followAutomation;
                 config.Save();
@@ -1936,12 +1950,7 @@ public class StatusWindow : Window
             // AllowWhenDisabled: without it the tooltip is unreachable exactly when it is most wanted —
             // greyed out because the parent toggle is off, with nothing to explain why.
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip("Glamourer reports nothing when automation applies a design on a gearset\n" +
-                                 "or job change, so Proteus infers it from the signals that do arrive.\n\n" +
-                                 "Only ever restores a binding — it never clears one.\n" +
-                                 "The one redraw Proteus itself causes is discounted, so its own work\n" +
-                                 "can't be mistaken for an automation apply.\n\n" +
-                                 "Needs \"Bind Proteus state to Glamourer designs\" above.");
+                ImGui.SetTooltip(bs.FollowAutomationTip);
         }
         ImGui.Unindent();
 
@@ -1951,12 +1960,12 @@ public class StatusWindow : Window
         if (activeId.HasValue)
         {
             var act = bindings.FirstOrDefault(b => b.DesignId == activeId.Value);
-            ImGui.TextDisabled($"Active: {act?.DesignName ?? activeId.Value.ToString()[..8]}");
+            ImGui.TextDisabled(string.Format(bs.ActiveFmt, act?.DesignName ?? activeId.Value.ToString()[..8]));
         }
 
         if (bindings.Count == 0)
         {
-            ImGui.TextDisabled("No bound designs yet.");
+            ImGui.TextDisabled(bs.NoBindings);
             return;
         }
 
@@ -1966,16 +1975,20 @@ public class StatusWindow : Window
         if (!ImGui.BeginTable("##bindings", 3,
                 ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.RowBg))
             return;
+        // Identifiers, not display text — see the Mods table for why these stay English.
         ImGui.TableSetupColumn("Design",   ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("Captured", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(90f));
-        // Wide enough for three icon+text buttons (Apply / Update / Unbind).
-        ImGui.TableSetupColumn("##act",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(255f));
+        ImGui.TableSetupColumn("Captured", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(112f));
+        // Wide enough for three icon+text buttons (Apply / Update / Unbind), with room for the longer
+        // words those become once translated.
+        ImGui.TableSetupColumn("##act",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(300f));
 
         // Clickable sort headers, same idiom as the Mods tab: clicking the active column flips direction,
         // switching column picks the sensible default for that column — name ascending, dates descending.
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        ProteusStyle.SortableHeader("Design",   BindingSort.Design,   ref _bindingSort, ref _bindingSortDesc, defaultDesc: false);
-        ProteusStyle.SortableHeader("Captured", BindingSort.Captured, ref _bindingSort, ref _bindingSortDesc, defaultDesc: true);
+        ProteusStyle.SortableHeader(Strings.Bindings.ColDesign, "bindDesign",
+            BindingSort.Design, ref _bindingSort, ref _bindingSortDesc, defaultDesc: false);
+        ProteusStyle.SortableHeader(Strings.Bindings.ColCaptured, "bindCaptured",
+            BindingSort.Captured, ref _bindingSort, ref _bindingSortDesc, defaultDesc: true);
         ImGui.TableNextColumn(); ImGui.TableHeader("##act");
 
         // Sort a COPY. Falls back to the design label so equal timestamps — a batch capture writes several
@@ -2007,7 +2020,7 @@ public class StatusWindow : Window
             var label = b.DesignName ?? b.DesignId.ToString()[..8];
             if (isActive)
             {
-                ProteusStyle.Pill("active", ProteusStyle.Binding);
+                ProteusStyle.Pill(bs.PillActive, ProteusStyle.Binding);
                 ImGui.SameLine();
                 ImGui.TextColored(BindingAccent, label);
             }
@@ -2017,9 +2030,9 @@ public class StatusWindow : Window
             ImGui.TableNextColumn();
             var ago = DateTime.UtcNow - b.CapturedUtc;
             ImGui.TextDisabled(
-                ago.TotalSeconds < 60 ? $"{ago.TotalSeconds:F0}s ago"
-                : ago.TotalMinutes < 60 ? $"{ago.TotalMinutes:F0}m ago"
-                : $"{ago.TotalHours:F0}h ago");
+                ago.TotalSeconds  < 60 ? string.Format(bs.SecondsAgoFmt, ago.TotalSeconds.ToString("F0"))
+                : ago.TotalMinutes < 60 ? string.Format(bs.MinutesAgoFmt, ago.TotalMinutes.ToString("F0"))
+                :                         string.Format(bs.HoursAgoFmt, ago.TotalHours.ToString("F0")));
 
             ImGui.TableNextColumn();
             // ImGuiComponents.IconButtonWithText derives its id from the LABEL, so the "##{DesignId}"
@@ -2027,34 +2040,26 @@ public class StatusWindow : Window
             // share one id and only the first row's buttons would respond to a click.
             using (ImRaii.PushId(b.DesignId.ToString()))
             {
-                if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.PlayCircle, "Apply"))
+                if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.PlayCircle, bs.Apply))
                     toApply = b.DesignId;
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(
-                        "Restore this design's Proteus state now, without going through Glamourer —\n" +
-                        "enable / priority / options / colours for every mod it captured.\n\n" +
-                        "Proteus mods NOT in the binding are switched off, so this replaces the current\n" +
-                        "look rather than adding to it.");
+                    ImGui.SetTooltip(bs.ApplyTip);
                 ImGui.SameLine();
                 // Only the active binding can be re-captured — the snapshot comes from the live state, so
                 // writing it into a binding that isn't driving that state would overwrite it with a look
                 // the user never applied. Drawn disabled rather than hidden so Unbind keeps its position.
                 using (ImRaii.Disabled(!isActive))
                 {
-                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Save, "Update"))
+                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Save, bs.Update))
                         toUpdate = true;
                 }
                 if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip(isActive
-                        ? "Snapshot the current Proteus state (enable / priority / options / colors)\n" +
-                          "into this binding. Manual edits only persist when you click this."
-                        : "Only the active binding can be updated from the current state.\n" +
-                          "Apply this design first.");
+                    ImGui.SetTooltip(isActive ? bs.UpdateTip : bs.UpdateInactiveTip);
                 ImGui.SameLine();
-                if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Unlink, "Unbind"))
+                if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Unlink, bs.Unbind))
                     toRemove = b.DesignId;
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Forget this binding. The Glamourer design itself is untouched.");
+                    ImGui.SetTooltip(bs.UnbindTip);
             }
         }
         ImGui.EndTable();
@@ -2088,11 +2093,17 @@ public class StatusWindow : Window
             // look like part of the editor's own copy.
             using (ProteusStyle.Card(ProteusStyle.Binding))
             {
-                ProteusStyle.Pill("binding", ProteusStyle.Binding);
+                // Both notices are full sentences and ImGui.TextColored does NOT wrap — it draws one line
+                // and lets the window clip it. English happened to fit; German and Russian run a third
+                // longer and ran straight off the right edge with no way to read the rest.
+                // Stopping 14px short of the content edge keeps the wrapped text inside the card's border:
+                // Card indents its contents by 8 and paints the frame 6 past the widest item.
+                ImGui.PushTextWrapPos(ImGui.GetWindowContentRegionMax().X - ProteusStyle.S(14f));
+                ProteusStyle.Pill(Strings.ColorPanel.PillBinding, ProteusStyle.Binding);
                 ImGui.SameLine();
-                ImGui.TextColored(BindingAccent, $"Editing '{name}' — previewing live; click \"Update\" on the Bindings tab to save.");
-                ImGui.TextColored(BindingAccent, "Base colors unchanged — except in Advanced, where \"Reset to " +
-                    "defaults\" rewrites them and \"Bodies\" is a global setting no binding captures.");
+                ImGui.TextColored(BindingAccent, string.Format(Strings.ColorPanel.EditingBindingFmt, name));
+                ImGui.TextColored(BindingAccent, Strings.ColorPanel.BaseUnchanged);
+                ImGui.PopTextWrapPos();
             }
             ImGui.Spacing();
         }
@@ -2144,7 +2155,7 @@ public class StatusWindow : Window
             }
             HashSet<int>? filteredSimple = (hasIdxSimple && usedRowsSimple.Count > 0) ? usedRowsSimple : null;
             if (!hasIdxSimple)
-                ImGui.TextDisabled("No index texture — only Row 16 is applied.");
+                ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoIndexTexture);
 
             // Layer/shader normally persist to metadata.json — but while a binding is being edited they
             // go into its gear override (live preview, saved on "Update binding"), like colour rows.
@@ -2248,8 +2259,9 @@ public class StatusWindow : Window
             // this panel is now its only home, so it can't leave with the tabs. An all-"None" mod is a mod
             // that isn't painting, and "the bake never reached my body type" is one of the reasons why, so
             // the control would otherwise disappear in exactly the state that sends someone looking for it.
-            ImGui.TextDisabled("No active options — select one in Penumbra to edit its colours.");
-            if (ImGui.TreeNodeEx($"Advanced##noopt_{entry.ModDirectory}", ImGuiTreeNodeFlags.NoTreePushOnOpen))
+            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##noopt_{entry.ModDirectory}",
+                    ImGuiTreeNodeFlags.NoTreePushOnOpen))
                 DrawBodiesAdvanced(entry);
             return;
         }
@@ -2308,7 +2320,8 @@ public class StatusWindow : Window
         {
             bool multiGroup = activeOptions.Select(x => x.GroupName).Distinct().Count() > 1;
 
-            ImGui.TextDisabled("Editing overlay  (drag a tab to restack — leftmost = on top):");
+            var cp = Strings.ColorPanel;
+            ProteusStyle.DisabledWrapped(cp.StackHint);
 
             // Src/Dst are SelKey values, so a tab is identified across groups, not just within one.
             (string Src, string Dst)? pendingReorder = null;
@@ -2318,8 +2331,8 @@ public class StatusWindow : Window
                 var (gName, opt) = activeOptions[i];
                 bool isMaskTab = string.Equals(gName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal);
                 var label = isMaskTab
-                    ? "Masks"
-                    : multiGroup ? $"{gName}: {opt.Name}" : opt.Name;
+                    ? cp.MasksTab
+                    : multiGroup ? string.Format(cp.GroupOptionFmt, gName, opt.Name) : opt.Name;
 
                 using (ProteusStyle.Selected(i == selIdx))
                     if (ImGui.Button($"{label}##otab_{entry.ModDirectory}_{gName}_{opt.Name}"))
@@ -2399,13 +2412,12 @@ public class StatusWindow : Window
                 }
 
                 using (ImRaii.Disabled(pos == 0 || selIsMask))
-                    if (ImGui.SmallButton($"◀ Toward top##stackup_{entry.ModDirectory}")) MoveTo(pos - 1);
+                    if (ImGui.SmallButton($"◀ {cp.TowardTop}##stackup_{entry.ModDirectory}")) MoveTo(pos - 1);
                 ImGui.SameLine();
                 using (ImRaii.Disabled(pos == stackKeys.Count - 1 || selIsMask))
-                    if (ImGui.SmallButton($"Toward bottom ▶##stackdn_{entry.ModDirectory}")) MoveTo(pos + 1);
+                    if (ImGui.SmallButton($"{cp.TowardBottom} ▶##stackdn_{entry.ModDirectory}")) MoveTo(pos + 1);
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Reorder how this mod's overlays stack on your body, across groups.\n" +
-                                     "Leftmost tab = top of the stack (composites last, on top).");
+                    ImGui.SetTooltip(cp.StackTip);
             }
 
             // Apply a drag drop after drawing (persist + recomposite; next frame re-sorts the tabs).
@@ -2459,7 +2471,7 @@ public class StatusWindow : Window
 
         bool hasAnyIndex = idxDesc?.Index != null || maskAssets.Any(a => a.IndexPath != null);
         if (usedRows == null && !hasAnyIndex)
-            ImGui.TextDisabled("No index texture — only Row 16 is applied.");
+            ImGui.TextDisabled(Strings.ColorPanel.NoIndexTexture);
 
         // ── Masks tab: one shared colorset for all active masks ───────────────────────────────────────
         // The active masks are composited together (coverage/relief/_id) into one top layer; these rows
@@ -2550,12 +2562,9 @@ public class StatusWindow : Window
                 // Forced Cloth shell — the mask's layer isn't user-chosen when it stacks over gear.
                 ColorTableEditor.DrawRenderingAsBadge(RenderMode.Cloth);
                 ImGui.SameLine();
-                ImGui.TextDisabled("(forced)");
+                ImGui.TextDisabled(Strings.ColorPanel.Forced);
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(
-                        "Another active option in this mod renders as gear, so the mask has to sit on that\n" +
-                        "shell — it can't be painted into the skin underneath it. Switch those options to\n" +
-                        "Skin (Advanced on their tabs) and the mask gets its own mode choice back.");
+                    ImGui.SetTooltip(Strings.ColorPanel.ForcedTip);
             }
             else
             {
@@ -2740,11 +2749,12 @@ public class StatusWindow : Window
         var mode = config.SiblingModeFor(entry.ModDirectory);
 
         ImGui.SetNextItemWidth(120);
-        if (ImGui.BeginCombo($"Bodies##bodies_{entry.ModDirectory}", SiblingModeLabels[(int)mode]))
+        var cp = Strings.ColorPanel;
+        if (ImGui.BeginCombo($"{cp.Bodies}##bodies_{entry.ModDirectory}", SiblingModeLabel((int)mode)))
         {
             foreach (var opt in new[] { SiblingSynthesisMode.AllBodies, SiblingSynthesisMode.BiboGen3Only, SiblingSynthesisMode.Off })
             {
-                if (ImGui.Selectable(SiblingModeLabels[(int)opt], opt == mode) && opt != mode)
+                if (ImGui.Selectable(SiblingModeLabel((int)opt), opt == mode) && opt != mode)
                 {
                     config.SiblingSynthesis[entry.ModDirectory] = opt;
                     config.Save();
@@ -2755,17 +2765,12 @@ public class StatusWindow : Window
         }
         bool binding = designBindings.IsOverrideActiveFor(entry.ModDirectory);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Which body types to bake this mod onto:\n" +
-                "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
-                "bibo+gen3 = bake to the sibling body only (default)\n" +
-                "Off = no synthesis\n\n" +
-                "Applies to the whole mod, not just this option." +
-                (binding ? "\nGlobal — this one is NOT part of the binding you're editing." : ""));
+            ImGui.SetTooltip(cp.BodiesTip + (binding ? cp.BodiesGlobalSuffix : ""));
 
         // Said in the panel, not only on hover: everything else in this window previews into the binding,
         // so a control that quietly writes global config instead has to break that expectation out loud.
         if (binding)
-            ImGui.TextDisabled("Saved globally — bindings don't capture this.");
+            ImGui.TextDisabled(cp.BodiesGlobalNote);
     }
 
     /// <summary>

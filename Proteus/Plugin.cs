@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using CheapLoc;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -25,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 419;
+    public const int BuildNumber = 424;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -59,6 +60,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
     private readonly Gui.ProteusFonts fonts;
+    private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
     private readonly SkinDiffuseGlow skinGlow;
     private readonly ShellNormalGhost shellGhost;
@@ -70,6 +72,12 @@ public sealed class Plugin : IDalamudPlugin
         IPluginLog log,
         IFramework framework)
     {
+        // FIRST, before anything that can put a string on screen or in chat. Loc.Localize falls back to the
+        // English text baked into each call site until the table is loaded, so an early call would not
+        // crash — it would just quietly render English once and cache nothing, which is a far more annoying
+        // bug to notice than a hard failure.
+        loc = new Localization.LocSetup(pluginInterface);
+
         config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         config.Initialize(pluginInterface);
 
@@ -153,7 +161,11 @@ public sealed class Plugin : IDalamudPlugin
 
         commandManager.AddHandler(CommandName, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
-            HelpMessage = "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings.",
+            // Read once, at registration: Dalamud caches the help line in its command list and offers no
+            // way to refresh it, so this one string keeps whatever language was active at load until the
+            // next reload. Everything drawn by the plugin itself re-reads per frame and switches live.
+            HelpMessage = Loc.Localize("Command.Help",
+                "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings."),
         });
 
         // The boot composite is held from CompositorService's construction (see BootCompositeHold) so
@@ -245,5 +257,6 @@ public sealed class Plugin : IDalamudPlugin
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();
+        loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under
     }
 }

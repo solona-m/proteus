@@ -1,0 +1,1150 @@
+{
+  "Band.Caption": {
+    "message": "Overlay-Compositor",
+    "description": ""
+  },
+  "Band.Pill.Disabled": {
+    "message": "deaktiviert",
+    "description": ""
+  },
+  "Band.Pill.NoPenumbra": {
+    "message": "kein Penumbra",
+    "description": ""
+  },
+  "Band.Recomposite.Tip": {
+    "message": "Jetzt neu komponieren",
+    "description": ""
+  },
+  "Band.Retry.Btn": {
+    "message": "Wiederholen",
+    "description": ""
+  },
+  "Band.Settings.Tip": {
+    "message": "Einstellungen",
+    "description": ""
+  },
+  "Bindings.Active.Fmt": {
+    "message": "Aktiv: {0}",
+    "description": ""
+  },
+  "Bindings.Apply.Btn": {
+    "message": "Anwenden",
+    "description": ""
+  },
+  "Bindings.Apply.Tip": {
+    "message": "Stellt den Proteus-Zustand dieses Designs sofort wieder her, ohne den Umweg über\nGlamourer — Aktivierung / Priorität / Optionen / Farben für jeden erfassten Mod.\n\nProteus-Mods, die NICHT in der Bindung stehen, werden abgeschaltet: das ersetzt den\naktuellen Look, statt ihn zu ergänzen.",
+    "description": ""
+  },
+  "Bindings.Col.Captured": {
+    "message": "Erfasst",
+    "description": ""
+  },
+  "Bindings.Col.Design": {
+    "message": "Design",
+    "description": ""
+  },
+  "Bindings.Enable.Label": {
+    "message": "Proteus-Zustand an Glamourer-Designs binden",
+    "description": ""
+  },
+  "Bindings.Enable.Tip": {
+    "message": "Wenn aktiv, hält das Speichern eines Glamourer-Designs den aktuellen Proteus-Zustand fest.\nWird dieses Design später angewendet, stellt es ihn wieder her (bestmögliche Ausrüstungszuordnung).",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Label": {
+    "message": "Glamourer-Automatisierung folgen (Gearset- / Job-Wechsel)",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Tip": {
+    "message": "Glamourer meldet nichts, wenn die Automatisierung bei einem Gearset- oder Job-Wechsel\nein Design anwendet, also leitet Proteus es aus den Signalen ab, die ankommen.\n\nStellt eine Bindung immer nur wieder her — es löscht nie eine.\nDas eine Neuzeichnen, das Proteus selbst auslöst, wird herausgerechnet, damit die\neigene Arbeit nicht für eine Automatisierung gehalten wird.\n\nBenötigt „Proteus-Zustand an Glamourer-Designs binden“ oben.",
+    "description": ""
+  },
+  "Bindings.HoursAgo.Fmt": {
+    "message": "vor {0} Std.",
+    "description": ""
+  },
+  "Bindings.MinutesAgo.Fmt": {
+    "message": "vor {0} Min.",
+    "description": ""
+  },
+  "Bindings.None": {
+    "message": "Noch keine gebundenen Designs.",
+    "description": ""
+  },
+  "Bindings.Pill.Active": {
+    "message": "aktiv",
+    "description": ""
+  },
+  "Bindings.SecondsAgo.Fmt": {
+    "message": "vor {0} Sek.",
+    "description": ""
+  },
+  "Bindings.Unbind.Btn": {
+    "message": "Lösen",
+    "description": ""
+  },
+  "Bindings.Unbind.Tip": {
+    "message": "Diese Bindung vergessen. Das Glamourer-Design selbst bleibt unangetastet.",
+    "description": ""
+  },
+  "Bindings.Update.Btn": {
+    "message": "Aktualisieren",
+    "description": ""
+  },
+  "Bindings.Update.Inactive.Tip": {
+    "message": "Nur die aktive Bindung kann aus dem aktuellen Zustand aktualisiert werden.\nWende dieses Design zuerst an.",
+    "description": ""
+  },
+  "Bindings.Update.Tip": {
+    "message": "Hält den aktuellen Proteus-Zustand (Aktivierung / Priorität / Optionen / Farben)\nin dieser Bindung fest. Manuelle Änderungen bleiben nur erhalten, wenn du hier klickst.",
+    "description": ""
+  },
+  "Chat.GlowPromoted.Fmt": {
+    "message": "[Proteus] „{0}“ setzt Leuchten auf einer Hautebene. Haut kann nicht mehr leuchten, daher wird diese Option jetzt als Stoffebene dargestellt — sie braucht ein freies Accessoire und ihre Oberfläche sieht etwas anders aus.",
+    "description": ""
+  },
+  "Chat.NoShellSurface.Fmt": {
+    "message": "[Proteus] „{0}“ setzt Leuchten auf einem Overlay, für das Proteus keine Ebene bauen kann. Leuchten braucht eine Ebene über dem Mesh, und das geht nur auf deiner eigenen Haut — Körper, Gesicht, Haar, Schweif oder Ohren — nicht auf Ausrüstung, Accessoires oder Waffen.",
+    "description": ""
+  },
+  "Chat.OverBudget.Fmt": {
+    "message": "[Proteus] Dieser Look hat {0} Ebenen ({1} Mask, {2} Cloth), aber nur {3} passen auf deine Accessoires (Proteus' unsichtbarer Ersatzring bereits eingerechnet). Schalte einige Ebenen ab oder lege eine weitere Brille / einen Ring / ein Armband / eine Halskette an, damit der Rest passt.",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Fmt": {
+    "message": "[Proteus] {0} hat die Hauttexturen überschrieben, in die Proteus deine Overlays hineinkomponiert, sodass sie nicht erscheinen konnten. Proteus' Penumbra-Priorität wurde auf {1} angehoben, um das zu beheben. (Schalte „Mod-Priorität automatisch anheben“ in den Proteus-Einstellungen ab, wenn dir das nicht recht ist.)",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Many.Fmt": {
+    "message": "„{0}“ und {1} weitere",
+    "description": ""
+  },
+  "Chat.PriorityRaised.One.Fmt": {
+    "message": "„{0}“",
+    "description": ""
+  },
+  "Chat.RedirectLost.Fmt": {
+    "message": "[Proteus] „{0}“ überschreibt {1}, worein Proteus deine Overlays komponiert — sie werden also nicht erscheinen. Lösung: hebe in Penumbra die Priorität des Mods „Proteus“ über „{0}“ an.",
+    "description": ""
+  },
+  "Chat.ShellNotDrawing": {
+    "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
+    "description": ""
+  },
+  "Chat.UnclaimedRedirects.Fmt": {
+    "message": "[Proteus] {0} der von Proteus veröffentlichten Dateien erreichen das Spiel nicht — sie führen ins Leere, was meist bedeutet, dass der Mod „Proteus“ in deiner aktuellen Penumbra-Sammlung deaktiviert ist. Prüfe, ob er dort aktiviert ist.",
+    "description": ""
+  },
+  "Chat.UnhostedLayers.Fmt": {
+    "message": "[Proteus] Einige Ebenen auf deinem Bereich {1} konnten nicht platziert werden (Ebenen: {0}). Sie dürfen nicht rassenverformt sein und brauchen daher einen Slot, den Proteus vollständig ersetzen kann: mache einen Ringslot (beliebige Hand) oder deinen Brillenslot frei, dann erscheinen sie.",
+    "description": ""
+  },
+  "Colors.Advanced": {
+    "message": "Erweitert",
+    "description": ""
+  },
+  "Colors.Auto": {
+    "message": "(automatisch)",
+    "description": ""
+  },
+  "Colors.Auto.Tip": {
+    "message": "Der Modus folgt dem, was du verwendest: eine Sphere-Map oder Metall ⇒ Cloth,\nein Leuchteffekt ⇒ Animiertes Leuchten, nichts Besonderes ⇒ Skin.",
+    "description": ""
+  },
+  "Colors.BackToAuto.Btn": {
+    "message": "Zurück zu automatisch",
+    "description": ""
+  },
+  "Colors.BaseUnchanged": {
+    "message": "Basisfarben unverändert — außer unter „Erweitert“, wo „Auf Standard zurücksetzen“ sie überschreibt und „Körper“ eine globale Einstellung ist, die keine Bindung erfasst.",
+    "description": ""
+  },
+  "Colors.Bodies.All": {
+    "message": "Alle Körper",
+    "description": ""
+  },
+  "Colors.Bodies.BiboGen3": {
+    "message": "bibo+gen3",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalNote": {
+    "message": "Global gespeichert — Bindungen erfassen das nicht.",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalSuffix": {
+    "message": "\nGlobal — dies ist NICHT Teil der Bindung, die du gerade bearbeitest.",
+    "description": ""
+  },
+  "Colors.Bodies.Label": {
+    "message": "Körper",
+    "description": ""
+  },
+  "Colors.Bodies.Off": {
+    "message": "Aus",
+    "description": ""
+  },
+  "Colors.Bodies.Tip": {
+    "message": "Auf welche Körpertypen dieser Mod gebacken wird:\nAlle Körper = Geschwisterkörper (bibo↔gen3/Eve) + Standard (gen2)\nbibo+gen3 = nur auf den Geschwisterkörper backen (Standard)\nAus = keine Synthese\n\nGilt für den ganzen Mod, nicht nur für diese Option.",
+    "description": ""
+  },
+  "Colors.CopyRow.Btn": {
+    "message": "Zeile kopieren",
+    "description": ""
+  },
+  "Colors.CopyRow.Tip": {
+    "message": "Kopiert beide Unterzeilen (A und B) dieser Zeile.",
+    "description": ""
+  },
+  "Colors.CopySub.Btn": {
+    "message": "Kopieren",
+    "description": ""
+  },
+  "Colors.CopySub.Tip": {
+    "message": "Kopiert die Werte dieser Unterzeile.",
+    "description": ""
+  },
+  "Colors.Diffuse.Gear.Tip": {
+    "message": "Die Oberfläche UNTER dem Leuchten — sie multipliziert die eigene Diffuse-Grafik des Overlays.\n\nHalte sie DUNKEL für ein leuchtendes Material, sonst hat das Leuchten nichts, wovon\nes sich abheben kann, und wirkt schwach, egal wie hoch du es drehst. Die originalen\nScrolling-Materialien kombinieren dafür ein fast schwarzes Diffuse mit hellem Emissive.",
+    "description": ""
+  },
+  "Colors.Diffuse.Label": {
+    "message": "Diffuse",
+    "description": ""
+  },
+  "Colors.EditingBinding.Fmt": {
+    "message": "Bearbeite „{0}“ — Live-Vorschau; klicke auf „Aktualisieren“ im Reiter „Bindungen“, um zu speichern.",
+    "description": ""
+  },
+  "Colors.Effect.FromMod.Fmt": {
+    "message": "{0}  (Mod)",
+    "description": ""
+  },
+  "Colors.ForceMode.Hint": {
+    "message": "Render-Modus erzwingen, statt ihn von den Merkmalen bestimmen zu lassen:",
+    "description": ""
+  },
+  "Colors.ForceMode.Tip": {
+    "message": "Skin (gemalt) — skin.shpk.  Cloth — character.shpk (Sphere, Metall).\nAnimiertes Leuchten — characterscroll.shpk. Das Anheften stoppt den automatischen Moduswechsel.",
+    "description": ""
+  },
+  "Colors.GlowAmount.Label": {
+    "message": "Leuchten",
+    "description": ""
+  },
+  "Colors.GlowAmount.Tip": {
+    "message": "Unter characterscroll ist das ein kleines GATE, nicht die Helligkeit:\n0 = gar kein Leuchten; ein großer Wert wäscht die Farbe der Scroll-Map aus.\nDie originalen animierten Materialien nutzen ~0,025.",
+    "description": ""
+  },
+  "Colors.GlowColour.Label": {
+    "message": "Leuchtfarbe",
+    "description": ""
+  },
+  "Colors.GlowColour.Tip": {
+    "message": "Leuchtfarbe, unabhängig vom Diffuse — ein leuchtendes Material will meist\neine DUNKLE Oberfläche mit hellem Leuchten. Standard ist das Diffuse.",
+    "description": ""
+  },
+  "Colors.GlowEffect.Label": {
+    "message": "Leuchteffekt",
+    "description": ""
+  },
+  "Colors.GlowEffect.Tip": {
+    "message": "Wähle eine Scroll-Map, damit dieses Overlay LEUCHTET und animiert wird — das schaltet es\nauf Animiertes Leuchten um. Die Map IST das Leuchten (Farbe, Muster, Bewegung); der\nLeucht-Wert der Zeile skaliert sie. Effekte kommen aus dem Ordner Proteus/Effects/ des\nMods, dann aus deinem Effects-Ordner.",
+    "description": ""
+  },
+  "Colors.GroupOption.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Colors.Highlight.Gear.Tip": {
+    "message": "Lässt das Mesh dieser Unterzeile an deinem Charakter leuchten, damit du es\nim Spiel findest. Nochmal klicken beendet es.",
+    "description": ""
+  },
+  "Colors.Highlight.Glow.Btn": {
+    "message": "Leuchten",
+    "description": ""
+  },
+  "Colors.Highlight.Glowing.Btn": {
+    "message": "Leuchtet",
+    "description": ""
+  },
+  "Colors.Highlight.Skin.Tip": {
+    "message": "Hebt den Bereich dieser Unterzeile auf der Haut deines Charakters hervor, damit du\nihn im Spiel findest. Nochmal klicken beendet es. (Baut sich beim ersten Mal kurz auf.)",
+    "description": ""
+  },
+  "Colors.Mask.Forced": {
+    "message": "(erzwungen)",
+    "description": ""
+  },
+  "Colors.Mask.Forced.Tip": {
+    "message": "Eine andere aktive Option in diesem Mod wird als Ausrüstung dargestellt, also muss die\nMaske auf dieser Hülle sitzen — sie kann nicht in die Haut darunter gemalt werden. Stelle\ndiese Optionen auf Skin (Erweitert auf ihren Reitern), dann bekommt die Maske ihre eigene\nModuswahl zurück.",
+    "description": ""
+  },
+  "Colors.MasksTab": {
+    "message": "Masken",
+    "description": ""
+  },
+  "Colors.Metal.Tip": {
+    "message": "Metall hat keine eigene Diffuse-Farbe — es zeigt, was es reflektiert.\nOhne Sphere-Map zum Reflektieren wird eine metallische Oberfläche einfach dunkel.",
+    "description": ""
+  },
+  "Colors.Metalness.Label": {
+    "message": "Metallanteil",
+    "description": ""
+  },
+  "Colors.Mode.AnimatedGlow": {
+    "message": "Animiertes Leuchten",
+    "description": ""
+  },
+  "Colors.Mode.Cloth": {
+    "message": "Cloth",
+    "description": ""
+  },
+  "Colors.Mode.Skin": {
+    "message": "Skin (gemalt)",
+    "description": ""
+  },
+  "Colors.NoActiveOptions": {
+    "message": "Keine aktiven Optionen — wähle in Penumbra eine aus, um ihre Farben zu bearbeiten.",
+    "description": ""
+  },
+  "Colors.NoEffects": {
+    "message": "Keine Effekte gefunden — lege Bilder in den Ordner, den die Schaltfläche\n„Leuchteffekt-Texturen“ öffnet (Einstellungen), oder in den Ordner Proteus/Effects/ des Mods.",
+    "description": ""
+  },
+  "Colors.NoIndexTexture": {
+    "message": "Keine Index-Textur — nur Zeile 16 wird angewendet.",
+    "description": ""
+  },
+  "Colors.None": {
+    "message": "Keiner",
+    "description": ""
+  },
+  "Colors.Opacity.Label": {
+    "message": "Deckkraft",
+    "description": ""
+  },
+  "Colors.Opacity.Tip": {
+    "message": "Negativ macht diese Zeile transparenter; positiv schiebt sie in Richtung deckend.",
+    "description": ""
+  },
+  "Colors.PasteRow.Btn": {
+    "message": "Zeile einfügen",
+    "description": ""
+  },
+  "Colors.PasteRow.NeedCopy": {
+    "message": "Kopiere zuerst eine Zeile.",
+    "description": ""
+  },
+  "Colors.PasteRow.Tip.Fmt": {
+    "message": "Überschreibt Zeile {0} (beide Unterzeilen) mit der kopierten Zeile.",
+    "description": ""
+  },
+  "Colors.PasteSub.Btn": {
+    "message": "Einfügen",
+    "description": ""
+  },
+  "Colors.PasteSub.NeedCopy": {
+    "message": "Kopiere zuerst eine Unterzeile.",
+    "description": ""
+  },
+  "Colors.PasteSub.Tip": {
+    "message": "Überschreibt diese Unterzeile mit den kopierten Werten.",
+    "description": ""
+  },
+  "Colors.Pill.Binding": {
+    "message": "Bindung",
+    "description": ""
+  },
+  "Colors.Pinned": {
+    "message": "(angeheftet)",
+    "description": ""
+  },
+  "Colors.Pinned.Tip": {
+    "message": "Du hast diesen Modus unter „Erweitert“ angeheftet — er folgt den gesetzten Merkmalen nicht mehr.\nKlicke auf „Zurück zu automatisch“, damit er sich wieder anpasst.",
+    "description": ""
+  },
+  "Colors.RenderingAs": {
+    "message": "Dargestellt als:",
+    "description": ""
+  },
+  "Colors.Reset.Btn": {
+    "message": "Auf Standard zurücksetzen",
+    "description": ""
+  },
+  "Colors.Reset.Tip": {
+    "message": "Halte Strg und klicke, um Farben, Leuchten und Modus dieser Option auf die\nEinstellungen zurückzusetzen, die Proteus für diesen Mod zuerst festgehalten hat.\nKann nicht rückgängig gemacht werden.\n\nIst ein Design angewendet, entfernt das auch dessen gespeicherte Überschreibung für\ndiese Option — sonst würde das Design sie gleich wieder aufzwingen. Andere Designs\nbehalten ihre.\n\nHinweis: Diese Originale wurden erfasst, als Proteus diesen Mod zum ersten Mal\ngespeichert hat — hattest du ihn davor schon bearbeitet, ist dieser Zustand der „Standard“.",
+    "description": ""
+  },
+  "Colors.Roughness.Label": {
+    "message": "Rauheit",
+    "description": ""
+  },
+  "Colors.Row.Unused.Tip": {
+    "message": "Die Index-Textur dieses Overlays wählt diese Zeile nie aus,\nsie zu bearbeiten hätte also keine Wirkung.",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Label": {
+    "message": "Scroll-Geschwindigkeit",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Tip": {
+    "message": "Wie schnell der Effekt fließt, X und Y. Negativ kehrt um; 0 hält ihn an. ~0,01 ist normal.",
+    "description": ""
+  },
+  "Colors.Section.Colours": {
+    "message": "Farben",
+    "description": ""
+  },
+  "Colors.Section.Physical": {
+    "message": "Physikalisch",
+    "description": ""
+  },
+  "Colors.Section.Physical.ClothSuffix": {
+    "message": "— Cloth",
+    "description": ""
+  },
+  "Colors.Section.SphereMap": {
+    "message": "Sphere-Map",
+    "description": ""
+  },
+  "Colors.Specular.Label": {
+    "message": "Glanzlicht",
+    "description": ""
+  },
+  "Colors.Sphere.Index.Label": {
+    "message": "Index",
+    "description": ""
+  },
+  "Colors.Sphere.Intensity.Label": {
+    "message": "Intensität",
+    "description": ""
+  },
+  "Colors.Sphere.Tip": {
+    "message": "Reflektiert eine Ebene aus dem gemeinsamen Sphere-Map-Array des Spiels.\nIndex UND Intensität müssen beide ungleich null sein, sonst passiert nichts.\nFunktioniert NICHT unter characterscroll.shpk — nutze character.shpk.",
+    "description": ""
+  },
+  "Colors.Stack.Tip": {
+    "message": "Legt fest, wie sich die Overlays dieses Mods auf deinem Körper stapeln, gruppenübergreifend.\nLinkester Reiter = oben im Stapel (wird zuletzt komponiert, also obenauf).",
+    "description": ""
+  },
+  "Colors.StackHint": {
+    "message": "Overlay bearbeiten  (ziehe einen Reiter zum Umstapeln — ganz links = oben):",
+    "description": ""
+  },
+  "Colors.SubRowA.Fmt": {
+    "message": "Zeile {0}A",
+    "description": ""
+  },
+  "Colors.SubRowB.Fmt": {
+    "message": "Zeile {0}B",
+    "description": ""
+  },
+  "Colors.Tiling.Label": {
+    "message": "Kachelung",
+    "description": ""
+  },
+  "Colors.Tiling.Tip": {
+    "message": "Wie oft sich der Effekt über die Oberfläche wiederholt. 1 = einmal.",
+    "description": ""
+  },
+  "Colors.TowardBottom.Btn": {
+    "message": "Nach unten",
+    "description": ""
+  },
+  "Colors.TowardTop.Btn": {
+    "message": "Nach oben",
+    "description": ""
+  },
+  "Command.Help": {
+    "message": "Blendet das Proteus-Statusfenster ein oder aus. \"/proteus config\" öffnet es bei den Einstellungen.",
+    "description": ""
+  },
+  "Common.Browse.Btn": {
+    "message": "Durchsuchen",
+    "description": ""
+  },
+  "Common.Clear.Btn": {
+    "message": "Leeren",
+    "description": ""
+  },
+  "Common.None": {
+    "message": "(keine)",
+    "description": ""
+  },
+  "Create.Author.Label": {
+    "message": "Autor",
+    "description": ""
+  },
+  "Create.Create.Btn": {
+    "message": "Erstellen",
+    "description": ""
+  },
+  "Create.Create.DisabledTip": {
+    "message": "Gib einen Mod-Namen und ein Materialziel ein und wähle mindestens eine Textur.",
+    "description": ""
+  },
+  "Create.Error.FolderExists.Fmt": {
+    "message": "Ein Mod-Ordner namens „{0}“ existiert bereits.",
+    "description": ""
+  },
+  "Create.Error.MissingFile.Fmt": {
+    "message": "Die Datei für {0} existiert nicht mehr: {1}",
+    "description": ""
+  },
+  "Create.Error.NoMaterial": {
+    "message": "Gib ein Materialziel ein.",
+    "description": ""
+  },
+  "Create.Error.NoName": {
+    "message": "Gib einen Mod-Namen ein.",
+    "description": ""
+  },
+  "Create.Error.NoTexture": {
+    "message": "Wähle mindestens eine Textur (Diffuse, Maske, Normal oder Index).",
+    "description": ""
+  },
+  "Create.Error.ReservedName": {
+    "message": "„Proteus“ ist reserviert — wähle einen anderen Mod-Namen.",
+    "description": ""
+  },
+  "Create.Error.UnusableName": {
+    "message": "Dieser Mod-Name enthält keine verwendbaren Zeichen — nutze Buchstaben oder Ziffern.",
+    "description": ""
+  },
+  "Create.Error.WriteFailed.Fmt": {
+    "message": "Der Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "Create.Intro": {
+    "message": "Erstelle einen einfachen Proteus-Overlay-Mod. Wähle mindestens eine Textur; Proteus schreibt einen neuen Penumbra-Mod und öffnet ihn, damit du ihn aktivieren und anpassen kannst.",
+    "description": ""
+  },
+  "Create.MaterialTarget.Label": {
+    "message": "Materialziel",
+    "description": ""
+  },
+  "Create.MaterialTarget.Tip": {
+    "message": "Das Material, auf das dieses Overlay komponiert wird. Automatisch ausgefüllt anhand des\nKörpers, den du gerade trägst; wähle einen angelegten aus der Liste oder tippe einen Pfad\nvon Hand ein, um einen Körper bzw. eine Rasse anzusprechen, die du gerade nicht trägst.",
+    "description": ""
+  },
+  "Create.ModName.Label": {
+    "message": "Mod-Name",
+    "description": ""
+  },
+  "Create.Ok.Fmt": {
+    "message": "„{0}“ erstellt, aktiviert und in Penumbra geöffnet.",
+    "description": ""
+  },
+  "Create.PickTexture.Title.Fmt": {
+    "message": "{0}-Textur auswählen",
+    "description": ""
+  },
+  "Create.Picker.Empty": {
+    "message": "Noch keine angelegten Materialien bekannt.\nWechsle die Zone oder zeichne neu und öffne diese Liste dann erneut.",
+    "description": ""
+  },
+  "Create.Picker.SkinGroup": {
+    "message": "Haut",
+    "description": ""
+  },
+  "Create.Picker.Stale": {
+    "message": "Zeigt die zuletzt bekannte Liste — der Charakter wird nicht gezeichnet.",
+    "description": ""
+  },
+  "Create.Redetect.Btn": {
+    "message": "Neu erkennen",
+    "description": ""
+  },
+  "Create.Redetect.Tip": {
+    "message": "Führt die Körpererkennung erneut aus und überschreibt das Feld.",
+    "description": ""
+  },
+  "Create.Slot.Diffuse": {
+    "message": "Diffuse",
+    "description": ""
+  },
+  "Create.Slot.Index": {
+    "message": "Index",
+    "description": ""
+  },
+  "Create.Slot.Mask": {
+    "message": "Maske",
+    "description": ""
+  },
+  "Create.Slot.NoDiffuse": {
+    "message": "Dieses Material hat keine Diffuse-Textur.",
+    "description": ""
+  },
+  "Create.Slot.NoIndex": {
+    "message": "Dieses Material hat keine Index-Textur und ist weder Haut noch Gesicht —\nnichts hier würde eine Farbtabellenzeile auswählen.",
+    "description": ""
+  },
+  "Create.Slot.NoMask": {
+    "message": "Dieses Material hat keine Masken-Textur.",
+    "description": ""
+  },
+  "Create.Slot.NoNormal": {
+    "message": "Dieses Material hat keine Normal-Textur.",
+    "description": ""
+  },
+  "Create.Slot.Normal": {
+    "message": "Normal",
+    "description": ""
+  },
+  "Create.Slot.Unused": {
+    "message": "(von diesem Material nicht genutzt)",
+    "description": ""
+  },
+  "Create.SlotsUnreadable": {
+    "message": "Dieses Material konnte nicht gelesen werden — es werden alle Slots angeboten.",
+    "description": ""
+  },
+  "Export.Dialog.Filter": {
+    "message": "Penumbra-Modpaket",
+    "description": ""
+  },
+  "Export.Dialog.Title": {
+    "message": "Proteus-Mod exportieren",
+    "description": ""
+  },
+  "Export.DisabledInPenumbra.Fmt": {
+    "message": "{0}\n(in Penumbra deaktiviert)",
+    "description": ""
+  },
+  "Export.Error.EmptyFolder": {
+    "message": "Dieser Mod-Ordner ist leer — es gibt nichts zu exportieren.",
+    "description": ""
+  },
+  "Export.Error.FolderGone.Fmt": {
+    "message": "Der Mod-Ordner ist verschwunden: {0}",
+    "description": ""
+  },
+  "Export.Error.NoPath": {
+    "message": "Wähle einen Speicherort für die Datei.",
+    "description": ""
+  },
+  "Export.Error.WriteFailed.Fmt": {
+    "message": "Die Datei konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "Export.Filter.Hint": {
+    "message": "Filtern…",
+    "description": ""
+  },
+  "Export.Intro": {
+    "message": "Speichere einen deiner Proteus-Mods als Penumbra-Modpaket (.pmp), um ihn zu teilen. Alles kommt mit — Optionen, Farben, Masken und Leuchteffekte — und die Datei installiert sich direkt in Penumbra.",
+    "description": ""
+  },
+  "Export.Mod.Label": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Export.ModDisabled.Note": {
+    "message": "Dieser Mod ist in Penumbra deaktiviert — der Export ist so oder so derselbe.",
+    "description": ""
+  },
+  "Export.NoMatch.Fmt": {
+    "message": "Nichts passt zu „{0}“.",
+    "description": ""
+  },
+  "Export.Ok.Fmt": {
+    "message": "„{0}“ exportiert — Dateien: {1}, {2} MB.\n{3}",
+    "description": ""
+  },
+  "Export.Phase.Choosing": {
+    "message": "Speicherort wählen…",
+    "description": ""
+  },
+  "Export.Phase.Idle": {
+    "message": "Exportieren",
+    "description": ""
+  },
+  "Export.Phase.Writing": {
+    "message": "Exportiere…",
+    "description": ""
+  },
+  "Footer.LastComposite.Fmt": {
+    "message": "Letzte Komposition: {0}   gepatchte Texturen: {1}   Mods: {2}",
+    "description": ""
+  },
+  "Footer.MinutesAgo.Fmt": {
+    "message": "vor {0} Min.",
+    "description": ""
+  },
+  "Footer.NoResult": {
+    "message": "Noch kein Kompositionsergebnis.",
+    "description": ""
+  },
+  "Footer.Pill.Failed": {
+    "message": "fehlgeschlagen",
+    "description": ""
+  },
+  "Footer.Pill.Ok": {
+    "message": "ok",
+    "description": ""
+  },
+  "Footer.SecondsAgo.Fmt": {
+    "message": "vor {0} Sek.",
+    "description": ""
+  },
+  "Footer.UnknownError": {
+    "message": "unbekannter Fehler",
+    "description": ""
+  },
+  "Import.AsTex.Label": {
+    "message": "Ebenen in BC7 .tex umwandeln",
+    "description": ""
+  },
+  "Import.AsTex.Tip": {
+    "message": "Etwa ein Viertel der Dateigröße, und kein PNG-Dekodieren zur Kompositionszeit.\nBlockkomprimierung ist verlustbehaftet — lass es aus, um die Bilder des Pakets\ngenau so zu behalten, wie sie erstellt wurden.",
+    "description": ""
+  },
+  "Import.AsTex.Unavailable.Tip": {
+    "message": "Der native Blockkompressor ist nicht geladen, BC7-Kodierung würde Minuten dauern.",
+    "description": ""
+  },
+  "Import.Author.Label": {
+    "message": "Autor",
+    "description": ""
+  },
+  "Import.BodyFit.NeedsAllBodies.Fmt": {
+    "message": "Dieses Paket hat nichts für deinen Standardkörper gemalt — stattdessen wird „{0}“ verwendet. Das Backen auf einen Standardkörper ist standardmäßig aus, daher setzt Proteus beim Import „Körper“ dieses Mods auf „Alle Körper“ (Farben → Erweitert); ohne das würde er nichts malen.",
+    "description": ""
+  },
+  "Import.BodyFit.NotDrawn.Fmt": {
+    "message": "Dein Charakter wird noch nicht gezeichnet, daher hat Proteus „{0}“ nach Präferenz gewählt und nicht nach deinem Körper. Prüfe das Ergebnis, sobald du im Spiel bist.",
+    "description": ""
+  },
+  "Import.BodyFit.Remapped.Fmt": {
+    "message": "Dieses Paket hat nichts für deinen {0}-Körper, daher wird „{1}“ automatisch darauf umgesetzt.",
+    "description": ""
+  },
+  "Import.Browse.Btn": {
+    "message": "Paket suchen",
+    "description": ""
+  },
+  "Import.DefaultLayoutMatched.Fmt": {
+    "message": "„{0}“ wird ausgewählt — es passt zu dem Körper, den du trägst.",
+    "description": ""
+  },
+  "Import.Description": {
+    "message": "Beschreibung",
+    "description": ""
+  },
+  "Import.Dialog.Filter": {
+    "message": "Onion-Paket",
+    "description": ""
+  },
+  "Import.Dialog.Title": {
+    "message": "Ein Onion-Paket auswählen",
+    "description": ""
+  },
+  "Import.Failed.Fmt": {
+    "message": "Import fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "Import.Import.Btn": {
+    "message": "Importieren",
+    "description": ""
+  },
+  "Import.Importing.Btn": {
+    "message": "Importiere…",
+    "description": ""
+  },
+  "Import.Intro": {
+    "message": "Importiere ein Onion-Overlay-Paket (.omp). Proteus liest die Ebenen des Pakets und schreibt einen neuen Penumbra-Mod mit einer Proteus-Beidatei — die Originaldatei wird nicht verändert.",
+    "description": ""
+  },
+  "Import.Layer.Imported.Fmt": {
+    "message": "{0}\nImportiert als {1} im UV-Raum {2}.",
+    "description": ""
+  },
+  "Import.Layer.NoLayout": {
+    "message": "(kein Layout)",
+    "description": ""
+  },
+  "Import.Layer.NoMap": {
+    "message": "(keine Map)",
+    "description": ""
+  },
+  "Import.Layer.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Import.Layer.SkippedReason.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Import.LayerCount.Fmt": {
+    "message": "Ebenen: {0} von {1}",
+    "description": ""
+  },
+  "Import.Layouts.Fmt": {
+    "message": "Das Paket hat {0} UV-Layouts, daher bekommt der Mod in Penumbra eine Einzelauswahl-Gruppe „{1}“ ({2}). Es wird immer nur eines komponiert.",
+    "description": ""
+  },
+  "Import.Materials.Fallback": {
+    "message": "Proteus konnte die Körperliste des Spiels nicht lesen, daher zielt dieser Import nur auf einen bekannt funktionierenden Satz weiblicher Körper. Öffne dieses Paket erneut, sobald du im Spiel bist, um alle Rassen zu erfassen.",
+    "description": ""
+  },
+  "Import.Materials.FallbackNote": {
+    "message": "Ersatzliste — die Spieldaten konnten beim Öffnen dieses Pakets nicht gelesen werden.",
+    "description": ""
+  },
+  "Import.Materials.FromGame": {
+    "message": "Jeder Körper, den das Spiel definiert, damit das Overlay dir über alle Rassen folgt. Körper, die du nicht trägst, werden bei der Komposition ignoriert.",
+    "description": ""
+  },
+  "Import.Materials.Header.Fmt": {
+    "message": "Materialziele ({0})",
+    "description": ""
+  },
+  "Import.Materials.Layout.Fmt": {
+    "message": "{0}  ({1})",
+    "description": ""
+  },
+  "Import.ModName.Label": {
+    "message": "Mod-Name",
+    "description": ""
+  },
+  "Import.NeedName": {
+    "message": "Gib einen Mod-Namen ein.",
+    "description": ""
+  },
+  "Import.NoPack": {
+    "message": "Wähle eine .omp-Datei, um zu sehen, was sie enthält.",
+    "description": ""
+  },
+  "Import.NothingUsable": {
+    "message": "Keine Ebene in diesem Paket kann importiert werden.",
+    "description": ""
+  },
+  "Import.Result.AllBodies.Fmt": {
+    "message": "„{0}“ importiert — Ebenen: {1}{2}. Das Paket hat nichts für einen Standardkörper gemalt, daher hat Proteus „Körper“ dieses Mods auf „Alle Körper“ gesetzt (Farben → Erweitert), um ihn darüber zu backen — schaltest du das ab, malt er nicht mehr.",
+    "description": ""
+  },
+  "Import.Result.NoLayout.Fmt": {
+    "message": "„{0}“ importiert — Ebenen: {1}{2}, aber Proteus konnte kein Körper-Layout für dich wählen. Wähle eines unter „{3}“ in Penumbra, sonst wird nichts gemalt.",
+    "description": ""
+  },
+  "Import.Result.Ok.Fmt": {
+    "message": "„{0}“ importiert — Ebenen: {1}{2}. Aktiviert und in Penumbra geöffnet.",
+    "description": ""
+  },
+  "Import.Result.SkippedTail.Fmt": {
+    "message": " (übersprungen: {0})",
+    "description": ""
+  },
+  "Import.Warn.FormatVersion.Fmt": {
+    "message": "Das Paket gibt Formatversion {0} an; Proteus wurde nur gegen {1} geprüft. Importiere es und prüfe das Ergebnis.",
+    "description": ""
+  },
+  "Import.Warn.Generated": {
+    "message": "Einige Layouts wurden von Onion aus einem anderen Layout erzeugt statt gemalt. Sie werden unverändert importiert; bevorzuge das erstellte Layout, wenn das Ergebnis weich wirkt.",
+    "description": ""
+  },
+  "Import.Warn.NothingImportable": {
+    "message": "Keine Ebene in diesem Paket kann importiert werden — siehe die Gründe oben.",
+    "description": ""
+  },
+  "Import.Warn.OptionGroups.Fmt": {
+    "message": "Das Paket hat Onion-Optionsgruppen ({0}). Diese werden nicht importiert — jede Ebene wird bedingungslos übernommen.",
+    "description": ""
+  },
+  "Import.Warn.RaceFilters": {
+    "message": "Einige Ebenen sind auf bestimmte Rassen beschränkt. Proteus überträgt keine Rassenfilter, daher werden sie für jede Rasse importiert.",
+    "description": ""
+  },
+  "Import.Website.Tip": {
+    "message": "Wird auf die Penumbra-Seite des Mods übernommen.",
+    "description": ""
+  },
+  "Mods.Ao.Off": {
+    "message": "Aus",
+    "description": ""
+  },
+  "Mods.Ao.On": {
+    "message": "An",
+    "description": ""
+  },
+  "Mods.Ao.Pack.Fmt": {
+    "message": "Paket ({0})",
+    "description": ""
+  },
+  "Mods.Ao.Tip.Fmt": {
+    "message": "Ambient-Occlusion-Schatten + Skindenting-Normalenvertiefung für die Riemen- und\nKleidungskanten dieses Mods. Es behandelt Bedeckung als in die Haut gedrückten Stoff,\nwas für Tattoos und Hautdetails falsch ist — daher ist es aus, sofern nicht angefordert.\n\n{0} = was das Paket angibt („AmbientOcclusion“ in seiner\nmetadata.json; fehlt es, gilt aus).\nAn / Aus = deine eigene Einstellung für diesen Mod, die das Paket überschreibt.\n\n(Die globalen Stärke-Regler stehen in den Einstellungen.)",
+    "description": ""
+  },
+  "Mods.Col.Colors": {
+    "message": "Farben",
+    "description": ""
+  },
+  "Mods.Col.Mod": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Mods.Col.On": {
+    "message": "An",
+    "description": ""
+  },
+  "Mods.Col.Priority": {
+    "message": "Prio",
+    "description": ""
+  },
+  "Mods.Col.Skindent": {
+    "message": "Skindent",
+    "description": ""
+  },
+  "Mods.Colors.BindingDriven.Tip": {
+    "message": "Die Farben werden von der aktiven Design-Bindung gesteuert.\nÄnderungen sind sofort sichtbar; klicke auf „Aktualisieren“ im Reiter „Bindungen“, um sie zu speichern. Die Basisfarben bleiben unverändert.",
+    "description": ""
+  },
+  "Mods.Colors.Btn": {
+    "message": "Farben",
+    "description": ""
+  },
+  "Mods.NoSidecarMods": {
+    "message": "Keine Proteus-Beidatei-Mods erkannt.",
+    "description": ""
+  },
+  "Mods.PluginDisabled": {
+    "message": "Proteus ist deaktiviert — aktiviere es in den Einstellungen.",
+    "description": ""
+  },
+  "Service.NoPenumbraDir": {
+    "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "Service.RegisterFailed.Fmt": {
+    "message": "Der Mod wurde geschrieben, aber Penumbra konnte ihn nicht registrieren ({0}). Lasse die Mods in Penumbra neu einlesen.",
+    "description": ""
+  },
+  "Service.UVMaps.Downloading": {
+    "message": "Lade UV-Maps herunter...",
+    "description": ""
+  },
+  "Service.UVMaps.Error.Fmt": {
+    "message": "Download-Fehler: {0}",
+    "description": ""
+  },
+  "Service.UVMaps.HttpFailed.Fmt": {
+    "message": "Download fehlgeschlagen: HTTP {0} für {1}",
+    "description": ""
+  },
+  "Service.UVMaps.Progress.Fmt": {
+    "message": "Lade UV-Maps herunter... ({0} MB / {1} MB)",
+    "description": ""
+  },
+  "Service.UVMaps.TooSmall.Fmt": {
+    "message": "Download zu klein ({0} Bytes) für {1} — möglicherweise ein LFS-Zeiger",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Header.Fmt": {
+    "message": "Basis-Haut ({0})",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Note": {
+    "message": "Der Mod, aus dem jede Basistextur gelesen wird. Zeige mit der Maus darauf, um den Spielpfad zu sehen.",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Unconfirmed.Fmt": {
+    "message": "{0} (unbestätigt)",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Btn": {
+    "message": "Texturcache leeren",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Tip": {
+    "message": "Verwirft alle zwischengespeicherten dekodierten Texturen und komponiert sofort neu.\nNutze das, wenn eine Texturänderung nicht erscheint — etwa wenn du ein Overlay in\nderselben Größe neu exportiert hast und die Änderung sonst erst nach einem Neustart\ndes Plugins sichtbar würde.\n\nLeitet außerdem neu her, aus welchem Mod jede Basis-Hauttextur stammt — nutze das,\nwenn „Basis-Haut“ unten den falschen Mod nennt.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.EffectsOnly.Fmt": {
+    "message": "{0} — nur Effekte (keine Overlay-Grafik)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Failed.Fmt": {
+    "message": "{0} — Diffuse {1}, Normal {2}, Maske {3} (Diffuse wurde nicht angewendet)",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Header.Fmt": {
+    "message": "Overlay-Reichweite ({0})",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Note": {
+    "message": "Wie viele Overlays jeden Kanal tatsächlich erreicht haben. Für das Material mit der Maus darauf zeigen.",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Ok.Fmt": {
+    "message": "{0} — Diffuse {1}, Normal {2}, Maske {3}",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Label": {
+    "message": "Mod-Priorität automatisch anheben",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Tip": {
+    "message": "Wenn nachweislich ein anderer Mod eine Hauttextur überschreibt, in die Proteus\nhineinkomponiert — etwa ein Tattoo- oder Hautpaket mit eigener Kopie der Körpertextur —,\nhebe die Penumbra-Priorität von Proteus automatisch darüber an und sage es im Chat.\n\nDiese Überschreibung ist sonst unsichtbar: Overlays wirken nur halb (die Unebenheiten\nkommen an, die Farbe nicht) und jede Logzeile liest sich weiterhin wie ein Erfolg.\n\nSchalte dies nur aus, wenn ein anderer Mod einen von Proteus komponierten Pfad\nabsichtlich gewinnen soll. Proteus handelt nie auf Verdacht — nur bei einer\nbestätigten Überschreibung.",
+    "description": ""
+  },
+  "Settings.General.DisableAutoRedraw.Label": {
+    "message": "Automatisches Neuzeichnen deaktivieren",
+    "description": ""
+  },
+  "Settings.General.Enabled.Label": {
+    "message": "Aktiviert",
+    "description": ""
+  },
+  "Settings.General.Enabled.Tip": {
+    "message": "Wenn du dies ausschaltest, wird die Ausgabe von Proteus verworfen, du wirst ohne sie\nneu gezeichnet und der verwaltete Mod \"Proteus\" in Penumbra wird deaktiviert.",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Btn": {
+    "message": "Leuchteffekt-Texturen",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Tip.Fmt": {
+    "message": "Öffnet den Ordner, aus dem Proteus die Scroll-Maps für animiertes Leuchten liest —\ndie „_o“-Texturen, die das Leuchten SIND. Alles, was hier abgelegt wird, erscheint im\nEffekt-Dropdown jedes Gear-Overlays.\n\n{0}\n\nAkzeptiert .tex, .dds, .png, .jpg, .bmp, .tga, .psd und .gif.\nDer eigene Ordner Proteus/Effects/ eines Mods hat Vorrang davor.",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Label": {
+    "message": "Neuladen an Ort und Stelle",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Tip": {
+    "message": "Aktualisiert Texturen über Glamourers Ausrüstungs-Neuladen an Ort und Stelle statt\nüber ein vollständiges Neuzeichnen und vermeidet so das Flackern beim Ent- und\nWiedererscheinen. Fällt automatisch auf ein vollständiges Neuzeichnen zurück, wenn\nGlamourer es nicht bedienen kann.",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Label": {
+    "message": "Unveränderte Neukompositionen überspringen",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Tip": {
+    "message": "Lässt eine durch Zonenwechsel oder Neuzeichnen ausgelöste Neukomposition früh abbrechen,\nwenn sich nichts geändert hat, was die Ausgabe betrifft. Was du selbst änderst, wird\nimmer neu komponiert. Schalte dies nur aus, um es als Ursache auszuschließen, wenn eine\nÄnderung nicht wirkt.",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Label": {
+    "message": "Auf unsichtbarer Brille hosten (Ringe frei halten)",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Tip": {
+    "message": "Wenn dies an ist und du keine Brille trägst, lässt Proteus Glamourer eine unsichtbare\nBrille anlegen, damit die zweite Haut den Brillen-Slot statt eines Rings nutzt. Das\nschreibt einen (verborgenen) Bonus-Gegenstand in deinen Glamourer-Zustand; er wird\nentfernt, wenn du Proteus deaktivierst, eine echte Brille anlegst oder dies ausschaltest.",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Btn": {
+    "message": "Geändertes Accessoire wiederherstellen",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Tip": {
+    "message": "Erzwingt ein vollständiges Neuzeichnen, um jeden Ring bzw. jedes Armband neu zu laden,\nden die zweite Haut ersetzt hat, und stellt das Originalmodell wieder her. Nutze das,\nwenn eine Gear-Hülle nach dem Deaktivieren oder Wechseln an einem Accessoire hängen bleibt.",
+    "description": ""
+  },
+  "Settings.Output.Compression.Label": {
+    "message": "Komprimierung aktivieren",
+    "description": ""
+  },
+  "Settings.Output.Compression.Tip": {
+    "message": "Komprimiert die gebackenen Texturen blockweise (BC7) und verkleinert jede auf etwa ein\nViertel ihrer unkomprimierten Größe auf der Festplatte und im VRAM. Die Index-Textur\nbleibt unkomprimiert, damit ihre exakten Zeilenwerte erhalten bleiben.\nAus = unkomprimiert (Byte-identisch wie zuvor).",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Label": {
+    "message": "Verbindungs-Meshes ausblenden",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Tip": {
+    "message": "Überspringt den Verbindungsring jedes Körperteils auf der „zweiten Haut“ der Ausrüstung —\ndas kleine zusätzliche Submesh an einem Gelenk (Handgelenk/Knöchel/…). Manche Körper\n(Neolithe) verstärken Gelenke mit einem Ring, der einen bereits vollständigen Körper\nüberlappt; bei einem durchsichtigen Overlay verdoppelt sich die Überlappung und zeigt\nsich als deckendere Naht. Lass es bei anderen Körpern auf Off — dort ist dieses Submesh\nechte Haut, und es auszublenden würde Lücken hinterlassen.",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Label": {
+    "message": "Hartes Alpha (Gpose: Sphere/Metall)",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Tip": {
+    "message": "EXPERIMENTELL. Rendert die Hüllendeckung als harten Alpha-Test-Ausschnitt statt als\nweiche Transparenz, damit Sphere-Maps und Metallglanz die Gpose überstehen (die sie auf\ntransparenten Oberflächen verwirft). Nachteil: Durchsichtige Kanten werden hart und\nausgefranst. Am besten für weitgehend blickdichte Stoffe; ein sehr durchsichtiger Stoff\nwirkt grob. Nach dem Umschalten neu komponieren.",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Label": {
+    "message": "Texturcache (MB)",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Tip": {
+    "message": "Wie viele dekodierte Texturdaten Proteus zwischen Kompositionen im Speicher behält.\n\nEine 4K-Textur kostet dekodiert 64 MB, das hier ist also eher eine Anzahl: 2048 MB ≈ 30 davon.\nEs hilft nur, wenn es eine ganze Komposition abdeckt — darunter verdrängt jeder Lauf das,\nwas der nächste braucht, und nichts wird wiederverwendet.\n\nPrüfe den Wert „cache N entries, M MB“ im Kompositionsprotokoll: meldet eine ZWEITE\nKomposition ohne Änderungen weiterhin Fehlschläge, erhöhe diesen Wert. Senke ihn, wenn\ndas Spiel anfängt auszulagern. Wird nach 60 s Leerlauf automatisch freigegeben.",
+    "description": ""
+  },
+  "Settings.Section.Diagnostics": {
+    "message": "Diagnose",
+    "description": ""
+  },
+  "Settings.Section.General": {
+    "message": "Allgemein",
+    "description": ""
+  },
+  "Settings.Section.Hosting": {
+    "message": "Hosting",
+    "description": ""
+  },
+  "Settings.Section.Output": {
+    "message": "Ausgabe",
+    "description": ""
+  },
+  "Settings.Section.SkinEffects": {
+    "message": "Hauteffekte",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Label": {
+    "message": "Ambient Occlusion",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Tip": {
+    "message": "Weicher Kontaktschatten auf der Haut direkt außerhalb maskierter Riemenkanten, der Riemen Tiefe gibt.\n0,00 schaltet ihn ganz ab (Haut-Diffuse unverändert).",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Label": {
+    "message": "Schattenweichheit",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Tip": {
+    "message": "Wie weit sich der Ambient-Occlusion-Schatten von einer Riemenkante ausbreitet (Anteil der Texturbreite).\nGrößer = breiterer, weicherer Schatten. Wird von Schatten und Riemenvertiefung gemeinsam genutzt.",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Label": {
+    "message": "Hautton-Unterdrückung",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Tip": {
+    "message": "Wie stark Overlays der Hautton-Einfärbung widerstehen (globaler Multiplikator).\nWird pro Pixel nach Farbe angewendet: weiße/helle Farbstoffe behalten ihre gestaltete\nFarbe auf jedem Hautton (leicht glänzender), dunkle Farbstoffe bleiben automatisch\nhautgetönt und matt.\n0,00 schaltet es ganz ab (ursprüngliches Aussehen).",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Label": {
+    "message": "Skindenting",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Tip": {
+    "message": "Vertieft die Hautnormale an Riemen-/Kleidungskanten, damit Riemen wie in die Haut gedrückt wirken.\n0,00 schaltet es ab (Hautnormale unverändert). Nutzt dieselben Kanten/Weichheit wie der Schatten.",
+    "description": ""
+  },
+  "Tab.Bindings": {
+    "message": "Bindungen",
+    "description": ""
+  },
+  "Tab.Create": {
+    "message": "Erstellen",
+    "description": ""
+  },
+  "Tab.Export": {
+    "message": "Export",
+    "description": ""
+  },
+  "Tab.Import": {
+    "message": "Import",
+    "description": ""
+  },
+  "Tab.Mods": {
+    "message": "Mods",
+    "description": ""
+  },
+  "Tab.Settings": {
+    "message": "Einstellungen",
+    "description": ""
+  }
+}

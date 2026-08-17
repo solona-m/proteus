@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -5524,6 +5525,7 @@ public class CompositorService : IDisposable
         }
 
         int lost = 0;
+        var selfServed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var unclaimed = new List<string>();
         foreach (var gamePath in expected.Keys)
@@ -5537,6 +5539,29 @@ public class CompositorService : IDisposable
             }
             if (unstable.Contains(gamePath)) continue;
 
+            var disk = raw[gamePath];
+
+            // OUR OWN FOLDER IS NOT A CONFLICT, and must never reach the owner set below. `owners` feeds
+            // TryRaisePriorityAbove and ManagedModDir is literally "Proteus", so a self-resolve had us read
+            // our own priority, add one, and write it back to ourselves — then force a recomposite that
+            // computed the same thing one higher. The attempted-target latch cannot stop that: each raise
+            // moves `highest` up with it, so the target is strictly increasing and always novel. Observed
+            // climbing 1000 -> 1001 -> … at roughly one composite per second, telling the user in chat each
+            // time that "Proteus" was overriding Proteus, and persisting the climbed value to the config.
+            //
+            // What it actually means is that Penumbra is still serving an EARLIER manifest's file for this
+            // path — same mod, different name. No priority can order one Proteus file above another, so
+            // there is nothing for the user to fix and nothing worth a chat line; the next reload settles it.
+            if (string.Equals(ModFolderOf(disk), SidecarDiscoveryService.ManagedModDir,
+                              StringComparison.OrdinalIgnoreCase))
+            {
+                selfServed.Add(gamePath);
+                log.Warning("[Proteus] redirect not yet current: {0} resolves to {1} — our own mod, but not "
+                          + "the file this manifest names, so Penumbra is still serving an earlier publish "
+                          + "for it. Not a conflict; no priority change can affect it.", gamePath, disk!);
+                continue;
+            }
+
             lost++;
 
             // TWO DIFFERENT FAULTS, and conflating them produced nonsense. Penumbra echoes the game path
@@ -5545,7 +5570,6 @@ public class CompositorService : IDisposable
             // own culprit: «"chara/accessory/a0053/texture/ss_0_id.tex" overrides ss_0_id.tex», advising the
             // user to outrank a mod that does not exist. Nobody is winning these; they are not published to
             // the collection at all, which is a different problem with a different fix.
-            var disk = raw[gamePath];
             bool nobodyProvides = disk == null
                                || string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase);
 
@@ -5570,9 +5594,10 @@ public class CompositorService : IDisposable
         // and the previous per-path notice turned a single fault into a seven-message wall of red.
         if (unclaimed.Count > 0 && _reportedRedirectLosses.TryAdd("\0unclaimed", "1"))
         {
-            var msg = $"[Proteus] {unclaimed.Count} of the files Proteus publishes aren't reaching the game — "
-                    + "they resolve to nothing at all, which usually means the \"Proteus\" mod is disabled in "
-                    + "your current Penumbra collection. Check it is enabled there.";
+            var msg = string.Format(Loc.Localize("Chat.UnclaimedRedirects.Fmt",
+                "[Proteus] {0} of the files Proteus publishes aren't reaching the game — they resolve to "
+                + "nothing at all, which usually means the \"Proteus\" mod is disabled in your current "
+                + "Penumbra collection. Check it is enabled there."), unclaimed.Count);
             _ = Plugin.Framework.RunOnFrameworkThread(
                 () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
         }
@@ -5582,7 +5607,8 @@ public class CompositorService : IDisposable
         // a path resolving to nothing, or to a file outside the mod directory, has no priority to beat.
         if (owners.Count > 0 && !TryRaisePriorityAbove(owners))
             foreach (var gamePath in expected.Keys)
-                if (!matched.Contains(gamePath) && !unstable.Contains(gamePath))
+                if (!matched.Contains(gamePath) && !unstable.Contains(gamePath)
+                    && !selfServed.Contains(gamePath))
                     NotifyRedirectLost(gamePath, raw[gamePath]);
 
         if (unstable.Count > 0)
@@ -5590,7 +5616,11 @@ public class CompositorService : IDisposable
                       + "resolve to our output but the answer was still changing, so this is NOT evidence of "
                       + "a loss: {2}", unstable.Count, sw.ElapsedMilliseconds, string.Join(", ", unstable));
 
-        if (lost == 0 && unstable.Count == 0)
+        if (selfServed.Count > 0)
+            log.Warning("[Proteus] {0} path(s) resolve to an earlier publish of our own mod rather than the "
+                      + "file this manifest names: {1}", selfServed.Count, string.Join(", ", selfServed));
+
+        if (lost == 0 && unstable.Count == 0 && selfServed.Count == 0)
         {
             // Winning everything re-arms the raise latch, exactly as it re-arms the per-path chat notice
             // above. Without this, a mod installed later in the session that takes a path back could compute
@@ -6531,9 +6561,10 @@ public class CompositorService : IDisposable
                     missing.Count, expected.Materials.Count, string.Join(", ", missing),
                     siblings.Count == 0 ? "(none — the host loads no material of its own)" : string.Join(", ", siblings));
 
-                var msg = "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
-                        + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
-                        + "unequipping and re-equipping that accessory, or pick a different one.";
+                var msg = Loc.Localize("Chat.ShellNotDrawing",
+                    "[Proteus] Your second skin was built but the game isn't drawing it. The accessory "
+                    + "it rides on is equipped, yet the character isn't loading Proteus' version. Try "
+                    + "unequipping and re-equipping that accessory, or pick a different one.");
                 _ = Plugin.Framework.RunOnFrameworkThread(
                     () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
             }
@@ -7752,6 +7783,17 @@ public class CompositorService : IDisposable
         int outranked = 0;
         foreach (var owner in owners)
         {
+            // NEVER outrank ourselves. The caller already filters this out, but the cost of one slipping
+            // through is not a bad message — it is an unbounded self-chase, because raising our priority
+            // above our own priority moves the target up with it and the attempted-target latch only ever
+            // sees a novel value. Two lines here bound a fault that otherwise runs until the user quits.
+            if (string.Equals(owner, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Warning("[Proteus] the managed mod appeared in its own outranked set — ignoring. A path "
+                          + "resolving to our own folder is a stale publish, not a conflict.");
+                continue;
+            }
+
             if (penumbra.GetModSettings(collId.Value, owner)?.Priority is not { } p) continue;
             outranked++;
             if (p > highest) { highest = p; highestOwner = owner; }
@@ -7797,12 +7839,17 @@ public class CompositorService : IDisposable
         log.Information("[Proteus] raised managed mod priority {0} -> {1}, above \"{2}\" ({3})",
             current, target, highestOwner, highest);
 
-        var names = outranked == 1 ? $"\"{highestOwner}\""
-                                   : $"\"{highestOwner}\" and {outranked - 1} other mod(s)";
-        var msg = $"[Proteus] {names} was overriding the skin textures Proteus composites your overlays "
-                + $"into, so they could not show up. Raised Proteus' Penumbra priority to {target} to fix "
-                + "it. (Turn off \"Auto-raise mod priority\" in Proteus' settings if you'd rather it "
-                + "didn't.)";
+        // Two whole phrases rather than an inline "(s)": the one-mod case has no count in it at all, and
+        // the many case labels its count instead of inflecting a noun, which is the only form that
+        // translates into every target language.
+        var names = outranked == 1
+            ? string.Format(Loc.Localize("Chat.PriorityRaised.One.Fmt", "\"{0}\""), highestOwner)
+            : string.Format(Loc.Localize("Chat.PriorityRaised.Many.Fmt", "\"{0}\" and {1} more"),
+                highestOwner, outranked - 1);
+        var msg = string.Format(Loc.Localize("Chat.PriorityRaised.Fmt",
+            "[Proteus] {0} was overriding the skin textures Proteus composites your overlays into, so they "
+            + "could not show up. Raised Proteus' Penumbra priority to {1} to fix it. (Turn off "
+            + "\"Auto-raise mod priority\" in Proteus' settings if you'd rather it didn't.)"), names, target);
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 45).Build()));
 
@@ -7847,9 +7894,10 @@ public class CompositorService : IDisposable
 
         // The file name alone: "bibo_mid_base.tex" is recognisable, the full invented game path is not, and a
         // chat line has no room for it. The log line right above carries the full path for anyone who needs it.
-        var msg = $"[Proteus] \"{owner}\" overrides {Path.GetFileName(gamePath)}, which Proteus composites "
-                + "your overlays into — so they will not show up. Fix: in Penumbra, raise the \"Proteus\" "
-                + $"mod's priority above \"{owner}\".";
+        var msg = string.Format(Loc.Localize("Chat.RedirectLost.Fmt",
+            "[Proteus] \"{0}\" overrides {1}, which Proteus composites your overlays into — so they will "
+            + "not show up. Fix: in Penumbra, raise the \"Proteus\" mod's priority above \"{0}\"."),
+            owner, Path.GetFileName(gamePath));
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 17).Build()));
     }
@@ -7858,9 +7906,10 @@ public class CompositorService : IDisposable
     {
         if (!HasEmissiveRow(rows) || !_glowPromotedMods.TryAdd(entry.ModDirectory, 0)) return;
 
-        var msg = $"[Proteus] \"{entry.ModName}\" sets Glow on a skin layer. Skin can no longer glow, so "
-                + "that option now renders as a cloth layer — it needs a free accessory to sit on, and its "
-                + "surface will look slightly different.";
+        var msg = string.Format(Loc.Localize("Chat.GlowPromoted.Fmt",
+            "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now "
+            + "renders as a cloth layer — it needs a free accessory to sit on, and its surface will look "
+            + "slightly different."), entry.ModName);
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
     }
@@ -7883,9 +7932,10 @@ public class CompositorService : IDisposable
         // Cloth overlay loses only sphere/metal, which never showed there in the first place.
         if (!HasEmissiveRow(rows)) return;
 
-        var msg = $"[Proteus] \"{entry.ModName}\" sets Glow on an overlay Proteus cannot build a layer for. "
-                + "Glow needs a layer over the mesh, and that only works on your own skin — body, face, "
-                + "hair, tail or ears — not on gear, accessories or weapons.";
+        var msg = string.Format(Loc.Localize("Chat.NoShellSurface.Fmt",
+            "[Proteus] \"{0}\" sets Glow on an overlay Proteus cannot build a layer for. Glow needs a layer "
+            + "over the mesh, and that only works on your own skin — body, face, hair, tail or ears — not "
+            + "on gear, accessories or weapons."), entry.ModName);
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
     }

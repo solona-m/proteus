@@ -61,6 +61,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- CheapLoc ships INSIDE Dalamud (it sits next to Dalamud.dll in the dev folder) and the SDK puts
+         DalamudLibPath on AssemblySearchPaths, so this resolves with no HintPath and no NuGet package.
+         Deliberately not the NuGet package: that would copy a second, differently-versioned CheapLoc.dll
+         into the plugin zip alongside the one Dalamud already has loaded. Private="false" for the same
+         reason — reference it, never ship it. -->
+    <Reference Include="CheapLoc" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="StbImageSharp" Version="2.*" />
     <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
     <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
@@ -94,6 +103,16 @@
          accident. Separate from the images\icon.png None item below, which must keep landing on disk
          because that is where Dalamud reads a dev-loaded plugin's installer icon from. -->
     <EmbeddedResource Include="Resources\header.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Translations. Embedded rather than copied to disk so they travel inside the DLL — DalamudPackager
+         zips whatever lands in the output folder, and a loose loc file is one more thing to go missing or
+         go stale on update. The manifest name each becomes is "Proteus.Localization.{lang}.json", which is
+         what LocSetup's resource prefix is built to match. en.json is shipped even though
+         SetupWithLangCode("en") short-circuits to the compiled-in fallbacks and never reads it: it is the
+         source of truth translators diff against, and the parity test asserts against it. -->
+    <EmbeddedResource Include="Localization\*.json" />
   </ItemGroup>
 
   <ItemGroup>

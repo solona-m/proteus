@@ -1,0 +1,1150 @@
+{
+  "Band.Caption": {
+    "message": "オーバーレイ合成",
+    "description": ""
+  },
+  "Band.Pill.Disabled": {
+    "message": "無効",
+    "description": ""
+  },
+  "Band.Pill.NoPenumbra": {
+    "message": "Penumbraなし",
+    "description": ""
+  },
+  "Band.Recomposite.Tip": {
+    "message": "今すぐ再合成",
+    "description": ""
+  },
+  "Band.Retry.Btn": {
+    "message": "再試行",
+    "description": ""
+  },
+  "Band.Settings.Tip": {
+    "message": "設定",
+    "description": ""
+  },
+  "Bindings.Active.Fmt": {
+    "message": "適用中: {0}",
+    "description": ""
+  },
+  "Bindings.Apply.Btn": {
+    "message": "適用",
+    "description": ""
+  },
+  "Bindings.Apply.Tip": {
+    "message": "Glamourerを介さずに、このデザインのProteus状態を今すぐ復元します。\n記録されたすべてのMODの有効/優先度/オプション/カラーが対象です。\n\n紐付けに含まれていないProteus MODはオフになります。つまり現在の見た目に\n追加するのではなく、置き換えます。",
+    "description": ""
+  },
+  "Bindings.Col.Captured": {
+    "message": "取得日時",
+    "description": ""
+  },
+  "Bindings.Col.Design": {
+    "message": "デザイン",
+    "description": ""
+  },
+  "Bindings.Enable.Label": {
+    "message": "Proteusの状態をGlamourerデザインに紐付ける",
+    "description": ""
+  },
+  "Bindings.Enable.Tip": {
+    "message": "オンにすると、Glamourerデザインの保存時に現在のProteus状態を記録します。\n後でそのデザインを適用すると復元されます（装備は可能な範囲で一致させます）。",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Label": {
+    "message": "Glamourerの自動化に追従（ギアセット／ジョブ変更）",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Tip": {
+    "message": "ギアセットやジョブの変更で自動化がデザインを適用したとき、Glamourerは何も\n通知しません。そのためProteusは届く信号から推測します。\n\n紐付けを復元することしかせず、解除は決してしません。\nProteus自身が起こす再描画は除外されるため、自分の処理を自動化の適用と\n取り違えることはありません。\n\n上の「Proteusの状態をGlamourerデザインに紐付ける」が必要です。",
+    "description": ""
+  },
+  "Bindings.HoursAgo.Fmt": {
+    "message": "{0}時間前",
+    "description": ""
+  },
+  "Bindings.MinutesAgo.Fmt": {
+    "message": "{0}分前",
+    "description": ""
+  },
+  "Bindings.None": {
+    "message": "紐付けられたデザインはまだありません。",
+    "description": ""
+  },
+  "Bindings.Pill.Active": {
+    "message": "適用中",
+    "description": ""
+  },
+  "Bindings.SecondsAgo.Fmt": {
+    "message": "{0}秒前",
+    "description": ""
+  },
+  "Bindings.Unbind.Btn": {
+    "message": "解除",
+    "description": ""
+  },
+  "Bindings.Unbind.Tip": {
+    "message": "この紐付けを破棄します。Glamourerのデザイン自体はそのままです。",
+    "description": ""
+  },
+  "Bindings.Update.Btn": {
+    "message": "更新",
+    "description": ""
+  },
+  "Bindings.Update.Inactive.Tip": {
+    "message": "現在の状態から更新できるのは適用中の紐付けだけです。\n先にこのデザインを適用してください。",
+    "description": ""
+  },
+  "Bindings.Update.Tip": {
+    "message": "現在のProteus状態（有効／優先度／オプション／カラー）をこの紐付けに\n記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
+    "description": ""
+  },
+  "Chat.GlowPromoted.Fmt": {
+    "message": "[Proteus]「{0}」は肌レイヤーにグローを設定しています。肌はもう発光できないため、このオプションは布レイヤーとして描画されます。空いているアクセサリが必要になり、表面の見え方も少し変わります。",
+    "description": ""
+  },
+  "Chat.NoShellSurface.Fmt": {
+    "message": "[Proteus]「{0}」は、Proteusがレイヤーを作成できないオーバーレイにグローを設定しています。グローにはメッシュの上に重ねるレイヤーが必要で、それが可能なのは自分の肌（体・顔・髪・尻尾・耳）だけです。装備・アクセサリ・武器では使えません。",
+    "description": ""
+  },
+  "Chat.OverBudget.Fmt": {
+    "message": "[Proteus] この見た目は{0}レイヤー（Mask {1}、Cloth {2}）ありますが、アクセサリに収まるのは{3}だけです（Proteusの透明な予備リングを含む）。いくつかのレイヤーをオフにするか、メガネ／指輪／腕輪／首飾りをもう1つ装備すると残りも収まります。",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Fmt": {
+    "message": "[Proteus] {0}が、Proteusのオーバーレイ合成先である肌テクスチャを上書きしていたため、表示できませんでした。修正のためProteusのPenumbra優先度を{1}に引き上げました。（不要な場合はProteusの設定で「MOD優先度を自動で引き上げる」をオフにしてください。）",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Many.Fmt": {
+    "message": "「{0}」ほか{1}件",
+    "description": ""
+  },
+  "Chat.PriorityRaised.One.Fmt": {
+    "message": "「{0}」",
+    "description": ""
+  },
+  "Chat.RedirectLost.Fmt": {
+    "message": "[Proteus]「{0}」が{1}を上書きしています。ここはProteusがオーバーレイを合成する場所なので、表示されません。対処：Penumbraで「Proteus」MODの優先度を「{0}」より上に設定してください。",
+    "description": ""
+  },
+  "Chat.ShellNotDrawing": {
+    "message": "[Proteus] セカンドスキンは作成されましたが、ゲームが描画していません。土台となるアクセサリは装備されているのに、キャラクターがProteus版を読み込んでいません。そのアクセサリを外して付け直すか、別のものを選んでください。",
+    "description": ""
+  },
+  "Chat.UnclaimedRedirects.Fmt": {
+    "message": "[Proteus] Proteusが公開しているファイルのうち{0}件がゲームに届いていません。まったく解決されていない状態で、たいていは現在のPenumbraコレクションで「Proteus」MODが無効になっていることを意味します。そこで有効になっているか確認してください。",
+    "description": ""
+  },
+  "Chat.UnhostedLayers.Fmt": {
+    "message": "[Proteus] {1}のレイヤーの一部を配置できませんでした（レイヤー数: {0}）。それらは種族変形を受けられないため、Proteusが丸ごと置き換えられるスロットが必要です。指輪スロット（左右どちらでも）か顔装備スロットを空けると表示されます。",
+    "description": ""
+  },
+  "Colors.Advanced": {
+    "message": "詳細設定",
+    "description": ""
+  },
+  "Colors.Auto": {
+    "message": "（自動）",
+    "description": ""
+  },
+  "Colors.Auto.Tip": {
+    "message": "モードは使用中の機能に従います。スフィアマップまたはメタル ⇒ Cloth、\nグローエフェクト ⇒ アニメーショングロー、特に何もなければ ⇒ Skin。",
+    "description": ""
+  },
+  "Colors.BackToAuto.Btn": {
+    "message": "自動に戻す",
+    "description": ""
+  },
+  "Colors.BaseUnchanged": {
+    "message": "基本カラーは変更されません。ただし「詳細設定」内では、「既定値に戻す」が基本カラーを書き換え、「ボディ」はどの紐付けも記録しないグローバル設定です。",
+    "description": ""
+  },
+  "Colors.Bodies.All": {
+    "message": "すべてのボディ",
+    "description": ""
+  },
+  "Colors.Bodies.BiboGen3": {
+    "message": "bibo+gen3",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalNote": {
+    "message": "グローバルに保存されます。紐付けはこれを記録しません。",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalSuffix": {
+    "message": "\nグローバル設定です。編集中の紐付けには含まれません。",
+    "description": ""
+  },
+  "Colors.Bodies.Label": {
+    "message": "ボディ",
+    "description": ""
+  },
+  "Colors.Bodies.Off": {
+    "message": "オフ",
+    "description": ""
+  },
+  "Colors.Bodies.Tip": {
+    "message": "このMODをどのボディタイプに焼き込むか：\nすべてのボディ = 姉妹ボディ（bibo↔gen3/Eve）＋バニラ（gen2）\nbibo+gen3 = 姉妹ボディのみに焼き込む（既定）\nオフ = 合成しない\n\nこのオプションだけでなく、MOD全体に適用されます。",
+    "description": ""
+  },
+  "Colors.CopyRow.Btn": {
+    "message": "行をコピー",
+    "description": ""
+  },
+  "Colors.CopyRow.Tip": {
+    "message": "この行のサブ行（AとB）を両方コピーします。",
+    "description": ""
+  },
+  "Colors.CopySub.Btn": {
+    "message": "コピー",
+    "description": ""
+  },
+  "Colors.CopySub.Tip": {
+    "message": "このサブ行の値をコピーします。",
+    "description": ""
+  },
+  "Colors.Diffuse.Gear.Tip": {
+    "message": "グローの下にある表面です。オーバーレイ自身のディフューズ画像に乗算されます。\n\n発光する素材では暗くしてください。そうしないとグローが引き立つ相手を失い、\nどれだけ強くしても弱く見えます。バニラのスクロール素材も、ほぼ黒のディフューズと\n明るいエミッシブを組み合わせているのはこのためです。",
+    "description": ""
+  },
+  "Colors.Diffuse.Label": {
+    "message": "ディフューズ",
+    "description": ""
+  },
+  "Colors.EditingBinding.Fmt": {
+    "message": "「{0}」を編集中 — リアルタイムでプレビューしています。保存するには「紐付け」タブの「更新」をクリックしてください。",
+    "description": ""
+  },
+  "Colors.Effect.FromMod.Fmt": {
+    "message": "{0}（MOD）",
+    "description": ""
+  },
+  "Colors.ForceMode.Hint": {
+    "message": "機能から自動で決めるのではなく、描画モードを固定します：",
+    "description": ""
+  },
+  "Colors.ForceMode.Tip": {
+    "message": "Skin（塗り）— skin.shpk。  Cloth — character.shpk（スフィア、メタル）。\nアニメーショングロー — characterscroll.shpk。固定すると自動モード切り替えが止まります。",
+    "description": ""
+  },
+  "Colors.GlowAmount.Label": {
+    "message": "グロー",
+    "description": ""
+  },
+  "Colors.GlowAmount.Tip": {
+    "message": "characterscrollではこれは明るさではなく小さなゲートです：\n0 = まったく発光しません。大きすぎるとスクロールマップの色が飛びます。\nバニラのアニメーション素材では約0.025です。",
+    "description": ""
+  },
+  "Colors.GlowColour.Label": {
+    "message": "グローの色",
+    "description": ""
+  },
+  "Colors.GlowColour.Tip": {
+    "message": "ディフューズとは独立したグローの色です。発光する素材は通常、\n暗い表面に明るいグローを組み合わせます。既定ではディフューズと同じです。",
+    "description": ""
+  },
+  "Colors.GlowEffect.Label": {
+    "message": "グローエフェクト",
+    "description": ""
+  },
+  "Colors.GlowEffect.Tip": {
+    "message": "スクロールマップを選ぶと、このオーバーレイが発光してアニメーションし、\nアニメーショングローに切り替わります。マップそのものがグロー（色・模様・動き）で、\n行のグロー値がその強さを調整します。エフェクトはMODのProteus/Effects/フォルダ、\n次に自分のEffectsフォルダから読み込まれます。",
+    "description": ""
+  },
+  "Colors.GroupOption.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Colors.Highlight.Gear.Tip": {
+    "message": "このサブ行のメッシュをキャラクター上で発光させ、ゲーム内で見つけやすく\nします。もう一度クリックすると停止します。",
+    "description": ""
+  },
+  "Colors.Highlight.Glow.Btn": {
+    "message": "光らせる",
+    "description": ""
+  },
+  "Colors.Highlight.Glowing.Btn": {
+    "message": "点灯中",
+    "description": ""
+  },
+  "Colors.Highlight.Skin.Tip": {
+    "message": "このサブ行の範囲をキャラクターの肌の上で光らせ、ゲーム内で見つけやすく\nします。もう一度クリックで停止。（初回は生成に少し時間がかかります。）",
+    "description": ""
+  },
+  "Colors.Mask.Forced": {
+    "message": "（強制）",
+    "description": ""
+  },
+  "Colors.Mask.Forced.Tip": {
+    "message": "このMOD内の別の有効なオプションが装備として描画されるため、マスクはその\nシェルの上に乗る必要があり、下の肌に塗り込むことはできません。それらの\nオプションを（各タブの詳細設定で）Skinに切り替えると、マスクは自分の\nモード選択を取り戻します。",
+    "description": ""
+  },
+  "Colors.MasksTab": {
+    "message": "マスク",
+    "description": ""
+  },
+  "Colors.Metal.Tip": {
+    "message": "メタルは自身のディフューズ色を持たず、映り込んだものを映します。\n映すスフィアマップがなければ、金属的な表面はただ暗くなるだけです。",
+    "description": ""
+  },
+  "Colors.Metalness.Label": {
+    "message": "メタルネス",
+    "description": ""
+  },
+  "Colors.Mode.AnimatedGlow": {
+    "message": "アニメーショングロー",
+    "description": ""
+  },
+  "Colors.Mode.Cloth": {
+    "message": "Cloth",
+    "description": ""
+  },
+  "Colors.Mode.Skin": {
+    "message": "Skin（塗り）",
+    "description": ""
+  },
+  "Colors.NoActiveOptions": {
+    "message": "有効なオプションがありません。Penumbraでいずれかを選ぶと色を編集できます。",
+    "description": ""
+  },
+  "Colors.NoEffects": {
+    "message": "エフェクトが見つかりません。設定の「グロー用エフェクトテクスチャ」ボタンで開く\nフォルダか、MOD独自のProteus/Effects/フォルダに画像を入れてください。",
+    "description": ""
+  },
+  "Colors.NoIndexTexture": {
+    "message": "インデックステクスチャがありません。行16のみ適用されます。",
+    "description": ""
+  },
+  "Colors.None": {
+    "message": "なし",
+    "description": ""
+  },
+  "Colors.Opacity.Label": {
+    "message": "不透明度",
+    "description": ""
+  },
+  "Colors.Opacity.Tip": {
+    "message": "マイナスでこの行を透明寄りに、プラスで不透明寄りにします。",
+    "description": ""
+  },
+  "Colors.PasteRow.Btn": {
+    "message": "行を貼り付け",
+    "description": ""
+  },
+  "Colors.PasteRow.NeedCopy": {
+    "message": "先に行をコピーしてください。",
+    "description": ""
+  },
+  "Colors.PasteRow.Tip.Fmt": {
+    "message": "行{0}（サブ行の両方）をコピーした行で上書きします。",
+    "description": ""
+  },
+  "Colors.PasteSub.Btn": {
+    "message": "貼り付け",
+    "description": ""
+  },
+  "Colors.PasteSub.NeedCopy": {
+    "message": "先にサブ行をコピーしてください。",
+    "description": ""
+  },
+  "Colors.PasteSub.Tip": {
+    "message": "このサブ行をコピーした値で上書きします。",
+    "description": ""
+  },
+  "Colors.Pill.Binding": {
+    "message": "紐付け",
+    "description": ""
+  },
+  "Colors.Pinned": {
+    "message": "（固定）",
+    "description": ""
+  },
+  "Colors.Pinned.Tip": {
+    "message": "詳細設定でこのモードを固定したため、設定した機能には追従しなくなりました。\n「自動に戻す」をクリックすると再び適応します。",
+    "description": ""
+  },
+  "Colors.RenderingAs": {
+    "message": "描画モード:",
+    "description": ""
+  },
+  "Colors.Reset.Btn": {
+    "message": "既定値に戻す",
+    "description": ""
+  },
+  "Colors.Reset.Tip": {
+    "message": "Ctrlキーを押しながらクリックすると、このオプションの色・グロー・モードを、\nProteusがこのMODを最初に保存したときの設定に戻します。取り消せません。\n\nデザインが適用されている場合、そのデザインが保存しているこのオプションの\n上書きも削除されます。そうしないとデザインがすぐに再適用してしまうためです。\n他のデザインの設定はそのまま残ります。\n\n注意：この「元の設定」はProteusがこのMODを初めて保存した時点のものです。\nそれ以前にすでに編集していた場合、その状態が「既定値」になります。",
+    "description": ""
+  },
+  "Colors.Roughness.Label": {
+    "message": "ラフネス",
+    "description": ""
+  },
+  "Colors.Row.Unused.Tip": {
+    "message": "このオーバーレイのインデックステクスチャはこの行を選択しないため、\n編集しても効果はありません。",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Label": {
+    "message": "スクロール速度",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Tip": {
+    "message": "エフェクトが流れる速さ（XとY）。マイナスで逆方向、0で停止。0.01前後が標準です。",
+    "description": ""
+  },
+  "Colors.Section.Colours": {
+    "message": "カラー",
+    "description": ""
+  },
+  "Colors.Section.Physical": {
+    "message": "物理設定",
+    "description": ""
+  },
+  "Colors.Section.Physical.ClothSuffix": {
+    "message": "— Cloth",
+    "description": ""
+  },
+  "Colors.Section.SphereMap": {
+    "message": "スフィアマップ",
+    "description": ""
+  },
+  "Colors.Specular.Label": {
+    "message": "スペキュラ",
+    "description": ""
+  },
+  "Colors.Sphere.Index.Label": {
+    "message": "インデックス",
+    "description": ""
+  },
+  "Colors.Sphere.Intensity.Label": {
+    "message": "強さ",
+    "description": ""
+  },
+  "Colors.Sphere.Tip": {
+    "message": "ゲーム共有のスフィアマップ配列から1枚を反射させます。\nインデックスと強さの両方が0以外でないと何も起きません。\ncharacterscroll.shpkでは動作しません。character.shpkを使ってください。",
+    "description": ""
+  },
+  "Colors.Stack.Tip": {
+    "message": "このMODのオーバーレイが体の上でどう重なるかを、グループをまたいで並べ替えます。\n左端のタブ = 重なりの一番上（最後に合成され、最前面になります）。",
+    "description": ""
+  },
+  "Colors.StackHint": {
+    "message": "オーバーレイを編集中（タブをドラッグで並べ替え — 左端が一番上）：",
+    "description": ""
+  },
+  "Colors.SubRowA.Fmt": {
+    "message": "行{0}A",
+    "description": ""
+  },
+  "Colors.SubRowB.Fmt": {
+    "message": "行{0}B",
+    "description": ""
+  },
+  "Colors.Tiling.Label": {
+    "message": "タイリング",
+    "description": ""
+  },
+  "Colors.Tiling.Tip": {
+    "message": "エフェクトが表面上で何回繰り返されるか。1 = 1回。",
+    "description": ""
+  },
+  "Colors.TowardBottom.Btn": {
+    "message": "下へ",
+    "description": ""
+  },
+  "Colors.TowardTop.Btn": {
+    "message": "上へ",
+    "description": ""
+  },
+  "Command.Help": {
+    "message": "Proteusオーバーレイ合成ウィンドウを開閉します。「/proteus config」で設定タブを開きます。",
+    "description": ""
+  },
+  "Common.Browse.Btn": {
+    "message": "参照",
+    "description": ""
+  },
+  "Common.Clear.Btn": {
+    "message": "クリア",
+    "description": ""
+  },
+  "Common.None": {
+    "message": "（なし）",
+    "description": ""
+  },
+  "Create.Author.Label": {
+    "message": "作者",
+    "description": ""
+  },
+  "Create.Create.Btn": {
+    "message": "作成",
+    "description": ""
+  },
+  "Create.Create.DisabledTip": {
+    "message": "MOD名とマテリアル対象を入力し、テクスチャを1つ以上選んでください。",
+    "description": ""
+  },
+  "Create.Error.FolderExists.Fmt": {
+    "message": "「{0}」という名前のMODフォルダはすでに存在します。",
+    "description": ""
+  },
+  "Create.Error.MissingFile.Fmt": {
+    "message": "{0}のファイルが見つかりません: {1}",
+    "description": ""
+  },
+  "Create.Error.NoMaterial": {
+    "message": "マテリアル対象を入力してください。",
+    "description": ""
+  },
+  "Create.Error.NoName": {
+    "message": "MOD名を入力してください。",
+    "description": ""
+  },
+  "Create.Error.NoTexture": {
+    "message": "テクスチャを1つ以上選んでください（ディフューズ、マスク、ノーマル、インデックス）。",
+    "description": ""
+  },
+  "Create.Error.ReservedName": {
+    "message": "「Proteus」は予約名です。別のMOD名を選んでください。",
+    "description": ""
+  },
+  "Create.Error.UnusableName": {
+    "message": "このMOD名には使用可能な文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "Create.Error.WriteFailed.Fmt": {
+    "message": "MODの書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "Create.Intro": {
+    "message": "基本的なProteusオーバーレイMODを作成します。テクスチャを1つ以上選ぶと、Proteusが新しいPenumbra MODを書き出して開くので、有効化して調整できます。",
+    "description": ""
+  },
+  "Create.MaterialTarget.Label": {
+    "message": "マテリアル対象",
+    "description": ""
+  },
+  "Create.MaterialTarget.Tip": {
+    "message": "このオーバーレイの合成先マテリアルです。現在着用しているボディから自動入力\nされます。装備中のものを一覧から選ぶか、いま着ていないボディ／種族を対象に\nしたい場合はパスを手入力してください。",
+    "description": ""
+  },
+  "Create.ModName.Label": {
+    "message": "MOD名",
+    "description": ""
+  },
+  "Create.Ok.Fmt": {
+    "message": "「{0}」を作成し、有効化してPenumbraで開きました。",
+    "description": ""
+  },
+  "Create.PickTexture.Title.Fmt": {
+    "message": "{0}テクスチャを選択",
+    "description": ""
+  },
+  "Create.Picker.Empty": {
+    "message": "装備中のマテリアルがまだ分かりません。\nエリア移動または再描画してから、この一覧を開き直してください。",
+    "description": ""
+  },
+  "Create.Picker.SkinGroup": {
+    "message": "肌",
+    "description": ""
+  },
+  "Create.Picker.Stale": {
+    "message": "最後に取得した一覧を表示しています。キャラクターが描画されていません。",
+    "description": ""
+  },
+  "Create.Redetect.Btn": {
+    "message": "再検出",
+    "description": ""
+  },
+  "Create.Redetect.Tip": {
+    "message": "ボディ検出をやり直し、フィールドを上書きします。",
+    "description": ""
+  },
+  "Create.Slot.Diffuse": {
+    "message": "ディフューズ",
+    "description": ""
+  },
+  "Create.Slot.Index": {
+    "message": "インデックス",
+    "description": ""
+  },
+  "Create.Slot.Mask": {
+    "message": "マスク",
+    "description": ""
+  },
+  "Create.Slot.NoDiffuse": {
+    "message": "このマテリアルにはディフューズテクスチャがありません。",
+    "description": ""
+  },
+  "Create.Slot.NoIndex": {
+    "message": "このマテリアルにはインデックステクスチャがなく、肌でも顔でもありません。\nカラーテーブルの行を参照するものがここにはありません。",
+    "description": ""
+  },
+  "Create.Slot.NoMask": {
+    "message": "このマテリアルにはマスクテクスチャがありません。",
+    "description": ""
+  },
+  "Create.Slot.NoNormal": {
+    "message": "このマテリアルにはノーマルテクスチャがありません。",
+    "description": ""
+  },
+  "Create.Slot.Normal": {
+    "message": "ノーマル",
+    "description": ""
+  },
+  "Create.Slot.Unused": {
+    "message": "（このマテリアルでは未使用）",
+    "description": ""
+  },
+  "Create.SlotsUnreadable": {
+    "message": "このマテリアルを読み込めませんでした。すべてのスロットを表示します。",
+    "description": ""
+  },
+  "Export.Dialog.Filter": {
+    "message": "Penumbra MODパック",
+    "description": ""
+  },
+  "Export.Dialog.Title": {
+    "message": "Proteus MODを書き出す",
+    "description": ""
+  },
+  "Export.DisabledInPenumbra.Fmt": {
+    "message": "{0}\n（Penumbraで無効）",
+    "description": ""
+  },
+  "Export.Error.EmptyFolder": {
+    "message": "このMODフォルダは空です。書き出すものがありません。",
+    "description": ""
+  },
+  "Export.Error.FolderGone.Fmt": {
+    "message": "MODフォルダが見つかりません: {0}",
+    "description": ""
+  },
+  "Export.Error.NoPath": {
+    "message": "保存先を選んでください。",
+    "description": ""
+  },
+  "Export.Error.WriteFailed.Fmt": {
+    "message": "ファイルを書き込めませんでした: {0}",
+    "description": ""
+  },
+  "Export.Filter.Hint": {
+    "message": "絞り込み…",
+    "description": ""
+  },
+  "Export.Intro": {
+    "message": "Proteus MODの1つをPenumbra MODパック（.pmp）として保存し、共有できます。オプション、カラー、マスク、グローエフェクトまですべて含まれ、そのファイルはPenumbraに直接インストールできます。",
+    "description": ""
+  },
+  "Export.Mod.Label": {
+    "message": "MOD",
+    "description": ""
+  },
+  "Export.ModDisabled.Note": {
+    "message": "このMODはPenumbraで無効ですが、書き出し結果は変わりません。",
+    "description": ""
+  },
+  "Export.NoMatch.Fmt": {
+    "message": "「{0}」に一致するものはありません。",
+    "description": ""
+  },
+  "Export.Ok.Fmt": {
+    "message": "「{0}」を書き出しました — ファイル数: {1}、{2} MB。\n{3}",
+    "description": ""
+  },
+  "Export.Phase.Choosing": {
+    "message": "保存先を選択…",
+    "description": ""
+  },
+  "Export.Phase.Idle": {
+    "message": "書き出し",
+    "description": ""
+  },
+  "Export.Phase.Writing": {
+    "message": "書き出し中…",
+    "description": ""
+  },
+  "Footer.LastComposite.Fmt": {
+    "message": "最終合成: {0}   適用テクスチャ数: {1}   MOD数: {2}",
+    "description": ""
+  },
+  "Footer.MinutesAgo.Fmt": {
+    "message": "{0}分前",
+    "description": ""
+  },
+  "Footer.NoResult": {
+    "message": "まだ合成結果がありません。",
+    "description": ""
+  },
+  "Footer.Pill.Failed": {
+    "message": "失敗",
+    "description": ""
+  },
+  "Footer.Pill.Ok": {
+    "message": "成功",
+    "description": ""
+  },
+  "Footer.SecondsAgo.Fmt": {
+    "message": "{0}秒前",
+    "description": ""
+  },
+  "Footer.UnknownError": {
+    "message": "不明なエラー",
+    "description": ""
+  },
+  "Import.AsTex.Label": {
+    "message": "レイヤーをBC7 .texに変換",
+    "description": ""
+  },
+  "Import.AsTex.Tip": {
+    "message": "ディスク使用量が約4分の1になり、合成時のPNGデコードも不要になります。\nブロック圧縮は非可逆です。パックの画像を作成時のまま保ちたい場合はオフのままに\nしてください。",
+    "description": ""
+  },
+  "Import.AsTex.Unavailable.Tip": {
+    "message": "ネイティブのブロック圧縮が読み込まれていないため、BC7エンコードには数分かかります。",
+    "description": ""
+  },
+  "Import.Author.Label": {
+    "message": "作者",
+    "description": ""
+  },
+  "Import.BodyFit.NeedsAllBodies.Fmt": {
+    "message": "このパックにはバニラボディ用に描かれたものがないため、代わりに「{0}」が使われます。バニラボディへの焼き込みは既定でオフなので、Proteusはインポート時にこのMODの「ボディ」を「すべてのボディ」に設定します（カラー→詳細設定）。そうしないと何も描画されません。",
+    "description": ""
+  },
+  "Import.BodyFit.NotDrawn.Fmt": {
+    "message": "キャラクターがまだ描画されていないため、Proteusはあなたのボディではなく優先順位で「{0}」を選びました。ゲームに入ったら結果を確認してください。",
+    "description": ""
+  },
+  "Import.BodyFit.Remapped.Fmt": {
+    "message": "このパックにはあなたの{0}ボディ用のものがないため、「{1}」が自動的に再マッピングされます。",
+    "description": ""
+  },
+  "Import.Browse.Btn": {
+    "message": "パックを選ぶ",
+    "description": ""
+  },
+  "Import.DefaultLayoutMatched.Fmt": {
+    "message": "「{0}」が選択されます。着用中のボディに一致しています。",
+    "description": ""
+  },
+  "Import.Description": {
+    "message": "説明",
+    "description": ""
+  },
+  "Import.Dialog.Filter": {
+    "message": "Onionパック",
+    "description": ""
+  },
+  "Import.Dialog.Title": {
+    "message": "Onionパックを選択",
+    "description": ""
+  },
+  "Import.Failed.Fmt": {
+    "message": "インポートに失敗しました: {0}",
+    "description": ""
+  },
+  "Import.Import.Btn": {
+    "message": "インポート",
+    "description": ""
+  },
+  "Import.Importing.Btn": {
+    "message": "インポート中…",
+    "description": ""
+  },
+  "Import.Intro": {
+    "message": "Onionオーバーレイパック（.omp）をインポートします。Proteusはパックのレイヤーを読み取り、Proteusサイドカー付きの新しいPenumbra MODを書き出します。元のファイルは変更されません。",
+    "description": ""
+  },
+  "Import.Layer.Imported.Fmt": {
+    "message": "{0}\n{2} UV空間の{1}としてインポートされます。",
+    "description": ""
+  },
+  "Import.Layer.NoLayout": {
+    "message": "（レイアウトなし）",
+    "description": ""
+  },
+  "Import.Layer.NoMap": {
+    "message": "（マップなし）",
+    "description": ""
+  },
+  "Import.Layer.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Import.Layer.SkippedReason.Fmt": {
+    "message": "{0}\nスキップ理由: {1}",
+    "description": ""
+  },
+  "Import.LayerCount.Fmt": {
+    "message": "レイヤー: {1}件中{0}件",
+    "description": ""
+  },
+  "Import.Layouts.Fmt": {
+    "message": "このパックにはUVレイアウトが{0}種類あるため、MODにはPenumbraで単一選択の「{1}」グループが作られます（{2}）。同時に合成されるのは1つだけです。",
+    "description": ""
+  },
+  "Import.Materials.Fallback": {
+    "message": "Proteusがゲームのボディ一覧を読み取れなかったため、このインポートは動作確認済みの女性ボディのみを対象にします。ゲームに入ってからこのパックを開き直すと、すべての種族を取り込めます。",
+    "description": ""
+  },
+  "Import.Materials.FallbackNote": {
+    "message": "代替一覧 — このパックを開いた時点でゲームデータを読み取れませんでした。",
+    "description": ""
+  },
+  "Import.Materials.FromGame": {
+    "message": "ゲームが定義するすべてのボディです。オーバーレイが種族をまたいで追従します。着用していないボディは合成時に無視されます。",
+    "description": ""
+  },
+  "Import.Materials.Header.Fmt": {
+    "message": "マテリアル対象（{0}）",
+    "description": ""
+  },
+  "Import.Materials.Layout.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "Import.ModName.Label": {
+    "message": "MOD名",
+    "description": ""
+  },
+  "Import.NeedName": {
+    "message": "MOD名を入力してください。",
+    "description": ""
+  },
+  "Import.NoPack": {
+    "message": ".ompファイルを選ぶと内容が表示されます。",
+    "description": ""
+  },
+  "Import.NothingUsable": {
+    "message": "このパックにインポートできるレイヤーはありません。",
+    "description": ""
+  },
+  "Import.Result.AllBodies.Fmt": {
+    "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。このパックにはバニラボディ用に描かれたものがないため、Proteusはこの MODの「ボディ」を「すべてのボディ」に設定して焼き込みました（カラー→詳細設定）。オフにすると描画されなくなります。",
+    "description": ""
+  },
+  "Import.Result.NoLayout.Fmt": {
+    "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。ただしProteusはボディレイアウトを選べませんでした。Penumbraの「{3}」から1つ選んでください。選ばないと何も描画されません。",
+    "description": ""
+  },
+  "Import.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。有効化してPenumbraで開きました。",
+    "description": ""
+  },
+  "Import.Result.SkippedTail.Fmt": {
+    "message": "（スキップ: {0}）",
+    "description": ""
+  },
+  "Import.Warn.FormatVersion.Fmt": {
+    "message": "このパックはフォーマットバージョン{0}を宣言していますが、Proteusは{1}までしか検証していません。インポートして結果を確認してください。",
+    "description": ""
+  },
+  "Import.Warn.Generated": {
+    "message": "一部のレイアウトは描かれたものではなく、Onionが別のレイアウトから生成したものです。そのままインポートされますが、結果がぼやけて見える場合は元から描かれたレイアウトを選んでください。",
+    "description": ""
+  },
+  "Import.Warn.NothingImportable": {
+    "message": "このパックにインポートできるレイヤーはありません。理由は上を参照してください。",
+    "description": ""
+  },
+  "Import.Warn.OptionGroups.Fmt": {
+    "message": "このパックにはOnionのオプショングループがあります（{0}）。これらはインポートされず、すべてのレイヤーが無条件に取り込まれます。",
+    "description": ""
+  },
+  "Import.Warn.RaceFilters": {
+    "message": "一部のレイヤーは特定の種族に限定されています。Proteusは種族フィルターを引き継がないため、すべての種族向けにインポートされます。",
+    "description": ""
+  },
+  "Import.Website.Tip": {
+    "message": "MODのPenumbraページに引き継がれます。",
+    "description": ""
+  },
+  "Mods.Ao.Off": {
+    "message": "オフ",
+    "description": ""
+  },
+  "Mods.Ao.On": {
+    "message": "オン",
+    "description": ""
+  },
+  "Mods.Ao.Pack.Fmt": {
+    "message": "パック（{0}）",
+    "description": ""
+  },
+  "Mods.Ao.Tip.Fmt": {
+    "message": "このMODのストラップや衣服の縁に対するアンビエントオクルージョンの影と\nSkindentingのノーマル凹みです。被覆を肌に押し当てられた布として扱うため、\nタトゥーや肌のディテールには適しません。そのため既定ではオフです。\n\n{0} = パックの宣言に従います（metadata.jsonの「AmbientOcclusion」。\n記載がなければオフ）。\nオン／オフ = このMODに対するあなた自身の設定で、パックの指定より優先されます。\n\n（全体の強さのスライダーは設定にあります。）",
+    "description": ""
+  },
+  "Mods.Col.Colors": {
+    "message": "カラー",
+    "description": ""
+  },
+  "Mods.Col.Mod": {
+    "message": "MOD",
+    "description": ""
+  },
+  "Mods.Col.On": {
+    "message": "有効",
+    "description": ""
+  },
+  "Mods.Col.Priority": {
+    "message": "優先度",
+    "description": ""
+  },
+  "Mods.Col.Skindent": {
+    "message": "Skindent",
+    "description": ""
+  },
+  "Mods.Colors.BindingDriven.Tip": {
+    "message": "カラーは適用中のデザイン紐付けによって制御されています。\n編集はその場で反映されます。保存するには「紐付け」タブの「更新」をクリックしてください。基本カラーは変更されません。",
+    "description": ""
+  },
+  "Mods.Colors.Btn": {
+    "message": "カラー",
+    "description": ""
+  },
+  "Mods.NoSidecarMods": {
+    "message": "Proteusサイドカー付きMODが見つかりません。",
+    "description": ""
+  },
+  "Mods.PluginDisabled": {
+    "message": "Proteusは無効です。設定から有効にしてください。",
+    "description": ""
+  },
+  "Service.NoPenumbraDir": {
+    "message": "PenumbraのMODディレクトリを利用できません。",
+    "description": ""
+  },
+  "Service.RegisterFailed.Fmt": {
+    "message": "MODは書き込まれましたが、Penumbraに登録できませんでした（{0}）。PenumbraでMODを再スキャンしてください。",
+    "description": ""
+  },
+  "Service.UVMaps.Downloading": {
+    "message": "UVマップをダウンロード中...",
+    "description": ""
+  },
+  "Service.UVMaps.Error.Fmt": {
+    "message": "ダウンロードエラー: {0}",
+    "description": ""
+  },
+  "Service.UVMaps.HttpFailed.Fmt": {
+    "message": "ダウンロード失敗: {1} でHTTP {0}",
+    "description": ""
+  },
+  "Service.UVMaps.Progress.Fmt": {
+    "message": "UVマップをダウンロード中... （{0} MB / {1} MB）",
+    "description": ""
+  },
+  "Service.UVMaps.TooSmall.Fmt": {
+    "message": "ダウンロードサイズが小さすぎます（{0}バイト）: {1} — LFSポインタの可能性があります",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Header.Fmt": {
+    "message": "ベーススキン（{0}）",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Note": {
+    "message": "各ベーステクスチャの読み込み元MOD。ゲーム内パスはカーソルを合わせると表示されます。",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Unconfirmed.Fmt": {
+    "message": "{0}（未確認）",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Btn": {
+    "message": "テクスチャキャッシュを消去",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Tip": {
+    "message": "デコード済みテクスチャのキャッシュをすべて破棄し、その場で再合成します。\nテクスチャの変更が反映されないときに使ってください。たとえばオーバーレイを\n同じサイズで書き出し直した場合、プラグインを再起動しないと変化が現れません。\n\n各ベーススキンテクスチャがどのMOD由来かも再判定します。下の「ベーススキン」が\n誤ったMOD名を表示している場合にお使いください。",
+    "description": ""
+  },
+  "Settings.Diag.Reach.EffectsOnly.Fmt": {
+    "message": "{0} — エフェクトのみ（オーバーレイ画像なし）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Failed.Fmt": {
+    "message": "{0} — ディフューズ {1}、ノーマル {2}、マスク {3}（ディフューズが適用されませんでした）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Header.Fmt": {
+    "message": "オーバーレイ適用範囲（{0}）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Note": {
+    "message": "各チャンネルに実際に届いたオーバーレイの数です。マテリアル名はカーソルを合わせると表示されます。",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Ok.Fmt": {
+    "message": "{0} — ディフューズ {1}、ノーマル {2}、マスク {3}",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Label": {
+    "message": "MOD優先度を自動で引き上げる",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Tip": {
+    "message": "Proteusが合成先としている肌テクスチャを他のMODが上書きしていると確認された場合\n——ボディテクスチャの独自コピーを同梱したタトゥーMODや肌MODなど——\nProteusのPenumbra優先度を自動でその上に引き上げ、チャットで知らせます。\n\nこの上書きは通常まったく見えません。オーバーレイは中途半端に適用され\n（凹凸は乗るのに色は乗らない）、ログはどの行も成功として記録されます。\n\n他のMODにProteusの合成対象パスをあえて優先させたい場合のみオフにしてください。\nProteusは推測では動作せず、上書きが確認された場合にのみ動作します。",
+    "description": ""
+  },
+  "Settings.General.DisableAutoRedraw.Label": {
+    "message": "自動再描画を無効にする",
+    "description": ""
+  },
+  "Settings.General.Enabled.Label": {
+    "message": "有効",
+    "description": ""
+  },
+  "Settings.General.Enabled.Tip": {
+    "message": "オフにするとProteusの出力を消去し、それを適用しない状態で再描画し、\nPenumbra内の管理MOD「Proteus」を無効にします。",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Btn": {
+    "message": "グロー用エフェクトテクスチャ",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Tip.Fmt": {
+    "message": "Proteusがアニメーショングローのスクロールマップを読み込むフォルダを開きます。\nグローそのものである「_o」テクスチャです。ここに置いたものはすべて、\nすべての装備オーバーレイのエフェクト一覧に表示されます。\n\n{0}\n\n.tex、.dds、.png、.jpg、.bmp、.tga、.psd、.gif に対応しています。\nMOD独自の Proteus/Effects/ フォルダがこちらより優先されます。",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Label": {
+    "message": "その場で再読み込み",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Tip": {
+    "message": "完全な再描画ではなくGlamourerの装備その場再読み込みでテクスチャを更新し、\n消えて出現する際のちらつきを避けます。Glamourerが処理できない場合は\n自動的に完全な再描画に切り替わります。",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Label": {
+    "message": "変更のない再合成をスキップ",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Tip": {
+    "message": "エリア移動や再描画によって起きた再合成を、出力に影響する変更が何もない場合は\n早期に打ち切ります。自分で変更した内容は常に再合成されます。\n編集が反映されない原因を切り分けるときのみオフにしてください。",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Label": {
+    "message": "透明なメガネにホストする（指輪を空けておく）",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Tip": {
+    "message": "オンのときにメガネを装備していない場合、ProteusはGlamourerに透明なメガネを\n装備させ、セカンドスキンが指輪ではなく顔装備スロットに乗るようにします。\nこれはGlamourerの状態に（非表示の）ボーナスアイテムを書き込みます。Proteusを\n無効にするか、実際のメガネを装備するか、この設定をオフにすると削除されます。",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Btn": {
+    "message": "変更されたアクセサリを元に戻す",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Tip": {
+    "message": "完全な再描画を強制し、セカンドスキンが置き換えた指輪やブレスレットを\n読み込み直して元のモデルに戻します。無効化や切り替えのあとで装備シェルが\nアクセサリに残ってしまう場合にお使いください。",
+    "description": ""
+  },
+  "Settings.Output.Compression.Label": {
+    "message": "圧縮を有効にする",
+    "description": ""
+  },
+  "Settings.Output.Compression.Tip": {
+    "message": "焼き込んだテクスチャをブロック圧縮（BC7）し、ディスクとVRAM上のサイズを\nそれぞれ非圧縮時の約4分の1に減らします。インデックステクスチャは正確な行の値を\n保つため非圧縮のままです。オフ＝非圧縮（従来とバイト単位で同一）。",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Label": {
+    "message": "コネクタメッシュを隠す",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Tip": {
+    "message": "装備の「セカンドスキン」で、各ボディパーツのコネクタリング（手首や足首などの\n関節にある小さな追加サブメッシュ）を省略します。一部のボディ（Neolithe）は\nすでに完成した体に重なるリングで関節を補強しており、透ける オーバーレイでは\n重なりが二重になって不透明な継ぎ目として現れます。他のボディではOffのままに\nしてください。そこではそのサブメッシュは本物の肌であり、隠すと隙間ができます。",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Label": {
+    "message": "シャープアルファ（グループポーズのスフィア/メタル）",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Tip": {
+    "message": "実験的機能。シェルの被覆をなめらかな透明ではなくアルファテストによる\n硬い切り抜きとして描画し、スフィアマップとメタリックがグループポーズでも\n残るようにします（グループポーズは透明面でそれらを落とします）。\n代償として、透ける生地の縁が硬くギザギザになります。ほぼ不透明な生地に最適で、\n非常に薄い生地は粗く見えます。切り替えたあとは再合成してください。",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Label": {
+    "message": "テクスチャキャッシュ（MB）",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Tip": {
+    "message": "合成と合成の間に、デコード済みテクスチャをどれだけメモリに保持するかです。\n\n4Kテクスチャはデコード時に64 MB必要なので、実質は枚数の設定です：2048 MB ≒ 30枚。\n1回の合成全体をまかなえて初めて効果があります。それを下回ると、毎回の実行で\n次に必要なものを追い出してしまい、何も再利用されません。\n\n再合成ログの「cache N entries, M MB」の値を確認してください。何も変更していない\n2回目の合成でもミスが報告されるなら、この値を上げてください。ゲームがページング\nを始めたら下げてください。60秒間アイドルで自動的に解放されます。",
+    "description": ""
+  },
+  "Settings.Section.Diagnostics": {
+    "message": "診断",
+    "description": ""
+  },
+  "Settings.Section.General": {
+    "message": "全般",
+    "description": ""
+  },
+  "Settings.Section.Hosting": {
+    "message": "ホスト先",
+    "description": ""
+  },
+  "Settings.Section.Output": {
+    "message": "出力",
+    "description": ""
+  },
+  "Settings.Section.SkinEffects": {
+    "message": "肌エフェクト",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Label": {
+    "message": "アンビエントオクルージョン",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Tip": {
+    "message": "マスクされたストラップの縁のすぐ外側の肌に柔らかい接触影を落とし、ストラップに立体感を与えます。\n0.00で完全に無効になります（肌のディフューズは変更されません）。",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Label": {
+    "message": "影の柔らかさ",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Tip": {
+    "message": "アンビエントオクルージョンの影がストラップの縁からどこまで広がるか（テクスチャ幅に対する割合）。\n大きいほど広く柔らかい影になります。影とストラップの凹みで共通の値です。",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Label": {
+    "message": "肌色の抑制",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Tip": {
+    "message": "オーバーレイが肌の色味に染まるのをどれだけ抑えるか（全体の倍率）。\n色ごとにピクセル単位で適用されます。白や明るい色は、どの肌色でも作成時の色を\n保ちます（わずかに光沢が増します）。暗い色は自動的に肌色に染まり、マットなまま\n残ります。\n0.00で完全に無効になります（元の見た目）。",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Label": {
+    "message": "Skindenting",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Tip": {
+    "message": "ストラップや衣服の縁で肌のノーマルを凹ませ、肌に食い込んで見えるようにします。\n0.00で無効になります（肌のノーマルは変更されません）。影と同じ縁と柔らかさを使います。",
+    "description": ""
+  },
+  "Tab.Bindings": {
+    "message": "紐付け",
+    "description": ""
+  },
+  "Tab.Create": {
+    "message": "作成",
+    "description": ""
+  },
+  "Tab.Export": {
+    "message": "書き出し",
+    "description": ""
+  },
+  "Tab.Import": {
+    "message": "取り込み",
+    "description": ""
+  },
+  "Tab.Mods": {
+    "message": "MOD",
+    "description": ""
+  },
+  "Tab.Settings": {
+    "message": "設定",
+    "description": ""
+  }
+}

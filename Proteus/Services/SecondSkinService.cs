@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
@@ -1367,10 +1368,10 @@ public sealed class SecondSkinService
             if (!string.Equals(_lastUnhostedSurfaces, keys, StringComparison.Ordinal))
             {
                 _lastUnhostedSurfaces = keys;
-                var msg =
-                    $"[Proteus] {unhostedLayers.Count} layer(s) on your {keys} could not be placed. Those must "
-                  + "not be race-deformed, so they need a slot Proteus can replace outright: free a ring slot "
-                  + "(either hand) or your facewear slot and they will appear.";
+                var msg = string.Format(Loc.Localize("Chat.UnhostedLayers.Fmt",
+                    "[Proteus] Some layers on your {1} could not be placed (layers: {0}). Those must not be "
+                  + "race-deformed, so they need a slot Proteus can replace outright: free a ring slot "
+                  + "(either hand) or your facewear slot and they will appear."), unhostedLayers.Count, keys);
                 _ = Plugin.Framework.RunOnFrameworkThread(
                     () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
             }
@@ -1387,11 +1388,11 @@ public sealed class SecondSkinService
             if (_lastOverBudgetLayers != totalLayers)
             {
                 _lastOverBudgetLayers = totalLayers;
-                var msg =
-                    $"[Proteus] This look has {totalLayers} layers ({totalMask} Mask, {totalLayers - totalMask} Cloth), "
-                  + $"but only {totalCapacity} fit across your accessories (Proteus' invisible fallback ring already "
-                  + $"included). Turn off some layers, or equip another pair of glasses / ring / bracelet / necklace so "
-                  + $"the rest fit.";
+                var msg = string.Format(Loc.Localize("Chat.OverBudget.Fmt",
+                    "[Proteus] This look has {0} layers ({1} Mask, {2} Cloth), but only {3} fit across your "
+                  + "accessories (Proteus' invisible fallback ring already included). Turn off some layers, "
+                  + "or equip another pair of glasses / ring / bracelet / necklace so the rest fit."),
+                    totalLayers, totalMask, totalLayers - totalMask, totalCapacity);
                 // Marshalled: the shell build runs off the framework thread, and ChatGui's queue is not
                 // safe to enqueue into concurrently with the tick that drains it.
                 _ = Plugin.Framework.RunOnFrameworkThread(

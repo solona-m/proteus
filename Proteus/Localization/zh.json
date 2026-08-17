@@ -1,0 +1,1150 @@
+{
+  "Band.Caption": {
+    "message": "叠加合成器",
+    "description": ""
+  },
+  "Band.Pill.Disabled": {
+    "message": "已禁用",
+    "description": ""
+  },
+  "Band.Pill.NoPenumbra": {
+    "message": "无 Penumbra",
+    "description": ""
+  },
+  "Band.Recomposite.Tip": {
+    "message": "立即重新合成",
+    "description": ""
+  },
+  "Band.Retry.Btn": {
+    "message": "重试",
+    "description": ""
+  },
+  "Band.Settings.Tip": {
+    "message": "设置",
+    "description": ""
+  },
+  "Bindings.Active.Fmt": {
+    "message": "当前：{0}",
+    "description": ""
+  },
+  "Bindings.Apply.Btn": {
+    "message": "应用",
+    "description": ""
+  },
+  "Bindings.Apply.Tip": {
+    "message": "立即恢复此设计的 Proteus 状态，无需经过 Glamourer——\n包括它记录的每个模组的启用状态、优先级、选项与颜色。\n\n不在该绑定中的 Proteus 模组会被关闭，因此这是替换当前外观，\n而不是在其之上叠加。",
+    "description": ""
+  },
+  "Bindings.Col.Captured": {
+    "message": "捕获时间",
+    "description": ""
+  },
+  "Bindings.Col.Design": {
+    "message": "设计",
+    "description": ""
+  },
+  "Bindings.Enable.Label": {
+    "message": "将 Proteus 状态绑定到 Glamourer 设计",
+    "description": ""
+  },
+  "Bindings.Enable.Tip": {
+    "message": "开启后，保存 Glamourer 设计时会记录当前的 Proteus 状态。\n之后应用该设计即可恢复（装备尽可能匹配）。",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Label": {
+    "message": "跟随 Glamourer 自动化（套装／职业切换）",
+    "description": ""
+  },
+  "Bindings.FollowAutomation.Tip": {
+    "message": "当自动化在套装或职业切换时应用设计，Glamourer 不会发出任何通知，\n因此 Proteus 只能从收到的信号中推断。\n\n它只会恢复绑定，绝不会清除绑定。\nProteus 自身触发的那次重绘会被排除，因此它自己的操作不会被\n误认为自动化应用。\n\n需要上方的“将 Proteus 状态绑定到 Glamourer 设计”。",
+    "description": ""
+  },
+  "Bindings.HoursAgo.Fmt": {
+    "message": "{0} 小时前",
+    "description": ""
+  },
+  "Bindings.MinutesAgo.Fmt": {
+    "message": "{0} 分钟前",
+    "description": ""
+  },
+  "Bindings.None": {
+    "message": "尚无已绑定的设计。",
+    "description": ""
+  },
+  "Bindings.Pill.Active": {
+    "message": "生效中",
+    "description": ""
+  },
+  "Bindings.SecondsAgo.Fmt": {
+    "message": "{0} 秒前",
+    "description": ""
+  },
+  "Bindings.Unbind.Btn": {
+    "message": "解绑",
+    "description": ""
+  },
+  "Bindings.Unbind.Tip": {
+    "message": "丢弃此绑定。Glamourer 设计本身不受影响。",
+    "description": ""
+  },
+  "Bindings.Update.Btn": {
+    "message": "更新",
+    "description": ""
+  },
+  "Bindings.Update.Inactive.Tip": {
+    "message": "只有当前生效的绑定才能从现有状态更新。\n请先应用此设计。",
+    "description": ""
+  },
+  "Bindings.Update.Tip": {
+    "message": "将当前 Proteus 状态（启用／优先级／选项／颜色）记录到此绑定中。\n手动修改只有在点击此处后才会保留。",
+    "description": ""
+  },
+  "Chat.GlowPromoted.Fmt": {
+    "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
+    "description": ""
+  },
+  "Chat.NoShellSurface.Fmt": {
+    "message": "[Proteus]“{0}”在一个 Proteus 无法为其构建层的叠加层上设置了发光。发光需要在网格之上叠加一层，而这只能用于你自己的皮肤——身体、面部、头发、尾巴或耳朵——不能用于装备、饰品或武器。",
+    "description": ""
+  },
+  "Chat.OverBudget.Fmt": {
+    "message": "[Proteus] 此外观共有 {0} 层（Mask {1}，Cloth {2}），但你的饰品只能容纳 {3} 层（已包含 Proteus 的隐形备用戒指）。请关闭部分层，或再装备一副眼镜／戒指／手镯／项链，以便容纳其余部分。",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Fmt": {
+    "message": "[Proteus] {0} 覆盖了 Proteus 用于合成叠加层的皮肤贴图，导致它们无法显示。已将 Proteus 的 Penumbra 优先级提升到 {1} 以修复此问题。（若不希望如此，请在 Proteus 设置中关闭“自动提升模组优先级”。）",
+    "description": ""
+  },
+  "Chat.PriorityRaised.Many.Fmt": {
+    "message": "“{0}”等 {1} 个",
+    "description": ""
+  },
+  "Chat.PriorityRaised.One.Fmt": {
+    "message": "“{0}”",
+    "description": ""
+  },
+  "Chat.RedirectLost.Fmt": {
+    "message": "[Proteus]“{0}”覆盖了 {1}，而 Proteus 正是将叠加层合成到该处——因此它们不会显示。解决方法：在 Penumbra 中将“Proteus”模组的优先级提升到“{0}”之上。",
+    "description": ""
+  },
+  "Chat.ShellNotDrawing": {
+    "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
+    "description": ""
+  },
+  "Chat.UnclaimedRedirects.Fmt": {
+    "message": "[Proteus] Proteus 发布的文件中有 {0} 个没有到达游戏——它们完全解析不到任何内容，通常意味着“Proteus”模组在你当前的 Penumbra 合集中被禁用了。请检查它是否已在那里启用。",
+    "description": ""
+  },
+  "Chat.UnhostedLayers.Fmt": {
+    "message": "[Proteus] 你的 {1} 上有部分层无法放置（层数：{0}）。它们不能进行种族形变，因此需要一个 Proteus 可以整体替换的栏位：空出一个戒指栏位（左右手皆可）或脸部装饰栏位，它们就会显示。",
+    "description": ""
+  },
+  "Colors.Advanced": {
+    "message": "高级",
+    "description": ""
+  },
+  "Colors.Auto": {
+    "message": "（自动）",
+    "description": ""
+  },
+  "Colors.Auto.Tip": {
+    "message": "模式会跟随你所使用的功能：球面贴图或金属 ⇒ Cloth，\n发光效果 ⇒ 动态发光，没有特殊设置 ⇒ Skin。",
+    "description": ""
+  },
+  "Colors.BackToAuto.Btn": {
+    "message": "恢复自动",
+    "description": ""
+  },
+  "Colors.BaseUnchanged": {
+    "message": "基础颜色不变——但“高级”中的“恢复默认值”会重写它们，而“身体”是任何绑定都不会记录的全局设置。",
+    "description": ""
+  },
+  "Colors.Bodies.All": {
+    "message": "所有身体",
+    "description": ""
+  },
+  "Colors.Bodies.BiboGen3": {
+    "message": "bibo+gen3",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalNote": {
+    "message": "全局保存——绑定不会记录此项。",
+    "description": ""
+  },
+  "Colors.Bodies.GlobalSuffix": {
+    "message": "\n全局设置——它不属于你正在编辑的绑定。",
+    "description": ""
+  },
+  "Colors.Bodies.Label": {
+    "message": "身体",
+    "description": ""
+  },
+  "Colors.Bodies.Off": {
+    "message": "关闭",
+    "description": ""
+  },
+  "Colors.Bodies.Tip": {
+    "message": "将此模组烘焙到哪些身体类型：\n所有身体 = 同系身体（bibo↔gen3/Eve）＋原版（gen2）\nbibo+gen3 = 仅烘焙到同系身体（默认）\n关闭 = 不进行合成\n\n作用于整个模组，而不仅是此选项。",
+    "description": ""
+  },
+  "Colors.CopyRow.Btn": {
+    "message": "复制行",
+    "description": ""
+  },
+  "Colors.CopyRow.Tip": {
+    "message": "复制此行的两个子行（A 和 B）。",
+    "description": ""
+  },
+  "Colors.CopySub.Btn": {
+    "message": "复制",
+    "description": ""
+  },
+  "Colors.CopySub.Tip": {
+    "message": "复制此子行的数值。",
+    "description": ""
+  },
+  "Colors.Diffuse.Gear.Tip": {
+    "message": "发光之下的表面——它会与叠加层自身的漫反射图像相乘。\n\n发光材质请保持深色，否则发光没有可衬托的底色，无论调得多高看起来\n都很微弱。原版的滚动材质正是为此将接近黑色的漫反射与明亮的自发光\n搭配在一起。",
+    "description": ""
+  },
+  "Colors.Diffuse.Label": {
+    "message": "漫反射",
+    "description": ""
+  },
+  "Colors.EditingBinding.Fmt": {
+    "message": "正在编辑“{0}”——实时预览中；点击“绑定”页的“更新”即可保存。",
+    "description": ""
+  },
+  "Colors.Effect.FromMod.Fmt": {
+    "message": "{0}（模组）",
+    "description": ""
+  },
+  "Colors.ForceMode.Hint": {
+    "message": "强制指定渲染模式，而不是由功能自动判断：",
+    "description": ""
+  },
+  "Colors.ForceMode.Tip": {
+    "message": "Skin（绘制）— skin.shpk。  Cloth — character.shpk（球面、金属）。\n动态发光 — characterscroll.shpk。固定后会停止自动切换模式。",
+    "description": ""
+  },
+  "Colors.GlowAmount.Label": {
+    "message": "发光",
+    "description": ""
+  },
+  "Colors.GlowAmount.Tip": {
+    "message": "在 characterscroll 下，这是一个很小的阈值，而不是亮度：\n0 = 完全不发光；数值过大会冲淡滚动贴图的颜色。\n原版动态材质使用约 0.025。",
+    "description": ""
+  },
+  "Colors.GlowColour.Label": {
+    "message": "发光颜色",
+    "description": ""
+  },
+  "Colors.GlowColour.Tip": {
+    "message": "独立于漫反射的发光颜色——发光材质通常需要深色表面配上明亮的发光。\n默认与漫反射相同。",
+    "description": ""
+  },
+  "Colors.GlowEffect.Label": {
+    "message": "发光效果",
+    "description": ""
+  },
+  "Colors.GlowEffect.Tip": {
+    "message": "选择一张滚动贴图，让此叠加层发光并产生动画——这会将其切换为动态发光。\n贴图本身就是发光（颜色、图案、运动）；行内的“发光”数值用于调节强度。\n效果来自模组的 Proteus/Effects/ 文件夹，其次是你自己的 Effects 文件夹。",
+    "description": ""
+  },
+  "Colors.GroupOption.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "Colors.Highlight.Gear.Tip": {
+    "message": "让此子行的网格在角色身上发光，便于你在游戏中找到它。\n再次点击可停止。",
+    "description": ""
+  },
+  "Colors.Highlight.Glow.Btn": {
+    "message": "点亮",
+    "description": ""
+  },
+  "Colors.Highlight.Glowing.Btn": {
+    "message": "点亮中",
+    "description": ""
+  },
+  "Colors.Highlight.Skin.Tip": {
+    "message": "点亮此子行在角色皮肤上对应的区域，便于你在游戏中找到它。\n再次点击可停止。（首次生成需要片刻。）",
+    "description": ""
+  },
+  "Colors.Mask.Forced": {
+    "message": "（强制）",
+    "description": ""
+  },
+  "Colors.Mask.Forced.Tip": {
+    "message": "此模组中另一个已启用的选项按装备渲染，因此遮罩必须位于该外壳之上，\n无法绘制到其下的皮肤中。将那些选项切换为 Skin（在各自标签页的“高级”\n中），遮罩便能重新拥有自己的模式选择。",
+    "description": ""
+  },
+  "Colors.MasksTab": {
+    "message": "遮罩",
+    "description": ""
+  },
+  "Colors.Metal.Tip": {
+    "message": "金属没有自己的漫反射颜色——它显示的是所反射的内容。\n没有可反射的球面贴图时，金属表面只会变暗。",
+    "description": ""
+  },
+  "Colors.Metalness.Label": {
+    "message": "金属度",
+    "description": ""
+  },
+  "Colors.Mode.AnimatedGlow": {
+    "message": "动态发光",
+    "description": ""
+  },
+  "Colors.Mode.Cloth": {
+    "message": "Cloth",
+    "description": ""
+  },
+  "Colors.Mode.Skin": {
+    "message": "Skin（绘制）",
+    "description": ""
+  },
+  "Colors.NoActiveOptions": {
+    "message": "没有已启用的选项——请在 Penumbra 中选择一个以编辑其颜色。",
+    "description": ""
+  },
+  "Colors.NoEffects": {
+    "message": "未找到效果——请将图片放入“发光效果贴图”按钮（设置）打开的文件夹，\n或模组自带的 Proteus/Effects/ 文件夹。",
+    "description": ""
+  },
+  "Colors.NoIndexTexture": {
+    "message": "没有索引贴图——仅应用第 16 行。",
+    "description": ""
+  },
+  "Colors.None": {
+    "message": "无",
+    "description": ""
+  },
+  "Colors.Opacity.Label": {
+    "message": "不透明度",
+    "description": ""
+  },
+  "Colors.Opacity.Tip": {
+    "message": "负值使此行趋向透明；正值使其趋向不透明。",
+    "description": ""
+  },
+  "Colors.PasteRow.Btn": {
+    "message": "粘贴行",
+    "description": ""
+  },
+  "Colors.PasteRow.NeedCopy": {
+    "message": "请先复制一行。",
+    "description": ""
+  },
+  "Colors.PasteRow.Tip.Fmt": {
+    "message": "用已复制的行覆盖第 {0} 行（两个子行）。",
+    "description": ""
+  },
+  "Colors.PasteSub.Btn": {
+    "message": "粘贴",
+    "description": ""
+  },
+  "Colors.PasteSub.NeedCopy": {
+    "message": "请先复制一个子行。",
+    "description": ""
+  },
+  "Colors.PasteSub.Tip": {
+    "message": "用已复制的数值覆盖此子行。",
+    "description": ""
+  },
+  "Colors.Pill.Binding": {
+    "message": "绑定",
+    "description": ""
+  },
+  "Colors.Pinned": {
+    "message": "（已固定）",
+    "description": ""
+  },
+  "Colors.Pinned.Tip": {
+    "message": "你在“高级”中固定了此模式——它不再跟随你设置的功能。\n点击“恢复自动”可让它重新自适应。",
+    "description": ""
+  },
+  "Colors.RenderingAs": {
+    "message": "渲染为：",
+    "description": ""
+  },
+  "Colors.Reset.Btn": {
+    "message": "恢复默认值",
+    "description": ""
+  },
+  "Colors.Reset.Tip": {
+    "message": "按住 Ctrl 并点击，可将此选项的颜色、发光和模式恢复为 Proteus 首次\n保存此模组时记录的设置。此操作无法撤销。\n\n若已应用某个设计，这还会删除该设计为此选项保存的覆盖设置——否则设计\n会立刻再次施加它。其他设计的设置保持不变。\n\n注意：这些“原始设置”是 Proteus 首次保存此模组时记录的——如果你在那之前\n就已修改过，那么被修改后的状态就是“默认值”。",
+    "description": ""
+  },
+  "Colors.Roughness.Label": {
+    "message": "粗糙度",
+    "description": ""
+  },
+  "Colors.Row.Unused.Tip": {
+    "message": "此叠加层的索引贴图从不会选中该行，\n因此编辑它不会产生任何效果。",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Label": {
+    "message": "滚动速度",
+    "description": ""
+  },
+  "Colors.ScrollSpeed.Tip": {
+    "message": "效果流动的快慢，分 X 和 Y。负值反向；0 表示静止。约 0.01 为常用值。",
+    "description": ""
+  },
+  "Colors.Section.Colours": {
+    "message": "颜色",
+    "description": ""
+  },
+  "Colors.Section.Physical": {
+    "message": "物理属性",
+    "description": ""
+  },
+  "Colors.Section.Physical.ClothSuffix": {
+    "message": "— Cloth",
+    "description": ""
+  },
+  "Colors.Section.SphereMap": {
+    "message": "球面贴图",
+    "description": ""
+  },
+  "Colors.Specular.Label": {
+    "message": "高光",
+    "description": ""
+  },
+  "Colors.Sphere.Index.Label": {
+    "message": "索引",
+    "description": ""
+  },
+  "Colors.Sphere.Intensity.Label": {
+    "message": "强度",
+    "description": ""
+  },
+  "Colors.Sphere.Tip": {
+    "message": "反射游戏共享球面贴图数组中的一层。\n索引和强度必须同时不为零，否则不会有任何效果。\n在 characterscroll.shpk 下无效——请使用 character.shpk。",
+    "description": ""
+  },
+  "Colors.Stack.Tip": {
+    "message": "调整此模组的叠加层在你身上的堆叠顺序，可跨选项组。\n最左侧的标签 = 堆叠最上层（最后合成，位于最上方）。",
+    "description": ""
+  },
+  "Colors.StackHint": {
+    "message": "正在编辑叠加层（拖动标签可重新排序——最左侧为最上层）：",
+    "description": ""
+  },
+  "Colors.SubRowA.Fmt": {
+    "message": "第 {0} 行 A",
+    "description": ""
+  },
+  "Colors.SubRowB.Fmt": {
+    "message": "第 {0} 行 B",
+    "description": ""
+  },
+  "Colors.Tiling.Label": {
+    "message": "平铺",
+    "description": ""
+  },
+  "Colors.Tiling.Tip": {
+    "message": "效果在表面上重复的次数。1 = 一次。",
+    "description": ""
+  },
+  "Colors.TowardBottom.Btn": {
+    "message": "向下",
+    "description": ""
+  },
+  "Colors.TowardTop.Btn": {
+    "message": "向上",
+    "description": ""
+  },
+  "Command.Help": {
+    "message": "开关 Proteus 叠加合成器状态窗口。输入“/proteus config”可直接打开设置页。",
+    "description": ""
+  },
+  "Common.Browse.Btn": {
+    "message": "浏览",
+    "description": ""
+  },
+  "Common.Clear.Btn": {
+    "message": "清除",
+    "description": ""
+  },
+  "Common.None": {
+    "message": "（无）",
+    "description": ""
+  },
+  "Create.Author.Label": {
+    "message": "作者",
+    "description": ""
+  },
+  "Create.Create.Btn": {
+    "message": "创建",
+    "description": ""
+  },
+  "Create.Create.DisabledTip": {
+    "message": "请输入模组名称和材质目标，并至少选择一张贴图。",
+    "description": ""
+  },
+  "Create.Error.FolderExists.Fmt": {
+    "message": "名为“{0}”的模组文件夹已存在。",
+    "description": ""
+  },
+  "Create.Error.MissingFile.Fmt": {
+    "message": "{0} 文件已不存在：{1}",
+    "description": ""
+  },
+  "Create.Error.NoMaterial": {
+    "message": "请输入材质目标。",
+    "description": ""
+  },
+  "Create.Error.NoName": {
+    "message": "请输入模组名称。",
+    "description": ""
+  },
+  "Create.Error.NoTexture": {
+    "message": "请至少选择一张贴图（漫反射、遮罩、法线或索引）。",
+    "description": ""
+  },
+  "Create.Error.ReservedName": {
+    "message": "“Proteus”为保留名称——请另选一个模组名称。",
+    "description": ""
+  },
+  "Create.Error.UnusableName": {
+    "message": "该模组名称不含可用字符——请使用字母或数字。",
+    "description": ""
+  },
+  "Create.Error.WriteFailed.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "Create.Intro": {
+    "message": "创建一个基础的 Proteus 叠加模组。至少选择一张贴图；Proteus 会写入一个新的 Penumbra 模组并将其打开，便于你启用和调整。",
+    "description": ""
+  },
+  "Create.MaterialTarget.Label": {
+    "message": "材质目标",
+    "description": ""
+  },
+  "Create.MaterialTarget.Tip": {
+    "message": "此叠加层要合成到的材质。会根据你当前穿着的身体自动填入；\n可从列表中选择一个已装备的材质，或手动输入路径，以指向\n你当前并未穿着的身体／种族。",
+    "description": ""
+  },
+  "Create.ModName.Label": {
+    "message": "模组名称",
+    "description": ""
+  },
+  "Create.Ok.Fmt": {
+    "message": "已创建“{0}”，已启用并在 Penumbra 中打开。",
+    "description": ""
+  },
+  "Create.PickTexture.Title.Fmt": {
+    "message": "选择{0}贴图",
+    "description": ""
+  },
+  "Create.Picker.Empty": {
+    "message": "尚未获知已装备的材质。\n请切换区域或重绘后，再重新打开此列表。",
+    "description": ""
+  },
+  "Create.Picker.SkinGroup": {
+    "message": "皮肤",
+    "description": ""
+  },
+  "Create.Picker.Stale": {
+    "message": "显示的是最后一次获知的列表——角色尚未绘制。",
+    "description": ""
+  },
+  "Create.Redetect.Btn": {
+    "message": "重新检测",
+    "description": ""
+  },
+  "Create.Redetect.Tip": {
+    "message": "重新执行身体检测并覆盖该字段。",
+    "description": ""
+  },
+  "Create.Slot.Diffuse": {
+    "message": "漫反射",
+    "description": ""
+  },
+  "Create.Slot.Index": {
+    "message": "索引",
+    "description": ""
+  },
+  "Create.Slot.Mask": {
+    "message": "遮罩",
+    "description": ""
+  },
+  "Create.Slot.NoDiffuse": {
+    "message": "此材质没有漫反射贴图。",
+    "description": ""
+  },
+  "Create.Slot.NoIndex": {
+    "message": "此材质没有索引贴图，且既不是皮肤也不是面部——\n这里没有任何内容会读取颜色表行选择器。",
+    "description": ""
+  },
+  "Create.Slot.NoMask": {
+    "message": "此材质没有遮罩贴图。",
+    "description": ""
+  },
+  "Create.Slot.NoNormal": {
+    "message": "此材质没有法线贴图。",
+    "description": ""
+  },
+  "Create.Slot.Normal": {
+    "message": "法线",
+    "description": ""
+  },
+  "Create.Slot.Unused": {
+    "message": "（此材质未使用）",
+    "description": ""
+  },
+  "Create.SlotsUnreadable": {
+    "message": "无法读取此材质——将提供所有栏位。",
+    "description": ""
+  },
+  "Export.Dialog.Filter": {
+    "message": "Penumbra 模组包",
+    "description": ""
+  },
+  "Export.Dialog.Title": {
+    "message": "导出 Proteus 模组",
+    "description": ""
+  },
+  "Export.DisabledInPenumbra.Fmt": {
+    "message": "{0}\n（在 Penumbra 中已禁用）",
+    "description": ""
+  },
+  "Export.Error.EmptyFolder": {
+    "message": "该模组文件夹为空——没有可导出的内容。",
+    "description": ""
+  },
+  "Export.Error.FolderGone.Fmt": {
+    "message": "模组文件夹已不存在：{0}",
+    "description": ""
+  },
+  "Export.Error.NoPath": {
+    "message": "请选择文件的保存位置。",
+    "description": ""
+  },
+  "Export.Error.WriteFailed.Fmt": {
+    "message": "无法写入文件：{0}",
+    "description": ""
+  },
+  "Export.Filter.Hint": {
+    "message": "筛选…",
+    "description": ""
+  },
+  "Export.Intro": {
+    "message": "将你的某个 Proteus 模组保存为 Penumbra 模组包（.pmp）以便分享。所有内容都会包含在内——选项、颜色、遮罩和发光效果——该文件可直接安装到 Penumbra。",
+    "description": ""
+  },
+  "Export.Mod.Label": {
+    "message": "模组",
+    "description": ""
+  },
+  "Export.ModDisabled.Note": {
+    "message": "该模组在 Penumbra 中已禁用——但导出结果并无区别。",
+    "description": ""
+  },
+  "Export.NoMatch.Fmt": {
+    "message": "没有与“{0}”匹配的内容。",
+    "description": ""
+  },
+  "Export.Ok.Fmt": {
+    "message": "已导出“{0}”——文件数：{1}，{2} MB。\n{3}",
+    "description": ""
+  },
+  "Export.Phase.Choosing": {
+    "message": "选择保存位置…",
+    "description": ""
+  },
+  "Export.Phase.Idle": {
+    "message": "导出",
+    "description": ""
+  },
+  "Export.Phase.Writing": {
+    "message": "正在导出…",
+    "description": ""
+  },
+  "Footer.LastComposite.Fmt": {
+    "message": "上次合成：{0}   已处理贴图：{1}   模组数：{2}",
+    "description": ""
+  },
+  "Footer.MinutesAgo.Fmt": {
+    "message": "{0} 分钟前",
+    "description": ""
+  },
+  "Footer.NoResult": {
+    "message": "尚无合成结果。",
+    "description": ""
+  },
+  "Footer.Pill.Failed": {
+    "message": "失败",
+    "description": ""
+  },
+  "Footer.Pill.Ok": {
+    "message": "成功",
+    "description": ""
+  },
+  "Footer.SecondsAgo.Fmt": {
+    "message": "{0} 秒前",
+    "description": ""
+  },
+  "Footer.UnknownError": {
+    "message": "未知错误",
+    "description": ""
+  },
+  "Import.AsTex.Label": {
+    "message": "将层转换为 BC7 .tex",
+    "description": ""
+  },
+  "Import.AsTex.Tip": {
+    "message": "磁盘占用约为原来的四分之一，且合成时无需解码 PNG。\n块压缩是有损的——若想完全保留包内图像的原始效果，请保持关闭。",
+    "description": ""
+  },
+  "Import.AsTex.Unavailable.Tip": {
+    "message": "原生块压缩器未加载，BC7 编码将耗时数分钟。",
+    "description": ""
+  },
+  "Import.Author.Label": {
+    "message": "作者",
+    "description": ""
+  },
+  "Import.BodyFit.NeedsAllBodies.Fmt": {
+    "message": "此包没有为你的原版身体绘制任何内容——将改用“{0}”。烘焙到原版身体默认是关闭的，因此 Proteus 会在导入时将此模组的“身体”设为“所有身体”（颜色 → 高级）；否则它将什么都不会绘制。",
+    "description": ""
+  },
+  "Import.BodyFit.NotDrawn.Fmt": {
+    "message": "你的角色尚未绘制，因此 Proteus 是按偏好而非按你的身体选择了“{0}”。进入游戏后请检查结果。",
+    "description": ""
+  },
+  "Import.BodyFit.Remapped.Fmt": {
+    "message": "此包没有适用于你的 {0} 身体的内容，因此“{1}”将被自动重映射到它上面。",
+    "description": ""
+  },
+  "Import.Browse.Btn": {
+    "message": "浏览选择包",
+    "description": ""
+  },
+  "Import.DefaultLayoutMatched.Fmt": {
+    "message": "将选择“{0}”——它与你当前穿着的身体相匹配。",
+    "description": ""
+  },
+  "Import.Description": {
+    "message": "说明",
+    "description": ""
+  },
+  "Import.Dialog.Filter": {
+    "message": "Onion 包",
+    "description": ""
+  },
+  "Import.Dialog.Title": {
+    "message": "选择一个 Onion 包",
+    "description": ""
+  },
+  "Import.Failed.Fmt": {
+    "message": "导入失败：{0}",
+    "description": ""
+  },
+  "Import.Import.Btn": {
+    "message": "导入",
+    "description": ""
+  },
+  "Import.Importing.Btn": {
+    "message": "正在导入…",
+    "description": ""
+  },
+  "Import.Intro": {
+    "message": "导入 Onion 叠加包（.omp）。Proteus 会读取包中的层，并写入一个带有 Proteus 附属文件的新 Penumbra 模组——原始文件不会被修改。",
+    "description": ""
+  },
+  "Import.Layer.Imported.Fmt": {
+    "message": "{0}\n将在 {2} UV 空间中作为 {1} 导入。",
+    "description": ""
+  },
+  "Import.Layer.NoLayout": {
+    "message": "（无布局）",
+    "description": ""
+  },
+  "Import.Layer.NoMap": {
+    "message": "（无贴图）",
+    "description": ""
+  },
+  "Import.Layer.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Import.Layer.SkippedReason.Fmt": {
+    "message": "{0}\n跳过原因：{1}",
+    "description": ""
+  },
+  "Import.LayerCount.Fmt": {
+    "message": "层：{1} 中的 {0}",
+    "description": ""
+  },
+  "Import.Layouts.Fmt": {
+    "message": "此包含有 {0} 种 UV 布局，因此该模组会在 Penumbra 中获得一个单选组“{1}”（{2}）。同一时间只会合成其中一种。",
+    "description": ""
+  },
+  "Import.Materials.Fallback": {
+    "message": "Proteus 无法读取游戏的身体列表，因此本次导入只会针对一组已知可用的女性身体。进入游戏后重新打开此包，即可涵盖所有种族。",
+    "description": ""
+  },
+  "Import.Materials.FallbackNote": {
+    "message": "备用列表——打开此包时无法读取游戏数据。",
+    "description": ""
+  },
+  "Import.Materials.FromGame": {
+    "message": "游戏定义的所有身体，使叠加层能够跨种族跟随你。合成时会忽略你未穿着的身体。",
+    "description": ""
+  },
+  "Import.Materials.Header.Fmt": {
+    "message": "材质目标（{0}）",
+    "description": ""
+  },
+  "Import.Materials.Layout.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "Import.ModName.Label": {
+    "message": "模组名称",
+    "description": ""
+  },
+  "Import.NeedName": {
+    "message": "请输入模组名称。",
+    "description": ""
+  },
+  "Import.NoPack": {
+    "message": "选择一个 .omp 文件即可查看其内容。",
+    "description": ""
+  },
+  "Import.NothingUsable": {
+    "message": "此包中没有可导入的层。",
+    "description": ""
+  },
+  "Import.Result.AllBodies.Fmt": {
+    "message": "已导入“{0}”——层数：{1}{2}。此包没有为原版身体绘制任何内容，因此 Proteus 已将此模组的“身体”设为“所有身体”（颜色 → 高级）以便烘焙——若将其关闭，它将不再绘制。",
+    "description": ""
+  },
+  "Import.Result.NoLayout.Fmt": {
+    "message": "已导入“{0}”——层数：{1}{2}，但 Proteus 无法为你选择身体布局。请在 Penumbra 的“{3}”下选择一个，否则不会绘制任何内容。",
+    "description": ""
+  },
+  "Import.Result.Ok.Fmt": {
+    "message": "已导入“{0}”——层数：{1}{2}。已启用并在 Penumbra 中打开。",
+    "description": ""
+  },
+  "Import.Result.SkippedTail.Fmt": {
+    "message": "（已跳过：{0}）",
+    "description": ""
+  },
+  "Import.Warn.FormatVersion.Fmt": {
+    "message": "此包声明的格式版本为 {0}；Proteus 仅针对 {1} 做过验证。请导入后检查结果。",
+    "description": ""
+  },
+  "Import.Warn.Generated": {
+    "message": "部分布局并非绘制而成，而是由 Onion 从另一种布局生成的。它们将按原样导入；若结果看起来发虚，请优先使用手绘的布局。",
+    "description": ""
+  },
+  "Import.Warn.NothingImportable": {
+    "message": "此包中没有可导入的层——原因见上方。",
+    "description": ""
+  },
+  "Import.Warn.OptionGroups.Fmt": {
+    "message": "此包含有 Onion 选项组（{0}）。这些不会被导入——所有层都会被无条件引入。",
+    "description": ""
+  },
+  "Import.Warn.RaceFilters": {
+    "message": "部分层限定了特定种族。Proteus 不会保留种族过滤条件，因此它们会为所有种族导入。",
+    "description": ""
+  },
+  "Import.Website.Tip": {
+    "message": "会沿用到模组的 Penumbra 页面。",
+    "description": ""
+  },
+  "Mods.Ao.Off": {
+    "message": "关",
+    "description": ""
+  },
+  "Mods.Ao.On": {
+    "message": "开",
+    "description": ""
+  },
+  "Mods.Ao.Pack.Fmt": {
+    "message": "包（{0}）",
+    "description": ""
+  },
+  "Mods.Ao.Tip.Fmt": {
+    "message": "针对此模组绑带／衣物边缘的环境光遮蔽阴影与 Skindenting 法线凹陷。\n它将覆盖区域视为压入皮肤的布料，这对纹身和皮肤细节而言并不合适——\n因此除非明确要求，否则默认关闭。\n\n{0} = 按包的声明（其 metadata.json 中的“AmbientOcclusion”；\n未声明即视为关闭）。\n开／关 = 你为此模组设定的值，会覆盖包的声明。\n\n（全局强度滑块位于设置中。）",
+    "description": ""
+  },
+  "Mods.Col.Colors": {
+    "message": "颜色",
+    "description": ""
+  },
+  "Mods.Col.Mod": {
+    "message": "模组",
+    "description": ""
+  },
+  "Mods.Col.On": {
+    "message": "启用",
+    "description": ""
+  },
+  "Mods.Col.Priority": {
+    "message": "优先级",
+    "description": ""
+  },
+  "Mods.Col.Skindent": {
+    "message": "Skindent",
+    "description": ""
+  },
+  "Mods.Colors.BindingDriven.Tip": {
+    "message": "颜色由当前生效的设计绑定控制。\n编辑会实时预览；点击“绑定”页的“更新”即可保存。基础颜色保持不变。",
+    "description": ""
+  },
+  "Mods.Colors.Btn": {
+    "message": "颜色",
+    "description": ""
+  },
+  "Mods.NoSidecarMods": {
+    "message": "未检测到带 Proteus 附属文件的模组。",
+    "description": ""
+  },
+  "Mods.PluginDisabled": {
+    "message": "Proteus 已禁用——请在设置中启用。",
+    "description": ""
+  },
+  "Service.NoPenumbraDir": {
+    "message": "无法访问 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "Service.RegisterFailed.Fmt": {
+    "message": "模组已写入，但 Penumbra 无法注册它（{0}）。请在 Penumbra 中重新扫描模组。",
+    "description": ""
+  },
+  "Service.UVMaps.Downloading": {
+    "message": "正在下载 UV 贴图...",
+    "description": ""
+  },
+  "Service.UVMaps.Error.Fmt": {
+    "message": "下载出错：{0}",
+    "description": ""
+  },
+  "Service.UVMaps.HttpFailed.Fmt": {
+    "message": "下载失败：{1} 返回 HTTP {0}",
+    "description": ""
+  },
+  "Service.UVMaps.Progress.Fmt": {
+    "message": "正在下载 UV 贴图...（{0} MB / {1} MB）",
+    "description": ""
+  },
+  "Service.UVMaps.TooSmall.Fmt": {
+    "message": "下载内容过小（{0} 字节）：{1}——可能是 LFS 指针",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Header.Fmt": {
+    "message": "基础皮肤（{0}）",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Note": {
+    "message": "每张基础贴图所读取的模组。将鼠标悬停可查看游戏内路径。",
+    "description": ""
+  },
+  "Settings.Diag.BaseSkin.Unconfirmed.Fmt": {
+    "message": "{0}（未确认）",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Btn": {
+    "message": "清除贴图缓存",
+    "description": ""
+  },
+  "Settings.Diag.ClearCache.Tip": {
+    "message": "丢弃所有已缓存的解码贴图并立即重新合成。当贴图修改没有生效时使用——\n例如你以相同尺寸重新导出了叠加层，不重启插件就看不到变化。\n\n同时会重新推断每张基础皮肤贴图来自哪个模组——如果下方的“基础皮肤”\n显示了错误的模组名，请使用此功能。",
+    "description": ""
+  },
+  "Settings.Diag.Reach.EffectsOnly.Fmt": {
+    "message": "{0} — 仅效果（无叠加层图像）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Failed.Fmt": {
+    "message": "{0} — 漫反射 {1}，法线 {2}，遮罩 {3}（漫反射未生效）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Header.Fmt": {
+    "message": "叠加层覆盖范围（{0}）",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Note": {
+    "message": "实际到达每个通道的叠加层数量。将鼠标悬停可查看材质。",
+    "description": ""
+  },
+  "Settings.Diag.Reach.Ok.Fmt": {
+    "message": "{0} — 漫反射 {1}，法线 {2}，遮罩 {3}",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Label": {
+    "message": "自动提升模组优先级",
+    "description": ""
+  },
+  "Settings.General.AutoRaise.Tip": {
+    "message": "当确认有其他模组覆盖了 Proteus 正在合成的皮肤贴图时——例如自带一份身体贴图的\n纹身包或皮肤包——自动将 Proteus 的 Penumbra 优先级提升到其之上，并在聊天中说明。\n\n这种覆盖平时完全看不出来：叠加层只生效一半（凹凸出现了，颜色没有），\n而且每一行日志读起来都像是成功。\n\n只有当你确实希望其他模组在 Proteus 合成的路径上取胜时才关闭此项。\nProteus 从不凭猜测行动，只在确认发生覆盖时才会处理。",
+    "description": ""
+  },
+  "Settings.General.DisableAutoRedraw.Label": {
+    "message": "禁用自动重绘",
+    "description": ""
+  },
+  "Settings.General.Enabled.Label": {
+    "message": "启用",
+    "description": ""
+  },
+  "Settings.General.Enabled.Tip": {
+    "message": "关闭此项会清除 Proteus 的输出，在不使用它的情况下重绘你的角色，\n并禁用 Penumbra 中受管理的 \"Proteus\" 模组。",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Btn": {
+    "message": "发光效果贴图",
+    "description": ""
+  },
+  "Settings.General.GlowLibrary.Tip.Fmt": {
+    "message": "打开 Proteus 读取动态发光滚动贴图的文件夹——也就是构成发光本身的“_o”贴图。\n放入其中的任何文件都会出现在每个装备叠加层的“效果”下拉列表中。\n\n{0}\n\n支持 .tex、.dds、.png、.jpg、.bmp、.tga、.psd 和 .gif。\n模组自带的 Proteus/Effects/ 文件夹优先于此处。",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Label": {
+    "message": "原地重载",
+    "description": ""
+  },
+  "Settings.General.InPlaceReload.Tip": {
+    "message": "通过 Glamourer 的原地装备重载来刷新贴图，而不是完整重绘，从而避免\n消失/重现的闪烁。当 Glamourer 无法处理时会自动回退到完整重绘。",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Label": {
+    "message": "跳过无变化的重新合成",
+    "description": ""
+  },
+  "Settings.General.SkipUnchanged.Tip": {
+    "message": "当没有任何影响输出的内容发生变化时，允许由切换区域或重绘触发的重新合成\n提前结束。你自己所做的更改始终会重新合成。只有在某项修改没有生效、\n需要排除此因素时才关闭。",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Label": {
+    "message": "寄载于隐形眼镜（保持戒指空闲）",
+    "description": ""
+  },
+  "Settings.Hosting.InvisibleGlasses.Tip": {
+    "message": "开启后，若你没有装备眼镜，Proteus 会让 Glamourer 装备一件隐形眼镜物品，\n使第二层皮肤占用脸部装饰栏位而非戒指。这会向你的 Glamourer 状态写入一件\n（隐藏的）附加物品；当你禁用 Proteus、装备真正的眼镜或关闭此项时会被移除。",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Btn": {
+    "message": "还原被更改的饰品",
+    "description": ""
+  },
+  "Settings.Hosting.RestoreAccessory.Tip": {
+    "message": "强制完整重绘，以重新加载第二层皮肤所替换的任何戒指或手镯，将其还原为\n原始模型。若禁用或切换后装备外壳仍卡在某件饰品上，请使用此功能。",
+    "description": ""
+  },
+  "Settings.Output.Compression.Label": {
+    "message": "启用压缩",
+    "description": ""
+  },
+  "Settings.Output.Compression.Tip": {
+    "message": "对烘焙后的贴图进行块压缩（BC7），使每张贴图在硬盘和显存中的占用降至\n未压缩时的约四分之一。索引贴图保持未压缩，以保留其精确的行数值。\n关闭 = 不压缩（与之前逐字节相同）。",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Label": {
+    "message": "隐藏连接网格",
+    "description": ""
+  },
+  "Settings.Output.ConnectorMeshes.Tip": {
+    "message": "在装备“第二层皮肤”上跳过各身体部位的连接环——即关节处（手腕／脚踝／……）\n那一小块额外的子网格。某些身体（Neolithe）会用一个环来加固关节，而该环与\n本已完整的身体重叠；在轻薄的叠加层上，这种重叠会叠加两次，显示为更不透明的\n接缝。其他身体请保持 Off——在那些身体上该子网格是真正的皮肤，隐藏它会留下缺口。",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Label": {
+    "message": "锐利 Alpha（集体动作中的球面/金属）",
+    "description": ""
+  },
+  "Settings.Output.SharpAlpha.Tip": {
+    "message": "实验性功能。将外壳覆盖渲染为硬性 Alpha 测试镂空，而非平滑透明，\n使球面贴图和金属质感在集体动作中得以保留（集体动作会在透明表面上丢弃它们）。\n代价是：透明边缘会变得生硬并产生锯齿。最适合基本不透明的布料；\n非常轻薄的布料会显得粗糙。切换后请重新合成。",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Label": {
+    "message": "贴图缓存（MB）",
+    "description": ""
+  },
+  "Settings.Output.TextureCache.Tip": {
+    "message": "Proteus 在两次合成之间在内存中保留多少已解码的贴图数据。\n\n一张 4K 贴图解码后占用 64 MB，因此这实际上是个数量设置：2048 MB ≈ 30 张。\n只有当它能容纳整整一次合成所需的量时才有帮助——低于该值，每次运行都会挤掉\n下一次所需的内容，结果什么都无法复用。\n\n请查看重新合成日志中的“cache N entries, M MB”数值：如果在没有任何改动的\n第二次合成中仍报告未命中，就调高此值。若游戏开始使用页面文件，则调低。\n空闲 60 秒后会自动释放。",
+    "description": ""
+  },
+  "Settings.Section.Diagnostics": {
+    "message": "诊断",
+    "description": ""
+  },
+  "Settings.Section.General": {
+    "message": "常规",
+    "description": ""
+  },
+  "Settings.Section.Hosting": {
+    "message": "寄载",
+    "description": ""
+  },
+  "Settings.Section.Output": {
+    "message": "输出",
+    "description": ""
+  },
+  "Settings.Section.SkinEffects": {
+    "message": "皮肤效果",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Label": {
+    "message": "环境光遮蔽",
+    "description": ""
+  },
+  "Settings.Skin.AmbientOcclusion.Tip": {
+    "message": "在被遮罩的绑带边缘外侧的皮肤上投下柔和的接触阴影，让绑带更有立体感。\n0.00 表示完全关闭（皮肤漫反射保持不变）。",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Label": {
+    "message": "阴影柔和度",
+    "description": ""
+  },
+  "Settings.Skin.ShadowSoftness.Tip": {
+    "message": "环境光遮蔽阴影从绑带边缘向外扩散的距离（占贴图宽度的比例）。\n数值越大，阴影越宽越柔和。阴影与绑带凹陷共用此数值。",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Label": {
+    "message": "肤色抑制",
+    "description": ""
+  },
+  "Settings.Skin.SkinTint.Tip": {
+    "message": "叠加层抵抗肤色染色的强度（全局倍数）。\n按颜色逐像素应用：白色／明亮的颜色在任何肤色上都能保持其原本的颜色\n（略微更有光泽），深色则会自动保持被肤色染色且哑光的效果。\n0.00 表示完全关闭（原始外观）。",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Label": {
+    "message": "Skindenting",
+    "description": ""
+  },
+  "Settings.Skin.Skindenting.Tip": {
+    "message": "在绑带／衣物边缘处压低皮肤法线，使绑带看起来陷入皮肤之中。\n0.00 表示关闭（皮肤法线保持不变）。与阴影使用相同的边缘和柔和度。",
+    "description": ""
+  },
+  "Tab.Bindings": {
+    "message": "绑定",
+    "description": ""
+  },
+  "Tab.Create": {
+    "message": "创建",
+    "description": ""
+  },
+  "Tab.Export": {
+    "message": "导出",
+    "description": ""
+  },
+  "Tab.Import": {
+    "message": "导入",
+    "description": ""
+  },
+  "Tab.Mods": {
+    "message": "模组",
+    "description": ""
+  },
+  "Tab.Settings": {
+    "message": "设置",
+    "description": ""
+  }
+}
