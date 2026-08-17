@@ -2990,6 +2990,45 @@ public class CompositorService : IDisposable
                 return;
             }
 
+            // ── Inherited mask colorsets ─────────────────────────────────────
+            // A mod whose masks carry an _id but whose Masks tab has no colorset of its own paints them from
+            // the TOPMOST overlay it draws on that material — the same rows the legacy _id merge would have
+            // picked, and the same fallback the mask SHELL makes (see the shell synthesis). Keyed per
+            // (material, mod) rather than per mod because an overlay only appears on the materials its
+            // MaterialGamePath lists, so the topmost one genuinely differs between a mod's body materials.
+            //
+            // Built HERE, not at the point of use: the paint pass runs inside a 4-way Parallel.ForEach, so
+            // both this dictionary and the log-once set have to be finished before that loop starts. Doing
+            // the lookup inline meant a plain HashSet was being mutated from four material tasks at once —
+            // and a character with two body materials in one mod (Au Ra female b0001 + b0101) hits that on
+            // every composite. It also keeps BuildRowDict off the hot path.
+            var maskFallbackRows = new Dictionary<string, Dictionary<int, ColorTableRowOverride>>(
+                StringComparer.OrdinalIgnoreCase);
+            {
+                var loggedInherit = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (mtrl, list) in byMaterial)
+                    // GroupBy preserves source order within a group, and `list` is already in composite
+                    // order (bottom→top), so Last() is the overlay the mask sits on — and the mod is
+                    // guaranteed present, which an "if not found" guard on a separate lookup would not be.
+                    foreach (var modGroup in list.GroupBy(p => p.Entry.ModDirectory, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var modDir = modGroup.Key;
+                        if (maskRowsByMod.ContainsKey(modDir) || maskShellMods.Contains(modDir)) continue;
+                        if (!maskAssetsByMod.TryGetValue(modDir, out var mA) || !mA.Any(a => a.IndexPath != null))
+                            continue;
+
+                        var top = modGroup.Last();
+                        // An empty/absent colorset leaves the dictionary empty, which ApplyIndexedOverlay
+                        // reads as neutral white rather than skipping the pixel.
+                        var inherited = BuildRowDict(top.Overlay.ColorTableRows);
+                        maskFallbackRows[MaskFallbackKey(mtrl, modDir)] = inherited;
+                        if (loggedInherit.Add(modDir))
+                            log.Debug("[Proteus] Masks on \"{0}\": no Masks colorset — inheriting \"{1}\"'s "
+                                    + "{2} row(s) so the mask still paints on skin",
+                                modDir, top.Overlay.Option ?? "(default)", inherited.Count);
+                    }
+            }
+
             // A mask OCCLUDES everything beneath it. In a mask's territory every overlay group — including the
             // mod's highest-priority one — is erased to skin (coverage = cov·W, and W=0 where the mask is
             // opaque), so only the mask's own colorset renders there. Lowering the mask's opacity then fades
@@ -3116,6 +3155,11 @@ public class CompositorService : IDisposable
                     // This mod's masks are handled elsewhere, NOT merged into the overlay index here (merging
                     // AND painting/shelling would double them): a mask colorset ⇒ the separate top diffuse pass
                     // below; a mask SHELL mod ⇒ the shell owns the mask entirely.
+                    //
+                    // A mod with NO mask colorset still merges here. That pass now paints those masks too
+                    // (inheriting the fabric's rows), but the two cannot double up: the combined mask's W term
+                    // has already erased the fabric wherever the mask's territory is opaque, so the merge only
+                    // reaches the soft edges — where it keeps giving them the mask's row, as it always has.
                     if (maskRowsByMod.ContainsKey(modDir) || maskShellMods.Contains(modDir)) return idx;
 
                     // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
@@ -3978,10 +4022,27 @@ public class CompositorService : IDisposable
                     }
                 }
 
-                // ── Masks own-colorset diffuse ─────────────────────────────────
-                // A mod whose single "Masks" tab has a colorset (maskRowsByMod) colours its active masks
-                // from THAT shared table, composited on top of the overlay diffuse. The mask _id is NOT merged
-                // into the overlays (skipped in LoadIndexMerged), so this is the only place it gets its colour.
+                // ── Masks diffuse ──────────────────────────────────────────────
+                // A mod's single "Masks" tab colours its active masks from ONE shared table, composited on
+                // top of the overlay diffuse. The mask _id selects the row, so this is the only place a mask
+                // gets colour on skin.
+                //
+                // The table is the mod's own Masks colorset (maskRowsByMod) when it has one, else the topmost
+                // fabric overlay's rows — the same colours the legacy _id merge would have picked, and the same
+                // fallback the mask SHELL already makes (see the shell synthesis). Without that fallback a mask
+                // with no colorset of its own painted NOTHING on skin: the legacy merge only recolours pixels
+                // the fabric already covers, and a mask's own grayscale has not been additive coverage since
+                // masks became garments in their own right (MaskAdds). So a waistband, toe cap or seam — the
+                // parts a mask draws rather than erases — vanished on Skin while rendering fine on Cloth, which
+                // is the "masks are invisible as a skin layer" report. Painting over the merge is safe: the
+                // combined mask's W already erased the fabric everywhere its territory is opaque, so the two
+                // never both contribute to the same texel.
+                //
+                // What the inherited table paints is a FLAT row colour, not the fabric's art — the same as the
+                // mod's own Masks colorset would, since `art` is white and only the row tints it. With the
+                // packager's default row (white) that means a mask reads white until its Masks tab is given
+                // colours. That is the intended trade: the fabric's pattern was never available there anyway
+                // (W erased it), so the choice is a flat colour or nothing at all.
                 //
                 // The active masks combine TOP-TERRITORY-WINS (matching CombinedMaskAt, which carves the other
                 // layers the same way): at each pixel the topmost mask that has territory (alpha) there decides
@@ -3990,9 +4051,13 @@ public class CompositorService : IDisposable
                 foreach (var modDir in pairs.Select(p => p.Entry.ModDirectory).Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     if (maskShellMods.Contains(modDir)) continue;   // mask lives on the shell, not the skin diffuse
-                    if (!maskRowsByMod.TryGetValue(modDir, out var maskRows)) continue;
                     if (!maskAssetsByMod.TryGetValue(modDir, out var assets) || texPaths.Diffuse == null) continue;
                     if (!assets.Any(a => a.IndexPath != null)) continue;
+                    // Own Masks colorset, else the one inherited from this material's topmost overlay
+                    // (precomputed above, single-threaded). Neither ⇒ nothing to colour the mask with.
+                    if (!maskRowsByMod.TryGetValue(modDir, out var maskRows)
+                     && !maskFallbackRows.TryGetValue(MaskFallbackKey(mtrlGamePath, modDir), out maskRows))
+                        continue;
                     lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
 
                     if (EnsureBaseDiffuse() is not { } maskBaseD) continue;
@@ -4634,6 +4699,12 @@ public class CompositorService : IDisposable
                         // a gear sibling: with none, null falls through to the neutral-white baseline
                         // (BuildRows' neutralWhenEmpty), which multiplies to the base diffuse instead of
                         // painting the mask a skin tone.
+                        //
+                        // The SKIN fallback (maskFallbackRows) deliberately does NOT make that distinction and
+                        // inherits from a skin overlay too. The hazard here is a shell — a surface pushed off
+                        // the body — being painted in body tones; on skin those same rows are exactly what the
+                        // legacy _id merge selected for the very pixels the mask covers, so inheriting them
+                        // reproduces the old colours rather than importing the wrong ones.
                         ColorTableRows = MaskRowsFor(seed.Entry)
                                       ?? (seededFromGear ? seed.Overlay.ColorTableRows : null),
                         OptionGroup    = SidecarDiscoveryService.MaskGroupName,
@@ -7939,6 +8010,13 @@ public class CompositorService : IDisposable
         _ = Plugin.Framework.RunOnFrameworkThread(
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
     }
+
+    /// <summary>
+    /// Key for the inherited-mask-colorset table: one entry per (body material, mod). NUL-joined because
+    /// neither half can contain it, and the dictionary itself is OrdinalIgnoreCase — the same comparison
+    /// both <c>byMaterial</c> and every mod-directory lookup already use.
+    /// </summary>
+    private static string MaskFallbackKey(string mtrlGamePath, string modDir) => mtrlGamePath + '\0' + modDir;
 
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
     {
