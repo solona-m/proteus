@@ -57,6 +57,27 @@ public class SidecarDiscoveryService
     public  const string MaskGroupName = "Masks";
     private const string MaskSubdir    = "Masks";
 
+    /// <summary>
+    /// Reserved option name inside the <see cref="MaskGroupName"/> group. <c>Masks/Toe Cap.png</c> is not
+    /// a transparency mask: it marks where the second-skin shell should web into one rounded cap instead
+    /// of following the body contour (the toes, so hosiery doesn't read as a toe sock). It therefore paints
+    /// nothing and carves no coverage — it is filtered out of every mask consumer here and routed to the
+    /// shell writer instead. Authored, selected and toggled exactly like any other mask.
+    /// </summary>
+    public const string ToeCapOptionName = "Toe Cap";
+
+    /// <summary>
+    /// Is this the reserved toe-cap option? Matched on letters and digits only, so "ToeCap", "Toe Cap",
+    /// "toe-cap" and "TOE_CAP" are all the same option. Getting this wrong is expensive — an unmatched
+    /// name silently falls through as an ordinary mask, which carves the garment away and paints a shell
+    /// in the mask colour — so the comparison is deliberately forgiving about how the author typed it.
+    /// </summary>
+    private static bool IsToeCapOption(string? option) =>
+        option != null && Squash(option) == Squash(ToeCapOptionName);
+
+    private static string Squash(string s) =>
+        new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
     /// <summary>Plugin assembly directory — the bundled DefaultEffects live under it. Set once at startup.</summary>
     public string? AssemblyDir { get; set; }
 
@@ -232,7 +253,7 @@ public class SidecarDiscoveryService
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var option in OrderByGroup(selected, order))
         {
-            if (string.IsNullOrWhiteSpace(option)) continue;
+            if (string.IsNullOrWhiteSpace(option) || IsToeCapOption(option)) continue;   // caps aren't masks
             var maskPath = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option));
             if (maskPath == null || !seen.Add(maskPath)) continue;
 
@@ -241,6 +262,33 @@ public class SidecarDiscoveryService
             result.Add((maskPath, normalPath, indexPath));
         }
         return result;
+    }
+
+    /// <summary>
+    /// Path of this mod's toe-cap map when the reserved <see cref="ToeCapOptionName"/> option is selected
+    /// in the <see cref="MaskGroupName"/> group and its file exists — otherwise null. Resolves the file
+    /// under the option's own name, like every other mask, so the two never drift apart.
+    /// </summary>
+    public string? ResolveActiveToeCap(OverlayEntry entry)
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId == null) return null;
+
+        var settings = penumbra.GetModSettings(collId.Value, entry.ModDirectory);
+        if (settings == null) return null;
+
+        var selected = settings.Value.Options
+            .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+        var option = selected?.FirstOrDefault(IsToeCapOption);
+        if (option == null) return null;   // not selected — the ordinary case, say nothing
+
+        var path = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option.Trim()));
+        if (path == null)
+            log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — no cap",
+                option, entry.SidecarRoot, MaskSubdir);
+        return path;
     }
 
     /// <summary>
@@ -256,7 +304,7 @@ public class SidecarDiscoveryService
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var option in selectedOptions)
         {
-            if (string.IsNullOrWhiteSpace(option)) continue;
+            if (string.IsNullOrWhiteSpace(option) || IsToeCapOption(option)) continue;   // caps aren't masks
             var stem = Path.Combine(sidecarRoot, MaskSubdir, option);
             var path = ResolveMaskAsset(stem);
             if (path != null && seen.Add(path))

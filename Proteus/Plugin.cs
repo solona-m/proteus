@@ -205,9 +205,29 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
+        // "/proteus models [filter]" — what the RENDERER loaded, not what we wrote. Everything else in
+        // this plugin's diagnostics reads the .mdl on disk, which cannot tell a stale or redirected
+        // resource from a correct one.
+        var a = args.Trim();
+        if (a.StartsWith("models", StringComparison.OrdinalIgnoreCase))
+        {
+            var filter = a.Length > 6 ? a[6..].Trim() : "";
+            var dump = new LiveModelDump(ObjectTable);
+            var lines = filter.Length > 0
+                ? dump.DumpMatching(filter, System.IO.Path.Combine(
+                      System.IO.Path.GetTempPath(), "proteus-live-models"))
+                : dump.DescribeLocalPlayer();
+            foreach (var l in lines)
+            {
+                Log.Information("[Proteus] {0}", l);
+                ChatGui.Print($"[Proteus] {l}");
+            }
+            return;
+        }
+
         // "/proteus config" is a request to see the settings, so it opens rather than toggles — typing it
         // while the window is already up would otherwise close it, the opposite of what was asked.
-        switch (args.Trim())
+        switch (a)
         {
             case "config":
             case "settings":

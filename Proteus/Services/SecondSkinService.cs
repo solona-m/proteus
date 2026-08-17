@@ -43,6 +43,25 @@ public sealed class SecondSkinService
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
 
+    /// <summary>
+    /// The toe-cap mask is sampled per VERTEX, not per texel, so it needs more resolution than coverage
+    /// (the toes are a small, position-sensitive patch of body UV) but far less than the art.
+    /// </summary>
+    private const int ToeCapSize = 512;
+
+    /// <summary>
+    /// How much of the capped area a shell must actually paint before it gets a toe cap. A shell that
+    /// stops at the ankle has no business rebuilding the toes.
+    /// <para/>
+    /// Deliberately LOW. Every shell that keeps any geometry over the toes has to be capped, or it
+    /// sleeves each toe while the capped shell smooths over them, and the uncapped one comes through —
+    /// measured with a thigh-band overlay whose shell still had toe geometry: 226 of its toe vertices
+    /// sat outside the capped shell, by up to 0.0036. Capping a shell whose toe art really is absent
+    /// costs nothing, because the coverage test then trims the rebuilt cap away exactly as it trimmed
+    /// what was cut out.
+    /// </summary>
+    private const float MinToeCoverage = 0.02f;
+
     /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
     /// so an id never runs past 'z'.</summary>
     private const int DiskIdSpace = 36;
@@ -87,6 +106,52 @@ public sealed class SecondSkinService
         this.log = log;
         this.resolveUpstream = resolveUpstream;
     }
+
+    /// <summary>
+    /// The hand-modelled toe box shipped beside the plugin, read once. Null when it is missing or will
+    /// not parse, in which case the shell builds exactly as it did before — this is additive.
+    /// </summary>
+    private readonly List<SecondSkinWriter.AuthoredCapSet> authoredCaps = [];
+    private bool authoredCapTried;
+
+    private IReadOnlyList<SecondSkinWriter.AuthoredCapSet> AuthoredCaps()
+    {
+        if (authoredCapTried) return authoredCaps;
+        authoredCapTried = true;
+        try
+        {
+            var dir = discovery.AssemblyDir;
+            if (dir == null) return authoredCaps;
+            // ONE CAP PER BODY: toecap.mdl / toecap.<body>.mdl, each with the binding of the same name
+            // that says where it sits on the body it was modelled for. The binding carries it across
+            // heels and other foot-model swaps for that body; it does NOT carry it to another body, which
+            // is why there is a cap per body rather than one cap and many bindings. The writer picks by
+            // which binding places best, so no file has to be matched to a body by name.
+            var meshDir = Path.Combine(dir, "Meshes");
+            if (Directory.Exists(meshDir))
+                foreach (var mp in Directory.GetFiles(meshDir, "toecap*.mdl").OrderBy(x => x))
+                {
+                    var bindPath = Path.ChangeExtension(mp, ".bind");
+                    authoredCaps.Add(new SecondSkinWriter.AuthoredCapSet(
+                        File.ReadAllBytes(mp),
+                        File.Exists(bindPath) ? File.ReadAllBytes(bindPath) : null,
+                        Path.GetFileNameWithoutExtension(mp)));
+                    log.Information("[Proteus] second skin: toe cap {0} loaded{1}",
+                        Path.GetFileName(mp),
+                        File.Exists(bindPath) ? "" : " (no binding — fits one foot only)");
+                }
+            if (authoredCaps.Count == 0)
+                log.Debug("[Proteus] second skin: no authored toe cap in {0}", meshDir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
+        }
+        return authoredCaps;
+    }
+
+    /// <summary>Last cap messages told to the wearer, so a recomposite doesn't repeat them.</summary>
+    private string? lastCapDeclined, lastCapUsed;
 
     /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
@@ -325,7 +390,10 @@ public sealed class SecondSkinService
         // CompositorService.HumanPartModelsFromModels). These are the ONLY source of non-body geometry —
         // there is no rebuild-from-a-code fallback, because a human part loads from its literal path and an
         // absence here means the character genuinely is not drawing it.
-        IReadOnlyList<string>? humanPartModels = null)
+        IReadOnlyList<string>? humanPartModels = null,
+        // Every mod in the look, not just those contributing a shell. A toe cap belongs to the foot, so
+        // the mod that ships the map need not be the one wearing anything over the toes.
+        IReadOnlyList<OverlayEntry>? allEntries = null)
     {
         if (gearOverlays.Count == 0) return null;
 
@@ -1247,6 +1315,33 @@ public sealed class SecondSkinService
             reliefContribs.Add((rEntry.ModDirectory, i, rNormal));
         }
 
+        // A toe cap belongs to the FOOT, not to the mod that happens to ship the map. One mod paints it
+        // and every shell over those toes is rebuilt with it — otherwise a wardrobe of stockings needs the
+        // same map copied into each one, and any shell missing it sleeves the toes while its neighbour
+        // caps them. The map is remapped into the body's UV using its own mod's source type, so it is
+        // shared as body-UV pixels that any shell can use.
+        byte[]? sharedToeCap = null;
+        var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+            .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First());
+        foreach (var tEntry in capCandidates)
+        {
+            var tPath = discovery.ResolveActiveToeCap(tEntry);
+            if (tPath == null) continue;
+
+            // Remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
+            var tDesc = gearOverlays.FirstOrDefault(g =>
+                string.Equals(g.Entry.ModDirectory, tEntry.ModDirectory, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
+            var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
+            sharedToeCap = ReadToeCap(tPath, tSrc, bodyType);
+            if (sharedToeCap != null)
+            {
+                log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",
+                    Path.GetFileName(tPath), tEntry.ModDirectory);
+                break;
+            }
+        }
+
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
         {
@@ -1337,12 +1432,24 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
+            // A shell follows every body contour, so hosiery sleeves each toe unless the toe area is
+            // marked — then the writer cuts that region out and rebuilds it as one rounded cap.
+            // BODY SURFACES ONLY. The map is body UV and the cap is a foot; handing one to a face or a
+            // tail layer would cut its geometry against a mask painted for another atlas entirely, and
+            // the coverage gate below would be comparing body-UV texels to face-UV alpha.
+            var toeCap = layerSurf.Key.IsBody
+                ? ToeCapFor(ov.Descriptor, entry, srcType, dstType, sharedToeCap, alpha)
+                : null;
             perHostLayers[hIdx].Add(new SecondSkinLayer
             {
                 MaterialName = "/" + matName,   // the model stores material names with a leading slash
                 Coverage = coverage,
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
+                ToeCap = toeCap,
+                ToeCapWidth = toeCap == null ? 0 : ToeCapSize,
+                ToeCapHeight = toeCap == null ? 0 : ToeCapSize,
+                ToeCapStrength = Math.Clamp(ov.Descriptor.ToeCapStrength ?? 1f, 0f, 1f),
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;
@@ -1424,15 +1531,48 @@ public sealed class SecondSkinService
 
             byte[] shell;
             SecondSkinWriter.Stats stats;
+            DumpShellInputs(h, surface.Sources, perHostLayers[h], host.BaseModel);
             try
             {
                 shell = SecondSkinWriter.Build(surface.Sources, perHostLayers[h], host.BaseModel,
-                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
+                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps());
             }
             catch (Exception ex)
             {
                 log.Error(ex, "[Proteus] second skin: model build failed for host {0}{1:D4}/{2}", host.Prefix, host.SetId, host.Slot);
                 continue;   // this host fails; the others still build
+            }
+
+            // The toe cap was wanted but no binding described this body, so none was emitted. Say so —
+            // the toes just quietly lose their cap otherwise, and there is a concrete thing the wearer
+            // can do about it (bake a binding against this body). Deduped: the shell rebuilds often.
+            if (stats.CapDeclined is { } declined)
+            {
+                if (lastCapDeclined != declined)
+                {
+                    lastCapDeclined = declined;
+                    var capMsg = $"[Proteus] Toe cap skipped: {declined}. The cap is fitted by a binding "
+                               + "measured against each supported body; this one has none, so the toes are "
+                               + "left uncapped rather than torn.";
+                    // Marshalled for the same reason as the messages above: this runs off the framework
+                    // thread and ChatGui's queue is not safe to enqueue into concurrently with the tick
+                    // that drains it.
+                    _ = Plugin.Framework.RunOnFrameworkThread(
+                        () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(capMsg, 25).Build()));
+                }
+                log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
+            }
+
+            // Which cap this shell actually got. Said out loud because the alternative is reading the
+            // Dalamud log, which is size-capped and quietly stops writing — "is the cap I just authored
+            // being used?" should not need forensics. Only on a change, so it is not chat spam.
+            if (stats.CapUsed is { } capUsed && lastCapUsed != capUsed)
+            {
+                lastCapUsed = capUsed;
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder()
+                        .AddUiForeground($"[Proteus] Toe cap: {capUsed}", 25).Build()));
+                log.Information("[Proteus] second skin: toe cap {0}", capUsed);
             }
 
             // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host. The Emperor
@@ -1721,6 +1861,116 @@ public sealed class SecondSkinService
             }
         }
         return cov;
+    }
+
+    /// <summary>
+    /// Write out exactly what the writer is about to be handed, so the offline harness can rebuild the
+    /// same shell instead of approximating its inputs. Enabled by CREATING the folder — it does nothing
+    /// until %TEMP%\proteus-shell-dump exists, and there is nothing to turn off afterwards but deleting
+    /// it again.
+    /// <para/>
+    /// This exists because approximating those inputs cost several rounds of chasing defects that the
+    /// harness could not reproduce: it was pointed at a different foot model than the one equipped, and
+    /// then at one body where the game passes several, no shape keys, and no connector-mesh mode.
+    /// </summary>
+    private void DumpShellInputs(int host, IReadOnlyList<SecondSkinWriter.SourceSpec> sources,
+                                 IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        try
+        {
+            var pre = Path.Combine(dir, $"host{host}_");
+            for (int i = 0; i < sources.Count; i++) File.WriteAllBytes($"{pre}body{i}.mdl", sources[i].Model);
+            if (baseModel != null) File.WriteAllBytes($"{pre}base.mdl", baseModel);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"bodies={sources.Count}");
+            for (int i = 0; i < sources.Count; i++)
+            {
+                var sp = sources[i];
+                sb.AppendLine($"source[{i}] dropConnectors={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
+                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")}");
+            }
+            for (int i = 0; i < layers.Count; i++)
+            {
+                var l = layers[i];
+                sb.AppendLine($"layer[{i}] material={l.MaterialName} "
+                            + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
+                            + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength}");
+                if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
+                if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
+            }
+            File.WriteAllText($"{pre}inputs.txt", sb.ToString());
+            log.Information("[Proteus] second skin: dumped build inputs for host {0} to {1}", host, dir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not dump build inputs");
+        }
+    }
+
+    /// <summary>
+    /// Load this shell's toe-cap map as a single-channel mask in the BODY's UV space (the shell inherits
+    /// the body's UVs, so the same remap the art takes applies here). Greyscale, so the red channel is the
+    /// value. Null — and no cap — when the file won't load or the map is all black.
+    /// </summary>
+    private byte[]? ReadToeCap(string path, string? srcType, string? dstType)
+    {
+        var rgba = RemapPath(path, srcType, dstType, ToeCapSize, ToeCapSize);
+        if (rgba == null)
+        {
+            log.Warning("[Proteus] second skin: toe cap map {0} failed to load — shells built without a cap", path);
+            return null;
+        }
+
+        var mask = new byte[ToeCapSize * ToeCapSize];
+        bool any = false;
+        for (int p = 0; p < mask.Length; p++)
+        {
+            mask[p] = rgba[p * 4];
+            if (mask[p] != 0) any = true;
+        }
+        return any ? mask : null;   // all black = untouched everywhere; keep the build byte-identical
+    }
+
+    /// <summary>
+    /// The toe cap for one shell: its option's own map if it names one, otherwise the shared map any mod
+    /// in the look supplied. Returned only when this shell's art actually reaches the toes — a cap cuts
+    /// the toe box out and rebuilds it, so handing one to a shell that stops at the ankle would carve a
+    /// hole in the body and fill it with fabric nobody asked for.
+    /// </summary>
+    private byte[]? ToeCapFor(OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType,
+                              byte[]? shared, byte[]? alpha)
+    {
+        if ((d.ToeCapStrength ?? 1f) <= 0f) return null;
+
+        var mask = d.ToeCap != null
+            ? ReadToeCap(Path.Combine(entry.SidecarRoot, d.ToeCap), srcType, dstType)
+            : shared;
+        if (mask == null || alpha == null) return null;
+
+        // How much of the capped area this shell actually paints, sampling the coverage under the map.
+        int over = 0, painted = 0;
+        int step = TexSize / ToeCapSize;
+        for (int y = 0; y < ToeCapSize; y++)
+            for (int x = 0; x < ToeCapSize; x++)
+            {
+                if (mask[y * ToeCapSize + x] < 128) continue;
+                over++;
+                if (alpha[(y * step) * TexSize + x * step] >= 32) painted++;
+            }
+        float share = over == 0 ? 0f : (float)painted / over;
+        if (share < MinToeCoverage)
+        {
+            log.Debug("[Proteus] second skin: shell covers {0:P0} of the toe cap area — below {1:P0}, left uncapped",
+                share, MinToeCoverage);
+            return null;
+        }
+
+        log.Information("[Proteus] second skin: toe cap at strength {0:0.##}, shell covers {1:P0} of it",
+            d.ToeCapStrength ?? 1f, share);
+        return mask;
     }
 
     /// <summary>Box-downsample the coverage for triangle trimming; it only decides keep/drop.</summary>

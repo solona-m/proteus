@@ -4800,7 +4800,12 @@ public class CompositorService : IDisposable
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
                             InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
-                            _humanPartModels);
+                            _humanPartModels,
+                            // Skin-layer mods count too: a toe cap map is about the foot, not about
+                            // whether the mod shipping it happens to put a shell over the toes.
+                            entries.Concat(gearOverlays.Select(g => g.Entry))
+                                   .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
+                                   .Select(g => g.First()).ToList());
                         if (shells != null)
                         {
                             shellBuilt = true;

@@ -136,6 +136,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Authored meshes the shell builder can graft in. toecap.mdl is a hand-modelled toe box that
+         replaces the procedurally generated cap: a stocking shell is a displaced copy of the body, so
+         it sleeves each toe and reads as a toe sock, and generating a smooth box over the toes is a
+         topology problem that repeatedly produced pinched and lumpy geometry. Authored once, it also
+         clears the toenails, which the generated cap could not.
+         NOTE: only OUR assets ship here. The foot the cap was modelled against stays out of the
+         plugin — bundling a body mod's model would redistribute it. The binding to that foot is
+         baked to a small file instead. -->
+    <Content Include="Meshes\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Meshes\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
   </ItemGroup>

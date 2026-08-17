@@ -193,6 +193,30 @@ public class OverlayDescriptor
     public float? SkinToneMask { get; set; }
 
     /// <summary>
+    /// Sidecar-relative path to a greyscale body-UV map marking where the shell should be webbed into a
+    /// smooth cap instead of following the body contour — the toes, for hosiery. White = fully capped,
+    /// black = untouched, grey = blended, so the cap fades into the rest of the shell.
+    /// <para/>
+    /// A shell is a displaced copy of the body, so without this a stocking sleeves each toe individually
+    /// and reads as a toe sock. Real sheer hosiery bridges the gaps: the toes sit inside one rounded cap
+    /// and only show through faintly. Gear layers only — the skin layer paints, it doesn't cut geometry.
+    /// <para/>
+    /// Set this only when ONE option needs a cap and its siblings don't. The usual way is the reserved
+    /// "Toe Cap" entry in the mod's Masks group (see SidecarDiscoveryService.ToeCapOptionName): authored
+    /// as Masks/Toe Cap.png and toggled by the wearer like any other mask, applying to all of the mod's
+    /// shells. This key wins where both are present; omit (null) for no cap from this option.
+    /// </summary>
+    [JsonPropertyName("ToeCap")]
+    public string? ToeCap { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="ToeCap"/> region inflates toward its smoothed envelope (0–1, default 1).
+    /// Lower values keep more of the underlying toe shape; 0 disables the pass without removing the map.
+    /// </summary>
+    [JsonPropertyName("ToeCapStrength")]
+    public float? ToeCapStrength { get; set; }
+
+    /// <summary>
     /// UV space the overlay PNGs were painted for: "bibo", "gen3", or "gen2".
     /// When set and different from the target material's body type (inferred from the
     /// material path suffix), Proteus remaps overlay pixels before compositing.
