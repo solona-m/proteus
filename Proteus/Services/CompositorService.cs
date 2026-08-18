@@ -130,6 +130,28 @@ public class CompositorService : IDisposable
     // GetActivePlayerMaterialPaths (a full Penumbra resource-tree walk on the framework thread) is
     // only paid for when this is set or the snapshot is cold; everything else reuses the cache.
     private volatile bool _activeMtrlSnapshotDirty;
+    // Every game path the last composite READ as a base — PrimeUpstreamCache's return value, captured
+    // verbatim. This is what makes "would a change to this mod actually change our output?" answerable:
+    // a mod that redirects none of these cannot move a single pixel we composite.
+    //
+    // Deliberately NOT _upstreamByGamePath: that one is a resolution memo, emptied wholesale by
+    // InvalidateUpstreamCache on every non-sidecar settings change (i.e. exactly when this has to be
+    // readable).
+    //
+    // The set and its hash live in ONE immutable record, swapped by reference, because they must never
+    // disagree. As two separate volatile fields, two composites publishing different sets could
+    // interleave their writes (setA, setB, hashB, hashA) and leave the pair permanently mismatched —
+    // and a verdict cached under a hash that does not describe the set it was computed from is never
+    // retired, because the mod's own fingerprint has not changed.
+    //
+    // The hash is content-derived rather than a counter: verdicts keyed on it are persisted, so it has
+    // to mean the same thing in the next session. It changes only when the contents change, so a cached
+    // verdict survives the composites that read the same bases — nearly all of them.
+    // Signature = a hash of the material paths the composite TARGETS, i.e. the shape of the run rather
+    // than its contents. It is what lets a path be retired: paths accumulate while the shape holds, and
+    // are dropped wholesale when it changes. See RecordCompositeBaseKeys.
+    private sealed record BaseKeySet(HashSet<string> Paths, int Hash, int Signature);
+    private volatile BaseKeySet? _compositeBaseKeys;
     // Signature of the equipped gear models the second skin cuts its shells from (feet/legs/hands/body).
     // The shell now depends on WHICH gear is worn — a heel poses the foot, a top reshapes the chest — so
     // a redraw that changes the equipped set must rebuild it. Equipping through the game fires no mod or
@@ -228,18 +250,22 @@ public class CompositorService : IDisposable
     // modDir -> (does this mod ship an obj/body/ material file, fingerprint it was computed at).
     // Fingerprint = summed size+mtime over the mod's own default_mod.json/group_*.json, so a mod
     // update is detected without needing a plugin restart. Seeded from config.KnownBodyMods.
-    // ConcurrentDictionary because IsBodyMod runs on a background thread (its manifest file I/O +
+    // ConcurrentDictionary because ClassifySurfaceMod runs on a background thread (its manifest file I/O +
     // config.Save must not touch the framework thread) while OnModDeleted may read/remove entries.
-    private readonly ConcurrentDictionary<string, (bool IsBodyMod, long Fingerprint)> _bodyModCache =
+    // AffectsComposite is the narrower verdict — the mod provides a path this composite actually reads —
+    // and is what gates a recomposite; IsSurfaceMod stays the wide one that drives cache invalidation.
+    // BaseKeysHash records which composite base set AffectsComposite was computed against.
+    private readonly ConcurrentDictionary<string,
+        (bool IsSurfaceMod, bool AffectsComposite, int BaseKeysHash, long Fingerprint)> _bodyModCache =
         new(StringComparer.OrdinalIgnoreCase);
-    // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by IsBodyMod
+    // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by ClassifySurfaceMod
     // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
     private readonly object _bodyModConfigLock = new();
 
     /// <summary>
     /// Save the plugin config under the same lock the off-thread body-mod classifier uses. Callers on
     /// the framework thread need this too: <c>Save()</c> serializes the WHOLE Configuration, so a bare
-    /// call can serialize <see cref="Configuration.KnownBodyMods"/> while IsBodyMod is mutating it —
+    /// call can serialize <see cref="Configuration.KnownBodyMods"/> while ClassifySurfaceMod is mutating it —
     /// the exact race <see cref="_bodyModConfigLock"/> exists for.
     /// </summary>
     public void SaveConfig() { lock (_bodyModConfigLock) config.Save(); }
@@ -376,8 +402,17 @@ public class CompositorService : IDisposable
         modsRoot      = penumbra.GetModDirectory() ?? string.Empty;
         managedModDir = Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir);
 
+        // Before the classifications, so a restored verdict is checked against the base set it was
+        // computed against rather than being retired wholesale on the first classify of the session.
+        if (config.CachedCompositeBaseKeys is { Count: > 0 } baseKeys)
+            _compositeBaseKeys = new BaseKeySet(
+                new HashSet<string>(baseKeys, StringComparer.OrdinalIgnoreCase),
+                ComputeBaseKeysHash(baseKeys),
+                config.CachedCompositeBaseSignature);
+
         foreach (var (modDir, entry) in config.KnownBodyMods)
-            _bodyModCache[modDir] = (entry.IsBodyMod, entry.Fingerprint);
+            _bodyModCache[modDir] =
+                (entry.IsBodyMod, entry.AffectsComposite, entry.BaseKeysHash, entry.Fingerprint);
 
         // Seed from the last session's snapshot instead of forcing an expensive Penumbra walk at
         // boot. Trusted until a body mod change or a real redraw proves it stale.
@@ -530,7 +565,7 @@ public class CompositorService : IDisposable
         // those redirects — so doing it for a hair or VFX mod that cannot move any base we read means a
         // pointless flicker. Glamourer re-asserts temporary settings for every mod a design touches on each
         // zone-in, so unfiltered this fired constantly. See MayMoveOurBases for why an unknown mod still
-        // invalidates, and EvaluateBodyModOffThread for the case where a classification turns out stale.
+        // invalidates, and EvaluateSurfaceModOffThread for the case where a classification turns out stale.
         if (!sidecar && MayMoveOurBases(modDir))
             InvalidateUpstreamCache($"ModSettingChanged:{change}:{modDir}");
 
@@ -573,7 +608,7 @@ public class CompositorService : IDisposable
         // Not one of our overlay mods: the only other thing we react to is a body mod (ships an
         // obj/body/ material), whose change can leave the cached snapshot wrong without a redraw.
         // Its detection does manifest file I/O + a config.Save, so run it off the framework thread.
-        EvaluateBodyModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient);
+        EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient);
     }
 
     /// <summary>
@@ -591,14 +626,23 @@ public class CompositorService : IDisposable
     /// onto the wrong base with nothing in the log to show for it. Only a mod we have already classified as
     /// shipping no body materials is exempt.
     ///
-    /// Note this consults the cached VERDICT and ignores the fingerprint <see cref="IsBodyMod"/> stores
+    /// Note this consults the cached VERDICT and ignores the fingerprint <see cref="ClassifySurfaceMod"/> stores
     /// beside it — checking that would mean reading the mod's manifest, which is exactly the I/O this has to
     /// avoid here. A mod that changes from non-body to body under a stale verdict is caught instead by
-    /// <see cref="EvaluateBodyModOffThread"/>, which re-runs the full fingerprinted classification off-thread
+    /// <see cref="EvaluateSurfaceModOffThread"/>, which re-runs the full fingerprinted classification off-thread
     /// and invalidates there.
     /// </summary>
+    /// <remarks>
+    /// Tests AffectsComposite and deliberately not IsSurfaceMod. The two answer different questions, and
+    /// this one is literally "could it move a base we read" — which is what AffectsComposite measures. A
+    /// mod can also provide such a base without its manifest naming a surface tree at all (see
+    /// EvaluateSurfaceModOffThread on "Drenched Wet Skin"), so the surface verdict is neither necessary
+    /// nor sufficient here. Admitting it as well would re-admit every hair/face/iris mod — exactly the
+    /// mods the comment at the call site wants exempt, because emptying the cache costs a re-derivation
+    /// that briefly unpublishes our redirects.
+    /// </remarks>
     private bool MayMoveOurBases(string modDir)
-        => !_bodyModCache.TryGetValue(modDir, out var cached) || cached.IsBodyMod;
+        => !_bodyModCache.TryGetValue(modDir, out var cached) || cached.AffectsComposite;
 
     private void InvalidateUpstreamCache(string reason)
     {
@@ -631,16 +675,21 @@ public class CompositorService : IDisposable
             return;
         }
         // A (re)installed body mod may have changed its files without changing its directory name —
-        // IsBodyMod's fingerprint check handles that. Off-thread, same as OnModSettingChanged.
-        EvaluateBodyModOffThread(modDir, $"ModAdded:{modDir}");
+        // ClassifySurfaceMod's fingerprint check handles that. Off-thread, same as OnModSettingChanged.
+        EvaluateSurfaceModOffThread(modDir, $"ModAdded:{modDir}");
     }
 
     private void OnModDeleted(string modDir)
     {
         // Files are already gone by the time this fires, so use the last-known classification
-        // rather than rescanning; then drop it, there's nothing left to invalidate against.
-        var wasBodyMod = _bodyModCache.TryGetValue(modDir, out var cached) && cached.IsBodyMod;
-        if (wasBodyMod) _activeMtrlSnapshotDirty = true;
+        // rather than rescanning; then drop it, there's nothing left to invalidate against. Both
+        // verdicts are needed and mean different things: the wide one still says whether the material
+        // snapshot went stale, while only the narrow one justifies a rebuild (deleting an iris mod
+        // changes no base we composite). Unknown mods answer false to both — nothing we ever read.
+        var known       = _bodyModCache.TryGetValue(modDir, out var cached);
+        var wasSurface  = known && cached.IsSurfaceMod;
+        var wasComposed = known && cached.AffectsComposite;
+        if (wasSurface || wasComposed) _activeMtrlSnapshotDirty = true;
         InvalidateUpstreamCache($"ModDeleted:{modDir}");
 
         // Drop the cached classification off the framework thread — config.Save is a disk write.
@@ -652,28 +701,71 @@ public class CompositorService : IDisposable
         });
 
         if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
-            && !wasBodyMod)
+            && !wasComposed)
             return;
         TriggerRecomposite($"ModDeleted:{modDir}");
     }
 
-    // IsBodyMod does manifest file I/O + a config.Save on a cache miss, both of which must stay off
-    // the framework-thread event handlers. Evaluate it on a background thread; if the mod turns out
-    // to ship body materials, mark the snapshot dirty and trigger a (debounced) recomposite.
-    private void EvaluateBodyModOffThread(string modDir, string reason, bool force = true)
+    // ClassifySurfaceMod does manifest file I/O + a config.Save on a cache miss, both of which must stay
+    // off the framework-thread event handlers. Evaluate it on a background thread.
+    //
+    // The two verdicts drive DIFFERENT things, and conflating them is what made every unrelated mod
+    // recomposite. "Surface" is deliberately wide (body/face/hair/tail/zear, any file, see
+    // BodyMaterialPattern) because the caches below have to be dropped whenever the answer to "is this
+    // material on the character" could have moved — an iris mod really does move that. But recompositing
+    // is a 5-7s rebuild-and-redraw, and it can only ever change the output if the mod provides one of the
+    // paths we actually read: an eye mod's *_iri_d.tex is not a base of any composite that isn't
+    // compositing that eye. So the trigger takes the narrow verdict, and the bookkeeping takes the wide one.
+    //
+    // Neither verdict implies the other, so the two are tested separately rather than nested. A skin mod
+    // can feed us WITHOUT looking like a surface mod: "Drenched Wet Skin" redirects Bibo's invented
+    // chara/bibo_mid_*.tex paths directly and its manifest contains no obj/body/ literal at all, so the
+    // old surface-only gate meant it never triggered a recomposite — measured, not hypothetical.
+    private void EvaluateSurfaceModOffThread(string modDir, string reason, bool force = true)
     {
         Task.Run(() =>
         {
             try
             {
-                if (!IsBodyMod(modDir)) return;
+                var (surface, affects) = ClassifySurfaceMod(modDir);
+                if (!surface && !affects) return;
                 textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
-                _activeMtrlSnapshotDirty = true;
+                // The wide verdict's own job: a face/hair/iris mod moves the answer to "is this material on
+                // the character", so the snapshot has to be re-walked even though nothing below will run.
+                // Either verdict earns the re-walk, for different reasons. A face/hair/iris mod moves the
+                // answer to "is this material on the character" directly. And a mod that feeds us without
+                // naming a surface tree still can: an append host is an accessory model, and replacing it
+                // changes which materials that model references — so gating this on `surface` alone would
+                // recomposite the shell against a material snapshot known to be stale.
+                if (surface || affects) _activeMtrlSnapshotDirty = true;
+
+                // The gate. A mod that provides none of our base paths cannot change a pixel of the output,
+                // and forcing a composite for it is not merely wasted work: TriggerRecomposite(force)
+                // latches _forcePending, which then defeats the unchanged-inputs gate for the NEXT
+                // composite too.
+                //
+                // The upstream invalidation stays BELOW this gate, deliberately. Dropping that cache is not
+                // free — the next composite re-derives every upstream through PrimeUpstreamCache, which
+                // briefly unpublishes our redirects — and a mod that moves no base we read has nothing to
+                // invalidate against. Doing it anyway is the pointless flicker the comment at
+                // OnModSettingChanged's MayMoveOurBases call warns about.
+                if (!affects)
+                {
+                    // Information, not Debug: this is the line that explains an absent recomposite, and it
+                    // fires at most once per deliberate user action on a mod we chose not to act on. The
+                    // base-set size is here so a false negative is diagnosable from the log alone.
+                    log.Information("[Proteus] {0}: mod provides none of the {1} base path(s) this composite "
+                                  + "reads — no recomposite",
+                        reason, _compositeBaseKeys?.Paths.Count ?? 0);
+                    return;
+                }
+
                 // The authoritative invalidation. MayMoveOurBases had to answer from a cached verdict with no
                 // disk access, so it can be working from a stale classification — a mod that only just began
-                // shipping body materials would have been let through. IsBodyMod above has just re-derived it
-                // against a fresh fingerprint, so this is the point where we actually know. Idempotent: when
-                // the sync check already invalidated, the cache is empty and this returns immediately.
+                // providing one of our bases would have been let through. ClassifySurfaceMod above has just
+                // re-derived it against a fresh fingerprint, so this is the point where we actually know.
+                // Idempotent: when the sync check already invalidated, the cache is empty and this returns
+                // immediately.
                 InvalidateUpstreamCache(reason);
                 // Safe to gate on an ambient re-assert: the upstream identity in the composite fingerprint
                 // is what actually detects a body mod that moved, and the EvictMod above guarantees the
@@ -926,15 +1018,22 @@ public class CompositorService : IDisposable
     // like AB Body applies its option as an in-place Penumbra file redirect on an already-loaded
     // resource, with no redraw, so the old "only refresh on redraw" assumption went stale forever).
     // Detected from the mod's own manifest files on disk — no Penumbra IPC needed, so it can run on
-    // any thread. It's driven off the framework thread (EvaluateBodyModOffThread) because the
+    // any thread. It's driven off the framework thread (EvaluateSurfaceModOffThread) because the
     // manifest reads + config.Save on a cache miss shouldn't block the game's main thread.
 
-    // Bumped whenever BodyMaterialPattern below changes what it matches. It seeds every mod's fingerprint,
-    // so raising it invalidates the whole cached classification — including the entries restored from
+    // Bumped whenever BodyMaterialPattern below changes what it matches, OR whenever a verdict stored in
+    // BodyModCacheEntry gains a meaning old entries cannot carry. It seeds every mod's fingerprint, so
+    // raising it invalidates the whole cached classification — including the entries restored from
     // config.KnownBodyMods — and forces one re-scan per mod. Without it, widening the pattern would change
     // nothing for any mod already on disk: their manifests are untouched, so their fingerprints still match
     // and the stale "not a body mod" verdict is returned forever.
-    private const int SurfaceModClassifierVersion = 3;
+    //
+    // 3 -> 4 was the SECOND reason, not the first: BodyMaterialPattern is unchanged, but the entry gained
+    // AffectsComposite/BaseKeysHash, which deserialise from an older config as (false, 0). A real body mod
+    // restored that way would answer "affects nothing" and, in a session that has not yet recorded a base
+    // set (hash also 0), match on hash and never be re-derived — silently silenced forever. Do not remove
+    // this bump on the grounds that the pattern did not change.
+    private const int SurfaceModClassifierVersion = 4;
 
     private static readonly Regex BodyMaterialPattern = new(
         // Every SKIN surface, not just the body. The snapshot this guards (_activeMtrlSnapshot) is what
@@ -985,42 +1084,181 @@ public class CompositorService : IDisposable
         return fp;
     }
 
-    private static bool ScanModForBodyMaterials(string modRoot)
+    // Every game path a manifest redirects. Penumbra writes these as lowercase forward-slash JSON
+    // strings ("chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl"), both as
+    // the keys of a Files map and inside option groups, so one quoted-string match over the raw text
+    // finds them all without having to model v3's and v4's two different layouts.
+    private static readonly Regex ManifestGamePathPattern = new(
+        // Not anchored to "chara/": a base key only has to be something we READ, and skin mods invent
+        // paths outside the usual trees (Bibo's chara/bibo_mid_base.tex is tame; others are not). An
+        // over-wide match costs a few extra strings in a set that is only ever tested for overlap —
+        // a local file value like "textures/foo.tex" simply never appears in baseKeys — while an
+        // over-narrow one silently drops a real base and skips the recomposite that base needed.
+        // The backslash exclusion drops the right-hand side of a Files entry — the mod's own relative disk
+        // path, JSON-escaped ("textures\\foo.tex") — which is never a game path and so never a base key.
+        @"""([^""\\]+\.(?:tex|mtrl|mdl))""",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// One pass over a mod's manifests answering both questions at once, because they need the same
+    /// bytes: does it touch a skin surface at all (<paramref name="Surface"/>), and exactly which game
+    /// paths does it provide (<paramref name="Paths"/>).
+    /// </summary>
+    private static (bool Surface, HashSet<string> Paths) ScanModManifests(string modRoot)
     {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var surface = false;
         try
         {
             foreach (var file in Directory.EnumerateFiles(modRoot, "*.json", SearchOption.TopDirectoryOnly))
             {
                 if (!IsModManifestFile(Path.GetFileName(file))) continue;
-                if (BodyMaterialPattern.IsMatch(File.ReadAllText(file))) return true;
+                var text = File.ReadAllText(file);
+                // Only until it is true: the answer cannot be un-set, and a multi-group mod would
+                // otherwise pay a full regex pass per manifest for a result already known.
+                if (!surface && BodyMaterialPattern.IsMatch(text)) surface = true;
+                foreach (Match m in ManifestGamePathPattern.Matches(text))
+                    paths.Add(m.Groups[1].Value);
             }
         }
         catch { /* modRoot missing/unreadable */ }
-        return false;
+        return (surface, paths);
     }
 
-    private bool IsBodyMod(string modDir)
+    /// <summary>
+    /// Classify a mod: does it touch a skin surface, and does it provide any of the base paths THIS
+    /// composite reads. The second is the recomposite gate — see <see cref="EvaluateSurfaceModOffThread"/>
+    /// for why the two must not be the same answer.
+    /// </summary>
+    private (bool Surface, bool Affects) ClassifySurfaceMod(string modDir)
     {
         // Proteus's own sidecar/overlay mods legitimately reference body materials too — that's
         // their redirect target, not a body-shape change — and they're already fully handled via
         // the HasSidecar-gated recompose path regardless of this flag. Exclude them here, or every
         // mask/color toggle on the user's own overlay mods would re-trigger the expensive walk this
         // whole mechanism exists to avoid.
-        if (HasSidecar(modDir)) return false;
+        if (HasSidecar(modDir)) return (false, false);
 
         var modRoot = Path.Combine(modsRoot, modDir);
         var fingerprint = ComputeModFingerprint(modRoot);
-        if (_bodyModCache.TryGetValue(modDir, out var cached) && cached.Fingerprint == fingerprint)
-            return cached.IsBodyMod;
+        // One read of the pair, so the hash always describes the set the verdict is computed from.
+        var bases   = _compositeBaseKeys;
+        var version = bases?.Hash ?? 0;
+        if (_bodyModCache.TryGetValue(modDir, out var cached)
+            && cached.Fingerprint == fingerprint && cached.BaseKeysHash == version)
+            return (cached.IsSurfaceMod, cached.AffectsComposite);
 
-        var isBody = ScanModForBodyMaterials(modRoot);
-        _bodyModCache[modDir] = (isBody, fingerprint);
+        var (surface, paths) = ScanModManifests(modRoot);
+
+        // Fail open while we have no idea what we read — before this session's first composite, or if
+        // the persisted set was lost. The old behaviour (any surface mod recomposites) is the safe
+        // answer there, and it lasts exactly until one composite runs.
+        var affects = bases is not { Paths.Count: > 0 } ? surface : paths.Overlaps(bases.Paths);
+
+        _bodyModCache[modDir] = (surface, affects, version, fingerprint);
         lock (_bodyModConfigLock)
         {
-            config.KnownBodyMods[modDir] = new BodyModCacheEntry { IsBodyMod = isBody, Fingerprint = fingerprint };
-            config.Save();
+            // Only pay the disk write when a VERDICT moved. config.Save serialises the whole
+            // Configuration — every KnownBodyMods entry included — and a changed base set retires every
+            // cached verdict at once, so Glamourer's zone-in re-assert storm would otherwise reclassify
+            // dozens of mods and write the entire config once per mod. BaseKeysHash is deliberately not
+            // part of "changed": a hash-only refresh costs one rescan next session if it is lost, which
+            // is far cheaper than the writes.
+            var stale = !config.KnownBodyMods.TryGetValue(modDir, out var prev)
+                     || prev.IsBodyMod != surface
+                     || prev.AffectsComposite != affects
+                     || prev.Fingerprint != fingerprint;
+            config.KnownBodyMods[modDir] = new BodyModCacheEntry
+            {
+                IsBodyMod        = surface,
+                AffectsComposite = affects,
+                BaseKeysHash     = version,
+                Fingerprint      = fingerprint,
+            };
+            if (stale) config.Save();
         }
-        return isBody;
+        return (surface, affects);
+    }
+
+    /// <summary>
+    /// Record the base paths a composite reads, so <see cref="ClassifySurfaceMod"/> can tell a mod that
+    /// feeds us from one that merely touches a skin surface.
+    ///
+    /// ACCUMULATES while the composite SHAPE holds, and is replaced outright when that shape changes.
+    /// Both halves matter, for opposite reasons:
+    ///
+    /// Accumulating, because a run does not reliably see everything. <see cref="ResolveUpstream"/> records
+    /// a path only when it resolves to something that is not our own output, so a composite running on a
+    /// cold cache (any settings change clears it) legitimately reports FEWER paths than the warm run
+    /// before it. Shrinking to that would be silent and lasting: the hash of this set keys every cached
+    /// verdict, so a skin mod whose only base was among the dropped paths gets classified "affects
+    /// nothing" and CACHED that way, and is then ignored until the set happens to move again.
+    ///
+    /// Replacing, because otherwise nothing ever retires. A face overlay enabled once would put the face
+    /// surfaces in the set permanently, and every face mod would then force a full recomposite for as
+    /// long as the config file survives — the exact symptom this whole mechanism exists to remove.
+    /// <paramref name="signature"/> hashes the material paths the composite TARGETS, so it changes when
+    /// overlays are added, removed or retargeted, and holds across the ordinary composites in between.
+    ///
+    /// Only an <paramref name="authoritative"/> record may retire paths. The pre-gate call knows just the
+    /// published-manifest half, so letting it replace would shrink the set to that floor for the width of
+    /// a composite — long enough for a concurrent classification to cache the very false negative the
+    /// accumulate rule exists to prevent.
+    /// </summary>
+    private void RecordCompositeBaseKeys(IEnumerable<string> baseKeys, int signature, bool authoritative)
+    {
+        // The whole read-modify-write is under the lock the persisted copy is written under: two
+        // overlapping composites could otherwise both compute a union against the same old set and race
+        // the swap, losing one of their contributions and leaving config.CachedCompositeBaseKeys
+        // describing neither.
+        lock (_bodyModConfigLock)
+        {
+            var prev = _compositeBaseKeys;
+            var next = new HashSet<string>(baseKeys, StringComparer.OrdinalIgnoreCase);
+
+            // The one moment a path may be dropped: an authoritative record for a shape that is not the
+            // one the stored set describes.
+            var retire = authoritative && prev is not null && prev.Signature != signature;
+
+            if (prev is not null && !retire)
+            {
+                next.UnionWith(prev.Paths);
+                // A union can only equal the old count when it added nothing, so this is "no new paths".
+                if (next.Count == prev.Paths.Count) return;
+            }
+
+            // A non-authoritative record leaves the stored signature alone — it has not seen enough of
+            // the run to redefine the shape, only enough to add to it.
+            var sig = prev is null || retire ? signature : prev.Signature;
+
+            _compositeBaseKeys = new BaseKeySet(next, ComputeBaseKeysHash(next), sig);
+            config.CachedCompositeBaseKeys = [.. next];
+            config.CachedCompositeBaseSignature = sig;
+            config.Save();
+            log.Debug("[Proteus] composite base set {0}: {1} path(s), hash {2}, shape {3}",
+                retire ? "replaced (composite shape changed)" : "now", next.Count,
+                _compositeBaseKeys.Hash, sig);
+        }
+    }
+
+    // Order-independent and case-insensitive, matching the set's own comparer, and stable across
+    // sessions — string.GetHashCode is randomised per process, so it cannot be used here.
+    private static int ComputeBaseKeysHash(IEnumerable<string> baseKeys)
+    {
+        var h = 17;
+        var n = 0;
+        foreach (var p in baseKeys.Select(k => k.ToLowerInvariant()).OrderBy(k => k, StringComparer.Ordinal))
+        {
+            foreach (var c in p)
+                h = unchecked(h * 31 + c);
+            // Terminator, or the concatenation alone collides: {"ab","c"} would hash as {"a","bc"}.
+            h = unchecked(h * 31 + '\n');
+            n++;
+        }
+        h = unchecked(h * 31 + n);
+        // Never 0 — that is the "no set recorded" value a restored BodyModCacheEntry from a config
+        // written before this field existed also carries, and the two must not compare equal.
+        return h == 0 ? 1 : h;
     }
 
     // ── Color override (design bindings) ───────────────────────────────────────
@@ -1266,7 +1504,7 @@ public class CompositorService : IDisposable
             // body replacers that redirect an always-loaded "smallclothes" resource in place) change
             // which materials are active WITHOUT a redraw. GetActivePlayerMaterialPaths must run on
             // the framework thread (it walks the draw object); it's cheap (~2-8ms), but we still only
-            // pay for it when the cache is cold or IsBodyMod flagged it dirty (see OnModSettingChanged/
+            // pay for it when the cache is cold or ClassifySurfaceMod flagged it dirty (see OnModSettingChanged/
             // OnModAdded/OnModDeleted/OnPlayerCollectionChanged), not on every mask/color toggle.
             if (_activeMtrlSnapshot == null || _activeMtrlSnapshotDirty)
             {
@@ -1325,7 +1563,7 @@ public class CompositorService : IDisposable
                     _activeMtrlSnapshotDirty = false;
                     // Under the lock like every other off-thread save: Save() serializes the WHOLE
                     // Configuration, so an unsynchronized one here can throw "collection was modified"
-                    // while IsBodyMod mutates KnownBodyMods on its own thread. Nothing catches that, and
+                    // while ClassifySurfaceMod mutates KnownBodyMods on its own thread. Nothing catches that, and
                     // Recomposite is below — so the composite this trigger exists to run would be dropped
                     // outright, with no log line to say it happened.
                     lock (_bodyModConfigLock)
@@ -2948,6 +3186,17 @@ public class CompositorService : IDisposable
             // InvalidateUpstreamCache stay a pure cache drop instead of a gate-defeating reset.
             var baseKeys = PrimeUpstreamCache(byMaterial.Keys);
             if (ct.IsCancellationRequested) return;
+
+            // The shape of this composite: which materials it targets, independent of what they resolve
+            // to. Retiring a stale base path keys off a CHANGE in this, so it is computed from
+            // byMaterial rather than from anything downstream that a cold cache could perturb.
+            var baseSignature = ComputeBaseKeysHash(byMaterial.Keys);
+
+            // Contribute the half of the base set that is knowable before the gate — the published
+            // manifest's keys plus the overlay material paths — so a fresh install's first mod-settings
+            // event has something to test against instead of failing open. Not authoritative: it has not
+            // seen what the blend loop resolves, so it may add paths but must never retire any.
+            RecordCompositeBaseKeys(baseKeys, baseSignature, authoritative: false);
 
             // ── Unchanged-inputs gate ────────────────────────────────────────
             // Every input is settled here and nothing expensive has run yet: the decode/blend loop, the
@@ -4892,7 +5141,7 @@ public class CompositorService : IDisposable
                             //
                             // LAST in this block, and under the same lock every other off-thread save takes
                             // (see _bodyModConfigLock). Save() serializes the whole Configuration, so an
-                            // unsynchronized one can throw "collection was modified" while IsBodyMod mutates
+                            // unsynchronized one can throw "collection was modified" while ClassifySurfaceMod mutates
                             // KnownBodyMods on its own thread — and thrown from higher up this block it would
                             // be swallowed as "second skin build failed" and skip _needFullRedraw, leaving a
                             // changed shell model to an in-place reload that never re-fetches an accessory
@@ -4947,6 +5196,18 @@ public class CompositorService : IDisposable
             // whatever the user asked for is now in the published manifest.
             _lastCompositeFingerprint = fingerprint;
             Interlocked.Exchange(ref _forcePending, 0);
+
+            // Widen the recorded base set to what this run ACTUALLY resolved. baseKeys is the published
+            // manifest's keys plus the overlay material paths, but the blend loop resolves texture bases
+            // through ResolveUpstream that we may read without publishing — the live manifest here carries
+            // c0201f0001_fac_mask.tex and not the face's other channels, so a skin mod changing only one of
+            // those would otherwise be judged "does not affect us" and skip a recomposite it needed.
+            // _upstreamByGamePath is exactly "every path resolved as a base", and by this point it holds the
+            // whole run. Over-inclusive by an append host's .mdl or two, which errs toward compositing.
+            // Authoritative: this has seen the whole run, so it is the record allowed to retire paths
+            // left over from a previous composite shape.
+            RecordCompositeBaseKeys(baseKeys.Concat(_upstreamByGamePath.Keys), baseSignature,
+                authoritative: true);
 
             // Reconcile the injected host items AFTER the redirect mod is live, so when the equip's redraw
             // loads the model it resolves straight to the shell (no visible frames, no bare ring). Each

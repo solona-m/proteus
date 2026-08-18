@@ -30,7 +30,20 @@ public enum ConnectorMeshMode
 [Serializable]
 public class BodyModCacheEntry
 {
+    /// <summary>Ships files under a skin surface tree (body/face/hair/tail/zear) — the wide verdict
+    /// that drives cache invalidation.</summary>
     public bool IsBodyMod { get; set; }
+
+    /// <summary>Provides at least one game path the composite actually reads as a base — the narrow
+    /// verdict that gates a recomposite. Computed against the base set named by
+    /// <see cref="BaseKeysHash"/>.</summary>
+    public bool AffectsComposite { get; set; }
+
+    /// <summary>Content hash of the composite base set <see cref="AffectsComposite"/> was computed
+    /// against; a mismatch retires that verdict (the fingerprint alone cannot catch it, because the
+    /// mod is unchanged and it is OUR inputs that moved).</summary>
+    public int BaseKeysHash { get; set; }
+
     public long Fingerprint { get; set; }
 }
 
@@ -284,6 +297,17 @@ public class Configuration : IPluginConfiguration
     /// this and only re-fetches once something actually invalidates it (a body mod change, or a
     /// real redraw).</summary>
     public List<string>? CachedActiveMaterialPaths { get; set; } = null;
+
+    /// <summary>Game paths the last composite read as bases. Persisted so the "does this mod feed our
+    /// composite?" test — the one that stops an unrelated hair/face/iris mod from forcing a full
+    /// recomposite — is answerable from the first mod-settings event of a session, rather than failing
+    /// open until the first composite of that session has run.</summary>
+    public List<string>? CachedCompositeBaseKeys { get; set; } = null;
+
+    /// <summary>Shape of the composite the set above describes — a hash of the material paths it
+    /// targets. Persisted alongside it so a path retired when overlays change stays retired across a
+    /// restart, instead of the restored set being treated as belonging to whatever shape runs next.</summary>
+    public int CachedCompositeBaseSignature { get; set; }
 
     /// <summary>Game model paths the second skin last APPENDED into — the player's own necklace/ring,
     /// whose model we read back as the base for the merge. Persisted because the managed mod's manifest
