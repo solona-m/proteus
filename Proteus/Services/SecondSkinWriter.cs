@@ -2041,6 +2041,81 @@ public static class SecondSkinWriter
 
                     // Whatever is left. Several passes above can each drop a triangle or two along the
                     // join, and a two-triangle hole is a bright polygon of bare skin in game.
+                    // WELD THE CRACKS ALONG THE TRIMS. The coverage cut, the cap's footprint cut and
+                    // the join all leave boundary vertices that sit on top of one another without being
+                    // the same vertex - measured on a heeled foot, 15 pairs in the toe region alone, the
+                    // closest 0.00003 apart. Each is a crack the shell shows daylight through, and in a
+                    // modelling package they are what a weld at 0.001 closes.
+                    //
+                    // Only vertices already on a BOUNDARY, so nothing interior is touched, and only where
+                    // both sit on the same spot: this closes cracks, it does not simplify the mesh. Note
+                    // the two sides usually disagree on UV - they are opposite sides of a chart boundary
+                    // - so the survivor's coordinate wins and the texture shifts a little along that
+                    // edge. A few texels of drift on a trim edge beats a hole.
+                    {
+                        var onEdge = new HashSet<ushort>();
+                        {
+                            var cnt = new Dictionary<(ushort, ushort), int>();
+                            foreach (var sub in keptPerSub)
+                                for (int t = 0; t + 2 < sub.Length; t += 3)
+                                    for (int k = 0; k < 3; k++)
+                                    {
+                                        ushort a3 = sub[t + k], b3 = sub[t + (k + 1) % 3];
+                                        var key = a3 < b3 ? (a3, b3) : (b3, a3);
+                                        cnt[key] = cnt.GetValueOrDefault(key) + 1;
+                                    }
+                            foreach (var (k, n) in cnt)
+                                if (n == 1) { onEdge.Add(k.Item1); onEdge.Add(k.Item2); }
+                        }
+
+                        var at = new Dictionary<(int, int, int), ushort>();
+                        var into = new ushort[vc];
+                        for (ushort i = 0; i < vc; i++) into[i] = i;
+                        int welds = 0;
+                        if (pEl2 is { } pw3)
+                        {
+                            Span<float> tw = stackalloc float[4];
+                            // Quantised at the weld tolerance, so two points inside it share a bucket.
+                            (int, int, int) Bucket(float x, float y, float z)
+                                => ((int)MathF.Round(x / CrackWeldTolerance),
+                                    (int)MathF.Round(y / CrackWeldTolerance),
+                                    (int)MathF.Round(z / CrackWeldTolerance));
+                            foreach (var i in onEdge)
+                            {
+                                if (!used[i]) continue;
+                                ReadTyped(outStreams[pw3.Stream], i * outStrides[pw3.Stream] + pw3.Offset,
+                                          pw3.Type, tw);
+                                var b4 = Bucket(tw[0], tw[1], tw[2]);
+                                if (at.TryGetValue(b4, out var keep) && keep != i)
+                                { into[i] = keep; welds++; }
+                                else at[b4] = i;
+                            }
+                        }
+
+                        if (welds > 0)
+                        {
+                            int lost = 0;
+                            for (int su = 0; su < keptPerSub.Count; su++)
+                            {
+                                var sub = keptPerSub[su];
+                                var keepT = new List<ushort>(sub.Length);
+                                for (int t = 0; t + 2 < sub.Length; t += 3)
+                                {
+                                    ushort a4 = into[sub[t]], b5 = into[sub[t + 1]], c4 = into[sub[t + 2]];
+                                    // A triangle whose corners weld together has no area left.
+                                    if (a4 == b5 || b5 == c4 || c4 == a4) { lost++; continue; }
+                                    keepT.Add(a4); keepT.Add(b5); keepT.Add(c4);
+                                }
+                                keptPerSub[su] = keepT.ToArray();
+                            }
+                            triOut -= lost;
+                            for (int i = 0; i < vc; i++) if (into[i] != i) used[i] = false;
+                            diag?.Invoke($"authored cap: welded {welds} crack(s) along the trims at "
+                                       + $"{CrackWeldTolerance:F4}"
+                                       + (lost > 0 ? $", dropping {lost} triangle(s) left with no area" : ""));
+                        }
+                    }
+
                     int holesShut = FillSmallHoles(keptPerSub, vc, ref used, SmallHoleEdges);
                     if (holesShut > 0)
                         diag?.Invoke($"authored cap: closed {holesShut} small hole(s) left along the join");
@@ -3904,6 +3979,14 @@ public static class SecondSkinWriter
     /// <summary>Furthest the relax may carry a point from where it started, once the inward part of the
     /// move has been dropped.</summary>
     private const float ShellRelaxMaxDrift = 0.0010f;
+
+    /// <summary>
+    /// How far apart two boundary vertices may sit and still be the same point. The trims leave pairs as
+    /// close as 0.00003 and the shell shows daylight between them; this is the tolerance a modelling
+    /// package would be given to weld them, and it is well under an edge length so nothing that is
+    /// genuinely two places gets merged.
+    /// </summary>
+    private const float CrackWeldTolerance = 0.0010f;
 
     /// <summary>Rings to walk out from a socket patch looking for landed vertices to fit against.</summary>
     private const int CapFitAnchorRings = 6;
