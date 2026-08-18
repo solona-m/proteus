@@ -568,13 +568,7 @@ public class SidecarDiscoveryService
             var path = Path.Combine(entry.SidecarRoot, MetadataFile);
             SnapshotDefaults(entry, path);
 
-            // Skip nulls: the gear-layer fields are all optional, and writing them out as null would
-            // bloat every mod's metadata.json the first time it's saved.
-            var json = JsonSerializer.Serialize(entry.Metadata, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-            });
+            var json = JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite);
             // AtomicWrite, not File.WriteAllText: this is the authored overlay — material paths, body
             // type, shader, colour rows — and nothing can rebuild it. Truncating it in place to refill
             // it means a crash mid-save loses the mod's whole descriptor, and the editor saves often.
@@ -639,8 +633,7 @@ public class SidecarDiscoveryService
         try
         {
             var json = File.ReadAllText(metaPath);
-            return JsonSerializer.Deserialize<ProteusMetadata>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead);
         }
         catch (Exception ex)
         {

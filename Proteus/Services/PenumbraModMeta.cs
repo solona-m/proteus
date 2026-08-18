@@ -34,7 +34,10 @@ internal static class PenumbraModMeta
     /// <summary>What we create new folders as — readable by every Penumbra, upgraded in place by new ones.</summary>
     public const int LegacyFileVersion = 3;
 
-    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    // Encoder: these are Penumbra's own files, and Penumbra writes non-ASCII names as themselves. Without
+    // it a rewrite here turns a mod's 正常 into "正常" in its manifest. See ProteusJson.
+    private static readonly JsonSerializerOptions WriteOptions =
+        new() { WriteIndented = true, Encoder = ProteusJson.Encoder };
 
     /// <summary>
     /// Whether the folder has a manifest that actually parses. False both when there is none and when
@@ -346,7 +349,7 @@ internal static class PenumbraModMeta
         var slot = Math.Clamp(index, 0, others.Count);
 
         using var stream = new MemoryStream();
-        using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
         {
             w.WriteStartObject();
             w.WriteNumber("FileVersion", SingleFileVersion);
@@ -442,7 +445,7 @@ internal static class PenumbraModMeta
         var path = Path.Combine(modRoot, MetaFile);
 
         using var stream = new MemoryStream();
-        using (var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
         {
             w.WriteStartObject();
             w.WriteNumber("FileVersion", SingleFileVersion);

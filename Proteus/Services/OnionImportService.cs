@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -559,11 +558,7 @@ public sealed class OnionImportService
             metadata.Overlays = byLayout[0].Overlays;
         }
 
-        var metaJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        });
+        var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
         // AtomicWrite, not File.WriteAllText: this descriptor is the one file here nothing can rebuild —
         // material paths, body type, shader, colour rows — and the import goes straight on to unpacking
         // textures, so the window where a truncated copy could be left behind is a busy one.

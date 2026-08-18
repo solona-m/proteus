@@ -194,6 +194,45 @@ public class PenumbraModMetaTests
         Assert.Null(PenumbraModMeta.TryReadDefaultData(tmp.Path));
     }
 
+    // Penumbra writes non-ASCII names as themselves (it serializes with Newtonsoft); System.Text.Json's
+    // default encoder escapes them. Since Proteus REWRITES Penumbra's own files, the default would turn a
+    // mod's 正常 into "正常" in its manifest — valid JSON, unreadable to its author. These
+    // assert on the raw text on purpose: JsonDocument decodes both forms identically, so parsing the
+    // result back could never catch a regression here.
+
+    [Fact]
+    public void NewMetaJson_writes_non_ascii_names_as_themselves()
+    {
+        var json = PenumbraModMeta.NewMetaJson("彩绘比基尼", "ttrrffxiv", "Ярко");
+        Assert.Contains("\"Name\": \"彩绘比基尼\"", json);
+        Assert.Contains("Ярко", json);
+        Assert.DoesNotContain("\\u", json);
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_writes_non_ascii_names_as_themselves_in_both_formats()
+    {
+        foreach (var fileVersion in new[] { 3, 4 })
+        {
+            using var tmp = new TempDir();
+            File.WriteAllText(tmp.File("meta.json"),
+                $$"""{"FileVersion":{{fileVersion}},"Name":"彩绘比基尼"}""");
+
+            PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Style", ["正常", "光沢"], 0);
+
+            // v4 splices into meta.json; v3 leaves it alone and drops a group_NNN_ file beside it.
+            var written = File.ReadAllText(fileVersion >= 4
+                ? tmp.File("meta.json")
+                : Directory.EnumerateFiles(tmp.Path, "group_*.json").Single());
+            Assert.Contains("正常", written);
+            Assert.DoesNotContain("\\u", written);
+
+            // The v4 rewrite copies untouched fields through as JsonElements, which are re-escaped by the
+            // WRITER's encoder — so the mod's own name is only safe if that writer was configured too.
+            if (fileVersion >= 4) Assert.Contains("彩绘比基尼", File.ReadAllText(tmp.File("meta.json")));
+        }
+    }
+
     [Fact]
     public void AtomicWrite_leaves_no_temp_files_behind()
     {

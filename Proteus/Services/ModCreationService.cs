@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -289,12 +288,7 @@ public sealed class ModCreationService
             Overlays = [descriptor],
         };
 
-        // Same options as SidecarDiscoveryService.SaveMetadata — skip null optional fields for clean json.
-        var metaJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        });
+        var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
         // AtomicWrite for the same reason as the manifest below, and with more at stake: meta.json is
         // regenerable boilerplate, whereas this descriptor is the authored overlay itself. A zero-filled
         // one leaves a mod that loads in Penumbra and does nothing in Proteus.

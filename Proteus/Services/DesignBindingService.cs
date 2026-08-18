@@ -91,8 +91,10 @@ public class DesignBindingService : IDisposable
     private readonly IFramework framework;
     private readonly IPluginLog log;
 
+    // Encoder is write-only (it has no effect on the read side that shares this): design names are
+    // user-authored and often non-ASCII, and escaping them makes the store unreadable. See ProteusJson.
     private static readonly JsonSerializerOptions JsonOpts =
-        new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
+        new() { WriteIndented = true, PropertyNameCaseInsensitive = true, Encoder = ProteusJson.Encoder };
 
     private readonly string storePath;
     private readonly object gate = new();
