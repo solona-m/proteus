@@ -693,6 +693,14 @@ public static class SecondSkinWriter
         // once, on first use, because it is the same expensive collection the cap projection makes.
         List<SkinTri>? bodySkin = null;
 
+        // EVERYTHING SOLID, for the clearance pass alone. bodySkin is the skin filter's idea of the body
+        // and the right one for reading a UV from, but it is not what the shell has to clear. A body may
+        // carry its toenails on their own mesh under their own material, and a shoe routinely brings them
+        // along: on this heeled foot the skin has ten holes where the nails should be and no nail
+        // geometry at all, so the nail pokes through a shell that was never told it existed. Nothing
+        // reads a coordinate from this - only distances.
+        List<SkinTri>? bodySolid = null;
+
         // The cap's projection depends only on the cap and the bodies, never on the layer wearing it, and
         // it is the most expensive thing in the build â€” every cap vertex against every skin triangle.
         var capUvCache = new Dictionary<int, CapUvPlan?>();
@@ -2051,7 +2059,162 @@ public static class SecondSkinWriter
                     // Only the strays: MinSkinClearance is well under the push, so anything already
                     // standing off is untouched, and MaxSkinLift stops this reshaping a surface that is
                     // low for a reason rather than by accident.
-                    if (bodySkin != null && capAllVerts.Count > 0 && nEl2 is { } ne10)
+                    // RELAX THE SHELL AROUND THE TOES, OUTWARD ONLY. The cap's own repairs cannot reach
+                    // a fault in the surface it was grafted onto: one nail vertex sitting 0.0003 off the
+                    // skin came out 0.0053 proud of the shell, and the socket fit, the fit bound, the
+                    // clearance ceiling and the patch relax each left it at exactly that.
+                    //
+                    // Done the way a modelling package does it, which two earlier attempts were not:
+                    //
+                    //   WELDED, so the copies a UV chart split apart - 66 vertices over 56 positions
+                    //   around this spot - move as one point instead of opening the seam between them.
+                    //
+                    //   UNIQUE EDGES, not one per triangle corner, or the average leans toward whichever
+                    //   neighbour carries more triangles rather than toward the middle.
+                    //
+                    //   TAUBIN, whose negative second step undoes the shrink a plain Laplacian causes.
+                    //
+                    //   AND NEVER INWARD. That is the part neither earlier attempt had, and the reason
+                    //   both made things worse. Smoothing a surface held a millimetre off a body moves
+                    //   it toward its neighbours' average, which on a curved shell means INTO the body;
+                    //   the clearance pass then shoves it back out, and the two fight. Measured, the
+                    //   clearance pass went from lifting about a hundred vertices to 471. Dropping the
+                    //   inward component of each step leaves the smoothing purely lateral, so it takes
+                    //   the jaggedness out and leaves nothing for the pass below to undo.
+                    if (capAllVerts.Count > 0 && pEl2 is { } pr0 && ShellRelaxPasses > 0)
+                    {
+                        Span<float> tmpS = stackalloc float[4];
+                        var cur0 = new Vec3[vc];
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (!used[i]) continue;
+                            ReadTyped(outStreams[pr0.Stream], i * outStrides[pr0.Stream] + pr0.Offset,
+                                      pr0.Type, tmpS);
+                            cur0[i] = new Vec3(tmpS[0], tmpS[1], tmpS[2]);
+                        }
+
+                        var nodeOf = new Dictionary<(int, int, int), int>();
+                        var owner = new int[vc];
+                        Array.Fill(owner, -1);
+                        var nodePos = new List<Vec3>();
+                        var nodeVerts = new List<List<ushort>>();
+                        for (ushort i = 0; i < vc; i++)
+                        {
+                            if (!used[i]) continue;
+                            var key = QuantPos(cur0[i].X, cur0[i].Y, cur0[i].Z);
+                            if (!nodeOf.TryGetValue(key, out int nd))
+                            {
+                                nd = nodePos.Count;
+                                nodeOf[key] = nd;
+                                nodePos.Add(cur0[i]);
+                                nodeVerts.Add([]);
+                            }
+                            owner[i] = nd;
+                            nodeVerts[nd].Add(i);
+                        }
+
+                        int nn = nodePos.Count;
+                        var nb = new HashSet<int>[nn];
+                        var acc = new Vec3[nn];
+                        foreach (var sub in keptPerSub)
+                            for (int t = 0; t + 2 < sub.Length; t += 3)
+                            {
+                                int a2 = owner[sub[t]], b2 = owner[sub[t + 1]], c2 = owner[sub[t + 2]];
+                                if (a2 < 0 || b2 < 0 || c2 < 0) continue;
+                                foreach (var (x2, y2) in new[] { (a2, b2), (b2, c2), (c2, a2) })
+                                {
+                                    if (x2 == y2) continue;
+                                    (nb[x2] ??= []).Add(y2);
+                                    (nb[y2] ??= []).Add(x2);
+                                }
+                                var e1 = new Vec3(nodePos[b2].X - nodePos[a2].X, nodePos[b2].Y - nodePos[a2].Y,
+                                                  nodePos[b2].Z - nodePos[a2].Z);
+                                var e2 = new Vec3(nodePos[c2].X - nodePos[a2].X, nodePos[c2].Y - nodePos[a2].Y,
+                                                  nodePos[c2].Z - nodePos[a2].Z);
+                                var fn = new Vec3(e1.Y * e2.Z - e1.Z * e2.Y, e1.Z * e2.X - e1.X * e2.Z,
+                                                  e1.X * e2.Y - e1.Y * e2.X);
+                                foreach (int q in new[] { a2, b2, c2 })
+                                    acc[q] = new Vec3(acc[q].X + fn.X, acc[q].Y + fn.Y, acc[q].Z + fn.Z);
+                            }
+
+                        var outN = new Vec3[nn];
+                        for (int n = 0; n < nn; n++) outN[n] = NormalizeOr(acc[n], default);
+
+                        var move = new bool[nn];
+                        int inBand = 0;
+                        for (int n = 0; n < nn; n++)
+                        {
+                            if (nb[n] is not { Count: > 2 }) continue;
+                            if (outN[n] is { X: 0, Y: 0, Z: 0 }) continue;
+                            foreach (var q0 in capAllVerts)
+                                if (Dist(nodePos[n], q0) <= ShellRelaxReach) { move[n] = true; inBand++; break; }
+                        }
+
+                        var start = nodePos.ToArray();
+                        var cur = nodePos.ToArray();
+                        var nxt = new Vec3[nn];
+                        for (int pass = 0; pass < ShellRelaxPasses; pass++)
+                            foreach (float lam in new[] { ShellRelaxLambda, ShellRelaxMu })
+                            {
+                                Array.Copy(cur, nxt, nn);
+                                for (int n = 0; n < nn; n++)
+                                {
+                                    if (!move[n]) continue;
+                                    Vec3 sum = default;
+                                    int c3 = 0;
+                                    foreach (int mn in nb[n]!)
+                                    { sum = new Vec3(sum.X + cur[mn].X, sum.Y + cur[mn].Y, sum.Z + cur[mn].Z); c3++; }
+                                    if (c3 == 0) continue;
+                                    float ic = 1f / c3;
+                                    var to = new Vec3(cur[n].X + (sum.X * ic - cur[n].X) * lam,
+                                                      cur[n].Y + (sum.Y * ic - cur[n].Y) * lam,
+                                                      cur[n].Z + (sum.Z * ic - cur[n].Z) * lam);
+
+                                    // Measured from where it STARTED, so the constraint is on the result
+                                    // rather than on one step of it.
+                                    float dx7 = to.X - start[n].X, dy7 = to.Y - start[n].Y, dz7 = to.Z - start[n].Z;
+                                    var un = outN[n];
+                                    float along = dx7 * un.X + dy7 * un.Y + dz7 * un.Z;
+                                    if (along < 0f)
+                                    {   // drop the inward part; keep the sideways part entire
+                                        dx7 -= un.X * along; dy7 -= un.Y * along; dz7 -= un.Z * along;
+                                    }
+                                    float dl = MathF.Sqrt(dx7 * dx7 + dy7 * dy7 + dz7 * dz7);
+                                    if (dl > ShellRelaxMaxDrift)
+                                    {
+                                        float k4 = ShellRelaxMaxDrift / dl;
+                                        dx7 *= k4; dy7 *= k4; dz7 *= k4;
+                                    }
+                                    nxt[n] = new Vec3(start[n].X + dx7, start[n].Y + dy7, start[n].Z + dz7);
+                                }
+                                (cur, nxt) = (nxt, cur);
+                            }
+
+                        int smoothed = 0;
+                        float worstS = 0f;
+                        for (int n = 0; n < nn; n++)
+                        {
+                            if (!move[n]) continue;
+                            float d5 = Dist(cur[n], start[n]);
+                            if (d5 <= 1e-6f) continue;
+                            foreach (var i in nodeVerts[n])
+                                WriteXYZ(outStreams[pr0.Stream], i * outStrides[pr0.Stream] + pr0.Offset,
+                                         pr0.Type, cur[n].X, cur[n].Y, cur[n].Z);
+                            worstS = MathF.Max(worstS, d5);
+                            smoothed++;
+                        }
+                        if (smoothed > 0)
+                            diag?.Invoke($"authored cap: relaxed {smoothed} of {inBand} welded shell points "
+                                       + $"around the toes, outward only, furthest {worstS:F5}");
+                    }
+
+                    if (bodySolid == null)
+                    {
+                        bodySolid = CollectSkinTriangles(sourceModels, dropIslands: false);
+                        bodySolid.AddRange(CollectSkinTriangles(sourceModels, skinOnly: false,
+                                                                dropIslands: false, nonSkin: true));
+                    }
+                    if (bodySolid.Count > 0 && capAllVerts.Count > 0 && nEl2 is { } ne10)
                     {
                         float lx = float.MaxValue, ly = float.MaxValue, lz = float.MaxValue;
                         float hx = float.MinValue, hy = float.MinValue, hz = float.MinValue;
@@ -2113,7 +2276,7 @@ public static class SecondSkinWriter
                             }
 
                         var lift = new float[vc];
-                        foreach (var t in bodySkin)
+                        foreach (var t in bodySolid)
                             foreach (var (bp, bn) in new[] { (t.A, t.Na), (t.B, t.Nb), (t.C, t.Nc) })
                             {
                                 if (bp.X < lx - pad || bp.X > hx + pad || bp.Y < ly - pad || bp.Y > hy + pad
@@ -3655,6 +3818,105 @@ public static class SecondSkinWriter
     /// business being touched: the two surfaces only have to agree where they meet.
     /// </summary>
     private const int CapSeamBlendRings = 1;
+
+    /// <summary>
+    /// Largest boundary loop, in edges, that counts as a hole in the skin rather than an edge of the
+    /// mesh. The sockets a body leaves when its toenails are their own mesh measure ten and twelve; the
+    /// ankle cut on the same foot runs to a hundred and sixty.
+    /// </summary>
+    private const int CapHoleMaxEdges = 20;
+
+    /// <summary>
+    /// ...and how far such a loop may reach in the atlas. A socket spans a few hundredths; a chart
+    /// boundary spans the texture, and mistaking one for the other would distrust half the cap.
+    /// </summary>
+    private const float CapHoleMaxUvSpan = 0.08f;
+
+    /// <summary>
+    /// How far past a socket's own extent a landing is still compromised, as a multiple of its radius.
+    /// <para/>
+    /// It was 1.6, on the reasoning that the rim triangles reach outwards from the hole and it is those a
+    /// landing is measured from. That is true, but it also claimed a band of toe well behind the nail and
+    /// carried it along with the fit - in game the cap rose off the toe far enough to clip through a
+    /// sandal strap. The rim itself is the part that cannot be trusted; just past it the surface is real.
+    /// </summary>
+    private const float CapSocketReach = 1.35f;
+
+    /// <summary>
+    /// Most a socket fit may move a vertex. The dish it exists to remove measured 0.0035, so this is not
+    /// a bound on the repair so much as on the fit going wrong: a rotation solved from anchors that
+    /// happen to be poorly spread can throw a patch a long way, and a nail standing proud of the toe is
+    /// as visible as one sunk into it.
+    /// </summary>
+    private const float CapFitMaxMove = 0.0026f;
+
+    /// <summary>
+    /// Most the per-socket bound may grow beyond <see cref="CapFitMaxMove"/> for a socket larger than the
+    /// median. A big toe's nail is half again the size of a little one's and sits that much prouder; past
+    /// this the socket is not a nail and the fit should not be trusted with it either way.
+    /// </summary>
+    private const float CapFitMoveScaleMax = 2.0f;
+
+    /// <summary>
+    /// Where the fade from the fitted position back to the resolved one begins, as a fraction of the
+    /// socket's radius. Inside this the nail is carried entirely by the fit; outside it the two are
+    /// blended so the patch meets the surface around it without a step.
+    /// </summary>
+    private const float CapFitFeatherStart = 0.6f;
+
+    /// <summary>
+    /// Smoothing passes run over a socket patch once it has been fitted. A modelling package's relax at
+    /// a low strength: enough to take the crease out of the seam between the fitted nail and the surface
+    /// blended back to around it, not enough to move the nail.
+    /// </summary>
+    private const int CapRelaxPasses = 8;
+
+    /// <summary>How far each pass eases a vertex toward the average of its neighbours.</summary>
+    private const float CapRelaxWeight = 0.5f;
+
+    /// <summary>
+    /// Furthest relaxing may carry a vertex from where the fit put it. Laplacian smoothing shrinks what
+    /// it is run on, and left unbounded over enough passes it would pull the nail flat again.
+    /// </summary>
+    private const float CapRelaxMaxDrift = 0.0008f;
+
+    /// <summary>
+    /// Most the per-socket relax drift may grow beyond <see cref="CapRelaxMaxDrift"/> for a socket larger
+    /// than the median. Higher than the fit's equivalent because settling a crease is a gentler thing
+    /// than moving a nail: it is bounded by the shape of the surface either way.
+    /// </summary>
+    private const float CapRelaxDriftScaleMax = 4.0f;
+
+    /// <summary>Smoothing rounds over the shell around the toes. Each runs a positive step and a
+    /// negative one, so this counts rounds rather than passes.</summary>
+    private const int ShellRelaxPasses = 4;
+
+    /// <summary>The smoothing step of Taubin's pair.</summary>
+    private const float ShellRelaxLambda = 0.50f;
+
+    /// <summary>...and the un-smoothing step, slightly larger in magnitude, which is what keeps the
+    /// surface from shrinking.</summary>
+    private const float ShellRelaxMu = -0.53f;
+
+    /// <summary>How near the cap a shell point must be to be relaxed at all.</summary>
+    private const float ShellRelaxReach = 0.004f;
+
+    /// <summary>Furthest the relax may carry a point from where it started, once the inward part of the
+    /// move has been dropped.</summary>
+    private const float ShellRelaxMaxDrift = 0.0010f;
+
+    /// <summary>Rings to walk out from a socket patch looking for landed vertices to fit against.</summary>
+    private const int CapFitAnchorRings = 6;
+
+    /// <summary>
+    /// Fewest anchors before a patch is fitted rather than left alone. Three would define a rotation and
+    /// be at the mercy of any one of them; this is enough that the fit describes the neighbourhood.
+    /// </summary>
+    private const int CapFitMinAnchors = 8;
+
+    /// <summary>Polar-decomposition iterations in <see cref="BestRotation"/>. It converges quadratically;
+    /// this is well past the point where the step stops changing anything.</summary>
+    private const int CapFitPolarSteps = 24;
 
     /// <summary>
     /// Weld-then-drop rounds. Dropping a collapsed triangle exposes vertices that were interior when the
@@ -6024,6 +6286,7 @@ public static class SecondSkinWriter
         // Version 1 still loads â€” a cap bound before the residual existed is imperfect, not unusable.
         if (version is not (1 or 2)) { diag?.Invoke($"cap bind: version {version} not understood"); return null; }
 
+        var all2 = BindSurface(bodies);
         int partCount = r.ReadInt32();
         var parts = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < partCount; i++) parts.Add(r.ReadString());
@@ -6116,12 +6379,48 @@ public static class SecondSkinWriter
                 continue;
             }
 
+            // OVER A NAIL SOCKET, KEEP THE AUTHORED SHAPE. Only on the full placement - the scoring
+            // probe above has already returned, and inflating its miss count would make a cap look
+            // unplaceable on the very bodies this exists to serve.
+            var socketOf = new int[vc];
+            Array.Fill(socketOf, -1);
+            var discs2 = NailSocketDiscs(all2);
+            {
+                var discs = discs2;
+                int over = 0;
+                for (int i = 0; i < vc && discs.Count > 0; i++)
+                {
+                    if (!found[i]) continue;
+                    var (u3, v3) = uvs[i];
+                    // WHICH socket, and the nearest one when discs overlap. Grouping the patches by
+                    // connectivity instead put ten nails into six pieces, and a piece spanning two toes
+                    // cannot be carried by one rigid transform on a foot that bends between them - the
+                    // cap came out a median 0.0030 off the body against a standoff of 0.0010, reaching
+                    // 0.0079. One socket, one transform.
+                    float bestD = float.MaxValue;
+                    for (int k = 0; k < discs.Count; k++)
+                    {
+                        var (du, dv, rr) = discs[k];
+                        float ddu = u3 - du, ddv = v3 - dv;
+                        float dd = ddu * ddu + ddv * ddv;
+                        if (dd > rr * rr || dd >= bestD) continue;
+                        bestD = dd; socketOf[i] = k;
+                    }
+                    if (socketOf[i] < 0) continue;
+                    found[i] = false; missed++; over++;
+                }
+                if (over > 0)
+                    diag?.Invoke($"cap bind: {over} vertex/vertices sit over a hole in the skin where a "
+                               + "toenail is carried on its own mesh - their landings are measured off "
+                               + "the rim of the hole and cannot be trusted");
+            }
+
             if (missed > 0 && capMdl != null)
             {
                 try
                 {
                     var capSrc2 = Parse(capMdl);
-                    ReadCapVertices(capSrc2, mesh, out var asAuthored, out _);
+                    ReadCapVertices(capSrc2, mesh, out var asAuthored, out var authoredNrm);
                     var tri2 = CapTriangles(capSrc2, mesh, (ushort)vc);
                     var near2 = new List<int>[vc];
                     for (int i = 0; i < vc; i++) near2[i] = [];
@@ -6131,6 +6430,215 @@ public static class SecondSkinWriter
                             int a = tri2[t + k], b = tri2[t + (k + 1) % 3];
                             if (a < vc && b < vc) { near2[a].Add(b); near2[b].Add(a); }
                         }
+
+                    // A SOCKET PATCH MOVES AS ONE PIECE. Spreading inwards from the landed rim, a
+                    // ring at a time, reached 217 of 424 and stopped: past the first ring or two a
+                    // patch has no landed neighbour left to copy, and the half that moved while the
+                    // rest stayed put deepened the step instead of removing it (0.0035 -> 0.0061).
+                    //
+                    // The cap is not wrong over a nail. It is authored correctly and it is very nearly
+                    // rigid there, because a foot bends behind the toes and not across them. So take
+                    // the rotation and translation that carry the authored cap onto where it actually
+                    // landed AROUND the patch, and move the whole patch by it. The nail keeps the shape
+                    // it was drawn with and still follows the body's bend, and it does not matter
+                    // whether the patch has a landed border at all.
+                    int fitted = 0, patches = 0, clipped = 0;
+                    float medianSocketR = 0f;
+                    float worstMove = 0f;
+                    {
+                        var bySocket = new Dictionary<int, List<int>>();
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (socketOf[i] < 0) continue;
+                            (bySocket.TryGetValue(socketOf[i], out var l) ? l
+                                : bySocket[socketOf[i]] = []).Add(i);
+                        }
+                        // Sized against the sockets the CAP actually sits over, not every hole in the
+                        // body. Taken across all of them the median lands among holes elsewhere that are
+                        // ten times a nail's size, every socket scores below it, and the scaling clamps
+                        // to its floor - which is to say it does nothing at all.
+                        if (bySocket.Count > 0)
+                        {
+                            var radii = bySocket.Keys.Select(k => discs2[k].R).OrderBy(x => x).ToArray();
+                            medianSocketR = radii[radii.Length / 2];
+                        }
+                        foreach (var members in bySocket.Values)
+                        {
+                            patches++;
+
+                            // Anchors: the landed vertices nearest the patch, found by walking outwards
+                            // from it. Rings rather than a radius, so a patch on a small toe and one on
+                            // the big toe are both answered at the scale of their own neighbourhood.
+                            var anchors = new List<int>();
+                            var seenA = new HashSet<int>(members);
+                            var frontier = new List<int>(members);
+                            for (int ring = 0; ring < CapFitAnchorRings && anchors.Count < CapFitMinAnchors; ring++)
+                            {
+                                var nextF = new List<int>();
+                                foreach (int x in frontier)
+                                    foreach (int y in near2[x])
+                                    {
+                                        if (!seenA.Add(y)) continue;
+                                        nextF.Add(y);
+                                        if (found[y] && socketOf[y] < 0 && y < asAuthored.Length) anchors.Add(y);
+                                    }
+                                if (nextF.Count == 0) break;
+                                frontier = nextF;
+                            }
+                            if (anchors.Count < CapFitMinAnchors) continue;
+
+                            Vec3 ca = default, cp = default;
+                            foreach (int j in anchors)
+                            {
+                                ca = new Vec3(ca.X + asAuthored[j].X, ca.Y + asAuthored[j].Y,
+                                              ca.Z + asAuthored[j].Z);
+                                cp = new Vec3(cp.X + pos[j].X, cp.Y + pos[j].Y, cp.Z + pos[j].Z);
+                            }
+                            float invA = 1f / anchors.Count;
+                            ca = new Vec3(ca.X * invA, ca.Y * invA, ca.Z * invA);
+                            cp = new Vec3(cp.X * invA, cp.Y * invA, cp.Z * invA);
+
+                            var fromP = anchors.Select(j => asAuthored[j]).ToList();
+                            var toP = anchors.Select(j => pos[j]).ToList();
+                            var rot = BestRotation(fromP, toP, ca, cp);
+                            Vec3 Apply(Vec3 q)
+                            {
+                                float ax = q.X - ca.X, ay = q.Y - ca.Y, az = q.Z - ca.Z;
+                                return new Vec3(cp.X + rot[0] * ax + rot[1] * ay + rot[2] * az,
+                                                cp.Y + rot[3] * ax + rot[4] * ay + rot[5] * az,
+                                                cp.Z + rot[6] * ax + rot[7] * ay + rot[8] * az);
+                            }
+                            Vec3 Turn(Vec3 q) =>
+                                new(rot[0] * q.X + rot[1] * q.Y + rot[2] * q.Z,
+                                    rot[3] * q.X + rot[4] * q.Y + rot[5] * q.Z,
+                                    rot[6] * q.X + rot[7] * q.Y + rot[8] * q.Z);
+
+                            // FADED OUT AT THE EDGE OF THE PATCH, and bounded. Replacing the landing
+                            // outright leaves a step wherever the patch ends, and the fit is least
+                            // trustworthy exactly there - furthest from the socket, where the resolved
+                            // landing was becoming reliable again. Full weight over the middle of the
+                            // nail, none at the rim, so the two agree where they meet.
+                            var (cu, cv, cr) = discs2[socketOf[members[0]]];
+
+                            // THE BOUND SCALES WITH THE SOCKET. One number for all ten held the big toe
+                            // back: its socket is the twelve-edge one where the rest are ten, so it is
+                            // both wider and deeper, and the ceiling that suits a little toe leaves it
+                            // still sunk. Measured against the median socket, so the ones already sitting
+                            // right keep exactly the bound they have now and only the larger get more.
+                            float bound = CapFitMaxMove;
+                            if (medianSocketR > 1e-9f)
+                                bound = Math.Clamp(CapFitMaxMove * (cr / medianSocketR),
+                                                   CapFitMaxMove, CapFitMaxMove * CapFitMoveScaleMax);
+                            foreach (int x in members)
+                            {
+                                if (x >= asAuthored.Length) continue;
+                                var was = pos[x];
+                                var want = Apply(asAuthored[x]);
+
+                                float du2 = uvs[x].U - cu, dv2 = uvs[x].V - cv;
+                                float rel = cr > 1e-9f ? MathF.Sqrt(du2 * du2 + dv2 * dv2) / cr : 1f;
+                                // Full weight over the nail itself and the fade kept to the outer band.
+                                // Fading from the very centre instead left the correction with almost no
+                                // weight anywhere - 154 vertices moved a furthest of 0.0009, and the dish
+                                // came back to where it started.
+                                float t2 = (1f - rel) / MathF.Max(1e-6f, 1f - CapFitFeatherStart);
+                                float wgt = Math.Clamp(t2, 0f, 1f);
+                                wgt *= wgt * (3f - 2f * wgt);          // smoothstep: flat at both ends
+
+                                float mx = want.X - was.X, my = want.Y - was.Y, mz = want.Z - was.Z;
+                                mx *= wgt; my *= wgt; mz *= wgt;
+                                float len = MathF.Sqrt(mx * mx + my * my + mz * mz);
+                                if (len > bound)
+                                {
+                                    float k2 = bound / len;
+                                    mx *= k2; my *= k2; mz *= k2;
+                                    clipped++;
+                                }
+                                pos[x] = new Vec3(was.X + mx, was.Y + my, was.Z + mz);
+                                if (x < authoredNrm.Length && wgt > 0.5f)
+                                    nrm[x] = NormalizeOr(Turn(authoredNrm[x]), nrm[x]);
+                                found[x] = true;      // settled; the ring fill below is for atlas gaps
+                                missed--;
+                                fitted++;
+                                worstMove = MathF.Max(worstMove, MathF.Sqrt(mx * mx + my * my + mz * mz));
+                            }
+                        }
+                    }
+                    // RELAX THE PATCHES. The fit places each nail as a rigid piece and the feather
+                    // blends it back to the resolved landing at the rim, and where those two disagree
+                    // the seam between them reads as a crease - over the big toe it came to a visible
+                    // spike across the nail. Laplacian smoothing, the way a modelling package's relax
+                    // works: each vertex eased toward the average of its neighbours, the vertices around
+                    // the patch held fixed so the nail stays where the fit put it and only its interior
+                    // settles. Bounded against the fitted position so smoothing cannot flatten the nail
+                    // back into the dish it was lifted out of.
+                    if (fitted > 0 && CapRelaxPasses > 0)
+                    {
+                        var anchorPos = new Vec3[vc];
+                        for (int i = 0; i < vc; i++) anchorPos[i] = pos[i];
+                        var next = new Vec3[vc];
+                        for (int pass = 0; pass < CapRelaxPasses; pass++)
+                        {
+                            for (int i = 0; i < vc; i++) next[i] = pos[i];
+                            for (int i = 0; i < vc; i++)
+                            {
+                                if (socketOf[i] < 0 || near2[i].Count == 0) continue;
+                                Vec3 sum = default;
+                                int c2 = 0;
+                                foreach (int j in near2[i])
+                                {
+                                    sum = new Vec3(sum.X + pos[j].X, sum.Y + pos[j].Y, sum.Z + pos[j].Z);
+                                    c2++;
+                                }
+                                if (c2 == 0) continue;
+                                float invC = 1f / c2;
+                                var avg = new Vec3(sum.X * invC, sum.Y * invC, sum.Z * invC);
+                                var to = new Vec3(pos[i].X + (avg.X - pos[i].X) * CapRelaxWeight,
+                                                  pos[i].Y + (avg.Y - pos[i].Y) * CapRelaxWeight,
+                                                  pos[i].Z + (avg.Z - pos[i].Z) * CapRelaxWeight);
+                                // Never further from where the fit put it than this.
+                                float dx2 = to.X - anchorPos[i].X, dy2 = to.Y - anchorPos[i].Y,
+                                      dz2 = to.Z - anchorPos[i].Z;
+                                float dl = MathF.Sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
+                                // Sized per socket, exactly as the height bound is: the big toe's socket
+                                // is the wider one and its nail carries the longer crease, so it needs
+                                // more settling than a little toe whose patch is a dozen vertices. Every
+                                // socket at or under the median keeps the drift it already had.
+                                float drift = CapRelaxMaxDrift;
+                                if (medianSocketR > 1e-9f)
+                                {
+                                    // Squared, not linear. The big toe's socket comes out 1.79x the
+                                    // median and a linear scale gave it 1.79x the drift - which it then
+                                    // sat exactly on, still creased. A crease runs the LENGTH of a nail
+                                    // while the drift bound is a distance, so the room a patch needs
+                                    // grows faster than its radius does.
+                                    float ratio = discs2[socketOf[i]].R / medianSocketR;
+                                    drift = Math.Clamp(CapRelaxMaxDrift * ratio * ratio,
+                                                       CapRelaxMaxDrift,
+                                                       CapRelaxMaxDrift * CapRelaxDriftScaleMax);
+                                }
+                                if (dl > drift)
+                                {
+                                    float k3 = drift / dl;
+                                    to = new Vec3(anchorPos[i].X + dx2 * k3, anchorPos[i].Y + dy2 * k3,
+                                                  anchorPos[i].Z + dz2 * k3);
+                                }
+                                next[i] = to;
+                            }
+                            (pos, next) = (next, pos);
+                        }
+                        float worstDrift = 0f;
+                        for (int i = 0; i < vc; i++)
+                            if (socketOf[i] >= 0) worstDrift = MathF.Max(worstDrift, Dist(pos[i], anchorPos[i]));
+                        diag?.Invoke($"cap bind: relaxed the socket patches over {CapRelaxPasses} pass(es), "
+                                   + $"furthest a vertex settled {worstDrift:F5}");
+                    }
+
+                    if (fitted > 0)
+                        diag?.Invoke($"cap bind: {fitted} vertex/vertices over {patches} toenail socket(s) "
+                                   + "placed by fitting the authored cap onto where it landed around "
+                                   + $"them, furthest moved {worstMove:F5}"
+                                   + (clipped > 0 ? $", {clipped} held back at the bound" : ""));
 
                     int filled = 0;
                     for (int pass = 0; pass < CapBindFillPasses; pass++)
@@ -6780,6 +7288,133 @@ public static class SecondSkinWriter
             (tan, bit) = UvFrame(t, n);
         }
         return best;
+    }
+
+    /// <summary>
+    /// Where the body's skin has a small hole, expressed as a disc in the atlas.
+    /// <para/>
+    /// A body is free to carry its toenails on their own mesh - many do, so the nails can take their own
+    /// material, and a shoe model routinely brings them along with it. What that leaves in the skin is a
+    /// ten- or twelve-edge hole per nail. The cap still has to cross the gap, and the landings it gets
+    /// there are measured off the rim: the triangles around a socket fan their normals out over the
+    /// hole, so stepping off along one lands where the rim points rather than where the nail is. On a
+    /// heeled foot that came to a dish 0.0035 deep against a 0.0010 standoff.
+    /// </summary>
+    private static List<(float U, float V, float R)> NailSocketDiscs(IReadOnlyList<SkinTri> tris)
+    {
+        (long, long, long) Key(Vec3 q) => ((long)MathF.Round(q.X * 1e5f), (long)MathF.Round(q.Y * 1e5f),
+                                           (long)MathF.Round(q.Z * 1e5f));
+        var count = new Dictionary<((long, long, long), (long, long, long)), int>();
+        var uvOf = new Dictionary<(long, long, long), (float U, float V)>();
+        void Edge(Vec3 x, Vec3 y)
+        {
+            var (kx, ky) = (Key(x), Key(y));
+            var k = kx.CompareTo(ky) <= 0 ? (kx, ky) : (ky, kx);
+            count[k] = count.GetValueOrDefault(k) + 1;
+        }
+        foreach (var t in tris)
+        {
+            // TILE-NORMALISED, the same way a landing is resolved. A body's foot islands sit a whole tile
+            // down the atlas - these sockets measure at v -0.66 - and comparing a raw coordinate against
+            // a baked one silently never matches: 35 sockets found and not one cap vertex over any.
+            var tile = TileOf(t);
+            uvOf[Key(t.A)] = (t.Ua.U - tile.U, t.Ua.V - tile.V);
+            uvOf[Key(t.B)] = (t.Ub.U - tile.U, t.Ub.V - tile.V);
+            uvOf[Key(t.C)] = (t.Uc.U - tile.U, t.Uc.V - tile.V);
+            Edge(t.A, t.B); Edge(t.B, t.C); Edge(t.C, t.A);
+        }
+
+        var side = new Dictionary<(long, long, long), List<(long, long, long)>>();
+        foreach (var (k, n) in count)
+        {
+            if (n != 1) continue;
+            (side.TryGetValue(k.Item1, out var l1) ? l1 : side[k.Item1] = []).Add(k.Item2);
+            (side.TryGetValue(k.Item2, out var l2) ? l2 : side[k.Item2] = []).Add(k.Item1);
+        }
+
+        var discs = new List<(float, float, float)>();
+        var seen = new HashSet<(long, long, long)>();
+        foreach (var start in side.Keys)
+        {
+            if (!seen.Add(start)) continue;
+            var loop = new List<(long, long, long)> { start };
+            var at = start;
+            var from = (long.MinValue, 0L, 0L);
+            while (true)
+            {
+                var next = (long.MinValue, 0L, 0L);
+                bool got = false;
+                foreach (var cand in side[at])
+                    if (!cand.Equals(from) && !seen.Contains(cand)) { next = cand; got = true; break; }
+                if (!got) break;
+                seen.Add(next); loop.Add(next);
+                from = at; at = next;
+                if (loop.Count > CapHoleMaxEdges) break;
+            }
+            if (loop.Count < 3 || loop.Count > CapHoleMaxEdges) continue;
+
+            float u0 = float.MaxValue, u1 = float.MinValue, v0 = float.MaxValue, v1 = float.MinValue;
+            bool all = true;
+            foreach (var k in loop)
+            {
+                if (!uvOf.TryGetValue(k, out var q)) { all = false; break; }
+                u0 = MathF.Min(u0, q.U); u1 = MathF.Max(u1, q.U);
+                v0 = MathF.Min(v0, q.V); v1 = MathF.Max(v1, q.V);
+            }
+            if (!all || u1 - u0 > CapHoleMaxUvSpan || v1 - v0 > CapHoleMaxUvSpan) continue;
+            discs.Add(((u0 + u1) * 0.5f, (v0 + v1) * 0.5f,
+                       MathF.Max(u1 - u0, v1 - v0) * 0.5f * CapSocketReach));
+        }
+        return discs;
+    }
+
+    /// <summary>
+    /// The rotation carrying one set of points onto another, by Kabsch. Solved as a polar decomposition
+    /// rather than an SVD - iterating M -> (M + M^-T)/2 converges on the orthogonal factor in a handful
+    /// of steps and needs nothing but a 3x3 inverse.
+    /// </summary>
+    private static float[] BestRotation(IReadOnlyList<Vec3> from, IReadOnlyList<Vec3> to,
+                                        Vec3 cFrom, Vec3 cTo)
+    {
+        var h = new float[9];
+        for (int i = 0; i < from.Count && i < to.Count; i++)
+        {
+            float ax = from[i].X - cFrom.X, ay = from[i].Y - cFrom.Y, az = from[i].Z - cFrom.Z;
+            float bx = to[i].X - cTo.X, by = to[i].Y - cTo.Y, bz = to[i].Z - cTo.Z;
+            h[0] += ax * bx; h[1] += ax * by; h[2] += ax * bz;
+            h[3] += ay * bx; h[4] += ay * by; h[5] += ay * bz;
+            h[6] += az * bx; h[7] += az * by; h[8] += az * bz;
+        }
+        float Det(float[] m) => m[0] * (m[4] * m[8] - m[5] * m[7])
+                              - m[1] * (m[3] * m[8] - m[5] * m[6])
+                              + m[2] * (m[3] * m[7] - m[4] * m[6]);
+        var r = (float[])h.Clone();
+        for (int it = 0; it < CapFitPolarSteps; it++)
+        {
+            float d = Det(r);
+            if (MathF.Abs(d) < 1e-20f) return [1, 0, 0, 0, 1, 0, 0, 0, 1];
+            // inverse-transpose of r
+            var inv = new float[9];
+            inv[0] = (r[4] * r[8] - r[5] * r[7]) / d;
+            inv[1] = (r[2] * r[7] - r[1] * r[8]) / d;
+            inv[2] = (r[1] * r[5] - r[2] * r[4]) / d;
+            inv[3] = (r[5] * r[6] - r[3] * r[8]) / d;
+            inv[4] = (r[0] * r[8] - r[2] * r[6]) / d;
+            inv[5] = (r[2] * r[3] - r[0] * r[5]) / d;
+            inv[6] = (r[3] * r[7] - r[4] * r[6]) / d;
+            inv[7] = (r[1] * r[6] - r[0] * r[7]) / d;
+            inv[8] = (r[0] * r[4] - r[1] * r[3]) / d;
+            var next = new float[9];
+            for (int k = 0; k < 3; k++)
+                for (int j = 0; j < 3; j++)
+                    next[k * 3 + j] = 0.5f * (r[k * 3 + j] + inv[j * 3 + k]);
+            float move = 0f;
+            for (int k = 0; k < 9; k++) move += MathF.Abs(next[k] - r[k]);
+            r = next;
+            if (move < 1e-7f) break;
+        }
+        // H is built as (from)^T(to), so the rotation that carries `from` onto `to` is its transpose.
+        return [r[0], r[3], r[6], r[1], r[4], r[7], r[2], r[5], r[8]];
     }
 
     /// <summary>
