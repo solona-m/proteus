@@ -551,23 +551,45 @@ public static class SecondSkinWriter
         string? capDeclined = null, capUsed = null;
         if (authoredCaps is { Count: > 0 })
         {
+            // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
+            // these bodies apart: barefoot it ranked the right cap first by a whisker, and in heels — a
+            // foot model neither cap was ever measured against — the order flipped and a Rue cap went
+            // onto a Bibo+ foot, which is where the big toe caved in. Rue weights its toes to IVCS bones
+            // that a Bibo+ body simply does not have, so the bind's bone list separates them outright
+            // where a 4%-against-1% placement score is noise.
+            var bodyBones = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var psrc in parsed)
+                foreach (var bn in psrc.BoneNames)
+                    if (!string.IsNullOrEmpty(bn)) bodyBones.Add(bn);
+
             AuthoredCapSet? best = null;
-            float bestRate = float.MaxValue;
+            float bestRate = float.MaxValue, bestCover = -1f;
             foreach (var cand in authoredCaps)
             {
                 if (cand.Bind == null)
                 {
                     // No binding: usable only as a last resort, exactly as authored.
-                    if (best == null) { best = cand; bestRate = float.MaxValue; }
+                    if (best == null) { best = cand; bestRate = float.MaxValue; bestCover = -1f; }
                     continue;
                 }
+
+                var want = ReadBindBones(cand.Bind);
+                float cover = want.Count == 0 ? 0f
+                            : (float)want.Count(bodyBones.Contains) / want.Count;
                 var probe = TryPlaceCapFromBind(cand.Bind, sourceModels, null, cand.Cap, CapBindProbeStride);
                 if (probe is not { Count: > 0 }) continue;
                 int tot = probe.Sum(p => p.Considered), miss = probe.Sum(p => p.Missed);
                 float rate = tot > 0 ? (float)miss / tot : 1f;
                 if (authoredCaps.Count > 1)
-                    diag?.Invoke($"authored cap: '{cand.Name}' places all but {rate * 100:F0}% on this body");
-                if (rate < bestRate) { bestRate = rate; best = cand; }
+                    diag?.Invoke($"authored cap: '{cand.Name}' places all but {rate * 100:F0}% on this body, "
+                               + $"and this body has {cover * 100:F0}% of the {want.Count} bone(s) it was "
+                               + "bound to");
+
+                // Bone coverage decides; the placement score only separates caps the body can equally
+                // carry. A cap missing bones is not a worse fit, it is the wrong body.
+                bool better = cover > bestCover + CapBoneCoverTie
+                           || (cover >= bestCover - CapBoneCoverTie && rate < bestRate);
+                if (better) { bestCover = cover; bestRate = rate; best = cand; }
             }
 
             if (best is { } chosen && bestRate <= CapBindMaxUnplaced)
@@ -686,6 +708,12 @@ public static class SecondSkinWriter
         //
         // These carry the current layer's cap settings into EmitMesh, which is declared above the layer
         // loop and so cannot see its locals.
+        // Every vertex of the cap as it will be placed this layer. The toenail drop needs it, and that
+        // has to run for EVERY capped layer — not only the one the cap is grafted into. A second shell
+        // over the same toes keeps its own nail patches otherwise, and they float over the toenails as
+        // little discs of fabric: measured, an inner shell of 840 triangles that was ten nail rings and
+        // almost nothing else.
+        var capAllVerts = new List<Vec3>();
         float capPushNow = 0f;
         SecondSkinLayer? capDefNow = null;
         bool capGrafted = false;
@@ -1892,105 +1920,269 @@ public static class SecondSkinWriter
                                        + $"inserted and {StitchShared} split point(s) reused a vertex the mesh "
                                        + $"already had, so the two runs share edges ({rimPts2.Count} positions)");
 
-                            // ── DROP THE TOENAIL PATCHES ─────────────────────────────────────────────
-                            // The shell is a displaced copy of the body, nails included, and the nails are
-                            // their own UV islands: the cap's footprint is in body UV and never covers
-                            // them, so the cut leaves each one as a small closed patch of fabric floating
-                            // under the cap with an open ring around it. Measured on Neolithe: ten
-                            // components of 92-188 triangles at the toe positions, 172 open edges between
-                            // them. They are inside a cap that already covers the toes, so they draw
-                            // nothing but their own rim.
-                            //
-                            // Identified by what they ARE rather than by size alone: a component that is
-                            // small AND lies entirely within a whisker of the cap's own vertices. The feet
-                            // fail the second test by a mile (they run back to the ankle), so the only
-                            // things this can take are patches the cap is already covering.
-                            {
-                                var nodeOfPos = new Dictionary<(int, int, int), int>();
-                                var parent = new List<int>();
-                                int Find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
-                                void Union(int a2, int b2) { int ra = Find(a2), rb = Find(b2); if (ra != rb) parent[ra] = rb; }
-                                Span<float> tmpC = stackalloc float[4];
-                                var posOf = new Vec3[vc];
-                                var node = new int[vc];
-                                for (int i = 0; i < vc; i++) node[i] = -1;
-                                for (int i = 0; i < vc; i++)
-                                {
-                                    if (!used[i]) continue;
-                                    ReadTyped(outStreams[pw2.Stream], i * outStrides[pw2.Stream] + pw2.Offset,
-                                              pw2.Type, tmpC);
-                                    posOf[i] = new Vec3(tmpC[0], tmpC[1], tmpC[2]);
-                                    var k = QuantPos(tmpC[0], tmpC[1], tmpC[2]);
-                                    if (!nodeOfPos.TryGetValue(k, out int n)) { nodeOfPos[k] = n = parent.Count; parent.Add(n); }
-                                    node[i] = n;
-                                }
-                                foreach (var sub in keptPerSub)
-                                    for (int t = 0; t + 2 < sub.Length; t += 3)
-                                    {
-                                        if (node[sub[t]] < 0 || node[sub[t + 1]] < 0 || node[sub[t + 2]] < 0) continue;
-                                        Union(node[sub[t]], node[sub[t + 1]]);
-                                        Union(node[sub[t + 1]], node[sub[t + 2]]);
-                                    }
-                                var count = new Dictionary<int, int>();
-                                foreach (var sub in keptPerSub)
-                                    for (int t = 0; t + 2 < sub.Length; t += 3)
-                                    {
-                                        if (node[sub[t]] < 0) continue;
-                                        int r = Find(node[sub[t]]);
-                                        count[r] = count.GetValueOrDefault(r) + 1;
-                                    }
-                                int biggest = 0;
-                                foreach (int n in count.Values) biggest = Math.Max(biggest, n);
+                        }
+                    }
 
-                                var capAt = new HashSet<(int, int, int)>();
-                                foreach (var cp in capVerts) capAt.Add(QuantPos(cp.X, cp.Y, cp.Z));
-                                bool NearCap(Vec3 q)
+                    // EVERY capped layer, not just the one the cap was grafted into. A second shell over
+                    // the same toes keeps its own nail patches otherwise.
+                    if (capAllVerts.Count > 0 && capDefNow != null)
+                        // ── DROP THE TOENAIL PATCHES ─────────────────────────────────────────────
+                        // The shell is a displaced copy of the body, nails included, and the nails are
+                        // their own UV islands: the cap's footprint is in body UV and never covers
+                        // them, so the cut leaves each one as a small closed patch of fabric floating
+                        // under the cap with an open ring around it. Measured on Neolithe: ten
+                        // components of 92-188 triangles at the toe positions, 172 open edges between
+                        // them. They are inside a cap that already covers the toes, so they draw
+                        // nothing but their own rim.
+                        //
+                        // Identified by what they ARE rather than by size alone: a component that is
+                        // small AND lies entirely within a whisker of the cap's own vertices. The feet
+                        // fail the second test by a mile (they run back to the ankle), so the only
+                        // things this can take are patches the cap is already covering.
+                        {
+                            var nodeOfPos = new Dictionary<(int, int, int), int>();
+                            var parent = new List<int>();
+                            int Find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+                            void Union(int a2, int b2) { int ra = Find(a2), rb = Find(b2); if (ra != rb) parent[ra] = rb; }
+                            Span<float> tmpC = stackalloc float[4];
+                            var posOf = new Vec3[vc];
+                            var node = new int[vc];
+                            for (int i = 0; i < vc; i++) node[i] = -1;
+                            for (int i = 0; i < vc; i++)
+                            {
+                                if (!used[i]) continue;
+                                ReadTyped(outStreams[pw2.Stream], i * outStrides[pw2.Stream] + pw2.Offset,
+                                          pw2.Type, tmpC);
+                                posOf[i] = new Vec3(tmpC[0], tmpC[1], tmpC[2]);
+                                var k = QuantPos(tmpC[0], tmpC[1], tmpC[2]);
+                                if (!nodeOfPos.TryGetValue(k, out int n)) { nodeOfPos[k] = n = parent.Count; parent.Add(n); }
+                                node[i] = n;
+                            }
+                            foreach (var sub in keptPerSub)
+                                for (int t = 0; t + 2 < sub.Length; t += 3)
                                 {
-                                    foreach (var cp in capVerts)
-                                        if (Dist(q, cp) <= NailUnderCap) return true;
-                                    return false;
+                                    if (node[sub[t]] < 0 || node[sub[t + 1]] < 0 || node[sub[t + 2]] < 0) continue;
+                                    Union(node[sub[t]], node[sub[t + 1]]);
+                                    Union(node[sub[t + 1]], node[sub[t + 2]]);
                                 }
-                                var drop = new HashSet<int>();
-                                foreach (var (root, n) in count)
+                            var count = new Dictionary<int, int>();
+                            foreach (var sub in keptPerSub)
+                                for (int t = 0; t + 2 < sub.Length; t += 3)
                                 {
-                                    if (n > biggest * NailIslandMax) continue;
-                                    drop.Add(root);
+                                    if (node[sub[t]] < 0) continue;
+                                    int r = Find(node[sub[t]]);
+                                    count[r] = count.GetValueOrDefault(r) + 1;
                                 }
-                                if (drop.Count > 0)
+                            int biggest = 0;
+                            foreach (int n in count.Values) biggest = Math.Max(biggest, n);
+                            diag?.Invoke($"NAILPROBE comps={count.Count} biggest={biggest} capVerts={capAllVerts.Count}");
+
+                            var capAt = new HashSet<(int, int, int)>();
+                            foreach (var cp in capAllVerts) capAt.Add(QuantPos(cp.X, cp.Y, cp.Z));
+                            bool NearCap(Vec3 q)
+                            {
+                                foreach (var cp in capAllVerts)
+                                    if (Dist(q, cp) <= NailUnderCap) return true;
+                                return false;
+                            }
+                            var drop = new HashSet<int>();
+                            foreach (var (root, n) in count)
+                            {
+                                    // An ABSOLUTE ceiling, not a fraction of the biggest here: an inner shell
+                                    // whose surviving geometry is nothing BUT ten nail patches has them all at
+                                    // one size, so none is small next to the others and every one survives
+                                    // (measured: comps=10, biggest=248, nothing dropped). The near-cap test
+                                    // below is what identifies these; this only bounds the cost of asking.
+                                    if (n > NailIslandMaxTris) continue;
+                                drop.Add(root);
+                            }
+                            if (drop.Count > 0)
+                            {
+                                // Confirm each candidate really is under the cap before taking it.
+                                var byRoot = new Dictionary<int, List<ushort>>();
+                                for (ushort i = 0; i < vc; i++)
                                 {
-                                    // Confirm each candidate really is under the cap before taking it.
-                                    var byRoot = new Dictionary<int, List<ushort>>();
-                                    for (ushort i = 0; i < vc; i++)
+                                    if (node[i] < 0) continue;
+                                    int r = Find(node[i]);
+                                    if (!drop.Contains(r)) continue;
+                                    (byRoot.TryGetValue(r, out var l) ? l : byRoot[r] = new List<ushort>()).Add(i);
+                                }
+                                foreach (var (r, vs) in byRoot)
+                                    foreach (var i in vs)
+                                        if (!NearCap(posOf[i])) { drop.Remove(r); break; }
+                            }
+                            if (drop.Count > 0)
+                            {
+                                int gone = 0;
+                                for (int su = 0; su < keptPerSub.Count; su++)
+                                {
+                                    var sub = keptPerSub[su];
+                                    var keepT = new List<ushort>(sub.Length);
+                                    for (int t = 0; t + 2 < sub.Length; t += 3)
                                     {
-                                        if (node[i] < 0) continue;
-                                        int r = Find(node[i]);
-                                        if (!drop.Contains(r)) continue;
-                                        (byRoot.TryGetValue(r, out var l) ? l : byRoot[r] = new List<ushort>()).Add(i);
+                                        if (node[sub[t]] >= 0 && drop.Contains(Find(node[sub[t]]))) { gone++; continue; }
+                                        keepT.Add(sub[t]); keepT.Add(sub[t + 1]); keepT.Add(sub[t + 2]);
                                     }
-                                    foreach (var (r, vs) in byRoot)
-                                        foreach (var i in vs)
-                                            if (!NearCap(posOf[i])) { drop.Remove(r); break; }
+                                    keptPerSub[su] = keepT.ToArray();
                                 }
-                                if (drop.Count > 0)
-                                {
-                                    int gone = 0;
-                                    for (int su = 0; su < keptPerSub.Count; su++)
-                                    {
-                                        var sub = keptPerSub[su];
-                                        var keepT = new List<ushort>(sub.Length);
-                                        for (int t = 0; t + 2 < sub.Length; t += 3)
-                                        {
-                                            if (node[sub[t]] >= 0 && drop.Contains(Find(node[sub[t]]))) { gone++; continue; }
-                                            keepT.Add(sub[t]); keepT.Add(sub[t + 1]); keepT.Add(sub[t + 2]);
-                                        }
-                                        keptPerSub[su] = keepT.ToArray();
-                                    }
-                                    triOut -= gone;
-                                    diag?.Invoke($"authored cap: dropped {drop.Count} toenail patch(es) under the "
-                                               + $"cap, {gone} triangle(s) - they drew nothing but their own rim");
-                                }
+                                triOut -= gone;
+                                diag?.Invoke($"authored cap: dropped {drop.Count} toenail patch(es) under the "
+                                           + $"cap, {gone} triangle(s) - they drew nothing but their own rim");
                             }
                         }
+
+                    // Whatever is left. Several passes above can each drop a triangle or two along the
+                    // join, and a two-triangle hole is a bright polygon of bare skin in game.
+                    int holesShut = FillSmallHoles(keptPerSub, vc, ref used, SmallHoleEdges);
+                    if (holesShut > 0)
+                        diag?.Invoke($"authored cap: closed {holesShut} small hole(s) left along the join");
+                    // ── RAISE ANYTHING THE SKIN POKES THROUGH ────────────────────────────────────
+                    // The shell is pushed 1 mm off the body, but the weld drags a lip vertex onto the
+                    // cap's RIM and the cap sits wherever its binding places it on a body it was not
+                    // modelled against. Either can leave the surface BETWEEN two clear vertices cutting
+                    // under the body's own curve, and skin a hair proud of a shell is a bright patch of
+                    // bare foot. Asymmetric, because which vertices fall short depends on the body and
+                    // not on the cap — reported from a modelling package as a few faces needing a lift.
+                    //
+                    // Driven from the BODY, deliberately. Asking each shell vertex for its distance to
+                    // the nearest skin point reports everything clear, because the vertices ARE clear;
+                    // what shows through is the body bulging past the flat triangle between them.
+                    //
+                    // Only the strays: MinSkinClearance is well under the push, so anything already
+                    // standing off is untouched, and MaxSkinLift stops this reshaping a surface that is
+                    // low for a reason rather than by accident.
+                    if (bodySkin != null && capAllVerts.Count > 0 && nEl2 is { } ne10)
+                    {
+                        float lx = float.MaxValue, ly = float.MaxValue, lz = float.MaxValue;
+                        float hx = float.MinValue, hy = float.MinValue, hz = float.MinValue;
+                        foreach (var q0 in capAllVerts)
+                        {
+                            lx = MathF.Min(lx, q0.X); hx = MathF.Max(hx, q0.X);
+                            ly = MathF.Min(ly, q0.Y); hy = MathF.Max(hy, q0.Y);
+                            lz = MathF.Min(lz, q0.Z); hz = MathF.Max(hz, q0.Z);
+                        }
+                        const float pad = 0.01f;
+                        // Tested against the shell's TRIANGLES, not its nearest vertex. Every vertex
+                        // around the toes stands a clean 1 mm off the body and a vertex-to-vertex test
+                        // duly reports the whole surface clear; what shows through is the body's curve
+                        // rising past the flat triangle spanning them, which is why this reads in a
+                        // modelling package as "these faces need raising the slightest amount" and why
+                        // it lands on one foot and not the other (measured: 17 body vertices out through
+                        // the right foot's triangles, 6 through the left, up to 0.32 mm proud).
+                        const float cell = 0.004f;
+                        (int, int, int) Cell(Vec3 q) => ((int)MathF.Floor(q.X / cell),
+                                                         (int)MathF.Floor(q.Y / cell),
+                                                         (int)MathF.Floor(q.Z / cell));
+                        Span<float> tmpR = stackalloc float[4];
+                        var shellPos = new Vec3[vc];
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (!used[i]) continue;
+                            ReadTyped(outStreams[pw2.Stream], i * outStrides[pw2.Stream] + pw2.Offset,
+                                      pw2.Type, tmpR);
+                            shellPos[i] = new Vec3(tmpR[0], tmpR[1], tmpR[2]);
+                        }
+
+                        // Every surviving triangle near the cap, registered in each cell its bounding box
+                        // touches so a body vertex can find the ones it might be standing through.
+                        var triHash = new Dictionary<(int, int, int), List<(ushort, ushort, ushort)>>();
+                        foreach (var sub in keptPerSub)
+                            for (int t = 0; t + 2 < sub.Length; t += 3)
+                            {
+                                ushort ia = sub[t], ib = sub[t + 1], ic = sub[t + 2];
+                                if (!used[ia] || !used[ib] || !used[ic]) continue;
+                                Vec3 a = shellPos[ia], b = shellPos[ib], c = shellPos[ic];
+                                float tlx = MathF.Min(a.X, MathF.Min(b.X, c.X));
+                                float thx = MathF.Max(a.X, MathF.Max(b.X, c.X));
+                                float tly = MathF.Min(a.Y, MathF.Min(b.Y, c.Y));
+                                float thy = MathF.Max(a.Y, MathF.Max(b.Y, c.Y));
+                                float tlz = MathF.Min(a.Z, MathF.Min(b.Z, c.Z));
+                                float thz = MathF.Max(a.Z, MathF.Max(b.Z, c.Z));
+                                if (thx < lx - pad || tlx > hx + pad || thy < ly - pad || tly > hy + pad
+                                    || thz < lz - pad || tlz > hz + pad) continue;
+                                var k0 = Cell(new Vec3(tlx, tly, tlz));
+                                var k1 = Cell(new Vec3(thx, thy, thz));
+                                for (int cx = k0.Item1; cx <= k1.Item1; cx++)
+                                for (int cy = k0.Item2; cy <= k1.Item2; cy++)
+                                for (int cz = k0.Item3; cz <= k1.Item3; cz++)
+                                {
+                                    var k = (cx, cy, cz);
+                                    (triHash.TryGetValue(k, out var l)
+                                        ? l : triHash[k] = new List<(ushort, ushort, ushort)>()).Add((ia, ib, ic));
+                                }
+                            }
+
+                        var lift = new float[vc];
+                        foreach (var t in bodySkin)
+                            foreach (var (bp, bn) in new[] { (t.A, t.Na), (t.B, t.Nb), (t.C, t.Nc) })
+                            {
+                                if (bp.X < lx - pad || bp.X > hx + pad || bp.Y < ly - pad || bp.Y > hy + pad
+                                    || bp.Z < lz - pad || bp.Z > hz + pad) continue;
+                                var n2 = NormalizeOr(bn, default);
+                                if (n2 is { X: 0, Y: 0, Z: 0 }) continue;
+                                if (!triHash.TryGetValue(Cell(bp), out var near)) continue;
+
+                                foreach (var (ia, ib, ic) in near)
+                                {
+                                    Vec3 a = shellPos[ia], b = shellPos[ib], c = shellPos[ic];
+                                    var e1 = new Vec3(b.X - a.X, b.Y - a.Y, b.Z - a.Z);
+                                    var e2 = new Vec3(c.X - a.X, c.Y - a.Y, c.Z - a.Z);
+                                    var fn = NormalizeOr(new Vec3(e1.Y * e2.Z - e1.Z * e2.Y,
+                                                                  e1.Z * e2.X - e1.X * e2.Z,
+                                                                  e1.X * e2.Y - e1.Y * e2.X), default);
+                                    if (fn is { X: 0, Y: 0, Z: 0 }) continue;
+                                    // Orient outward, by the body's own normal: winding alone cannot be
+                                    // trusted across a mesh assembled from several sources.
+                                    if (fn.X * n2.X + fn.Y * n2.Y + fn.Z * n2.Z < 0)
+                                        fn = new Vec3(-fn.X, -fn.Y, -fn.Z);
+
+                                    // How far the triangle's plane stands above this body vertex.
+                                    float h = (a.X - bp.X) * fn.X + (a.Y - bp.Y) * fn.Y + (a.Z - bp.Z) * fn.Z;
+                                    if (h >= MinSkinClearance || h < -MaxSkinLift) continue;
+
+                                    // Only if the body vertex is actually UNDER this triangle: the plane
+                                    // of a triangle elsewhere on the foot says nothing about this spot.
+                                    var q = new Vec3(bp.X + fn.X * h, bp.Y + fn.Y * h, bp.Z + fn.Z * h);
+                                    bool inside = true;
+                                    foreach (var (u, v) in new[] { (a, b), (b, c), (c, a) })
+                                    {
+                                        var ev = new Vec3(v.X - u.X, v.Y - u.Y, v.Z - u.Z);
+                                        var qv = new Vec3(q.X - u.X, q.Y - u.Y, q.Z - u.Z);
+                                        float side = (ev.Y * qv.Z - ev.Z * qv.Y) * fn.X
+                                                   + (ev.Z * qv.X - ev.X * qv.Z) * fn.Y
+                                                   + (ev.X * qv.Y - ev.Y * qv.X) * fn.Z;
+                                        if (side < -1e-9f) { inside = false; break; }
+                                    }
+                                    if (!inside) continue;
+
+                                    // Lift the whole face — one corner is not what the skin came through.
+                                    float need = MathF.Min(MinSkinClearance - h, MaxSkinLift);
+                                    lift[ia] = MathF.Max(lift[ia], need);
+                                    lift[ib] = MathF.Max(lift[ib], need);
+                                    lift[ic] = MathF.Max(lift[ic], need);
+                                }
+                            }
+
+                        int raised = 0;
+                        float worstLift2 = 0f;
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (!used[i] || lift[i] <= 1e-6f) continue;
+                            ReadTyped(outStreams[ne10.Stream], i * outStrides[ne10.Stream] + ne10.Offset,
+                                      ne10.Type, tmpR);
+                            float rx = tmpR[0], ry = tmpR[1], rz = tmpR[2];
+                            if (ne10.Type == 8) { rx = rx * 2 - 1; ry = ry * 2 - 1; rz = rz * 2 - 1; }
+                            var rn = NormalizeOr(new Vec3(rx, ry, rz), default);
+                            if (rn is { X: 0, Y: 0, Z: 0 }) continue;
+                            var sp = shellPos[i];
+                            WriteXYZ(outStreams[pw2.Stream], i * outStrides[pw2.Stream] + pw2.Offset, pw2.Type,
+                                     sp.X + rn.X * lift[i], sp.Y + rn.Y * lift[i], sp.Z + rn.Z * lift[i]);
+                            worstLift2 = MathF.Max(worstLift2, lift[i]);
+                            raised++;
+                        }
+                        if (raised > 0)
+                            diag?.Invoke($"authored cap: raised {raised} vertex/vertices clear of the skin "
+                                       + $"(furthest {worstLift2:F5}) so it cannot show through");
                     }
                 }
             }
@@ -2185,6 +2377,7 @@ public static class SecondSkinWriter
             weldRim = null;
             weldRimVerts.Clear();
             weldRimPos.Clear();
+            capAllVerts.Clear();
             welded = 0; weldWorst = 0; weldWorstD = 0f; capWelded = 0;
             capRimLandings.Clear();
             shellRim.Clear();
@@ -2299,6 +2492,16 @@ public static class SecondSkinWriter
                                          pb, pl.SrcNrm[e.B], pl.SrcW[e.B]));
                         weldRimVerts.Add(e.A); weldRimVerts.Add(e.B);
                         weldRimPos[(m, e.A)] = pa; weldRimPos[(m, e.B)] = pb;
+                    }
+
+                    for (int oi = 0; oi < pl.SourceOf.Length; oi++)
+                    {
+                        int sIdx = pl.SourceOf[oi];
+                        if (capPlaced == null || !capPlaced.TryGetValue(m, out var pcap)) break;
+                        if (sIdx < 0 || sIdx >= pcap.Pos.Length) continue;
+                        capAllVerts.Add(new Vec3(pcap.Pos[sIdx].X + pcap.Nrm[sIdx].X * capPush,
+                                                 pcap.Pos[sIdx].Y + pcap.Nrm[sIdx].Y * capPush,
+                                                 pcap.Pos[sIdx].Z + pcap.Nrm[sIdx].Z * capPush));
                     }
                 }
                 if (segs.Count > 0) weldRim = segs.ToArray();
@@ -5783,6 +5986,29 @@ public static class SecondSkinWriter
     /// Resolve only every n-th vertex. For scoring a binding against a body, where the hit rate is all
     /// that is wanted and a full placement is every cap vertex against every skin triangle.
     /// </param>
+    /// <summary>
+    /// The bone NAMES a binding was baked against, read from its header alone — no placement, no surface
+    /// collection. This is a body fingerprint: Rue weights its toes to IVCS bones (iv_asi_*) where
+    /// Neolithe and stock Bibo+ use the game's own (j_asi_*), so a cap baked for one names bones the
+    /// other does not have.
+    /// </summary>
+    private static HashSet<string> ReadBindBones(byte[] bind)
+    {
+        var parts = new HashSet<string>(StringComparer.Ordinal);
+        if (bind.Length < 12 || BitConverter.ToUInt32(bind, 0) != CapBindMagic) return parts;
+        try
+        {
+            var r = new BinaryReader(new MemoryStream(bind));
+            r.ReadUInt32();
+            if (r.ReadInt32() is not (1 or 2)) return parts;
+            int n = r.ReadInt32();
+            if (n is < 0 or > 4096) return parts;
+            for (int i = 0; i < n; i++) parts.Add(r.ReadString());
+        }
+        catch { parts.Clear(); }
+        return parts;
+    }
+
     internal static List<CapPlacement>? TryPlaceCapFromBind(byte[] bind, IReadOnlyList<byte[]> bodies,
                                                             Action<string>? diag = null,
                                                             byte[]? capMdl = null, int stride = 1)
@@ -6069,6 +6295,12 @@ public static class SecondSkinWriter
     /// move to the new body while the rest stay where they were authored, and the triangles between them
     /// stretch across the gap. That is the fan of shards this guard exists to prevent.
     /// </summary>
+    /// <summary>
+    /// How close two caps' bone coverage must be to count as equal, leaving the placement score to
+    /// separate them. Anything wider than this is a different body, not a worse fit.
+    /// </summary>
+    private const float CapBoneCoverTie = 0.02f;
+
     private const float CapBindMaxUnplaced = 0.15f;
 
     /// <summary>
@@ -6085,6 +6317,29 @@ public static class SecondSkinWriter
     private const int CapCoverDilate = 2;
 
     /// <summary>
+
+    /// <summary>
+    /// Most triangles a connected component may have and still be considered a toenail patch. A nail is
+    /// about a hundred; a foot is thousands. Absolute, because a shell can consist of nothing but nail
+    /// patches and then nothing is small relative to anything.
+    /// </summary>
+    private const int NailIslandMaxTris = 600;
+
+    /// <summary>Largest boundary loop, in edges, that FillSmallHoles will close. Under the 16-20 a
+    /// toenail socket carries, which has to stay open.</summary>
+    private const int SmallHoleEdges = 8;
+
+    /// <summary>
+    /// How far a shell or cap vertex must stand off the body's skin around the toes. The shell is pushed
+    /// 1 mm, but the weld drags lip vertices onto the cap's rim and the cap sits where its binding puts
+    /// it, so a few end up level with the skin or just under it — and skin a hair proud of a shell reads
+    /// in game as a bright patch of bare foot. Well under the push, so this only rescues the strays.
+    /// </summary>
+    private const float MinSkinClearance = 0.0006f;
+
+    /// <summary>Most a vertex may be lifted to reach that clearance. Past this it is not a straggler and
+    /// moving it would distort the surface rather than repair it.</summary>
+    private const float MaxSkinLift = 0.0030f;
     /// Largest a connected component may be, as a fraction of the biggest, and still be considered a
     /// toenail patch rather than a foot. The feet run to thousands of triangles; a nail is about a
     /// hundred, so this sits far clear of both.
@@ -6093,7 +6348,7 @@ public static class SecondSkinWriter
 
     /// <summary>How close to the cap's own vertices every vertex of a candidate patch must be before it
     /// counts as sitting under the cap and can be dropped. A nail sits a millimetre or two under it.</summary>
-    private const float NailUnderCap = 0.006f;
+    private const float NailUnderCap = 0.010f;
 
     /// <summary>Resolution the cap's own footprint is rasterised at when the layer's map isn't square.</summary>
     private const int CapFootprintSize = 512;
@@ -6872,6 +7127,97 @@ public static class SecondSkinWriter
             keptPerSub[su] = outp.ToArray();
         }
         return newCount;
+    }
+
+    /// <summary>
+    /// Triangulate any open boundary loop of at most <see cref="SmallHoleEdges"/> edges. A handful of
+    /// triangles go missing along the join for several small reasons — a collapsed sliver dropped, a
+    /// coverage texel landing awkwardly — and each leaves a two-or-three-triangle hole that shows in game
+    /// as a bright polygon of bare skin. Chasing every producer one at a time is endless; closing what is
+    /// left costs nothing and cannot make a hole worse.
+    /// <para/>
+    /// Bounded deliberately: the toenail sockets a body carries are 16-20 edges and MUST stay open (the
+    /// nail draws through them), the coverage and ankle cuts are hundreds. Only the small strays qualify.
+    /// Winding is taken from the triangle that owns each boundary edge and reversed, so a filled hole
+    /// faces the same way as the surface around it.
+    /// </summary>
+    private static int FillSmallHoles(List<ushort[]> keptPerSub, ushort vc, ref bool[] used, int maxEdges)
+    {
+        var dir = new Dictionary<(ushort, ushort), int>();
+        foreach (var sub in keptPerSub)
+            for (int t = 0; t + 2 < sub.Length; t += 3)
+                for (int k = 0; k < 3; k++)
+                {
+                    ushort x = sub[t + k], y = sub[t + (k + 1) % 3];
+                    var e = (Math.Min(x, y), Math.Max(x, y));
+                    dir[e] = dir.GetValueOrDefault(e) + 1;
+                }
+        var open = new HashSet<(ushort, ushort)>();
+        foreach (var (e, n) in dir) if (n == 1) open.Add(e);
+        if (open.Count == 0) return 0;
+
+        // The direction each boundary edge is traversed by the triangle that owns it.
+        var next = new Dictionary<ushort, ushort>();
+        foreach (var sub in keptPerSub)
+            for (int t = 0; t + 2 < sub.Length; t += 3)
+                for (int k = 0; k < 3; k++)
+                {
+                    ushort x = sub[t + k], y = sub[t + (k + 1) % 3];
+                    if (open.Contains((Math.Min(x, y), Math.Max(x, y)))) next[x] = y;
+                }
+
+        var seen = new HashSet<ushort>();
+        var fill = new List<ushort>();
+        int closed = 0;
+        foreach (var start in next.Keys.ToList())
+        {
+            if (seen.Contains(start)) continue;
+            var loop = new List<ushort>();
+            ushort at = start;
+            while (loop.Count <= maxEdges + 1)
+            {
+                if (!next.TryGetValue(at, out ushort nx)) { loop.Clear(); break; }
+                loop.Add(at);
+                if (nx == start) break;
+                at = nx;
+            }
+            if (loop.Count < 3 || loop.Count > maxEdges) continue;
+            if (loop.Any(seen.Contains)) continue;
+            foreach (var v in loop) seen.Add(v);
+            // Reversed against the owning triangles, so the patch faces outward like its neighbours.
+            for (int i = 1; i + 1 < loop.Count; i++)
+            { fill.Add(loop[0]); fill.Add(loop[i + 1]); fill.Add(loop[i]); }
+            closed++;
+        }
+        if (fill.Count == 0) return 0;
+
+        int host = 0;
+        for (int su = 1; su < keptPerSub.Count; su++)
+            if (keptPerSub[su].Length > keptPerSub[host].Length) host = su;
+        var grown = new List<ushort>(keptPerSub[host]);
+        grown.AddRange(fill);
+        keptPerSub[host] = grown.ToArray();
+        foreach (var v in fill) if (v < used.Length) used[v] = true;
+        return closed;
+    }
+
+    /// <summary>Nearest point on the body's skin, and how far away it is. Null when nothing is in reach.</summary>
+    private static bool NearestOnSkin(Vec3 p, List<SkinTri> tris, float reach, out Vec3 at)
+    {
+        float best = reach * reach;
+        at = default;
+        bool got = false;
+        foreach (var t in tris)
+        {
+            float cx = t.Ctr.X - p.X, cy = t.Ctr.Y - p.Y, cz = t.Ctr.Z - p.Z;
+            if (cx * cx + cy * cy + cz * cz > best + 0.01f) continue;
+            var q = ClosestOnTriangle(p, t.A, t.B, t.C);
+            float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+            float d = dx * dx + dy * dy + dz * dz;
+            if (d >= best) continue;
+            best = d; at = q; got = true;
+        }
+        return got;
     }
 
     /// <summary>
