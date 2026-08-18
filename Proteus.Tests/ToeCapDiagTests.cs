@@ -716,6 +716,50 @@ public class ToeCapDiagTests
     }
 
     /// <summary>
+    /// Convert any .mdl to .obj so it can be opened in a modelling package. Aimed at the SHIPPED shell —
+    /// the file Penumbra actually serves the game — rather than anything the harness rebuilds, because
+    /// "is what I am looking at what I measured" is otherwise a matter of trust.
+    /// <para/>
+    /// Opt-in: set PROTEUS_OBJ_IN (the model) and optionally PROTEUS_OBJ_OUT (where the .obj lands,
+    /// default beside the input). Does nothing without them, so an ordinary test run is unaffected.
+    /// </summary>
+    [Fact]
+    public void ExportModelToObj()
+    {
+        var inPath = Environment.GetEnvironmentVariable("PROTEUS_OBJ_IN");
+        if (string.IsNullOrWhiteSpace(inPath) || !File.Exists(inPath)) return;
+        var outPath = Environment.GetEnvironmentVariable("PROTEUS_OBJ_OUT")
+                   ?? Path.ChangeExtension(inPath, ".obj");
+        var bytes = File.ReadAllBytes(inPath);
+        WriteObj(bytes, outPath);
+        o.WriteLine($"wrote {outPath} ({new FileInfo(outPath).Length} bytes) from {inPath} ({bytes.Length} bytes)");
+
+        // ...and a cut-down copy of just the meshes named in PROTEUS_OBJ_ONLY (comma-separated, e.g.
+        // "mesh3,mesh4"). A whole second skin is ten meshes of body, and the join is two of them; opening
+        // the small file is the difference between inspecting the seam and looking for it.
+        var only = Environment.GetEnvironmentVariable("PROTEUS_OBJ_ONLY");
+        if (string.IsNullOrWhiteSpace(only)) return;
+        var keep = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var trimmed = Path.Combine(Path.GetDirectoryName(outPath)!,
+                                   Path.GetFileNameWithoutExtension(outPath) + "_join.obj");
+        // Vertex/uv/normal lines are shared by every mesh and indices are absolute, so keeping all of them
+        // and dropping only the unwanted faces keeps every index valid without renumbering anything.
+        using (var w = new StreamWriter(trimmed))
+        {
+            string cur = "";
+            foreach (var ln in File.ReadLines(outPath))
+            {
+                if (ln.StartsWith("o ", StringComparison.Ordinal) || ln.StartsWith("g ", StringComparison.Ordinal))
+                { cur = ln[2..].Trim(); if (keep.Contains(cur)) w.WriteLine(ln); continue; }
+                if (ln.StartsWith("f ", StringComparison.Ordinal)) { if (keep.Contains(cur)) w.WriteLine(ln); continue; }
+                w.WriteLine(ln);
+            }
+        }
+        o.WriteLine($"wrote {trimmed} keeping [{string.Join(", ", keep)}]");
+    }
+
+    /// <summary>
     /// Structural dump of an authored cap converted out of 3ds Max, before anything tries to merge it:
     /// mesh and submesh layout, bone table, materials, and the geometry as an OBJ so it can be measured
     /// against the foot it will sit on. Runs only when the file is there.
@@ -1133,6 +1177,10 @@ public class ToeCapDiagTests
                 ts.Append("vt ").Append(F(u)).Append(' ').Append(F(v)).Append('\n');
             }
 
+            // BOTH `o` and `g`. A group is a face tag, and importers are free to keep only the last one —
+            // which is how a ten-mesh shell opened showing nothing but the cap, that being mesh9. An
+            // object statement is the one every importer splits on.
+            fs.Append("o mesh").Append(mi).Append('\n');
             fs.Append("g mesh").Append(mi).Append('\n');
             for (uint t = 0; t + 2 < idxCount; t += 3)
             {
