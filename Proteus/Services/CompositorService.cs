@@ -262,6 +262,14 @@ public class CompositorService : IDisposable
     // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
     private readonly object _bodyModConfigLock = new();
 
+    // Set (value unused) of mods we have already REACTED to while they were disabled — i.e. a composite
+    // or a body-mod evaluation was kicked off with the mod off. Membership is what lets
+    // OnModSettingChanged skip further setting changes on a disabled mod; see that handler for why the
+    // entry is only added once the handler is past every early return, and why "not a member" is the safe
+    // default (it merely means "don't skip"). Only OnModSettingChanged adds, on the framework thread.
+    private readonly ConcurrentDictionary<string, byte> _knownDisabled =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Save the plugin config under the same lock the off-thread body-mod classifier uses. Callers on
     /// the framework thread need this too: <c>Save()</c> serializes the WHOLE Configuration, so a bare
@@ -550,6 +558,34 @@ public class CompositorService : IDisposable
         if (playerColl == null || collId != playerColl.Value)
             return;
 
+        // A disabled mod contributes nothing: no overlay art, and no redirect that could move a base we
+        // read. Tweaking its option groups, priority or temporary settings therefore cannot change the
+        // composite, so skip the whole handler — including the upstream invalidation below, which is not
+        // free (the next composite re-derives every upstream, briefly unpublishing our redirects). Penumbra
+        // fires these for disabled mods just as readily as for enabled ones, and Glamourer re-asserts
+        // temporary settings for every mod a design touches whether or not the mod is on.
+        //
+        // The transition itself must still get through: by the time a disable event reaches us the mod
+        // already reads as disabled, and THAT one does change the composite. Hence the _knownDisabled gate
+        // — skip only mods we have already ACTED on while off (see the write further down), never on a
+        // live reading alone. A mod that isn't a member is processed exactly as before.
+        //
+        // Membership is checked before asking Penumbra anything: this handler runs for every mod in the
+        // player's collection, and the set is empty for all the enabled ones, so the common path costs a
+        // dictionary lookup rather than an IPC round trip.
+        if (_knownDisabled.ContainsKey(modDir))
+        {
+            var live = penumbra.GetModSettings(playerColl.Value, modDir);
+            if (live is { Enabled: false })
+            {
+                NoteSkippedDisabled(modDir, live.Value.Priority);
+                return;
+            }
+            // Back on, or no longer readable — either way the recorded verdict no longer holds. Drop it
+            // and fall through, so this event is treated as the real change it is.
+            _knownDisabled.TryRemove(modDir, out _);
+        }
+
         var sidecar = HasSidecar(modDir);
 
         // Before any of the early returns below. Anything that isn't one of our overlay mods can change
@@ -591,6 +627,18 @@ public class CompositorService : IDisposable
             if (msSince >= 0 && msSince < 1500) return;
         }
 
+        // Everything below this line acts. THIS is where a mod earns its place in _knownDisabled, not the
+        // gate at the top: the set means "a composite was kicked off with this mod off", and the early
+        // returns above — the echo suppression in particular — abandon the handler without producing one.
+        // Recording at the top instead let a disable that arrived inside the 1500 ms echo window mark the
+        // mod as handled while the composite still carried it, and every later event for it was then
+        // skipped, stranding the character on a base a temporarily-disabled body mod had supplied.
+        //
+        // This is the only place that pays for the extra IPC, and it sits next to a recomposite or an
+        // off-thread manifest scan, so the lookup is noise against the work it is gating.
+        if (penumbra.GetModSettings(playerColl.Value, modDir) is { Enabled: false })
+            _knownDisabled[modDir] = 0;
+
         // A TemporarySetting is the only change here that Glamourer generates by itself, and it re-asserts
         // them after every redraw — so it is the one change kind that routinely carries no new information.
         // Every other kind is a deliberate act by the user or another plugin and must always composite.
@@ -609,6 +657,35 @@ public class CompositorService : IDisposable
         // obj/body/ material), whose change can leave the cached snapshot wrong without a redraw.
         // Its detection does manifest file I/O + a config.Save, so run it off the framework thread.
         EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient);
+    }
+
+    /// <summary>
+    /// Fold a skipped disabled mod's current priority and enabled state into <see cref="LastDiscovered"/>.
+    ///
+    /// Needed because <see cref="DiscoveredSetsEqual"/> compares priority, and that list is otherwise only
+    /// refreshed by a completed composite or by the enable-state branch above — both of which the skip
+    /// bypasses. Without this, reordering a DISABLED overlay mod left the stale priority in place until the
+    /// next Glamourer state change diffed it and fired a full recomposite for a mod contributing nothing,
+    /// turning the skip into a deferral rather than an avoidance.
+    ///
+    /// No-op for anything that isn't one of our overlay mods: only those are ever in the list. Copy-on-write
+    /// because background composite threads read <see cref="LastDiscovered"/> and the UI enumerates it; the
+    /// re-sort keeps the priority-ascending order <c>Discover</c> establishes. If a composite is in flight it
+    /// will overwrite this with its own fresher walk, which is equally correct.
+    /// </summary>
+    private void NoteSkippedDisabled(string modDir, int priority)
+    {
+        var snapshot = LastDiscovered;
+        var idx = snapshot.FindIndex(e =>
+            string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0) return;
+        var entry = snapshot[idx];
+        if (entry.Priority == priority && !entry.Enabled) return;
+
+        var updated = new List<OverlayEntry>(snapshot);
+        updated[idx] = entry with { Priority = priority, Enabled = false };
+        updated.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        LastDiscovered = updated;
     }
 
     /// <summary>
@@ -691,6 +768,10 @@ public class CompositorService : IDisposable
         var wasComposed = known && cached.AffectsComposite;
         if (wasSurface || wasComposed) _activeMtrlSnapshotDirty = true;
         InvalidateUpstreamCache($"ModDeleted:{modDir}");
+        // The directory can come back (a reinstall keeps the name), and it would come back enabled or not
+        // on its own terms — a remembered "was disabled" from the old install must not suppress the first
+        // event of the new one.
+        _knownDisabled.TryRemove(modDir, out _);
 
         // Drop the cached classification off the framework thread — config.Save is a disk write.
         Task.Run(() =>
@@ -805,6 +886,10 @@ public class CompositorService : IDisposable
         // Rare event; not worth trying to scan every mod in the new collection, just force one walk.
         _activeMtrlSnapshotDirty = true;
         InvalidateUpstreamCache("collection-changed");
+        // Enabled state is collection-scoped, so every remembered verdict now describes the wrong
+        // collection. Dropping them makes the first setting change for each mod count as a possible
+        // transition again, which is what OnModSettingChanged's disabled skip needs to stay honest.
+        _knownDisabled.Clear();
         if (!config.PluginEnabled) return;
         TriggerRecomposite("collection-changed", force: false);
     }
