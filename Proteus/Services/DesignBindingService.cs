@@ -104,6 +104,7 @@ public class DesignBindingService : IDisposable
     private Dictionary<string, OverlayColorOverride>? activeOverride;
     private Dictionary<string, OverlayGearOverride>? activeGearOverride;
     private Dictionary<string, List<string>>? activeStackOverride;
+    private HashSet<string>? activeSuppression;
     private Guid? activeDesignId;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
@@ -380,6 +381,13 @@ public class DesignBindingService : IDisposable
     /// active. Deliberately does NOT write Penumbra (enable / priority / options), does NOT disable
     /// unbound mods and does NOT recomposite — <see cref="Restore"/> does all three around it, and the
     /// boot restore does none of them. Framework thread.
+    /// <para/>
+    /// It DROPS any suppression left over from a previous restore (see <see cref="UnboundContentMods"/>),
+    /// for exactly the reason it writes no Penumbra either: holding a mod out is part of a restore, and
+    /// this runs on paths that are not one. A boot restore adopting the last active design must leave the
+    /// player's mods composing as they were — this used to compute the set here instead, and the result
+    /// was that a mod installed after the design was saved rendered nothing at all from the next login on,
+    /// with only a debug line to say why.
     /// </summary>
     /// <param name="suppressEcho">
     /// Arm the <see cref="RestoreSuppressMs"/> window that makes <see cref="OnGlamourerStateFinalized"/>
@@ -402,6 +410,7 @@ public class DesignBindingService : IDisposable
             activeOverride      = colours = CloneOverrides(b.Mods);
             activeGearOverride  = gear    = CloneGear(b.Mods);
             activeStackOverride = stack   = CloneStack(b.Mods);
+            activeSuppression   = null;
         }
 
         PersistActiveDesignId(designId);
@@ -410,6 +419,42 @@ public class DesignBindingService : IDisposable
         compositor.SetActiveColorOverride(colours);
         compositor.SetActiveGearOverride(gear);
         compositor.SetActiveStackOverride(stack);
+        compositor.SetActiveSuppression(null);
+    }
+
+    /// <summary>
+    /// The discovered sidecar mods this binding never captured that ALSO ship Penumbra content of their
+    /// own — the gear they overlay, a body, textures. Published by <see cref="Restore"/> and by nothing
+    /// else: it is the non-destructive half of that method's unbound sweep, and it lasts exactly as long
+    /// as the restore that established it.
+    /// <para/>
+    /// <see cref="Restore"/> switches unbound mods off in Penumbra so a previous look's overlays can't
+    /// bleed into this design. For a pure overlay pack that is exactly right and costs nothing else. For
+    /// one of these it is not: the author's dress, model and metadata edits go off with the overlays, the
+    /// binding captured none of it to put back, and the mod simply stops working — including after a
+    /// reboot, because the disable is written into Penumbra's collection. So these are held out of the
+    /// composite instead, which silences precisely the overlays and leaves Penumbra untouched.
+    /// </summary>
+    private HashSet<string> UnboundContentMods(DesignBinding b, IReadOnlyList<OverlayEntry> discovered)
+    {
+        var bound = b.Mods.Select(m => m.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var held  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var e in discovered)
+        {
+            if (bound.Contains(e.ModDirectory)) continue;
+            // SidecarRoot is the Proteus/ subfolder; the manifest lives one level up. Trimmed first,
+            // exactly as SidecarDiscoveryService does at its three sibling conversions: a trailing
+            // separator would make GetDirectoryName return the sidecar folder itself, and
+            // PublishesGameContent answers "has content" for a folder it cannot read — so EVERY unbound
+            // mod would be held out and none would ever be disabled again.
+            var modRoot = Path.GetDirectoryName(
+                e.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (modRoot != null && PenumbraModMeta.PublishesGameContent(modRoot))
+                held.Add(e.ModDirectory);
+        }
+
+        return held;
     }
 
     /// <summary>
@@ -423,11 +468,13 @@ public class DesignBindingService : IDisposable
         lock (gate)
         {
             changed = activeDesignId != null || activeOverride != null
-                   || activeGearOverride != null || activeStackOverride != null;
+                   || activeGearOverride != null || activeStackOverride != null
+                   || activeSuppression is { Count: > 0 };
             activeDesignId      = null;
             activeOverride      = null;
             activeGearOverride  = null;
             activeStackOverride = null;
+            activeSuppression   = null;
         }
 
         // Both of these run even when nothing was active, because both are about the state OUTSIDE this
@@ -443,6 +490,7 @@ public class DesignBindingService : IDisposable
         compositor.SetActiveColorOverride(null);
         compositor.SetActiveGearOverride(null);
         compositor.SetActiveStackOverride(null);
+        compositor.SetActiveSuppression(null);
         return true;
     }
 
@@ -477,6 +525,16 @@ public class DesignBindingService : IDisposable
 
         AdoptOverrides(b, designId, suppressEcho: true);
 
+        // After AdoptOverrides, which clears any suppression a previous restore left: this one's set
+        // replaces it, and only for as long as this restore is the active one.
+        var held = UnboundContentMods(b, allMods);
+        lock (gate) activeSuppression = held;
+        compositor.SetActiveSuppression(held);
+        if (held.Count > 0)
+            log.Debug("[Proteus] design-binding: holding {0} unbound mod(s) out of the composite — "
+                    + "they ship their own Penumbra content, so they stay enabled: {1}",
+                held.Count, string.Join(", ", held));
+
         if (collId != null)
         {
             foreach (var m in b.Mods)
@@ -491,10 +549,17 @@ public class DesignBindingService : IDisposable
             // Any Proteus mod not part of this binding shouldn't carry over from whatever was
             // active before — e.g. enabled after this design was captured, or left on from a
             // previous unrelated look.
+            //
+            // Only overlay packs are switched off, though. A mod that also ships its own Penumbra
+            // content loses the gear, model and metadata edits along with the overlays, and the binding
+            // captured none of that to put back — so it just stops working, and stays broken across a
+            // reboot because the disable lives in Penumbra's collection. AdoptOverrides above is holding
+            // those out of the composite instead (see UnboundContentMods), which silences the overlays
+            // and nothing else.
             foreach (var e in allMods)
             {
-                if (!boundDirs.Contains(e.ModDirectory))
-                    penumbra.SetModEnabled(collId.Value, e.ModDirectory, false);
+                if (boundDirs.Contains(e.ModDirectory) || held.Contains(e.ModDirectory)) continue;
+                penumbra.SetModEnabled(collId.Value, e.ModDirectory, false);
             }
         }
 
@@ -562,6 +627,17 @@ public class DesignBindingService : IDisposable
     public bool IsOverrideActiveFor(string modDir)
     {
         lock (gate) return activeOverride != null && activeOverride.ContainsKey(modDir);
+    }
+
+    /// <summary>
+    /// Whether the active binding is holding this mod's overlays out of the composite — it never captured
+    /// the mod, and the mod ships Penumbra content that switching it off would take down with it (see
+    /// <see cref="UnboundContentMods"/>). The mod stays enabled in Penumbra and keeps working; only what
+    /// Proteus paints for it is silenced.
+    /// </summary>
+    public bool IsHeldOutByBinding(string modDir)
+    {
+        lock (gate) return activeSuppression?.Contains(modDir) == true;
     }
 
     /// <summary>
@@ -831,10 +907,16 @@ public class DesignBindingService : IDisposable
             newOverride         = CloneOverrides(mods);
             activeOverride      = newOverride;
             activeStackOverride = CloneStack(mods);
+            // mods came from BuildModBindings, which binds EVERY discovered mod — so nothing is unbound
+            // any more and nothing may stay held out. Without this the mod the user just added by
+            // clicking "Update" would keep being filtered out of the composite it triggers below, which
+            // is precisely the remedy the held-out tooltip tells them to use.
+            activeSuppression   = null;
             Save();
         }
         compositor.SetActiveColorOverride(newOverride);
         compositor.SetActiveStackOverride(activeStackOverride);
+        compositor.SetActiveSuppression(null);
         compositor.TriggerRecomposite($"design-binding-update:{id}");
         log.Information("[Proteus] Updated binding for design {0} from current state.", name ?? id.ToString());
         return true;

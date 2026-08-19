@@ -1844,15 +1844,20 @@ public class StatusWindow : Window
                     compositor.TriggerRecomposite("penumbra-enable");
                 }
 
-                // Mod name (dimmed when disabled)
+                // Mod name (dimmed when disabled, or when the active design binding is holding this mod's
+                // overlays out — it is on in Penumbra and its own content still applies, but Proteus is
+                // painting nothing for it, and a row that looks fully live would be a lie about that).
                 ImGui.TableNextColumn();
-                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
+                bool heldOut = active && designBindings.IsHeldOutByBinding(entry.ModDirectory);
+                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active || heldOut))
                 {
                     if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
                     {
                         penumbra.OpenToMod(entry.ModDirectory);
                     }
                 }
+                if (heldOut && ImGui.IsItemHovered())
+                    ImGui.SetTooltip(ms.HeldOutByBindingTip);
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();
@@ -2228,13 +2233,27 @@ public class StatusWindow : Window
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
-            List<string>? selected = null;
-            settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
+            // Matched case-insensitively, like SidecarDiscoveryService.ResolveActiveOverlays: the dictionary
+            // comes from Penumbra's IPC and we don't control its comparer, and a missed key here would read
+            // as "nothing selected".
+            List<string>? selected = settings.HasValue
+                ? settings.Value.Options
+                    .FirstOrDefault(kv => string.Equals(kv.Key, group.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
+                    .Value
+                : null;
 
-            IEnumerable<OverlayOption> active = (selected is { Count: > 0 })
-                ? group.Options.Where(o => selected.Any(s =>
-                      string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)))
-                : [group.Options[0]];
+            // A group with NOTHING selected contributes nothing — the composite path (ResolveActiveOverlays)
+            // skips it outright, so falling back to Options[0] here put a tab and a colorset on screen for an
+            // option whose texture is never painted. Only when Penumbra can't be asked at all (no collection,
+            // IPC down) do we preview the group's first option, so the editor isn't blank while it's away.
+            IEnumerable<OverlayOption> active;
+            if (selected is { Count: > 0 })
+                active = group.Options.Where(o => selected.Any(s =>
+                    string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)));
+            else if (settings.HasValue)
+                continue;
+            else
+                active = [group.Options[0]];
 
             // Display (and thus stack) order within the group follows the user's saved order, top-first.
             // Stable, so options the user hasn't reordered keep their natural order.

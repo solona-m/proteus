@@ -2243,7 +2243,13 @@ public sealed class SecondSkinService
         // compositor is about to equip our pair. Host on it NOW: the injected model only loads after the
         // equip's redraw, and OUR pair always takes the REPLACE path (no base bytes needed), its path fully
         // determined by our set id plus this character.
-        if (hosts.Count == 0 && (metModels == null || metModels.Count == 0) && invisibleGlassesSet is int pending)
+        //
+        // KNOWN empty, not merely "not known to be occupied". A null metModels means no draw-object walk
+        // has ever succeeded, and treating that as "no hat worn" is how this REPLACE host silently took a
+        // player's hat off: the slot was occupied all along, we just had not looked yet. The caller retries
+        // the walk before asking, so null here means it genuinely could not find out — in which case the
+        // shell falls through to a worn accessory or the Emperor's-ring carrier, which replace nothing.
+        if (hosts.Count == 0 && metModels is { Count: 0 } && invisibleGlassesSet is int pending)
         {
             // Predicted with the EQUIPMENT code, not the cut code: this is a guess at the path the game
             // will load our pair from once it is equipped, and equipment loads in the character's own

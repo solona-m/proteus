@@ -437,4 +437,102 @@ public class PenumbraModMetaTests
         PenumbraModMeta.CleanLegacyFiles(tmp.Path);   // must not throw on a mod with no Proteus/ subdir
         Assert.Empty(Directory.EnumerateFiles(tmp.Path));
     }
+
+    // ── PublishesGameContent ────────────────────────────────────────────────
+    //
+    // A design binding switches unbound overlay mods off in Penumbra. It must not do that to a mod that
+    // also ships its own content, or the author's gear goes off with the overlays and stays off across a
+    // reboot. These pin which side of that line each folder shape falls on.
+
+    [Fact]
+    public void PublishesGameContent_is_false_for_an_overlay_only_v4_pack()
+    {
+        using var tmp = new TempDir();
+        // The self-swap several overlay packs carry so Penumbra doesn't see an empty mod: it redirects
+        // nothing, so it must not read as content.
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Pack",
+             "DefaultData":{"Files":{},"FileSwaps":{"chara/a.mtrl":"chara/a.mtrl"},"Manipulations":[]},
+             "Groups":[{"Type":"Multi","Name":"Patterns","Options":[{"Name":"Lace"},{"Name":"Dots"}]}]}
+            """);
+
+        Assert.False(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_files_in_a_v4_group_option()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Dress",
+             "Groups":[{"Type":"Multi","Name":"Items","Options":[
+                {"Name":"Dress","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"items/top.mdl"}}]}]}
+            """);
+
+        Assert.True(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_manipulations_and_real_swaps_and_imc_groups()
+    {
+        using var manips = new TempDir();
+        File.WriteAllText(manips.File("meta.json"),
+            """{"FileVersion":4,"DefaultData":{"Manipulations":[{"Type":"Eqdp"}]}}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(manips.Path));
+
+        using var swap = new TempDir();
+        File.WriteAllText(swap.File("meta.json"),
+            """{"FileVersion":4,"DefaultData":{"FileSwaps":{"chara/a.mtrl":"chara/b.mtrl"}}}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(swap.Path));
+
+        // An IMC group edits the game by existing — its options carry an attribute mask, not files.
+        using var imc = new TempDir();
+        File.WriteAllText(imc.File("meta.json"),
+            """{"FileVersion":4,"Groups":[{"Type":"Imc","Name":"Parts","Options":[{"Name":"A"}]}]}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(imc.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_a_Combining_groups_containers()
+    {
+        using var tmp = new TempDir();
+        // A Combining group's options are bare flag labels; every redirect lives in Containers, one per
+        // combination. Reading only Options would call a physics/body pack an empty overlay pack.
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Physics",
+             "Groups":[{"Type":"Combining","Name":"Sizes",
+                "Options":[{"Name":"Large"}],
+                "Containers":[{},{"Files":{"chara/human/c0201/skeleton/base/b0001/phy_c0201b0001.phyb":"large/phy.phyb"}}]}]}
+            """);
+
+        Assert.True(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_reads_the_v3_layout_too()
+    {
+        using var bare = new TempDir();
+        File.WriteAllText(bare.File("meta.json"), """{"FileVersion":3,"Name":"Pack"}""");
+        File.WriteAllText(bare.File("default_mod.json"), """{"Files":{},"Manipulations":[]}""");
+        File.WriteAllText(bare.File("group_001_patterns.json"),
+            """{"Name":"Patterns","Type":"Multi","Options":[{"Name":"Lace","Files":{}}]}""");
+        Assert.False(PenumbraModMeta.PublishesGameContent(bare.Path));
+
+        // Same folder, one group option that actually redirects something.
+        File.WriteAllText(bare.File("group_002_items.json"),
+            """{"Name":"Items","Type":"Multi","Options":[{"Name":"Dress","Files":{"chara/a.mdl":"a.mdl"}}]}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(bare.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_says_content_when_the_manifest_cannot_be_read()
+    {
+        // A false is what justifies disabling the mod, so an unreadable folder must never produce one.
+        using var missing = new TempDir();
+        Assert.True(PenumbraModMeta.PublishesGameContent(missing.Path));
+
+        using var corrupt = new TempDir();
+        File.WriteAllText(corrupt.File("meta.json"), "{ not json");
+        Assert.True(PenumbraModMeta.PublishesGameContent(corrupt.Path));
+    }
 }

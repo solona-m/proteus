@@ -1293,6 +1293,22 @@ public class CompositorService : IDisposable
         => _stackOverride = overrideByMod;
 
     /// <summary>
+    /// Mods a design RESTORE is holding OUT of the composite: ones the restored binding never captured
+    /// that also ship Penumbra content of their own (see <c>DesignBindingService.UnboundContentMods</c>).
+    /// A restore switches an unbound overlay pack off in Penumbra outright, but it cannot do that to a mod
+    /// whose gear or body would go with it — so those stay enabled and are silenced here instead.
+    /// <para/>
+    /// Null ⇒ nothing is held out, which is the state every path that ISN'T a restore leaves behind: a
+    /// boot restore, a capture and an "Update binding" all publish null. Holding a mod out is one half of
+    /// a restore's sweep and lives exactly as long as that restore, never longer — a mod installed after a
+    /// design was saved must still compose on the next login.
+    /// </summary>
+    private volatile IReadOnlySet<string>? _suppressedMods;
+
+    public void SetActiveSuppression(IReadOnlySet<string>? modDirs)
+        => _suppressedMods = modDirs;
+
+    /// <summary>
     /// Apply the plugin's enabled state, both visually and in Penumbra.
     ///
     /// Turning off in the wrong order leaves the character still wearing the last composite: the mod has
@@ -1405,6 +1421,48 @@ public class CompositorService : IDisposable
     /// composite's inputs are byte-identical to the last published one — see the gate in RecompositeBody.
     /// Defaulting to true means a new call site is safe by construction; opting out is the deliberate act.
     /// </param>
+    /// <summary>
+    /// Re-walk the draw object and refresh the five equipped-model maps the second skin builds from.
+    /// Returns whether the maps are populated afterwards — false only when no walk has EVER succeeded,
+    /// which is the state in which every host decision downstream is a guess.
+    /// </summary>
+    /// <remarks>
+    /// Safe to call from a background thread: the draw-object IPC itself runs inside
+    /// RunOnFrameworkThread. What must never happen is calling that IPC directly from off-thread.
+    /// </remarks>
+    private bool RefreshEquippedModels()
+    {
+        // Who the walk saw is captured INSIDE the framework call, with the paths themselves — this
+        // method runs off-thread, so a later object-table read could name a different character
+        // than the one these models came from, which is the very confusion being guarded against.
+        var walk = Plugin.Framework.RunOnFrameworkThread(() =>
+            (Paths: penumbra.GetActivePlayerModelPaths(),
+             Owner: Plugin.ObjectTable.LocalPlayer?.Name.TextValue)).GetAwaiter().GetResult();
+        var equipped = walk.Paths;
+        // EMPTY counts as failure, not as "wearing nothing". A character that exists always draws
+        // models — a face at the very least — so an empty set only ever means the walk caught the
+        // draw object mid-teardown. Guarding on null alone let that through, and the damage is not
+        // subtle: all five maps are wiped, so the shell is rebuilt from rebuilt-by-default paths.
+        // Seen in a post-settle composite — the equipped heel (e6039, 2158v of posed foot) silently
+        // became the bare foot model (e0000_sho, 6710v), the host list collapsed from four items to
+        // the Emperor-ring fallback, and the invisible glasses were injected — all reported as a
+        // perfectly successful build, because from here it looks exactly like a naked character.
+        // The redraw hook has always documented this hazard; it just tested the wrong condition.
+        if (equipped is { Count: > 0 })
+        {
+            _equippedPartModels = EquippedPartModelsFromModels(equipped);
+            _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
+            _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
+            _bareBodyModels = BareBodyModelsFromModels(equipped);
+            _humanPartModels = HumanPartModelsFromModels(equipped);
+            // Keep the last known race on a walk that carried no human model: it only changes on a
+            // race change, which redraws, and "unknown" would send the shell back to charCode.
+            // Bounded by the owner check, so "keep" never means "keep someone else's".
+            UpdateDrawnRaceCode(equipped, walk.Owner);
+        }
+        return _equippedPartModels != null;
+    }
+
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
@@ -1449,34 +1507,7 @@ public class CompositorService : IDisposable
             // null so a mid-reload blank draw object doesn't wipe a good set.
             try
             {
-                // Who the walk saw is captured INSIDE the framework call, with the paths themselves — this
-                // method runs off-thread, so a later object-table read could name a different character
-                // than the one these models came from, which is the very confusion being guarded against.
-                var walk = Plugin.Framework.RunOnFrameworkThread(() =>
-                    (Paths: penumbra.GetActivePlayerModelPaths(),
-                     Owner: Plugin.ObjectTable.LocalPlayer?.Name.TextValue)).GetAwaiter().GetResult();
-                var equipped = walk.Paths;
-                // EMPTY counts as failure, not as "wearing nothing". A character that exists always draws
-                // models — a face at the very least — so an empty set only ever means the walk caught the
-                // draw object mid-teardown. Guarding on null alone let that through, and the damage is not
-                // subtle: all five maps are wiped, so the shell is rebuilt from rebuilt-by-default paths.
-                // Seen in a post-settle composite — the equipped heel (e6039, 2158v of posed foot) silently
-                // became the bare foot model (e0000_sho, 6710v), the host list collapsed from four items to
-                // the Emperor-ring fallback, and the invisible glasses were injected — all reported as a
-                // perfectly successful build, because from here it looks exactly like a naked character.
-                // The redraw hook has always documented this hazard; it just tested the wrong condition.
-                if (equipped is { Count: > 0 })
-                {
-                    _equippedPartModels = EquippedPartModelsFromModels(equipped);
-                    _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
-                    _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
-                    _bareBodyModels = BareBodyModelsFromModels(equipped);
-                    _humanPartModels = HumanPartModelsFromModels(equipped);
-                    // Keep the last known race on a walk that carried no human model: it only changes on a
-                    // race change, which redraws, and "unknown" would send the shell back to charCode.
-                    // Bounded by the owner check, so "keep" never means "keep someone else's".
-                    UpdateDrawnRaceCode(equipped, walk.Owner);
-                }
+                RefreshEquippedModels();
             }
             catch (OperationCanceledException) { return; }
 
@@ -2609,7 +2640,15 @@ public class CompositorService : IDisposable
 
             LastDiscovered = allEntries;
 
-            var entries = allEntries.Where(e => e.Enabled).OrderBy(e => e.Priority).ToList();
+            // Mods a design binding is holding out (see _suppressedMods) drop out here and nowhere else:
+            // one filter, so they are absent from the overlay lists, from the fingerprint built out of
+            // them, and from every count taken off `entries`. They stay in LastDiscovered above — the UI
+            // still lists them, enabled, because that is what Penumbra says they are.
+            var suppressed = _suppressedMods;  // snapshot the volatile reference for this run
+            var entries = allEntries
+                .Where(e => e.Enabled && (suppressed == null || !suppressed.Contains(e.ModDirectory)))
+                .OrderBy(e => e.Priority)
+                .ToList();
             CheckManagedModHealth(entries);
 
             if (entries.Count == 0)
@@ -5009,11 +5048,42 @@ public class CompositorService : IDisposable
                         // the character is actually drawing there, not the flat bare body. Captured on
                         // the framework thread at redraw/trigger time (draw-object model resources);
                         // never call the draw-object IPC from this background thread.
+                        // Last chance to learn what the character is actually wearing. The walk at
+                        // trigger time can land before the draw object is ready — right after load, or
+                        // mid-redraw — and leave every map null. Seconds have passed since then (the
+                        // blend loop ran), so a retry here usually succeeds where that one failed.
+                        //
+                        // This matters because "null" and "empty" mean opposite things to the host
+                        // chooser and it cannot tell them apart on its own: an unknown met slot used to
+                        // read as "no hat worn", so Proteus injected invisible glasses over the head
+                        // slot and took the hat off. Retry first, and pass the maps through WITHOUT
+                        // coalescing null away, so a still-failed walk stays legible as "unknown".
+                        // Wrapped, because everything from here to the end of the shell build sits under
+                        // one catch-all that reports "second skin build failed" and skips _needFullRedraw.
+                        // RefreshEquippedModels blocks on the framework thread, so it throws on teardown
+                        // or a cancelled frame queue — and an unhandled throw here would trade a failed
+                        // RETRY for a lost SHELL plus the redraw that restores its host accessory. A
+                        // failure just leaves the maps null, which the host chooser now reads as
+                        // "unknown" and handles by refusing to replace anything.
+                        if (_equippedPartModels == null)
+                        {
+                            var known = false;
+                            try { known = RefreshEquippedModels(); }
+                            catch (Exception ex)
+                            {
+                                log.Debug("[Proteus] second skin: equipped-model retry could not run ({0})",
+                                    ex.GetType().Name);
+                            }
+                            if (!known)
+                                log.Warning("[Proteus] second skin: no draw-object walk has succeeded yet — "
+                                          + "host choice will avoid anything that replaces worn gear");
+                        }
+
                         var equippedModels = _equippedPartModels
                             ?? new Dictionary<string, string>();
                         var equippedAccessories = _equippedAccessoryModels
                             ?? new Dictionary<string, string>();
-                        var metModels = _equippedMetModels ?? [];
+                        var metModels = _equippedMetModels;
                         // The bare slots come from the same walk. Logged beside the gear because when a shell
                         // comes out empty these are usually what answers "cut from WHAT?" — a slot missing
                         // from BOTH lists is a slot the shell has no geometry for.
@@ -5021,7 +5091,7 @@ public class CompositorService : IDisposable
                         log.Information("[Proteus] second skin: equipped part models [{0}], accessories [{1}], head/met [{2}], bare [{3}] ({4})",
                             string.Join(", ", equippedModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             string.Join(", ", equippedAccessories.Select(kv => $"{kv.Key}={kv.Value}")),
-                            string.Join(", ", metModels),
+                            metModels == null ? "unknown" : string.Join(", ", metModels),
                             string.Join(", ", bareBodyModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
                         // Observed only for now — nothing cuts from these yet. Logged because the whole
@@ -5064,9 +5134,12 @@ public class CompositorService : IDisposable
                                     p.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase)
                                  && p.EndsWith($"_{c.Slot}.mdl", StringComparison.OrdinalIgnoreCase)))
                                 .Select(c => c.Slot).ToList();
-                            // Mirrors ChooseHost's pending-injection branch: feature on and the "_met"
-                            // slot empty means the shell was built for glasses we are about to equip.
-                            glassesPreHosted = invisibleGlassesSet is int && metModels.Count == 0;
+                            // Mirrors ChooseHost's pending-injection branch, and must keep mirroring it:
+                            // feature on and the "_met" slot KNOWN empty means the shell was built for
+                            // glasses we are about to equip. Unknown (null) is not empty — claiming a
+                            // pre-host we never chose would make the reconcile below adopt glasses that
+                            // were never injected, over a hat that was there all along.
+                            glassesPreHosted = invisibleGlassesSet is int && metModels is { Count: 0 };
                             // Verified after publishing along with everything else — see VerifyRedirectsLive.
                             // This used to build a narrowed list of just the .mdl/.mtrl keys, on the reasoning
                             // that the textures hang off the materials so listing every ss_*.tex would bury

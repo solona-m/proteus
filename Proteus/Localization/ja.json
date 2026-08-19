@@ -903,6 +903,10 @@
     "message": "カラー",
     "description": ""
   },
+  "Mods.HeldOut.Tip": {
+    "message": "適用中のデザインはこのMODより前に保存されたため、そのオーバーレイは\n合成から除外されています。MOD自体は有効なままで、装備・モデル・\nテクスチャは通常どおり適用されます。\n\n「紐付け」タブの「更新」をクリックすると、このデザインに追加できます。",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Proteusサイドカー付きMODが見つかりません。",
     "description": ""

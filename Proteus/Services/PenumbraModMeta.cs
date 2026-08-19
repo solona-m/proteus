@@ -135,6 +135,108 @@ internal static class PenumbraModMeta
         return (files, manips);
     }
 
+    /// <summary>
+    /// Whether the mod puts anything of its OWN into the game — a file redirect, a metadata manipulation,
+    /// an IMC group, or a file swap that actually goes somewhere — in its default data or in any option of
+    /// any group. Reads whichever format the folder is in.
+    ///
+    /// This separates the two kinds of folder a Proteus sidecar can sit in: a pure overlay pack, whose
+    /// entire visible effect is what Proteus composites for it, and a mod that ALSO ships gear, a body or
+    /// textures. Switching the first off in Penumbra costs nothing but its overlays; switching the second
+    /// off takes the author's actual mod down with them. <c>DesignBindingService.Restore</c> is the caller
+    /// that has to tell them apart.
+    ///
+    /// An identity swap (A -> A) does not count. Several overlay packs carry exactly one, purely so
+    /// Penumbra doesn't see an empty mod, and it redirects nothing.
+    ///
+    /// True — "has content", so leave it alone — when the manifest is missing or unreadable. The only
+    /// caller uses a false to justify DISABLING the mod, and a folder we couldn't read is not one to
+    /// disable on a guess.
+    /// </summary>
+    public static bool PublishesGameContent(string modRoot)
+    {
+        try
+        {
+            var manifest = ReadManifest(modRoot);
+            if (manifest.Count == 0) return true;   // unreadable — see the remarks
+
+            if (FileVersionOf(manifest) >= SingleFileVersion)
+            {
+                if (manifest.TryGetValue("DefaultData", out var dd) && HasGameContent(dd)) return true;
+                if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+                    foreach (var g in groups.EnumerateArray())
+                        if (GroupHasGameContent(g))
+                            return true;
+                return false;
+            }
+
+            var legacy = Path.Combine(modRoot, LegacyDefaultMod);
+            if (File.Exists(legacy))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(legacy));
+                if (HasGameContent(doc.RootElement)) return true;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                if (GroupHasGameContent(doc.RootElement)) return true;
+            }
+
+            return false;
+        }
+        catch { return true; /* see the remarks — an unreadable folder is not one to disable */ }
+    }
+
+    /// <summary>
+    /// One group, in either format. Three shapes, because Penumbra's group kinds carry their redirects in
+    /// three different places: an <c>Imc</c> group edits the game by existing at all; a <c>Combining</c>
+    /// group's options are bare flag labels and every redirect sits in a parallel <c>Containers</c> array,
+    /// one per combination; every other kind carries them on the options themselves.
+    /// </summary>
+    private static bool GroupHasGameContent(JsonElement group)
+    {
+        if (group.ValueKind != JsonValueKind.Object) return false;
+
+        if (group.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String
+            && string.Equals(t.GetString(), "Imc", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (group.TryGetProperty("Containers", out var containers) && containers.ValueKind == JsonValueKind.Array)
+            foreach (var c in containers.EnumerateArray())
+                if (HasGameContent(c))
+                    return true;
+
+        if (!group.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array)
+            return false;
+        foreach (var o in opts.EnumerateArray())
+            if (HasGameContent(o))
+                return true;
+        return false;
+    }
+
+    /// <summary>Shared shape of one option, the v3 root object and the v4 <c>DefaultData</c> object.</summary>
+    private static bool HasGameContent(JsonElement o)
+    {
+        if (o.ValueKind != JsonValueKind.Object) return false;
+
+        if (o.TryGetProperty("Files", out var f) && f.ValueKind == JsonValueKind.Object
+            && f.EnumerateObject().Any())
+            return true;
+
+        if (o.TryGetProperty("Manipulations", out var m) && m.ValueKind == JsonValueKind.Array
+            && m.EnumerateArray().Any())
+            return true;
+
+        if (o.TryGetProperty("FileSwaps", out var s) && s.ValueKind == JsonValueKind.Object)
+            foreach (var p in s.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.String
+                    && !string.Equals(p.Value.GetString(), p.Name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+        return false;
+    }
+
     /// <summary>The <c>Options[].Name</c> values of <paramref name="group"/>, in order.</summary>
     public static List<string> ReadOptionNames(JsonElement group)
     {

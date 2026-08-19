@@ -903,6 +903,10 @@
     "message": "색상",
     "description": ""
   },
+  "Mods.HeldOut.Tip": {
+    "message": "적용 중인 디자인은 이 모드보다 먼저 저장되어, 이 모드의 오버레이는\n합성에서 제외됩니다. 모드 자체는 켜져 있으며 장비, 모델, 텍스처는\n평소대로 적용됩니다.\n\n연결 탭에서 \"업데이트\"를 클릭하면 이 디자인에 추가됩니다.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Proteus 사이드카가 있는 모드를 찾지 못했습니다.",
     "description": ""

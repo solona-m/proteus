@@ -903,6 +903,10 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Mods.HeldOut.Tip": {
+    "message": "Le design appliqué a été enregistré avant ce mod ; ses surcouches sont donc\nécartées de la composition. Le mod lui-même reste actif : son équipement, son\nmodèle et ses textures s'appliquent normalement.\n\nCliquez sur « Mettre à jour » dans l'onglet Liaisons pour l'ajouter à ce design.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Aucun mod avec fichier Proteus détecté.",
     "description": ""

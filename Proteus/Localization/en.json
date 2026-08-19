@@ -903,6 +903,10 @@
     "message": "Colors",
     "description": "Opens the colour editor. Narrow table column - keep short."
   },
+  "Mods.HeldOut.Tip": {
+    "message": "The design you have applied was saved before this mod, so its overlays are\nheld out of the composite. The mod itself is still on: its gear, model and\ntextures apply as normal.\n\nClick \"Update\" on the Bindings tab to add it to this design.",
+    "description": "Tooltip. Appears in the Mods tab on a mod whose overlays the active design binding is holding out of the composite. Contains deliberate line breaks - keep the same number, moving them where your language needs. \"Update\" and \"Bindings\" name controls translated elsewhere - match Bindings.Update.Btn and Tab.Bindings."
+  },
   "Mods.NoSidecarMods": {
     "message": "No Proteus sidecar mods detected.",
     "description": "Appears in the Mods tab."

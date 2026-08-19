@@ -903,6 +903,10 @@
     "message": "Farben",
     "description": ""
   },
+  "Mods.HeldOut.Tip": {
+    "message": "Das angewendete Design wurde vor diesem Mod gespeichert, daher werden seine\nOverlays aus der Komposition herausgehalten. Der Mod selbst bleibt an: Ausrüstung,\nModell und Texturen gelten wie gewohnt.\n\nKlicke auf „Aktualisieren“ im Reiter „Bindungen“, um ihn diesem Design hinzuzufügen.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Keine Proteus-Beidatei-Mods erkannt.",
     "description": ""

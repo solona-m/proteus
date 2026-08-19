@@ -103,6 +103,12 @@ public sealed class ModsStrings
     public readonly string ColColors   = Loc.Localize("Mods.Col.Colors", "Colors") + "###modColors";
     public readonly string ColSkindent = Loc.Localize("Mods.Col.Skindent", "Skindent") + "###modSkindent";
 
+    public readonly string HeldOutByBindingTip = Loc.Localize("Mods.HeldOut.Tip",
+        "The design you have applied was saved before this mod, so its overlays are\n" +
+        "held out of the composite. The mod itself is still on: its gear, model and\n" +
+        "textures apply as normal.\n\n" +
+        "Click \"Update\" on the Bindings tab to add it to this design.");
+
     public readonly string ColorsBtn = Loc.Localize("Mods.Colors.Btn", "Colors");
 
     public readonly string ColorsBindingDrivenTip = Loc.Localize("Mods.Colors.BindingDriven.Tip",

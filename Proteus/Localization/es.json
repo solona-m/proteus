@@ -903,6 +903,10 @@
     "message": "Colores",
     "description": ""
   },
+  "Mods.HeldOut.Tip": {
+    "message": "El diseño aplicado se guardó antes que este mod, así que sus superposiciones\nquedan fuera de la composición. El mod sigue activado: su equipo, su modelo y\nsus texturas se aplican con normalidad.\n\nHaz clic en «Actualizar» en la pestaña Vínculos para añadirlo a este diseño.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "No se han detectado mods con archivo Proteus.",
     "description": ""
