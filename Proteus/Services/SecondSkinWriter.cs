@@ -563,7 +563,8 @@ public static class SecondSkinWriter
                     if (!string.IsNullOrEmpty(bn)) bodyBones.Add(bn);
 
             AuthoredCapSet? best = null;
-            float bestRate = float.MaxValue, bestCover = -1f;
+            float bestRate = float.MaxValue, bestCover = -1f, bestSpread = float.MaxValue;
+            List<SkinTri>? fitSurface = null;
             foreach (var cand in authoredCaps)
             {
                 if (cand.Bind == null)
@@ -580,16 +581,32 @@ public static class SecondSkinWriter
                 if (probe is not { Count: > 0 }) continue;
                 int tot = probe.Sum(p => p.Considered), miss = probe.Sum(p => p.Missed);
                 float rate = tot > 0 ? (float)miss / tot : 1f;
+                float spread = CapStandoffSpread(probe, fitSurface ??= BindSurface(sourceModels));
                 if (authoredCaps.Count > 1)
                     diag?.Invoke($"authored cap: '{cand.Name}' places all but {rate * 100:F0}% on this body, "
-                               + $"and this body has {cover * 100:F0}% of the {want.Count} bone(s) it was "
-                               + "bound to");
+                               + $"this body has {cover * 100:F0}% of the {want.Count} bone(s) it was bound "
+                               + $"to, and it sits off the skin within {spread:F5}");
 
                 // Bone coverage decides; the placement score only separates caps the body can equally
                 // carry. A cap missing bones is not a worse fit, it is the wrong body.
-                bool better = cover > bestCover + CapBoneCoverTie
-                           || (cover >= bestCover - CapBoneCoverTie && rate < bestRate);
-                if (better) { bestCover = cover; bestRate = rate; best = cand; }
+                //
+                // AND WHEN THOSE TWO TIE, HOW EVENLY IT SITS. Two bodies can share a skeleton entirely -
+                // Bibo+ and Neolithe feet both weight to j_asi_d and j_asi_e and nothing else - so bone
+                // coverage cannot tell their caps apart, and a cap made for either places every vertex
+                // on the other. Both then scored 100% and 0%, the comparison fell through to a strict
+                // "better than", and the winner was whichever the directory listing named first:
+                // toecap.bibo.mdl sorts before toecap.mdl, so a Neolithe foot got the Bibo+ cap.
+                //
+                // A cap on the body it was modelled for hugs it at the standoff its author gave it. On a
+                // foot shaped differently the same binding lands some of it buried and some of it
+                // floating, and that spread is the thing to compare.
+                bool better;
+                if (cover > bestCover + CapBoneCoverTie) better = true;
+                else if (cover < bestCover - CapBoneCoverTie) better = false;
+                else if (rate < bestRate - CapPlaceRateTie) better = true;
+                else if (rate > bestRate + CapPlaceRateTie) better = false;
+                else better = spread < bestSpread;
+                if (better) { bestCover = cover; bestRate = rate; bestSpread = spread; best = cand; }
             }
 
             if (best is { } chosen && bestRate <= CapBindMaxUnplaced)
@@ -6332,6 +6349,34 @@ public static class SecondSkinWriter
     /// that is wanted and a full placement is every cap vertex against every skin triangle.
     /// </param>
     /// <summary>
+    /// How unevenly a placed cap sits off the body's skin, as the spread of its standoffs between the
+    /// tenth and ninetieth percentile.
+    /// <para/>
+    /// This is what separates two caps that a body can equally carry. A cap on the foot it was modelled
+    /// for stands off it by very nearly one figure everywhere, whatever that figure is; the same cap on
+    /// a foot with different toes lands parts of itself under the skin and parts of it in the air, and
+    /// the spread widens even though every vertex still found somewhere to land.
+    /// <para/>
+    /// Percentiles rather than the extremes, because a handful of vertices at the rim of any cap sit
+    /// oddly on any body and should not decide which cap a whole foot gets.
+    /// </summary>
+    private static float CapStandoffSpread(IReadOnlyList<CapPlacement> placed, List<SkinTri> skin)
+    {
+        if (skin.Count == 0) return float.MaxValue;
+        var d = new List<float>();
+        foreach (var pl in placed)
+            foreach (var q in pl.Pos)
+            {
+                if (q is { X: 0, Y: 0, Z: 0 }) continue;      // never placed
+                if (!NearestOnSkin(q, skin, CapStandoffReach, out var at)) continue;
+                d.Add(Dist(q, at));
+            }
+        if (d.Count < 8) return float.MaxValue;
+        d.Sort();
+        return d[(int)(d.Count * 0.90f)] - d[(int)(d.Count * 0.10f)];
+    }
+
+    /// <summary>
     /// The bone NAMES a binding was baked against, read from its header alone — no placement, no surface
     /// collection. This is a body fingerprint: Rue weights its toes to IVCS bones (iv_asi_*) where
     /// Neolithe and stock Bibo+ use the game's own (j_asi_*), so a cap baked for one names bones the
@@ -6891,6 +6936,18 @@ public static class SecondSkinWriter
     /// separate them. Anything wider than this is a different body, not a worse fit.
     /// </summary>
     private const float CapBoneCoverTie = 0.02f;
+
+    /// <summary>
+    /// How close two caps' placement rates must be before the tie falls through to how evenly each sits
+    /// off the skin. Wide enough that a percent either way does not decide which cap a foot gets.
+    /// </summary>
+    private const float CapPlaceRateTie = 0.02f;
+
+    /// <summary>
+    /// How far a placed cap vertex may look for the skin when measuring its standoff. Past this it did
+    /// not land on the foot at all and says nothing about the fit.
+    /// </summary>
+    private const float CapStandoffReach = 0.030f;
 
     private const float CapBindMaxUnplaced = 0.15f;
 
