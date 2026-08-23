@@ -318,6 +318,32 @@ public class DesignBindingService : IDisposable
             if (opts.Count > 0) result.Options = opts;
         }
 
+        // Imported content packs colour the material they SHIP, and those rows live on a ContentOption
+        // rather than an OverlayOption — a different list, keyed the same way. Without this, binding a
+        // design captured every colour a mod had except a content pack's, and restoring it painted the
+        // pack's authored colours back over the ones the design was saved with.
+        if (e.Metadata.ContentGroups is { } contentGroups)
+        {
+            var opts = result.Options ?? new Dictionary<string, Dictionary<string, List<ColorTableRowPreset>>>();
+            foreach (var g in contentGroups)
+            foreach (var o in g.Options)
+            {
+                List<ColorTableRowPreset>? rows = null;
+                if (active?.Options != null
+                    && active.Options.TryGetValue(g.PenumbraGroupName, out var d)
+                    && d.TryGetValue(o.Name, out var r))
+                    rows = r;
+                rows ??= o.ColorTableRows;
+
+                var cloned = CloneRows(rows);
+                if (cloned == null) continue;
+                if (!opts.TryGetValue(g.PenumbraGroupName, out var inner))
+                    opts[g.PenumbraGroupName] = inner = new();
+                inner[o.Name] = cloned;
+            }
+            if (opts.Count > 0) result.Options = opts;
+        }
+
         return result;
     }
 

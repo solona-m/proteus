@@ -1853,7 +1853,8 @@ public class CompositorService : IDisposable
         Dictionary<string, List<(string MaskPath, string? NormalPath, string? IndexPath)>> maskAssetsByMod,
         Dictionary<string, Dictionary<int, ColorTableRowOverride>> maskRowsByMod,
         HashSet<string> maskShellMods,
-        List<string> baseKeys)
+        List<string> baseKeys,
+        List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -1874,6 +1875,17 @@ public class CompositorService : IDisposable
 
         sb.Append("gear:");
         foreach (var (e, o) in gearOverlays) Pair(sb, e, o);
+        sb.Append('\n');
+
+        // Imported geometry, in the order it will be placed. Without this a change of selection in a
+        // content pack — a different piercing, a piece switched off — hashes identically to the
+        // composite already published and is skipped, and the character keeps wearing the old one.
+        sb.Append("content:");
+        foreach (var (e, c) in contentLayers)
+            sb.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
+              .Append(c.OptionGroup).Append('/').Append(c.Option).Append('#').Append(c.GroupOrder).Append('#')
+              .Append(JsonSerializer.Serialize(c.Piece)).Append('#')
+              .Append(c.ColorTableRows == null ? "-" : JsonSerializer.Serialize(c.ColorTableRows)).Append(';');
         sb.Append('\n');
 
         foreach (var mod in maskPathsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
@@ -2819,12 +2831,28 @@ public class CompositorService : IDisposable
             // Gear overlays don't composite into a skin material — each becomes its own second-skin
             // shell with its own material and shader. Collect them separately.
             var gearOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
+            // Imported content packs bring geometry rather than art. They composite into no skin material at
+            // all, so they never reach byMaterial — they go straight to the second-skin builder, which
+            // appends their meshes into the carrier beside the shells.
+            var contentLayers = new List<(OverlayEntry Entry, ResolvedContent Content)>();
             // Every active overlay of every mod, both layers — the second-skin builder ranks groups
             // across layers (a skin group can outrank a gear group), so it needs the full picture.
             var allOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
 
             foreach (var entry in entries)
             {
+                if (entry.Metadata.HasContent)
+                {
+                    var content = discovery.ResolveActiveContent(entry);
+                    // A restored design binding overrides the pack's colours in memory, exactly as it does
+                    // for overlays below — metadata.json is never written.
+                    if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var cOvr))
+                        content = content
+                            .Select(c => c with { ColorTableRows = cOvr.Resolve(c.OptionGroup, c.Option) ?? c.ColorTableRows })
+                            .ToList();
+                    foreach (var c in content) contentLayers.Add((entry, c));
+                }
+
                 var overlays = discovery.ResolveActiveOverlays(entry);
 
                 // A restored design binding overrides metadata colors in-memory (metadata.json is
@@ -3340,7 +3368,7 @@ public class CompositorService : IDisposable
             // below, so a skip leaves the previous composite's shell state intact.
             var fingerprint = BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
-                baseKeys);
+                baseKeys, contentLayers);
 
             if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
@@ -5016,7 +5044,8 @@ public class CompositorService : IDisposable
             // already skipped it ("mask lives on the shell"), and the shell it was deferred to was never
             // built. The masked region then rendered as plain body skin, which is exactly what it looks
             // like. The synthesis adds to gearOverlays itself, and Build still no-ops on an empty list.
-            if (gearOverlays.Count > 0 || maskShellMods.Count > 0)
+            // …and content packs, which have no overlay of any kind: their whole contribution is geometry.
+            if (gearOverlays.Count > 0 || maskShellMods.Count > 0 || contentLayers.Count > 0)
             {
                 // Same stacking rules as the skin composite: Penumbra priority, then group order, then the
                 // user's per-group stack order (top-first). SecondSkinService assigns shell letters in this
@@ -5114,7 +5143,8 @@ public class CompositorService : IDisposable
                 var charCode = (_glamourerCharCode ?? _lastCompositedCharCodes?.Split(',').FirstOrDefault())
                     ?.TrimStart('c', 'C');
                 if (string.IsNullOrEmpty(charCode))
-                    log.Warning("[Proteus] {0} gear overlay(s) skipped: no character code yet", gearOverlays.Count);
+                    log.Warning("[Proteus] {0} gear overlay(s) and {1} content piece(s) skipped: "
+                              + "no character code yet", gearOverlays.Count, contentLayers.Count);
                 else
                     try
                     {
@@ -5204,7 +5234,7 @@ public class CompositorService : IDisposable
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
                             InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
-                            _humanPartModels);
+                            _humanPartModels, contentLayers);
                         if (shells != null)
                         {
                             shellBuilt = true;
@@ -5336,9 +5366,10 @@ public class CompositorService : IDisposable
             _lastCompositedBodyShapeSig = BodyShapeSignature(_bodyShapeSnapshot);
 
             // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
-            if (gearOverlays.Count > 0)
-                log.Information("[Proteus] recomposite phases: second skin {0:F0}ms ({1} gear layer(s))",
-                    PhaseCounter.MsSince(tGear), gearOverlays.Count);
+            if (gearOverlays.Count > 0 || contentLayers.Count > 0)
+                log.Information("[Proteus] recomposite phases: second skin {0:F0}ms ({1} gear layer(s), "
+                              + "{2} content piece(s))",
+                    PhaseCounter.MsSince(tGear), gearOverlays.Count, contentLayers.Count);
 
             WriteManagedModJson(redirects, manipulations);
 
@@ -5373,10 +5404,17 @@ public class CompositorService : IDisposable
             // themselves. Glasses only count when the shell rides the facewear slot — on a race whose
             // facewear ships native the shell goes to the ring instead, and equipping a pair we don't host
             // on would just put real frames on the player's face.
-            RememberHostDecision(gearOverlays.Count > 0, shellBuilt, shellOnFacewear,
+            //
+            // "Wanted" counts content packs as well as gear overlays, and has to: it is what separates "this
+            // composite asked for a host and failed to build one" (transient — leave the carrier on, retry)
+            // from "nothing wants a host at all" (settled — take it back off). A content-only look wants one
+            // exactly as much as a shell does, and reading it off gearOverlays alone would unequip the
+            // carrier its own geometry is riding the moment a build hiccuped.
+            bool hostWanted = gearOverlays.Count > 0 || contentLayers.Count > 0;
+            RememberHostDecision(hostWanted, shellBuilt, shellOnFacewear,
                                  shellBuilt ? shellCarrierSlots : []);
-            ReconcileInvisibleGlasses(gearOverlays.Count > 0, shellBuilt, shellOnFacewear, glassesPreHosted);
-            ReconcileEmperorRing(gearOverlays.Count > 0, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+            ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);
+            ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : []);
 
             // Every path, not just the shell's. The shell paths were verified from the start because a worn
             // accessory is obviously contested; the skin textures were not, on the unexamined assumption that

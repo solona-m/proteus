@@ -99,6 +99,10 @@
     "message": "현재 Proteus 상태(사용 여부 / 우선도 / 옵션 / 색상)를 이 연결에 기록합니다.\n수동 편집은 여기를 클릭해야만 유지됩니다.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] 모드의 메시 파츠 {0}개를 배치하지 못했습니다 — 장신구의 머티리얼 슬롯이 부족합니다. 반지 / 팔지 / 목걸이를 하나 더 착용하거나 레이어를 끄세요.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
     "description": ""
@@ -469,6 +473,126 @@
   },
   "Common.None": {
     "message": "(없음)",
+    "description": ""
+  },
+  "Content.Browse.Btn": {
+    "message": "모드 팩 찾아보기",
+    "description": ""
+  },
+  "Content.Dialog.Filter": {
+    "message": "Penumbra 팩",
+    "description": ""
+  },
+  "Content.Dialog.Title": {
+    "message": "Penumbra 팩 선택",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "메시 {0}, 정점 {1}",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "또는 자체 메시를 포함한 Penumbra 팩(.pmp)을 가져옵니다. Proteus는 팩을 복사한 뒤 Penumbra가 그 모델을 적용하지 못하게 하고, 대신 선택한 각 옵션의 메시를 캐리어 장신구에 덧붙입니다. 덕분에 같은 게임 경로를 두고 충돌하던 옵션들을 한꺼번에 착용할 수 있습니다.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "머티리얼 {0}개",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "이 팩에는 Proteus가 덧붙일 수 있는 메시를 포함한 옵션이 없습니다.",
+    "description": ""
+  },
+  "Content.OptionOf.Fmt": {
+    "message": "\"{0}\" 그룹 — 파츠 {1}개. 이 색상은 팩이 제공하는 머티리얼에 기록됩니다. 건드리지 않은 행은 제작자가 설정한 그대로 유지됩니다.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "메시가 있는 옵션: {1}개 중 {0}개",
+    "description": ""
+  },
+  "Content.Pill": {
+    "message": "메시",
+    "description": ""
+  },
+  "Content.Pill.Tip": {
+    "message": "이 모드는 자체 메시를 포함합니다. Proteus는 선택한 옵션이 지정한 메시를 캐리어 장신구에 덧붙입니다. 선택은 Penumbra에서 하세요.",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "해당 팩을 읽을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "머티리얼 미연결",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "그 모드 이름에는 사용할 수 있는 문자가 없습니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "\"{0}\"(이)라는 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\"는 예약된 이름입니다. 다른 모드 이름을 선택하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "모드를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "지오메트리 없음 — 모든 메시가 비어 있습니다",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "메시가 {0}을(를) 참조하지만 이 팩에는 없습니다. 메시를 팩에 포함된 머티리얼에 다시 연결한 뒤 다시 내보내세요.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "읽을 수 없는 모델입니다 ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 활성화하고 Penumbra에서 열었습니다. 옵션은 Penumbra에서 선택하며, 선택한 항목은 모두 동시에 착용됩니다.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (건너뜀: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.DefaultModel": {
+    "message": "이 팩은 어느 옵션에도 속하지 않는 모델을 리디렉션합니다. 해당 모델은 항상 켜진 파츠로 가져오며, 모드가 활성화된 동안 항상 덧붙습니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "\"{0}\" 그룹은 {1} 유형이라 Proteus가 배치할 수 없습니다. 이 그룹의 옵션은 그대로 둡니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "이 팩에는 모델을 리디렉션하는 옵션이 없어 Proteus가 덧붙일 지오메트리가 없습니다. 대신 Penumbra에서 설치하세요.",
     "description": ""
   },
   "Create.Author.Label": {

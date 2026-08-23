@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Proteus.Services;
 
 namespace Proteus;
 
 /// <summary>Which piece of the character a shell is cut from.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ShellSurfaceKind
 {
     /// <summary>The body — the only surface shells were ever cut from before this existed. Includes body-UV

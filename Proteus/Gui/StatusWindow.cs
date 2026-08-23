@@ -29,6 +29,7 @@ public class StatusWindow : Window
     private readonly UVRemapService uvRemap;
     private readonly ModCreationService modCreation;
     private readonly OnionImportService onionImport;
+    private readonly ContentImportService contentImport;
     private readonly ModExportService modExport;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
@@ -141,6 +142,13 @@ public class StatusWindow : Window
     // thread. A plain reference assignment is the whole handoff; nothing else touches it.
     private volatile OnionImportService.PreparedImport? _importPrepared;
 
+    // ── Content (.pmp) import state ──
+    // The same three-phase handoff as the Onion import above, kept in its own fields rather than shared:
+    // the two packs describe different things (layers vs geometry) and a half-switched tab that still held
+    // the other kind's preview would offer to import it under the wrong rules.
+    private ContentImportService.ImportPreview? _contentPreview;
+    private volatile ContentImportService.PreparedImport? _contentPrepared;
+
     // ── Export tab state ──
     // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
     // can reorder, and an index would then quietly point at a different mod than the one on screen.
@@ -194,6 +202,7 @@ public class StatusWindow : Window
         UVRemapService uvRemap,
         ModCreationService modCreation,
         OnionImportService onionImport,
+        ContentImportService contentImport,
         ModExportService modExport)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
@@ -209,6 +218,7 @@ public class StatusWindow : Window
         this.uvRemap        = uvRemap;
         this.modCreation    = modCreation;
         this.onionImport    = onionImport;
+        this.contentImport  = contentImport;
         this.modExport      = modExport;
 
         SizeConstraints = new WindowSizeConstraints
@@ -1230,6 +1240,8 @@ public class StatusWindow : Window
     /// </param>
     public void TickImport(bool unloading = false)
     {
+        TickContentImport(unloading);
+
         var done = _importPrepared;
         if (done == null) return;
         _importPrepared = null;
@@ -1257,12 +1269,56 @@ public class StatusWindow : Window
         if (!IsOpen) Show();
     }
 
+    /// <summary>
+    /// The content-pack half of <see cref="TickImport"/>, on the same terms: the disk work runs on the
+    /// pool, and the Penumbra registration has to land back here on the framework thread.
+    /// </summary>
+    private void TickContentImport(bool unloading)
+    {
+        var done = _contentPrepared;
+        if (done == null) return;
+        _contentPrepared = null;
+        _importBusy = false;
+
+        var r = contentImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        if (r.Ok && ReferenceEquals(_contentPreview, done.Preview))
+            _contentPreview = null;
+
+        if (!IsOpen) Show();
+    }
+
     private void DrawImportTab()
     {
         var ims = Strings.Import;
+        var cms = Strings.Content;
 
         ImGui.TextWrapped(ims.Intro);
+        ImGui.Spacing();
+        ImGui.TextWrapped(cms.Intro);
         ImGui.Separator();
+
+        if (ImGui.Button(cms.BrowseBtn))
+            _fileDialog.OpenFileDialog(cms.DialogTitle, cms.DialogFilter + "{" + PenumbraPackage.Extension + "}",
+                (ok, paths) =>
+                {
+                    if (!ok) return;
+                    var picked = paths.FirstOrDefault();
+                    if (string.IsNullOrEmpty(picked)) return;
+                    LoadContentPack(picked);
+                }, 1);
+        ImGui.SameLine();
+
+        if (_contentPreview != null)
+        {
+            DrawContentImport(_contentPreview);
+            return;
+        }
 
         if (ImGui.Button(ims.BrowseBtn))
             // The "{.omp}" suffix is the dialog's own filter syntax, not prose — it is appended here so a
@@ -1361,6 +1417,7 @@ public class StatusWindow : Window
         _importPath = path;
         _importStatus = null;
         _importMaterials = null;
+        _contentPreview = null;   // the two kinds of pack are imported under different rules
         try
         {
             var preview = onionImport.Inspect(path);
@@ -1403,6 +1460,283 @@ public class StatusWindow : Window
                 _importPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message), null, null, 0, 0);
             }
         });
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.pmp</c> into the content preview, or report why it isn't one. Done HERE, on the
+    /// one frame the dialog reports a pick, for the same reason as the Onion path: reading every model in
+    /// the pack is milliseconds, not a per-frame cost.
+    /// </summary>
+    private void LoadContentPack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _importMaterials = null;
+        try
+        {
+            var preview = ContentImportService.Inspect(path, Plugin.Log);
+            _contentPreview = preview;
+            _importName = preview.Name;
+            _importAuthor = preview.Author;
+        }
+        catch (Exception ex)
+        {
+            _contentPreview = null;
+            _importStatus = string.Format(Strings.Content.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The content-pack preview: what each option ships, and whether Proteus can append it.</summary>
+    private void DrawContentImport(ContentImportService.ImportPreview preview)
+    {
+        var cms = Strings.Content;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(ims.Description);
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
+        }
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(cms.PieceCountFmt, preview.ImportableOptions, preview.Options.Count));
+
+        using (var table = ImRaii.Table("##contentPieces", 4,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var opt in preview.Options)
+                    foreach (var piece in opt.Pieces)
+                    {
+                        ImGui.TableNextRow();
+
+                        ImGui.TableNextColumn();
+                        ImGui.TextUnformatted(opt.Group);
+
+                        ImGui.TableNextColumn();
+                        if (piece.Import) ImGui.TextUnformatted(opt.Option);
+                        else ImGui.TextDisabled(opt.Option);
+
+                        ImGui.TableNextColumn();
+                        if (piece.Import)
+                            ImGui.TextDisabled(string.Format(cms.GeometryFmt, piece.Meshes, piece.Vertices));
+                        else
+                            ImGui.TextDisabled(cms.Skipped);
+
+                        ImGui.TableNextColumn();
+                        if (piece.Import)
+                        {
+                            var mtrl = Path.GetFileName(piece.Bindings.Values.First());
+                            ImGui.TextDisabled(piece.Bindings.Count > 1
+                                ? string.Format(cms.MaterialsFmt, piece.Bindings.Count)
+                                : mtrl);
+                        }
+                        else
+                        {
+                            ImGui.TextColored(ImportWarnColour, cms.Unbound);
+                        }
+
+                        if (piece.Problem != null && ImGui.IsItemHovered())
+                            ImGui.SetTooltip(string.Format(cms.ProblemFmt, opt.Option, piece.Problem));
+                    }
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartContentImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : cms.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    /// <summary>Hand the unpack to the pool; <see cref="TickContentImport"/> registers what comes back.</summary>
+    private void StartContentImport(ContentImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        var (name, author) = (_importName, _importAuthor);
+        Task.Run(() =>
+        {
+            try { _contentPrepared = contentImport.Prepare(preview, name, author); }
+            catch (Exception ex)
+            {
+                _contentPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, 0, 0);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The colour editor for an imported content pack: one tab per selected option, each editing the rows
+    /// stamped into the material that option's meshes are bound to.
+    /// <para/>
+    /// Separate from the overlay editors rather than folded into their tab strip, and the reason is what a
+    /// content option IS. An overlay option owns art Proteus composites, so its panel is built around
+    /// coverage, an index texture and a render mode inferred from the features in use. A content option
+    /// owns none of those: the pack shipped its own mesh, its own textures and its own shader, and the only
+    /// thing left for the user to change is the colour table. Everything else in that panel would be a
+    /// control with nothing behind it.
+    /// <para/>
+    /// Rows that are NOT edited stay exactly as the author wrote them — see
+    /// <c>GearMaterialWriter.PatchColorTable</c>, which writes only the rows it is given.
+    /// </summary>
+    private void DrawContentColorEditor(OverlayEntry entry, bool editingBinding)
+    {
+        // Resolved HERE rather than through discovery.ResolveActiveContent, which is otherwise the same
+        // walk: that one re-reads the mod's meta.json for its group order, and this runs once a frame for
+        // as long as the panel is open. The selection still comes from Penumbra — one IPC call, exactly as
+        // the option-group editor below does it — and the group order comes off the cache the tab strip
+        // already keeps.
+        var collId = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+
+        if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var groupOrder))
+        {
+            var modRoot = Path.GetDirectoryName(
+                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            groupOrder = modRoot != null
+                ? SidecarDiscoveryService.ReadGroupOrder(modRoot)
+                : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _groupOrderCache[entry.ModDirectory] = groupOrder;
+        }
+
+        // One tab per OPTION, not per piece: an option's pieces all take the option's rows, and two pieces
+        // of one option would otherwise show two identical grids writing to the same place.
+        var options = new List<(string? Group, string? Option, int Order, int Pieces)>();
+
+        if (entry.Metadata.Content is { Count: > 0 } unconditional)
+            options.Add((null, null, int.MaxValue, unconditional.Count));
+
+        foreach (var g in entry.Metadata.ContentGroups ?? [])
+        {
+            var selected = settings?.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, g.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
+                .Value;
+            // A group with nothing selected contributes nothing to the composite either, so it gets no tab.
+            if (selected is not { Count: > 0 }) continue;
+
+            int order = groupOrder.TryGetValue(g.PenumbraGroupName, out var n) ? n : int.MaxValue;
+            foreach (var o in g.Options.Where(o => selected.Any(sel =>
+                         string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
+                if (o.Pieces.Count > 0)
+                    options.Add((g.PenumbraGroupName, o.Name, order, o.Pieces.Count));
+        }
+
+        if (options.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            return;
+        }
+
+        options = options
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Option, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        using var tabs = ImRaii.TabBar($"##contentTabs_{entry.ModDirectory}");
+        if (!tabs) return;
+
+        foreach (var (group, option, _, pieceCount) in options)
+        {
+            var label = option ?? Strings.Content.Pill;
+            using var tab = ImRaii.TabItem($"{label}##content_{group}_{option}");
+            if (!tab) continue;
+
+            if (group != null)
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.OptionOfFmt, group, pieceCount));
+
+            // Where the rows live. Same rule as every other editor here: while a binding is being edited we
+            // work on a COPY and only install it once something actually changes, so merely opening the
+            // panel never creates an override — and the compositor is reading the real one from another
+            // thread meanwhile.
+            var stored = StoredContentRows(entry, group, option);
+            var ovrRows = editingBinding ? designBindings.PeekOverrideRows(entry.ModDirectory, group, option) : null;
+            var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
+
+            bool changed = false;
+            var selKey = entry.ModDirectory + "\u0000" + group + "\u0000" + option;
+            int sel = _rowSelection.GetValueOrDefault(selKey, 1);
+            ColorTableEditor.DrawRows(selKey, rows, null,
+                // A content material is gear-space by construction — it hangs off an accessory — and it
+                // brings its own shader, so nothing here may infer or change one.
+                gear: true, shader: OverlayDescriptor.DefaultGearShader,
+                compositor.GetShellMaterials(entry.ModDirectory, group, option),
+                skinGlowTargets: null,
+                out _, ref sel, ref changed);
+            _rowSelection[selKey] = sel;
+
+            if (!changed) continue;
+
+            if (editingBinding)
+            {
+                designBindings.SetOverrideRows(entry.ModDirectory, group, option, rows);
+            }
+            else
+            {
+                StoreContentRows(entry, group, option, rows);
+                discovery.SaveMetadata(entry);
+                InvalidateDefaultsCache(entry);
+            }
+            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+        }
+    }
+
+    /// <summary>
+    /// The rows an option's material is stamped with, as stored in the sidecar — or a fresh empty list when
+    /// the author wrote none, so the editor has somewhere to put a first edit.
+    /// <para/>
+    /// Deliberately does NOT install that empty list. Drawing a panel must not change the mod: the list is
+    /// only written back by <see cref="StoreContentRows"/>, and only once something actually changed.
+    /// </summary>
+    private static List<ColorTableRowPreset> StoredContentRows(OverlayEntry entry, string? group, string? option)
+        => ContentOptionFor(entry, group, option)?.ColorTableRows
+        ?? entry.Metadata.ColorTableRows
+        ?? [];
+
+    private static void StoreContentRows(
+        OverlayEntry entry, string? group, string? option, List<ColorTableRowPreset> rows)
+    {
+        // Onto the option when there is one, else the mod-wide list — which is also where an unconditional
+        // piece's colours live, since it belongs to no option.
+        if (ContentOptionFor(entry, group, option) is { } o) o.ColorTableRows = rows;
+        else entry.Metadata.ColorTableRows = rows;
+    }
+
+    /// <summary>The sidecar's content option for a (group, option) pair, or null for an unconditional piece
+    /// — or for a name pair the sidecar no longer carries.</summary>
+    private static ContentOption? ContentOptionFor(OverlayEntry entry, string? group, string? option)
+    {
+        if (group == null || option == null) return null;
+        return entry.Metadata.ContentGroups?
+            .FirstOrDefault(g => string.Equals(g.PenumbraGroupName, group, StringComparison.OrdinalIgnoreCase))?
+            .Options.FirstOrDefault(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>One row per pack layer: what it is, and — dimmed — why it won't be imported.</summary>
@@ -1859,6 +2193,15 @@ public class StatusWindow : Window
                 if (heldOut && ImGui.IsItemHovered())
                     ImGui.SetTooltip(ms.HeldOutByBindingTip);
 
+                // A content pack ships geometry rather than art, so what its rows and its options mean is
+                // different enough to be worth saying on the row itself.
+                if (entry.Metadata is { HasContent: true })
+                {
+                    ImGui.SameLine();
+                    ProteusStyle.Pill(Strings.Content.Pill, ProteusStyle.Binding);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Content.PillTip);
+                }
+
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();
                 int pri = _priorityEdits.TryGetValue(entry.ModDirectory, out var pe) ? pe : entry.Priority;
@@ -2125,6 +2468,25 @@ public class StatusWindow : Window
 
         // Scroll maps a gear overlay can pick from: the mod's own Effects/ folder, then the user's.
         var effects = discovery.ResolveAvailableEffects(entry, discovery.EffectsLibraryPath());
+
+        // ── content packs: the pack's OWN material, one tab per selected option ────
+        // Drawn first and separately from the overlay paths below, because a content option has no overlay
+        // descriptor at all — no art, no coverage, no index texture of ours. Its colours go into the
+        // material the PACK ships, so the only control that means anything is the colour grid itself.
+        if (entry.Metadata is { HasContent: true })
+        {
+            DrawContentColorEditor(entry, editingBinding);
+            // A pack may ship geometry AND overlays; only a pure content pack is finished here.
+            if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
+            {
+                ImGui.Separator();
+                if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##content_{entry.ModDirectory}",
+                        ImGuiTreeNodeFlags.NoTreePushOnOpen))
+                    DrawBodiesAdvanced(entry);
+                return;
+            }
+            ImGui.Separator();
+        }
 
         // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
         if (entry.Metadata.OptionGroups is not { Count: > 0 })

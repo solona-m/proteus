@@ -35,6 +35,19 @@ public record ResolvedOverlay(
     int GroupOrder = int.MaxValue
 );
 
+/// <summary>
+/// One geometry piece an imported content pack currently contributes, paired with the colour rows that
+/// apply to it. Mirrors <see cref="ResolvedOverlay"/> field for field so the compositor, the design
+/// bindings and the editor can key both on the same <c>(mod, group, option)</c> triple.
+/// </summary>
+public record ResolvedContent(
+    ContentPiece Piece,
+    List<ColorTableRowPreset>? ColorTableRows,
+    string? OptionGroup,
+    string? Option,
+    int GroupOrder = int.MaxValue
+);
+
 public class SidecarDiscoveryService
 {
     private readonly PenumbraBridge penumbra;
@@ -170,6 +183,53 @@ public class SidecarDiscoveryService
                 var rows = opt.ColorTableRows ?? entry.Metadata.ColorTableRows;
                 foreach (var desc in opt.Overlays)
                     resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name, order));
+            }
+        }
+        return resolved;
+    }
+
+    /// <summary>
+    /// Resolve the geometry an imported content pack currently contributes: its unconditional
+    /// <see cref="ProteusMetadata.Content"/> pieces, or the pieces of whichever options are selected in
+    /// Penumbra. The selection read is identical to <see cref="ResolveActiveOverlays"/>'s — Penumbra owns
+    /// which options are on, and Proteus only mirrors it.
+    /// </summary>
+    public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry)
+    {
+        var meta = entry.Metadata;
+        if (meta.Content is { Count: > 0 })
+            return meta.Content
+                .Select(p => new ResolvedContent(p, meta.ColorTableRows, null, null))
+                .ToList();
+
+        if (meta.ContentGroups == null) return [];
+
+        var collId   = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+        if (!settings.HasValue) return [];
+
+        var modRoot = Path.GetDirectoryName(
+            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
+
+        var resolved = new List<ResolvedContent>();
+        foreach (var group in meta.ContentGroups)
+        {
+            if (group.Options.Count == 0) continue;
+
+            int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
+
+            var selected = settings.Value.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, group.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
+                .Value;
+            if (selected is not { Count: > 0 }) continue;
+
+            foreach (var opt in group.Options.Where(o => selected.Any(sel =>
+                         string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
+            {
+                var rows = opt.ColorTableRows ?? meta.ColorTableRows;
+                foreach (var piece in opt.Pieces)
+                    resolved.Add(new ResolvedContent(piece, rows, group.PenumbraGroupName, opt.Name, order));
             }
         }
         return resolved;

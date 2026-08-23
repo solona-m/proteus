@@ -99,6 +99,10 @@
     "message": "Captura el estado actual de Proteus (activación / prioridad / opciones / colores)\nen este vínculo. Los cambios manuales solo se conservan si haces clic aquí.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] No se pudieron colocar {0} pieza(s) de malla de tus mods — tus accesorios se han quedado sin espacios de material. Equipa otro anillo / brazalete / collar, o desactiva una capa.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] «{0}» aplica brillo en una capa de piel. La piel ya no puede brillar, así que esa opción se representa ahora como capa de tela: necesita un accesorio libre y su superficie se verá algo distinta.",
     "description": ""
@@ -469,6 +473,126 @@
   },
   "Common.None": {
     "message": "(ninguna)",
+    "description": ""
+  },
+  "Content.Browse.Btn": {
+    "message": "Buscar un paquete de mod",
+    "description": ""
+  },
+  "Content.Dialog.Filter": {
+    "message": "Paquete de Penumbra",
+    "description": ""
+  },
+  "Content.Dialog.Title": {
+    "message": "Selecciona un paquete de Penumbra",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "{0} malla, {1} vértices",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "O importa un paquete de Penumbra (.pmp) que traiga sus propias mallas. Proteus lo copia, impide que Penumbra publique sus modelos y, en su lugar, añade las mallas de cada opción que selecciones a tu accesorio portador — así, las opciones que se disputarían una misma ruta del juego pueden llevarse todas a la vez.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} materiales",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "Ninguna opción de este paquete incluye una malla que Proteus pueda añadir.",
+    "description": ""
+  },
+  "Content.OptionOf.Fmt": {
+    "message": "Del grupo «{0}» — {1} pieza(s). Estos colores se escriben en el material que trae el paquete; las filas que no toques quedan exactamente como las escribió su autor.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "Opciones con mallas: {0} de {1}",
+    "description": ""
+  },
+  "Content.Pill": {
+    "message": "Mallas",
+    "description": ""
+  },
+  "Content.Pill.Tip": {
+    "message": "Este mod trae sus propias mallas. Proteus añade las que indiquen tus opciones seleccionadas a tu accesorio portador; elígelas en Penumbra.",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nOmitido: {1}",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "No se pudo leer ese paquete: {0}",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "omitido",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "material sin vincular",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "Ese nombre de mod no tiene caracteres utilizables — usa letras o números.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "Ya existe una carpeta de mod llamada «{0}».",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "El paquete ya no está ahí: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "El directorio de mods de Penumbra no está disponible.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "No hay nada en este paquete que se pueda importar.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "«Proteus» está reservado — elige otro nombre de mod.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "No se pudo escribir el mod: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "sin geometría — todas sus mallas están vacías",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "su malla nombra {0}, que este paquete no incluye. Vuelve a vincular la malla a uno de los materiales del paquete y expórtalo de nuevo.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "no es un modelo legible ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "Se importó «{0}» — piezas: {1}{2}. Se activó y se abrió en Penumbra. Sus opciones se eligen en Penumbra, y todas las que selecciones se llevan a la vez.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (omitido: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.DefaultModel": {
+    "message": "Este paquete redirige un modelo fuera de toda opción. Ese modelo se importa como pieza siempre activa — se añadirá siempre que el mod esté habilitado.",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "El grupo «{0}» es de tipo {1}, que Proteus no puede colocar — sus opciones se dejan como están.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "Ninguna opción de este paquete redirige un modelo, así que no hay geometría que Proteus pueda añadir. Instálalo en Penumbra en su lugar.",
     "description": ""
   },
   "Create.Author.Label": {

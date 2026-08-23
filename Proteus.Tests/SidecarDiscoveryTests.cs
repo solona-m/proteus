@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Dalamud.Plugin.Services;
 using NSubstitute;
+using Proteus;
 using Proteus.Services;
 using Xunit;
 
@@ -524,6 +526,98 @@ public class SidecarDiscoveryTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // ── ResolveActiveContent ──────────────────────────────────────────────────
+    // Only the paths that never reach Penumbra, same rule as the overlay tests above: unconditional
+    // content resolves without asking anyone, and a group-gated pack with no readable selection resolves
+    // to nothing rather than guessing at an option.
+
+    [Fact]
+    public void ResolveActiveContent_UnconditionalPieces_ResolveWithTopLevelRows()
+    {
+        var piece = new ContentPiece { Model = "top/heart/model.mdl" };
+        piece.Materials["mt_x.mtrl"] = "common/x.mtrl";
+        var rows = new List<ColorTableRowPreset> { new() { Row = 3 } };
+        var meta = new ProteusMetadata { Content = [piece], ColorTableRows = rows };
+
+        var result = MakeService().ResolveActiveContent(Entry(meta));
+
+        var resolved = Assert.Single(result);
+        Assert.Same(piece, resolved.Piece);
+        Assert.Same(rows, resolved.ColorTableRows);
+        Assert.Null(resolved.OptionGroup);
+        Assert.Null(resolved.Option);
+    }
+
+    [Fact]
+    public void ResolveActiveContent_NoContentAtAll_IsEmpty()
+    {
+        Assert.Empty(MakeService().ResolveActiveContent(Entry(new ProteusMetadata())));
+        Assert.Empty(MakeService().ResolveActiveContent(
+            Entry(new ProteusMetadata { Content = [] })));
+    }
+
+    [Fact]
+    public void HasContent_IsTrueOnlyWhenThereIsGeometryToPlace()
+    {
+        Assert.False(new ProteusMetadata().HasContent);
+        Assert.False(new ProteusMetadata { Content = [], ContentGroups = [] }.HasContent);
+        Assert.True(new ProteusMetadata { Content = [new ContentPiece { Model = "m.mdl" }] }.HasContent);
+        Assert.True(new ProteusMetadata
+        {
+            ContentGroups = [new ContentOptionGroup { PenumbraGroupName = "Top" }],
+        }.HasContent);
+    }
+
+    [Fact]
+    public void ContentMetadata_RoundTripsThroughJson()
+    {
+        var piece = new ContentPiece
+        {
+            Model = "top/heart/model.mdl",
+            Surface = ShellSurfaceKind.Face,
+            SurfaceId = "f0001",
+        };
+        piece.Materials["/mt_c0201b0001_a.mtrl"] = "common/1/piercings.mtrl";
+
+        var meta = new ProteusMetadata
+        {
+            ContentGroups =
+            [
+                new ContentOptionGroup
+                {
+                    PenumbraGroupName = "Top",
+                    Options =
+                    [
+                        new ContentOption
+                        {
+                            Name = "Heart",
+                            Pieces = [piece],
+                            ColorTableRows = [new ColorTableRowPreset { Row = 2 }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var json = JsonSerializer.Serialize(meta, ProteusJson.MetadataWrite);
+        var back = JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead)!;
+
+        var opt = back.ContentGroups!.Single().Options.Single();
+        Assert.Equal("Heart", opt.Name);
+        Assert.Equal(2, opt.ColorTableRows!.Single().Row);
+
+        var p = opt.Pieces.Single();
+        Assert.Equal("top/heart/model.mdl", p.Model);
+        // The enum must survive as a NAME, not an ordinal: a mod folder is hand-edited, and a bare 1
+        // there says nothing about which surface it means.
+        Assert.Contains("\"Face\"", json);
+        Assert.Equal(ShellSurfaceKind.Face, p.Surface);
+        Assert.Equal(new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001"), p.SurfaceKey);
+        // The lookup survives the round trip even though System.Text.Json rebuilds the dictionary with
+        // its own default comparer — see ContentPiece.MaterialFor.
+        Assert.Equal("common/1/piercings.mtrl", p.MaterialFor("mt_c0201b0001_a.mtrl"));
+    }
 
     private static OverlayEntry Entry(ProteusMetadata meta, string? sidecarRoot = null) =>
         new("mod1", "Mod 1", 10, true, meta, sidecarRoot ?? "/tmp/mod1/Proteus");

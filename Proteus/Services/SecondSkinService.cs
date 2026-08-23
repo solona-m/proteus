@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
@@ -135,6 +136,45 @@ public sealed class SecondSkinService
         string? UvSpace);
 
     /// <summary>
+    /// One (piece, mesh material) pair of an imported content pack, resolved and ready to place: the model
+    /// bytes, which of its materials this unit draws, that material's bytes, and the colour rows to stamp
+    /// into them. A unit is the allocation unit because a MATERIAL is what costs a slot on the host — a
+    /// piece whose meshes span two materials needs two.
+    /// </summary>
+    private sealed record ContentUnit(
+        OverlayEntry Entry, ResolvedContent Content, byte[] Model, string MaterialLeaf, byte[] Mtrl,
+        Dictionary<int, GearColorRow>? Rows);
+
+    /// <summary>The Penumbra mod folder an entry lives in — the parent of its Proteus/ sidecar.</summary>
+    private static string? ModRootOf(OverlayEntry entry)
+        => Path.GetDirectoryName(
+            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+    /// <summary>
+    /// The material names of a model's LOD0 meshes that actually have vertices, in declaration order.
+    /// <para/>
+    /// Emptied meshes are the norm in a content pack: an author starts from a stock model, deletes the
+    /// vanilla geometry and adds their own, leaving zero-vertex meshes still bound to the vanilla materials.
+    /// Those materials are declared but never drawn, so asking a pack to bind them would reject it over
+    /// meshes that emit nothing.
+    /// </summary>
+    internal static List<string> UsedMaterialNames(byte[] model, List<string> declared)
+    {
+        var used = new List<string>();
+        foreach (var name in declared)
+        {
+            if (used.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            var leaf = name;
+            if (SecondSkinWriter.TryReadLod0Geometry(model, out var pos, out _, out _,
+                    SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        { leaf.TrimStart('/') }))
+                && pos.Length >= 3)
+                used.Add(name);
+        }
+        return used;
+    }
+
+    /// <summary>
     /// Write only if the content differs; reports whether it did.
     ///
     /// Via a temp file and an atomic move, NOT WriteAllBytes. Shell output names are stable
@@ -174,6 +214,10 @@ public sealed class SecondSkinService
     // Layer count last warned about as over the host's material budget — so the chat guidance prints once
     // per changed situation, not every composite. -1 = not currently over budget.
     private int _lastOverBudgetLayers = -1;
+
+    // Content pieces last warned about as unplaceable, so that chat notice prints once per changed
+    // situation rather than every composite. -1 = everything currently fits.
+    private int _lastUnhostedContent = -1;
 
     // Surfaces last warned about as unhostable, joined, so that guidance prints once per changed situation
     // too. Keyed on the SET rather than a count: swapping one face overlay for another keeps the count at 1
@@ -325,9 +369,15 @@ public sealed class SecondSkinService
         // CompositorService.HumanPartModelsFromModels). These are the ONLY source of non-body geometry —
         // there is no rebuild-from-a-code fallback, because a human part loads from its literal path and an
         // absence here means the character genuinely is not drawing it.
-        IReadOnlyList<string>? humanPartModels = null)
+        IReadOnlyList<string>? humanPartModels = null,
+        // Geometry imported content packs contribute this composite — their own meshes and materials,
+        // appended into the carrier verbatim rather than cut from the character. Allocated to hosts AFTER
+        // the gear shells above, from whatever material capacity they leave, so a character with no content
+        // packs gets a bit-identical shell allocation to before this existed.
+        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
     {
-        if (gearOverlays.Count == 0) return null;
+        int contentIn = contentLayers?.Count ?? 0;
+        if (gearOverlays.Count == 0 && contentIn == 0) return null;
 
         // Which "v####" folder the game will ask for a host's materials under.
         //
@@ -406,7 +456,11 @@ public sealed class SecondSkinService
         // gen2 (vanilla) is opt-in per the gear mode, exactly like the skin layer's gen2 sibling — but the
         // gate is per-PART, not per-character: a bibo torso plus a vanilla skirt's exposed legs is ONE
         // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
-        bool anyGen2Allowed = gen2Allowed == null || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
+        // Content packs are in the "allowed" set unconditionally: they paint nothing onto the body, and the
+        // body is resolved here only to derive the cut code and the hosts. Gating them out would leave a
+        // vanilla-bodied wearer with no resolved parts at all and drop a pack that never touched her skin.
+        bool anyGen2Allowed = gen2Allowed == null || contentIn > 0
+                           || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
 
         // FFXIV keys EQUIPMENT to a model race, not the character's race. Viera and Hrothgar wear Midlander
         // models, race-deformed onto their own skeleton, so a c1801 character's gear, accessories AND e0000
@@ -1001,6 +1055,108 @@ public sealed class SecondSkinService
         for (int i = 0; i < gearOverlays.Count; i++)
             if (layerSurface[i] < 0) droppedLayers.Add(i);
 
+        // ── imported content, resolved into units before anything is allocated ────────────────
+        // A UNIT is one (piece, material) pair, because a material is what costs a slot on the host: a
+        // piece whose meshes span two materials needs two. Resolving here — reading the model, checking
+        // every mesh's material is one the pack actually ships — means a piece that cannot be built never
+        // consumes capacity a shell could have used, and the reason is reported once rather than per host.
+        var contentUnits = new List<ContentUnit>();
+        var seenUnits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < contentIn; i++)
+        {
+            var (cEntry, rc) = contentLayers![i];
+            var piece = rc.Piece;
+            var modRoot = ModRootOf(cEntry);
+            if (modRoot == null || string.IsNullOrWhiteSpace(piece.Model))
+            {
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" names no model — skipping",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "");
+                continue;
+            }
+
+            byte[] model;
+            List<string> declared;
+            try
+            {
+                model = File.ReadAllBytes(Path.Combine(modRoot, piece.Model));
+                declared = SecondSkinWriter.MaterialNames(model);
+            }
+            catch (Exception ex)
+            {
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} could not be read as a model ({4})",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", piece.Model, ex.Message);
+                continue;
+            }
+
+            // Which of the model's materials actually carry geometry. A pack commonly ships a stock model
+            // with the vanilla meshes emptied out (0 vertices) and its own mesh added, so the materials on
+            // those empty meshes are declared but never drawn — demanding a binding for them would reject
+            // a pack over meshes that emit nothing.
+            var used = UsedMaterialNames(model, declared);
+            if (used.Count == 0)
+            {
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} has no LOD0 geometry at all, skipping",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", piece.Model);
+                continue;
+            }
+
+            foreach (var leaf in used)
+            {
+                // Binding is by NAME and never guessed — see ContentPiece.Materials. A mesh whose material
+                // the pack does not ship is dropped, loudly, with the fix in the message: the alternative is
+                // binding it to whatever else is lying around, which renders a metal piercing as skin.
+                var rel = piece.MaterialFor(leaf);
+                if (rel == null)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — mesh material {3} is not bound to any "
+                              + "material this pack ships, so those meshes are dropped. Rebind the mesh to one "
+                              + "of [{4}] and re-export",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", leaf,
+                        string.Join(", ", piece.Materials.Values));
+                    continue;
+                }
+
+                byte[] mtrl;
+                try { mtrl = File.ReadAllBytes(Path.Combine(modRoot, rel)); }
+                catch (Exception ex)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — material {3} could not be read ({4})",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", rel, ex.Message);
+                    continue;
+                }
+
+                var rows = BuildSparseRows(rc.ColorTableRows);
+                // Two options that bind the same model, the same mesh material AND the same colours would
+                // publish byte-identical materials from byte-identical geometry — the same slot twice, out
+                // of a budget of ten. Different colours are a different material and legitimately cost two.
+                var dedupe = string.Join('\u0000', cEntry.ModDirectory, piece.Model, leaf, rel,
+                    rows == null ? "-" : JsonSerializer.Serialize(rc.ColorTableRows));
+                if (!seenUnits.Add(dedupe)) continue;
+
+                contentUnits.Add(new ContentUnit(cEntry, rc, model, leaf, mtrl, rows));
+            }
+        }
+
+        // The surfaces those units live on, resolved AFTER the gear layers so a key both use is the one cut
+        // from real geometry. A surface introduced HERE carries no sources at all: the piece brought its own
+        // meshes, so the surface exists only to name the race space it was authored in and — through
+        // RequiresNativeHost — which hosts are allowed to carry it.
+        var unitSurface = new int[contentUnits.Count];
+        var contentByKey = new Dictionary<ShellSurfaceKey, int>();
+        for (int i = 0; i < contentUnits.Count; i++)
+        {
+            var key = contentUnits[i].Content.Piece.SurfaceKey;
+            if (resolvedByKey.TryGetValue(key, out var known) && known >= 0) { unitSurface[i] = known; continue; }
+            if (contentByKey.TryGetValue(key, out var made)) { unitSurface[i] = made; continue; }
+
+            // A natively-authored part is already the character's own shape, so its space is the character's
+            // own race — not the shared equipment cut space the body lives in.
+            var cut = key.IsBody ? bodySurface.CutCode : (drawnRaceCode ?? charCode);
+            surfaces.Add(new ResolvedSurface(key, [], [], cut, null));
+            contentByKey[key] = surfaces.Count - 1;
+            unitSurface[i] = surfaces.Count - 1;
+        }
+
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
@@ -1177,6 +1333,37 @@ public sealed class SecondSkinService
         // model names no such material). Already logged in detail by the resolver.
         unhostedLayers.AddRange(droppedLayers);
 
+        // ── content units take what the shells left ───────────────────────────
+        // After the shells, and out of the same remaining[]/hostClaim[]/diskBudget state, so a character
+        // with no content packs gets the allocation it always got. One slot per unit, first host that has
+        // room and is allowed to carry that surface; a unit that finds none is reported, never squeezed in
+        // over a shell.
+        var contentWork = new List<(int Unit, int HostIdx)>();
+        var contentUnhosted = new List<int>();
+        for (int u = 0; u < contentUnits.Count; u++)
+        {
+            int surfIdx = unitSurface[u];
+            bool carrierOnly = surfaces[surfIdx].Key.RequiresNativeHost;
+            int chosen = -1;
+            for (int h = 0; h < hosts.Count && diskBudget > 0; h++)
+            {
+                if (remaining[h] <= 0) continue;
+                // A carrier is the only host whose EQDP we may rewrite, so it is the only one that can
+                // publish a natively-authored piece without the game deforming it.
+                if (carrierOnly && hosts[h].BaseModel != null) continue;
+                if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
+                chosen = h;
+                break;
+            }
+            if (chosen < 0) { contentUnhosted.Add(u); continue; }
+
+            remaining[chosen]--;
+            diskBudget--;
+            hostClaim[chosen] = surfIdx;
+            hostSurface[chosen] = surfIdx;
+            contentWork.Add((u, chosen));
+        }
+
         // Per host, and reading THAT host's surface's cut code — not an ambient one. Computed AFTER the
         // allocation, because which surface a host carries is what the allocation decides. This is what lets
         // a host carrying a natively-authored surface reach the no-deform branch while a body host beside it
@@ -1348,7 +1535,83 @@ public sealed class SecondSkinService
             if (isMaskShell) maskLayers++; else clothLayers++;
         }
 
-        int placed = maskLayers + clothLayers;
+        // ── imported content: the pack's own meshes and its own material ──────────────────────
+        // Everything about the host — its name, its variant folder, its material letter — comes from the
+        // same convention the shells above use, because from the host's side there is no difference: a
+        // content unit is one more material on the accessory. What differs is what fills it. The .mtrl is
+        // the PACK'S, published byte-for-byte (colour rows aside): it already names its own textures and its
+        // own shader, and those textures are still served by the pack's own Penumbra redirects, so there is
+        // nothing here for Proteus to bake.
+        int contentPlaced = 0;
+        foreach (var (u, hIdx) in contentWork)
+        {
+            var unit = contentUnits[u];
+            var host = hosts[hIdx];
+            char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);
+            char diskChar  = DiskId(diskLetter);
+
+            var hostCode = host.ModelPath != null
+                ? PathCharCode(host.ModelPath) ?? plan[hIdx].PublishCode
+                : plan[hIdx].PublishCode;
+            string matName     = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
+            string matVariant  = VariantFolderFor(host);
+            string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
+
+            // Only the colour rows the user edited are stamped in; every other row stays as the author left
+            // it. PatchColorTable no-ops on a material with no colour set, so a pack that ships one is not a
+            // requirement — it just cannot be recoloured.
+            var mtrl = GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+
+            var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
+            shellChanged |= WriteIfChanged(matDisk, mtrl);
+            redirects[matGamePath] = Rel(outputRoot, matDisk);
+
+            // Same "ss_" naming as a shell, deliberately: ShellColorsetApplier and ColorTableHighlighter
+            // both key on that prefix and on the single disk char, so a content material gets the live
+            // colour re-assert and the editor's glow highlight for free.
+            var cKey = (unit.Entry.ModDirectory, unit.Content.OptionGroup, unit.Content.Option);
+            if (!shellMaterials.TryGetValue(cKey, out var cList))
+                shellMaterials[cKey] = cList = new List<string>();
+            cList.Add($"ss_{diskChar}.mtrl");
+
+            perHostLayers[hIdx].Add(new SecondSkinLayer
+            {
+                MaterialName = "/" + matName,   // the model stores material names with a leading slash
+                Geometry = new ContentGeometry(unit.Model,
+                    SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        { unit.MaterialLeaf.TrimStart('/') })),
+            });
+            inHost[hIdx]++; diskLetter++;
+            contentPlaced++;
+
+            log.Information("[Proteus] content mat={0}/{7}/disk={1} -> host {2}{3:D4}/{4}: {5} \"{6}\" mesh material {8}",
+                matLetter, diskChar, host.Prefix, host.SetId, host.Slot,
+                unit.Entry.ModDirectory, unit.Content.Option ?? "(default)", matVariant, unit.MaterialLeaf);
+        }
+
+        if (contentUnhosted.Count > 0)
+        {
+            // In chat as well as the log, and deduped by count the same way the over-budget notice is. A
+            // piece that silently does not appear is the failure mode this whole file is most careful about:
+            // nothing on screen says the accessory ran out of material slots, and the mod, its option and
+            // its enable state all still look completely correct.
+            if (_lastUnhostedContent != contentUnhosted.Count)
+            {
+                _lastUnhostedContent = contentUnhosted.Count;
+                var msg = string.Format(Loc.Localize("Chat.ContentUnplaced.Fmt",
+                    "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are "
+                  + "out of material slots. Equip another ring / bracelet / necklace, or turn off a layer."),
+                    contentUnhosted.Count);
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+            }
+            log.Warning("[Proteus] content: {0} piece material(s) could not be placed — every host is full or "
+                      + "cannot carry their surface. Free an accessory slot, or turn off a layer",
+                contentUnhosted.Count);
+        }
+        else _lastUnhostedContent = -1;
+
+        int placed = maskLayers + clothLayers + contentPlaced;
         if (placed == 0) return null;
 
         // Layers whose SURFACE could not be hosted, reported apart from a capacity overflow because the
@@ -1383,7 +1646,7 @@ public sealed class SecondSkinService
         // Guidance when even all equipped accessories can't hold the look (deduped by total layer count).
         if (overBudget > 0)
         {
-            int totalLayers = placed + overBudget;
+            int totalLayers = maskLayers + clothLayers + overBudget;
             int totalMask = maskLayers + overBudgetMask;
             if (_lastOverBudgetLayers != totalLayers)
             {
@@ -1426,7 +1689,14 @@ public sealed class SecondSkinService
             SecondSkinWriter.Stats stats;
             try
             {
-                shell = SecondSkinWriter.Build(surface.Sources, perHostLayers[h], host.BaseModel,
+                // A host filled entirely with imported content needs NO sources: every layer brought its own
+                // geometry, so parsing the body here would cost the whole header walk to contribute nothing —
+                // and worse, the merged model's flags and LOD block are taken from source 0, which would then
+                // describe a body rather than the piece actually being emitted.
+                var srcs = perHostLayers[h].All(l => l.Geometry != null)
+                    ? []
+                    : surface.Sources;
+                shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                     out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
             }
             catch (Exception ex)
@@ -2001,26 +2271,56 @@ public sealed class SecondSkinService
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
             if (sub == null) return;   // leaves the neutral-white row from the init above
-            var rgb = ParseHex(sub.Diffuse);
-            // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
-            // with a white emissive), falling back to the diffuse when not given.
-            var emis = ParseHex(sub.EmissiveColor) ?? rgb;
-            rows[rowIndex] = new GearColorRow
-            {
-                Diffuse = rgb,
-                Specular = ParseHex(sub.Specular),
-                // Always write emissive — a template's own emissive must be CLEARED, not inherited.
-                // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
-                // white glow and drowns out the scroll map entirely.
-                Emissive = sub.Emissive > 0f && emis is { } c
-                    ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
-                    : (0f, 0f, 0f),
-                SphereMapIndex = sub.SphereMap,
-                SphereMapMask = sub.SphereIntensity,
-                Roughness = sub.Roughness,
-                Metalness = sub.Metalness,
-            };
+            rows[rowIndex] = RowFrom(sub);
         }
+    }
+
+    /// <summary>
+    /// The rows an imported content pack's OWN material should have overwritten — only the ones the user
+    /// actually edited.
+    /// <para/>
+    /// Deliberately NOT <see cref="BuildRows"/>: that one starts from <see cref="NeutralRows"/> and returns
+    /// all 32 rows, because a shell's material is cloned from a vanilla template whose colours have to be
+    /// neutralised wholesale. A content material is the author's own, and everything they set and the user
+    /// did not touch has to survive — so this returns a SPARSE dictionary, and
+    /// <see cref="GearMaterialWriter.PatchColorTable"/> leaves every row not in it alone.
+    /// </summary>
+    private static Dictionary<int, GearColorRow>? BuildSparseRows(List<ColorTableRowPreset>? presets)
+    {
+        if (presets == null || presets.Count == 0) return null;
+        var rows = new Dictionary<int, GearColorRow>();
+        foreach (var p in presets)
+        {
+            if (p.Row is < 1 or > 16) continue;
+            if (p.SubRowA is { } a) rows[(p.Row - 1) * 2] = RowFrom(a);
+            if (p.SubRowB is { } b) rows[(p.Row - 1) * 2 + 1] = RowFrom(b);
+        }
+        return rows.Count > 0 ? rows : null;
+    }
+
+    /// <summary>One sub-row preset as the material writer's row. Shared by both row builders so a shell and
+    /// a content material can never disagree about what a preset means.</summary>
+    private static GearColorRow RowFrom(ColorTableSubRowPreset sub)
+    {
+        var rgb = ParseHex(sub.Diffuse);
+        // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
+        // with a white emissive), falling back to the diffuse when not given.
+        var emis = ParseHex(sub.EmissiveColor) ?? rgb;
+        return new GearColorRow
+        {
+            Diffuse = rgb,
+            Specular = ParseHex(sub.Specular),
+            // Always write emissive — a template's own emissive must be CLEARED, not inherited.
+            // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
+            // white glow and drowns out the scroll map entirely.
+            Emissive = sub.Emissive > 0f && emis is { } c
+                ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
+                : (0f, 0f, 0f),
+            SphereMapIndex = sub.SphereMap,
+            SphereMapMask = sub.SphereIntensity,
+            Roughness = sub.Roughness,
+            Metalness = sub.Metalness,
+        };
     }
 
     private static (float R, float G, float B)? ParseHex(string? hex)

@@ -303,41 +303,69 @@ public static class GearMaterialWriter
             }
         }
 
-        if (rows is { Count: > 0 })
+        return PatchColorTable(r, rows, linearizeDiffuse, isScroll);
+    }
+
+    /// <summary>
+    /// Overwrite colour table rows in an EXISTING material, in place and nothing else — no texture table,
+    /// no string block, no shader section. <paramref name="rows"/> is keyed by 0-based row; absent rows and
+    /// null fields keep whatever the material already holds.
+    /// <para/>
+    /// This is how an imported content pack's own .mtrl is coloured: it already names its own textures and
+    /// shader, and rebuilding it through <see cref="Build"/> would demand a template with a matching texture
+    /// count and throw away everything the author set. It is also the row writer <see cref="Build"/> itself
+    /// uses, so shells and content packs can never drift apart on what a row means.
+    /// <para/>
+    /// The colour table's position is read from the material's OWN header, which is why this works on any
+    /// material rather than only on a freshly built one. No-ops (returning the input unchanged) when the
+    /// material declares no colour set, or when its data set is too small to hold a Dawntrail 32×64 table —
+    /// a legacy 16-row material would otherwise be shredded by rows written at Dawntrail offsets.
+    /// </summary>
+    public static byte[] PatchColorTable(
+        byte[] mtrl, IReadOnlyDictionary<int, GearColorRow>? rows,
+        bool linearizeDiffuse = false, bool isScroll = false)
+    {
+        if (rows is not { Count: > 0 }) return mtrl;
+        if (mtrl.Length < 16) return mtrl;
+
+        byte texCount = mtrl[12], uvCount = mtrl[13], colorSetCount = mtrl[14], addDataSize = mtrl[15];
+        if (colorSetCount == 0) return mtrl;
+
+        ushort strTableSize = BitConverter.ToUInt16(mtrl, 8);
+        int csStart = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strTableSize + addDataSize;
+        if (csStart < 0 || csStart + RowCount * RowBytes > mtrl.Length) return mtrl;
+
+        var r = (byte[])mtrl.Clone();
+        foreach (var (row, def) in rows)
         {
-            int csStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
-            foreach (var (row, def) in rows)
+            if (row < 0 || row >= RowCount) continue;
+            int b = csStart + row * RowBytes;
+            void WH(int half, float v) => BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)v)).CopyTo(r, b + half * 2);
+
+            if (def.Diffuse is { } d)
             {
-                if (row < 0 || row >= RowCount) continue;
-                int b = csStart + row * RowBytes;
-                void WH(int half, float v) => BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)v)).CopyTo(r, b + half * 2);
+                float dr = linearizeDiffuse ? SrgbToLinear(d.R) : d.R;
+                float dg = linearizeDiffuse ? SrgbToLinear(d.G) : d.G;
+                float db = linearizeDiffuse ? SrgbToLinear(d.B) : d.B;
+                WH(HDiffuse, dr); WH(HDiffuse + 1, dg); WH(HDiffuse + 2, db);
+            }
+            if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
+            if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
+            if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
+            if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
+            if (def.Roughness is { } ro) WH(HRoughness, ro);
+            if (def.Metalness is { } me) WH(HMetalness, me);
 
-                if (def.Diffuse is { } d)
-                {
-                    float dr = linearizeDiffuse ? SrgbToLinear(d.R) : d.R;
-                    float dg = linearizeDiffuse ? SrgbToLinear(d.G) : d.G;
-                    float db = linearizeDiffuse ? SrgbToLinear(d.B) : d.B;
-                    WH(HDiffuse, dr); WH(HDiffuse + 1, dg); WH(HDiffuse + 2, db);
-                }
-                if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
-                if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
-                if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
-                if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
-                if (def.Roughness is { } ro) WH(HRoughness, ro);
-                if (def.Metalness is { } me) WH(HMetalness, me);
-
-                // Arm the scrolling effect on rows that actually glow. Field 23 is the master switch —
-                // without it nothing renders — and sphere-map opacity doubles as the effect's visibility.
-                // SphereIntensity is a Cloth concept that has no meaning on a glow row, so only a POSITIVE
-                // value overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
-                if (isScroll && def.Emissive is { } em && (em.R > 0 || em.G > 0 || em.B > 0))
-                {
-                    WH(HEffectEnable, 1f);
-                    WH(HSphereMask, def.SphereMapMask is { } vis && vis > 0f ? vis : 1f);
-                }
+            // Arm the scrolling effect on rows that actually glow. Field 23 is the master switch —
+            // without it nothing renders — and sphere-map opacity doubles as the effect's visibility.
+            // SphereIntensity is a Cloth concept that has no meaning on a glow row, so only a POSITIVE
+            // value overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
+            if (isScroll && def.Emissive is { } em && (em.R > 0 || em.G > 0 || em.B > 0))
+            {
+                WH(HEffectEnable, 1f);
+                WH(HSphereMask, def.SphereMapMask is { } vis && vis > 0f ? vis : 1f);
             }
         }
-
         return r;
     }
 }

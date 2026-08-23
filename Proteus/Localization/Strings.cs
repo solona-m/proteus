@@ -41,6 +41,7 @@ public static class Strings
     public static BandStrings     Band     { get; private set; } = new();
     public static FooterStrings   Footer   { get; private set; } = new();
     public static ImportStrings   Import   { get; private set; } = new();
+    public static ContentStrings  Content  { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
@@ -61,6 +62,7 @@ public static class Strings
         Band     = new BandStrings();
         Footer   = new FooterStrings();
         Import   = new ImportStrings();
+        Content  = new ContentStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
         ColorPanel = new ColorPanelStrings();
@@ -418,6 +420,46 @@ public sealed class SettingsStrings
         "that overlaps an already-complete body; on a sheer overlay the overlap doubles up and\n" +
         "shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
         "skin, and hiding it would leave gaps.");
+}
+
+/// <summary>The Import tab's content-pack (.pmp) half — packs that ship their own meshes.</summary>
+public sealed class ContentStrings
+{
+    public readonly string Intro = Loc.Localize("Content.Intro",
+        "Or import a Penumbra pack (.pmp) that ships its own meshes. Proteus copies it in, stops Penumbra "
+      + "from publishing its models, and appends the meshes of every option you select onto your carrier "
+      + "accessory instead — so options that would fight over one game path can all be worn at once.");
+
+    public readonly string BrowseBtn = Loc.Localize("Content.Browse.Btn", "Browse for a mod pack") + "###contentBrowse";
+    public readonly string DialogTitle = Loc.Localize("Content.Dialog.Title", "Select a Penumbra pack");
+    public readonly string DialogFilter = Loc.Localize("Content.Dialog.Filter", "Penumbra pack");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Content.ReadFailed.Fmt",
+        "Couldn't read that pack: {0}");
+
+    public readonly string PieceCountFmt = Loc.Localize("Content.PieceCount.Fmt",
+        "Options with meshes: {0} of {1}");
+
+    public readonly string GeometryFmt = Loc.Localize("Content.Geometry.Fmt", "{0} mesh, {1} verts");
+    public readonly string MaterialsFmt = Loc.Localize("Content.Materials.Fmt", "{0} materials");
+    public readonly string Skipped = Loc.Localize("Content.Skipped", "skipped");
+    public readonly string Unbound = Loc.Localize("Content.Unbound", "unbound material");
+
+    public readonly string ProblemFmt = Loc.Localize("Content.Problem.Fmt", "{0}\nSkipped: {1}");
+
+    public readonly string NothingUsable = Loc.Localize("Content.NothingUsable",
+        "No option in this pack ships a mesh Proteus can append.");
+
+    /// <summary>Marks a content pack in the Mods list, so the two kinds of pack are told apart at a glance.</summary>
+    public readonly string Pill = Loc.Localize("Content.Pill", "Meshes");
+
+    public readonly string OptionOfFmt = Loc.Localize("Content.OptionOf.Fmt",
+        "From the \"{0}\" group — {1} piece(s). These colours are stamped into the material the pack ships; "
+      + "rows you don't touch stay exactly as its author wrote them.");
+
+    public readonly string PillTip = Loc.Localize("Content.Pill.Tip",
+        "This mod ships its own meshes. Proteus appends the ones your selected options name onto your "
+      + "carrier accessory; choose which in Penumbra.");
 }
 
 public sealed class ImportStrings

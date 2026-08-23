@@ -65,6 +65,25 @@ public class ProteusMetadata
     /// </summary>
     [JsonPropertyName("AmbientOcclusion")]
     public bool? AmbientOcclusion { get; set; }
+
+    /// <summary>
+    /// Geometry this pack contributes unconditionally — used when it declares no
+    /// <see cref="ContentGroups"/>. See <see cref="ContentPiece"/>.
+    /// </summary>
+    [JsonPropertyName("Content")]
+    public List<ContentPiece>? Content { get; set; }
+
+    /// <summary>
+    /// Option-gated geometry, one entry per Penumbra option group. Written by the .pmp content importer;
+    /// the selected options' pieces are appended into the carrier accessory each composite.
+    /// </summary>
+    [JsonPropertyName("ContentGroups")]
+    public List<ContentOptionGroup>? ContentGroups { get; set; }
+
+    /// <summary>Whether this pack contributes any geometry at all (before selection is resolved).</summary>
+    [JsonIgnore]
+    public bool HasContent
+        => Content is { Count: > 0 } || ContentGroups is { Count: > 0 };
 }
 
 /// <summary>Which surface an overlay renders on.</summary>
@@ -236,6 +255,99 @@ public class OverlayOption
     /// </summary>
     [JsonPropertyName("ColorTableRows")]
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+}
+
+// ── Content packs (imported .pmp mods that ship their own geometry) ──────────
+
+/// <summary>
+/// One model an imported pack contributes, with the materials its meshes are bound to.
+/// <para/>
+/// Unlike an overlay — which is art painted onto geometry Proteus copies from the character — a piece IS
+/// geometry. Its meshes are copied verbatim into the carrier accessory, so the pack keeps its own vertices,
+/// UVs and skinning, and two options that would collide on one game path in Penumbra can be worn together.
+/// </summary>
+public class ContentPiece
+{
+    /// <summary>The .mdl, as a path relative to the MOD ROOT (not the Proteus/ sidecar).</summary>
+    [JsonPropertyName("Model")]
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Model material name (leaf, no leading slash) → the .mtrl backing it, relative to the mod root.
+    /// <para/>
+    /// Binding is by NAME and never guessed: a mesh renders with the material its model declares, and a
+    /// mesh whose material has no entry here is dropped with a warning rather than bound to something
+    /// plausible. The importer builds this map by matching each declared leaf against the .mtrl files the
+    /// pack ships anywhere — a pack commonly puts its material in one always-on group and its meshes in
+    /// another.
+    /// </summary>
+    [JsonPropertyName("Materials")]
+    public Dictionary<string, string> Materials { get; set; } = new();
+
+    /// <summary>
+    /// The .mtrl backing <paramref name="materialName"/>, or null when the model names a material this pack
+    /// does not ship. Compared leaf-to-leaf and case-insensitively because the model stores names with a
+    /// leading slash while a manifest lists them without one.
+    /// <para/>
+    /// A method rather than an OrdinalIgnoreCase dictionary: System.Text.Json constructs its own Dictionary
+    /// for a settable property and assigns it, so a comparer given in the initializer is silently discarded
+    /// on every load from disk — which is every load that matters.
+    /// </summary>
+    public string? MaterialFor(string materialName)
+    {
+        var leaf = materialName.TrimStart('/');
+        foreach (var (k, v) in Materials)
+            if (string.Equals(k.TrimStart('/'), leaf, StringComparison.OrdinalIgnoreCase))
+                return v;
+        return null;
+    }
+
+    /// <summary>
+    /// Which surface the piece belongs to — the race space it is authored in, and therefore which hosts can
+    /// carry it. Body (the default) rides a carrier in cut space and is deformed onto the wearer exactly as
+    /// a second-skin shell is; a face/hair/tail piece is already the right shape and needs a host that will
+    /// not deform it. See <see cref="ShellSurfaceKind"/>.
+    /// </summary>
+    [JsonPropertyName("Surface")]
+    public ShellSurfaceKind Surface { get; set; } = ShellSurfaceKind.Body;
+
+    /// <summary>The part id for a non-body surface ("f0001", "h0133"); empty for the body.</summary>
+    [JsonPropertyName("SurfaceId")]
+    public string SurfaceId { get; set; } = string.Empty;
+
+    /// <summary>The surface this piece is cut for, as the host chooser understands it.</summary>
+    [JsonIgnore]
+    public ShellSurfaceKey SurfaceKey
+        => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+}
+
+/// <summary>One Penumbra option's geometry contribution.</summary>
+public class ContentOption
+{
+    [JsonPropertyName("Name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("Pieces")]
+    public List<ContentPiece> Pieces { get; set; } = new();
+
+    /// <summary>
+    /// Colour table overrides applied to EVERY material this option's pieces bind. Null keeps the pack's
+    /// own authored colorset. Two options binding the same .mtrl with different rows each get their own
+    /// published material (and so each cost a material slot on the host); identical rows are deduped.
+    /// </summary>
+    [JsonPropertyName("ColorTableRows")]
+    public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+}
+
+/// <summary>Maps one Penumbra option group to per-option geometry.</summary>
+public class ContentOptionGroup
+{
+    /// <summary>Must match the group name exactly as it appears in Penumbra.</summary>
+    [JsonPropertyName("PenumbraGroupName")]
+    public string PenumbraGroupName { get; set; } = string.Empty;
+
+    [JsonPropertyName("Options")]
+    public List<ContentOption> Options { get; set; } = new();
 }
 
 /// <summary>

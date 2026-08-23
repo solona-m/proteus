@@ -99,6 +99,10 @@
     "message": "Snapshot the current Proteus state (enable / priority / options / colors)\ninto this binding. Manual edits only persist when you click this.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",
+    "description": "Chat notice when an accessory ran out of material slots for an imported pack's meshes. {0} is a count. \"Proteus\" is a plugin name - never translate it."
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now renders as a cloth layer — it needs a free accessory to sit on, and its surface will look slightly different.",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
@@ -470,6 +474,126 @@
   "Common.None": {
     "message": "(none)",
     "description": "Shown where a file has not been chosen yet. Keep the parentheses."
+  },
+  "Content.Browse.Btn": {
+    "message": "Browse for a mod pack",
+    "description": "Button in the Import tab that opens a file picker for .pmp packs."
+  },
+  "Content.Dialog.Filter": {
+    "message": "Penumbra pack",
+    "description": "File-type label in the picker. The \".pmp\" extension is appended after it."
+  },
+  "Content.Dialog.Title": {
+    "message": "Select a Penumbra pack",
+    "description": "Title of the file-picker dialog. \"Penumbra\" is a plugin name - never translate it."
+  },
+  "Content.Geometry.Fmt": {
+    "message": "{0} mesh, {1} verts",
+    "description": "A table cell. {0} is a mesh count, {1} a vertex count. Very tight space - keep it short."
+  },
+  "Content.Intro": {
+    "message": "Or import a Penumbra pack (.pmp) that ships its own meshes. Proteus copies it in, stops Penumbra from publishing its models, and appends the meshes of every option you select onto your carrier accessory instead — so options that would fight over one game path can all be worn at once.",
+    "description": "Appears in the Import tab, under the Onion pack intro. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} materials",
+    "description": "A table cell, shown instead of a filename when a piece uses several materials. Very tight space."
+  },
+  "Content.NothingUsable": {
+    "message": "No option in this pack ships a mesh Proteus can append.",
+    "description": "Tooltip on the disabled Import button when the pack has no appendable mesh."
+  },
+  "Content.OptionOf.Fmt": {
+    "message": "From the \"{0}\" group — {1} piece(s). These colours are stamped into the material the pack ships; rows you don't touch stay exactly as its author wrote them.",
+    "description": "Caption above the colour grid for a content option. {0} is the Penumbra group name, {1} a piece count."
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "Options with meshes: {0} of {1}",
+    "description": "Header above the preview table. {0} is how many options can be imported, {1} how many ship a mesh."
+  },
+  "Content.Pill": {
+    "message": "Meshes",
+    "description": "Badge on a row in the Mods list marking a pack that ships geometry. Very tight space - one short word."
+  },
+  "Content.Pill.Tip": {
+    "message": "This mod ships its own meshes. Proteus appends the ones your selected options name onto your carrier accessory; choose which in Penumbra.",
+    "description": "Tooltip on that badge. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nSkipped: {1}",
+    "description": "Tooltip on a skipped row. {0} is the option name, {1} the reason. Keep the line break."
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "Couldn't read that pack: {0}",
+    "description": "Shown when the picked file is not a readable pack. {0} is the error message."
+  },
+  "Content.Skipped": {
+    "message": "skipped",
+    "description": "A table cell marking a piece that will not be imported. Very tight space - one short word."
+  },
+  "Content.Unbound": {
+    "message": "unbound material",
+    "description": "A table cell: the piece's mesh names a material the pack does not ship. Very tight space."
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "That mod name has no usable characters — use letters or numbers.",
+    "description": "Import refused: the typed mod name would produce an empty folder name."
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "A mod folder named \"{0}\" already exists.",
+    "description": "Import refused: a folder of that name is already there. {0} is the folder name."
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "The pack is no longer there: {0}",
+    "description": "Import refused: the picked file has since been moved or deleted. {0} is its path."
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbra's mod directory isn't available.",
+    "description": "Import refused: Penumbra could not be asked where its mods live. \"Penumbra\" is a plugin name - never translate it."
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "Nothing in this pack can be imported.",
+    "description": "Import refused: the pack has no geometry Proteus can use."
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\" is reserved — choose a different mod name.",
+    "description": "Import refused: \"Proteus\" is the managed output mod's folder. \"Proteus\" is a plugin name - never translate it."
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "Failed to write the mod: {0}",
+    "description": "Shown when unpacking the mod threw. {0} is the error message."
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "no geometry — every mesh in it is empty",
+    "description": "Why one piece was skipped, shown in a tooltip."
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's own materials and re-export.",
+    "description": "Why one piece was skipped, shown in a tooltip. {0} is a material file name."
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "not a readable model ({0})",
+    "description": "Why one piece was skipped, shown in a tooltip. {0} is the error message."
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen in Penumbra, and every one you select is worn at once.",
+    "description": "Import succeeded. {0} is the mod folder name, {1} a piece count, {2} an optional \"(skipped: n)\" tail. \"Penumbra\" is a plugin name - never translate it."
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (skipped: {0})",
+    "description": "Appended to the import result when some pieces were skipped. {0} is a count. Note the leading space."
+  },
+  "ContentImport.Warn.DefaultModel": {
+    "message": "This pack redirects a model outside any option. That model is imported as an always-on piece — it will be appended whenever the mod is enabled.",
+    "description": "Preview warning: the pack redirects a model outside every option."
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "Group \"{0}\" is a {1} group, which Proteus can't place — its options are left alone.",
+    "description": "Preview warning. {0} is a group name, {1} a Penumbra group type such as Imc or Combining - leave {1} as it arrives."
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "No option in this pack redirects a model, so there is no geometry for Proteus to append. Install it in Penumbra instead.",
+    "description": "Preview warning: the pack has no models at all. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
   },
   "Create.Author.Label": {
     "message": "Author",

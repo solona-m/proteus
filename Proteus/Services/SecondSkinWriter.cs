@@ -20,7 +20,22 @@ public sealed class SecondSkinLayer
 
     public int CoverageWidth { get; init; }
     public int CoverageHeight { get; init; }
+
+    /// <summary>
+    /// When set, this layer IS geometry rather than a copy of the character's: the named meshes of
+    /// <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their authored
+    /// vertices, UVs and skinning — under this layer's material. Set for a piece of an imported content
+    /// pack; null for an ordinary second-skin shell, which is cut from the body sources instead.
+    /// </summary>
+    public ContentGeometry? Geometry { get; init; }
 }
+
+/// <summary>
+/// One imported model and the meshes of it that belong to a layer.
+/// <paramref name="KeepMaterial"/> is matched against the model's own material names (leading slash
+/// included, as the model stores them) — see <see cref="SecondSkinWriter.KeepByLeaf"/>.
+/// </summary>
+public sealed record ContentGeometry(byte[] Model, Func<string, bool> KeepMaterial);
 
 /// <summary>
 /// Builds the "second skin" model: every skin part (chest, legs, hands, feet…) duplicated, pushed out
@@ -351,8 +366,12 @@ public static class SecondSkinWriter
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null)
     {
-        if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
+        // Sources are the character geometry a SHELL is cut from, so a build made entirely of content
+        // layers — an imported pack that brings its own meshes — legitimately has none. Anything else
+        // still does: a shell layer with no source would emit nothing at all.
+        if (sources.Count == 0 && layers.Any(l => l.Geometry == null))
+            throw new ArgumentException("need at least one source model", nameof(sources));
 
         var parsed = sources.Select(s => Parse(s.Model)).ToList();
 
@@ -374,6 +393,22 @@ public static class SecondSkinWriter
                     diag($"shape '{name}' enabled but not present in source {i} — not baked");
         }
         Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
+
+        // Imported content models, parsed ONCE each: several layers of one pack commonly bind different
+        // materials of the same .mdl, and re-parsing it per layer would cost the whole header walk again
+        // for no new information. Reference identity is the key because that is exactly what "the same
+        // model" means here — the caller hands the same byte[] to every layer cut from it.
+        var geomSrcs = new List<Source>();
+        var geomByModel = new Dictionary<byte[], Source>(ReferenceEqualityComparer.Instance);
+        foreach (var l in layers)
+        {
+            if (l.Geometry is not { } g || geomByModel.ContainsKey(g.Model)) continue;
+            var gs = Parse(g.Model);
+            gs.Keep = g.KeepMaterial;
+            geomByModel[g.Model] = gs;
+            geomSrcs.Add(gs);
+        }
+
         int baseMatCount = baseSrc?.MatNames.Count ?? 0;
         if (baseMatCount + layers.Count > MaxMaterials)
             throw new InvalidOperationException(
@@ -384,7 +419,9 @@ public static class SecondSkinWriter
         var boneNames = new List<string>();
         var boneIndex = new Dictionary<string, ushort>(StringComparer.Ordinal);
         var boneBBox = new List<byte[]>();
-        var boneSources = baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed;
+        // Content models contribute bones too — a piece skinned to j_sebo_a needs that bone present in the
+        // merged table or its vertices collapse onto the root.
+        var boneSources = (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed).Concat(geomSrcs);
         foreach (var src in boneSources)
             for (int i = 0; i < src.BoneNames.Length; i++)
             {
@@ -666,6 +703,32 @@ public static class SecondSkinWriter
             float push = BaseOffset + LayerSeparation * layer;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
+            // An imported content layer brings its own geometry, so it is copied exactly as the host is —
+            // preserve:true, no push, no coverage trim. Pushing it would lift a piercing off the skin it
+            // was modelled against, and trimming it would need a coverage map the pack never authored: its
+            // silhouette IS its mesh. Only the material index is ours to set.
+            if (def.Geometry is { } geo)
+            {
+                var gsrc = geomByModel[geo.Model];
+                var gs = gsrc.S;
+                int gMapBase = submeshBoneMap.Count;
+                bool gMapAppended = false;
+                int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
+                for (int m = gsrc.Lod0MeshIndex; m < gEnd && m < gsrc.MeshCount; m++)
+                {
+                    int gmo = gsrc.MeshStart + m * 36;
+                    if (BitConverter.ToUInt16(gs, gmo) == 0) continue;   // empty placeholder mesh
+
+                    ushort gMat = BitConverter.ToUInt16(gs, gmo + 8);
+                    if (gMat >= gsrc.MatNames.Count || !geo.KeepMaterial(gsrc.MatNames[gMat]))
+                        continue;
+
+                    EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
+                        dropConnectors: false);
+                }
+                continue;
+            }
+
             foreach (var src in parsed)
             {
                 var s = src.S;
@@ -737,7 +800,9 @@ public static class SecondSkinWriter
         // Flags, the 0x44 file header and the LOD block still come from source 0. That is a real choice, not
         // an accident: source 0 is the surface this shell was cut from, and its flags are the ones that
         // describe the geometry we are actually emitting. (The host's would describe a ring.)
-        var head = parsed[0];
+        // …or, for a build made entirely of imported content, that pack's first model — same reasoning:
+        // whichever source the emitted geometry actually came from is the one whose flags describe it.
+        var head = parsed.Count > 0 ? parsed[0] : geomSrcs[0];
 
         // The CULLING quantities are different — they are about extent, and the merged model's extent is the
         // union of everything in it, exactly as UnionModelBBoxes already treats the bounding boxes. Taking
@@ -746,7 +811,7 @@ public static class SecondSkinWriter
         // the shell blinking out at an angle or a distance, with nothing in the log. Max is the only safe
         // direction here: too large costs a little overdraw, too small loses the shell.
         float radius = head.Radius, modelClip = head.ModelClip, shadowClip = head.ShadowClip;
-        foreach (var src in (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed))
+        foreach (var src in (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed).Concat(geomSrcs))
         {
             if (src.Radius     > radius)     radius     = src.Radius;
             if (src.ModelClip  > modelClip)  modelClip  = src.ModelClip;
@@ -807,7 +872,7 @@ public static class SecondSkinWriter
 
         // Bounding boxes: 4 model-level boxes then one per union bone. The model box must cover EVERY
         // part, or the merged model gets culled whenever only one part is on screen.
-        ms.Write(UnionModelBBoxes(baseSrc != null ? [baseSrc, .. parsed] : parsed));
+        ms.Write(UnionModelBBoxes(baseSrc != null ? [baseSrc, .. parsed, .. geomSrcs] : [.. parsed, .. geomSrcs]));
         foreach (var bb in boneBBox) ms.Write(bb);
 
         long vtxOffOut = ms.Position;

@@ -288,6 +288,85 @@ So to punch a clean hole, paint the hole region **alpha = white, RGB = black**; 
 
 Because `Masks` is just a Penumbra group, the user's selection is saved and restored by Glamourer designs automatically, and toggling a mask re-composites immediately.
 
+### Content Packs (packs that ship their own meshes)
+
+Everything above describes an *overlay* pack: art Proteus composites onto the character's own geometry. A
+**content pack** is the other kind — a normal Penumbra `.pmp` that ships its own `.mdl`, `.mtrl` and `.tex`
+files. Proteus imports one through **Import → Browse for a mod pack**, and from then on the meshes of every
+option the user has selected in Penumbra are appended onto their carrier accessory.
+
+The reason to ship one this way is that Penumbra can only apply **one** file per game path. Two options in a
+multi-select group that both redirect `chara/equipment/e0000/model/c0201e0000_top.mdl` can never both be
+worn — the higher-priority one wins and the other silently does nothing. Appending removes that limit:
+every selected option contributes its own meshes at once.
+
+**What the import changes.** Your pack is copied into Penumbra's mod directory as an ordinary mod, with two
+edits:
+
+1. Every `.mdl` entry is removed from the manifest's `Files` maps. The files stay on disk — Proteus's
+   sidecar names them instead — so Penumbra no longer publishes your models and cannot pick just one.
+2. A `Proteus/metadata.json` sidecar is written, mirroring your groups and naming each option's model.
+
+Your `.mtrl` and `.tex` redirects are left exactly as you wrote them, so your own colour/texture option
+groups keep working untouched.
+
+**The one rule: a mesh must name a material your pack ships.** Binding is by name and is never guessed —
+Proteus takes the material name your model declares (`/mt_…​.mtrl`) and looks for a `.mtrl` your pack
+redirects under that leaf name, anywhere in the pack (a shared material in an always-on group is the normal
+arrangement). A mesh whose material you don't ship is listed in the Import tab and skipped, because the only
+alternative would be binding it to whatever else is lying around — and a metal piercing bound to a skin
+material renders as skin.
+
+Meshes with **zero vertices** are ignored entirely, so the usual workflow — start from a stock model, empty
+its vanilla meshes, add your own — needs no cleanup. Only meshes that actually draw need a binding.
+
+**Choosing a shader.** The material is published verbatim (bar colour rows), under the carrier accessory's
+own path, so whatever you authored is what renders. `character.shpk` with norm/mask/index samplers and a
+colour set is the natural choice; a *skin* material will render as skin, which is almost never what a
+separate mesh wants.
+
+**Colour tables.** If your material carries a Dawntrail colour set, the user can edit its rows in Proteus's
+Colors panel — one tab per selected option. Only the rows they actually change are written; everything else
+stays exactly as you authored it.
+
+**Budget.** Each distinct material an option contributes costs one of the ten material slots on the host
+accessory, shared with any second-skin shells. Options that bind the same material and are left at the same
+colours share a single slot.
+
+**Sidecar shape**, written by the importer — worth knowing if you want to hand-tune it:
+
+```jsonc
+{
+  "Name": "Neolithe Piercings",
+  "ContentGroups": [
+    {
+      "PenumbraGroupName": "Top",          // must match the Penumbra group name exactly
+      "Options": [
+        {
+          "Name": "Belly Button Heart",    // must match the Penumbra option name exactly
+          "Pieces": [
+            {
+              "Model": "top/heart/chara/equipment/e0000/model/c0201e0000_top.mdl",
+              "Materials": {
+                // model material name -> the .mtrl backing it, both relative to the MOD ROOT
+                "mt_c0201b0001_neolithe_piercings.mtrl": "common/1/mt_c0201b0001_neolithe_piercings.mtrl"
+              },
+              "Surface": "Body"            // Body (default), Face, Hair, Tail or Ear
+            }
+          ],
+          "ColorTableRows": []             // optional, same shape as an overlay option's
+        }
+      ]
+    }
+  ]
+}
+```
+
+`Surface` decides which space the piece is authored in, and therefore where it can ride. `Body` is cut in the
+shared equipment space and is deformed onto the wearer exactly as a second skin is. `Face`, `Hair`, `Tail`
+and `Ear` are authored at the character's own race and must **not** be deformed, so they can only ride a slot
+Proteus can replace outright — a free ring, or the facewear slot. Add `"SurfaceId": "f0001"` for those.
+
 ### Distributing Your Mod
 
 Pack your mod folder as a `.zip` and rename the extension to `.pmp`. Penumbra imports `.pmp` files directly. Include everything in the mod root:
@@ -308,3 +387,6 @@ The `samples/` directory in this repository contains two ready-to-study examples
 
 - **ExampleOverlayMod** — simple unconditional overlay with diffuse, normal, and mask.
 - **MultiOptionOverlayMod** — single-select style picker plus an independently toggleable piece, demonstrating `OptionGroups`, per-option `ColorTableRows`, index textures, and the normal-only overlay pattern.
+
+There is no sample content pack: one is just an ordinary Penumbra `.pmp` whose models name materials it also
+ships. Any mesh mod that follows that rule imports as one.

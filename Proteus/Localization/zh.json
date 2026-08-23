@@ -99,6 +99,10 @@
     "message": "将当前 Proteus 状态（启用／优先级／选项／颜色）记录到此绑定中。\n手动修改只有在点击此处后才会保留。",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] 有 {0} 个模组网格部件无法放置——你的饰品已没有材质槽位。请再装备一件戒指 / 手镯 / 项链，或关闭一个图层。",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
     "description": ""
@@ -469,6 +473,126 @@
   },
   "Common.None": {
     "message": "（无）",
+    "description": ""
+  },
+  "Content.Browse.Btn": {
+    "message": "浏览模组包",
+    "description": ""
+  },
+  "Content.Dialog.Filter": {
+    "message": "Penumbra 包",
+    "description": ""
+  },
+  "Content.Dialog.Title": {
+    "message": "选择 Penumbra 包",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "网格 {0}，顶点 {1}",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "或者导入自带网格的 Penumbra 包（.pmp）。Proteus 会将其复制进来，阻止 Penumbra 发布其模型，转而把你所选每个选项的网格追加到承载饰品上——这样原本会争抢同一游戏路径的选项就能同时穿戴。",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} 个材质",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "此包中没有任何选项提供 Proteus 可追加的网格。",
+    "description": ""
+  },
+  "Content.OptionOf.Fmt": {
+    "message": "来自“{0}”分组 — {1} 个部件。这些颜色会写入包自带的材质；你未改动的行将完全保持作者设定的样子。",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "含网格的选项：{1} 个中的 {0} 个",
+    "description": ""
+  },
+  "Content.Pill": {
+    "message": "网格",
+    "description": ""
+  },
+  "Content.Pill.Tip": {
+    "message": "此模组自带网格。Proteus 会把你所选选项指定的网格追加到承载饰品上；请在 Penumbra 中选择。",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "无法读取该包：{0}",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "材质未绑定",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "该模组名称没有可用字符——请使用字母或数字。",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "已存在名为“{0}”的模组文件夹。",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "该包已不存在：{0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "无法访问 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "此包中没有可导入的内容。",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "“Proteus”为保留名称——请另选模组名称。",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "没有几何体——其中每个网格都是空的",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "其网格引用了 {0}，但此包并未提供该材质。请将网格重新绑定到包自带的材质后重新导出。",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "不是可读取的模型（{0}）",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "已导入“{0}”——部件：{1}{2}。已启用并在 Penumbra 中打开。其选项在 Penumbra 中选择，所选的全部会同时穿戴。",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": "（已跳过：{0}）",
+    "description": ""
+  },
+  "ContentImport.Warn.DefaultModel": {
+    "message": "此包在所有选项之外重定向了一个模型。该模型将作为常驻部件导入——只要模组启用就会被追加。",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "分组“{0}”属于 {1} 类型，Proteus 无法放置——该分组的选项将保持原样。",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "此包中没有任何选项重定向模型，因此没有可供 Proteus 追加的几何体。请改为在 Penumbra 中安装。",
     "description": ""
   },
   "Create.Author.Label": {

@@ -99,6 +99,10 @@
     "message": "Hält den aktuellen Proteus-Zustand (Aktivierung / Priorität / Optionen / Farben)\nin dieser Bindung fest. Manuelle Änderungen bleiben nur erhalten, wenn du hier klickst.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] {0} Mesh-Teil(e) aus deinen Mods konnten nicht platziert werden — deinen Accessoires fehlen Materialplätze. Leg einen weiteren Ring / ein Armband / eine Halskette an oder schalte eine Ebene ab.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] „{0}“ setzt Leuchten auf einer Hautebene. Haut kann nicht mehr leuchten, daher wird diese Option jetzt als Stoffebene dargestellt — sie braucht ein freies Accessoire und ihre Oberfläche sieht etwas anders aus.",
     "description": ""
@@ -469,6 +473,126 @@
   },
   "Common.None": {
     "message": "(keine)",
+    "description": ""
+  },
+  "Content.Browse.Btn": {
+    "message": "Mod-Paket auswählen",
+    "description": ""
+  },
+  "Content.Dialog.Filter": {
+    "message": "Penumbra-Paket",
+    "description": ""
+  },
+  "Content.Dialog.Title": {
+    "message": "Penumbra-Paket auswählen",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "{0} Mesh, {1} Vertices",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "Oder importiere ein Penumbra-Paket (.pmp), das eigene Meshes mitbringt. Proteus kopiert es herein, hindert Penumbra daran, dessen Modelle zu veröffentlichen, und hängt stattdessen die Meshes jeder ausgewählten Option an dein Träger-Accessoire an — so lassen sich Optionen, die sonst um denselben Spielpfad streiten, alle gleichzeitig tragen.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} Materialien",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "Keine Option in diesem Paket liefert ein Mesh, das Proteus anhängen kann.",
+    "description": ""
+  },
+  "Content.OptionOf.Fmt": {
+    "message": "Aus der Gruppe \"{0}\" — {1} Teil(e). Diese Farben werden in das mitgelieferte Material geschrieben; Zeilen, die du nicht anfasst, bleiben genau so, wie der Autor sie geschrieben hat.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "Optionen mit Meshes: {0} von {1}",
+    "description": ""
+  },
+  "Content.Pill": {
+    "message": "Meshes",
+    "description": ""
+  },
+  "Content.Pill.Tip": {
+    "message": "Dieses Mod bringt eigene Meshes mit. Proteus hängt die von deinen ausgewählten Optionen benannten an dein Träger-Accessoire an; die Auswahl triffst du in Penumbra.",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "Dieses Paket konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "Material nicht zugeordnet",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "Dieser Mod-Name enthält keine verwendbaren Zeichen — nutze Buchstaben oder Ziffern.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "Ein Mod-Ordner namens \"{0}\" existiert bereits.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "Das Paket ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "Aus diesem Paket kann nichts importiert werden.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\" ist reserviert — wähle einen anderen Mod-Namen.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "keine Geometrie — jedes Mesh darin ist leer",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "sein Mesh nennt {0}, was dieses Paket nicht mitliefert. Weise das Mesh einem der paketeigenen Materialien zu und exportiere neu.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "kein lesbares Modell ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "\"{0}\" importiert — Teile: {1}{2}. Aktiviert und in Penumbra geöffnet. Die Optionen wählst du in Penumbra, und jede ausgewählte wird gleichzeitig getragen.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (übersprungen: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.DefaultModel": {
+    "message": "Dieses Paket leitet ein Modell außerhalb jeder Option um. Es wird als dauerhaft aktives Teil importiert — es wird angehängt, sobald das Mod aktiviert ist.",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "Gruppe \"{0}\" ist eine {1}-Gruppe, die Proteus nicht platzieren kann — ihre Optionen bleiben unangetastet.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "Keine Option in diesem Paket leitet ein Modell um, es gibt also keine Geometrie zum Anhängen. Installiere es stattdessen in Penumbra.",
     "description": ""
   },
   "Create.Author.Label": {

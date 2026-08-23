@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using Proteus.Services;
 using Xunit;
 
@@ -87,6 +88,102 @@ public class SecondSkinWriterVerbatimTests
         Assert.True(stats.Meshes > shellOnly.Meshes, "host added no meshes");
 
         Validate(outBytes);
+    }
+
+    // A .pmp that ships geometry, used to exercise the content-append path against a real pack rather than
+    // a synthesised model. Absent on other machines, in which case these tests no-op like the ones above.
+    private const string ContentPack = @"E:\ModPacks\Neolithe Piercings for Proteus.pmp";
+    private const string ContentEntry = "top/belly button heart/chara/equipment/e0000/model/c0201e0000_top.mdl";
+    private const string ContentMaterial = "/mt_c0201b0001_a.mtrl";
+
+    private static byte[]? ReadPackEntry(string entry)
+    {
+        if (!File.Exists(ContentPack)) return null;
+        using var zip = ZipFile.OpenRead(ContentPack);
+        var e = zip.GetEntry(entry);
+        if (e == null) return null;
+        using var st = e.Open();
+        using var ms = new MemoryStream();
+        st.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    private static ContentGeometry Geometry(byte[] model, string materialLeaf)
+        => new(model, SecondSkinWriter.KeepByLeaf(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { materialLeaf.TrimStart('/') }));
+
+    [Fact]
+    public void Content_layer_appends_the_packs_own_geometry_into_the_host()
+    {
+        var content = ReadPackEntry(ContentEntry);
+        if (content == null || !File.Exists(HostRing)) return;
+
+        var ring = File.ReadAllBytes(HostRing);
+        var ringMats = SecondSkinWriter.MaterialNames(ring);
+
+        var layers = new[]
+        {
+            new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0001_rir_b.mtrl",
+                Geometry = Geometry(content, ContentMaterial),
+            },
+        };
+
+        // No shell sources at all - the pack brought every vertex in the output.
+        var outBytes = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(), layers, ring, out var stats);
+
+        var outMats = SecondSkinWriter.MaterialNames(outBytes);
+        Assert.Equal(ringMats.Count + 1, outMats.Count);
+        Assert.Equal("/mt_c0201a0001_rir_b.mtrl", outMats[^1]);
+        for (int i = 0; i < ringMats.Count; i++)
+            Assert.Equal(ringMats[i], outMats[i]);
+
+        // The pack's mesh is REAL geometry, so it must have survived with vertices of its own - and with
+        // more than the ring alone would contribute.
+        SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
+            new[] { new SecondSkinLayer { MaterialName = "/x.mtrl", Geometry = Geometry(content, "nothing.mtrl") } },
+            ring, out var ringOnly);
+        Assert.True(stats.VerticesOut > ringOnly.VerticesOut, "the content mesh contributed no vertices");
+
+        Validate(outBytes);
+    }
+
+    [Fact]
+    public void Content_only_build_needs_no_shell_sources()
+    {
+        var content = ReadPackEntry(ContentEntry);
+        if (content == null) return;
+
+        var layers = new[]
+        {
+            new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry = Geometry(content, ContentMaterial),
+            },
+        };
+
+        var outBytes = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(), layers, null, out var stats);
+
+        Assert.True(stats.Meshes > 0, "no mesh emitted");
+        Assert.True(stats.VerticesOut > 0, "no vertices emitted");
+        // Every triangle is carried through: a content piece has no coverage map to be trimmed by.
+        Assert.Equal(stats.TrianglesIn, stats.TrianglesOut);
+        Assert.Equal(new[] { "/mt_c0201a0053_rir_a.mtrl" }, SecondSkinWriter.MaterialNames(outBytes));
+        Validate(outBytes);
+    }
+
+    [Fact]
+    public void Content_build_without_geometry_still_demands_a_source()
+    {
+        // The relaxed guard is for content ONLY. A shell layer with no source would emit nothing at all,
+        // so that case must keep throwing rather than silently producing an empty model.
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/a.mtrl", Coverage = null } };
+        Assert.Throws<ArgumentException>(() => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(), layers, null, out _));
     }
 
     [Fact]
