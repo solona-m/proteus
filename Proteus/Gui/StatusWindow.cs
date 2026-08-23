@@ -1475,7 +1475,7 @@ public class StatusWindow : Window
         _importMaterials = null;
         try
         {
-            var preview = ContentImportService.Inspect(path, Plugin.Log);
+            var preview = ContentImportService.Inspect(path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log));
             _contentPreview = preview;
             _importName = preview.Name;
             _importAuthor = preview.Author;
@@ -1514,46 +1514,67 @@ public class StatusWindow : Window
         }
 
         ImGui.Separator();
-        ImGui.TextUnformatted(string.Format(cms.PieceCountFmt, preview.ImportableOptions, preview.Options.Count));
+        ImGui.TextUnformatted(string.Format(cms.PieceCountFmt, preview.ImportableUnits, preview.TotalUnits));
 
-        using (var table = ImRaii.Table("##contentPieces", 4,
+        // One row per PIECE, not per file: a pack that ships the same garment for five races ships one
+        // garment, and the race variants are folded into the count in the third column.
+        using (var table = ImRaii.Table("##contentPieces", 5,
                    ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
         {
             if (table)
-                foreach (var opt in preview.Options)
-                    foreach (var piece in opt.Pieces)
+                foreach (var unit in preview.Units)
+                {
+                    var lead = unit.Variants.FirstOrDefault(v => v.Import) ?? unit.Variants[0];
+
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (unit.Import) ImGui.TextUnformatted(unit.Slot.Label);
+                    else ImGui.TextDisabled(unit.Slot.Label);
+
+                    // The vanilla item the pack replaces, which is what the synthesized option is named
+                    // after. Falls back to the set id, so the column is never blank.
+                    ImGui.TableNextColumn();
+                    if (unit.Import) ImGui.TextUnformatted(unit.ItemName ?? unit.Slot.SetTag);
+                    else ImGui.TextDisabled(unit.ItemName ?? unit.Slot.SetTag);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(unit.Slot.SetTag);
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(unit.Variants.Count > 1
+                        ? string.Format(cms.RacesFmt, unit.Variants.Count)
+                        : "");
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(unit.Import
+                        ? string.Format(cms.GeometryFmt, lead.Meshes, lead.Vertices)
+                        : cms.Skipped);
+
+                    ImGui.TableNextColumn();
+                    if (unit.Import)
                     {
-                        ImGui.TableNextRow();
-
-                        ImGui.TableNextColumn();
-                        ImGui.TextUnformatted(opt.Group);
-
-                        ImGui.TableNextColumn();
-                        if (piece.Import) ImGui.TextUnformatted(opt.Option);
-                        else ImGui.TextDisabled(opt.Option);
-
-                        ImGui.TableNextColumn();
-                        if (piece.Import)
-                            ImGui.TextDisabled(string.Format(cms.GeometryFmt, piece.Meshes, piece.Vertices));
-                        else
-                            ImGui.TextDisabled(cms.Skipped);
-
-                        ImGui.TableNextColumn();
-                        if (piece.Import)
-                        {
-                            var mtrl = Path.GetFileName(piece.Bindings.Values.First());
-                            ImGui.TextDisabled(piece.Bindings.Count > 1
-                                ? string.Format(cms.MaterialsFmt, piece.Bindings.Count)
-                                : mtrl);
-                        }
-                        else
-                        {
-                            ImGui.TextColored(ImportWarnColour, cms.Unbound);
-                        }
-
-                        if (piece.Problem != null && ImGui.IsItemHovered())
-                            ImGui.SetTooltip(string.Format(cms.ProblemFmt, opt.Option, piece.Problem));
+                        var mtrl = Path.GetFileName(lead.Bindings.Values.First());
+                        ImGui.TextDisabled(lead.Bindings.Count > 1
+                            ? string.Format(cms.MaterialsFmt, lead.Bindings.Count)
+                            : mtrl);
                     }
+                    else
+                    {
+                        ImGui.TextColored(ImportWarnColour, cms.Unbound);
+                    }
+
+                    if (lead.Problem != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(cms.ProblemFmt, unit.Label, lead.Problem));
+                }
+        }
+
+        // Said before the button, not after the import: pieces arriving switched off is the single most
+        // surprising thing about this flow, and a character that changes nothing looks like a failure.
+        if (preview.PieceGroupName is { } gate && preview.AnyImportable)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(string.Format(cms.AllOffFmt, gate));
+            ImGui.PopTextWrapPos();
         }
 
         foreach (var w in preview.Warnings)

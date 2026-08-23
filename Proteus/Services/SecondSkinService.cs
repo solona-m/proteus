@@ -145,6 +145,36 @@ public sealed class SecondSkinService
         OverlayEntry Entry, ResolvedContent Content, byte[] Model, string MaterialLeaf, byte[] Mtrl,
         Dictionary<int, GearColorRow>? Rows);
 
+    /// <summary>
+    /// The model of <paramref name="piece"/> that belongs on a character wearing equipment code
+    /// <paramref name="modelCode"/>: the exact variant if the pack ships one, else the NEAREST one its own
+    /// fall-through chain reaches, else null.
+    /// <para/>
+    /// Nearest, not merely reachable: a pack shipping both Midlander and Highlander male models must give a
+    /// Highlander his own, and "any ancestor" would be free to hand him the Midlander one. The chain is
+    /// walked outward from the wearer and the first code the pack has wins.
+    /// <para/>
+    /// Gender is checked at every hop for the same reason <see cref="CanFallThrough"/> checks it: the chain
+    /// really does contain cross-gender hops, and taking one means dressing someone in a body they do not
+    /// have.
+    /// </summary>
+    private static string? ResolveVariant(ContentPiece piece, string? modelCode)
+    {
+        if (piece.ModelFor(modelCode) is { } exact) return exact;
+        if (modelCode == null || RaceIndex(modelCode) is not { } from) return null;
+
+        for (int i = 0, cur = from; i < 8; i++)
+        {
+            cur = EqdpFallbackIndex(cur);
+            if (cur == 0) break;
+            if (cur % 2 != from % 2) continue;   // a cross-gender hop is not ours to take
+            foreach (var code in piece.ModelCodes)
+                if (RaceIndex(code) == cur)
+                    return piece.ModelFor(code);
+        }
+        return null;
+    }
+
     /// <summary>The Penumbra mod folder an entry lives in — the parent of its Proteus/ sidecar.</summary>
     private static string? ModRootOf(OverlayEntry entry)
         => Path.GetDirectoryName(
@@ -594,6 +624,12 @@ public sealed class SecondSkinService
             modelCode ??= charCode;
         }
 
+        // Non-null from here, and pinned into its own local rather than left to flow analysis: the block
+        // above always ends in a value, but Build is long enough that the compiler stops carrying that
+        // guarantee to the far end of it — and scattering `!` at each use would be asserting the same fact
+        // five times with nothing to point at.
+        string equipCode = modelCode;
+
         if (!string.Equals(modelCode, charCode, StringComparison.OrdinalIgnoreCase))
             log.Information("[Proteus] second skin: c{0} wears c{1} equipment models (race-deformed) — any "
                           + "bare slot the live walk missed is rebuilt in c{1}", charCode, modelCode);
@@ -623,7 +659,7 @@ public sealed class SecondSkinService
             // (nothing drawn there, or the walk came back empty) — same path as before.
             var bareBody = bareBodyModels != null && bareBodyModels.TryGetValue(part, out var drawnBare)
                 ? drawnBare
-                : $"chara/equipment/e0000/model/c{modelCode}e0000_{part}.mdl";
+                : $"chara/equipment/e0000/model/c{equipCode}e0000_{part}.mdl";
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
                 : bareBody;
@@ -870,7 +906,7 @@ public sealed class SecondSkinService
         // Majority, because one host serves the whole shell: a race-native gear top cut beside bare c0201
         // legs is genuinely two spaces at once. Ties and unreadable paths fall back to the equipment code.
         var cutVotes = CodeVotes(bodies.Select(b => b.Path));
-        var cutCode = modelCode;
+        var cutCode = equipCode;
         if (cutVotes.Count == 1
             // A tie means the shell is half in each space and neither is more right than the other, so
             // keep the equipment code rather than letting grouping order decide it.
@@ -890,7 +926,7 @@ public sealed class SecondSkinService
             cutCode, bodies.Count,
             cutVotes.Count > 0
                 ? string.Join(", ", cutVotes.Select(g => $"c{g.Key}x{g.Count()}"))
-                : $"no readable path codes, fell back to the equipment code c{modelCode}");
+                : $"no readable path codes, fell back to the equipment code c{equipCode}");
 
         // ── the surfaces this build cuts from ─────────────────────────────────────────────────
         // The body first — it is the only surface assembled from everything resolved above, and the only one
@@ -1067,10 +1103,15 @@ public sealed class SecondSkinService
             var (cEntry, rc) = contentLayers![i];
             var piece = rc.Piece;
             var modRoot = ModRootOf(cEntry);
-            if (modRoot == null || string.IsNullOrWhiteSpace(piece.Model))
+            // The equipment code the wearer loads gear at — what a per-race pack keys its variants by.
+            var wearerCode = equipCode;
+            var modelRel = ResolveVariant(piece, wearerCode);
+            if (modRoot == null || modelRel == null)
             {
-                log.Warning("[Proteus] content: {0} \"{1}/{2}\" names no model — skipping",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "");
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" has no model for c{3} — skipping. "
+                          + "The pack ships [{4}]",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", wearerCode,
+                    string.Join(", ", piece.ModelCodes.Select(c => "c" + c)));
                 continue;
             }
 
@@ -1078,7 +1119,7 @@ public sealed class SecondSkinService
             List<string> declared;
             try
             {
-                model = File.ReadAllBytes(Path.Combine(modRoot, piece.Model));
+                model = File.ReadAllBytes(Path.Combine(modRoot, modelRel));
                 declared = SecondSkinWriter.MaterialNames(model);
             }
             catch (Exception ex)
@@ -1164,7 +1205,7 @@ public sealed class SecondSkinService
         // Chosen against the BODY's cut space. With one surface that is simply the shell's space; with more
         // than one, the body is the surface that has to be able to spill across several hosts, and the
         // others are carrier-only anyway (ShellSurfaceKey.RequiresNativeHost).
-        var hosts = ChooseHosts(bodySurface.CutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
+        var hosts = ChooseHosts(bodySurface.CutCode, equipCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
             emperorRingVariant, invisibleGlassesVariant);
 
         // Which surface each host carries. A host is one model at one path with one EQDP entry, so it can

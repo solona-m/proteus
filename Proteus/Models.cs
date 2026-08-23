@@ -80,6 +80,18 @@ public class ProteusMetadata
     [JsonPropertyName("ContentGroups")]
     public List<ContentOptionGroup>? ContentGroups { get; set; }
 
+    /// <summary>
+    /// The Penumbra group whose selection ALSO gates this pack's pieces — a multi-select group the importer
+    /// synthesizes so individual pieces of a pack can be turned on and off.
+    /// <para/>
+    /// It exists because Penumbra has no way to say "apply only the model out of this always-on set". A pack
+    /// that ships a whole outfit with no options of its own leaves nothing for Proteus to mirror, so the
+    /// importer writes a group for it and every piece names the option that switches it on. Null when the
+    /// pack's own options already select one model each — there is nothing to add.
+    /// </summary>
+    [JsonPropertyName("PieceGroupName")]
+    public string? PieceGroupName { get; set; }
+
     /// <summary>Whether this pack contributes any geometry at all (before selection is resolved).</summary>
     [JsonIgnore]
     public bool HasContent
@@ -314,6 +326,52 @@ public class ContentPiece
     /// <summary>The part id for a non-body surface ("f0001", "h0133"); empty for the body.</summary>
     [JsonPropertyName("SurfaceId")]
     public string SurfaceId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The option in <see cref="ProteusMetadata.PieceGroupName"/> that must ALSO be selected for this piece
+    /// to be worn. Null = ungated, which is what a hand-authored sidecar gets.
+    /// </summary>
+    [JsonPropertyName("GateOption")]
+    public string? GateOption { get; set; }
+
+    /// <summary>Where the piece rides, as a label ("Head", "Body"). Display only; stored so a hand-edited
+    /// sidecar reads without anyone having to decode a path.</summary>
+    [JsonPropertyName("Slot")]
+    public string? Slot { get; set; }
+
+    /// <summary>
+    /// Equipment model code ("0201", "1201") → the model authored for it, when a pack ships the same garment
+    /// per race. Null means <see cref="Model"/> applies whoever is wearing it.
+    /// <para/>
+    /// A map rather than one piece per race, because these are variants of ONE thing: the user picks the
+    /// garment, and which file backs it is a question only the wearer's race can answer. Cerise ships five
+    /// models of one shirt; as separate pieces that would be five entries in the picker, four of them
+    /// wrong for any given character.
+    /// </summary>
+    [JsonPropertyName("Models")]
+    public Dictionary<string, string>? Models { get; set; }
+
+    /// <summary>
+    /// The model authored for <paramref name="modelCode"/>, or null when the pack ships none. An EXACT
+    /// lookup only: walking the race fall-through chain when there is no exact match belongs to
+    /// <c>SecondSkinService</c>, which owns that chain. Falls back to <see cref="Model"/> for a pack that
+    /// ships one model for everyone.
+    /// </summary>
+    public string? ModelFor(string? modelCode)
+    {
+        if (Models is not { Count: > 0 })
+            return string.IsNullOrWhiteSpace(Model) ? null : Model;
+        if (modelCode == null) return null;
+        foreach (var (k, v) in Models)
+            if (string.Equals(k, modelCode, StringComparison.OrdinalIgnoreCase))
+                return v;
+        return null;
+    }
+
+    /// <summary>The model codes this piece has a variant for, for a message that has to say what it does ship.</summary>
+    [JsonIgnore]
+    public IEnumerable<string> ModelCodes
+        => Models is { Count: > 0 } ? Models.Keys : [];
 
     /// <summary>The surface this piece is cut for, as the host chooser understands it.</summary>
     [JsonIgnore]

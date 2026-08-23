@@ -475,6 +475,10 @@
     "message": "(aucune)",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "Les pièces arrivent DÉSACTIVÉES. Après l'import, cochez celles que vous voulez sous « {0} » dans Penumbra — rien n'est porté avant.",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "Parcourir les packs de mod",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "Options avec maillages : {0} sur {1}",
+    "message": "Pièces : {0} sur {1}",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nIgnoré : {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} races",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "« {0} » importé — pièces : {1}{2}. Activé et ouvert dans Penumbra. Ses options se choisissent dans Penumbra, et toutes celles que vous sélectionnez sont portées en même temps.",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": " (ignoré : {0})",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "« {0} » importé — pièces : {1}{2}. Elles arrivent DÉSACTIVÉES : cochez celles que vous voulez sous « {3} » dans Penumbra, maintenant ouvert sur ce mod.",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "Ce pack redirige un modèle en dehors de toute option. Ce modèle est importé comme pièce toujours active — il sera ajouté dès que le mod est activé.",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (ignoré : {0})",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

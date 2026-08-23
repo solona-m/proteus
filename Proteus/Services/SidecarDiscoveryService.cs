@@ -197,31 +197,52 @@ public class SidecarDiscoveryService
     public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry)
     {
         var meta = entry.Metadata;
-        if (meta.Content is { Count: > 0 })
-            return meta.Content
-                .Select(p => new ResolvedContent(p, meta.ColorTableRows, null, null))
-                .ToList();
+        if (!meta.HasContent) return [];
 
-        if (meta.ContentGroups == null) return [];
+        // Ask Penumbra only when there is something to ask about. A pack whose pieces are all unconditional
+        // and ungated resolves without a single IPC hop, which is the same rule the sidecar pre-filter in
+        // Discover follows and the reason this stays cheap for the common case.
+        bool needsSettings = meta.PieceGroupName is { Length: > 0 } || meta.ContentGroups is { Count: > 0 };
+        (bool Enabled, int Priority, Dictionary<string, List<string>> Options)? settings = null;
+        if (needsSettings)
+        {
+            var collId = penumbra.GetPlayerCollectionId();
+            settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+        }
 
-        var collId   = penumbra.GetPlayerCollectionId();
-        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
-        if (!settings.HasValue) return [];
+        List<string>? Selection(string group)
+            => settings?.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, group, StringComparison.OrdinalIgnoreCase))
+                .Value;
+
+        // The synthesized piece group, if the importer added one. A gated piece whose option is not ticked
+        // is not worn — and when the selection cannot be read at all, nothing gated is worn either: the
+        // safe direction is to leave off something the user never asked for.
+        var gateOn = meta.PieceGroupName is { Length: > 0 } gateGroup ? Selection(gateGroup) : null;
+
+        bool Ungated(ContentPiece p) => PieceIsOn(p, gateOn);
+
+        var resolved = new List<ResolvedContent>();
+
+        // Unconditional pieces. Additive with the groups below rather than an either/or: one pack can
+        // legitimately ship both, and returning early on the first would silently drop the rest.
+        foreach (var piece in meta.Content ?? [])
+            if (Ungated(piece))
+                resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null));
+
+        if (meta.ContentGroups == null || !settings.HasValue) return resolved;
 
         var modRoot = Path.GetDirectoryName(
             entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
 
-        var resolved = new List<ResolvedContent>();
         foreach (var group in meta.ContentGroups)
         {
             if (group.Options.Count == 0) continue;
 
             int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
 
-            var selected = settings.Value.Options
-                .FirstOrDefault(kv => string.Equals(kv.Key, group.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
-                .Value;
+            var selected = Selection(group.PenumbraGroupName);
             if (selected is not { Count: > 0 }) continue;
 
             foreach (var opt in group.Options.Where(o => selected.Any(sel =>
@@ -229,11 +250,25 @@ public class SidecarDiscoveryService
             {
                 var rows = opt.ColorTableRows ?? meta.ColorTableRows;
                 foreach (var piece in opt.Pieces)
-                    resolved.Add(new ResolvedContent(piece, rows, group.PenumbraGroupName, opt.Name, order));
+                    if (Ungated(piece))
+                        resolved.Add(new ResolvedContent(piece, rows, group.PenumbraGroupName, opt.Name, order));
             }
         }
         return resolved;
     }
+
+    /// <summary>
+    /// Whether a piece's gate is open: it has none, or the option that switches it on is among
+    /// <paramref name="selection"/>.
+    /// <para/>
+    /// A null selection means the gate group's state could not be read at all, and everything gated stays
+    /// OFF. That is the safe direction — the alternative is wearing something the user never ticked — and it
+    /// is why this is a decision worth naming rather than an inline condition.
+    /// </summary>
+    internal static bool PieceIsOn(ContentPiece piece, IReadOnlyList<string>? selection)
+        => piece.GateOption == null
+        || (selection != null
+            && selection.Any(sel => string.Equals(sel, piece.GateOption, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Resolve the grayscale transparency-mask images currently selected for an entry. These come

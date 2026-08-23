@@ -475,6 +475,10 @@
     "message": "(없음)",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "파츠는 모두 꺼진 상태로 들어옵니다. 가져온 뒤 Penumbra의 \"{0}\"에서 원하는 항목을 체크하세요. 그 전에는 아무것도 착용되지 않습니다.",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "모드 팩 찾아보기",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "메시가 있는 옵션: {1}개 중 {0}개",
+    "message": "파츠: {1}개 중 {0}개",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0}종족",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 활성화하고 Penumbra에서 열었습니다. 옵션은 Penumbra에서 선택하며, 선택한 항목은 모두 동시에 착용됩니다.",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": " (건너뜀: {0})",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 모두 꺼진 상태입니다. 이 모드가 열린 Penumbra의 \"{3}\"에서 원하는 항목을 체크하세요.",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "이 팩은 어느 옵션에도 속하지 않는 모델을 리디렉션합니다. 해당 모델은 항상 켜진 파츠로 가져오며, 모드가 활성화된 동안 항상 덧붙습니다.",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (건너뜀: {0})",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

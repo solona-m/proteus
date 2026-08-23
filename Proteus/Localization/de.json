@@ -475,6 +475,10 @@
     "message": "(keine)",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "Teile kommen AUSGESCHALTET an. Häkchen nach dem Import unter \"{0}\" in Penumbra setzen — vorher wird nichts getragen.",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "Mod-Paket auswählen",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "Optionen mit Meshes: {0} von {1}",
+    "message": "Teile: {0} von {1}",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} Rassen",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "\"{0}\" importiert — Teile: {1}{2}. Aktiviert und in Penumbra geöffnet. Die Optionen wählst du in Penumbra, und jede ausgewählte wird gleichzeitig getragen.",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": " (übersprungen: {0})",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "\"{0}\" importiert — Teile: {1}{2}. Sie kommen AUSGESCHALTET an: setze die Häkchen unter \"{3}\" in Penumbra, das jetzt auf diesem Mod offen ist.",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "Dieses Paket leitet ein Modell außerhalb jeder Option um. Es wird als dauerhaft aktives Teil importiert — es wird angehängt, sobald das Mod aktiviert ist.",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (übersprungen: {0})",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

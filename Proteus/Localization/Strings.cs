@@ -438,7 +438,13 @@ public sealed class ContentStrings
         "Couldn't read that pack: {0}");
 
     public readonly string PieceCountFmt = Loc.Localize("Content.PieceCount.Fmt",
-        "Options with meshes: {0} of {1}");
+        "Pieces: {0} of {1}");
+
+    public readonly string RacesFmt = Loc.Localize("Content.Races.Fmt", "{0} races");
+
+    public readonly string AllOffFmt = Loc.Localize("Content.AllOff.Fmt",
+        "Pieces arrive switched OFF. After importing, tick the ones you want under \"{0}\" in Penumbra — "
+      + "nothing is worn until you do.");
 
     public readonly string GeometryFmt = Loc.Localize("Content.Geometry.Fmt", "{0} mesh, {1} verts");
     public readonly string MaterialsFmt = Loc.Localize("Content.Materials.Fmt", "{0} materials");

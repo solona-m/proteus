@@ -475,6 +475,10 @@
     "message": "(ninguna)",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "Las piezas llegan DESACTIVADAS. Tras importar, marca las que quieras en «{0}» dentro de Penumbra — hasta entonces no se lleva nada.",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "Buscar un paquete de mod",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "Opciones con mallas: {0} de {1}",
+    "message": "Piezas: {0} de {1}",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nOmitido: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} razas",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "Se importó «{0}» — piezas: {1}{2}. Se activó y se abrió en Penumbra. Sus opciones se eligen en Penumbra, y todas las que selecciones se llevan a la vez.",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": " (omitido: {0})",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "Se importó «{0}» — piezas: {1}{2}. Llegan DESACTIVADAS: marca las que quieras en «{3}» dentro de Penumbra, que ya está abierto en este mod.",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "Este paquete redirige un modelo fuera de toda opción. Ese modelo se importa como pieza siempre activa — se añadirá siempre que el mod esté habilitado.",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (omitido: {0})",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

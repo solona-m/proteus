@@ -475,6 +475,10 @@
     "message": "(none)",
     "description": "Shown where a file has not been chosen yet. Keep the parentheses."
   },
+  "Content.AllOff.Fmt": {
+    "message": "Pieces arrive switched OFF. After importing, tick the ones you want under \"{0}\" in Penumbra — nothing is worn until you do.",
+    "description": "Shown in the Import tab before the Import button. {0} is the name of the option group the import adds. \"Penumbra\" is a plugin name - never translate it."
+  },
   "Content.Browse.Btn": {
     "message": "Browse for a mod pack",
     "description": "Button in the Import tab that opens a file picker for .pmp packs."
@@ -508,8 +512,8 @@
     "description": "Caption above the colour grid for a content option. {0} is the Penumbra group name, {1} a piece count."
   },
   "Content.PieceCount.Fmt": {
-    "message": "Options with meshes: {0} of {1}",
-    "description": "Header above the preview table. {0} is how many options can be imported, {1} how many ship a mesh."
+    "message": "Pieces: {0} of {1}",
+    "description": "Header above the Import tab's piece table. {0} is how many can be appended, {1} how many the pack ships."
   },
   "Content.Pill": {
     "message": "Meshes",
@@ -522,6 +526,10 @@
   "Content.Problem.Fmt": {
     "message": "{0}\nSkipped: {1}",
     "description": "Tooltip on a skipped row. {0} is the option name, {1} the reason. Keep the line break."
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} races",
+    "description": "A table cell: the piece is shipped for this many races. Very tight space - keep it short."
   },
   "Content.ReadFailed.Fmt": {
     "message": "Couldn't read that pack: {0}",
@@ -579,13 +587,13 @@
     "message": "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen in Penumbra, and every one you select is worn at once.",
     "description": "Import succeeded. {0} is the mod folder name, {1} a piece count, {2} an optional \"(skipped: n)\" tail. \"Penumbra\" is a plugin name - never translate it."
   },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want under \"{3}\" in Penumbra, which is now open on this mod.",
+    "description": "Import succeeded, for a pack whose pieces arrive switched off. {0} is the mod folder, {1} a count, {2} an optional \"(skipped: n)\" tail, {3} the option group to tick in. \"Penumbra\" is a plugin name - never translate it."
+  },
   "ContentImport.Result.SkippedTail.Fmt": {
     "message": " (skipped: {0})",
     "description": "Appended to the import result when some pieces were skipped. {0} is a count. Note the leading space."
-  },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "This pack redirects a model outside any option. That model is imported as an always-on piece — it will be appended whenever the mod is enabled.",
-    "description": "Preview warning: the pack redirects a model outside every option."
   },
   "ContentImport.Warn.GroupType.Fmt": {
     "message": "Group \"{0}\" is a {1} group, which Proteus can't place — its options are left alone.",

@@ -119,11 +119,16 @@ public class ContentImportTests
 
             Assert.Equal(4, preview.Pack.FileVersion);
             Assert.Equal("Sample Piercings", preview.Name);
-            Assert.Equal(2, preview.Options.Count);              // the mtrl group ships no model
-            Assert.Equal(2, preview.ImportableOptions);
-            Assert.All(preview.Options, o => Assert.Equal("Top", o.Group));
+            Assert.Equal(2, preview.TotalUnits);                 // the mtrl group ships no model
+            Assert.Equal(2, preview.ImportableUnits);
+            Assert.All(preview.Units, u => Assert.Equal("Top", u.Group));
 
-            var piece = preview.Options[0].Pieces.Single();
+            // Every option ships exactly one garment, so the author's own group already selects them and
+            // nothing is added: this is the shipped piercings-pack shape and it must not change.
+            Assert.Null(preview.PieceGroupName);
+            Assert.All(preview.Units, u => Assert.Null(u.GateOption));
+
+            var piece = preview.Units[0].Variants.Single();
             Assert.Null(piece.Problem);
             Assert.Empty(piece.Unbound);
             Assert.Equal("common/piercings.mtrl", piece.Bindings[leaf]);
@@ -148,7 +153,7 @@ public class ContentImportTests
             var preview = ContentImportService.Inspect(pmp);
 
             Assert.False(preview.AnyImportable);
-            var piece = preview.Options[0].Pieces.Single();
+            var piece = preview.Units[0].Variants.Single();
             Assert.NotNull(piece.Problem);
             Assert.Empty(piece.Bindings);
             Assert.NotEmpty(piece.Unbound);
@@ -263,11 +268,13 @@ public class ContentImportTests
             Assert.Equal(new[] { "Basic", "Heart" }, group.Options.Select(o => o.Name).ToArray());
 
             var piece = group.Options[1].Pieces.Single();
-            Assert.Equal("top/heart/model.mdl", piece.Model);
+            // Through the accessor, not the raw field: a model path names the race it was authored for, so
+            // the importer records it as a per-race variant even when the pack ships only one.
+            Assert.Equal("top/heart/model.mdl", piece.ModelFor("0201"));
             Assert.Equal("common/piercings.mtrl", piece.MaterialFor(leaf));
             Assert.Equal(ShellSurfaceKind.Body, piece.Surface);
             // The sidecar path must resolve against the mod root, since that is what the compositor reads.
-            Assert.True(File.Exists(Path.Combine(root, piece.Model.Replace('/', Path.DirectorySeparatorChar))));
+            Assert.True(File.Exists(Path.Combine(root, piece.ModelFor("0201")!.Replace('/', Path.DirectorySeparatorChar))));
         }
         finally { Directory.Delete(dir, true); }
     }

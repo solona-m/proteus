@@ -62,22 +62,50 @@ public sealed class ContentImportService
         IReadOnlyList<string> Unbound,
         int Meshes,
         int Vertices,
-        string? Problem)
+        string? Problem,
+        string RaceCode = "")
     {
         public bool Import => Problem == null && Bindings.Count > 0;
     }
 
-    /// <summary>One option of one group, with whatever geometry it ships.</summary>
-    public sealed record OptionPlan(string Group, string Option, IReadOnlyList<PiecePlan> Pieces)
+    /// <summary>
+    /// One thing the user can tick: a garment, with every race variant of it underneath.
+    /// <para/>
+    /// The unit rather than the model is what gets listed and gated, because a pack that ships the same shirt
+    /// for five races ships five models of ONE garment. Listing those separately would put five entries in
+    /// the picker, four of them wrong for whoever is wearing it.
+    /// </summary>
+    /// <param name="Group">The author's group this came from, or null when the model was unconditional.</param>
+    /// <param name="GateOption">
+    /// The option in the synthesized group that switches this on, or null when the author's own option
+    /// already selects it and nothing needs adding.
+    /// </param>
+    public sealed record PieceUnit(
+        string? Group,
+        string? Option,
+        ContentSlot.Parsed Slot,
+        string? ItemName,
+        string? GateOption,
+        IReadOnlyList<PiecePlan> Variants)
     {
-        public bool Import => Pieces.Any(p => p.Import);
+        /// <summary>What the user reads, in the Import tab and as the synthesized option's name.</summary>
+        public string Label => ContentSlot.Label(Slot, ItemName);
+
+        /// <summary>Buildable when ANY race variant is — a pack missing one race's material still works
+        /// for the races it does ship.</summary>
+        public bool Import => Variants.Any(v => v.Import);
     }
 
     /// <summary>What an import would do, shown in the Import tab before anything is written.</summary>
+    /// <param name="PieceGroupName">
+    /// The multi-select group the import will add so individual pieces can be picked, or null when the
+    /// pack's own options already select one garment each and there is nothing to add.
+    /// </param>
     public sealed record ImportPreview(
         string SourcePath,
         PenumbraPackage.Contents Pack,
-        IReadOnlyList<OptionPlan> Options,
+        IReadOnlyList<PieceUnit> Units,
+        string? PieceGroupName,
         IReadOnlyList<string> Warnings)
     {
         public string Name => Pack.Name;
@@ -85,20 +113,26 @@ public sealed class ContentImportService
         public string? Description => string.IsNullOrWhiteSpace(Pack.Description) ? null : Pack.Description;
         public string? Website => string.IsNullOrWhiteSpace(Pack.Website) ? null : Pack.Website;
 
-        /// <summary>Options carrying at least one appendable model.</summary>
-        public int ImportableOptions => Options.Count(o => o.Import);
+        /// <summary>Pieces that can actually be appended.</summary>
+        public int ImportableUnits => Units.Count(u => u.Import);
 
-        public bool AnyImportable => ImportableOptions > 0;
+        public bool AnyImportable => ImportableUnits > 0;
 
         /// <summary>Every piece the pack ships, importable or not — the count the tab reports against.</summary>
-        public int TotalPieces => Options.Sum(o => o.Pieces.Count);
+        public int TotalUnits => Units.Count;
+
+        /// <summary>The names the synthesized group will offer, in listing order.</summary>
+        public IReadOnlyList<string> GateOptions
+            => [.. Units.Where(u => u.Import && u.GateOption != null)
+                        .Select(u => u.GateOption!).Distinct(StringComparer.Ordinal)];
     }
 
     /// <summary>
     /// Read the pack and work out which of its options carry geometry Proteus can append. Throws
     /// <see cref="InvalidDataException"/> when the file isn't a readable pack.
     /// </summary>
-    public static ImportPreview Inspect(string pmpPath, IPluginLog? log = null)
+    public static ImportPreview Inspect(
+        string pmpPath, IPluginLog? log = null, Func<int, int, string?>? itemName = null)
     {
         var pack = PenumbraPackage.Read(pmpPath);
         var warnings = new List<string>();
@@ -115,16 +149,14 @@ public sealed class ContentImportService
             materialsByLeaf.TryAdd(Path.GetFileName(entry), entry);
         }
 
-        // Every model the pack redirects, read in ONE pass over the archive rather than one open per file:
-        // this runs on the frame the user picked the pack, and a pack with dozens of mesh options would
-        // otherwise re-read the zip's central directory dozens of times inside a single draw call.
-        var modelEntries = pack.Groups.Where(g => IsSelectable(g.Type))
-            .SelectMany(g => g.Options).SelectMany(o => o.Files)
-            .Where(f => f.Key.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
-            .Select(f => f.Value);
-        var models = PenumbraPackage.ReadEntries(pack.Path, modelEntries);
+        // Where every model in the pack comes from. Default-data models are in here as well as the ones
+        // inside options — a pack with no option groups at all keeps ALL of its models there, and reading
+        // only the grouped ones is what used to make such a pack import as "nothing usable".
+        var sources = new List<(string? Group, string? Option, string GamePath, string Entry)>();
+        foreach (var (gamePath, entry) in pack.DefaultFiles)
+            if (gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+                sources.Add((null, null, gamePath, entry));
 
-        var options = new List<OptionPlan>();
         foreach (var group in pack.Groups)
         {
             if (!IsSelectable(group.Type))
@@ -134,32 +166,90 @@ public sealed class ContentImportService
                     group.Name, group.Type));
                 continue;
             }
-
             foreach (var option in group.Options)
-            {
-                var pieces = new List<PiecePlan>();
                 foreach (var (gamePath, entry) in option.Files)
-                {
-                    if (!gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)) continue;
-                    models.TryGetValue(entry, out var bytes);
-                    pieces.Add(PlanPiece(gamePath, entry, bytes, materialsByLeaf, log));
-                }
-                if (pieces.Count > 0)
-                    options.Add(new OptionPlan(group.Name, option.Name, pieces));
-            }
+                    if (gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+                        sources.Add((group.Name, option.Name, gamePath, entry));
         }
 
-        if (pack.DefaultFiles.Keys.Any(k => k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)))
-            warnings.Add(Loc.Localize("ContentImport.Warn.DefaultModel",
-                "This pack redirects a model outside any option. That model is imported as an always-on "
-              + "piece — it will be appended whenever the mod is enabled."));
+        // Read in ONE pass over the archive rather than one open per file: this runs on the frame the user
+        // picked the pack, and a pack with dozens of models would otherwise re-read the zip's central
+        // directory dozens of times inside a single draw call.
+        var models = PenumbraPackage.ReadEntries(pack.Path, sources.Select(x => x.Entry));
 
-        if (options.Count == 0)
+        // Collapse into units. The key carries the OPTION as well as the slot and set, because two options
+        // of one group deliberately redirect the same path — that is what an option group is — so keying on
+        // the set alone would merge two alternatives into a single entry.
+        var byUnit = new Dictionary<(string?, string?, string, string), List<PiecePlan>>();
+        var unitOrder = new List<(string?, string?, string, string)>();
+        var slotOf = new Dictionary<(string?, string?, string, string), ContentSlot.Parsed>();
+
+        foreach (var (group, option, gamePath, entry) in sources)
+        {
+            if (ContentSlot.Parse(gamePath) is not { } slot)
+            {
+                log?.Warning("[Proteus] content import: {0} is not a character model path — skipping", gamePath);
+                continue;
+            }
+            var key = (group, option, slot.Label, slot.SetTag);
+            if (!byUnit.TryGetValue(key, out var list))
+            {
+                byUnit[key] = list = new List<PiecePlan>();
+                unitOrder.Add(key);
+                slotOf[key] = slot;
+            }
+            models.TryGetValue(entry, out var bytes);
+            list.Add(PlanPiece(gamePath, entry, bytes, materialsByLeaf, log) with { RaceCode = slot.RaceCode });
+        }
+
+        // How many distinct garments each of the author's options ships. One means their own option already
+        // selects it and we add nothing; more means the option bundles an outfit, and its pieces are gated
+        // by SLOT — the identity that stays stable as the user switches between that group's options, where
+        // the set id would not.
+        var unitsPerOption = unitOrder.GroupBy(k => (k.Item1, k.Item2))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var units = new List<PieceUnit>();
+        foreach (var key in unitOrder)
+        {
+            var (group, option, _, setTag) = key;
+            var slot = slotOf[key];
+            var name = itemName?.Invoke(slot.Category, ContentSlot.SetIdOf(setTag) ?? -1);
+
+            string? gate =
+                group == null                         ? ContentSlot.Label(slot, name)   // nothing else selects it
+                : unitsPerOption[(group, option)] > 1 ? slot.Label                       // one slot of a bundle
+                : null;                                                                 // its own option selects it
+
+            units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key]));
+        }
+
+        var gateGroup = units.Any(u => u.Import && u.GateOption != null)
+            ? UniqueGroupName(pack)
+            : null;
+
+        if (units.Count == 0)
             warnings.Add(Loc.Localize("ContentImport.Warn.NoModels",
                 "No option in this pack redirects a model, so there is no geometry for Proteus to append. "
               + "Install it in Penumbra instead."));
 
-        return new ImportPreview(pmpPath, pack, options, warnings);
+        return new ImportPreview(pmpPath, pack, units, gateGroup, warnings);
+    }
+
+    /// <summary>
+    /// The group the import adds so individual pieces can be picked. Suffixed until it is free: writing a
+    /// group REPLACES any of the same name, so colliding with one the author happens to have called the
+    /// same thing would destroy theirs.
+    /// </summary>
+    internal const string PieceGroup = "Pieces (Proteus)";
+
+    private static string UniqueGroupName(PenumbraPackage.Contents pack)
+    {
+        bool Taken(string n) => pack.Groups.Any(g => string.Equals(g.Name, n, StringComparison.OrdinalIgnoreCase));
+        if (!Taken(PieceGroup)) return PieceGroup;
+        for (int i = 2; ; i++)
+            if (!Taken($"{PieceGroup} {i}"))
+                return $"{PieceGroup} {i}";
     }
 
     /// <summary>Only Single and Multi have selectable options a sidecar group can mirror.</summary>
@@ -282,8 +372,8 @@ public sealed class ContentImportService
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
-        int pieces = preview.Options.Sum(o => o.Pieces.Count(p => p.Import));
-        return new(true, "", dirName, preview, pieces, preview.TotalPieces - pieces);
+        int pieces = preview.ImportableUnits;
+        return new(true, "", dirName, preview, pieces, preview.TotalUnits - pieces);
     }
 
     /// <summary>
@@ -308,6 +398,13 @@ public sealed class ContentImportService
             }
 
         StripModelRedirects(root, preview.Pack);
+
+        // The group that makes individual pieces pickable, written with EVERY option off. An imported
+        // outfit therefore contributes nothing until the user asks for a piece, which is also what keeps it
+        // off the host accessory's ten-material budget until then.
+        if (preview.PieceGroupName is { } gate && preview.GateOptions.Count > 0)
+            PenumbraModMeta.WriteMultiSelectGroup(
+                root, preview.Pack.Groups.Count, gate, preview.GateOptions, defaultSettings: 0);
 
         var metadata = BuildSidecar(preview, modName, author);
         var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
@@ -384,25 +481,24 @@ public sealed class ContentImportService
             Author = author,
         };
 
-        // Always-on models, if the pack redirects one outside every option.
-        foreach (var (gamePath, entry) in preview.Pack.DefaultFiles)
-        {
-            if (!gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)) continue;
-            var plan = preview.Options.SelectMany(o => o.Pieces)
-                .FirstOrDefault(p => string.Equals(p.Entry, entry, StringComparison.OrdinalIgnoreCase));
-            if (plan is { Import: true })
-                (metadata.Content ??= new()).Add(PieceOf(plan));
-        }
+        metadata.PieceGroupName = preview.PieceGroupName;
 
-        foreach (var byGroup in preview.Options.Where(o => o.Import).GroupBy(o => o.Group, StringComparer.Ordinal))
+        // Models the pack redirects outside every option. These used to be dropped: they were looked up
+        // against the grouped plans, which never contained them, so a pack with no option groups at all
+        // imported as "nothing usable" while the warning claimed they had been taken as always-on pieces.
+        foreach (var unit in preview.Units.Where(u => u.Import && u.Group == null))
+            (metadata.Content ??= new()).Add(PieceOf(unit));
+
+        foreach (var byGroup in preview.Units.Where(u => u.Import && u.Group != null)
+                     .GroupBy(u => u.Group!, StringComparer.Ordinal))
         {
             var group = new ContentOptionGroup { PenumbraGroupName = byGroup.Key };
-            foreach (var opt in byGroup)
-            {
-                var pieces = opt.Pieces.Where(p => p.Import).Select(PieceOf).ToList();
-                if (pieces.Count == 0) continue;
-                group.Options.Add(new ContentOption { Name = opt.Option, Pieces = pieces });
-            }
+            foreach (var byOption in byGroup.GroupBy(u => u.Option!, StringComparer.Ordinal))
+                group.Options.Add(new ContentOption
+                {
+                    Name   = byOption.Key,
+                    Pieces = byOption.Select(PieceOf).ToList(),
+                });
             if (group.Options.Count > 0)
                 (metadata.ContentGroups ??= new()).Add(group);
         }
@@ -410,15 +506,31 @@ public sealed class ContentImportService
         return metadata;
     }
 
-    private static ContentPiece PieceOf(PiecePlan plan)
+    /// <summary>
+    /// One unit as the sidecar stores it. Its race variants become a <c>Models</c> map rather than separate
+    /// pieces, and their material bindings merge: the leaf names are race-specific
+    /// (<c>mt_c0101…</c> vs <c>mt_c0201…</c>) so they cannot collide, and whichever model the wearer's race
+    /// selects declares only its own.
+    /// </summary>
+    private static ContentPiece PieceOf(PieceUnit unit)
     {
+        var usable = unit.Variants.Where(v => v.Import).ToList();
         var piece = new ContentPiece
         {
-            Model = plan.Entry,
-            Surface = ShellSurfaceKind.Body,
+            Surface    = ShellSurfaceKind.Body,
+            Slot       = unit.Slot.Label,
+            GateOption = unit.GateOption,
         };
-        foreach (var (leaf, entry) in plan.Bindings)
-            piece.Materials[leaf] = entry;
+
+        if (usable.Count == 1 && string.IsNullOrEmpty(usable[0].RaceCode))
+            piece.Model = usable[0].Entry;
+        else
+            piece.Models = usable.ToDictionary(v => v.RaceCode, v => v.Entry, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var v in usable)
+            foreach (var (leaf, entry) in v.Bindings)
+                piece.Materials[leaf] = entry;
+
         return piece;
     }
 
@@ -473,6 +585,16 @@ public sealed class ContentImportService
         var tail = prepared.Skipped > 0
             ? string.Format(Loc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
+
+        // A pack whose pieces arrive switched off has, from the outside, done nothing at all. Say so in the
+        // result rather than letting the user go looking for a bug: this is the one message that explains
+        // why the character did not change.
+        if (prepared.Preview.PieceGroupName is { } gate)
+            return new(true, true, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
+                "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want "
+              + "under \"{3}\" in Penumbra, which is now open on this mod."),
+                dirName, prepared.Pieces, tail, gate));
+
         return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Ok.Fmt",
             "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen "
           + "in Penumbra, and every one you select is worn at once."),

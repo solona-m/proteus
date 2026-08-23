@@ -475,6 +475,10 @@
     "message": "（なし）",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "パーツはすべてオフの状態でインポートされます。インポート後、Penumbraの「{0}」で使いたいものにチェックを入れてください。それまでは何も着用されません。",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "MODパックを選択",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "メッシュを持つオプション：{1}件中{0}件",
+    "message": "パーツ：{1}個中{0}個",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nスキップ：{1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0}種族",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "「{0}」をインポートしました — パーツ：{1}{2}。有効化してPenumbraで開きました。オプションの選択はPenumbraで行い、選択したものはすべて同時に着用されます。",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": "（スキップ：{0}）",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "「{0}」をインポートしました — パーツ：{1}{2}。すべてオフの状態です。Penumbra（このMODを開いています）の「{3}」で使いたいものにチェックを入れてください。",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "このパックはオプションに属さないモデルを差し替えています。そのモデルは常時有効なパーツとしてインポートされ、MODが有効な間は常に追加されます。",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": "（スキップ：{0}）",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

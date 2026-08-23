@@ -475,6 +475,10 @@
     "message": "(нет)",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "Детали прибывают ВЫКЛЮЧЕННЫМИ. После импорта отметьте нужные в «{0}» в Penumbra — до этого ничего не надевается.",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "Выбрать пакет мода",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "Опций с мешами: {0} из {1}",
+    "message": "Детали: {0} из {1}",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nПропущено: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "рас: {0}",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "Импортировано «{0}» — деталей: {1}{2}. Мод включён и открыт в Penumbra. Опции выбираются в Penumbra, и все выбранные надеваются одновременно.",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": " (пропущено: {0})",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "Импортировано «{0}» — деталей: {1}{2}. Они ВЫКЛЮЧЕНЫ: отметьте нужные в «{3}» в Penumbra, которая уже открыта на этом моде.",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "Этот пакет перенаправляет модель вне какой-либо опции. Она импортируется как всегда активная деталь — и будет добавляться, пока мод включён.",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (пропущено: {0})",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {

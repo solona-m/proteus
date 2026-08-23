@@ -475,6 +475,10 @@
     "message": "（无）",
     "description": ""
   },
+  "Content.AllOff.Fmt": {
+    "message": "部件导入时均为关闭状态。导入后请在 Penumbra 的“{0}”中勾选你想要的部件——在那之前不会穿戴任何东西。",
+    "description": ""
+  },
   "Content.Browse.Btn": {
     "message": "浏览模组包",
     "description": ""
@@ -508,7 +512,7 @@
     "description": ""
   },
   "Content.PieceCount.Fmt": {
-    "message": "含网格的选项：{1} 个中的 {0} 个",
+    "message": "部件：{1} 个中的 {0} 个",
     "description": ""
   },
   "Content.Pill": {
@@ -521,6 +525,10 @@
   },
   "Content.Problem.Fmt": {
     "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} 个种族",
     "description": ""
   },
   "Content.ReadFailed.Fmt": {
@@ -579,12 +587,12 @@
     "message": "已导入“{0}”——部件：{1}{2}。已启用并在 Penumbra 中打开。其选项在 Penumbra 中选择，所选的全部会同时穿戴。",
     "description": ""
   },
-  "ContentImport.Result.SkippedTail.Fmt": {
-    "message": "（已跳过：{0}）",
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "已导入“{0}”——部件：{1}{2}。它们均为关闭状态：请在已打开此模组的 Penumbra 中，于“{3}”内勾选你想要的部件。",
     "description": ""
   },
-  "ContentImport.Warn.DefaultModel": {
-    "message": "此包在所有选项之外重定向了一个模型。该模型将作为常驻部件导入——只要模组启用就会被追加。",
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": "（已跳过：{0}）",
     "description": ""
   },
   "ContentImport.Warn.GroupType.Fmt": {
