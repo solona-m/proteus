@@ -94,7 +94,14 @@ public class SecondSkinWriterVerbatimTests
     // a synthesised model. Absent on other machines, in which case these tests no-op like the ones above.
     private const string ContentPack = @"E:\ModPacks\Neolithe Piercings for Proteus.pmp";
     private const string ContentEntry = "top/belly button heart/chara/equipment/e0000/model/c0201e0000_top.mdl";
-    private const string ContentMaterial = "/mt_c0201b0001_a.mtrl";
+
+    /// <summary>
+    /// The material the pack's own mesh is bound to, read OUT of the model rather than written down here:
+    /// which material that is belongs to the pack's author, and a hard-coded name turns a legitimate
+    /// rebind into a red test.
+    /// </summary>
+    private static string ContentMaterialOf(byte[] model)
+        => SecondSkinService.UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0];
 
     private static byte[]? ReadPackEntry(string entry)
     {
@@ -126,7 +133,7 @@ public class SecondSkinWriterVerbatimTests
             new SecondSkinLayer
             {
                 MaterialName = "/mt_c0201a0001_rir_b.mtrl",
-                Geometry = Geometry(content, ContentMaterial),
+                Geometry = Geometry(content, ContentMaterialOf(content)),
             },
         };
 
@@ -161,7 +168,7 @@ public class SecondSkinWriterVerbatimTests
             new SecondSkinLayer
             {
                 MaterialName = "/mt_c0201a0053_rir_a.mtrl",
-                Geometry = Geometry(content, ContentMaterial),
+                Geometry = Geometry(content, ContentMaterialOf(content)),
             },
         };
 

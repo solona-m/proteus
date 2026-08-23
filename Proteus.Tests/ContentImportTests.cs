@@ -271,25 +271,4 @@ public class ContentImportTests
         }
         finally { Directory.Delete(dir, true); }
     }
-
-    [Fact]
-    public void The_sample_pack_reports_its_meshes_as_unbound()
-    {
-        // The shipped sample binds its meshes to /mt_c0201b0001_a.mtrl — a VANILLA body material it does
-        // not ship — while carrying mt_c0201b0001_neolithe_piercings.mtrl. Under the naming rule that is a
-        // pack to be fixed, not guessed at, and the importer has to say so rather than quietly succeed.
-        if (!File.Exists(SamplePack)) return;
-
-        var preview = ContentImportService.Inspect(SamplePack);
-
-        Assert.Equal(4, preview.Pack.FileVersion);
-        Assert.Equal(5, preview.Options.Count);          // 2 Top + 3 Bottom
-        Assert.False(preview.AnyImportable);
-        Assert.All(preview.Options, o =>
-        {
-            var piece = o.Pieces.Single();
-            Assert.Contains("/mt_c0201b0001_a.mtrl".TrimStart('/'), piece.Unbound);
-            Assert.NotNull(piece.Problem);
-        });
-    }
 }

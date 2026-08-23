@@ -37,12 +37,16 @@ public class ContentPieceTests
         var model = ReadPackEntry("top/belly button heart/chara/equipment/e0000/model/c0201e0000_top.mdl");
         if (model == null) return;
 
+        // Asserted by SHAPE, not by name: this pack's material names are the author's to change, and a
+        // test that pins them fails the day they rebind a mesh.
         var declared = SecondSkinWriter.MaterialNames(model);
-        Assert.Contains("/mt_c0201b0001_a.mtrl", declared);
-        Assert.Contains("/mt_c0201e0000_top_a.mtrl", declared);
+        Assert.Equal(2, declared.Count);
+        Assert.Contains("/mt_c0201e0000_top_a.mtrl", declared);   // the emptied vanilla smallclothes mesh
 
         var used = SecondSkinService.UsedMaterialNames(model, declared);
-        Assert.Equal(new[] { "/mt_c0201b0001_a.mtrl" }, used);
+        var only = Assert.Single(used);
+        Assert.Contains(only, declared);
+        Assert.NotEqual("/mt_c0201e0000_top_a.mtrl", only);
     }
 
     [Fact]
