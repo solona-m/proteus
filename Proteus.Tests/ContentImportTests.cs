@@ -92,6 +92,100 @@ public class ContentImportTests
         });
     }
 
+    /// <summary>
+    /// A v4 pack with one option Proteus can take over and one it must refuse: "Bound" ships the material
+    /// its mesh names, "Orphan" does not.
+    /// <para/>
+    /// Both options claim the SAME game path from different files — the shape the sample piercings pack
+    /// uses, and the whole reason this feature exists, since Penumbra can only ever apply one of them.
+    /// Giving them separate paths would leave the strip's real hazard untested: an imported option putting
+    /// a path into the taken set and a refused option losing its redirect for sharing it.
+    /// </summary>
+    private static string MixedPack(string dir)
+    {
+        var bound  = SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_bound.mtrl",  new SyntheticModel.Sub(0)));
+        var orphan = SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_orphan.mtrl", new SyntheticModel.Sub(0)));
+
+        var manifest = """
+        {
+          "FileVersion": 4,
+          "Name": "Mixed",
+          "Author": "Someone",
+          "DefaultData": { "Files": { "chara/x/mt_bound.mtrl": "common\\bound.mtrl" } },
+          "Groups": [
+            {
+              "Name": "Pieces",
+              "Type": "Multi",
+              "Options": [
+                { "Name": "Bound",  "Files": { "chara/equipment/e0000/model/c0201e0000_top.mdl": "bound\\model.mdl" } },
+                { "Name": "Orphan", "Files": { "chara/equipment/e0000/model/c0201e0000_top.mdl": "orphan\\model.mdl" } }
+              ]
+            }
+          ]
+        }
+        """;
+        return WritePack(dir, manifest, new[]
+        {
+            ("common/bound.mtrl", new byte[64]),
+            ("bound/model.mdl", bound),
+            ("orphan/model.mdl", orphan),
+        });
+    }
+
+    /// <summary>
+    /// The strip takes over only what the sidecar names.
+    /// <para/>
+    /// It used to remove EVERY .mdl redirect in the pack, including those of pieces this import refused —
+    /// so an option whose mesh named a material the pack does not ship stopped being published by Penumbra
+    /// and was never picked up by Proteus. It rendered nothing at all after an import that reported it, in
+    /// one line, as skipped.
+    /// </summary>
+    [Fact]
+    public void An_option_the_import_refuses_keeps_its_own_model_redirect()
+    {
+        var dir = TempDir();
+        try
+        {
+            var preview = ContentImportService.Inspect(MixedPack(dir));
+
+            // Precondition: exactly one of the two is importable. Without this the assertions below could
+            // pass on a pack where nothing was refused in the first place.
+            var refused = Assert.Single(preview.Units, u => !u.Import);
+            Assert.Equal("Orphan", refused.Option);
+            // NotNull first: !Import also admits a plan with no problem and no bindings, and Assert.Contains
+            // on a null string throws ArgumentNullException instead of failing as an assertion.
+            var problem = Assert.Single(refused.Variants).Problem;
+            Assert.NotNull(problem);
+            Assert.Contains("mt_orphan.mtrl", problem);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Mixed", "Someone", preview);
+
+            var options = (JsonArray)((JsonArray)((JsonObject)JsonNode.Parse(
+                File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)))!)["Groups"]!)[0]!["Options"]!;
+
+            JsonObject Files(string name) => (JsonObject)options
+                .First(o => (string?)o!["Name"] == name)!["Files"]!;
+
+            // Taken over: the sidecar names it, so Penumbra must not publish it too.
+            Assert.Empty(Files("Bound"));
+
+            // Refused: nothing else is going to publish this, so the redirect stays exactly as authored —
+            // even though the option beside it was taken over under the very same game path.
+            Assert.Equal("orphan\\model.mdl",
+                (string?)Files("Orphan")["chara/equipment/e0000/model/c0201e0000_top.mdl"]);
+
+            // And the sidecar carries only the piece that was taken over.
+            var sidecar = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "metadata.json")),
+                ProteusJson.MetadataWrite)!;
+            var piece = Assert.Single(sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces));
+            // Keyed by race, since the path carries c0201 — read it back the way the composite does.
+            Assert.Contains("bound", piece.ModelFor("0201"), StringComparison.OrdinalIgnoreCase);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private static string TempDir()
     {
         var d = Path.Combine(Path.GetTempPath(), "proteus-content-" + Guid.NewGuid().ToString("N"));

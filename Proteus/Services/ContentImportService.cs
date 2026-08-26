@@ -428,7 +428,7 @@ public sealed class ContentImportService
 
         try
         {
-            WriteMod(root, modName, author, preview);
+            WriteMod(root, modName, author, preview, log);
         }
         catch (Exception ex)
         {
@@ -446,7 +446,8 @@ public sealed class ContentImportService
     /// Unpack the archive, strip the model redirects from the manifests and write the Proteus sidecar.
     /// Pure filesystem work, no IPC, so it can be exercised offline against a temp directory.
     /// </summary>
-    internal static void WriteMod(string root, string modName, string author, ImportPreview preview)
+    internal static void WriteMod(
+        string root, string modName, string author, ImportPreview preview, IPluginLog? log = null)
     {
         Directory.CreateDirectory(root);
 
@@ -463,7 +464,14 @@ public sealed class ContentImportService
                 e.ExtractToFile(dest, overwrite: true);
             }
 
-        StripModelRedirects(root, preview.Pack);
+        // The redirects the sidecar is about to name — and ONLY those. A unit this import refused keeps its
+        // own, because Proteus is not taking it over and something has to publish it. Keyed on game path AND
+        // file, so an option sharing a path with an imported one is judged on its own redirect.
+        var taken = preview.Units
+            .Where(u => u.Import)
+            .SelectMany(u => u.Variants.Where(v => v.Import).Select(v => RedirectKey(v.GamePath, v.Entry)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        StripModelRedirects(root, preview.Pack, taken, log);
 
         // The group that makes individual pieces pickable, written with EVERY option off. An imported
         // outfit therefore contributes nothing until the user asks for a piece, which is also what keeps it
@@ -480,60 +488,107 @@ public sealed class ContentImportService
     }
 
     /// <summary>
-    /// Remove every <c>.mdl</c> redirect from the copied manifests, in whichever layout the pack uses.
-    /// The files themselves stay — the sidecar names them — so this only changes who publishes them: not
-    /// Penumbra (which can only ever pick ONE option per game path, and would replace the wearer's body
-    /// with a mesh that has had its vanilla geometry emptied out) but Proteus, which appends them.
+    /// Remove the <c>.mdl</c> redirects Proteus is taking over from the copied manifests, in whichever
+    /// layout the pack uses. The files themselves stay — the sidecar names them — so this only changes who
+    /// publishes them: not Penumbra (which can only ever pick ONE option per game path, and would replace
+    /// the wearer's body with a mesh that has had its vanilla geometry emptied out) but Proteus, which
+    /// appends them.
+    /// <para/>
+    /// Only the redirects in <paramref name="taken"/> — the models that actually reached the sidecar.
+    /// Stripping every <c>.mdl</c> regardless was silent sabotage of the pieces this import REFUSED: a pack
+    /// with one option whose mesh names a material it does not ship has that option reported as skipped and
+    /// left out of the sidecar, and stripping it too meant Penumbra stopped publishing it while Proteus
+    /// never picked it up. An option that worked before the import rendered nothing after it, and the
+    /// preview's own "N skipped" line was the only trace.
+    /// <para/>
+    /// A redirect is game path AND archive entry, not the path alone. Two options claiming ONE game path
+    /// from different files is not an edge case — it is the shape this whole feature exists for, and the
+    /// sample pack is built that way. Matching on the path meant an imported option put that path in the
+    /// set and a refused option sharing it lost its redirect on the strength of its neighbour's success,
+    /// which is the same silent sabotage one level down. Two options naming the same path and the same file
+    /// cannot disagree, since they plan identically, so the pair is a safe key.
     /// </summary>
-    private static void StripModelRedirects(string root, PenumbraPackage.Contents pack)
+    private static void StripModelRedirects(
+        string root, PenumbraPackage.Contents pack, IReadOnlySet<string> taken, IPluginLog? log)
     {
         if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
         {
-            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), manifest =>
+            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log, manifest =>
             {
-                if (manifest["DefaultData"] is JsonObject dd) StripFiles(dd);
+                if (manifest["DefaultData"] is JsonObject dd) StripFiles(dd, taken);
                 if (manifest["Groups"] is JsonArray groups)
                     foreach (var g in groups)
                         if (g is JsonObject go)
-                            StripGroup(go);
+                            StripGroup(go, taken);
             });
             return;
         }
 
-        EditJson(Path.Combine(root, PenumbraModMeta.LegacyDefaultMod), StripFiles);
+        EditJson(Path.Combine(root, PenumbraModMeta.LegacyDefaultMod), log, o => StripFiles(o, taken));
         foreach (var group in pack.Groups)
             if (group.Entry != null)
-                EditJson(Path.Combine(root, group.Entry.Replace('/', Path.DirectorySeparatorChar)), StripGroup);
+                EditJson(Path.Combine(root, group.Entry.Replace('/', Path.DirectorySeparatorChar)), log,
+                    o => StripGroup(o, taken));
     }
 
-    private static void StripGroup(JsonObject group)
+    private static void StripGroup(JsonObject group, IReadOnlySet<string> taken)
     {
         if (group["Options"] is JsonArray opts)
             foreach (var o in opts)
-                if (o is JsonObject oo) StripFiles(oo);
+                if (o is JsonObject oo) StripFiles(oo, taken);
         // A Combining group's redirects hang off Containers rather than Options. Nothing here imports one,
         // but a pack can mix kinds, and leaving a model redirect behind in one would put the two publishers
         // back in conflict.
         if (group["Containers"] is JsonArray containers)
             foreach (var c in containers)
-                if (c is JsonObject co) StripFiles(co);
+                if (c is JsonObject co) StripFiles(co, taken);
     }
 
-    private static void StripFiles(JsonObject owner)
+    private static void StripFiles(JsonObject owner, IReadOnlySet<string> taken)
     {
         if (owner["Files"] is not JsonObject files) return;
-        var doomed = files.Where(p => p.Key.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Key).ToList();
+        var doomed = files
+            .Where(p => p.Value?.GetValue<string>() is { } entry
+                     && taken.Contains(RedirectKey(p.Key, entry)))
+            .Select(p => p.Key)
+            .ToList();
         foreach (var k in doomed) files.Remove(k);
     }
 
-    private static void EditJson(string path, Action<JsonObject> edit)
+    /// <summary>
+    /// One manifest redirect, as a comparable key. Both halves normalised, because a manifest writes its
+    /// archive entries with backslashes while the plans carry them with forward ones, and neither side
+    /// guarantees case. NUL separates them: it cannot occur in either a game path or an archive entry, so
+    /// no pair of halves can be spelled two ways.
+    /// </summary>
+    private static string RedirectKey(string gamePath, string entry)
+        => PenumbraPackage.Normalize(gamePath) + '\0' + PenumbraPackage.Normalize(entry);
+
+    /// <summary>
+    /// Edit one manifest in place, or say why it could not be.
+    /// <para/>
+    /// A failure here is NOT harmless and must not pass in silence: leaving a model redirect behind is the
+    /// exact conflict this whole import exists to prevent, and its symptom in game — Penumbra replacing the
+    /// body with a mesh whose vanilla geometry has been emptied out — points nowhere near a manifest that
+    /// would not parse.
+    /// </summary>
+    private static void EditJson(string path, IPluginLog? log, Action<JsonObject> edit)
     {
         if (!File.Exists(path)) return;
         JsonNode? node;
         try { node = JsonNode.Parse(File.ReadAllText(path)); }
-        catch (JsonException) { return; }
-        if (node is not JsonObject root) return;
+        catch (Exception ex)
+        {
+            log?.Warning(ex, "[Proteus] content import: {0} could not be read, so its model redirects are "
+                           + "still Penumbra's — that pack's pieces will fight over their game paths", path);
+            return;
+        }
+        if (node is not JsonObject root)
+        {
+            log?.Warning("[Proteus] content import: {0} is not a JSON object, so its model redirects are "
+                       + "still Penumbra's — that pack's pieces will fight over their game paths", path);
+            return;
+        }
         edit(root);
         PenumbraModMeta.AtomicWrite(path, root.ToJsonString(ProteusJson.MetadataWrite));
     }

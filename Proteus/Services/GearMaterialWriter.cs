@@ -387,7 +387,16 @@ public static class GearMaterialWriter
     /// The offset is read from the material's own header rather than assumed, which is the whole reason the
     /// row writer works on a pack's authored material as well as on a freshly built one.
     /// </summary>
-    private static int ColorTableStart(byte[] mtrl)
+    /// <summary>
+    /// Byte offset of the colour table, or -1 when this material has none that can be written.
+    /// <para/>
+    /// Internal rather than private because the colour PANEL has to ask the same question, and asking it a
+    /// second way was a bug: it tested the DECLARED data-set size out of the header while this tests the
+    /// offset against the actual buffer. A material whose header promises a full table but whose file is
+    /// short passed there and fails here, so the grid drew live, took edits, and
+    /// <see cref="PatchColorTable"/> returned the material untouched with nothing on screen saying why.
+    /// </summary>
+    internal static int ColorTableStart(byte[] mtrl)
     {
         if (mtrl.Length < 16) return -1;
         byte texCount = mtrl[12], uvCount = mtrl[13], colorSetCount = mtrl[14], addDataSize = mtrl[15];

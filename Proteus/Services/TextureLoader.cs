@@ -515,10 +515,13 @@ public class TextureLoader
         // could not be read" — two states that look identical in the paths alone and mean opposite things
         // to anything deciding what a colour row does.
         //
-        // The colour-table test is the same one GearMaterialWriter.PatchColorTable refuses on: a declared
-        // colour set AND a data set big enough for the 32×64 rows. A material failing it has no rows to
-        // sample, so a null Index there says nothing about which row is live.
-        bool hasColorTable = colorSetCount > 0 && dataSetSize >= 32 * 64;
+        // The colour-table test is LITERALLY the one PatchColorTable refuses on, called rather than
+        // restated. Restating it drifted: this asked whether the header DECLARED a big enough data set,
+        // while the writer resolves the table's offset and checks it against the actual buffer. A material
+        // promising a full table in a file too short to hold one passed here and failed there — so the grid
+        // drew live, took a colour, and the write returned the material byte-for-byte unchanged, which is
+        // exactly the "controls with nothing behind them" case the warning above exists to prevent.
+        bool hasColorTable = GearMaterialWriter.ColorTableStart(b) >= 0;
         return new MtrlTexturePaths(diffuse, normal, mask, index, Parsed: true, HasColorTable: hasColorTable);
     }
 

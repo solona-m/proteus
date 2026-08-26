@@ -2190,8 +2190,23 @@ public class StatusWindow : Window
     /// </summary>
     private ContentIndex ContentIndexFor(OverlayEntry entry, string mtrlRel, string selectionStamp)
     {
-        var cacheKey = entry.ModDirectory + "|" + mtrlRel + "|" + selectionStamp;
+        var prefix = entry.ModDirectory + "|" + mtrlRel + "|";
+        var cacheKey = prefix + selectionStamp;
         if (_contentIndexCache.TryGetValue(cacheKey, out var hit)) return hit;
+
+        // A miss means this material's answer under the OLD selection is now dead weight, so drop it before
+        // adding the new one — one entry per material rather than one per selection ever tried.
+        //
+        // The stamp stays the whole mod's selection, deliberately. Narrowing it to the options that can
+        // redirect THIS material's index would need the material parsed to know which texture it names,
+        // which is the work being cached; and a stale row filter is worse than a re-decode, because it dims
+        // the row that actually renders. So the cost of a checkbox is still one decode per material shown —
+        // what this stops is those decodes' results piling up, one set per combination, until the window
+        // happens to reappear.
+        foreach (var stale in _contentIndexCache.Keys
+                     .Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+            _contentIndexCache.Remove(stale);
 
         var result = new ContentIndex(null, null, ContentIndexState.Unknown);
         try
