@@ -114,7 +114,20 @@ public sealed class SecondSkinService
         // recovering, so they are the only ones PrimeUpstreamCache should ever unpublish to go looking (see
         // there). A CARRIER host is replaced outright and its base is never read, so priming it would blank
         // the shell for the width of the prime and learn nothing.
-        List<string> AppendHostModelPaths);
+        List<string> AppendHostModelPaths,
+        // Mod directory → the content materials of that mod which back at least one DRAWN mesh this
+        // composite, as paths relative to the mod root. What the colour editor should offer a grid for.
+        //
+        // The editor groups its tabs by the materials a piece DECLARES, which is the larger set: a material
+        // bound only to meshes with no LOD0 vertices is declared and never drawn, and a tab for one would
+        // save rows that reach nothing and offer a glow button with no target.
+        //
+        // DRAWN, deliberately, not "placed on a host". A unit that found no free material slot is still a
+        // real material the user can see on their character — the fix is another ring, which the unhosted
+        // notice already tells them — and taking its colour grid away would be the same silent nothing in
+        // the other direction. Keyed by mod so the editor's per-frame lookup is a dictionary hit rather
+        // than a filter over the whole set.
+        Dictionary<string, HashSet<string>> ContentMaterials);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell for it is cut from, and the two spaces that geometry
@@ -149,6 +162,9 @@ public sealed class SecondSkinService
     /// </summary>
     private sealed record ContentUnit(
         byte[] Mtrl,
+        /// <summary>The source .mtrl, relative to the mod root — what the colour editor knows this material
+        /// by, and therefore what it has to be told was published.</summary>
+        string MtrlRel,
         Dictionary<int, GearColorRow>? Rows,
         ShellSurfaceKey Surface,
         List<ContentGeometry> Geometries,
@@ -220,11 +236,6 @@ public sealed class SecondSkinService
     /// </summary>
     internal static string ContentGeometryKey(string modelRel, string materialLeaf)
         => modelRel + '\u0000' + materialLeaf;
-
-    /// <summary>The Penumbra mod folder an entry lives in — the parent of its Proteus/ sidecar.</summary>
-    private static string? ModRootOf(OverlayEntry entry)
-        => Path.GetDirectoryName(
-            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
     /// <summary>
     /// The material names of a model's LOD0 meshes that actually have vertices, in declaration order.
@@ -517,6 +528,9 @@ public sealed class SecondSkinService
         // can hold SEVERAL: a mod/option may carry more than one gear overlay, all baking the same shared
         // colour table, so a row's glow must reach every one of their shell materials.
         var shellMaterials = new Dictionary<(string, string?, string?), List<string>>();
+        // Per mod, the content materials backing a drawn mesh — see Result.ContentMaterials for why the
+        // declared set is not good enough, and why this is not the hosted set either.
+        var contentMaterials = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
         var modelsDir = Path.Combine(outputRoot, "models");
         var materialsDir = Path.Combine(outputRoot, "materials");
@@ -1155,7 +1169,7 @@ public sealed class SecondSkinService
         {
             var (cEntry, rc) = contentLayers![i];
             var piece = rc.Piece;
-            var modRoot = ModRootOf(cEntry);
+            var modRoot = cEntry.ModRoot;
             // The equipment code the wearer loads gear at — what a per-race pack keys its variants by.
             var wearerCode = equipCode;
             var modelRel = ResolveVariant(piece, wearerCode);
@@ -1234,9 +1248,17 @@ public sealed class SecondSkinService
 
                 if (!unitByKey.TryGetValue(key, out var unit))
                 {
-                    unitByKey[key] = unit = new ContentUnit(mtrl, rows, piece.SurfaceKey, [], []);
+                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, piece.SurfaceKey, [], []);
                     contentUnits.Add(unit);
                 }
+
+                // Recorded HERE, where the material is known to back a drawn mesh — not down at the emit
+                // loop, which only sees the units a host had room for. A piece the user can see but that
+                // spilled past the material budget still needs its colour grid; see Result.ContentMaterials.
+                if (!contentMaterials.TryGetValue(cEntry.ModDirectory, out var modMats))
+                    contentMaterials[cEntry.ModDirectory] =
+                        modMats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                modMats.Add(rel);
 
                 // Same mesh of the same model twice — an option listing a piece it already lists, or two
                 // options sharing one file — is still drawn once.
@@ -1993,7 +2015,7 @@ public sealed class SecondSkinService
         if (hostModelPaths.Count == 0) return null;
 
         return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                          hostModelPaths, appendHostModelPaths);
+                          hostModelPaths, appendHostModelPaths, contentMaterials);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');

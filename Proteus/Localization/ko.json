@@ -495,12 +495,28 @@
     "message": "메시 {0}, 정점 {1}",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "이 머티리얼의 인덱스 텍스처가 완전히 투명해서 색상 행을 하나도 선택하지 않습니다. 아래 모든 행을 편집할 수 있지만, 부품은 텍스처에서만 색상을 가져옵니다.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "이 머티리얼이 지정한 인덱스 텍스처를 Proteus가 읽지 못해 어느 행이 적용되는지 알 수 없습니다. 아래 모든 행을 편집할 수 있지만 인덱스가 선택한 행만 반영됩니다.",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "또는 자체 메시를 포함한 Penumbra 팩(.pmp)을 가져옵니다. Proteus는 팩을 복사한 뒤 Penumbra가 그 모델을 적용하지 못하게 하고, 대신 선택한 각 옵션의 메시를 캐리어 장신구에 덧붙입니다. 덕분에 같은 게임 경로를 두고 충돌하던 옵션들을 한꺼번에 착용할 수 있습니다.",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "머티리얼 {0}개",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "이 머티리얼에는 색상 테이블이 없어 편집할 행이 없습니다. 아래에서 무엇을 바꿔도 부품에 전달되지 않으며, 색상은 텍스처에서만 결정됩니다.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "이 머티리얼에는 인덱스 텍스처가 없어 모두 {0}행을 사용합니다.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "해당 팩을 읽을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행 {1}열을 읽습니다. 다른 행은 샘플링되지 않아 흐리게 표시되며, 이 행의 반대쪽 열을 만져도 아무 일도 일어나지 않습니다.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행을 읽습니다. 나머지 행은 샘플링되지 않아 흐리게 표시됩니다.",
     "description": ""
   },
   "Content.SharedBy.Fmt": {

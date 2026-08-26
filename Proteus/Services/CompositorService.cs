@@ -168,6 +168,22 @@ public class CompositorService : IDisposable
     public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
         => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
 
+    // Mod directory → the content materials of that mod backing a drawn mesh in the last composite, as
+    // paths relative to the mod root. Same publish contract as _shellMaterials: assembled on the composite
+    // thread, swapped in as one reference, never mutated afterwards.
+    private volatile Dictionary<string, HashSet<string>> _contentMaterials = new();
+
+    /// <summary>
+    /// The content materials of <paramref name="modDir"/> that the last composite found backing a drawn
+    /// mesh, or null when it found none — which is also what a mod that has not been composited yet looks
+    /// like, so callers must treat null as "no information" rather than "nothing is live".
+    /// <para/>
+    /// Includes materials whose unit could not be given a host: the piece is real and on screen, it just
+    /// spilled past the material budget, and its colours are still the user's to set.
+    /// </summary>
+    public IReadOnlySet<string>? GetLiveContentMaterials(string modDir)
+        => _contentMaterials.TryGetValue(modDir, out var mats) ? mats : null;
+
     /// <summary>
     /// What the last shell build published, split by kind, for the drawn check after the redraw — see
     /// <see cref="SchedulePostRedrawShellCheck"/>.
@@ -5023,6 +5039,7 @@ public class CompositorService : IDisposable
             _needFullRedraw = false;
             _secondSkinActive = false;
             _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
+            _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
             _shellDrawnCheck = null;   // same: no shell this composite means nothing to check for on-screen
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
@@ -5315,6 +5332,7 @@ public class CompositorService : IDisposable
                             else if (shells.ShellChanged)
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             _shellMaterials = shells.ShellMaterials;
+                            _contentMaterials = shells.ContentMaterials;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
                             _shellDrawnCheck = new ShellDrawnProbe(

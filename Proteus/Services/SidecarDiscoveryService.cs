@@ -15,7 +15,19 @@ public record OverlayEntry(
     bool Enabled,        // current enabled state in the player's Penumbra collection
     ProteusMetadata Metadata,
     string SidecarRoot   // absolute path to the Proteus/ subfolder
-);
+)
+{
+    /// <summary>
+    /// The Penumbra mod folder this entry lives in — the parent of its <c>Proteus/</c> sidecar, and what
+    /// every path a content pack stores (models, materials, textures) is relative to.
+    /// <para/>
+    /// One place rather than four: this convention was open-coded in the compositor and three times over in
+    /// the status window, and a mod folder that failed to derive in one of them but not the others is the
+    /// kind of drift nothing would catch. Null only for a sidecar path with no parent at all.
+    /// </summary>
+    public string? ModRoot => Path.GetDirectoryName(
+        SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+}
 
 /// <summary>
 /// A single overlay descriptor paired with the color table rows that apply to it.

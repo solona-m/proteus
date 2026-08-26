@@ -117,4 +117,26 @@ public class GearMaterialWriterTests
 
         Assert.Same(Array.Empty<byte>(), GearMaterialWriter.PatchColorTable(Array.Empty<byte>(), rows));
     }
+
+    /// <summary>
+    /// The colour-table guard <see cref="MtrlTexturePaths.HasColorTable"/> reports agrees with the one
+    /// <see cref="GearMaterialWriter.PatchColorTable"/> enforces, on a REAL material.
+    /// <para/>
+    /// The two are computed from different things — the flag reads the declared data-set size, the writer
+    /// bounds-checks the actual buffer — and the colour panel decides whether to draw a live grid from the
+    /// first while the second decides whether an edit survives. They only have to agree; the parser's own
+    /// tests pin the flag, this pins that agreement where it matters.
+    /// </summary>
+    [Fact]
+    public void The_colour_table_flag_agrees_with_what_the_writer_will_accept()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        Assert.True(TextureLoader.ParseMtrlBytes(mtrl).HasColorTable);
+
+        // And the writer does in fact write to it, rather than no-opping.
+        var rows = new Dictionary<int, GearColorRow> { [0] = new() { Diffuse = (1f, 0f, 0f) } };
+        Assert.NotSame(mtrl, GearMaterialWriter.PatchColorTable(mtrl, rows));
+    }
 }

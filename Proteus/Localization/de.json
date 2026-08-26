@@ -495,12 +495,28 @@
     "message": "{0} Mesh, {1} Vertices",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "Die Index-Textur dieses Materials ist völlig transparent und wählt daher gar keine Farbzeile aus. Unten sind alle Zeilen bearbeitbar, das Teil nimmt seine Farben aber allein aus den Texturen.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "Dieses Material nennt eine Index-Textur, die Proteus nicht lesen konnte, also lässt sich nicht sagen, welche Zeilen wirken. Unten sind alle Zeilen bearbeitbar, sichtbar werden aber nur die, die der Index auswählt.",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "Oder importiere ein Penumbra-Paket (.pmp), das eigene Meshes mitbringt. Proteus kopiert es herein, hindert Penumbra daran, dessen Modelle zu veröffentlichen, und hängt stattdessen die Meshes jeder ausgewählten Option an dein Träger-Accessoire an — so lassen sich Optionen, die sonst um denselben Spielpfad streiten, alle gleichzeitig tragen.",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "{0} Materialien",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "Dieses Material hat gar keine Farbtabelle, also auch keine Zeilen zum Bearbeiten — nichts, was du unten änderst, erreicht das Teil. Seine Farben kommen allein aus den Texturen.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "Dieses Material bringt keine Index-Textur mit, es nimmt also für alles Zeile {0}.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "Dieses Paket konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — die übrigen Zeilen sind ausgegraut, weil nichts sie abtastet, und die andere Spalte dieser Zeile zu bearbeiten bewirkt ebenfalls nichts.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Seine Index-Textur liest die Zeilen {0} — die übrigen sind ausgegraut, weil nichts sie abtastet.",
     "description": ""
   },
   "Content.SharedBy.Fmt": {

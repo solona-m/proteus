@@ -510,7 +510,16 @@ public class TextureLoader
             else if (samplerId == SamplerIdMask)                          mask    = path;
             else if (samplerId == SamplerIdIndex)                         index   = path;
         }
-        return new MtrlTexturePaths(diffuse, normal, mask, index);
+        // Parsed: true only HERE, at the one exit that walked the whole file. Every bail above returns the
+        // default false, so a caller can tell "this material names no index texture" from "this material
+        // could not be read" — two states that look identical in the paths alone and mean opposite things
+        // to anything deciding what a colour row does.
+        //
+        // The colour-table test is the same one GearMaterialWriter.PatchColorTable refuses on: a declared
+        // colour set AND a data set big enough for the 32×64 rows. A material failing it has no rows to
+        // sample, so a null Index there says nothing about which row is live.
+        bool hasColorTable = colorSetCount > 0 && dataSetSize >= 32 * 64;
+        return new MtrlTexturePaths(diffuse, normal, mask, index, Parsed: true, HasColorTable: hasColorTable);
     }
 
     /// <summary>Load an on-disk .tex file as RGBA8. Returns null on failure.</summary>

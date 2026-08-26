@@ -337,6 +337,65 @@ public class ContentPieceSelectionTests
     }
 
     [Fact]
+    public void An_index_texture_says_which_colour_cell_a_material_samples()
+    {
+        static byte[] Flat(byte r, byte g, int texels = 16)
+        {
+            var b = new byte[texels * 4];
+            for (int i = 0; i < texels; i++) { b[i * 4] = r; b[i * 4 + 1] = g; b[i * 4 + 3] = 255; }
+            return b;
+        }
+
+        // The shipped piercings pack: red 0, green 0 — row 1, column B. Colouring row 16 (which is what the
+        // grid invited before it was filtered) changes a cell nothing reads, and the glow highlight, which
+        // drives the same row, does nothing either.
+        var piercings = ContentIndexTexture.Read(Flat(0, 0));
+        Assert.Equal(new[] { 1 }, piercings.Rows.ToArray());
+        Assert.Equal("B", piercings.SubRow);
+
+        // Red is the row PAIR selector: 255/17 = 15, so row 16. Green 255 is column A.
+        var silver = ContentIndexTexture.Read(Flat(255, 255));
+        Assert.Equal(new[] { 16 }, silver.Rows.ToArray());
+        Assert.Equal("A", silver.SubRow);
+        Assert.Equal(new[] { 15 }, ContentIndexTexture.Read(Flat(238, 0)).Rows.ToArray());
+
+        // Several rows in one texture are all reported, and a texture using both columns names neither —
+        // a gradient genuinely reads both, and narrowing it away would be a lie.
+        var mixed = new byte[Flat(0, 0).Length + Flat(255, 255).Length];
+        Flat(0, 0).CopyTo(mixed, 0);
+        Flat(255, 255).CopyTo(mixed, Flat(0, 0).Length);
+        var scan = ContentIndexTexture.Read(mixed);
+        Assert.Equal(new[] { 1, 16 }, scan.Rows.OrderBy(r => r).ToArray());
+        Assert.Null(scan.SubRow);
+
+        // Fully transparent texels select nothing at all.
+        Assert.Empty(ContentIndexTexture.Read(new byte[64]).Rows);
+    }
+
+    [Fact]
+    public void The_row_decode_rounds_to_the_nearest_pair_rather_than_truncating()
+    {
+        // Every exact multiple of 17 lands on its own pair — the authored case, and the one plain division
+        // already got right.
+        for (int pair = 0; pair < 16; pair++)
+            Assert.Equal(pair + 1, ContentIndexTexture.RowOf((byte)(pair * 17)));
+
+        // A value one short of the multiple is what truncation gets wrong: 254 is plainly pair 15 (row 16),
+        // but 254/17 = 14. That is not cosmetic — the editor DISABLES every row the scan doesn't name, so a
+        // one-off decode puts the only working row out of reach.
+        Assert.Equal(16, ContentIndexTexture.RowOf(254));
+        Assert.Equal(16, ContentIndexTexture.RowOf(250));
+        Assert.Equal(2,  ContentIndexTexture.RowOf(16));
+        Assert.Equal(2,  ContentIndexTexture.RowOf(18));
+
+        // Halfway rounds up, and neither end can escape the table.
+        Assert.Equal(1,  ContentIndexTexture.RowOf(0));
+        Assert.Equal(2,  ContentIndexTexture.RowOf(9));
+        Assert.Equal(1,  ContentIndexTexture.RowOf(8));
+        Assert.Equal(16, ContentIndexTexture.RowOf(255));
+    }
+
+    [Fact]
     public void ModelFor_picks_the_wearers_race()
     {
         var piece = new ContentPiece

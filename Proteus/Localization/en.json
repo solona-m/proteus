@@ -495,6 +495,14 @@
     "message": "{0} mesh, {1} verts",
     "description": "A table cell. {0} is a mesh count, {1} a vertex count. Very tight space - keep it short."
   },
+  "Content.IndexEmpty": {
+    "message": "This material's index texture is fully transparent, so it selects no colour row at all. Every row is editable below, but the piece will take its colours from the textures alone.",
+    "description": "Above a content pack's colour grid when its index texture was read fine but is fully transparent, so it selects no row."
+  },
+  "Content.IndexUnreadable": {
+    "message": "This material names an index texture Proteus couldn't read, so it can't tell which rows are live. Every row is editable below, but only the ones the index selects will show.",
+    "description": "Warning above a content pack's colour grid when its index texture cannot be read. \"Proteus\" is a plugin name - never translate it."
+  },
   "Content.Intro": {
     "message": "Or import a Penumbra pack (.pmp) that ships its own meshes. Proteus copies it in, stops Penumbra from publishing its models, and appends the meshes of every option you select onto your carrier accessory instead — so options that would fight over one game path can all be worn at once.",
     "description": "Appears in the Import tab, under the Onion pack intro. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
@@ -502,6 +510,14 @@
   "Content.Materials.Fmt": {
     "message": "{0} materials",
     "description": "A table cell, shown instead of a filename when a piece uses several materials. Very tight space."
+  },
+  "Content.NoColorTable": {
+    "message": "This material carries no colour table, so it has no rows to edit — nothing you change below will reach the piece. Its colours come from its textures alone.",
+    "description": "Warning above a content pack's colour grid when its material carries no colour table at all, so no edit can reach the piece."
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "This material ships no index texture, so it takes row {0} for everything.",
+    "description": "Above a content pack's colour grid when its material has no _id texture. {0} is a row number."
   },
   "Content.NothingUsable": {
     "message": "No option in this pack ships a mesh Proteus can append.",
@@ -522,6 +538,14 @@
   "Content.ReadFailed.Fmt": {
     "message": "Couldn't read that pack: {0}",
     "description": "Shown when the picked file is not a readable pack. {0} is the error message."
+  },
+  "Content.Samples.Fmt": {
+    "message": "Its index texture reads row {0}, column {1} — the other rows are dimmed because nothing samples them, and editing the other column of this row will do nothing either.",
+    "description": "Above a content pack's colour grid. {0} is a row number 1-16, {1} is the column letter A or B."
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Its index texture reads rows {0} — the others are dimmed because nothing samples them.",
+    "description": "Above a content pack's colour grid when its index texture selects more than one row, or one row across both columns. {0} is a comma-separated list of row numbers."
   },
   "Content.SharedBy.Fmt": {
     "message": "Shared by: {0}. Those pieces are drawn with one material, so these colours reach all of them — and rows you don't touch stay exactly as the pack's author wrote them.",

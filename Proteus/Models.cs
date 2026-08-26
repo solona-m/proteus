@@ -431,6 +431,52 @@ public static class ContentLabels
     }
 }
 
+/// <summary>
+/// Reads an <c>_id</c> (index) texture for the one thing the colour editor needs from it: which colour-table
+/// cell the material actually samples.
+/// <para/>
+/// Pure, and out of the drawing code, because the two conventions it encodes are exactly the ones that made
+/// a content pack look broken — a user colouring row 16 while the pack's index pointed at row 1 saw nothing
+/// change and no glow, with no way to tell which of the two was at fault.
+/// </summary>
+public static class ContentIndexTexture
+{
+    /// <summary>
+    /// Rows (1-based) the texture selects, and the sub-row column when every sampled texel agrees on one.
+    /// <para/>
+    /// Red picks the row pair — 16 pairs spread over 0–255, so <c>red / 17</c> — and green blends sub-row A
+    /// at 255 against B at 0. Fully transparent texels select nothing and are skipped. A null
+    /// <paramref name="SubRow"/> means the texture genuinely uses both columns (a gradient), which is not
+    /// something to narrow away. An empty <paramref name="Rows"/> means the texture was read and selects
+    /// nothing, which is NOT the same as failing to read it.
+    /// </summary>
+    public readonly record struct Scan(HashSet<int> Rows, string? SubRow);
+
+    /// <summary>
+    /// The row pair a red value names, 1–16.
+    /// <para/>
+    /// ROUNDED, not truncated. The encoding puts pair <c>n</c> at <c>n * 17</c>, so plain division is exact
+    /// only on the multiples — 254 truncates to pair 14 when the author plainly meant 15, and anything that
+    /// has been through a lossy step lands a row off. That matters more than it reads: the editor DISABLES
+    /// the rows this doesn't name, so a one-off decode doesn't merely mislabel a row, it puts the working
+    /// one out of reach.
+    /// </summary>
+    public static int RowOf(byte red) => Math.Clamp((red + 8) / 17 + 1, 1, 16);
+
+    public static Scan Read(byte[] rgba)
+    {
+        var rows = new HashSet<int>();
+        bool anyA = false, anyB = false;
+        for (int i = 0; i + 3 < rgba.Length; i += 4)
+        {
+            if (rgba[i + 3] == 0) continue;
+            rows.Add(RowOf(rgba[i]));
+            if (rgba[i + 1] > 127) anyA = true; else anyB = true;
+        }
+        return new Scan(rows, anyA == anyB ? null : anyA ? "A" : "B");
+    }
+}
+
 /// <summary>Maps one Penumbra option group to per-option geometry.</summary>
 public class ContentOptionGroup
 {
@@ -450,11 +496,25 @@ public class ContentOptionGroup
 /// index on skin is Proteus's own concept, not something the material declares. Defaulted so the older
 /// three-argument construction sites keep working.
 /// </summary>
+/// <param name="Parsed">
+/// Whether the walk actually reached the sampler array. The parser is fail-open by design — a truncated
+/// file, a table running past the end, a shader block it cannot step to, all return "nothing found" rather
+/// than throwing — so a null <paramref name="Index"/> alone cannot tell "this material declares no index
+/// sampler" from "Proteus could not read this material". Callers that act on the ABSENCE of a texture must
+/// check this first; callers that only use the paths they got can ignore it.
+/// </param>
+/// <param name="HasColorTable">
+/// Whether the material carries a Dawntrail 32×64 colour table at all. A material without one has no rows
+/// to select, so nothing may claim which row it samples — and any colour edit aimed at it is discarded by
+/// <c>GearMaterialWriter.PatchColorTable</c>, which no-ops on exactly this shape.
+/// </param>
 public record MtrlTexturePaths(
     string? Diffuse,
     string? Normal,
     string? Mask,
-    string? Index = null
+    string? Index = null,
+    bool Parsed = false,
+    bool HasColorTable = false
 );
 
 // ── Color table types ────────────────────────────────────────────────────────

@@ -495,12 +495,28 @@
     "message": "网格 {0}，顶点 {1}",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "此材质的索引贴图完全透明，因此它不选择任何颜色行。下方每一行都可编辑，但该部件将仅从贴图获取颜色。",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "此材质指定了 Proteus 无法读取的索引贴图，因此无法判断哪些行有效。下方所有行均可编辑，但只有索引选中的行才会生效。",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "或者导入自带网格的 Penumbra 包（.pmp）。Proteus 会将其复制进来，阻止 Penumbra 发布其模型，转而把你所选每个选项的网格追加到承载饰品上——这样原本会争抢同一游戏路径的选项就能同时穿戴。",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "{0} 个材质",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "此材质没有颜色表，因此没有可编辑的行——您在下方做的任何修改都不会影响该部件。它的颜色仅来自贴图。",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "此材质未提供索引贴图，因此全部使用第 {0} 行。",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "无法读取该包：{0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "其索引贴图读取第 {0} 行、{1} 列——其余行因为无人采样而变灰，修改本行的另一列也同样不会生效。",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "其索引贴图读取第 {0} 行——其余行因为无人采样而变灰。",
     "description": ""
   },
   "Content.SharedBy.Fmt": {

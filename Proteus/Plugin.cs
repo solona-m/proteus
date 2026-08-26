@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 440;
+    public const int BuildNumber = 444;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -150,7 +150,7 @@ public sealed class Plugin : IDalamudPlugin
         var contentImport = new ContentImportService(penumbra, compositor, log);
         var modExport = new ModExportService(penumbra, log);
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
-            modCreation, onionImport, contentImport, modExport);
+            modCreation, onionImport, contentImport, modExport, textureLoader);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);

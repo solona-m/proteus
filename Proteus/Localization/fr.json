@@ -495,12 +495,28 @@
     "message": "{0} maillage, {1} sommets",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "La texture d'index de ce matériau est entièrement transparente : elle ne sélectionne donc aucune ligne de couleur. Toutes les lignes sont modifiables ci-dessous, mais la pièce tirera ses couleurs des seules textures.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "Ce matériau désigne une texture d'index que Proteus n'a pas pu lire ; impossible de dire quelles lignes sont actives. Toutes les lignes sont modifiables ci-dessous, mais seules celles que l'index sélectionne apparaîtront.",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "Ou importez un pack Penumbra (.pmp) qui fournit ses propres maillages. Proteus le copie, empêche Penumbra de publier ses modèles, et ajoute à la place les maillages de chaque option sélectionnée sur votre accessoire porteur — ainsi, des options qui se disputeraient un même chemin de jeu peuvent toutes être portées en même temps.",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "{0} matériaux",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "Ce matériau ne comporte aucune table de couleurs, donc aucune ligne à modifier : rien de ce que vous changez ci-dessous n'atteindra la pièce. Ses couleurs viennent des seules textures.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "Ce matériau ne fournit pas de texture d'index : il prend donc la ligne {0} pour tout.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "Impossible de lire ce pack : {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "Sa texture d'index lit la ligne {0}, colonne {1} — les autres lignes sont grisées car rien ne les échantillonne, et modifier l'autre colonne de cette ligne ne fera rien non plus.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Sa texture d'index lit les lignes {0} — les autres sont grisées car rien ne les échantillonne.",
     "description": ""
   },
   "Content.SharedBy.Fmt": {

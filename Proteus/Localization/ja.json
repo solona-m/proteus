@@ -495,12 +495,28 @@
     "message": "メッシュ{0}、頂点{1}",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "このマテリアルのインデックステクスチャは完全に透明なため、カラー行を一つも選択しません。下の行はすべて編集できますが、パーツはテクスチャだけから色を取得します。",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "このマテリアルが指定するインデックステクスチャをProteusが読み取れなかったため、どの行が有効か判別できません。下の行はすべて編集できますが、実際に反映されるのはインデックスが選ぶ行だけです。",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "または、独自のメッシュを同梱したPenumbraパック（.pmp）をインポートします。Proteusはパックを取り込み、Penumbraによるモデルの適用を止めたうえで、選択した各オプションのメッシュをキャリア用アクセサリに追加します。これにより、同じゲームパスを奪い合うオプションどうしも同時に着用できます。",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "マテリアル{0}個",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "このマテリアルにはカラーテーブルがないため、編集できる行がありません。下で何を変えてもパーツには届きません。色はテクスチャだけから決まります。",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "このマテリアルにはインデックステクスチャがないため、すべて行{0}を使います。",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "そのパックを読み込めませんでした：{0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "このマテリアルのインデックステクスチャは行{0}の列{1}を参照します。他の行は使われないため無効表示です。この行のもう一方の列を編集しても何も起きません。",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "このマテリアルのインデックステクスチャは行 {0} を参照します。他の行は使われないため無効表示です。",
     "description": ""
   },
   "Content.SharedBy.Fmt": {

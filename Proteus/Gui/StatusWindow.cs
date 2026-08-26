@@ -30,6 +30,8 @@ public class StatusWindow : Window
     private readonly ModCreationService modCreation;
     private readonly OnionImportService onionImport;
     private readonly ContentImportService contentImport;
+    // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
+    private readonly TextureLoader textureLoader;
     private readonly ModExportService modExport;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
@@ -76,6 +78,9 @@ public class StatusWindow : Window
     /// <summary>Penumbra group → ordinal per mod, memoised: the tab strip needs it every frame to show
     /// the true stacking order, and reading it walks the mod folder.</summary>
     private readonly Dictionary<string, Dictionary<string, int>> _groupOrderCache = new(StringComparer.OrdinalIgnoreCase);
+    // mod|material -> the colour rows that material's index texture actually selects. Cleared with the rest
+    // when the colour window reopens, so a pack whose index option changed is rescanned.
+    private readonly Dictionary<string, ContentIndex> _contentIndexCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Mods for which we've already fired the cold-boot glow-recipe warmup, so it runs at most
     /// once per mod per session. See the trigger in the colour-editor draw.</summary>
@@ -203,7 +208,8 @@ public class StatusWindow : Window
         ModCreationService modCreation,
         OnionImportService onionImport,
         ContentImportService contentImport,
-        ModExportService modExport)
+        ModExportService modExport,
+        TextureLoader textureLoader)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -219,6 +225,7 @@ public class StatusWindow : Window
         this.modCreation    = modCreation;
         this.onionImport    = onionImport;
         this.contentImport  = contentImport;
+        this.textureLoader  = textureLoader;
         this.modExport      = modExport;
 
         SizeConstraints = new WindowSizeConstraints
@@ -1640,8 +1647,7 @@ public class StatusWindow : Window
 
         if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var groupOrder))
         {
-            var modRoot = Path.GetDirectoryName(
-                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var modRoot = entry.ModRoot;
             groupOrder = modRoot != null
                 ? SidecarDiscoveryService.ReadGroupOrder(modRoot)
                 : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -1692,6 +1698,28 @@ public class StatusWindow : Window
             .ThenBy(x => x.Option, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Which of this mod's materials the last composite found backing a DRAWN mesh. A piece's Materials
+        // map is every binding its models declare, which is the larger set: a material bound only to meshes
+        // with no LOD0 vertices — the norm in a pack built by gutting a stock model — is declared and never
+        // drawn. A tab for one of those would save rows that reach nothing and offer a glow button with no
+        // target, which is the same silent-nothing this whole panel exists to stop.
+        //
+        // Drawn, not hosted: a piece that spilled past the host's material budget is on screen and still the
+        // user's to colour. Null means "no information", NOT "nothing is live" — a pack that has not been
+        // composited yet looks identical, and hiding every tab in that state would be worse than showing one
+        // tab too many.
+        var liveMaterials = compositor.GetLiveContentMaterials(entry.ModDirectory);
+
+        // A stamp of what Penumbra currently has selected in this mod. Feeds the index-scan cache key so a
+        // pack whose index texture is itself an option re-reads it the moment that option changes — the
+        // selection can be changed from Penumbra's own window while this panel stays open, which no
+        // window-appearing sweep can see.
+        var selectionStamp = settings == null
+            ? "-"
+            : string.Join(' ', settings.Value.Options
+                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => kv.Key + "=" + string.Join(',', kv.Value)));
+
         // Collapse the options into MATERIALS. Pieces binding the same .mtrl are published as one material
         // and cost one of the host's ten slots between them (see SecondSkinService.ContentUnitKey), so one
         // grid governs all of them — and the edit fans out to every option it covers, because rows differing
@@ -1701,6 +1729,7 @@ public class StatusWindow : Window
         {
             var live = PiecesFor(entry, group, option, gateOn);
             foreach (var mtrl in live.SelectMany(p => p.Materials.Values)
+                         .Where(m => liveMaterials == null || liveMaterials.Contains(m))
                          .Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 int at = byMaterial.FindIndex(m => string.Equals(m.Mtrl, mtrl, StringComparison.OrdinalIgnoreCase));
@@ -1723,7 +1752,7 @@ public class StatusWindow : Window
         // furniture around a single grid.
         if (byMaterial.Count == 1)
         {
-            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding);
+            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding, selectionStamp);
             return;
         }
 
@@ -1734,7 +1763,7 @@ public class StatusWindow : Window
         {
             using var tab = ImRaii.TabItem($"{Path.GetFileNameWithoutExtension(mtrl)}##content_{mtrl}");
             if (!tab) continue;
-            DrawContentMaterial(entry, mtrl, owners, editingBinding);
+            DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp);
         }
     }
 
@@ -1746,7 +1775,7 @@ public class StatusWindow : Window
     /// material slot and leave half the pieces the old colour.
     /// </summary>
     private void DrawContentMaterial(
-        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding)
+        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding, string selectionStamp)
     {
         var (leadGroup, leadOption, _) = owners[0];
 
@@ -1754,6 +1783,57 @@ public class StatusWindow : Window
         var worn = ContentLabels.For(
             owners.Select(o => (o.Option, o.Pieces)), Strings.Content.Unconditional);
         ProteusStyle.DisabledWrapped(string.Format(Strings.Content.SharedByFmt, string.Join(", ", worn)));
+
+        // Which cell the pack's index texture actually samples. Said out loud as well as dimmed, because a
+        // row filter narrows the grid to one row but cannot narrow it to one COLUMN, and picking the wrong
+        // sub-row of the right row fails exactly as silently as picking the wrong row did.
+        //
+        // Every state gets a sentence, and the sentence always matches the grid. Two of these used to share
+        // one branch: a material that could not be opened printed the "no index texture, row 16" line over a
+        // grid with all sixteen rows live, asserting a fact about a file nothing had read and contradicting
+        // itself in the same frame.
+        var idx = ContentIndexFor(entry, mtrl, selectionStamp);
+        switch (idx.State)
+        {
+            case ContentIndexState.NoSampler:
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.NoIndexFmt, DefaultContentRow));
+                break;
+
+            case ContentIndexState.SelectsNothing:
+                ProteusStyle.DisabledWrapped(Strings.Content.IndexEmpty);
+                break;
+
+            case ContentIndexState.NoColorTable:
+                // Amber, not dimmed: everything below this line is a control with nothing behind it, and
+                // that is worth interrupting for.
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.NoColorTable);
+                ImGui.PopTextWrapPos();
+                break;
+
+            case ContentIndexState.Scanned when idx.Rows is { Count: 1 } && idx.SubRow != null:
+                ProteusStyle.DisabledWrapped(
+                    string.Format(Strings.Content.SamplesFmt, idx.Rows.First(), idx.SubRow));
+                break;
+
+            case ContentIndexState.Scanned:
+                // Several rows, or one row read across both columns. The grid is narrowed just as hard, so
+                // it needs saying just as much — leaving it silent was a screen of greyed rows with the
+                // reason available only to someone who thought to hover one.
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.SamplesRowsFmt,
+                    string.Join(", ", idx.Rows!.OrderBy(r => r))));
+                break;
+
+            default:
+                // Said out loud rather than left as an unfiltered grid. Silence here is what makes every row
+                // look live, and colouring one that nothing reads is indistinguishable from the feature
+                // failing. Wrapped: TextColored draws ONE line and lets the window clip it, and this is the
+                // longest string on the panel — see the same trap called out in DrawColorEditor.
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.IndexUnreadable);
+                ImGui.PopTextWrapPos();
+                break;
+        }
 
         // Where the rows live. Same rule as every other editor here: while a binding is being edited we work
         // on a COPY and only install it once something actually changes, so merely opening the panel never
@@ -1773,7 +1853,7 @@ public class StatusWindow : Window
         bool changed = false;
         var selKey = entry.ModDirectory + "|" + mtrl;
         int sel = _rowSelection.GetValueOrDefault(selKey, 1);
-        ColorTableEditor.DrawRows(selKey, rows, null,
+        ColorTableEditor.DrawRows(selKey, rows, idx.Rows,
             // A content material is gear-space by construction — it hangs off an accessory — and it brings
             // its own shader, so nothing here may infer or change one.
             gear: true, shader: OverlayDescriptor.DefaultGearShader,
@@ -1799,6 +1879,169 @@ public class StatusWindow : Window
             InvalidateDefaultsCache(entry);
         }
         compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+    }
+
+    /// <summary>
+    /// How much the panel actually knows about which colour-table cell a content material samples.
+    /// <para/>
+    /// Five states, not a bool, because several of them used to be indistinguishable and the panel said the
+    /// wrong thing about all of them. "The material declares no index texture" and "Proteus could not read
+    /// the material" are opposite facts — the first justifies pinning the grid to one row, the second
+    /// justifies nothing at all — and collapsing them let the caption assert a row it had never looked for
+    /// while the grid underneath it stayed unfiltered, contradicting the sentence above it in the same frame.
+    /// </summary>
+    private enum ContentIndexState
+    {
+        /// <summary>Nothing could be established: the material is missing, unparseable, or its index texture
+        /// could not be found or decoded. Filter nothing and SAY so.</summary>
+        Unknown,
+        /// <summary>The material parsed cleanly and declares no <c>_id</c> sampler.</summary>
+        NoSampler,
+        /// <summary>The material parsed cleanly and carries no colour table at all, so there are no rows to
+        /// select and nothing the grid writes will survive. Its own state: claiming a row here would be as
+        /// baseless as claiming one for a file that was never opened.</summary>
+        NoColorTable,
+        /// <summary>The index texture was read and every texel is fully transparent, so it selects no row at
+        /// all. Read fine — a different fact from Unknown, and a different message.</summary>
+        SelectsNothing,
+        /// <summary>The index texture was read and names rows.</summary>
+        Scanned,
+    }
+
+    /// <summary>
+    /// Which colour-table cell a content material actually samples.
+    /// <para/>
+    /// <paramref name="Rows"/> is 1-based and feeds the grid's availability filter; <paramref name="SubRow"/>
+    /// is "A" or "B" when the index texture is uniform enough to name one. Null Rows = don't filter, which
+    /// is the only honest answer in every state but the two that establish a row set.
+    /// </summary>
+    private readonly record struct ContentIndex(HashSet<int>? Rows, string? SubRow, ContentIndexState State);
+
+    /// <summary>
+    /// The colour-table row a material with NO index texture falls back to.
+    /// <para/>
+    /// The <c>_id</c> sampler is what picks a row per pixel; with none bound there is nothing to pick with
+    /// and the shader takes the last one. Proteus already leans on this elsewhere — a normal-only overlay
+    /// synthesizes its tint from Row 16 for the same reason.
+    /// </summary>
+    private const int DefaultContentRow = 16;
+
+    /// <summary>
+    /// Read a content material's index texture and work out which colour rows it selects, so the grid can
+    /// dim the fifteen that do nothing.
+    /// <para/>
+    /// This is not cosmetic. Without it every row renders as live, and colouring the wrong one looks exactly
+    /// like the feature being broken: the piece does not change, and the glow highlight — which drives the
+    /// same row — does nothing either. A pack whose index points at row 1 is easy to spend an afternoon on.
+    /// <para/>
+    /// Cached per material path: this runs once a frame while the panel is open, and it costs a Penumbra
+    /// resolve plus a texture decode. The cache key carries <paramref name="selectionStamp"/> — the mod's
+    /// live Penumbra selection — because a pack whose index texture IS an option reads a different file the
+    /// moment that selection changes, and Penumbra's own window can change it while this panel is open.
+    /// </summary>
+    private ContentIndex ContentIndexFor(OverlayEntry entry, string mtrlRel, string selectionStamp)
+    {
+        var cacheKey = entry.ModDirectory + "|" + mtrlRel + "|" + selectionStamp;
+        if (_contentIndexCache.TryGetValue(cacheKey, out var hit)) return hit;
+
+        var result = new ContentIndex(null, null, ContentIndexState.Unknown);
+        try
+        {
+            var modRoot = entry.ModRoot;
+            if (modRoot == null)
+                Plugin.Log.Warning("[Proteus] content: no mod folder for {0}, so {1}'s index is unknown",
+                    entry.ModDirectory, mtrlRel);
+            else
+            {
+                var mtrlPath = Path.Combine(modRoot, mtrlRel.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(mtrlPath))
+                    // Logged, not swallowed: this is the case that used to print "ships no index texture,
+                    // takes row 16" about a file nothing had opened.
+                    Plugin.Log.Warning("[Proteus] content: {0} names material {1}, which is not in the mod "
+                                     + "folder — its colour rows cannot be narrowed", entry.ModDirectory, mtrlRel);
+                else
+                {
+                    // The material names its index by GAME path, so Penumbra has to say which file that is
+                    // right now — the pack may well be redirecting it from one of its own options.
+                    var slots = TextureLoader.ParseMtrlBytes(File.ReadAllBytes(mtrlPath));
+                    if (!slots.Parsed)
+                        // The parser is fail-open, so "no index" and "could not walk this file" arrive as the
+                        // same null. Only Parsed separates them, and getting it wrong is expensive: a wrongly
+                        // claimed row filter DISABLES the fifteen others, putting the working row out of reach.
+                        Plugin.Log.Warning("[Proteus] content: could not read material {0} of {1} — its colour "
+                                         + "rows cannot be narrowed", mtrlRel, entry.ModDirectory);
+                    else if (!slots.HasColorTable)
+                        // No rows exist, so no row can be claimed — and PatchColorTable will discard
+                        // whatever the grid writes. Said, not filtered.
+                        result = new ContentIndex(null, null, ContentIndexState.NoColorTable);
+                    else if (string.IsNullOrEmpty(slots.Index))
+                        result = new ContentIndex([DefaultContentRow], "A", ContentIndexState.NoSampler);
+                    else
+                    {
+                        var disk = ResolveContentTexture(entry, modRoot, slots.Index);
+                        if (disk != null && textureLoader.LoadTexAsRgba(disk) is { } tex)
+                            result = ScanContentIndex(tex.rgba);
+                        else
+                            Plugin.Log.Warning("[Proteus] content: {0} names index texture {1}, which could not "
+                                             + "be resolved or decoded", entry.ModDirectory, slots.Index);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning("[Proteus] could not read the index texture for {0}: {1}", mtrlRel, ex.Message);
+        }
+
+        _contentIndexCache[cacheKey] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// The file behind a texture a content material names, as a disk path.
+    /// <para/>
+    /// Penumbra first, because it is the only one that knows which of the pack's options is selected — a
+    /// pack whose index texture IS an option (a colour picker) has several, and only the live one is right.
+    /// <para/>
+    /// But it cannot be relied on alone. These paths are frequently not game paths at all: this pack asks
+    /// for <c>chara/neolithe/neolithe_piercings_index.tex</c>, a namespace its author invented, and a
+    /// resolver whose job is "what does the game load here" has nothing to say about it. So fall back to
+    /// the pack's own folder and match on the file name. The fallback can pick the wrong variant for a pack
+    /// that ships several under one name — better a filter derived from a sibling than none at all, since
+    /// without one every row reads as live and colouring the wrong one looks exactly like a broken feature.
+    /// </summary>
+    private string? ResolveContentTexture(OverlayEntry entry, string modRoot, string gamePath)
+    {
+        var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+        // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
+        if (viaPenumbra != null
+            && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(viaPenumbra))
+            return viaPenumbra;
+
+        try
+        {
+            var leaf = Path.GetFileName(gamePath.Replace('\\', '/'));
+            if (leaf.Length == 0) return null;
+            return Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Debug("[Proteus] no file for {0} under {1}: {2}", gamePath, entry.ModDirectory, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>The scan as the panel needs it — a texture whose texels are all fully transparent selects
+    /// nothing, so it filters nothing rather than narrowing the grid to an empty set. That is its OWN state:
+    /// the texture was read perfectly, and reporting it as unreadable would send the user looking for a
+    /// problem in the wrong file.</summary>
+    private static ContentIndex ScanContentIndex(byte[] rgba)
+    {
+        var scan = ContentIndexTexture.Read(rgba);
+        return scan.Rows.Count == 0
+            ? new ContentIndex(null, null, ContentIndexState.SelectsNothing)
+            : new ContentIndex(scan.Rows, scan.SubRow, ContentIndexState.Scanned);
     }
 
     /// <summary>
@@ -2571,8 +2814,18 @@ public class StatusWindow : Window
 
         // Clear per-entry index cache on popup open so option switches are reflected.
         if (ImGui.IsWindowAppearing())
+        {
             foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
                 _indexRowCache.Remove(k);
+            // Same reason, and it needs its own sweep: a content material's scan is keyed by mod directory,
+            // material and selection rather than by sidecar path. The selection is IN the key, so a live
+            // option change already re-reads without this — what this catches is the pack's own files
+            // changing underneath an unchanged selection (a re-import, or an author editing in place).
+            foreach (var k in _contentIndexCache.Keys
+                         .Where(k => k.StartsWith(entry.ModDirectory + "|", StringComparison.OrdinalIgnoreCase))
+                         .ToList())
+                _contentIndexCache.Remove(k);
+        }
 
         // Which body's UV this mod's art is painted in — needed to know where its UV islands are, so the
         // index scan can ignore the dilated bleed outside them.
@@ -2764,8 +3017,7 @@ public class StatusWindow : Window
         // order while the composite ranked them by Penumbra group number, so the "leftmost = on top"
         // label could be a lie whenever two groups were active.
         {
-            var modRoot = Path.GetDirectoryName(
-                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var modRoot = entry.ModRoot;
             if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var gOrder))
             {
                 gOrder = modRoot != null

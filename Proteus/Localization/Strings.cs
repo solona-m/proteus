@@ -463,6 +463,28 @@ public sealed class ContentStrings
     /// <summary>Stands in for an option name in <see cref="SharedByFmt"/> when a piece belongs to no
     /// option — a model the pack applies whenever it is enabled.</summary>
     public readonly string Unconditional = Loc.Localize("Content.Unconditional", "always on");
+
+    public readonly string SamplesFmt = Loc.Localize("Content.Samples.Fmt",
+        "Its index texture reads row {0}, column {1} — the other rows are dimmed because nothing samples "
+      + "them, and editing the other column of this row will do nothing either.");
+
+    public readonly string NoIndexFmt = Loc.Localize("Content.NoIndex.Fmt",
+        "This material ships no index texture, so it takes row {0} for everything.");
+
+    public readonly string SamplesRowsFmt = Loc.Localize("Content.SamplesRows.Fmt",
+        "Its index texture reads rows {0} — the others are dimmed because nothing samples them.");
+
+    public readonly string IndexUnreadable = Loc.Localize("Content.IndexUnreadable",
+        "This material names an index texture Proteus couldn't read, so it can't tell which rows are live. "
+      + "Every row is editable below, but only the ones the index selects will show.");
+
+    public readonly string NoColorTable = Loc.Localize("Content.NoColorTable",
+        "This material carries no colour table, so it has no rows to edit — nothing you change below will "
+      + "reach the piece. Its colours come from its textures alone.");
+
+    public readonly string IndexEmpty = Loc.Localize("Content.IndexEmpty",
+        "This material's index texture is fully transparent, so it selects no colour row at all. Every row "
+      + "is editable below, but the piece will take its colours from the textures alone.");
 }
 
 public sealed class ImportStrings

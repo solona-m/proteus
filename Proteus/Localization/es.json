@@ -495,12 +495,28 @@
     "message": "{0} malla, {1} vértices",
     "description": ""
   },
+  "Content.IndexEmpty": {
+    "message": "La textura de índice de este material es totalmente transparente, así que no selecciona ninguna fila de color. Todas las filas son editables abajo, pero la pieza tomará sus colores solo de las texturas.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "Este material nombra una textura de índice que Proteus no pudo leer, así que no puede decir qué filas están activas. Abajo puedes editar todas, pero solo se verán las que el índice seleccione.",
+    "description": ""
+  },
   "Content.Intro": {
     "message": "O importa un paquete de Penumbra (.pmp) que traiga sus propias mallas. Proteus lo copia, impide que Penumbra publique sus modelos y, en su lugar, añade las mallas de cada opción que selecciones a tu accesorio portador — así, las opciones que se disputarían una misma ruta del juego pueden llevarse todas a la vez.",
     "description": ""
   },
   "Content.Materials.Fmt": {
     "message": "{0} materiales",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "Este material no lleva tabla de colores, así que no tiene filas que editar: nada de lo que cambies abajo llegará a la pieza. Sus colores vienen solo de las texturas.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "Este material no incluye textura de índice, así que usa la fila {0} para todo.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -521,6 +537,14 @@
   },
   "Content.ReadFailed.Fmt": {
     "message": "No se pudo leer ese paquete: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "Su textura de índice lee la fila {0}, columna {1} — las demás filas están atenuadas porque nada las muestrea, y editar la otra columna de esta fila tampoco hará nada.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Su textura de índice lee las filas {0} — las demás están atenuadas porque nada las muestrea.",
     "description": ""
   },
   "Content.SharedBy.Fmt": {
