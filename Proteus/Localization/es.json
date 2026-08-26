@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Con characterscroll esto es un UMBRAL pequeño, no el brillo:\n0 = sin brillo alguno; un valor alto lava el color del sphere map desplazado.\nLos materiales animados originales usan ~0,025.",
+    "message": "Con cuánta intensidad brilla esta fila. 0 la apaga.\nCon un brillo animado es la luminosidad del efecto, y un valor alto\nquema una textura de desplazamiento de color hasta el blanco. Un 25% es buen punto de partida.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "{0} malla, {1} vértices",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "Este pack pinta su superficie con una textura. Un brillo animado ejecuta el material en un sombreador que no tiene hueco para ella, así que mientras esté activo mandan los colores de arriba. Quitar el efecto devuelve la textura.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "El efecto «{0}» ya no está en la carpeta Effects de este mod ni en tu biblioteca, así que la pieza se muestra sin él. Elige otro, o devuelve el archivo a su sitio.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "Glow está a cero en la fila {0}{1} — la única celda que lee este material — así que el efecto sigue apagado. Sube Glow ahí para encenderlo y ajustar su intensidad. Glow en cualquier otra fila no hace nada.",
     "description": ""
   },
   "Content.IndexEmpty": {

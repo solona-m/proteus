@@ -26,6 +26,11 @@ public static class ColorTableEditor
 {
     private static readonly string[] GearShaders = ["character.shpk", "characterscroll.shpk"];
 
+    /// <summary>What an unset glow colour looks like in the swatch, made explicit when the user raises Glow
+    /// on a row that has no colour to fall back on. Shared with <see cref="ContentGlowRow"/>, which seeds
+    /// the same pair when an animated effect is switched on.</summary>
+    internal const string WhiteHex = "#FFFFFF";
+
     // Were `const string`; a localized lookup is not a compile-time constant, so they read through the
     // string table now. Still resolved once per language, not once per frame — see Strings.
     private static string SphereTip => Strings.Colors.SphereTip;
@@ -201,6 +206,81 @@ public static class ColorTableEditor
         return changed;
     }
 
+    /// <summary>
+    /// The glow footer for an imported content pack's material: pick an effect, then set its speed and
+    /// tiling. Returns true when something changed and the caller should persist and recomposite.
+    /// <para/>
+    /// A sibling of <see cref="DrawGlowFooter"/> rather than a parameter on it, because almost none of that
+    /// one applies here. It is built around an <c>OverlayDescriptor</c> a content piece does not have, and
+    /// around render-mode INFERENCE — deciding whether art belongs on skin or on a shell — which is not a
+    /// question a content pack raises: the pack shipped its own geometry and its own material, and this one
+    /// control is the only thing that changes its shader. So no mode pin, no "Rendering as" badge, no
+    /// shell/no-shell reason.
+    /// <para/>
+    /// <paramref name="glow"/> is mutated in place, exactly as <see cref="DrawGlowFooter"/> mutates its
+    /// override — the caller owns whether that instance is the sidecar's or a binding's copy.
+    /// </summary>
+    public static bool DrawContentGlowFooter(
+        string idScope,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
+        GearSettingsPreset glow)
+    {
+        bool changed = false;
+        var cs = Strings.Colors;
+
+        DrawEffectPicker(idScope, effects, glow.Scroll, out bool effChanged, out string? newScroll);
+        if (effChanged)
+        {
+            glow.Scroll = newScroll;
+            changed = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.GlowEffectTip);
+        if (effects.Count == 0)
+            // Names the Settings button verbatim: this is the exact moment someone needs that folder.
+            ImGui.TextDisabled(cs.NoEffects);
+
+        // Speed and tiling mean nothing until there is a pattern to move, so they appear with one.
+        if (string.IsNullOrEmpty(glow.Scroll)) return changed;
+
+        // A stored effect the picker can no longer offer — the file was removed from the mod's Effects
+        // folder or the library after it was chosen. The composite falls back to the pack's own material and
+        // says so in the log; without this the panel would show a glow that isn't rendering and give no clue.
+        if (!effects.Any(e => string.Equals(e.Name, glow.Scroll, StringComparison.OrdinalIgnoreCase)))
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, string.Format(Strings.Content.GlowEffectMissingFmt, glow.Scroll));
+            ImGui.PopTextWrapPos();
+        }
+
+        var speed = new Vector2(glow.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
+                                glow.ScrollSpeedY ?? ScrollSettings.Default.SpeedY);
+        var tile  = new Vector2(glow.ScrollTilingX ?? ScrollSettings.Default.TilingX,
+                                glow.ScrollTilingY ?? ScrollSettings.Default.TilingY);
+
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat2($"{cs.ScrollSpeed}##content_{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
+        {
+            glow.ScrollSpeedX = speed.X;
+            glow.ScrollSpeedY = speed.Y;
+            changed = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.ScrollSpeedTip);
+
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat2($"{cs.Tiling}##content_{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
+        {
+            glow.ScrollTilingX = tile.X;
+            glow.ScrollTilingY = tile.Y;
+            changed = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.TilingTip);
+
+        return changed;
+    }
+
     /// <summary>Thumbnail picker for the glow effect, modelled on <see cref="DrawSpherePicker"/>: the current
     /// effect's image sits beside the combo, and the list is clickable pictures. <paramref name="newScroll"/>
     /// is the chosen effect's file name (null = None) when <paramref name="changed"/> is true.</summary>
@@ -326,6 +406,9 @@ public static class ColorTableEditor
     /// <summary>
     /// Row picker plus the A/B detail panels for the selected row.
     /// <paramref name="usedRows"/> (when non-null) limits the picker to rows the index texture uses.
+    /// <paramref name="authoredPhysical"/> says the roughness and metalness in these rows came from the
+    /// material's own author rather than from a template Proteus built — see the Physical block, which is
+    /// otherwise hidden under Animated glow.
     /// </summary>
     public static void DrawRows(
         string idScope,
@@ -337,7 +420,9 @@ public static class ColorTableEditor
         IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
         out FeatureEdit edited,
         ref int selectedRow,
-        ref bool changed)
+        ref bool changed,
+        bool authoredPhysical = false,
+        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline = null)
     {
         edited = FeatureEdit.Neutral;
 
@@ -346,17 +431,24 @@ public static class ColorTableEditor
         // scroll map, so sphere/metal don't render there.
         var mode = RenderModeInference.ModeOf(gear ? OverlayLayer.Gear : OverlayLayer.Skin, shader);
 
-        // Every row is shown; rows the index texture never selects are disabled rather than hidden, so
-        // the table's shape stays constant and it's obvious WHICH rows the overlay actually uses.
+        // Every row is shown; rows the index texture never selects are DIMMED rather than hidden or
+        // disabled, so the table's shape stays constant and it's obvious which rows the overlay uses.
+        //
+        // Dimmed, not disabled, because the filter is a reading of an index texture and a reading can be
+        // wrong. One was: another mod claiming the same game path handed back its own texture, the scan
+        // called it row 16, and every other row — including the one that actually rendered — became
+        // unclickable. A hint that turns out to be wrong should cost a moment's confusion, not the ability
+        // to edit the material at all.
         bool InUse(int r) => usedRows == null || usedRows.Contains(r);
 
-        int sel = selectedRow;                       // a ref param can't be captured by a lambda
-        if (!InUse(sel))
+        // Land on a live row only when nothing has been chosen yet (0 = unset). Re-clamping every frame
+        // would drag the selection back the instant someone picked a dimmed row on purpose.
+        if (selectedRow is <= 0 or > 16)
         {
             int firstUsed = Enumerable.Range(1, 16).FirstOrDefault(InUse);
-            sel = firstUsed == 0 ? 1 : firstUsed;    // land on a row that actually renders
+            selectedRow = firstUsed == 0 ? 1 : firstUsed;
         }
-        selectedRow = sel;
+        int sel = selectedRow;                       // a ref param can't be captured by a lambda
 
         // ── row picker ───────────────────────────────────────────────────────
         // Each button previews its row: three columns (diffuse, specular, glow), each split top = A,
@@ -378,7 +470,7 @@ public static class ColorTableEditor
             if ((row - 1) % perLine != 0) ImGui.SameLine();
 
             bool used = InUse(row);
-            using (ImRaii.Disabled(!used))
+            using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, used ? 1f : 0.5f))
             using (ProteusStyle.Selected(row == selectedRow))
             {
                 if (ImGui.Button($"#{row:D2}##row_{idScope}_{row}", btn))
@@ -428,10 +520,12 @@ public static class ColorTableEditor
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets, ref edited, ref changed);
+            DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets,
+                authoredPhysical, physicalBaseline, ref edited, ref changed);
 
             ImGui.TableNextColumn();
-            DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets, ref edited, ref changed);
+            DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets,
+                authoredPhysical, physicalBaseline, ref edited, ref changed);
 
             ImGui.EndTable();
         }
@@ -540,6 +634,8 @@ public static class ColorTableEditor
         string id, List<ColorTableRowPreset> rows, int row, bool isA, RenderMode mode,
         IReadOnlyList<string>? shellMaterialLeaves,
         IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
+        bool authoredPhysical,
+        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline,
         ref FeatureEdit edited, ref bool changed)
     {
         bool gear     = mode != RenderMode.Skin;
@@ -657,21 +753,36 @@ public static class ColorTableEditor
                 ImGui.SetTooltip(cs.GlowColourTip);
         }
 
-        // Shown as a percentage. Fine steps matter: characterscroll's glow gate sits at about 2.5%. The
-        // cap goes past 100% because the emissive is written as a Half — vanilla scrolling materials push
-        // it above 1.0 for a brighter bloom, which a graphics-only (black-background) effect needs to make
-        // up for the surface it no longer glows across.
-        // Drag is coarse for a quick sweep of the wide range; ctrl+click to type the fine gate (~2.5%).
+        // Shown as a percentage. On an ANIMATED GLOW this is what the effect's brightness scales with, and
+        // 0 switches it off — a scroll map is usually a saturated colour, so pushing this to 100% blows it
+        // out and the surface reads white rather than as the pattern. A quarter is a good starting point;
+        // that is what a newly switched-on effect seeds (ContentGlowRow.DefaultGlow).
+        // The cap goes past 100% because the value is written as a Half — vanilla materials push it above
+        // 1.0 for a brighter bloom. Drag is coarse for a quick sweep; ctrl+click to type an exact value.
         float emPct = (sub?.Emissive ?? 0f) * 100f;
         ImGui.SetNextItemWidth(70);
         if (ImGui.DragFloat($"{cs.GlowAmount}##e_{id}", ref emPct, 2.5f, 0f, 1000f, "%.1f%%"))
         {
-            Edit().Emissive = Math.Clamp(emPct / 100f, 0f, 10f);
+            var cell = Edit();
+            cell.Emissive = Math.Clamp(emPct / 100f, 0f, 10f);
+            // Make the swatch beside this TRUE rather than only apparent. It draws an unset glow colour as
+            // white, but the colour is only stored once someone opens the picker — so raising this on an
+            // otherwise untouched row asked for a white glow and got a black one, since the writer resolves
+            // the colour EmissiveColor → Diffuse and had neither.
+            //
+            // Written here, at the moment the user asks for glow, rather than resolved white at composite
+            // time: that reinterprets rows already authored, and a mod carrying an inert Glow value would
+            // start emitting at full strength without anyone touching it.
+            //
+            // Only when there is no colour to fall back on — a row with a diffuse keeps the documented
+            // EmissiveColor → Diffuse fallback, which is how a red garment glows red without being told to.
+            if (cell.Emissive > 0f && cell.EmissiveColor == null && cell.Diffuse == null)
+                cell.EmissiveColor = WhiteHex;
             // Skin cannot emit, so asking for glow asks for a shell: classify the edit as Cloth and let
             // the inference move the overlay there, exactly as a sphere map or metalness does. The one
-            // exception is Animated glow, where this slider is the scroll effect's GATE rather than a
-            // feature request — treating it as Cloth there would kick the overlay out of Glow the moment
-            // the author tuned the gate.
+            // exception is Animated glow, where this slider is the scroll effect's own strength rather than
+            // a feature request — treating it as Cloth there would kick the overlay out of Glow the moment
+            // the author turned the effect up or down.
             edited = mode == RenderMode.Glow ? FeatureEdit.Neutral : FeatureEdit.Cloth;
             changed = true;
         }
@@ -694,14 +805,29 @@ public static class ColorTableEditor
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
         // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a
         // "sphere" control let a stray 0 silently kill the glow.
-        if (mode != RenderMode.Glow)
+        //
+        // Except when the values are the AUTHOR'S. A shell's material is built from a neutral template, so
+        // hiding these in glow hides nothing anyone chose; an imported pack's material is its author's and
+        // arrives with whatever they set — the piercings carry metalness 1.0 — so the controls have to stay
+        // reachable or a value that IS in the material cannot be changed. The sphere stays hidden either
+        // way: on this shader its intensity is the effect's visibility, not a sphere at all.
+        if (mode != RenderMode.Glow || authoredPhysical)
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
             ImGui.TextDisabled(cs.Physical);
             if (!material) { ImGui.SameLine(); ImGui.TextDisabled(cs.ClothSuffix); }
 
-            float rough = sub?.Roughness ?? 0.5f;
+            // The values the MATERIAL already holds, when the caller supplied them, instead of this editor's
+            // neutral defaults. A shell's material is built from a neutral template so 0.5 / 0 is what is
+            // really there; an imported pack's is its author's, and showing 0 over a metalness of 1.0 made
+            // the panel describe a different material from the one on screen — and made the control that
+            // would fix it look as though it already had.
+            int cell = (row - 1) * 2 + (isA ? 0 : 1);
+            var baseline = physicalBaseline is { } bl && cell >= 0 && cell < bl.Count
+                ? bl[cell] : (Roughness: 0.5f, Metalness: 0f);
+
+            float rough = sub?.Roughness ?? baseline.Roughness;
             ImGui.SetNextItemWidth(70);
             if (ImGui.DragFloat($"{cs.Roughness}##r_{id}", ref rough, 0.01f, 0f, 1f, "%.2f"))
             {
@@ -710,7 +836,7 @@ public static class ColorTableEditor
                 changed = true;
             }
 
-            float metal = sub?.Metalness ?? 0f;
+            float metal = sub?.Metalness ?? baseline.Metalness;
             ImGui.SetNextItemWidth(70);
             if (ImGui.DragFloat($"{cs.Metalness}##m_{id}", ref metal, 0.01f, 0f, 1f, "%.2f"))
             {
@@ -720,6 +846,11 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(MetalTip);
+
+            // Never on a scrolling material, even when the rest of this block is shown for an authored one:
+            // SphereIntensity is that shader's effect visibility, so a "sphere" control here is a switch
+            // labelled as something else, and a stray 0 in it silently kills the glow.
+            if (mode == RenderMode.Glow) return;
 
             ImGui.TextDisabled(cs.SphereMap);
 

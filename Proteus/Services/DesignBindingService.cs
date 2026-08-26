@@ -791,6 +791,64 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
+    /// The same, seeded from a preset rather than a descriptor — for a content pack's glow, which has no
+    /// overlay descriptor to snapshot. The seed is CLONED before it is stored, so a binding that starts
+    /// from the sidecar's own settings can never write back into them.
+    /// <para/>
+    /// An unconditional piece lands in <see cref="OverlayGearOverride.Content"/>, not
+    /// <see cref="OverlayGearOverride.Top"/>: Top is captured from the mod's first overlay descriptor, so
+    /// sharing it would let an overlay's scroll effect reach the pack's meshes and the reverse.
+    /// </summary>
+    public GearSettingsPreset? GetEditableContentGearOverride(
+        string modDir, string? group, string? option, GearSettingsPreset seed)
+    {
+        lock (gate)
+        {
+            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
+                return null;
+            if (group != null && option != null)
+            {
+                ovr.Options ??= new();
+                if (!ovr.Options.TryGetValue(group, out var inner))
+                    ovr.Options[group] = inner = new();
+                if (!inner.TryGetValue(option, out var g))
+                    inner[option] = g = seed.Clone();
+                return g;
+            }
+            return ovr.Content ??= seed.Clone();
+        }
+    }
+
+    /// <summary>
+    /// Read-only peek at a content material's glow under the active design. Resolves through
+    /// <see cref="OverlayGearOverride.ResolveContent"/> — the SAME call the compositor makes — so the
+    /// editor and the composite can never disagree about which slot governs.
+    /// </summary>
+    /// <summary>
+    /// Clear the mod-wide gear scopes: the overlays' <see cref="OverlayGearOverride.Top"/> and an imported
+    /// pack's <see cref="OverlayGearOverride.Content"/>.
+    /// <para/>
+    /// Both, because "reset this option" with no option named means the mod-wide settings, and content lives
+    /// in its own slot precisely so it does NOT share Top. Clearing only one would leave a glow the reset
+    /// claimed to remove.
+    /// </summary>
+    private static bool ClearTopGear(OverlayGearOverride gear)
+    {
+        bool had = gear.Top != null || gear.Content != null;
+        gear.Top = null;
+        gear.Content = null;
+        return had;
+    }
+
+    public GearSettingsPreset? PeekContentGearOverride(string modDir, string? group, string? option)
+    {
+        lock (gate)
+            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
+                ? ovr.ResolveContent(group, option)
+                : null;
+    }
+
+    /// <summary>
     /// Read-only peek at the active design's captured gear settings for one option. Unlike
     /// <see cref="GetEditableGearOverride"/> this creates nothing, so callers can ask about options the user
     /// hasn't opened — needed when surveying every active option's effective layer. Null when no design is
@@ -802,6 +860,9 @@ public class DesignBindingService : IDisposable
     /// mod after the design was saved, or one whose descriptors were empty at capture time): the composite
     /// would apply <c>Top</c> while the editor read the raw descriptor.
     /// </summary>
+    /// <remarks>Overlays only. A content pack's glow reads <see cref="PeekContentGearOverride"/>, which
+    /// resolves against its own slot rather than <c>Top</c> — see <see cref="OverlayGearOverride.Content"/>
+    /// for why the two must not share.</remarks>
     public GearSettingsPreset? PeekGearOverride(string modDir, string group, string option)
     {
         lock (gate)
@@ -848,7 +909,7 @@ public class DesignBindingService : IDisposable
             if (activeOverride != null && activeOverride.TryGetValue(modDir, out var col))
                 touched |= ClearScope(col.Options, group, option, () => { bool had = col.Top != null; col.Top = null; return had; });
             if (activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var gear))
-                touched |= ClearScope(gear.Options, group, option, () => { bool had = gear.Top != null; gear.Top = null; return had; });
+                touched |= ClearScope(gear.Options, group, option, () => ClearTopGear(gear));
 
             // Persisted binding, so the design stops re-applying it.
             if (store.Bindings.TryGetValue(id, out var b))
@@ -859,8 +920,7 @@ public class DesignBindingService : IDisposable
                 {
                     touched |= ClearScope(mod.Colors.Options, group, option,
                         () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
-                    touched |= ClearScope(mod.Gear.Options, group, option,
-                        () => { bool had = mod.Gear.Top != null; mod.Gear.Top = null; return had; });
+                    touched |= ClearScope(mod.Gear.Options, group, option, () => ClearTopGear(mod.Gear));
                 }
             }
 
@@ -1723,6 +1783,11 @@ public class DesignBindingService : IDisposable
         // the synthesized Masks tab isn't a real option group. Live override first, else the metadata.
         if (active?.Mask != null) result.Mask = CloneGearPreset(active.Mask);
         else if (e.Metadata.MaskDescriptor is { } md) result.Mask = GearSettingsPreset.From(md);
+
+        // An imported pack's unconditional pieces, on the same rule — the live override if a design is
+        // driving it, else the sidecar's own. Its own slot, never Top: see OverlayGearOverride.Content.
+        if (active?.Content != null) result.Content = CloneGearPreset(active.Content);
+        else if (e.Metadata.ContentGlow is { } cg) result.Content = CloneGearPreset(cg);
 
         if (e.Metadata.OptionGroups is { } groups)
         {

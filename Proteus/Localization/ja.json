@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "characterscrollではこれは明るさではなく小さなゲートです：\n0 = まったく発光しません。大きすぎるとスクロールマップの色が飛びます。\nバニラのアニメーション素材では約0.025です。",
+    "message": "この行がどれだけ明るく光るか。0 でオフになります。\nアニメーション光る効果ではこれが効果の明るさで、値が高いと\n色鮮やかなスクロールマップが白飛びします。25% 前後が目安です。",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "メッシュ{0}、頂点{1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "このパックはテクスチャで表面を描いています。アニメーション光る効果はテクスチャ枠のないシェーダーで動くため、効果が有効な間は上の色が代わりに使われます。効果を解除すればテクスチャは戻ります。",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "エフェクト「{0}」はこのモッドのEffectsフォルダーにもライブラリにも見つからないため、パーツはそれなしで描画されています。別のものを選ぶか、ファイルを戻してください。",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "この材質が読むのは行{0}{1}の一箇所だけですが、そこの Glow が 0 のためエフェクトはオフのままです。その行の Glow を上げてオンにし、表示の強さを決めてください。他の行の Glow は何もしません。",
     "description": ""
   },
   "Content.IndexEmpty": {

@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "characterscroll에서 이 값은 밝기가 아니라 작은 게이트입니다:\n0 = 전혀 발광하지 않음. 값이 크면 스크롤 맵의 색이 날아갑니다.\n기본 애니메이션 재질은 약 0.025를 사용합니다.",
+    "message": "이 행이 얼마나 밝게 빛나는지입니다. 0이면 꺼집니다.\n애니메이션 발광에서는 이것이 효과의 밝기이며, 값이 높으면\n색이 진한 스크롤 맵이 하얗게 날아갑니다. 25% 정도가 적당한 시작점입니다.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "메시 {0}, 정점 {1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "이 팩은 텍스처로 표면을 칠합니다. 애니메이션 발광은 그 자리가 없는 셀이더로 머티리얼을 구동하므로, 켜져 있는 동안은 위의 색상이 대신 쓰입니다. 효과를 지우면 텍스처가 돌아옵니다.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "효과 \"{0}\"을(를) 이 모드의 Effects 폴더에서도 라이브러리에서도 찾을 수 없어 부품이 효과 없이 렌더링되고 있습니다. 다른 것을 고르거나 파일을 되돌려 주세요.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "이 머티리얼이 읽는 곳은 {0}행 {1}열 하나뿐인데 그곳의 Glow가 0이라 효과가 꺼진 상태입니다. 그 자리에서 Glow를 올려 켜고 강도를 정하세요. 다른 행의 Glow는 아무 일도 하지 않습니다.",
     "description": ""
   },
   "Content.IndexEmpty": {

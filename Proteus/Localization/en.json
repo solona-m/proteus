@@ -236,8 +236,8 @@
     "description": "Control label. Appears in the colour-table editor window."
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Under characterscroll this is a small GATE, not the brightness:\n0 = no glow at all; a large value washes the scroll map's colour out.\nThe vanilla animated materials use ~0.025.",
-    "description": "\"characterscroll\" is a shader name. The value ~0.025 is literal. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+    "message": "How brightly this row glows. 0 switches it off.\nUnder an animated glow this is the effect's brightness, and a high value\nblows a colourful scroll map out to white. Around 25% is a good start.",
+    "description": "Tooltip on the Glow slider in the colour grid. Newlines are intentional."
   },
   "Colors.GlowColour.Label": {
     "message": "Glow colour",
@@ -494,6 +494,18 @@
   "Content.Geometry.Fmt": {
     "message": "{0} mesh, {1} verts",
     "description": "A table cell. {0} is a mesh count, {1} a vertex count. Very tight space - keep it short."
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "This pack paints its surface with a texture. An animated glow runs the material on a shader that has no slot for one, so the colours above take over while the glow is on. Clearing the effect puts the texture back.",
+    "description": "Warning above a content pack's animated-glow picker, shown only when the pack's material has a base texture that the glow shader has no slot for."
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "The effect \"{0}\" is no longer in this mod's Effects folder or your library, so the piece is rendering without it. Pick another, or put the file back.",
+    "description": "Warning under a content pack's glow picker when the chosen effect file is gone. {0} is the effect name."
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "Glow is at zero on row {0}{1} — the one cell this material reads — so the effect stays off. Raise Glow there to turn it on and set how strongly it shows. Glow on any other row does nothing.",
+    "description": "Warning under a content pack's glow picker when an effect is chosen but the one colour-table cell the material samples has Glow at zero. {0} is a row number 1-16, {1} is the column letter A or B. \"Glow\" is the name of the control in the grid above."
   },
   "Content.IndexEmpty": {
     "message": "This material's index texture is fully transparent, so it selects no colour row at all. Every row is editable below, but the piece will take its colours from the textures alone.",

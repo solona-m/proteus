@@ -1635,7 +1635,9 @@ public class StatusWindow : Window
     /// Rows that are NOT edited stay exactly as the author wrote them — see
     /// <c>GearMaterialWriter.PatchColorTable</c>, which writes only the rows it is given.
     /// </summary>
-    private void DrawContentColorEditor(OverlayEntry entry, bool editingBinding)
+    private void DrawContentColorEditor(
+        OverlayEntry entry, bool editingBinding,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         // Resolved HERE rather than through discovery.ResolveActiveContent, which is otherwise the same
         // walk: that one re-reads the mod's meta.json for its group order, and this runs once a frame for
@@ -1752,7 +1754,8 @@ public class StatusWindow : Window
         // furniture around a single grid.
         if (byMaterial.Count == 1)
         {
-            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding, selectionStamp);
+            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding,
+                selectionStamp, effects);
             return;
         }
 
@@ -1763,7 +1766,7 @@ public class StatusWindow : Window
         {
             using var tab = ImRaii.TabItem($"{Path.GetFileNameWithoutExtension(mtrl)}##content_{mtrl}");
             if (!tab) continue;
-            DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp);
+            DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp, effects);
         }
     }
 
@@ -1775,7 +1778,8 @@ public class StatusWindow : Window
     /// material slot and leave half the pieces the old colour.
     /// </summary>
     private void DrawContentMaterial(
-        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding, string selectionStamp)
+        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding, string selectionStamp,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         var (leadGroup, leadOption, _) = owners[0];
 
@@ -1843,6 +1847,13 @@ public class StatusWindow : Window
             ? designBindings.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
         var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
 
+        // The glow, on the same copy-while-binding rule as the rows above.
+        var storedGlow = StoredContentGlow(entry, leadGroup, leadOption);
+        var ovrGlow = editingBinding
+            ? designBindings.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
+        var glow = (ovrGlow ?? storedGlow).Clone();
+        bool glowing = glow.GlowKey() != null;
+
         // The glow button targets the published material, which every owner maps to — the same one — so this
         // is a union of duplicates and comes out as a single entry.
         var targets = owners
@@ -1852,25 +1863,94 @@ public class StatusWindow : Window
 
         bool changed = false;
         var selKey = entry.ModDirectory + "|" + mtrl;
-        int sel = _rowSelection.GetValueOrDefault(selKey, 1);
+        int sel = _rowSelection.GetValueOrDefault(selKey, 0);        // 0 = never chosen; DrawRows lands it
         ColorTableEditor.DrawRows(selKey, rows, idx.Rows,
-            // A content material is gear-space by construction — it hangs off an accessory — and it brings
-            // its own shader, so nothing here may infer or change one.
-            gear: true, shader: OverlayDescriptor.DefaultGearShader,
+            // A content material is gear-space by construction — it hangs off an accessory. Its shader is
+            // the PACK'S and nothing here infers one, with a single exception: an animated glow rebuilds the
+            // material onto characterscroll, and the grid has to agree — the row emissive is what ARMS the
+            // effect, so it must be reachable, while sphere and metal do nothing on that shader.
+            gear: true,
+            shader: glowing ? RenderModeInference.GlowShader : OverlayDescriptor.DefaultGearShader,
             targets,
             skinGlowTargets: null,
-            out _, ref sel, ref changed);
+            out _, ref sel, ref changed,
+            // The roughness and metalness in these rows are the PACK author's, grafted through from their
+            // own material — unlike a shell's, which come from a neutral template. Animated glow hides that
+            // block by default; here it must not, or a value that is in the material (the piercings carry
+            // metalness 1.0) has no control at all.
+            authoredPhysical: true,
+            // And the grid shows what the PACK'S material holds for anything the sidecar hasn't overridden,
+            // rather than this editor's neutral defaults — see DrawSubRow.
+            physicalBaseline: idx.Physical);
         _rowSelection[selKey] = sel;
 
-        if (!changed) return;
+        // ── animated glow ────────────────────────────────────────────────────
+        // Hidden when there is no colour table: the effect is armed by a row's emissive, so a material with
+        // no rows has no way to switch it on and the picker would be a control with nothing behind it.
+        bool glowChanged = false;
+        if (idx.State != ContentIndexState.NoColorTable)
+        {
+            ImGui.Separator();
+            // Said BEFORE the picker, not after the fact: characterscroll has no base-texture slot, so a
+            // pack that paints its surface loses that painting the moment this is switched on.
+            if (idx.HasDiffuse)
+            {
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.GlowDropsDiffuse);
+                ImGui.PopTextWrapPos();
+            }
+            glowChanged = ColorTableEditor.DrawContentGlowFooter(selKey, effects, glow);
+
+            // Picking an effect must be enough to see one, and clearing it must leave nothing behind.
+            //
+            // The row's Glow is what arms the shader — GearMaterialWriter sets the effect-enable field only
+            // on a row that has one — so without arming, a material whose rows are all zero renders exactly
+            // as it did before, with every other part of the setup correct. And without DISARMING, that same
+            // value stays in the rows when the effect goes away: on the pack's own character.shpk it is an
+            // ordinary emissive, so the piece keeps glowing with the animation switched off.
+            if (glowChanged)
+            {
+                var (armRow, armA) = SampledCell(idx, sel);
+                bool wrote = glow.GlowKey() != null
+                    ? ContentGlowRow.Arm(rows, armRow, armA)
+                    : ContentGlowRow.Disarm(rows, armRow, armA);
+                if (wrote) changed = true;
+            }
+
+            // And the standing case, for a cell whose Glow is cleared later — or set on the wrong row.
+            // Names the cell, because "raise Glow somewhere" is exactly the advice that let this go wrong:
+            // the row an older colour edit happened to leave behind is not the row the material reads.
+            if (glow.GlowKey() != null && !SampledCellEmits(rows, idx, sel))
+            {
+                var (needRow, needA) = SampledCell(idx, sel);
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour,
+                    string.Format(Strings.Content.GlowNeedsEmissiveFmt, needRow, needA ? "A" : "B"));
+                ImGui.PopTextWrapPos();
+            }
+        }
+
+        if (!changed && !glowChanged) return;
 
         foreach (var (group, option, _) in owners)
         {
             // A copy each: one list shared between options would serialise identically but ALIAS in memory,
-            // so a later edit to one would silently move the others in ways nothing asked for.
-            var mine = DesignBindingService.CopyRows(rows);
-            if (editingBinding) designBindings.SetOverrideRows(entry.ModDirectory, group, option, mine);
-            else StoreContentRows(entry, group, option, mine);
+            // so a later edit to one would silently move the others in ways nothing asked for. The same goes
+            // for the glow, and there it also decides whether they still SHARE a material — settings that
+            // drift split one host slot into several.
+            if (changed)
+            {
+                var mine = DesignBindingService.CopyRows(rows);
+                if (editingBinding) designBindings.SetOverrideRows(entry.ModDirectory, group, option, mine);
+                else StoreContentRows(entry, group, option, mine);
+            }
+            if (glowChanged)
+            {
+                if (editingBinding)
+                    designBindings.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
+                        ?.ApplyScrollFrom(glow);
+                else StoreContentGlow(entry, group, option, glow.Clone());
+            }
         }
 
         if (!editingBinding)
@@ -1879,6 +1959,39 @@ public class StatusWindow : Window
             InvalidateDefaultsCache(entry);
         }
         compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+    }
+
+    /// <summary>Thin wrappers onto <see cref="ContentGlowRow"/>, which owns the rule — see there for why it
+    /// is not written inline. These only unpack the index scan into the shape it takes.</summary>
+    private static (int Row, bool SubRowA) SampledCell(ContentIndex idx, int selectedRow)
+        => ContentGlowRow.Sampled(idx.Rows, idx.SubRow, selectedRow);
+
+    private static bool SampledCellEmits(List<ColorTableRowPreset> rows, ContentIndex idx, int selectedRow)
+    {
+        var (row, subRowA) = SampledCell(idx, selectedRow);
+        return ContentGlowRow.Emits(rows, row, subRowA);
+    }
+
+    /// <summary>
+    /// The animated glow an option's material carries, as stored in the sidecar — or a fresh empty preset
+    /// when none is set, so the picker has somewhere to put a first choice.
+    /// <para/>
+    /// Deliberately does NOT install that empty preset, on the same rule as <see cref="StoredContentRows"/>:
+    /// drawing a panel must not change the mod.
+    /// </summary>
+    private static GearSettingsPreset StoredContentGlow(OverlayEntry entry, string? group, string? option)
+        => ContentOptionFor(entry, group, option)?.Glow
+        ?? entry.Metadata.ContentGlow
+        ?? new GearSettingsPreset();
+
+    private static void StoreContentGlow(
+        OverlayEntry entry, string? group, string? option, GearSettingsPreset glow)
+    {
+        // Null rather than an empty preset once the effect is cleared, so the sidecar goes back to saying
+        // nothing about glow at all — which is what makes the pack's own material publish verbatim again.
+        var value = glow.GlowKey() == null ? null : glow;
+        if (ContentOptionFor(entry, group, option) is { } o) o.Glow = value;
+        else entry.Metadata.ContentGlow = value;
     }
 
     /// <summary>
@@ -1914,8 +2027,17 @@ public class StatusWindow : Window
     /// <paramref name="Rows"/> is 1-based and feeds the grid's availability filter; <paramref name="SubRow"/>
     /// is "A" or "B" when the index texture is uniform enough to name one. Null Rows = don't filter, which
     /// is the only honest answer in every state but the two that establish a row set.
+    /// <para/>
+    /// <paramref name="HasDiffuse"/> rides along because the same parse answers it and the panel needs it for
+    /// the glow warning — characterscroll has no base-texture slot, so a pack that paints its surface loses
+    /// that painting when the glow is switched on. Reading the material twice for one bool would be waste.
     /// </summary>
-    private readonly record struct ContentIndex(HashSet<int>? Rows, string? SubRow, ContentIndexState State);
+    private readonly record struct ContentIndex(
+        HashSet<int>? Rows, string? SubRow, ContentIndexState State, bool HasDiffuse = false,
+        /// <summary>The roughness and metalness the pack's material already holds, per sub-row (0–31), so
+        /// the grid can show those instead of its own neutral defaults. Null when it has no colour table.
+        /// From the same parse as the rest of this.</summary>
+        IReadOnlyList<(float Roughness, float Metalness)>? Physical = null);
 
     /// <summary>
     /// The colour-table row a material with NO index texture falls back to.
@@ -1963,7 +2085,8 @@ public class StatusWindow : Window
                 {
                     // The material names its index by GAME path, so Penumbra has to say which file that is
                     // right now — the pack may well be redirecting it from one of its own options.
-                    var slots = TextureLoader.ParseMtrlBytes(File.ReadAllBytes(mtrlPath));
+                    var mtrlBytes = File.ReadAllBytes(mtrlPath);
+                    var slots = TextureLoader.ParseMtrlBytes(mtrlBytes);
                     if (!slots.Parsed)
                         // The parser is fail-open, so "no index" and "could not walk this file" arrive as the
                         // same null. Only Parsed separates them, and getting it wrong is expensive: a wrongly
@@ -1985,6 +2108,17 @@ public class StatusWindow : Window
                             Plugin.Log.Warning("[Proteus] content: {0} names index texture {1}, which could not "
                                              + "be resolved or decoded", entry.ModDirectory, slots.Index);
                     }
+
+                    // From the SAME parse — see ContentIndex.HasDiffuse. Recorded even on the branches that
+                    // learned nothing about the index, because the glow warning is a separate question and a
+                    // material whose index is unreadable can still have a base texture to lose. The physical
+                    // values ride along for the same reason: the grid needs them whatever the index said.
+                    if (slots.Parsed)
+                        result = result with
+                        {
+                            HasDiffuse = !string.IsNullOrEmpty(slots.Diffuse),
+                            Physical = GearMaterialWriter.ReadPhysical(mtrlBytes),
+                        };
                 }
             }
         }
@@ -2000,15 +2134,20 @@ public class StatusWindow : Window
     /// <summary>
     /// The file behind a texture a content material names, as a disk path.
     /// <para/>
-    /// Penumbra first, because it is the only one that knows which of the pack's options is selected — a
-    /// pack whose index texture IS an option (a colour picker) has several, and only the live one is right.
+    /// The answer must come from INSIDE the pack. A content material is the pack's own and its textures are
+    /// the pack's own, so a resolution landing anywhere else is answering a different question — and it
+    /// answered one here: this pack asks for <c>chara/neolithe/neolithe_piercings_index.tex</c>, a namespace
+    /// its author invented, and the live resolve came back with something whose red channel read as row 16
+    /// while the pack's actual file selects row 1. The grid then dimmed every row but 16, so the one row the
+    /// material reads could not be edited at all.
     /// <para/>
-    /// But it cannot be relied on alone. These paths are frequently not game paths at all: this pack asks
-    /// for <c>chara/neolithe/neolithe_piercings_index.tex</c>, a namespace its author invented, and a
-    /// resolver whose job is "what does the game load here" has nothing to say about it. So fall back to
-    /// the pack's own folder and match on the file name. The fallback can pick the wrong variant for a pack
-    /// that ships several under one name — better a filter derived from a sibling than none at all, since
-    /// without one every row reads as live and colouring the wrong one looks exactly like a broken feature.
+    /// Penumbra is still asked first, because it is the only thing that knows which of the pack's options is
+    /// selected — a pack whose index texture IS an option (a colour picker) ships several under one name and
+    /// only the live one is right. Its answer is simply required to be a file within this mod's folder.
+    /// <para/>
+    /// Otherwise: the pack's own folder, matched on file name. Ambiguous for the colour-picker case, but a
+    /// filter derived from a sibling beats none — without one every row reads as live and colouring the
+    /// wrong one looks exactly like a broken feature.
     /// </summary>
     private string? ResolveContentTexture(OverlayEntry entry, string modRoot, string gamePath)
     {
@@ -2017,19 +2156,39 @@ public class StatusWindow : Window
         if (viaPenumbra != null
             && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
             && File.Exists(viaPenumbra))
-            return viaPenumbra;
+        {
+            if (IsUnder(modRoot, viaPenumbra)) return viaPenumbra;
+            Plugin.Log.Debug("[Proteus] content: ignoring \"{0}\" for {1} — outside {2}, so it is not this "
+                           + "pack's own texture", viaPenumbra, gamePath, entry.ModDirectory);
+        }
 
         try
         {
             var leaf = Path.GetFileName(gamePath.Replace('\\', '/'));
             if (leaf.Length == 0) return null;
-            return Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+            var hit = Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+            Plugin.Log.Debug("[Proteus] content: {0} -> {1}", gamePath, hit ?? "(not in the mod folder)");
+            return hit;
         }
         catch (Exception ex)
         {
             Plugin.Log.Debug("[Proteus] no file for {0} under {1}: {2}", gamePath, entry.ModDirectory, ex.Message);
             return null;
         }
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="root"/>. Compared through
+    /// <see cref="Path.GetRelativePath"/> so <c>..</c> and mixed separators cannot smuggle a path out.</summary>
+    private static bool IsUnder(string root, string path)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(Path.GetFullPath(root), Path.GetFullPath(path));
+            return !Path.IsPathRooted(rel)
+                && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && rel != "..";
+        }
+        catch { return false; }
     }
 
     /// <summary>The scan as the panel needs it — a texture whose texels are all fully transparent selects
@@ -2840,7 +2999,7 @@ public class StatusWindow : Window
         // material the PACK ships, so the only control that means anything is the colour grid itself.
         if (entry.Metadata is { HasContent: true })
         {
-            DrawContentColorEditor(entry, editingBinding);
+            DrawContentColorEditor(entry, editingBinding, effects);
             // A pack may ship geometry AND overlays; only a pure content pack is finished here.
             if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
             {
@@ -2899,7 +3058,7 @@ public class StatusWindow : Window
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
 
             bool changedSimple = false;
-            int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
+            int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 0);
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
                 compositor.GetShellMaterials(entry.ModDirectory, null, null),
                 compositor.GetSkinGlowTargets(entry.ModDirectory, null, null),
@@ -3241,7 +3400,7 @@ public class StatusWindow : Window
                 ? DesignBindingService.CopyRows(storedMaskRows ?? baseMaskRows)
                 : baseMaskRows;
             var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
-            int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
+            int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 0);
             bool maskChanged = false;
 
             // When the mod has any gear layer, the mask is FORCED to a top Cloth shell (it stacks over gear),
@@ -3400,7 +3559,7 @@ public class StatusWindow : Window
         }
 
         bool changed = false;
-        int sel = _rowSelection.GetValueOrDefault(scope, 1);
+        int sel = _rowSelection.GetValueOrDefault(scope, 0);
 
         var skinGlowTargets = compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name);
         var shellMaterials  = compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name);

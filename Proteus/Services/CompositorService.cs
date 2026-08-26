@@ -2866,6 +2866,13 @@ public class CompositorService : IDisposable
                         content = content
                             .Select(c => c with { ColorTableRows = cOvr.Resolve(c.OptionGroup, c.Option) ?? c.ColorTableRows })
                             .ToList();
+                    // And its animated glow, resolved the same way. Without this the editor would write a
+                    // glow into the binding and the composite would go on publishing the pack's own
+                    // material — the change would appear to save and do nothing.
+                    if (gearOverride != null && gearOverride.TryGetValue(entry.ModDirectory, out var cGear))
+                        content = content
+                            .Select(c => c with { Glow = cGear.ResolveContent(c.OptionGroup, c.Option) ?? c.Glow })
+                            .ToList();
                     foreach (var c in content) contentLayers.Add((entry, c));
                 }
 

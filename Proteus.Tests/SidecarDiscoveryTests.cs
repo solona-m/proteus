@@ -550,6 +550,26 @@ public class SidecarDiscoveryTests
     }
 
     [Fact]
+    public void ResolveActiveContent_UnconditionalPieces_TakeTheModWideGlow()
+    {
+        // A piece that belongs to no option has no option to hang a glow on, so it reads the mod-wide one —
+        // the same fallback its colours already take. Without this an unconditional piece could never glow
+        // at all, which is most of an imported pack: the importer puts every model in the unconditional
+        // list and gates them through the synthesized piece group.
+        var piece = new ContentPiece { Model = "top/heart/model.mdl" };
+        var glow = new GearSettingsPreset { Scroll = "rainbow.png", ScrollSpeedX = 0.3f };
+        var meta = new ProteusMetadata { Content = [piece], ContentGlow = glow };
+
+        var resolved = Assert.Single(MakeService().ResolveActiveContent(Entry(meta)));
+        Assert.Same(glow, resolved.Glow);
+
+        // And no glow set is no glow — not an empty preset that would look like one to the merge key.
+        var bare = Assert.Single(MakeService().ResolveActiveContent(
+            Entry(new ProteusMetadata { Content = [piece] })));
+        Assert.Null(bare.Glow);
+    }
+
+    [Fact]
     public void ResolveActiveContent_NoContentAtAll_IsEmpty()
     {
         Assert.Empty(MakeService().ResolveActiveContent(Entry(new ProteusMetadata())));

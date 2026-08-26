@@ -39,8 +39,13 @@ public sealed class SecondSkinLayer
 /// One imported model and the meshes of it that belong to a layer.
 /// <paramref name="KeepMaterial"/> is matched against the model's own material names (leading slash
 /// included, as the model stores them) — see <see cref="SecondSkinWriter.KeepByLeaf"/>.
+/// <para/>
+/// <paramref name="MirrorUv1"/> overwrites every uv1 slot with the mesh's own uv0. It is the ONE deviation
+/// from a byte-for-byte copy, and it is set only when the layer's material was rebuilt onto
+/// <c>characterscroll.shpk</c> for an animated glow: that shader samples its scroll map with uv1, and a
+/// model's uv1 is as likely to hold an unrelated aux coordinate as a usable texcoord.
 /// </summary>
-public sealed record ContentGeometry(byte[] Model, Func<string, bool> KeepMaterial);
+public sealed record ContentGeometry(byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false);
 
 /// <summary>
 /// Builds the "second skin" model: every skin part (chest, legs, hands, feet…) duplicated, pushed out
@@ -462,7 +467,8 @@ public static class SecondSkinWriter
         // accumulators; `cov` null keeps all triangles; `mapBase`/`mapAppended` share the src's submesh bone
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
-                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors)
+                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
+                      bool mirrorUv1 = false)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -483,7 +489,7 @@ public static class SecondSkinWriter
             (float U, float V)[]? uvPre = null;
             if (preserve)
             {
-                CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
+                CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, mirrorUv1,
                     out outStreams, out outStrides, out declBlock);
                 uv = [];   // no coverage trim for the host mesh
             }
@@ -739,7 +745,7 @@ public static class SecondSkinWriter
                             continue;
 
                         EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
-                            dropConnectors: false);
+                            dropConnectors: false, mirrorUv1: geo.MirrorUv1);
                     }
                 }
                 continue;
@@ -1213,26 +1219,118 @@ public static class SecondSkinWriter
     /// shell tricks — no push, no colour-whiten, no uv1 mirroring, no UV normalization. The accessory must
     /// render exactly as authored, so its format passes through untouched.
     /// </summary>
+    /// <summary>
+    /// Where a mesh's uv1 lives, and what it would take to give it one — the single description
+    /// <see cref="BuildVerbatim"/> and <see cref="CopyVerbatim"/> both work from.
+    /// <para/>
+    /// Three shapes, and the reason there are three is the format: a Float4 (type 3) or Half4 (type 14) uv0
+    /// packs a second UV in its <c>.zw</c>; some models instead declare a separate <c>usage 4 index 1</c>
+    /// element; and a mesh with a bare 2-component uv0 and neither has no uv1 at all, so one must be
+    /// APPENDED to uv0's own stream — that stream is guaranteed present, which a hard-coded stream 1 is not.
+    /// <para/>
+    /// A model can have both the packed and the explicit form at once (the sample piercings pack does), and
+    /// which one the shader reads is not worth guessing: every slot is written.
+    /// </summary>
+    private readonly record struct Uv1Plan(
+        bool ZwValid, int ZwOffset, bool ZwHalf, VElem? Explicit, bool Append, int Stream, int AppendOffset)
+    {
+        /// <summary>Bytes this adds to <see cref="Stream"/>'s stride. Zero unless a uv1 is appended.</summary>
+        public int ExtraBytes => Append ? 8 : 0;
+    }
+
+    private static Uv1Plan PlanUv1(VElem? uv0, VElem? uv1El, byte[] bs)
+    {
+        bool zwValid = uv0 is { } uz && (uz.Type == 3 || uz.Type == 14);
+        int  zwOff   = uv0 is { } uo ? uo.Offset + (uo.Type == 3 ? 8 : 4) : 0;
+        bool zwHalf  = uv0 is { } uh && uh.Type == 14;
+        int  stream  = uv0 is { } us ? us.Stream : 1;
+        return new Uv1Plan(zwValid, zwOff, zwHalf, uv1El,
+            Append: uv0 is not null && !zwValid && uv1El is null,
+            Stream: stream, AppendOffset: bs[stream]);
+    }
+
+    /// <summary>Write one vertex's (u, v) into every uv1 slot the plan names.</summary>
+    private static void WriteUv1(
+        in Uv1Plan p, VElem uv0, byte[][] outStreams, byte[] outStrides, int i, float u, float v)
+    {
+        if (p.ZwValid)
+            WriteUV2(outStreams[uv0.Stream], i * outStrides[uv0.Stream] + p.ZwOffset, p.ZwHalf, u, v);
+        if (p.Explicit is { } e1)
+            WriteUV2(outStreams[e1.Stream], i * outStrides[e1.Stream] + e1.Offset, e1.Type is 13 or 14, u, v);
+        if (p.Append)
+            WriteUV2(outStreams[p.Stream], i * outStrides[p.Stream] + p.AppendOffset, false, u, v);
+    }
+
+    /// <summary>Splice a Float2 uv1 into a declaration block, when the plan appended one. The .zw and
+    /// existing-uidx1 cases already declare theirs, so this no-ops for them.</summary>
+    private static void SpliceUv1Decl(byte[] declBlock, in Uv1Plan p)
+    {
+        if (!p.Append) return;
+        for (int e = 0; e < 17; e++)
+        {
+            int o = e * 8;
+            if (declBlock[o] != 0xFF) continue;
+            declBlock[o]     = (byte)p.Stream;
+            declBlock[o + 1] = (byte)p.AppendOffset;
+            declBlock[o + 2] = 1;                         // Float2
+            declBlock[o + 3] = UseUV;
+            declBlock[o + 4] = 1;                         // usageIndex 1
+            if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
+            break;
+        }
+    }
+
     private static void CopyVerbatim(
-        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs,
+        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, bool mirrorUv1,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock)
     {
         // Match BuildVerbatim's stream count: every stream carrying data OR named by a decl element.
         int streamCount = bs[2] > 0 ? 3 : (bs[1] > 0 ? 2 : 1);
         foreach (var el in decl) streamCount = Math.Max(streamCount, Math.Min((int)el.Stream, 2) + 1);
 
+        // uv1 is touched ONLY for a glowing content piece — characterscroll samples its scroll map with it,
+        // and a model's own uv1 is as likely to hold an unrelated aux coordinate as a usable texcoord (see
+        // BuildVerbatim, which resolved the same ambiguity by overwriting). Everything else about this copy
+        // stays byte-for-byte: the piece must render exactly as its author built it.
+        VElem? uv0 = null, uv1El = null;
+        if (mirrorUv1)
+            foreach (var el in decl)
+                if (el.Usage == UseUV)
+                {
+                    if (el.UsageIndex == 0) uv0 ??= el; else uv1El ??= el;
+                }
+        var plan = PlanUv1(uv0, uv1El, bs);
+        bool doMirror = mirrorUv1 && uv0 is not null;
+
         outStrides = new byte[streamCount];
         for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
+        if (doMirror && plan.Append) outStrides[plan.Stream] = (byte)(bs[plan.Stream] + plan.ExtraBytes);
+
         outStreams = new byte[streamCount][];
         for (int st = 0; st < streamCount; st++)
         {
-            outStreams[st] = new byte[vc * bs[st]];
+            outStreams[st] = new byte[vc * outStrides[st]];
             for (int i = 0; i < vc; i++)
-                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * bs[st], bs[st]);
+                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * outStrides[st], bs[st]);
         }
 
         declBlock = new byte[DeclSize];
         Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
+
+        if (doMirror)
+        {
+            var u0 = uv0!.Value;
+            Span<float> tmp = stackalloc float[4];
+            for (int i = 0; i < vc; i++)
+            {
+                // The AUTHORED uv0, unshifted and unnormalized — unlike the shell path, which mirrors the
+                // value it moved onto the [0,1] tile. A content mesh keeps its own UV island and the
+                // material's tiling constants set how densely the pattern repeats across it.
+                ReadTyped(s, vb + (int)vbo[u0.Stream] + i * bs[u0.Stream] + u0.Offset, u0.Type, tmp);
+                WriteUv1(plan, u0, outStreams, outStrides, i, tmp[0], tmp[1]);
+            }
+            SpliceUv1Decl(declBlock, plan);
+        }
     }
 
     /// <summary>Returns the number of vertices <paramref name="uvConv"/> had no correspondence for (0 when
@@ -1267,17 +1365,13 @@ public static class SecondSkinWriter
         // The model's own uv1 slot holds an unrelated aux coord (a Float4/Half4 uv0 packs it in .zw; some
         // models add a separate uidx1 element) — junk for scrolling, so we overwrite every uv1 slot with
         // uv0. Only when uv0 is a bare 2-component element with no uidx1 do we append a Float2 uv1 — into
-        // uv0's OWN stream (guaranteed present), not a hard-coded stream 1.
-        bool zwValid = uv0 is { } uz && (uz.Type == 3 || uz.Type == 14);
-        int  zwOff   = uv0 is { } uo ? uo.Offset + (uo.Type == 3 ? 8 : 4) : 0;
-        bool zwHalf  = uv0 is { } uh && uh.Type == 14;
-        bool appendUv1 = uv0 is not null && !zwValid && uv1El is null;
-        int  uv1Stream = uv0 is { } us ? us.Stream : 1;
-        int  uv1Bytes  = appendUv1 ? 8 : 0;                  // appended as Float2
+        // uv0's OWN stream (guaranteed present), not a hard-coded stream 1. See Uv1Plan, which CopyVerbatim
+        // shares so a glowing content mesh cannot drift from this.
+        var uv1Plan = PlanUv1(uv0, uv1El, bs);
 
         outStrides = new byte[streamCount];
         for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
-        if (appendUv1) outStrides[uv1Stream] = (byte)(bs[uv1Stream] + uv1Bytes);
+        if (uv1Plan.Append) outStrides[uv1Plan.Stream] = (byte)(bs[uv1Plan.Stream] + uv1Plan.ExtraBytes);
         outStreams = new byte[streamCount][];
         for (int st = 0; st < streamCount; st++) outStreams[st] = new byte[vc * outStrides[st]];
 
@@ -1345,11 +1439,8 @@ public static class SecondSkinWriter
                     else uvUnmapped++;
                 }
                 uvs[i] = (u, v);
-                int so = i * outStrides[u0e.Stream];
-                WriteUV2(outStreams[u0e.Stream], so + u0e.Offset, uv0Half, u, v);   // uv0.xy (normalized)
-                if (zwValid)         WriteUV2(outStreams[u0e.Stream], so + zwOff, zwHalf, u, v);
-                if (uv1El is { } e1) WriteUV2(outStreams[e1.Stream], i * outStrides[e1.Stream] + e1.Offset, e1.Type is 13 or 14, u, v);
-                if (appendUv1)       WriteUV2(outStreams[uv1Stream], i * outStrides[uv1Stream] + bs[uv1Stream], false, u, v);
+                WriteUV2(outStreams[u0e.Stream], i * outStrides[u0e.Stream] + u0e.Offset, uv0Half, u, v);
+                WriteUv1(uv1Plan, u0e, outStreams, outStrides, i, u, v);   // the SHIFTED value, unlike content
             }
         }
 
@@ -1357,19 +1448,7 @@ public static class SecondSkinWriter
         // appended one (the .zw / existing-uidx1 cases already declare their uv1).
         declBlock = new byte[DeclSize];
         Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
-        if (appendUv1)
-            for (int e = 0; e < 17; e++)
-            {
-                int o = e * 8;
-                if (declBlock[o] != 0xFF) continue;
-                declBlock[o]     = (byte)uv1Stream;
-                declBlock[o + 1] = bs[uv1Stream];
-                declBlock[o + 2] = 1;                         // Float2
-                declBlock[o + 3] = UseUV;
-                declBlock[o + 4] = 1;                         // usageIndex 1
-                if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
-                break;
-            }
+        SpliceUv1Decl(declBlock, uv1Plan);
         return uvUnmapped;
     }
 

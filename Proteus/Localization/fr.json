@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Sous characterscroll, il s'agit d'un petit SEUIL, pas de la luminosité :\n0 = aucune lueur ; une valeur élevée délave la couleur de la sphere map défilante.\nLes matériaux animés d'origine utilisent ~0,025.",
+    "message": "L'intensité avec laquelle cette ligne brille. 0 l'éteint.\nAvec une lueur animée, c'est la luminosité de l'effet ; une valeur élevée\nbrûle en blanc une texture de défilement colorée. Environ 25 % est un bon départ.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "{0} maillage, {1} sommets",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "Ce pack peint sa surface avec une texture. Une lueur animée fait tourner le matériau sur un shader qui n'a pas d'emplacement pour elle : tant qu'elle est active, les couleurs ci-dessus prennent le relais. Retirer l'effet remet la texture.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "L'effet « {0} » n'est plus dans le dossier Effects de ce mod ni dans votre bibliothèque : la pièce s'affiche sans lui. Choisissez-en un autre, ou remettez le fichier.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "Glow est à zéro sur la ligne {0}{1} — la seule cellule que lit ce matériau — donc l'effet reste éteint. Augmentez Glow là pour l'activer et régler sa force. Glow sur toute autre ligne ne fait rien.",
     "description": ""
   },
   "Content.IndexEmpty": {

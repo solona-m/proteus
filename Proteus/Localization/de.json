@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Unter characterscroll ist das ein kleines GATE, nicht die Helligkeit:\n0 = gar kein Leuchten; ein großer Wert wäscht die Farbe der Scroll-Map aus.\nDie originalen animierten Materialien nutzen ~0,025.",
+    "message": "Wie hell diese Zeile leuchtet. 0 schaltet sie aus.\nBei einem animierten Leuchten ist das die Helligkeit des Effekts; ein hoher Wert\nüberstrahlt eine farbige Scroll-Textur zu Weiß. Rund 25 % sind ein guter Start.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "{0} Mesh, {1} Vertices",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "Dieses Pack bemalt seine Oberfläche mit einer Textur. Ein animiertes Leuchten lässt das Material auf einem Shader laufen, der dafür keinen Platz hat — solange es an ist, übernehmen die Farben oben. Das Entfernen des Effekts holt die Textur zurück.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "Der Effekt „{0}“ liegt weder im Effects-Ordner dieses Mods noch in deiner Bibliothek, das Teil wird also ohne ihn dargestellt. Wähle einen anderen oder lege die Datei zurück.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "In Zeile {0}{1} — der einzigen Zelle, die dieses Material liest — steht Glow auf null, also bleibt der Effekt aus. Erhöhe Glow dort, um ihn einzuschalten und seine Stärke festzulegen. Glow in jeder anderen Zeile bewirkt nichts.",
     "description": ""
   },
   "Content.IndexEmpty": {

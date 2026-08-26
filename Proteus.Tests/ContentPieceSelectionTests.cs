@@ -306,6 +306,50 @@ public class ContentPieceSelectionTests
     }
 
     [Fact]
+    public void An_animated_glow_splits_a_shared_material_and_its_numbers_are_part_of_that()
+    {
+        const string Mtrl = "common/1/piercings.mtrl";
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
+        var plain = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+
+        GearSettingsPreset Glow(string scroll, float? speedX = null, float? tileX = null) => new()
+        {
+            Scroll = scroll, ScrollSpeedX = speedX, ScrollTilingX = tileX,
+        };
+
+        // A glow rebuilds the material onto characterscroll — a different file, so a different slot.
+        var glowing = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey());
+        Assert.NotEqual(plain, glowing);
+
+        // Two options that agree on the effect AND every number still share one.
+        Assert.Equal(glowing,
+            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey()));
+
+        // Differing on any of them does not. Merging on the effect name alone would silently hand one
+        // option the other's speed, because only one material gets published.
+        Assert.NotEqual(glowing,
+            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("stars.png").GlowKey()));
+        Assert.NotEqual(glowing,
+            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", speedX: 0.4f).GlowKey()));
+        Assert.NotEqual(glowing,
+            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", tileX: 8f).GlowKey()));
+
+        // A preset carrying numbers but NO effect is not a glow, and must not split a slot for nothing.
+        Assert.Null(new GearSettingsPreset { ScrollSpeedX = 0.4f, ScrollTilingX = 8f }.GlowKey());
+        Assert.Null(new GearSettingsPreset().GlowKey());
+
+        // Layer, Shader and the mode pin describe an overlay descriptor, not a content material — a stray
+        // value in one must not cost a second slot.
+        Assert.Equal(
+            new GearSettingsPreset { Scroll = "rainbow.png" }.GlowKey(),
+            new GearSettingsPreset
+            {
+                Scroll = "rainbow.png", Layer = OverlayLayer.Gear,
+                Shader = "characterscroll.shpk", ManualShaderLock = true,
+            }.GlowKey());
+    }
+
+    [Fact]
     public void A_piece_is_named_by_the_switch_that_turned_it_on()
     {
         // The regression: an imported pack with no options of its own puts every model in the unconditional
@@ -370,6 +414,148 @@ public class ContentPieceSelectionTests
 
         // Fully transparent texels select nothing at all.
         Assert.Empty(ContentIndexTexture.Read(new byte[64]).Rows);
+    }
+
+    /// <summary>
+    /// An animated glow has to be armed on the cell the material SAMPLES, not on whichever row happens to
+    /// carry a value.
+    /// <para/>
+    /// The regression this pins, in full: the piercings pack's index selects row 1 sub-row B, but an older
+    /// colour edit had left values on row 16. Asking "does any row emit" saw those, concluded the glow was
+    /// already on, and armed nothing — so the effect switched on at row 16, which the shader never reads.
+    /// The material was correct in every other respect and the piece rendered as plain metal.
+    /// </summary>
+    [Fact]
+    public void A_glow_is_armed_on_the_cell_the_material_samples_not_on_any_row_that_has_a_value()
+    {
+        // The piercings pack: index selects row 1, column B.
+        Assert.Equal((1, false), ContentGlowRow.Sampled([1], "B", selectedRow: 16));
+        Assert.Equal((16, true), ContentGlowRow.Sampled([16], "A", selectedRow: 3));
+
+        // An unreadable index falls back to the row the grid is showing, in column A.
+        Assert.Equal((3, true), ContentGlowRow.Sampled(null, null, selectedRow: 3));
+        // An index naming several rows falls back for the ROW — none of them is "the" cell — but keeps the
+        // column, which the scan did establish. Half an answer is still an answer.
+        Assert.Equal((3, false), ContentGlowRow.Sampled([1, 16], "B", selectedRow: 3));
+
+        // A leftover value on row 16 is NOT this effect being on.
+        var rows = new List<ColorTableRowPreset>
+        {
+            new()
+            {
+                Row = 16,
+                SubRowA = new ColorTableSubRowPreset { Diffuse = "#FF5000" },
+                SubRowB = new ColorTableSubRowPreset { Emissive = 0.25f },
+            },
+        };
+        Assert.False(ContentGlowRow.Emits(rows, 1, subRowA: false));
+        Assert.True(ContentGlowRow.Emits(rows, 16, subRowA: false));
+
+        // Arming adds the sampled row and leaves the leftovers alone.
+        Assert.True(ContentGlowRow.Arm(rows, 1, subRowA: false));
+        Assert.True(ContentGlowRow.Emits(rows, 1, subRowA: false));
+        Assert.Equal(ContentGlowRow.DefaultGlow, rows.Single(r => r.Row == 1).SubRowB!.Emissive);
+        Assert.Null(rows.Single(r => r.Row == 1).SubRowA);              // the other column is untouched
+        Assert.Equal(0.25f, rows.Single(r => r.Row == 16).SubRowB!.Emissive);
+
+        // The diffuse is never written — a piece keeps the surface its author gave it.
+        Assert.Null(rows.Single(r => r.Row == 1).SubRowB!.Diffuse);
+        // The glow COLOUR is written, and has to be: the writer resolves it EmissiveColor → Diffuse, so a
+        // cell with neither stays dark however high the intensity.
+        Assert.Equal(ContentGlowRow.DefaultGlowColour, rows.Single(r => r.Row == 1).SubRowB!.EmissiveColor);
+
+        // Arming again is a no-op — it seeds a starting point, it does not overrule a choice.
+        rows.Single(r => r.Row == 1).SubRowB!.Emissive = 0.4f;
+        Assert.False(ContentGlowRow.Arm(rows, 1, subRowA: false));
+        Assert.Equal(0.4f, rows.Single(r => r.Row == 1).SubRowB!.Emissive);
+
+        // And column matters: the same row's other half is a different cell.
+        Assert.False(ContentGlowRow.Emits(rows, 1, subRowA: true));
+        Assert.True(ContentGlowRow.Arm(rows, 1, subRowA: true));
+    }
+
+    /// <summary>
+    /// Switching an effect off leaves nothing behind.
+    /// <para/>
+    /// Clearing the effect only changes the SHADER: the pack's own material goes back to character.shpk,
+    /// where a Glow value is an ordinary emissive rather than an animation gate. So a value arming left in
+    /// the rows kept the piece glowing with the animation switched off — and broke the promise that clearing
+    /// an effect republishes the author's material exactly.
+    /// </summary>
+    [Fact]
+    public void Switching_an_effect_off_takes_back_the_glow_it_switched_on()
+    {
+        var rows = new List<ColorTableRowPreset>();
+
+        // On, then off: back to nothing at all. Not a row carrying an explicit zero — the row writer writes
+        // every emissive it is given, so a zero would overwrite whatever the author had there.
+        Assert.True(ContentGlowRow.Arm(rows, 1, subRowA: false));
+        Assert.True(ContentGlowRow.Disarm(rows, 1, subRowA: false));
+        Assert.Empty(rows);
+
+        // Disarming something that was never armed changes nothing.
+        Assert.False(ContentGlowRow.Disarm(rows, 1, subRowA: false));
+
+        // A value the user MOVED is theirs and survives — only an untouched seed is taken back.
+        ContentGlowRow.Arm(rows, 1, subRowA: false);
+        rows.Single().SubRowB!.Emissive = 0.6f;
+        Assert.False(ContentGlowRow.Disarm(rows, 1, subRowA: false));
+        Assert.Equal(0.6f, rows.Single().SubRowB!.Emissive);
+
+        // So does a cell that carries anything else, even at the seeded value — the row itself is still
+        // wanted, so only the Glow is cleared and the rest stays.
+        var tinted = new List<ColorTableRowPreset>();
+        ContentGlowRow.Arm(tinted, 4, subRowA: true);
+        tinted.Single().SubRowA!.Diffuse = "#FF5000";
+        Assert.True(ContentGlowRow.Disarm(tinted, 4, subRowA: true));
+        Assert.Equal(0f, tinted.Single().SubRowA!.Emissive);
+        Assert.Equal("#FF5000", tinted.Single().SubRowA!.Diffuse);
+
+        // And a sibling column keeps the row alive when only one half is taken back.
+        var both = new List<ColorTableRowPreset>();
+        ContentGlowRow.Arm(both, 2, subRowA: true);
+        both.Single().SubRowB = new ColorTableSubRowPreset { Diffuse = "#00FF00" };
+        Assert.True(ContentGlowRow.Disarm(both, 2, subRowA: true));
+        Assert.Null(both.Single().SubRowA);
+        Assert.Equal("#00FF00", both.Single().SubRowB!.Diffuse);
+    }
+
+    /// <summary>
+    /// The row a texture names is what the GAME reads there, which is not always what the pack shipped.
+    /// <para/>
+    /// The piercings pack names <c>chara/neolithe/neolithe_piercings_index.tex</c> — a namespace its author
+    /// invented and does not own. Neolithe [ALL IN ONE] claims the same path and wins, and its file reads
+    /// <c>R=255</c>: row 16, where that material happens to keep a silver, fully metallic, non-emitting row.
+    /// So a glow armed on the pack's own row 1 rendered as nothing while the piece drew as plain metal, and
+    /// nothing said another mod had taken the texture.
+    /// <para/>
+    /// Both files are decoded here, because the two readings are the whole story and neither is wrong on its
+    /// own terms — the fix is to stop the collision, by republishing the pack's texture under a path Proteus
+    /// owns, not to prefer one reading over the other.
+    /// </summary>
+    [Fact]
+    public void Two_mods_can_claim_one_texture_path_and_they_select_different_rows()
+    {
+        static byte[] Flat(byte r, byte g)
+        {
+            var b = new byte[16 * 4];
+            for (int i = 0; i < 16; i++) { b[i * 4] = r; b[i * 4 + 1] = g; b[i * 4 + 3] = 255; }
+            return b;
+        }
+
+        // What the pack ships: black, so row 1 column B.
+        var pack = ContentIndexTexture.Read(Flat(0, 0));
+        Assert.Equal(new[] { 1 }, pack.Rows.ToArray());
+        Assert.Equal("B", pack.SubRow);
+
+        // What actually resolved at that path: another mod's silver index, red at full, so row 16 column B.
+        var foreign = ContentIndexTexture.Read(Flat(255, 0));
+        Assert.Equal(new[] { 16 }, foreign.Rows.ToArray());
+        Assert.Equal("B", foreign.SubRow);
+
+        // Same column, different row — which is why editing row 16 B was the only thing that ever showed.
+        Assert.NotEqual(pack.Rows.Single(), foreign.Rows.Single());
+        Assert.Equal(pack.SubRow, foreign.SubRow);
     }
 
     [Fact]

@@ -236,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "在 characterscroll 下，这是一个很小的阈值，而不是亮度：\n0 = 完全不发光；数值过大会冲淡滚动贴图的颜色。\n原版动态材质使用约 0.025。",
+    "message": "此行发光的亮度。0 表示关闭。\n在动画发光下，这就是效果的亮度；数值过高会让\n彩色的滚动贴图过曝为白色。25% 左右是不错的起点。",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -493,6 +493,18 @@
   },
   "Content.Geometry.Fmt": {
     "message": "网格 {0}，顶点 {1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "此模组使用贴图绘制表面。动画发光会让材质运行在一个没有该槽位的着色器上，因此发光期间将改由上方的颜色接管。清除效果即可恢复贴图。",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "效果“{0}”已不在此模组的 Effects 文件夹或您的收藏库中，因此该部件正在不带效果地渲染。请另选一个，或将文件放回。",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "此材质只读取第 {0} 行 {1} 列这一处，而那里的 Glow 为零，因此效果仍处于关闭状态。请在该处提高 Glow 以开启它并设置强度。其他行的 Glow 不起任何作用。",
     "description": ""
   },
   "Content.IndexEmpty": {

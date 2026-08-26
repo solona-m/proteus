@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using Proteus.Services;
 using Xunit;
 
@@ -115,9 +116,142 @@ public class SecondSkinWriterVerbatimTests
         return ms.ToArray();
     }
 
-    private static ContentGeometry Geometry(byte[] model, string materialLeaf)
+    private static ContentGeometry Geometry(byte[] model, string materialLeaf, bool mirrorUv1 = false)
         => new(model, SecondSkinWriter.KeepByLeaf(
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { materialLeaf.TrimStart('/') }));
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { materialLeaf.TrimStart('/') }), mirrorUv1);
+
+    [Fact]
+    public void A_glowing_content_mesh_gets_uv1_mirrored_from_its_own_uv0()
+    {
+        var content = ReadPackEntry(ContentEntry);
+        if (content == null) return;
+
+        var mat = ContentMaterialOf(content);
+        SecondSkinLayer[] Layers(bool mirror) =>
+        [
+            new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry = [Geometry(content, mat, mirrorUv1: mirror)],
+            },
+        ];
+
+        var plain = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(), Layers(false), null, out var plainStats);
+        var mirrored = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(), Layers(true), null, out var mirrorStats);
+
+        // Whatever the declaration shape, the output must still parse: every element inside its stream's
+        // stride, one declaration per mesh, every submesh bone index inside the union list. This is the
+        // check that catches a stride grown without its declaration, or the reverse.
+        Validate(plain);
+        Validate(mirrored);
+
+        // Mirroring changes uv1 and NOTHING about the geometry itself.
+        Assert.Equal(plainStats.Meshes, mirrorStats.Meshes);
+        Assert.Equal(plainStats.VerticesOut, mirrorStats.VerticesOut);
+        Assert.Equal(plainStats.TrianglesOut, mirrorStats.TrianglesOut);
+
+        // The mesh must actually HAVE a uv1 to check — a test that silently found none would pass forever.
+        Assert.True(CountUv1Slots(mirrored) > 0, "no uv1 slot in the output to verify");
+
+        // Copied verbatim, this pack's uv1 is a CONSTANT (0, 1) on every vertex — in the .zw of its Float4
+        // uv0 and in its separate uidx1 element alike — while uv0 carries the real island. That is the whole
+        // reason mirroring exists: characterscroll would sample the scroll map at one texel and render a
+        // flat, colourless wash. Asserted so this test can never quietly go vacuous on a pack whose uv1
+        // already happened to match.
+        Assert.NotNull(FirstUv1Mismatch(plain));
+        Assert.Null(FirstUv1Mismatch(mirrored));
+    }
+
+    // ── uv1 inspection ────────────────────────────────────────────────────────
+    // A model reader narrow enough to answer one question: for every LOD0 vertex, does each uv1 slot hold
+    // the same value as uv0? Offsets follow Validate's walk; the vertex buffer base is the ModelFileHeader's
+    // LOD0 offset at 16.
+
+    private static IEnumerable<(byte[] M, int Vb, int Mo, int Db)> Lod0Meshes(byte[] m)
+    {
+        int declCount = BitConverter.ToUInt16(m, 12);
+        int declEnd = 0x44 + declCount * 17 * 8;
+        int strSize = (int)BitConverter.ToUInt32(m, declEnd + 4);
+        int mh = declEnd + 8 + strSize;
+        int meshCount = BitConverter.ToUInt16(m, mh + 4);
+        int elemCount = BitConverter.ToUInt16(m, mh + 24);
+        byte flags2 = m[mh + 27];
+        int lodStart = mh + 56 + elemCount * 32;
+        int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
+        int vb = (int)BitConverter.ToUInt32(m, 16);
+
+        for (int mi = 0; mi < meshCount; mi++)
+            yield return (m, vb, meshStart + mi * 36, 0x44 + mi * 17 * 8);
+    }
+
+    /// <summary>uv0 and every uv1 slot of one mesh, as (offsetInVertex, isHalf) pairs in its stream.</summary>
+    private static (int Stream, int Offset, byte Type)? Uv0Of(byte[] m, int db)
+    {
+        for (int e = 0; e < 17; e++)
+        {
+            int o = db + e * 8;
+            if (m[o] == 0xFF) break;
+            if (m[o + 3] == 4 && m[o + 4] == 0) return (m[o], m[o + 1], m[o + 2]);
+        }
+        return null;
+    }
+
+    private static List<(int Stream, int Offset, bool Half)> Uv1SlotsOf(byte[] m, int db)
+    {
+        var slots = new List<(int, int, bool)>();
+        var uv0 = Uv0Of(m, db);
+        // The .zw half of a Float4 / Half4 uv0 IS a uv1 — the same rule PlanUv1 encodes.
+        if (uv0 is { } u)
+        {
+            if (u.Type == 3)  slots.Add((u.Stream, u.Offset + 8, false));
+            if (u.Type == 14) slots.Add((u.Stream, u.Offset + 4, true));
+        }
+        for (int e = 0; e < 17; e++)
+        {
+            int o = db + e * 8;
+            if (m[o] == 0xFF) break;
+            if (m[o + 3] == 4 && m[o + 4] == 1) slots.Add((m[o], m[o + 1], m[o + 2] is 13 or 14));
+        }
+        return slots;
+    }
+
+    private static int CountUv1Slots(byte[] m)
+        => Lod0Meshes(m).Where(x => BitConverter.ToUInt16(x.M, x.Mo) > 0).Sum(x => Uv1SlotsOf(m, x.Db).Count);
+
+    /// <summary>The first uv1 slot that does not mirror its mesh's uv0, described; null when every one
+    /// does. A finding, not an assertion, so a caller can require EITHER answer.</summary>
+    private static string? FirstUv1Mismatch(byte[] m)
+    {
+        foreach (var (_, vb, mo, db) in Lod0Meshes(m))
+        {
+            ushort vc = BitConverter.ToUInt16(m, mo);
+            if (vc == 0) continue;
+            if (Uv0Of(m, db) is not { } uv0) continue;
+
+            uint[] vbo = { BitConverter.ToUInt32(m, mo + 20), BitConverter.ToUInt32(m, mo + 24),
+                           BitConverter.ToUInt32(m, mo + 28) };
+            byte[] bs = { m[mo + 32], m[mo + 33], m[mo + 34] };
+            bool uv0Half = uv0.Type is 13 or 14;
+
+            foreach (var (st, off, half) in Uv1SlotsOf(m, db))
+                for (int i = 0; i < vc; i++)
+                {
+                    var (u0, v0) = ReadUv(m, vb + (int)vbo[uv0.Stream] + i * bs[uv0.Stream] + uv0.Offset, uv0Half);
+                    var (u1, v1) = ReadUv(m, vb + (int)vbo[st] + i * bs[st] + off, half);
+                    // Half-precision on either side, so compare at half's resolution rather than exactly.
+                    if (Math.Abs(u0 - u1) >= 1e-2f || Math.Abs(v0 - v1) >= 1e-2f)
+                        return $"vertex {i}: uv1 ({u1}, {v1}) does not mirror uv0 ({u0}, {v0})";
+                }
+        }
+        return null;
+    }
+
+    private static (float U, float V) ReadUv(byte[] m, int at, bool half)
+        => half
+            ? ((float)BitConverter.ToHalf(m, at), (float)BitConverter.ToHalf(m, at + 2))
+            : (BitConverter.ToSingle(m, at), BitConverter.ToSingle(m, at + 4));
 
     [Fact]
     public void Content_layer_appends_the_packs_own_geometry_into_the_host()

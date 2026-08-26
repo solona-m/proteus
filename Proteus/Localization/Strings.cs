@@ -478,6 +478,19 @@ public sealed class ContentStrings
         "This material names an index texture Proteus couldn't read, so it can't tell which rows are live. "
       + "Every row is editable below, but only the ones the index selects will show.");
 
+    public readonly string GlowNeedsEmissiveFmt = Loc.Localize("Content.GlowNeedsEmissive.Fmt",
+        "Glow is at zero on row {0}{1} — the one cell this material reads — so the effect stays off. Raise "
+      + "Glow there to turn it on and set how strongly it shows. Glow on any other row does nothing.");
+
+    public readonly string GlowEffectMissingFmt = Loc.Localize("Content.GlowEffectMissing.Fmt",
+        "The effect \"{0}\" is no longer in this mod's Effects folder or your library, so the piece is "
+      + "rendering without it. Pick another, or put the file back.");
+
+    public readonly string GlowDropsDiffuse = Loc.Localize("Content.GlowDropsDiffuse",
+        "This pack paints its surface with a texture. An animated glow runs the material on a shader that "
+      + "has no slot for one, so the colours above take over while the glow is on. Clearing the effect puts "
+      + "the texture back.");
+
     public readonly string NoColorTable = Loc.Localize("Content.NoColorTable",
         "This material carries no colour table, so it has no rows to edit — nothing you change below will "
       + "reach the piece. Its colours come from its textures alone.");
@@ -736,9 +749,9 @@ public sealed class ColorsStrings
     public readonly string GlowAmount = Loc.Localize("Colors.GlowAmount.Label", "Glow");
 
     public readonly string GlowAmountTip = Loc.Localize("Colors.GlowAmount.Tip",
-        "Under characterscroll this is a small GATE, not the brightness:\n" +
-        "0 = no glow at all; a large value washes the scroll map's colour out.\n" +
-        "The vanilla animated materials use ~0.025.");
+        "How brightly this row glows. 0 switches it off.\n" +
+        "Under an animated glow this is the effect's brightness, and a high value\n" +
+        "blows a colourful scroll map out to white. Around 25% is a good start.");
 
     public readonly string Opacity = Loc.Localize("Colors.Opacity.Label", "Opacity");
 

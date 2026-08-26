@@ -166,6 +166,9 @@ public sealed class SecondSkinService
         /// by, and therefore what it has to be told was published.</summary>
         string MtrlRel,
         Dictionary<int, GearColorRow>? Rows,
+        /// <summary>The animated glow, or null to publish the pack's material as its author wrote it. Set
+        /// means the material is REBUILT onto characterscroll — see the emit loop.</summary>
+        GearSettingsPreset? Glow,
         ShellSurfaceKey Surface,
         List<ContentGeometry> Geometries,
         List<(OverlayEntry Entry, ResolvedContent Content)> Owners)
@@ -209,9 +212,12 @@ public sealed class SecondSkinService
     /// What makes two pieces share one published material, and therefore one of the host's ten slots.
     /// <para/>
     /// Everything that decides the material's BYTES is in here and nothing else is: the mod it came from,
-    /// the .mtrl file, and the colour rows stamped into it. Two pieces agreeing on all three would publish
-    /// the same file twice and spend a slot each — so they publish it once and both draw with it. Different
-    /// colours really are a different material and legitimately cost two.
+    /// the .mtrl file, the colour rows stamped into it, and the animated glow — which decides whether the
+    /// material is the pack's own or one rebuilt onto characterscroll, and at what speed it scrolls. Two
+    /// pieces agreeing on all of them would publish the same file twice and spend a slot each, so they
+    /// publish it once and both draw with it. Different colours or a different glow really are a different
+    /// material and legitimately cost two; merging on the effect NAME alone would silently hand one option
+    /// the other's speed.
     /// <para/>
     /// The SURFACE is in the key despite having nothing to do with the bytes. A Body piece and a Face piece
     /// are allocated to different hosts — a natively-authored face must not be race-deformed, so only a
@@ -221,8 +227,8 @@ public sealed class SecondSkinService
     /// meshes a unit draws is <see cref="ContentGeometryKey"/>'s job, deduped inside the unit.
     /// </summary>
     internal static string ContentUnitKey(
-        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson)
-        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-");
+        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson, string? glowKey = null)
+        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-", glowKey ?? "-");
 
     /// <summary>
     /// What makes two meshes the same mesh WITHIN a unit — the resolved model, and the material its meshes
@@ -1243,12 +1249,16 @@ public sealed class SecondSkinService
                 }
 
                 var rows = BuildSparseRows(rc.ColorTableRows);
+                // Only a glow that actually names an effect counts. A preset left behind with its numbers
+                // but no scroll map is not a glow, and treating it as one would split a material slot for
+                // nothing.
+                var glow = rc.Glow?.GlowKey() != null ? rc.Glow : null;
                 var key = ContentUnitKey(cEntry.ModDirectory, piece.SurfaceKey, rel,
-                    rows == null ? null : JsonSerializer.Serialize(rc.ColorTableRows));
+                    rows == null ? null : JsonSerializer.Serialize(rc.ColorTableRows), glow?.GlowKey());
 
                 if (!unitByKey.TryGetValue(key, out var unit))
                 {
-                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, piece.SurfaceKey, [], []);
+                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, glow, piece.SurfaceKey, [], []);
                     contentUnits.Add(unit);
                 }
 
@@ -1265,7 +1275,11 @@ public sealed class SecondSkinService
                 if (unitGeometry.Add(key + '\u0000' + ContentGeometryKey(modelRel, leaf)))
                     unit.Geometries.Add(new ContentGeometry(model,
                         SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                            { leaf.TrimStart('/') })));
+                            { leaf.TrimStart('/') }),
+                        // characterscroll samples its scroll map with uv1, so a glowing mesh is the only
+                        // content mesh that is not copied byte-for-byte. Per GEOMETRY rather than per layer:
+                        // the glow belongs to the unit, and the unit is what owns these.
+                        MirrorUv1: glow != null));
 
                 // Every option this material serves, so the colour editor can find it under any of them.
                 // Compared case-insensitively, as option names are everywhere else in this codebase.
@@ -1695,11 +1709,26 @@ public sealed class SecondSkinService
             string matName     = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
             string matVariant  = VariantFolderFor(host);
             string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
+            string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
 
-            // Only the colour rows the user edited are stamped in; every other row stays as the author left
-            // it. PatchColorTable no-ops on a material with no colour set, so a pack that ships one is not a
-            // requirement — it just cannot be recoloured.
-            var mtrl = GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+            byte[]? mtrl;
+            bool glowBuilt = false;
+            if (unit.Glow != null)
+            {
+                mtrl = BuildContentGlowMaterial(unit, texPrefix, texturesDir, diskChar, effectsFolder,
+                    redirects, ref shellChanged);
+                glowBuilt = mtrl != null;
+                // The pack's own material rather than nothing: an effect file that has gone missing, or a
+                // template the game could not hand us, must not take the piece off the character.
+                mtrl ??= GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+            }
+            else
+            {
+                // Only the colour rows the user edited are stamped in; every other row stays as the author
+                // left it. PatchColorTable no-ops on a material with no colour set, so a pack that ships one
+                // is not a requirement — it just cannot be recoloured.
+                mtrl = GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+            }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
             shellChanged |= WriteIfChanged(matDisk, mtrl);
@@ -1728,12 +1757,18 @@ public sealed class SecondSkinService
             inHost[hIdx]++; diskLetter++;
             contentPlaced++;
 
+            // The glow state is in here because its absence is otherwise invisible: a unit that resolved no
+            // effect, and one whose effect failed to build and fell back to the pack's own material, publish
+            // the same-looking line and the same-looking piece. Says which of the two, every composite.
             log.Information("[Proteus] content mat={0}/{7}/disk={1} -> host {2}{3:D4}/{4}: {5} — {8} mesh(es) "
-                          + "for [{6}]",
+                          + "for [{6}] glow={9}",
                 matLetter, diskChar, host.Prefix, host.SetId, host.Slot,
                 unit.Entry.ModDirectory,
                 string.Join(", ", unit.Owners.Select(o => o.Content.Option ?? "(default)")),
-                matVariant, unit.Geometries.Count);
+                matVariant, unit.Geometries.Count,
+                unit.Glow?.Scroll is { Length: > 0 } s
+                    ? (glowBuilt ? s : s + " (FAILED — published the pack's own material)")
+                    : "(none)");
         }
 
         if (contentUnhosted.Count > 0)
@@ -2163,6 +2198,15 @@ public sealed class SecondSkinService
     /// failure. The overlay's alpha is written into the NORMAL's BLUE channel — that is what gates
     /// transparency for gear, and therefore what lets stacked shells composite instead of occlude.
     /// </summary>
+    /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
+    /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
+    private static byte[] Solid(byte r, byte g, byte b, byte a)
+    {
+        var t = new byte[TexSize * TexSize * 4];
+        for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
+        return t;
+    }
+
     private List<string>? WriteTextures(
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
@@ -2191,13 +2235,6 @@ public sealed class SecondSkinService
                 scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
             else
                 log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
-        }
-
-        byte[] Solid(byte r, byte g, byte b, byte a)
-        {
-            var t = new byte[TexSize * TexSize * 4];
-            for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
-            return t;
         }
 
         // ── Proteus "Masks" options ──────────────────────────────────────────
@@ -2379,6 +2416,199 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
+    /// Rebuild an imported pack's material onto <c>characterscroll.shpk</c>, so its meshes can carry the
+    /// same animated glow a second-skin shell can. Null when it cannot be done, and the caller falls back to
+    /// publishing the pack's own material — a missing effect file must never take the piece off the wearer.
+    /// <para/>
+    /// Three things make this cheap. The pack's norm/mask/index textures are still served by the pack's OWN
+    /// Penumbra redirects, so the rebuilt material just names the same game paths and nothing is copied.
+    /// The shader's four slots are <c>norm, mask, id, catc</c> with no base, which is exactly what a pack
+    /// like the piercings ships once the scroll map is added. And nothing here touches the pack on disk:
+    /// this runs from <c>unit.Mtrl</c>, re-read every composite, so clearing the effect republishes the
+    /// author's bytes with no undo state to keep.
+    /// <para/>
+    /// What IS lost is a base texture, if the pack has one — characterscroll has no slot for it, and that is
+    /// load-bearing rather than an oversight (see <see cref="GearMaterialWriter.TextureOrder"/>: a base
+    /// present drives the diffuse and the colour table's is ignored, so a glow on white art can never read).
+    /// The panel says so before the user turns it on.
+    /// </summary>
+    private byte[]? BuildContentGlowMaterial(
+        ContentUnit unit, string texPrefix, string texturesDir, char letter, string? effectsFolder,
+        Dictionary<string, string> redirects, ref bool texturesChanged)
+    {
+        var glow = unit.Glow;
+        // ToScrollSettings returns null exactly when Scroll is empty, so a non-null result also pins the
+        // effect name for the lookups below.
+        if (glow?.ToScrollSettings() is not { } scrollSettings || glow.Scroll is not { } effectName) return null;
+
+        // The scroll map, from the mod's own Effects/ folder then the user's library — the same lookup a
+        // shell's glow uses, so one library serves both.
+        var effectPath = SidecarDiscoveryService.ResolveEffectPath(unit.Entry, effectsFolder, effectName);
+        if (effectPath == null)
+        {
+            // The library folder is named as well as the effect. It comes from Penumbra's mod directory, so
+            // it is null whenever that IPC is momentarily unavailable — and a null library silently reduces
+            // the lookup to the pack's own Effects folder, which most packs do not have. That reads exactly
+            // like a missing file while the file is sitting in the library.
+            log.Warning("[Proteus] content: {0} wants effect \"{1}\", which is in neither its own Effects "
+                      + "folder nor the library ({2}) — publishing the pack's own material instead",
+                unit.Entry.ModDirectory, effectName, effectsFolder ?? "(library unavailable)");
+            return null;
+        }
+        var scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+        if (scroll == null)
+        {
+            log.Warning("[Proteus] content: effect \"{0}\" could not be decoded ({1})", effectName, effectPath);
+            return null;
+        }
+
+        var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(RenderModeInference.GlowShader));
+        if (template == null)
+        {
+            log.Error("[Proteus] content: missing the {0} template material", RenderModeInference.GlowShader);
+            return null;
+        }
+
+        // The pack's own texture paths, kept verbatim. A slot the pack doesn't name gets the same fallback
+        // WriteTextures picks for a shell, written beside the scroll map.
+        var packTex = TextureLoader.ParseMtrlBytes(unit.Mtrl);
+        var outputRoot = Directory.GetParent(texturesDir)!.FullName;
+        // A ref parameter can't be captured by a local function; folded back into the caller's flag below.
+        bool wroteAnything = false;
+
+        string? Publish(string slot, byte[] rgba)
+        {
+            var gamePath = texPrefix + slot + ".tex";
+            var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
+            // Same rules as the shell path: never compress "id" (its red/green are discrete row selectors
+            // and a lossy bucket crossing picks the wrong row), BC7 for the continuous ones.
+            var encoding = config.EnableCompression && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase)
+                ? TexEncoding.Bc7
+                : TexEncoding.Uncompressed;
+
+            var hash = Hash(rgba) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
+            {
+                if (!textureLoader.WriteTex(rgba, TexSize, TexSize, disk, encoding))
+                {
+                    log.Error("[Proteus] content: failed to write {0}", disk);
+                    return null;
+                }
+                _texHashes[disk] = hash;
+                wroteAnything = true;
+            }
+            redirects[gamePath] = Rel(outputRoot, disk);
+            return gamePath;
+        }
+
+        // Republish the pack's OWN textures under paths Proteus owns, rather than naming the pack's paths
+        // and hoping they resolve to the pack.
+        //
+        // They do not always. A content pack names its textures in whatever namespace its author invented,
+        // and nothing makes that unique: this pack asks for chara/neolithe/neolithe_piercings_index.tex, a
+        // path Neolithe [ALL IN ONE] also claims — and wins. The game therefore sampled ALL IN ONE's index
+        // (red 255 → row 16) while the pack's own selects row 1, so every colour and glow written to row 1
+        // rendered as nothing and the piece drew from row 16's silver instead. The piece looked untouched
+        // and nothing anywhere said another mod had taken the texture.
+        //
+        // Copied by BYTES, not decoded and re-encoded: whatever the author shipped is what gets published,
+        // and WriteIfChanged means a recomposite is not a rewrite.
+        var packRoot = unit.Entry.ModRoot;
+        string? Republish(string slot, string? packPath, byte[] fallback)
+        {
+            // Nothing named at all: the shell's own fallback for an empty slot.
+            if (packPath == null) return Publish(slot, fallback);
+
+            // Named, but the pack does not ship it — a material may legitimately point at a VANILLA game
+            // texture. Keep the author's path so the game supplies it; substituting a flat colour here
+            // would blank a texture that was resolving perfectly well.
+            var file = packRoot == null ? null : ContentTextureFile(packRoot, packPath);
+            if (file == null) return packPath;
+
+            try
+            {
+                var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
+                if (WriteIfChanged(disk, File.ReadAllBytes(file))) wroteAnything = true;
+                var gamePath = texPrefix + slot + ".tex";
+                redirects[gamePath] = Rel(outputRoot, disk);
+                return gamePath;
+            }
+            catch (Exception ex)
+            {
+                log.Warning("[Proteus] content: could not republish {0} ({1}) — naming the pack's own path "
+                          + "instead: {2}", slot, file, ex.Message);
+                return packPath;
+            }
+        }
+
+        // Fallbacks match the shell path exactly, so the two can't disagree about what "no texture" means:
+        // a white mask (a grey one halves the lighting everywhere) and a row-16-A index.
+        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255));
+        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255));
+        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255));
+        var catc = Publish("catc", scroll);
+        texturesChanged |= wroteAnything;
+        if (norm == null || mask == null || id == null || catc == null) return null;
+
+        // Built with NO rows, then the pack's own colour table grafted on, then the user's rows written over
+        // that. Order matters: Build clones vanilla e6257, so grafting is what keeps the author's silver,
+        // metalness and roughness instead of inheriting the template's — and doing it after Build restores
+        // the author's tile alpha, which Build zeroes because a second skin is skin and a piercing is not.
+        var built = GearMaterialWriter.Build(template, [norm, mask, id, catc], rows: null, scroll: scrollSettings);
+        var grafted = GearMaterialWriter.CopyColorTable(built, unit.Mtrl);
+        return GearMaterialWriter.PatchColorTable(grafted, unit.Rows, isScroll: true);
+    }
+
+    /// <summary>
+    /// The file inside a pack that backs one of the textures its material names.
+    /// <para/>
+    /// Penumbra first, because it is the only thing that knows which of the pack's OPTIONS is selected — a
+    /// pack whose texture is a colour picker ships several files under one name, and a plain name search
+    /// would freeze it on whichever the directory walk reached first.
+    /// <para/>
+    /// But its answer is only accepted from inside THIS pack. "What does the game load at this path" and
+    /// "which file did this pack ship" are different questions, and they diverge exactly when another mod
+    /// has claimed the same path — which is the case this republish exists to defeat. Accepting a foreign
+    /// answer would copy the collision into our own output and change nothing.
+    /// <para/>
+    /// Null when the pack ships nothing by that name. That is normal and not an error: a material may name
+    /// a vanilla game texture it does not provide, and that one should keep resolving through the game.
+    /// </summary>
+    private string? ContentTextureFile(string modRoot, string gamePath)
+    {
+        var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+        // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
+        if (viaPenumbra != null
+            && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(viaPenumbra)
+            && IsUnder(modRoot, viaPenumbra))
+            return viaPenumbra;
+
+        try
+        {
+            var leaf = Path.GetFileName(gamePath.Replace('\\', '/'));
+            return leaf.Length == 0
+                ? null
+                : Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="root"/>. Through
+    /// <see cref="Path.GetRelativePath"/> so <c>..</c> and mixed separators cannot smuggle a path out.</summary>
+    private static bool IsUnder(string root, string path)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(Path.GetFullPath(root), Path.GetFullPath(path));
+            return !Path.IsPathRooted(rel)
+                && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && rel != "..";
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
     /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
     /// colour. The index texture can select ANY pair — one the colorset never defined, or the undefined
     /// sub-row of a pair that set only the other — and that row must not paint something the author never
@@ -2432,7 +2662,7 @@ public sealed class SecondSkinService
     /// did not touch has to survive — so this returns a SPARSE dictionary, and
     /// <see cref="GearMaterialWriter.PatchColorTable"/> leaves every row not in it alone.
     /// </summary>
-    private static Dictionary<int, GearColorRow>? BuildSparseRows(List<ColorTableRowPreset>? presets)
+    internal static Dictionary<int, GearColorRow>? BuildSparseRows(List<ColorTableRowPreset>? presets)
     {
         if (presets == null || presets.Count == 0) return null;
         var rows = new Dictionary<int, GearColorRow>();
@@ -2452,6 +2682,13 @@ public sealed class SecondSkinService
         var rgb = ParseHex(sub.Diffuse);
         // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
         // with a white emissive), falling back to the diffuse when not given.
+        //
+        // A row with an intensity but NO colour anywhere stays dark, and that is deliberate. The editor's
+        // swatch shows an unset colour as white, so this used to be a genuine mismatch — but the fix for it
+        // belongs where the value is WRITTEN, not here: the Glow slider now stores white the moment someone
+        // raises it (see ColorTableEditor). Resolving it white here instead reinterpreted every row already
+        // authored, and mods carrying an inert Glow value suddenly emitted at full strength — one shipped
+        // bodysuit had five of them and its patterns blew out.
         var emis = ParseHex(sub.EmissiveColor) ?? rgb;
         return new GearColorRow
         {
@@ -2463,6 +2700,8 @@ public sealed class SecondSkinService
             Emissive = sub.Emissive > 0f && emis is { } c
                 ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
                 : (0f, 0f, 0f),
+            // The dial itself, for characterscroll — see GearColorRow.EmissiveStrength.
+            EmissiveStrength = sub.Emissive,
             SphereMapIndex = sub.SphereMap,
             SphereMapMask = sub.SphereIntensity,
             Roughness = sub.Roughness,

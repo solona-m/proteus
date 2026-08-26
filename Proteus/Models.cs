@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Proteus.Services;
 
 namespace Proteus;
 
@@ -92,6 +94,16 @@ public class ProteusMetadata
     /// </summary>
     [JsonPropertyName("PieceGroupName")]
     public string? PieceGroupName { get; set; }
+
+    /// <summary>
+    /// Animated glow for a content piece that belongs to no option — the mod-wide fallback, exactly where
+    /// <see cref="ColorTableRows"/> already stands in for an unconditional piece's colours.
+    /// <para/>
+    /// Named apart from the overlay settings above because it governs the pack's OWN material rather than
+    /// anything Proteus composites. See <see cref="ContentOption.Glow"/>.
+    /// </summary>
+    [JsonPropertyName("ContentGlow")]
+    public GearSettingsPreset? ContentGlow { get; set; }
 
     /// <summary>Whether this pack contributes any geometry at all (before selection is resolved).</summary>
     [JsonIgnore]
@@ -396,6 +408,21 @@ public class ContentOption
     /// </summary>
     [JsonPropertyName("ColorTableRows")]
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+
+    /// <summary>
+    /// Animated glow for the materials this option's pieces bind. Null — the usual case — publishes the
+    /// pack's own material as the author wrote it.
+    /// <para/>
+    /// Only <see cref="GearSettingsPreset.Scroll"/> and the four scroll numbers are read; Layer, Shader and
+    /// ManualShaderLock belong to overlay descriptors and mean nothing here. The type is shared anyway so a
+    /// design binding's gear override — which is already this shape — can drive a content glow without a
+    /// second parallel record.
+    /// <para/>
+    /// Setting it does not touch the pack: the composite rebuilds the material onto characterscroll from a
+    /// vanilla template every run, so clearing this republishes the author's original bytes.
+    /// </summary>
+    [JsonPropertyName("Glow")]
+    public GearSettingsPreset? Glow { get; set; }
 }
 
 /// <summary>
@@ -475,6 +502,118 @@ public static class ContentIndexTexture
         }
         return new Scan(rows, anyA == anyB ? null : anyA ? "A" : "B");
     }
+}
+
+/// <summary>
+/// Which colour-table cell an animated glow has to be set on, and whether it is.
+/// <para/>
+/// Pure, and out of the drawing code, because this exact decision has now been got wrong twice in the same
+/// way. A material renders from ONE cell — the row its index texture selects, in the column that index's
+/// green channel picks — and a value on any other row is invisible. First a user coloured row 16 while the
+/// pack's index pointed at row 1 and saw nothing; then the glow was armed on row 16 for the same reason, and
+/// a piercing with a correct shader, scroll map, second UV set and decal key rendered as plain metal.
+/// </summary>
+public static class ContentGlowRow
+{
+    /// <summary>
+    /// The cell the material actually reads. <paramref name="rows"/> is the index scan's row set and
+    /// <paramref name="subRow"/> its column, both null when the index could not be read — then this falls
+    /// back to the row the grid is showing, which is the only guess available. Column A is the fallback
+    /// because an index's green channel defaults high.
+    /// </summary>
+    public static (int Row, bool SubRowA) Sampled(IReadOnlyCollection<int>? rows, string? subRow, int selectedRow)
+        => (rows is { Count: 1 } ? rows.First() : selectedRow,
+            !string.Equals(subRow, "B", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Whether that cell's Glow is above zero — the only value the shader will ever read.
+    /// <para/>
+    /// The intensity alone is the question: an unset glow colour means WHITE, in the editor's swatch and in
+    /// the material writer alike.
+    /// </summary>
+    public static bool Emits(IEnumerable<ColorTableRowPreset> rows, int row, bool subRowA)
+    {
+        var preset = rows.FirstOrDefault(r => r.Row == row);
+        return (subRowA ? preset?.SubRowA : preset?.SubRowB) is { Emissive: > 0f };
+    }
+
+    /// <summary>
+    /// The Glow a newly switched-on effect starts at.
+    /// <para/>
+    /// Deliberately not full. On a scrolling material this dial is what the effect's brightness scales with,
+    /// and a scroll map is usually a saturated colour — pushed to 1.0 it blows out and the piece reads as a
+    /// white blob rather than as the pattern. A quarter shows the map's own colours clearly and leaves the
+    /// dial room in both directions.
+    /// </summary>
+    public const float DefaultGlow = 0.25f;
+
+    /// <summary>The glow colour a switched-on effect seeds. Explicit rather than left null: the writer
+    /// resolves a glow's colour <c>EmissiveColor → Diffuse</c> and a row with neither stays dark, however
+    /// high its intensity.</summary>
+    public const string DefaultGlowColour = "#FFFFFF";
+
+    /// <summary>
+    /// Turn the cell on at <see cref="DefaultGlow"/> if it is off, adding the row when the list has none.
+    /// Returns true when it wrote something.
+    /// <para/>
+    /// The diffuse is left alone, so a piece keeps whatever surface its author gave it — for the piercings
+    /// pack, its silver.
+    /// </summary>
+    public static bool Arm(List<ColorTableRowPreset> rows, int row, bool subRowA)
+    {
+        if (Emits(rows, row, subRowA)) return false;
+
+        var preset = rows.FirstOrDefault(r => r.Row == row);
+        if (preset == null) rows.Add(preset = new ColorTableRowPreset { Row = row });
+
+        var cell = subRowA
+            ? preset.SubRowA ??= new ColorTableSubRowPreset()
+            : preset.SubRowB ??= new ColorTableSubRowPreset();
+        cell.Emissive = DefaultGlow;
+        cell.EmissiveColor ??= DefaultGlowColour;
+        return true;
+    }
+
+    /// <summary>
+    /// Take back an <see cref="Arm"/> when the effect is switched off, leaving no trace. Returns true when
+    /// it changed something.
+    /// <para/>
+    /// Necessary because switching the effect off only changes the SHADER. The Glow that arming wrote stays
+    /// in the rows, and on the pack's own <c>character.shpk</c> that is an ordinary emissive — so a piece
+    /// whose animated glow had been turned off went on glowing, plainly. Turning a feature off has to undo
+    /// what turning it on did, or the promise that clearing an effect republishes the author's material
+    /// exactly is not kept.
+    /// <para/>
+    /// Only an UNTOUCHED seed is taken back: a value still sitting at <see cref="DefaultGlow"/> is one
+    /// nobody has moved, while any other number is the user's and stays. A cell left with nothing in it at
+    /// all is dropped rather than written as an explicit zero, because the row writer writes every emissive
+    /// it is given and a zero would overwrite whatever the author had there.
+    /// </summary>
+    public static bool Disarm(List<ColorTableRowPreset> rows, int row, bool subRowA)
+    {
+        var preset = rows.FirstOrDefault(r => r.Row == row);
+        var cell = subRowA ? preset?.SubRowA : preset?.SubRowB;
+        if (preset == null || cell == null || cell.Emissive != DefaultGlow) return false;
+
+        cell.Emissive = 0f;
+        // The colour arming seeded goes with it — left behind it is a field nobody chose, and it would stop
+        // the cell reading as blank so the row could never be dropped.
+        if (string.Equals(cell.EmissiveColor, DefaultGlowColour, StringComparison.OrdinalIgnoreCase))
+            cell.EmissiveColor = null;
+        if (IsBlank(cell))
+        {
+            if (subRowA) preset.SubRowA = null; else preset.SubRowB = null;
+            if (preset.SubRowA == null && preset.SubRowB == null) rows.Remove(preset);
+        }
+        return true;
+    }
+
+    /// <summary>Whether a sub-row now says nothing at all, so it can be dropped instead of persisted.</summary>
+    private static bool IsBlank(ColorTableSubRowPreset s)
+        => s.Diffuse == null && s.EmissiveColor == null && s.Specular == null
+        && s.Emissive == 0f && s.Opacity == 0
+        && s.SphereMap == null && s.SphereIntensity == null
+        && s.Roughness == null && s.Metalness == null;
 }
 
 /// <summary>Maps one Penumbra option group to per-option geometry.</summary>
@@ -694,6 +833,67 @@ public class GearSettingsPreset
         ManualShaderLock = d.ManualShaderLock,
     };
 
+    /// <summary>An independent copy. A design-binding edit works on a copy of what the sidecar holds, so
+    /// merely opening a panel can never move the mod's own settings.</summary>
+    public GearSettingsPreset Clone() => new()
+    {
+        Layer = Layer,
+        Shader = Shader,
+        Scroll = Scroll,
+        ScrollSpeedX = ScrollSpeedX,
+        ScrollSpeedY = ScrollSpeedY,
+        ScrollTilingX = ScrollTilingX,
+        ScrollTilingY = ScrollTilingY,
+        ManualShaderLock = ManualShaderLock,
+    };
+
+    /// <summary>
+    /// The scroll settings as one comparable string, or null when there is no glow at all.
+    /// <para/>
+    /// This is identity, not display: it goes into a content material's merge key, so two options sharing a
+    /// <c>.mtrl</c> publish one material only while they agree on the effect AND its numbers. Letting them
+    /// merge on the effect alone would silently give one option the other's speed.
+    /// <para/>
+    /// Layer, Shader and ManualShaderLock are excluded deliberately — they describe an overlay descriptor,
+    /// not a content material, and a stray value in one must not split a slot.
+    /// </summary>
+    public string? GlowKey()
+        => string.IsNullOrEmpty(Scroll)
+            ? null
+            : string.Join(' ', Scroll,
+                ScrollSpeedX?.ToString("R", CultureInfo.InvariantCulture) ?? "-",
+                ScrollSpeedY?.ToString("R", CultureInfo.InvariantCulture) ?? "-",
+                ScrollTilingX?.ToString("R", CultureInfo.InvariantCulture) ?? "-",
+                ScrollTilingY?.ToString("R", CultureInfo.InvariantCulture) ?? "-");
+
+    /// <summary>The scroll settings the material writer wants, with the shared defaults filled in for
+    /// anything the user never touched. Null when this preset names no effect.</summary>
+    public ScrollSettings? ToScrollSettings()
+        => string.IsNullOrEmpty(Scroll)
+            ? null
+            : new ScrollSettings(
+                ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
+                ScrollSpeedY ?? ScrollSettings.Default.SpeedY,
+                ScrollTilingX ?? ScrollSettings.Default.TilingX,
+                ScrollTilingY ?? ScrollSettings.Default.TilingY);
+
+    /// <summary>
+    /// Copy just the scroll settings out of <paramref name="from"/>, leaving Layer, Shader and
+    /// ManualShaderLock alone.
+    /// <para/>
+    /// For a content glow written into a design binding's gear override: that override may already be
+    /// carrying an overlay's layer and shader for the same mod, and a content material has no business
+    /// touching either.
+    /// </summary>
+    public void ApplyScrollFrom(GearSettingsPreset from)
+    {
+        Scroll = from.Scroll;
+        ScrollSpeedX = from.ScrollSpeedX;
+        ScrollSpeedY = from.ScrollSpeedY;
+        ScrollTilingX = from.ScrollTilingX;
+        ScrollTilingY = from.ScrollTilingY;
+    }
+
     /// <summary>Apply onto a descriptor (used on a clone, so metadata.json is never mutated).</summary>
     public void ApplyTo(OverlayDescriptor d)
     {
@@ -731,13 +931,31 @@ public class OverlayGearOverride
     [JsonPropertyName("Mask")]
     public GearSettingsPreset? Mask { get; set; }
 
+    /// <summary>
+    /// The animated glow of an imported content pack's pieces that belong to no option
+    /// (<see cref="ProteusMetadata.ContentGlow"/>). Its own slot for the same reason
+    /// <see cref="Mask"/> has one — there is no entry in <see cref="Options"/> to hold it — and for one
+    /// more that matters here: <see cref="Top"/> is captured from the mod's first OVERLAY descriptor, so
+    /// resolving content against it would hand a pack's meshes whatever scroll effect an overlay of the
+    /// same mod happens to be using. See <see cref="ResolveContent"/>.
+    /// </summary>
+    [JsonPropertyName("Content")]
+    public GearSettingsPreset? Content { get; set; }
+
     public GearSettingsPreset? Resolve(string? group, string? option)
-    {
-        if (group != null && option != null && Options != null
-            && Options.TryGetValue(group, out var opts) && opts.TryGetValue(option, out var s))
-            return s;
-        return Top;
-    }
+        => ResolveOption(group, option) ?? Top;
+
+    /// <summary>
+    /// The same lookup for a content piece: its option's entry, else the content slot — never
+    /// <see cref="Top"/>, which belongs to the mod's overlays.
+    /// </summary>
+    public GearSettingsPreset? ResolveContent(string? group, string? option)
+        => ResolveOption(group, option) ?? Content;
+
+    private GearSettingsPreset? ResolveOption(string? group, string? option)
+        => group != null && option != null && Options != null
+        && Options.TryGetValue(group, out var opts) && opts.TryGetValue(option, out var s)
+            ? s : null;
 }
 
 /// <summary>

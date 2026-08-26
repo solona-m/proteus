@@ -57,7 +57,12 @@ public record ResolvedContent(
     List<ColorTableRowPreset>? ColorTableRows,
     string? OptionGroup,
     string? Option,
-    int GroupOrder = int.MaxValue
+    int GroupOrder = int.MaxValue,
+    /// <summary>
+    /// The animated glow this piece's material takes, resolved with the same option-then-mod fallback the
+    /// colour rows use. Null — the usual case — publishes the pack's own material untouched.
+    /// </summary>
+    GearSettingsPreset? Glow = null
 );
 
 public class SidecarDiscoveryService
@@ -240,12 +245,11 @@ public class SidecarDiscoveryService
         // legitimately ship both, and returning early on the first would silently drop the rest.
         foreach (var piece in meta.Content ?? [])
             if (Ungated(piece))
-                resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null));
+                resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null, Glow: meta.ContentGlow));
 
         if (meta.ContentGroups == null || !settings.HasValue) return resolved;
 
-        var modRoot = Path.GetDirectoryName(
-            entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var modRoot = entry.ModRoot;
         var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
 
         foreach (var group in meta.ContentGroups)
@@ -261,9 +265,13 @@ public class SidecarDiscoveryService
                          string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
             {
                 var rows = opt.ColorTableRows ?? meta.ColorTableRows;
+                // Same option-then-mod fallback the rows take, so a pack-wide glow reaches an option that
+                // never set one of its own.
+                var glow = opt.Glow ?? meta.ContentGlow;
                 foreach (var piece in opt.Pieces)
                     if (Ungated(piece))
-                        resolved.Add(new ResolvedContent(piece, rows, group.PenumbraGroupName, opt.Name, order));
+                        resolved.Add(new ResolvedContent(
+                            piece, rows, group.PenumbraGroupName, opt.Name, order, glow));
             }
         }
         return resolved;
