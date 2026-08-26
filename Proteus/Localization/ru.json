@@ -507,20 +507,8 @@
     "message": "Ни одна опция этого пакета не содержит меша, который Proteus может добавить.",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "Из группы «{0}» — деталей: {1}. Эти цвета записываются в материал из пакета; строки, которых вы не касались, остаются точно такими, какими их задал автор.",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "Детали: {0} из {1}",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "Меши",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "Этот мод содержит собственные меши. Proteus добавляет те, что указаны выбранными опциями, к аксессуару-носителю; выбирайте их в Penumbra.",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "Не удалось прочитать этот пакет: {0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "Общий для: {0}. Эти детали рисуются одним материалом, поэтому эти цвета достаются всем — а строки, которых вы не касались, остаются такими, какими их задал автор.",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "пропущено",
     "description": ""
   },
   "Content.Unbound": {
     "message": "материал не привязан",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "всегда вкл.",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

@@ -507,21 +507,9 @@
     "message": "No option in this pack ships a mesh Proteus can append.",
     "description": "Tooltip on the disabled Import button when the pack has no appendable mesh."
   },
-  "Content.OptionOf.Fmt": {
-    "message": "From the \"{0}\" group — {1} piece(s). These colours are stamped into the material the pack ships; rows you don't touch stay exactly as its author wrote them.",
-    "description": "Caption above the colour grid for a content option. {0} is the Penumbra group name, {1} a piece count."
-  },
   "Content.PieceCount.Fmt": {
     "message": "Pieces: {0} of {1}",
     "description": "Header above the Import tab's piece table. {0} is how many can be appended, {1} how many the pack ships."
-  },
-  "Content.Pill": {
-    "message": "Meshes",
-    "description": "Badge on a row in the Mods list marking a pack that ships geometry. Very tight space - one short word."
-  },
-  "Content.Pill.Tip": {
-    "message": "This mod ships its own meshes. Proteus appends the ones your selected options name onto your carrier accessory; choose which in Penumbra.",
-    "description": "Tooltip on that badge. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
   },
   "Content.Problem.Fmt": {
     "message": "{0}\nSkipped: {1}",
@@ -535,6 +523,10 @@
     "message": "Couldn't read that pack: {0}",
     "description": "Shown when the picked file is not a readable pack. {0} is the error message."
   },
+  "Content.SharedBy.Fmt": {
+    "message": "Shared by: {0}. Those pieces are drawn with one material, so these colours reach all of them — and rows you don't touch stay exactly as the pack's author wrote them.",
+    "description": "Caption above a content pack's colour grid. {0} is a comma-separated list of option names sharing that material."
+  },
   "Content.Skipped": {
     "message": "skipped",
     "description": "A table cell marking a piece that will not be imported. Very tight space - one short word."
@@ -542,6 +534,10 @@
   "Content.Unbound": {
     "message": "unbound material",
     "description": "A table cell: the piece's mesh names a material the pack does not ship. Very tight space."
+  },
+  "Content.Unconditional": {
+    "message": "always on",
+    "description": "Stands in for an option name when a piece belongs to no option - the pack applies it whenever it is enabled. Very tight space."
   },
   "ContentImport.Fail.BadName": {
     "message": "That mod name has no usable characters — use letters or numbers.",

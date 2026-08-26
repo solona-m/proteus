@@ -507,20 +507,8 @@
     "message": "이 팩에는 Proteus가 덧붙일 수 있는 메시를 포함한 옵션이 없습니다.",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "\"{0}\" 그룹 — 파츠 {1}개. 이 색상은 팩이 제공하는 머티리얼에 기록됩니다. 건드리지 않은 행은 제작자가 설정한 그대로 유지됩니다.",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "파츠: {1}개 중 {0}개",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "메시",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "이 모드는 자체 메시를 포함합니다. Proteus는 선택한 옵션이 지정한 메시를 캐리어 장신구에 덧붙입니다. 선택은 Penumbra에서 하세요.",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "해당 팩을 읽을 수 없습니다: {0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "공유: {0}. 이 파츠들은 하나의 머티리얼로 그려지므로 이 색상은 전부에 적용됩니다. 건드리지 않은 행은 제작자가 설정한 그대로 유지됩니다.",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "건너뜀",
     "description": ""
   },
   "Content.Unbound": {
     "message": "머티리얼 미연결",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "항상 켜짐",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

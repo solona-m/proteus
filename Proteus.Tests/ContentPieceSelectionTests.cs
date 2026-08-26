@@ -256,28 +256,84 @@ public class ContentPieceSelectionTests
     [Fact]
     public void Two_garments_sharing_one_material_are_not_collapsed_into_one()
     {
-        // The regression this pins: a pack whose pieces all bind the SAME material — the piercings pack is
-        // exactly that — had every piece hash alike, so wearing a belly piercing and a hip piercing showed
-        // only whichever discovery reached first. The key must identify the geometry, and an imported
-        // piece's path lives in Models (it names a race), leaving ContentPiece.Model empty.
+        // A pack whose pieces all bind the SAME material — the piercings pack is exactly that — publishes
+        // ONE material for them and spends one of the host's ten slots, not one each.
         const string Mtrl = "common/1/piercings.mtrl";
         const string Leaf = "/mt_c0201b0001_neolithe_piercings.mtrl";
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
 
-        // The trap, stated: an imported piece's path lives in Models because it names a race, so Model is
-        // blank and keying on it made every piece of the pack identical.
+        var belly = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+        var hip   = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+        Assert.Equal(belly, hip);
+
+        // …but they are still two MESHES inside it, which is what the earlier regression got wrong: keying
+        // the geometry on ContentPiece.Model collapsed them, because an imported piece's path lives in
+        // Models (it names a race) and leaves Model blank.
         var imported = new ContentPiece { Models = new Dictionary<string, string> { ["0201"] = "top/heart/model.mdl" } };
         Assert.Equal(string.Empty, imported.Model);
         Assert.Equal("top/heart/model.mdl", imported.ModelFor("0201"));
 
-        var belly = SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, null);
-        var hip   = SecondSkinService.ContentUnitKey("mod", "bottom/hip/model.mdl", Leaf, Mtrl, null);
-        Assert.NotEqual(belly, hip);
+        Assert.NotEqual(
+            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf),
+            SecondSkinService.ContentGeometryKey("bottom/hip/model.mdl", Leaf));
+        // The same mesh named twice really is one mesh.
+        Assert.Equal(
+            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf),
+            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf));
+    }
 
-        // …while two options that really do draw the same model with the same colours are still one slot.
-        Assert.Equal(belly, SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, null));
+    [Fact]
+    public void A_material_is_shared_only_by_pieces_that_would_publish_it_identically()
+    {
+        const string Mtrl = "common/1/piercings.mtrl";
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
+        var baseline = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
 
-        // Different colours are a different material, and legitimately cost two.
-        Assert.NotEqual(belly, SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, "[{\"Row\":1}]"));
+        // Different colours really are a different material, and legitimately cost two slots.
+        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("mod", body, Mtrl, "[{\"Row\":1}]"));
+
+        // A different .mtrl is a different material.
+        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("mod", body, "common/1/other.mtrl", null));
+
+        // Another mod's identical file is still its own — a shared slot across mods would make one mod's
+        // colour edit reach into another's.
+        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("other", body, Mtrl, null));
+
+        // And a face piece cannot share with a body piece however identical the material: they are allocated
+        // to different hosts, because a natively-authored face must not be race-deformed.
+        Assert.NotEqual(baseline,
+            SecondSkinService.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001"), Mtrl, null));
+    }
+
+    [Fact]
+    public void A_piece_is_named_by_the_switch_that_turned_it_on()
+    {
+        // The regression: an imported pack with no options of its own puts every model in the unconditional
+        // list, so the OPTION is null and they are gated through the synthesized piece group instead.
+        // Naming them after the option captioned the whole panel "always on" — untrue of all of them, and
+        // identical however many were worn.
+        var jacket = new ContentPiece { GateOption = "Head — Far Eastern Schoolgirl's Hair Ribbon" };
+        var shirt  = new ContentPiece { GateOption = "Body — Extreme Survival Shirt" };
+
+        Assert.Equal(
+            new[] { "Head — Far Eastern Schoolgirl's Hair Ribbon", "Body — Extreme Survival Shirt" },
+            ContentLabels.For([(null, new[] { jacket, shirt })], "always on").ToArray());
+
+        // A pack whose own options already select one garment each has no gate, so the option names it.
+        var plain = new ContentPiece();
+        Assert.Equal(
+            new[] { "Belly Button Heart", "Hip Dermals" },
+            ContentLabels.For(
+                [("Belly Button Heart", new[] { plain }), ("Hip Dermals", new[] { plain })],
+                "always on").ToArray());
+
+        // Only a piece with neither — a hand-authored sidecar — is genuinely always applied.
+        Assert.Equal(new[] { "always on" }, ContentLabels.For([(null, new[] { plain })], "always on").ToArray());
+
+        // One option contributing several pieces under one gate is named once, in encounter order.
+        Assert.Equal(
+            new[] { "Body — Extreme Survival Shirt" },
+            ContentLabels.For([(null, new[] { shirt, shirt })], "always on").ToArray());
     }
 
     [Fact]

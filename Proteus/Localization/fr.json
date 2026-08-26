@@ -507,20 +507,8 @@
     "message": "Aucune option de ce pack ne fournit un maillage que Proteus puisse ajouter.",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "Du groupe « {0} » — {1} pièce(s). Ces couleurs sont inscrites dans le matériau fourni par le pack ; les lignes que vous ne touchez pas restent exactement telles que son auteur les a écrites.",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "Pièces : {0} sur {1}",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "Maillages",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "Ce mod fournit ses propres maillages. Proteus ajoute ceux que désignent vos options sélectionnées sur votre accessoire porteur ; le choix se fait dans Penumbra.",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "Impossible de lire ce pack : {0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "Partagé par : {0}. Ces pièces sont dessinées avec un seul matériau, ces couleurs les atteignent donc toutes — et les lignes que vous ne touchez pas restent exactement telles que l'auteur du pack les a écrites.",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "ignoré",
     "description": ""
   },
   "Content.Unbound": {
     "message": "matériau non lié",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "toujours actif",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

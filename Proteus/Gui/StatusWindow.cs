@@ -1648,26 +1648,37 @@ public class StatusWindow : Window
             _groupOrderCache[entry.ModDirectory] = groupOrder;
         }
 
-        // One tab per OPTION, not per piece: an option's pieces all take the option's rows, and two pieces
-        // of one option would otherwise show two identical grids writing to the same place.
+        List<string>? Selection(string group)
+            => settings?.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, group, StringComparison.OrdinalIgnoreCase))
+                .Value;
+
+        // The synthesized piece group, read exactly as ResolveActiveContent reads it. Without this the panel
+        // and the composite disagree about what is being worn: a pack whose pieces are all switched off
+        // still contributes nothing, but would draw a full colour grid whose glow button targets a material
+        // that was never published.
+        var gateOn = entry.Metadata.PieceGroupName is { Length: > 0 } gateGroup ? Selection(gateGroup) : null;
+
+        // Which options are live. Collapsed into MATERIALS below — see there.
         var options = new List<(string? Group, string? Option, int Order, int Pieces)>();
 
-        if (entry.Metadata.Content is { Count: > 0 } unconditional)
-            options.Add((null, null, int.MaxValue, unconditional.Count));
+        int unconditional = PiecesFor(entry, null, null, gateOn).Count;
+        if (unconditional > 0)
+            options.Add((null, null, int.MaxValue, unconditional));
 
         foreach (var g in entry.Metadata.ContentGroups ?? [])
         {
-            var selected = settings?.Options
-                .FirstOrDefault(kv => string.Equals(kv.Key, g.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
-                .Value;
+            var selected = Selection(g.PenumbraGroupName);
             // A group with nothing selected contributes nothing to the composite either, so it gets no tab.
             if (selected is not { Count: > 0 }) continue;
 
             int order = groupOrder.TryGetValue(g.PenumbraGroupName, out var n) ? n : int.MaxValue;
             foreach (var o in g.Options.Where(o => selected.Any(sel =>
                          string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
-                if (o.Pieces.Count > 0)
-                    options.Add((g.PenumbraGroupName, o.Name, order, o.Pieces.Count));
+            {
+                int live = PiecesFor(entry, g.PenumbraGroupName, o.Name, gateOn).Count;
+                if (live > 0) options.Add((g.PenumbraGroupName, o.Name, order, live));
+            }
         }
 
         if (options.Count == 0)
@@ -1681,52 +1692,141 @@ public class StatusWindow : Window
             .ThenBy(x => x.Option, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Collapse the options into MATERIALS. Pieces binding the same .mtrl are published as one material
+        // and cost one of the host's ten slots between them (see SecondSkinService.ContentUnitKey), so one
+        // grid governs all of them — and the edit fans out to every option it covers, because rows differing
+        // is precisely what would split that one slot back into several.
+        var byMaterial = new List<(string Mtrl, List<ContentOwner> Owners)>();
+        foreach (var (group, option, _, _) in options)
+        {
+            var live = PiecesFor(entry, group, option, gateOn);
+            foreach (var mtrl in live.SelectMany(p => p.Materials.Values)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                int at = byMaterial.FindIndex(m => string.Equals(m.Mtrl, mtrl, StringComparison.OrdinalIgnoreCase));
+                if (at < 0) { byMaterial.Add((mtrl, [])); at = byMaterial.Count - 1; }
+                // The pieces carried along are the ones that made this owner a user of THIS material — an
+                // option binding two materials contributes different pieces to each. They are what the
+                // caption names, since a piece knows the switch that turned it on and its option may not.
+                byMaterial[at].Owners.Add(new ContentOwner(group, option,
+                    [.. live.Where(p => p.Materials.Values.Contains(mtrl, StringComparer.OrdinalIgnoreCase))]));
+            }
+        }
+
+        if (byMaterial.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            return;
+        }
+
+        // A pack with one material — the ordinary shape — gets no tab strip at all. A strip of one tab is
+        // furniture around a single grid.
+        if (byMaterial.Count == 1)
+        {
+            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding);
+            return;
+        }
+
         using var tabs = ImRaii.TabBar($"##contentTabs_{entry.ModDirectory}");
         if (!tabs) return;
 
-        foreach (var (group, option, _, pieceCount) in options)
+        foreach (var (mtrl, owners) in byMaterial)
         {
-            var label = option ?? Strings.Content.Pill;
-            using var tab = ImRaii.TabItem($"{label}##content_{group}_{option}");
+            using var tab = ImRaii.TabItem($"{Path.GetFileNameWithoutExtension(mtrl)}##content_{mtrl}");
             if (!tab) continue;
-
-            if (group != null)
-                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.OptionOfFmt, group, pieceCount));
-
-            // Where the rows live. Same rule as every other editor here: while a binding is being edited we
-            // work on a COPY and only install it once something actually changes, so merely opening the
-            // panel never creates an override — and the compositor is reading the real one from another
-            // thread meanwhile.
-            var stored = StoredContentRows(entry, group, option);
-            var ovrRows = editingBinding ? designBindings.PeekOverrideRows(entry.ModDirectory, group, option) : null;
-            var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
-
-            bool changed = false;
-            var selKey = entry.ModDirectory + "\u0000" + group + "\u0000" + option;
-            int sel = _rowSelection.GetValueOrDefault(selKey, 1);
-            ColorTableEditor.DrawRows(selKey, rows, null,
-                // A content material is gear-space by construction — it hangs off an accessory — and it
-                // brings its own shader, so nothing here may infer or change one.
-                gear: true, shader: OverlayDescriptor.DefaultGearShader,
-                compositor.GetShellMaterials(entry.ModDirectory, group, option),
-                skinGlowTargets: null,
-                out _, ref sel, ref changed);
-            _rowSelection[selKey] = sel;
-
-            if (!changed) continue;
-
-            if (editingBinding)
-            {
-                designBindings.SetOverrideRows(entry.ModDirectory, group, option, rows);
-            }
-            else
-            {
-                StoreContentRows(entry, group, option, rows);
-                discovery.SaveMetadata(entry);
-                InvalidateDefaultsCache(entry);
-            }
-            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+            DrawContentMaterial(entry, mtrl, owners, editingBinding);
         }
+    }
+
+    /// <summary>
+    /// One content material's colour grid, governing every option that shares it.
+    /// <para/>
+    /// The edit fans out to all of them. They share a published material only while their rows AGREE — the
+    /// merge key includes the rows — so writing to one and not the others would quietly spend an extra
+    /// material slot and leave half the pieces the old colour.
+    /// </summary>
+    private void DrawContentMaterial(
+        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding)
+    {
+        var (leadGroup, leadOption, _) = owners[0];
+
+        // Named by the switch that turned each piece ON, which is not always its option — see ContentLabels.
+        var worn = ContentLabels.For(
+            owners.Select(o => (o.Option, o.Pieces)), Strings.Content.Unconditional);
+        ProteusStyle.DisabledWrapped(string.Format(Strings.Content.SharedByFmt, string.Join(", ", worn)));
+
+        // Where the rows live. Same rule as every other editor here: while a binding is being edited we work
+        // on a COPY and only install it once something actually changes, so merely opening the panel never
+        // creates an override — and the compositor is reading the real one from another thread meanwhile.
+        var stored  = StoredContentRows(entry, leadGroup, leadOption);
+        var ovrRows = editingBinding
+            ? designBindings.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
+        var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
+
+        // The glow button targets the published material, which every owner maps to — the same one — so this
+        // is a union of duplicates and comes out as a single entry.
+        var targets = owners
+            .SelectMany(o => compositor.GetShellMaterials(entry.ModDirectory, o.Group, o.Option) ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        bool changed = false;
+        var selKey = entry.ModDirectory + "|" + mtrl;
+        int sel = _rowSelection.GetValueOrDefault(selKey, 1);
+        ColorTableEditor.DrawRows(selKey, rows, null,
+            // A content material is gear-space by construction — it hangs off an accessory — and it brings
+            // its own shader, so nothing here may infer or change one.
+            gear: true, shader: OverlayDescriptor.DefaultGearShader,
+            targets,
+            skinGlowTargets: null,
+            out _, ref sel, ref changed);
+        _rowSelection[selKey] = sel;
+
+        if (!changed) return;
+
+        foreach (var (group, option, _) in owners)
+        {
+            // A copy each: one list shared between options would serialise identically but ALIAS in memory,
+            // so a later edit to one would silently move the others in ways nothing asked for.
+            var mine = DesignBindingService.CopyRows(rows);
+            if (editingBinding) designBindings.SetOverrideRows(entry.ModDirectory, group, option, mine);
+            else StoreContentRows(entry, group, option, mine);
+        }
+
+        if (!editingBinding)
+        {
+            discovery.SaveMetadata(entry);
+            InvalidateDefaultsCache(entry);
+        }
+        compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+    }
+
+    /// <summary>
+    /// One option's stake in a shared content material: which option it is, so an edit can be written back
+    /// to it, and which of its pieces are drawn with that material, so the panel can say what it governs.
+    /// <para/>
+    /// <paramref name="Option"/> is null for a piece belonging to no option of the pack's own — those are
+    /// gated through the synthesized piece group instead, and the piece carries that gate.
+    /// </summary>
+    private readonly record struct ContentOwner(
+        string? Group, string? Option, IReadOnlyList<ContentPiece> Pieces);
+
+    /// <summary>
+    /// The sidecar pieces behind one live option — or the unconditional ones when it has no option — with
+    /// anything the piece group is holding switched off removed.
+    /// <para/>
+    /// The gate filter is not optional decoration: it is the same rule
+    /// <see cref="SidecarDiscoveryService.ResolveActiveContent"/> applies, and the panel exists to show what
+    /// is actually being worn. Skipping it would offer a colour grid for a piece the composite is not
+    /// publishing, with a glow button pointing at a material that does not exist.
+    /// </summary>
+    private static IReadOnlyList<ContentPiece> PiecesFor(
+        OverlayEntry entry, string? group, string? option, IReadOnlyList<string>? gateOn)
+    {
+        var pieces = group == null || option == null
+            ? entry.Metadata.Content ?? []
+            : ContentOptionFor(entry, group, option)?.Pieces ?? [];
+        return [.. pieces.Where(p => SidecarDiscoveryService.PieceIsOn(p, gateOn))];
     }
 
     /// <summary>
@@ -2213,15 +2313,6 @@ public class StatusWindow : Window
                 }
                 if (heldOut && ImGui.IsItemHovered())
                     ImGui.SetTooltip(ms.HeldOutByBindingTip);
-
-                // A content pack ships geometry rather than art, so what its rows and its options mean is
-                // different enough to be worth saying on the row itself.
-                if (entry.Metadata is { HasContent: true })
-                {
-                    ImGui.SameLine();
-                    ProteusStyle.Pill(Strings.Content.Pill, ProteusStyle.Binding);
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Content.PillTip);
-                }
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();

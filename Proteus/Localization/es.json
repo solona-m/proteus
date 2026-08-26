@@ -507,20 +507,8 @@
     "message": "Ninguna opción de este paquete incluye una malla que Proteus pueda añadir.",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "Del grupo «{0}» — {1} pieza(s). Estos colores se escriben en el material que trae el paquete; las filas que no toques quedan exactamente como las escribió su autor.",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "Piezas: {0} de {1}",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "Mallas",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "Este mod trae sus propias mallas. Proteus añade las que indiquen tus opciones seleccionadas a tu accesorio portador; elígelas en Penumbra.",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "No se pudo leer ese paquete: {0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "Compartido por: {0}. Esas piezas se dibujan con un solo material, así que estos colores llegan a todas — y las filas que no toques quedan exactamente como las escribió el autor del paquete.",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "omitido",
     "description": ""
   },
   "Content.Unbound": {
     "message": "material sin vincular",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "siempre activo",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

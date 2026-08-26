@@ -507,20 +507,8 @@
     "message": "このパックには、Proteusが追加できるメッシュを含むオプションがありません。",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "「{0}」グループより — パーツ{1}個。ここでの色はパック同梱のマテリアルに書き込まれます。触れていない行は作者が設定したまま残ります。",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "パーツ：{1}個中{0}個",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "メッシュ",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "このMODは独自のメッシュを同梱しています。Proteusは選択中のオプションが指すメッシュをキャリア用アクセサリに追加します。選択はPenumbra側で行ってください。",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "そのパックを読み込めませんでした：{0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "共有：{0}。これらのパーツは一つのマテリアルで描画されるため、ここでの色はそのすべてに適用されます。触れていない行は作者が設定したまま残ります。",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "スキップ",
     "description": ""
   },
   "Content.Unbound": {
     "message": "マテリアル未割当",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "常時有効",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

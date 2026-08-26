@@ -507,20 +507,8 @@
     "message": "Keine Option in diesem Paket liefert ein Mesh, das Proteus anhängen kann.",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "Aus der Gruppe \"{0}\" — {1} Teil(e). Diese Farben werden in das mitgelieferte Material geschrieben; Zeilen, die du nicht anfasst, bleiben genau so, wie der Autor sie geschrieben hat.",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "Teile: {0} von {1}",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "Meshes",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "Dieses Mod bringt eigene Meshes mit. Proteus hängt die von deinen ausgewählten Optionen benannten an dein Träger-Accessoire an; die Auswahl triffst du in Penumbra.",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "Dieses Paket konnte nicht gelesen werden: {0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "Geteilt von: {0}. Diese Teile werden mit einem Material gezeichnet, diese Farben erreichen also alle — und Zeilen, die du nicht anfasst, bleiben genau so, wie der Autor sie geschrieben hat.",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "übersprungen",
     "description": ""
   },
   "Content.Unbound": {
     "message": "Material nicht zugeordnet",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "immer an",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

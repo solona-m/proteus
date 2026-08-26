@@ -507,20 +507,8 @@
     "message": "此包中没有任何选项提供 Proteus 可追加的网格。",
     "description": ""
   },
-  "Content.OptionOf.Fmt": {
-    "message": "来自“{0}”分组 — {1} 个部件。这些颜色会写入包自带的材质；你未改动的行将完全保持作者设定的样子。",
-    "description": ""
-  },
   "Content.PieceCount.Fmt": {
     "message": "部件：{1} 个中的 {0} 个",
-    "description": ""
-  },
-  "Content.Pill": {
-    "message": "网格",
-    "description": ""
-  },
-  "Content.Pill.Tip": {
-    "message": "此模组自带网格。Proteus 会把你所选选项指定的网格追加到承载饰品上；请在 Penumbra 中选择。",
     "description": ""
   },
   "Content.Problem.Fmt": {
@@ -535,12 +523,20 @@
     "message": "无法读取该包：{0}",
     "description": ""
   },
+  "Content.SharedBy.Fmt": {
+    "message": "共用：{0}。这些部件使用同一个材质绘制，因此这些颜色会应用于全部——你未改动的行将完全保持作者设定的样子。",
+    "description": ""
+  },
   "Content.Skipped": {
     "message": "已跳过",
     "description": ""
   },
   "Content.Unbound": {
     "message": "材质未绑定",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "常驻",
     "description": ""
   },
   "ContentImport.Fail.BadName": {

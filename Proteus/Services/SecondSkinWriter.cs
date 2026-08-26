@@ -22,12 +22,17 @@ public sealed class SecondSkinLayer
     public int CoverageHeight { get; init; }
 
     /// <summary>
-    /// When set, this layer IS geometry rather than a copy of the character's: the named meshes of
-    /// <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their authored
-    /// vertices, UVs and skinning — under this layer's material. Set for a piece of an imported content
-    /// pack; null for an ordinary second-skin shell, which is cut from the body sources instead.
+    /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
+    /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
+    /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
+    /// second-skin shell, which is cut from the body sources instead.
+    /// <para/>
+    /// A LIST because a material is what costs a slot on the host, not a mesh. Several pieces of an imported
+    /// pack that want the same material with the same colours — a mod of five piercings usually ships
+    /// exactly one — would otherwise publish byte-identical materials and spend a slot each, out of a budget
+    /// of ten.
     /// </summary>
-    public ContentGeometry? Geometry { get; init; }
+    public IReadOnlyList<ContentGeometry> Geometry { get; init; } = [];
 }
 
 /// <summary>
@@ -370,7 +375,7 @@ public static class SecondSkinWriter
         // Sources are the character geometry a SHELL is cut from, so a build made entirely of content
         // layers — an imported pack that brings its own meshes — legitimately has none. Anything else
         // still does: a shell layer with no source would emit nothing at all.
-        if (sources.Count == 0 && layers.Any(l => l.Geometry == null))
+        if (sources.Count == 0 && layers.Any(l => l.Geometry.Count == 0))
             throw new ArgumentException("need at least one source model", nameof(sources));
 
         var parsed = sources.Select(s => Parse(s.Model)).ToList();
@@ -400,11 +405,14 @@ public static class SecondSkinWriter
         // model" means here — the caller hands the same byte[] to every layer cut from it.
         var geomSrcs = new List<Source>();
         var geomByModel = new Dictionary<byte[], Source>(ReferenceEqualityComparer.Instance);
-        foreach (var l in layers)
+        foreach (var g in layers.SelectMany(l => l.Geometry))
         {
-            if (l.Geometry is not { } g || geomByModel.ContainsKey(g.Model)) continue;
+            if (geomByModel.ContainsKey(g.Model)) continue;
             var gs = Parse(g.Model);
-            gs.Keep = g.KeepMaterial;
+            // Deliberately NOT `gs.Keep = g.KeepMaterial`. Source.Keep is unused on this path — the emit
+            // loop filters with the GEOMETRY's own predicate — and now that two geometries may share one
+            // model (two meshes of one file, or one file bound by two pieces) storing a single filter on
+            // the shared Source would quietly be one of them.
             geomByModel[g.Model] = gs;
             geomSrcs.Add(gs);
         }
@@ -707,24 +715,32 @@ public static class SecondSkinWriter
             // preserve:true, no push, no coverage trim. Pushing it would lift a piercing off the skin it
             // was modelled against, and trimming it would need a coverage map the pack never authored: its
             // silhouette IS its mesh. Only the material index is ours to set.
-            if (def.Geometry is { } geo)
+            //
+            // Every geometry of the layer is emitted at the SAME material index. That is what lets a mod's
+            // several pieces share one published material and therefore one of the host's ten slots.
+            if (def.Geometry.Count > 0)
             {
-                var gsrc = geomByModel[geo.Model];
-                var gs = gsrc.S;
-                int gMapBase = submeshBoneMap.Count;
-                bool gMapAppended = false;
-                int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
-                for (int m = gsrc.Lod0MeshIndex; m < gEnd && m < gsrc.MeshCount; m++)
+                foreach (var geo in def.Geometry)
                 {
-                    int gmo = gsrc.MeshStart + m * 36;
-                    if (BitConverter.ToUInt16(gs, gmo) == 0) continue;   // empty placeholder mesh
+                    var gsrc = geomByModel[geo.Model];
+                    var gs = gsrc.S;
+                    // Per geometry, not per layer: each contributes its own copy of its source's submesh
+                    // bone map, exactly as each (source, layer) pair does on the shell path below.
+                    int gMapBase = submeshBoneMap.Count;
+                    bool gMapAppended = false;
+                    int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
+                    for (int m = gsrc.Lod0MeshIndex; m < gEnd && m < gsrc.MeshCount; m++)
+                    {
+                        int gmo = gsrc.MeshStart + m * 36;
+                        if (BitConverter.ToUInt16(gs, gmo) == 0) continue;   // empty placeholder mesh
 
-                    ushort gMat = BitConverter.ToUInt16(gs, gmo + 8);
-                    if (gMat >= gsrc.MatNames.Count || !geo.KeepMaterial(gsrc.MatNames[gMat]))
-                        continue;
+                        ushort gMat = BitConverter.ToUInt16(gs, gmo + 8);
+                        if (gMat >= gsrc.MatNames.Count || !geo.KeepMaterial(gsrc.MatNames[gMat]))
+                            continue;
 
-                    EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
-                        dropConnectors: false);
+                        EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
+                            dropConnectors: false);
+                    }
                 }
                 continue;
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -395,6 +396,39 @@ public class ContentOption
     /// </summary>
     [JsonPropertyName("ColorTableRows")]
     public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+}
+
+/// <summary>
+/// How content pieces are named back to the user — the rule behind the caption over a shared colour grid.
+/// <para/>
+/// Kept out of the drawing code, and out of <c>Gui/</c>, for the same reason <see cref="RenderModeInference"/>
+/// is: it is a decision, not a rendering detail, and the decision is worth a test. It has been got wrong
+/// once already — captioning by the OPTION reads "always on" for every piece of an imported pack, because
+/// those belong to no option of the pack's own and are gated through the synthesized piece group instead.
+/// </summary>
+public static class ContentLabels
+{
+    /// <summary>
+    /// What to call each piece of one shared material: the switch the user actually ticked to turn it on.
+    /// That is the piece's own gate where it has one, the owning option where it does not, and
+    /// <paramref name="unconditional"/> only for a piece that is genuinely always applied — a hand-authored
+    /// sidecar with no gate and no option.
+    /// <para/>
+    /// Distinct and in encounter order, so one option contributing several pieces under one gate is named
+    /// once and the caption reads in the order the panel lists them.
+    /// </summary>
+    public static List<string> For(
+        IEnumerable<(string? Option, IReadOnlyList<ContentPiece> Pieces)> owners, string unconditional)
+    {
+        var seen = new List<string>();
+        foreach (var (option, pieces) in owners)
+            foreach (var piece in pieces)
+            {
+                var label = piece.GateOption ?? option ?? unconditional;
+                if (!seen.Contains(label, StringComparer.Ordinal)) seen.Add(label);
+            }
+        return seen;
+    }
 }
 
 /// <summary>Maps one Penumbra option group to per-option geometry.</summary>

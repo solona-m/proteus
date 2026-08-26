@@ -456,16 +456,13 @@ public sealed class ContentStrings
     public readonly string NothingUsable = Loc.Localize("Content.NothingUsable",
         "No option in this pack ships a mesh Proteus can append.");
 
-    /// <summary>Marks a content pack in the Mods list, so the two kinds of pack are told apart at a glance.</summary>
-    public readonly string Pill = Loc.Localize("Content.Pill", "Meshes");
+    public readonly string SharedByFmt = Loc.Localize("Content.SharedBy.Fmt",
+        "Shared by: {0}. Those pieces are drawn with one material, so these colours reach all of them — and "
+      + "rows you don't touch stay exactly as the pack's author wrote them.");
 
-    public readonly string OptionOfFmt = Loc.Localize("Content.OptionOf.Fmt",
-        "From the \"{0}\" group — {1} piece(s). These colours are stamped into the material the pack ships; "
-      + "rows you don't touch stay exactly as its author wrote them.");
-
-    public readonly string PillTip = Loc.Localize("Content.Pill.Tip",
-        "This mod ships its own meshes. Proteus appends the ones your selected options name onto your "
-      + "carrier accessory; choose which in Penumbra.");
+    /// <summary>Stands in for an option name in <see cref="SharedByFmt"/> when a piece belongs to no
+    /// option — a model the pack applies whenever it is enabled.</summary>
+    public readonly string Unconditional = Loc.Localize("Content.Unconditional", "always on");
 }
 
 public sealed class ImportStrings

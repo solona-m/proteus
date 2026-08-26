@@ -136,14 +136,28 @@ public sealed class SecondSkinService
         string? UvSpace);
 
     /// <summary>
-    /// One (piece, mesh material) pair of an imported content pack, resolved and ready to place: the model
-    /// bytes, which of its materials this unit draws, that material's bytes, and the colour rows to stamp
-    /// into them. A unit is the allocation unit because a MATERIAL is what costs a slot on the host — a
-    /// piece whose meshes span two materials needs two.
+    /// One MATERIAL an imported content pack publishes, and every mesh drawn with it.
+    /// <para/>
+    /// A material is the allocation unit because a material is what costs a slot on the host — ten of them,
+    /// shared with the shells. So the unit is not a piece: pieces that want the same .mtrl with the same
+    /// colours all land here together and spend one slot between them. A pack of five piercings on a single
+    /// material is the case that makes this worth doing, and it is the common shape.
+    /// <para/>
+    /// <paramref name="Owners"/> is every (mod, group, option) this material serves. All of them need the
+    /// material registered under their own key, or the colour editor's glow button silently loses its target
+    /// for every option but the first.
     /// </summary>
     private sealed record ContentUnit(
-        OverlayEntry Entry, ResolvedContent Content, byte[] Model, string MaterialLeaf, byte[] Mtrl,
-        Dictionary<int, GearColorRow>? Rows);
+        byte[] Mtrl,
+        Dictionary<int, GearColorRow>? Rows,
+        ShellSurfaceKey Surface,
+        List<ContentGeometry> Geometries,
+        List<(OverlayEntry Entry, ResolvedContent Content)> Owners)
+    {
+        /// <summary>The entry any per-mod lookup should use. Merged owners are all one mod — the merge key
+        /// carries the mod directory — so the first is as good as any.</summary>
+        public OverlayEntry Entry => Owners[0].Entry;
+    }
 
     /// <summary>
     /// The model of <paramref name="piece"/> that belongs on a character wearing equipment code
@@ -176,21 +190,36 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
-    /// What makes two content units the SAME unit, and therefore one material slot instead of two.
+    /// What makes two pieces share one published material, and therefore one of the host's ten slots.
     /// <para/>
-    /// Two options that draw the same geometry with the same material and the same colours would publish
-    /// byte-identical output twice, out of a budget of ten — so they collapse. Different colours are a
-    /// different material and legitimately cost two.
+    /// Everything that decides the material's BYTES is in here and nothing else is: the mod it came from,
+    /// the .mtrl file, and the colour rows stamped into it. Two pieces agreeing on all three would publish
+    /// the same file twice and spend a slot each — so they publish it once and both draw with it. Different
+    /// colours really are a different material and legitimately cost two.
+    /// <para/>
+    /// The SURFACE is in the key despite having nothing to do with the bytes. A Body piece and a Face piece
+    /// are allocated to different hosts — a natively-authored face must not be race-deformed, so only a
+    /// carrier can hold it — and one material cannot live on two models at once however identical it is.
+    /// <para/>
+    /// Note what is NOT here: the model path. Sharing a material ACROSS models is the entire point. Which
+    /// meshes a unit draws is <see cref="ContentGeometryKey"/>'s job, deduped inside the unit.
+    /// </summary>
+    internal static string ContentUnitKey(
+        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson)
+        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-");
+
+    /// <summary>
+    /// What makes two meshes the same mesh WITHIN a unit — the resolved model, and the material its meshes
+    /// are bound by.
     /// <para/>
     /// Keyed on the RESOLVED model path, never on <see cref="ContentPiece.Model"/>. That field is empty for
     /// anything the importer wrote: a model path names the race it was authored for, so the paths live in
     /// <see cref="ContentPiece.Models"/> and only a hand-authored sidecar fills Model in. Keying on it made
-    /// every piece of a pack that shares one material hash alike, and a mod offering a belly piercing and a
-    /// hip piercing could only ever show whichever the discovery order reached first.
+    /// every piece of a pack that shares one material look identical, and a mod offering a belly piercing
+    /// and a hip piercing could only ever show whichever discovery reached first.
     /// </summary>
-    internal static string ContentUnitKey(
-        string modDir, string modelRel, string materialLeaf, string mtrlRel, string? rowsJson)
-        => string.Join('\u0000', modDir, modelRel, materialLeaf, mtrlRel, rowsJson ?? "-");
+    internal static string ContentGeometryKey(string modelRel, string materialLeaf)
+        => modelRel + '\u0000' + materialLeaf;
 
     /// <summary>The Penumbra mod folder an entry lives in — the parent of its Proteus/ sidecar.</summary>
     private static string? ModRootOf(OverlayEntry entry)
@@ -1109,12 +1138,19 @@ public sealed class SecondSkinService
             if (layerSurface[i] < 0) droppedLayers.Add(i);
 
         // ── imported content, resolved into units before anything is allocated ────────────────
-        // A UNIT is one (piece, material) pair, because a material is what costs a slot on the host: a
-        // piece whose meshes span two materials needs two. Resolving here — reading the model, checking
-        // every mesh's material is one the pack actually ships — means a piece that cannot be built never
-        // consumes capacity a shell could have used, and the reason is reported once rather than per host.
+        // A UNIT is one published MATERIAL and every mesh drawn with it, because a material is what costs a
+        // slot on the host. Pieces that want the same .mtrl with the same colours therefore land in one unit
+        // and spend one slot between them — a pack of five piercings on a single material is the ordinary
+        // shape, and charging it five of ten would be most of the budget for one mod.
+        //
+        // Resolved here, before anything is allocated: a piece that cannot be built must never consume
+        // capacity a shell could have used, and its reason is reported once rather than once per host.
         var contentUnits = new List<ContentUnit>();
-        var seenUnits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unitByKey = new Dictionary<string, ContentUnit>(StringComparer.OrdinalIgnoreCase);
+        var unitGeometry = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Model path → its bytes and the materials its LOD0 meshes actually draw with. A null Model is a
+        // file that could not be read, cached so the warning is printed once rather than per option.
+        var modelCache = new Dictionary<string, (byte[]? Model, List<string> Used)>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < contentIn; i++)
         {
             var (cEntry, rc) = contentLayers![i];
@@ -1132,29 +1168,38 @@ public sealed class SecondSkinService
                 continue;
             }
 
-            byte[] model;
-            List<string> declared;
-            try
+            // Read and inspected ONCE per file, however many options name it. Two options binding different
+            // meshes of one .mdl is ordinary, and the scan below is not cheap — UsedMaterialNames walks the
+            // LOD0 geometry once per declared material. Handing back the same byte[] also lets the writer's
+            // reference-keyed parse cache recognise it as one model rather than parsing it twice.
+            var modelPath = Path.Combine(modRoot, modelRel);
+            if (!modelCache.TryGetValue(modelPath, out var parsedModel))
             {
-                model = File.ReadAllBytes(Path.Combine(modRoot, modelRel));
-                declared = SecondSkinWriter.MaterialNames(model);
+                try
+                {
+                    var bytes = File.ReadAllBytes(modelPath);
+                    parsedModel = (bytes, UsedMaterialNames(bytes, SecondSkinWriter.MaterialNames(bytes)));
+                }
+                catch (Exception ex)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} could not be read as a model ({4})",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel, ex.Message);
+                    parsedModel = (null, []);
+                }
+                modelCache[modelPath] = parsedModel;
             }
-            catch (Exception ex)
-            {
-                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} could not be read as a model ({4})",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", piece.Model, ex.Message);
-                continue;
-            }
+            if (parsedModel.Model == null) continue;   // unreadable, and already reported
+            var model = parsedModel.Model;
 
             // Which of the model's materials actually carry geometry. A pack commonly ships a stock model
             // with the vanilla meshes emptied out (0 vertices) and its own mesh added, so the materials on
             // those empty meshes are declared but never drawn — demanding a binding for them would reject
             // a pack over meshes that emit nothing.
-            var used = UsedMaterialNames(model, declared);
+            var used = parsedModel.Used;
             if (used.Count == 0)
             {
                 log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} has no LOD0 geometry at all, skipping",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", piece.Model);
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel);
                 continue;
             }
 
@@ -1184,11 +1229,28 @@ public sealed class SecondSkinService
                 }
 
                 var rows = BuildSparseRows(rc.ColorTableRows);
-                var key = ContentUnitKey(cEntry.ModDirectory, modelRel, leaf, rel,
+                var key = ContentUnitKey(cEntry.ModDirectory, piece.SurfaceKey, rel,
                     rows == null ? null : JsonSerializer.Serialize(rc.ColorTableRows));
-                if (!seenUnits.Add(key)) continue;
 
-                contentUnits.Add(new ContentUnit(cEntry, rc, model, leaf, mtrl, rows));
+                if (!unitByKey.TryGetValue(key, out var unit))
+                {
+                    unitByKey[key] = unit = new ContentUnit(mtrl, rows, piece.SurfaceKey, [], []);
+                    contentUnits.Add(unit);
+                }
+
+                // Same mesh of the same model twice — an option listing a piece it already lists, or two
+                // options sharing one file — is still drawn once.
+                if (unitGeometry.Add(key + '\u0000' + ContentGeometryKey(modelRel, leaf)))
+                    unit.Geometries.Add(new ContentGeometry(model,
+                        SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                            { leaf.TrimStart('/') })));
+
+                // Every option this material serves, so the colour editor can find it under any of them.
+                // Compared case-insensitively, as option names are everywhere else in this codebase.
+                if (!unit.Owners.Any(o =>
+                        string.Equals(o.Content.OptionGroup, rc.OptionGroup, StringComparison.OrdinalIgnoreCase)
+                     && string.Equals(o.Content.Option, rc.Option, StringComparison.OrdinalIgnoreCase)))
+                    unit.Owners.Add((cEntry, rc));
             }
         }
 
@@ -1200,7 +1262,7 @@ public sealed class SecondSkinService
         var contentByKey = new Dictionary<ShellSurfaceKey, int>();
         for (int i = 0; i < contentUnits.Count; i++)
         {
-            var key = contentUnits[i].Content.Piece.SurfaceKey;
+            var key = contentUnits[i].Surface;
             if (resolvedByKey.TryGetValue(key, out var known) && known >= 0) { unitSurface[i] = known; continue; }
             if (contentByKey.TryGetValue(key, out var made)) { unitSurface[i] = made; continue; }
 
@@ -1624,24 +1686,32 @@ public sealed class SecondSkinService
             // Same "ss_" naming as a shell, deliberately: ShellColorsetApplier and ColorTableHighlighter
             // both key on that prefix and on the single disk char, so a content material gets the live
             // colour re-assert and the editor's glow highlight for free.
-            var cKey = (unit.Entry.ModDirectory, unit.Content.OptionGroup, unit.Content.Option);
-            if (!shellMaterials.TryGetValue(cKey, out var cList))
-                shellMaterials[cKey] = cList = new List<string>();
-            cList.Add($"ss_{diskChar}.mtrl");
+            //
+            // Registered under EVERY option this material serves. One shared material is reached from any of
+            // the options that share it, and keying it to only the first would leave the colour editor's
+            // glow button pointing at nothing for all the others.
+            foreach (var (oEntry, oContent) in unit.Owners)
+            {
+                var cKey = (oEntry.ModDirectory, oContent.OptionGroup, oContent.Option);
+                if (!shellMaterials.TryGetValue(cKey, out var cList))
+                    shellMaterials[cKey] = cList = new List<string>();
+                cList.Add($"ss_{diskChar}.mtrl");
+            }
 
             perHostLayers[hIdx].Add(new SecondSkinLayer
             {
                 MaterialName = "/" + matName,   // the model stores material names with a leading slash
-                Geometry = new ContentGeometry(unit.Model,
-                    SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                        { unit.MaterialLeaf.TrimStart('/') })),
+                Geometry = unit.Geometries,
             });
             inHost[hIdx]++; diskLetter++;
             contentPlaced++;
 
-            log.Information("[Proteus] content mat={0}/{7}/disk={1} -> host {2}{3:D4}/{4}: {5} \"{6}\" mesh material {8}",
+            log.Information("[Proteus] content mat={0}/{7}/disk={1} -> host {2}{3:D4}/{4}: {5} — {8} mesh(es) "
+                          + "for [{6}]",
                 matLetter, diskChar, host.Prefix, host.SetId, host.Slot,
-                unit.Entry.ModDirectory, unit.Content.Option ?? "(default)", matVariant, unit.MaterialLeaf);
+                unit.Entry.ModDirectory,
+                string.Join(", ", unit.Owners.Select(o => o.Content.Option ?? "(default)")),
+                matVariant, unit.Geometries.Count);
         }
 
         if (contentUnhosted.Count > 0)
@@ -1748,7 +1818,7 @@ public sealed class SecondSkinService
                 // geometry, so parsing the body here would cost the whole header walk to contribute nothing —
                 // and worse, the merged model's flags and LOD block are taken from source 0, which would then
                 // describe a body rather than the piece actually being emitted.
-                var srcs = perHostLayers[h].All(l => l.Geometry != null)
+                var srcs = perHostLayers[h].All(l => l.Geometry.Count > 0)
                     ? []
                     : surface.Sources;
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,

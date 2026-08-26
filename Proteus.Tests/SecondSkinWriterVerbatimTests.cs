@@ -133,7 +133,7 @@ public class SecondSkinWriterVerbatimTests
             new SecondSkinLayer
             {
                 MaterialName = "/mt_c0201a0001_rir_b.mtrl",
-                Geometry = Geometry(content, ContentMaterialOf(content)),
+                Geometry = [Geometry(content, ContentMaterialOf(content))],
             },
         };
 
@@ -150,7 +150,7 @@ public class SecondSkinWriterVerbatimTests
         // The pack's mesh is REAL geometry, so it must have survived with vertices of its own - and with
         // more than the ring alone would contribute.
         SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
-            new[] { new SecondSkinLayer { MaterialName = "/x.mtrl", Geometry = Geometry(content, "nothing.mtrl") } },
+            new[] { new SecondSkinLayer { MaterialName = "/x.mtrl", Geometry = [Geometry(content, "nothing.mtrl")] } },
             ring, out var ringOnly);
         Assert.True(stats.VerticesOut > ringOnly.VerticesOut, "the content mesh contributed no vertices");
 
@@ -168,7 +168,7 @@ public class SecondSkinWriterVerbatimTests
             new SecondSkinLayer
             {
                 MaterialName = "/mt_c0201a0053_rir_a.mtrl",
-                Geometry = Geometry(content, ContentMaterialOf(content)),
+                Geometry = [Geometry(content, ContentMaterialOf(content))],
             },
         };
 
@@ -181,6 +181,47 @@ public class SecondSkinWriterVerbatimTests
         Assert.Equal(stats.TrianglesIn, stats.TrianglesOut);
         Assert.Equal(new[] { "/mt_c0201a0053_rir_a.mtrl" }, SecondSkinWriter.MaterialNames(outBytes));
         Validate(outBytes);
+    }
+
+    [Fact]
+    public void One_layer_can_carry_several_meshes_against_a_single_material()
+    {
+        // The point of the whole thing: a material is what costs a slot on the host, so two pieces of a pack
+        // that want the same material publish it ONCE and both draw with it. A pack of five piercings on one
+        // material would otherwise spend five of the host's ten slots.
+        var top = ReadPackEntry(ContentEntry);
+        var bottom = ReadPackEntry("bottom/hip dermals/chara/equipment/e0000/model/c0201e0000_dwn.mdl");
+        if (top == null || bottom == null) return;
+
+        SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer { MaterialName = "/m.mtrl", Geometry = [Geometry(top, ContentMaterialOf(top))] }],
+            null, out var topOnly);
+        SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer { MaterialName = "/m.mtrl", Geometry = [Geometry(bottom, ContentMaterialOf(bottom))] }],
+            null, out var bottomOnly);
+
+        var merged = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [
+                new SecondSkinLayer
+                {
+                    MaterialName = "/m.mtrl",
+                    Geometry =
+                    [
+                        Geometry(top, ContentMaterialOf(top)),
+                        Geometry(bottom, ContentMaterialOf(bottom)),
+                    ],
+                },
+            ],
+            null, out var stats);
+
+        // Both meshes are in there — nothing was deduped away — and they cost ONE material between them.
+        Assert.Equal(new[] { "/m.mtrl" }, SecondSkinWriter.MaterialNames(merged));
+        Assert.Equal(topOnly.VerticesOut + bottomOnly.VerticesOut, stats.VerticesOut);
+        Assert.Equal(topOnly.TrianglesOut + bottomOnly.TrianglesOut, stats.TrianglesOut);
+        Assert.Equal(stats.TrianglesIn, stats.TrianglesOut);   // no coverage map, so nothing is trimmed
+
+        Validate(merged);
     }
 
     [Fact]
