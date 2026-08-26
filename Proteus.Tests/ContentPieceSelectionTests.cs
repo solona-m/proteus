@@ -254,6 +254,33 @@ public class ContentPieceSelectionTests
     }
 
     [Fact]
+    public void Two_garments_sharing_one_material_are_not_collapsed_into_one()
+    {
+        // The regression this pins: a pack whose pieces all bind the SAME material — the piercings pack is
+        // exactly that — had every piece hash alike, so wearing a belly piercing and a hip piercing showed
+        // only whichever discovery reached first. The key must identify the geometry, and an imported
+        // piece's path lives in Models (it names a race), leaving ContentPiece.Model empty.
+        const string Mtrl = "common/1/piercings.mtrl";
+        const string Leaf = "/mt_c0201b0001_neolithe_piercings.mtrl";
+
+        // The trap, stated: an imported piece's path lives in Models because it names a race, so Model is
+        // blank and keying on it made every piece of the pack identical.
+        var imported = new ContentPiece { Models = new Dictionary<string, string> { ["0201"] = "top/heart/model.mdl" } };
+        Assert.Equal(string.Empty, imported.Model);
+        Assert.Equal("top/heart/model.mdl", imported.ModelFor("0201"));
+
+        var belly = SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, null);
+        var hip   = SecondSkinService.ContentUnitKey("mod", "bottom/hip/model.mdl", Leaf, Mtrl, null);
+        Assert.NotEqual(belly, hip);
+
+        // …while two options that really do draw the same model with the same colours are still one slot.
+        Assert.Equal(belly, SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, null));
+
+        // Different colours are a different material, and legitimately cost two.
+        Assert.NotEqual(belly, SecondSkinService.ContentUnitKey("mod", "top/heart/model.mdl", Leaf, Mtrl, "[{\"Row\":1}]"));
+    }
+
+    [Fact]
     public void ModelFor_picks_the_wearers_race()
     {
         var piece = new ContentPiece

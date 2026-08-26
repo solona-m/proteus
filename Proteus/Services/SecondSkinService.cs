@@ -175,6 +175,23 @@ public sealed class SecondSkinService
         return null;
     }
 
+    /// <summary>
+    /// What makes two content units the SAME unit, and therefore one material slot instead of two.
+    /// <para/>
+    /// Two options that draw the same geometry with the same material and the same colours would publish
+    /// byte-identical output twice, out of a budget of ten — so they collapse. Different colours are a
+    /// different material and legitimately cost two.
+    /// <para/>
+    /// Keyed on the RESOLVED model path, never on <see cref="ContentPiece.Model"/>. That field is empty for
+    /// anything the importer wrote: a model path names the race it was authored for, so the paths live in
+    /// <see cref="ContentPiece.Models"/> and only a hand-authored sidecar fills Model in. Keying on it made
+    /// every piece of a pack that shares one material hash alike, and a mod offering a belly piercing and a
+    /// hip piercing could only ever show whichever the discovery order reached first.
+    /// </summary>
+    internal static string ContentUnitKey(
+        string modDir, string modelRel, string materialLeaf, string mtrlRel, string? rowsJson)
+        => string.Join('\u0000', modDir, modelRel, materialLeaf, mtrlRel, rowsJson ?? "-");
+
     /// <summary>The Penumbra mod folder an entry lives in — the parent of its Proteus/ sidecar.</summary>
     private static string? ModRootOf(OverlayEntry entry)
         => Path.GetDirectoryName(
@@ -1167,12 +1184,9 @@ public sealed class SecondSkinService
                 }
 
                 var rows = BuildSparseRows(rc.ColorTableRows);
-                // Two options that bind the same model, the same mesh material AND the same colours would
-                // publish byte-identical materials from byte-identical geometry — the same slot twice, out
-                // of a budget of ten. Different colours are a different material and legitimately cost two.
-                var dedupe = string.Join('\u0000', cEntry.ModDirectory, piece.Model, leaf, rel,
-                    rows == null ? "-" : JsonSerializer.Serialize(rc.ColorTableRows));
-                if (!seenUnits.Add(dedupe)) continue;
+                var key = ContentUnitKey(cEntry.ModDirectory, modelRel, leaf, rel,
+                    rows == null ? null : JsonSerializer.Serialize(rc.ColorTableRows));
+                if (!seenUnits.Add(key)) continue;
 
                 contentUnits.Add(new ContentUnit(cEntry, rc, model, leaf, mtrl, rows));
             }
