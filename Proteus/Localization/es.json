@@ -479,18 +479,6 @@
     "message": "Las piezas llegan DESACTIVADAS. Tras importar, marca las que quieras en «{0}» dentro de Penumbra — hasta entonces no se lleva nada.",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "Buscar un paquete de mod",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Paquete de Penumbra",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Selecciona un paquete de Penumbra",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A y B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "O importa un paquete de Penumbra (.pmp) que traiga sus propias mallas. Proteus lo copia, impide que Penumbra publique sus modelos y, en su lugar, añade las mallas de cada opción que selecciones a tu accesorio portador — así, las opciones que se disputarían una misma ruta del juego pueden llevarse todas a la vez.",
+    "message": "Importa un mod normal (.pmp). Lleva partes de él sin ocupar una ranura de equipo y añade funciones avanzadas de tabla de color.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Paquete Onion",
+    "message": "Paquete de mod",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Seleccionar un paquete Onion",
+    "message": "Seleccionar un paquete",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Importa un paquete de superposiciones Onion (.omp). Proteus lee las capas del paquete y escribe un nuevo mod de Penumbra con un archivo Proteus adjunto: el archivo original no se modifica.",
+    "message": "Importa un paquete de superposiciones de Onion (.omp). Lleva sus capas como superposiciones de Proteus, que puedes recolorear y reordenar.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Elige un archivo .omp para ver lo que contiene.",
+    "message": "Elige un paquete para ver lo que contiene.",
     "description": ""
   },
   "Import.NothingUsable": {

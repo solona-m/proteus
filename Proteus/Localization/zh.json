@@ -479,18 +479,6 @@
     "message": "部件导入时均为关闭状态。导入后请在 Penumbra 的“{0}”中勾选你想要的部件——在那之前不会穿戴任何东西。",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "浏览模组包",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Penumbra 包",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "选择 Penumbra 包",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A 和 B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "或者导入自带网格的 Penumbra 包（.pmp）。Proteus 会将其复制进来，阻止 Penumbra 发布其模型，转而把你所选每个选项的网格追加到承载饰品上——这样原本会争抢同一游戏路径的选项就能同时穿戴。",
+    "message": "导入普通模组（.pmp）。无需占用装备栏即可穿戴其中的部件，并添加进阶色表功能。",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion 包",
+    "message": "模组整合包",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "选择一个 Onion 包",
+    "message": "选择整合包",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "导入 Onion 叠加包（.omp）。Proteus 会读取包中的层，并写入一个带有 Proteus 附属文件的新 Penumbra 模组——原始文件不会被修改。",
+    "message": "导入 Onion 叠加层整合包（.omp）。其图层可作为 Proteus 叠加层穿戴，并可重新上色和调整叠放顺序。",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "选择一个 .omp 文件即可查看其内容。",
+    "message": "选择一个整合包以查看其内容。",
     "description": ""
   },
   "Import.NothingUsable": {

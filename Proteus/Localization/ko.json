@@ -479,18 +479,6 @@
     "message": "파츠는 모두 꺼진 상태로 들어옵니다. 가져온 뒤 Penumbra의 \"{0}\"에서 원하는 항목을 체크하세요. 그 전에는 아무것도 착용되지 않습니다.",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "모드 팩 찾아보기",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Penumbra 팩",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Penumbra 팩 선택",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A와 B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "또는 자체 메시를 포함한 Penumbra 팩(.pmp)을 가져옵니다. Proteus는 팩을 복사한 뒤 Penumbra가 그 모델을 적용하지 못하게 하고, 대신 선택한 각 옵션의 메시를 캐리어 장신구에 덧붙입니다. 덕분에 같은 게임 경로를 두고 충돌하던 옵션들을 한꺼번에 착용할 수 있습니다.",
+    "message": "일반 모드(.pmp)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion 팩",
+    "message": "모드 팩",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Onion 팩 선택",
+    "message": "팩 선택",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. Proteus가 팩의 레이어를 읽어 Proteus 사이드카가 포함된 새 Penumbra 모드를 작성합니다 — 원본 파일은 변경되지 않습니다.",
+    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. 레이어를 Proteus 오버레이로 착용하고, 색을 바꾸거나 순서를 다시 쌓을 수 있습니다.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": ".omp 파일을 선택하면 내용이 표시됩니다.",
+    "message": "팩을 선택하면 내용을 확인할 수 있습니다.",
     "description": ""
   },
   "Import.NothingUsable": {

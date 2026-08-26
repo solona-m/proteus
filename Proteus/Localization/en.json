@@ -479,18 +479,6 @@
     "message": "Pieces arrive switched OFF. After importing, tick the ones you want under \"{0}\" in Penumbra — nothing is worn until you do.",
     "description": "Shown in the Import tab before the Import button. {0} is the name of the option group the import adds. \"Penumbra\" is a plugin name - never translate it."
   },
-  "Content.Browse.Btn": {
-    "message": "Browse for a mod pack",
-    "description": "Button in the Import tab that opens a file picker for .pmp packs."
-  },
-  "Content.Dialog.Filter": {
-    "message": "Penumbra pack",
-    "description": "File-type label in the picker. The \".pmp\" extension is appended after it."
-  },
-  "Content.Dialog.Title": {
-    "message": "Select a Penumbra pack",
-    "description": "Title of the file-picker dialog. \"Penumbra\" is a plugin name - never translate it."
-  },
   "Content.EitherColumn": {
     "message": "A and B",
     "description": "Stands in for the column letter when an index texture uses both columns. Used inside Content.IndexCompressed.Fmt."
@@ -524,8 +512,8 @@
     "description": "Warning above a content pack's colour grid when its index texture cannot be read. \"Proteus\" is a plugin name - never translate it."
   },
   "Content.Intro": {
-    "message": "Or import a Penumbra pack (.pmp) that ships its own meshes. Proteus copies it in, stops Penumbra from publishing its models, and appends the meshes of every option you select onto your carrier accessory instead — so options that would fight over one game path can all be worn at once.",
-    "description": "Appears in the Import tab, under the Onion pack intro. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
+    "message": "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour table features.",
+    "description": "First of the Import tab's two bulleted lines: what a regular .pmp mod gets you."
   },
   "Content.Materials.Fmt": {
     "message": "{0} materials",
@@ -920,12 +908,12 @@
     "description": "Appears in the Import tab."
   },
   "Import.Dialog.Filter": {
-    "message": "Onion pack",
-    "description": "Shown in the file dialog's file-type box. \"Onion\" is another tool's name - never translated."
+    "message": "Mod pack",
+    "description": "Human half of the file picker's filter; the braced extension list is appended in code."
   },
   "Import.Dialog.Title": {
-    "message": "Select an Onion pack",
-    "description": "Appears in the Import tab."
+    "message": "Select a pack",
+    "description": "Title of the file picker. One dialog now offers both pack formats."
   },
   "Import.Failed.Fmt": {
     "message": "Import failed: {0}",
@@ -940,8 +928,8 @@
     "description": "Button caption. Appears in the Import tab."
   },
   "Import.Intro": {
-    "message": "Import an Onion overlay pack (.omp). Proteus reads the pack's layers and writes a new Penumbra mod with a Proteus sidecar — the original file isn't modified.",
-    "description": "Appears in the Import tab."
+    "message": "Import an Onion overlay pack (.omp). Wear its layers as Proteus overlays you can recolour and restack.",
+    "description": "Second of the Import tab's two bulleted lines: what an .omp overlay pack gets you."
   },
   "Import.Layer.Imported.Fmt": {
     "message": "{0}\nImported as {1} in {2} UV space.",
@@ -1000,8 +988,8 @@
     "description": "Appears in the Import tab."
   },
   "Import.NoPack": {
-    "message": "Pick an .omp file to see what it contains.",
-    "description": "Appears in the Import tab."
+    "message": "Pick a pack to see what it contains.",
+    "description": "Shown in the Import tab before a pack has been picked."
   },
   "Import.NothingUsable": {
     "message": "No layer in this pack can be imported.",

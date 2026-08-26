@@ -479,18 +479,6 @@
     "message": "Teile kommen AUSGESCHALTET an. Häkchen nach dem Import unter \"{0}\" in Penumbra setzen — vorher wird nichts getragen.",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "Mod-Paket auswählen",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Penumbra-Paket",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Penumbra-Paket auswählen",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A und B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Oder importiere ein Penumbra-Paket (.pmp), das eigene Meshes mitbringt. Proteus kopiert es herein, hindert Penumbra daran, dessen Modelle zu veröffentlichen, und hängt stattdessen die Meshes jeder ausgewählten Option an dein Träger-Accessoire an — so lassen sich Optionen, die sonst um denselben Spielpfad streiten, alle gleichzeitig tragen.",
+    "message": "Importiere eine gewöhnliche Mod (.pmp). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion-Paket",
+    "message": "Mod-Paket",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Ein Onion-Paket auswählen",
+    "message": "Paket auswählen",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Importiere ein Onion-Overlay-Paket (.omp). Proteus liest die Ebenen des Pakets und schreibt einen neuen Penumbra-Mod mit einer Proteus-Beidatei — die Originaldatei wird nicht verändert.",
+    "message": "Importiere ein Onion-Overlay-Paket (.omp). Trage seine Ebenen als Proteus-Overlays, die du umfärben und neu stapeln kannst.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Wähle eine .omp-Datei, um zu sehen, was sie enthält.",
+    "message": "Wähle ein Paket, um seinen Inhalt zu sehen.",
     "description": ""
   },
   "Import.NothingUsable": {

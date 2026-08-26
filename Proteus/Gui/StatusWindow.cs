@@ -1305,38 +1305,54 @@ public class StatusWindow : Window
         var ims = Strings.Import;
         var cms = Strings.Content;
 
-        ImGui.TextWrapped(ims.Intro);
-        ImGui.Spacing();
-        ImGui.TextWrapped(cms.Intro);
+        // A bullet each, .pmp first: an ordinary Penumbra mod is what most people arrive holding, and an
+        // overlay pack is the specialist case.
+        //
+        // Indent is a left inset for the list and nothing more. It is NOT what hangs the wrapped lines —
+        // ImGui does that by itself, since wrapped text restarts every line at the x it began at, which is
+        // already past the bullet. Removing this call would only move the list back to the window margin.
+        // Two calls rather than a loop over an array: this runs every frame the tab is open, and the pair
+        // cannot be hoisted into a static — Strings.Import is REPLACED on a language change, so a cached
+        // one would go on showing the old language.
+        ImGui.Indent();
+        ImGui.PushTextWrapPos(0);
+        BulletLine(cms.Intro);
+        BulletLine(ims.Intro);
+        ImGui.PopTextWrapPos();
+        ImGui.Unindent();
         ImGui.Separator();
 
-        if (ImGui.Button(cms.BrowseBtn))
-            _fileDialog.OpenFileDialog(cms.DialogTitle, cms.DialogFilter + "{" + PenumbraPackage.Extension + "}",
+        // ONE button, for both formats. Which reader a file needs is written on the file, so asking someone
+        // to say it again before they may pick one is a question with no purpose — and the wrong answer used
+        // to be a dead end, since each dialog filtered the other format out of sight entirely.
+        //
+        // The braced suffix is the dialog's own filter syntax, not prose, so it is built here from the
+        // format constants and a translator only ever sees the human half. The label is stripped of the
+        // three characters that syntax is made of before it goes in: a translation carrying a brace or a
+        // comma would corrupt the filter, and with one button that breaks the only route to ANY pack rather
+        // than to one format. None of the eight current translations contain them; the point is that
+        // nothing in the code was making that true.
+        if (ImGui.Button(ims.BrowseBtn))
+            _fileDialog.OpenFileDialog(ims.DialogTitle,
+                FilterLabel(ims.DialogFilter)
+                    + "{" + PenumbraPackage.Extension + "," + OnionPackage.Extension + "}",
                 (ok, paths) =>
                 {
                     if (!ok) return;
                     var picked = paths.FirstOrDefault();
                     if (string.IsNullOrEmpty(picked)) return;
-                    LoadContentPack(picked);
+                    LoadPack(picked);
                 }, 1);
-        ImGui.SameLine();
-
+        // SameLine inside each branch rather than once above them. The picked file's name goes beside the
+        // button — the content preview prints it first thing, the Onion path prints it just below — but
+        // when nothing has been picked there is no such name, and a SameLine left hanging would drag the
+        // "pick a pack" line up onto the button's row instead.
         if (_contentPreview != null)
         {
+            ImGui.SameLine();
             DrawContentImport(_contentPreview);
             return;
         }
-
-        if (ImGui.Button(ims.BrowseBtn))
-            // The "{.omp}" suffix is the dialog's own filter syntax, not prose — it is appended here so a
-            // translator only ever sees the human half.
-            _fileDialog.OpenFileDialog(ims.DialogTitle, ims.DialogFilter + "{.omp}", (ok, paths) =>
-            {
-                if (!ok) return;
-                var picked = paths.FirstOrDefault();
-                if (string.IsNullOrEmpty(picked)) return;
-                LoadOnionPack(picked);
-            }, 1);
 
         if (_importPath.Length > 0)
         {
@@ -1419,6 +1435,38 @@ public class StatusWindow : Window
     /// resolve are done HERE, on the one frame the file dialog reports a pick — they're multi-ms, and the
     /// draw runs them at frame rate otherwise.
     /// </summary>
+    /// <summary>
+    /// Read a picked pack with whichever reader its extension calls for.
+    /// <para/>
+    /// Everything that is not an <c>.omp</c> goes to the Penumbra reader rather than to a third
+    /// "unsupported" arm. That arm would need a string of its own to say something
+    /// <see cref="PenumbraPackage.Read"/> already says better — it rejects a file with no manifest as "Not a
+    /// Penumbra pack", which <see cref="LoadContentPack"/> puts on screen. A file that is neither format
+    /// gets a true sentence, and the tab gets no message that exists only to be wrong about.
+    /// </summary>
+    private void LoadPack(string path)
+    {
+        if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
+        else LoadContentPack(path);
+    }
+
+    /// <summary>One bulleted line of wrapped body text. Honours whatever wrap position is pushed around
+    /// it; the bullet advances the cursor itself, so the text follows on the same row.</summary>
+    private static void BulletLine(string text)
+    {
+        ImGui.Bullet();
+        ImGui.TextUnformatted(text);
+    }
+
+    /// <summary>
+    /// A localized file-dialog label with the filter syntax's own characters removed, so a translation
+    /// cannot corrupt the filter it gets concatenated into. Called on click, not per frame.
+    /// </summary>
+    private static string FilterLabel(string label)
+        => label.IndexOfAny(['{', '}', ',']) < 0
+            ? label
+            : new string([.. label.Where(c => c is not ('{' or '}' or ','))]);
+
     private void LoadOnionPack(string path)
     {
         _importPath = path;

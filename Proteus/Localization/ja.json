@@ -479,18 +479,6 @@
     "message": "パーツはすべてオフの状態でインポートされます。インポート後、Penumbraの「{0}」で使いたいものにチェックを入れてください。それまでは何も着用されません。",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "MODパックを選択",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Penumbraパック",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Penumbraパックを選択",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A と B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "または、独自のメッシュを同梱したPenumbraパック（.pmp）をインポートします。Proteusはパックを取り込み、Penumbraによるモデルの適用を止めたうえで、選択した各オプションのメッシュをキャリア用アクセサリに追加します。これにより、同じゲームパスを奪い合うオプションどうしも同時に着用できます。",
+    "message": "通常の Mod (.pmp) をインポートします。装備枠を使わずに一部だけを着用でき、高度なカラーテーブル機能を追加できます。",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onionパック",
+    "message": "Mod パック",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Onionパックを選択",
+    "message": "パックを選択",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Onionオーバーレイパック（.omp）をインポートします。Proteusはパックのレイヤーを読み取り、Proteusサイドカー付きの新しいPenumbra MODを書き出します。元のファイルは変更されません。",
+    "message": "Onion のオーバーレイパック (.omp) をインポートします。レイヤーは Proteus のオーバーレイとして着用でき、色の変更や重ね順の入れ替えができます。",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": ".ompファイルを選ぶと内容が表示されます。",
+    "message": "パックを選択すると内容が表示されます。",
     "description": ""
   },
   "Import.NothingUsable": {

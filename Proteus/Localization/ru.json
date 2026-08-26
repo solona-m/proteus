@@ -479,18 +479,6 @@
     "message": "Детали прибывают ВЫКЛЮЧЕННЫМИ. После импорта отметьте нужные в «{0}» в Penumbra — до этого ничего не надевается.",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "Выбрать пакет мода",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Пакет Penumbra",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Выберите пакет Penumbra",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A и B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Или импортируйте пакет Penumbra (.pmp) со своими мешами. Proteus скопирует его, запретит Penumbra публиковать его модели и вместо этого добавит меши каждой выбранной опции к аксессуару-носителю — так опции, которые спорили бы за один игровой путь, можно носить одновременно.",
+    "message": "Импортируйте обычный мод (.pmp). Носите его отдельные части, не занимая слот экипировки, и добавляйте расширенные возможности цветовой таблицы.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Пакет Onion",
+    "message": "Пак мода",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Выберите пакет Onion",
+    "message": "Выберите пак",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Импортируйте пакет наложений Onion (.omp). Proteus прочитает слои пакета и запишет новый мод Penumbra с сопроводительным файлом Proteus — исходный файл не изменяется.",
+    "message": "Импортируйте пак наложений Onion (.omp). Носите его слои как наложения Proteus — их можно перекрашивать и менять местами.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Выберите файл .omp, чтобы увидеть его содержимое.",
+    "message": "Выберите пак, чтобы увидеть его содержимое.",
     "description": ""
   },
   "Import.NothingUsable": {

@@ -479,18 +479,6 @@
     "message": "Les pièces arrivent DÉSACTIVÉES. Après l'import, cochez celles que vous voulez sous « {0} » dans Penumbra — rien n'est porté avant.",
     "description": ""
   },
-  "Content.Browse.Btn": {
-    "message": "Parcourir les packs de mod",
-    "description": ""
-  },
-  "Content.Dialog.Filter": {
-    "message": "Pack Penumbra",
-    "description": ""
-  },
-  "Content.Dialog.Title": {
-    "message": "Sélectionner un pack Penumbra",
-    "description": ""
-  },
   "Content.EitherColumn": {
     "message": "A et B",
     "description": ""
@@ -524,7 +512,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Ou importez un pack Penumbra (.pmp) qui fournit ses propres maillages. Proteus le copie, empêche Penumbra de publier ses modèles, et ajoute à la place les maillages de chaque option sélectionnée sur votre accessoire porteur — ainsi, des options qui se disputeraient un même chemin de jeu peuvent toutes être portées en même temps.",
+    "message": "Importez un mod classique (.pmp). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -920,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Pack Onion",
+    "message": "Pack de mod",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Sélectionner un pack Onion",
+    "message": "Sélectionner un pack",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -940,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Importez un pack de calques Onion (.omp). Proteus lit les couches du pack et écrit un nouveau mod Penumbra accompagné d'un fichier Proteus — le fichier d'origine n'est pas modifié.",
+    "message": "Importez un pack d'overlays Onion (.omp). Portez ses calques comme des overlays Proteus, que vous pouvez recolorer et réempiler.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -1000,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Choisissez un fichier .omp pour voir ce qu'il contient.",
+    "message": "Choisissez un pack pour voir ce qu'il contient.",
     "description": ""
   },
   "Import.NothingUsable": {

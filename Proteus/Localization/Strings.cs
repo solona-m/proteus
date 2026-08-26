@@ -425,14 +425,16 @@ public sealed class SettingsStrings
 /// <summary>The Import tab's content-pack (.pmp) half — packs that ship their own meshes.</summary>
 public sealed class ContentStrings
 {
+    /// <summary>
+    /// The .pmp half of the Import tab's two lines, in the same voice as <see cref="ImportStrings.Intro"/>:
+    /// what you get, not how it is done. The mechanism it used to describe — copying the pack in, stopping
+    /// Penumbra publishing its models, appending option meshes onto a carrier accessory so options sharing
+    /// a game path can coexist — is all true and none of it belongs on the button someone is deciding
+    /// whether to press.
+    /// </summary>
     public readonly string Intro = Loc.Localize("Content.Intro",
-        "Or import a Penumbra pack (.pmp) that ships its own meshes. Proteus copies it in, stops Penumbra "
-      + "from publishing its models, and appends the meshes of every option you select onto your carrier "
-      + "accessory instead — so options that would fight over one game path can all be worn at once.");
-
-    public readonly string BrowseBtn = Loc.Localize("Content.Browse.Btn", "Browse for a mod pack") + "###contentBrowse";
-    public readonly string DialogTitle = Loc.Localize("Content.Dialog.Title", "Select a Penumbra pack");
-    public readonly string DialogFilter = Loc.Localize("Content.Dialog.Filter", "Penumbra pack");
+        "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour "
+      + "table features.");
 
     public readonly string ReadFailedFmt = Loc.Localize("Content.ReadFailed.Fmt",
         "Couldn't read that pack: {0}");
@@ -518,15 +520,22 @@ public sealed class ContentStrings
 
 public sealed class ImportStrings
 {
+    /// <summary>
+    /// What an .omp gets you, in one line. Says the PAYOFF, not the machinery: it used to explain sidecars
+    /// and that the original file is left alone, which answers a question nobody has asked yet at the point
+    /// they are deciding whether to click.
+    /// </summary>
     public readonly string Intro = Loc.Localize("Import.Intro",
-        "Import an Onion overlay pack (.omp). Proteus reads the pack's layers and writes " +
-        "a new Penumbra mod with a Proteus sidecar — the original file isn't modified.");
+        "Import an Onion overlay pack (.omp). Wear its layers as Proteus overlays you can recolour and "
+      + "restack.");
 
+    /// <summary>Shared by BOTH formats — see DrawImportTab, which has one browse button and picks the
+    /// reader off the extension.</summary>
     public readonly string BrowseBtn    = Loc.Localize("Import.Browse.Btn", "Browse for a pack") + "###importBrowse";
-    public readonly string DialogTitle  = Loc.Localize("Import.Dialog.Title", "Select an Onion pack");
-    public readonly string DialogFilter = Loc.Localize("Import.Dialog.Filter", "Onion pack");
+    public readonly string DialogTitle  = Loc.Localize("Import.Dialog.Title", "Select a pack");
+    public readonly string DialogFilter = Loc.Localize("Import.Dialog.Filter", "Mod pack");
 
-    public readonly string NoPack = Loc.Localize("Import.NoPack", "Pick an .omp file to see what it contains.");
+    public readonly string NoPack = Loc.Localize("Import.NoPack", "Pick a pack to see what it contains.");
 
     public readonly string ModName = Loc.Localize("Import.ModName.Label", "Mod name") + "###importName";
     public readonly string Author  = Loc.Localize("Import.Author.Label", "Author") + "###importAuthor";
