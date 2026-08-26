@@ -63,7 +63,17 @@ public sealed class ContentImportService
         int Meshes,
         int Vertices,
         string? Problem,
-        string RaceCode = "")
+        string RaceCode = "",
+        /// <summary>
+        /// Material name → the attribute names of the submeshes drawn with it: the switches a mod flips by
+        /// name to show and hide parts of one model.
+        /// <para/>
+        /// Read here because only the importer has the .mdl open. It answers two questions later: whether
+        /// this model is one the pack ALREADY controls (so Proteus need not add a checkbox of its own), and
+        /// which of the pack's options each material answers to (so the colour panel can show tabs for the
+        /// pieces actually being worn, named after the options that turn them on).
+        /// </summary>
+        IReadOnlyDictionary<string, List<string>>? MaterialAttributes = null)
     {
         public bool Import => Problem == null && Bindings.Count > 0;
     }
@@ -209,19 +219,43 @@ public sealed class ContentImportService
         var unitsPerOption = unitOrder.GroupBy(k => (k.Item1, k.Item2))
             .ToDictionary(g => g.Key, g => g.Count());
 
+        // Attributes the pack's own options switch on. A pack holding many accessories in ONE model gives
+        // each a named attribute and a checkbox, redirecting no files at all — so an option that looks empty
+        // is still a real selector, and a model those checkboxes already drive must not get a second one.
+        var packToggles = pack.Groups
+            .SelectMany(g => g.Options)
+            .SelectMany(o => o.Attributes)
+            .ToHashSet(StringComparer.Ordinal);
+
         var units = new List<PieceUnit>();
+        bool selfDriven = false;   // at least one model the pack's own checkboxes already drive
         foreach (var key in unitOrder)
         {
             var (group, option, _, setTag) = key;
             var slot = slotOf[key];
             var name = itemName?.Invoke(slot.Category, ContentSlot.SetIdOf(setTag) ?? -1);
 
+            // "Nothing else selects it" is the whole reason an unconditional model gets a switch of ours —
+            // so it stops being true the moment the pack's own checkboxes reach into that model. They do
+            // when its attributes are ones those options toggle, and then our switch is pure friction: a
+            // box to tick before any of the pack's own boxes mean anything, which also equips everything
+            // at once the moment it is ticked.
+            bool packControls = byUnit[key].Any(v =>
+                v.MaterialAttributes is { } byMat
+                && byMat.Values.Any(names => names.Any(packToggles.Contains)));
+
             string? gate =
-                group == null                         ? ContentSlot.Label(slot, name)   // nothing else selects it
-                : unitsPerOption[(group, option)] > 1 ? slot.Label                       // one slot of a bundle
-                : null;                                                                 // its own option selects it
+                group == null                         ? (packControls ? null : ContentSlot.Label(slot, name))
+                : unitsPerOption[(group, option)] > 1 ? slot.Label   // one slot of a bundle
+                : null;                                             // its own option selects it
 
             units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key]));
+
+            // Only when a gate was ACTUALLY suppressed, and only for a unit that will be imported. On the
+            // grouped arms packControls changes nothing — those units can still synthesize a group — so
+            // setting this from packControls alone told the user Proteus was adding no checkboxes while it
+            // was about to add several.
+            if (group == null && packControls && units[^1].Import) selfDriven = true;
         }
 
         var gateGroup = units.Any(u => u.Import && u.GateOption != null)
@@ -232,6 +266,34 @@ public sealed class ContentImportService
             warnings.Add(Loc.Localize("ContentImport.Warn.NoModels",
                 "No option in this pack redirects a model, so there is no geometry for Proteus to append. "
               + "Install it in Penumbra instead."));
+
+        // Which races the pack is actually built for, said BEFORE it is imported.
+        //
+        // Most gear ships one model in the shared shape the game resizes for everyone, and those carry no
+        // race of their own — nothing to report. A pack built for one race only fits that race, because
+        // Proteus does not resize geometry between races, and finding that out after importing means
+        // wondering why an enabled mod shows nothing.
+        var raceCodes = units
+            .Where(u => u.Import)
+            .SelectMany(u => u.Variants.Where(v => v.Import).Select(v => v.RaceCode))
+            .Where(c => !string.IsNullOrEmpty(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (raceCodes.Count > 0 && raceCodes.All(c => !ModelRace.IsSharedShape(c)))
+            warnings.Add(string.Format(Loc.Localize("ContentImport.Warn.RaceOnly.Fmt",
+                "This pack's models are built for {0}. Proteus does not resize geometry between races, so "
+              + "its pieces will only appear on a character of that race."),
+                ModelRace.DescribeAll(raceCodes)));
+
+        // Said because the absence of something is otherwise invisible. Proteus normally adds a checkbox per
+        // piece; for a pack that switches its own pieces on by model attribute it deliberately adds none, so
+        // the pack's boxes work directly instead of needing one of ours ticked first. The consequence worth
+        // knowing is the other half of that: a piece the pack does NOT gate is one its author meant to be
+        // worn always, and there is now no per-piece switch to turn it off.
+        if (selfDriven)
+            warnings.Add(Loc.Localize("ContentImport.Warn.SelfDriven",
+                "This pack switches its own pieces on and off, so Proteus adds no checkboxes of its own — "
+              + "use the pack's. Any piece it does not switch is worn whenever the mod is enabled."));
 
         return new ImportPreview(pmpPath, pack, units, gateGroup, warnings);
     }
@@ -273,9 +335,12 @@ public sealed class ContentImportService
         if (model == null) return Unreadable(entry);
 
         List<string> declared;
+        Dictionary<string, List<string>> byMaterial;
         try
         {
-            declared = SecondSkinWriter.MaterialNames(model);
+            // Both from one walk — see MaterialsAndAttributes. These models run to six figures of vertices
+            // and the parse is the expensive half of either question.
+            (declared, byMaterial) = SecondSkinWriter.MaterialsAndAttributes(model);
         }
         catch (Exception ex)
         {
@@ -311,7 +376,8 @@ public sealed class ContentImportService
                 "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's own "
               + "materials and re-export."), string.Join(", ", unbound));
 
-        return new PiecePlan(gamePath, entry, bindings, unbound, meshes, vertices, problem);
+        return new PiecePlan(gamePath, entry, bindings, unbound, meshes, vertices, problem,
+                             MaterialAttributes: byMaterial);
     }
 
     // ── write ────────────────────────────────────────────────────────────────
@@ -487,7 +553,7 @@ public sealed class ContentImportService
         // against the grouped plans, which never contained them, so a pack with no option groups at all
         // imported as "nothing usable" while the warning claimed they had been taken as always-on pieces.
         foreach (var unit in preview.Units.Where(u => u.Import && u.Group == null))
-            (metadata.Content ??= new()).Add(PieceOf(unit));
+            (metadata.Content ??= new()).Add(PieceOf(unit, preview.Pack));
 
         foreach (var byGroup in preview.Units.Where(u => u.Import && u.Group != null)
                      .GroupBy(u => u.Group!, StringComparer.Ordinal))
@@ -497,7 +563,7 @@ public sealed class ContentImportService
                 group.Options.Add(new ContentOption
                 {
                     Name   = byOption.Key,
-                    Pieces = byOption.Select(PieceOf).ToList(),
+                    Pieces = byOption.Select(u => PieceOf(u, preview.Pack)).ToList(),
                 });
             if (group.Options.Count > 0)
                 (metadata.ContentGroups ??= new()).Add(group);
@@ -512,7 +578,7 @@ public sealed class ContentImportService
     /// (<c>mt_c0101…</c> vs <c>mt_c0201…</c>) so they cannot collide, and whichever model the wearer's race
     /// selects declares only its own.
     /// </summary>
-    private static ContentPiece PieceOf(PieceUnit unit)
+    private static ContentPiece PieceOf(PieceUnit unit, PenumbraPackage.Contents pack)
     {
         var usable = unit.Variants.Where(v => v.Import).ToList();
         var piece = new ContentPiece
@@ -530,6 +596,22 @@ public sealed class ContentImportService
         foreach (var v in usable)
             foreach (var (leaf, entry) in v.Bindings)
                 piece.Materials[leaf] = entry;
+
+        // Which of the PACK'S options reveal each material — see ContentPiece.MaterialGates. Worked out
+        // here, where the model has just been read, because the panel that needs it draws every frame.
+        var gates = new List<ContentMaterialGate>();
+        foreach (var v in usable)
+        {
+            if (v.MaterialAttributes is not { Count: > 0 } byMat) continue;
+            foreach (var (matName, attrs) in byMat)
+                foreach (var g in pack.Groups)
+                    foreach (var o in g.Options)
+                        if (o.Attributes.Any(a => attrs.Contains(a, StringComparer.Ordinal))
+                            && !gates.Any(x => x.Material == matName && x.Group == g.Name && x.Option == o.Name))
+                            gates.Add(new ContentMaterialGate
+                            { Material = matName, Group = g.Name, Option = o.Name });
+        }
+        if (gates.Count > 0) piece.MaterialGates = gates;
 
         return piece;
     }

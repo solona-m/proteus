@@ -105,6 +105,51 @@ public class ProteusMetadata
     [JsonPropertyName("ContentGlow")]
     public GearSettingsPreset? ContentGlow { get; set; }
 
+    /// <summary>
+    /// Per-MATERIAL colours and glow for an imported pack, keyed by the material's path relative to the mod
+    /// root — the same key <c>SecondSkinService.ContentUnitKey</c> forms a published material around.
+    /// <para/>
+    /// The colour panel draws one tab per material, so this is where a tab's edits belong. The older
+    /// per-option storage (<see cref="ContentOption.ColorTableRows"/>, <see cref="ContentGlow"/>) cannot
+    /// express it: a pack holding nine accessories in one always-on model has ONE option and nine materials,
+    /// so every tab read and wrote the same settings — set a glow on the ear rings and the shin laces were
+    /// already glowing.
+    /// <para/>
+    /// Read in preference to the per-option values, which stay as the fallback so packs edited before this
+    /// keep their colours. A field present here always wins, INCLUDING when it is empty — an empty row list
+    /// means "cleared", not "unset", and must shadow the older value rather than let it come back.
+    /// </summary>
+    [JsonPropertyName("ContentMaterials")]
+    public Dictionary<string, ContentMaterialSettings>? ContentMaterials { get; set; }
+
+    /// <summary>
+    /// The settings stored for one material path, creating the entry if this is its first edit.
+    /// <para/>
+    /// Grows the dictionary by COPY-AND-SWAP rather than in place. The composite reads this map from a
+    /// thread-pool thread while the panel writes to it from the UI thread, and a plain <c>Dictionary</c>
+    /// being inserted into is not safe to read concurrently — a resize can hand the reader a wrong value or
+    /// throw out of the middle of a composite. Swapping a finished dictionary in is the same publish
+    /// contract the compositor's own maps use, and a reader that catches the older reference simply misses
+    /// an edit that is about to trigger a recomposite anyway.
+    /// </summary>
+    public ContentMaterialSettings MaterialSettings(string materialRel)
+    {
+        if (ContentMaterials is { } cur && cur.TryGetValue(materialRel, out var have)) return have;
+
+        var next = ContentMaterials == null
+            ? new Dictionary<string, ContentMaterialSettings>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, ContentMaterialSettings>(ContentMaterials, StringComparer.OrdinalIgnoreCase);
+        var made = new ContentMaterialSettings();
+        next[materialRel] = made;
+        ContentMaterials = next;
+        return made;
+    }
+
+    /// <summary>The settings stored for one material path, or null — reads must not create entries, since
+    /// merely opening a panel must not change the mod.</summary>
+    public ContentMaterialSettings? PeekMaterialSettings(string? materialRel)
+        => materialRel != null && ContentMaterials is { } m && m.TryGetValue(materialRel, out var s) ? s : null;
+
     /// <summary>Whether this pack contributes any geometry at all (before selection is resolved).</summary>
     [JsonIgnore]
     public bool HasContent
@@ -386,10 +431,77 @@ public class ContentPiece
     public IEnumerable<string> ModelCodes
         => Models is { Count: > 0 } ? Models.Keys : [];
 
+    /// <summary>
+    /// Which of the PACK'S own options reveal each of this piece's materials, when the pack switches its
+    /// pieces on and off by model attribute rather than by shipping separate models.
+    /// <para/>
+    /// Recorded at import by walking submesh → attribute mask → attribute name → the option that turns that
+    /// attribute on. Without it the colour panel has no way to tell a material the user is actually wearing
+    /// from one belonging to a piece they left unticked, and shows a tab for all nine whatever is selected.
+    /// <para/>
+    /// A material with no gate here is drawn unconditionally. Null for a pack that does not work this way,
+    /// which is most of them.
+    /// </summary>
+    [JsonPropertyName("MaterialGates")]
+    public List<ContentMaterialGate>? MaterialGates { get; set; }
+
+    /// <summary>Every option that reveals <paramref name="materialLeaf"/>, or an empty list when nothing
+    /// gates it — compared leaf-to-leaf like <see cref="MaterialFor"/>, for the same reason.</summary>
+    public IReadOnlyList<ContentMaterialGate> GatesFor(string materialLeaf)
+    {
+        if (MaterialGates is not { Count: > 0 }) return [];
+        var leaf = materialLeaf.TrimStart('/');
+        return [.. MaterialGates.Where(g =>
+            string.Equals(g.Material.TrimStart('/'), leaf, StringComparison.OrdinalIgnoreCase))];
+    }
+
     /// <summary>The surface this piece is cut for, as the host chooser understands it.</summary>
     [JsonIgnore]
     public ShellSurfaceKey SurfaceKey
         => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+}
+
+/// <summary>
+/// What the colour panel stores for ONE of an imported pack's materials — which is what one of its tabs
+/// governs. See <see cref="ProteusMetadata.ContentMaterials"/>.
+/// </summary>
+public class ContentMaterialSettings
+{
+    /// <summary>Colour table overrides stamped into this material. Null keeps the author's own table.</summary>
+    [JsonPropertyName("ColorTableRows")]
+    public List<ColorTableRowPreset>? ColorTableRows { get; set; }
+
+    /// <summary>
+    /// Animated glow for this material. A preset naming no effect means the glow was CLEARED here, which is
+    /// not the same as never having been set: it publishes the material as its author wrote it, and it
+    /// shadows the older per-option glow instead of letting it come back.
+    /// <para/>
+    /// Null only for an entry created by a colour edit that never touched the glow at all — that one does
+    /// fall through to the per-option value, because nothing here has an opinion about it yet.
+    /// </summary>
+    [JsonPropertyName("Glow")]
+    public GearSettingsPreset? Glow { get; set; }
+}
+
+/// <summary>
+/// One of the pack's own options that reveals one of its materials — the link between a checkbox in the
+/// mod's own settings and the geometry it shows.
+/// <para/>
+/// Stored rather than recomputed because working it out means reading the model: submesh attribute masks,
+/// the model's attribute name table, and the option whose <c>Atr</c> manipulation turns that name on. The
+/// panel draws every frame and cannot open a .mdl to do it.
+/// </summary>
+public class ContentMaterialGate
+{
+    /// <summary>The model's own material name, leading slash and all.</summary>
+    [JsonPropertyName("Material")]
+    public string Material { get; set; } = string.Empty;
+
+    [JsonPropertyName("Group")]
+    public string Group { get; set; } = string.Empty;
+
+    [JsonPropertyName("Option")]
+    public string Option { get; set; } = string.Empty;
 }
 
 /// <summary>One Penumbra option's geometry contribution.</summary>

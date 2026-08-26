@@ -278,4 +278,106 @@ public class ContentImportTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    /// <summary>
+    /// A model the pack's OWN checkboxes already drive gets no checkbox of ours.
+    /// <para/>
+    /// The synthesized "Pieces" group exists because Penumbra cannot say "apply only this model out of an
+    /// always-on set". That reason evaporates when the pack holds its pieces in one model and toggles them
+    /// by attribute — it already has a checkbox per piece. Adding ours on top means a box to tick before any
+    /// of theirs mean anything, and ticking it equips the lot.
+    /// <para/>
+    /// Built rather than read off disk. This test used to name a pack at an absolute path on one machine's
+    /// Desktop and return at its first line when it wasn't there — passing, silently, over behaviour that
+    /// had live bugs in it. See <see cref="SyntheticPack"/>.
+    /// </summary>
+    [Fact]
+    public void A_model_the_packs_own_options_toggle_needs_no_gate_of_ours()
+    {
+        using var built = SyntheticPack.AttributeDriven("0801", "Accessories",
+            new SyntheticPack.Toggle("Belly Dermals", "atrx_belly"),
+            new SyntheticPack.Toggle("Collarbone Top", "atrx_collar"));
+        var RacePack = built.Path;
+
+        var pack = PenumbraPackage.Read(RacePack);
+
+        // Its options redirect no files at all — they flip named attributes, which a reader that only looks
+        // at Files would see as empty options and conclude the pack selects nothing.
+        var toggles = pack.Groups.SelectMany(g => g.Options).SelectMany(o => o.Attributes).ToList();
+        Assert.NotEmpty(toggles);
+        Assert.Contains(toggles, a => a.StartsWith("atrx_", StringComparison.Ordinal));
+        Assert.All(pack.Groups.SelectMany(g => g.Options), o => Assert.Empty(o.Files));
+
+        // So the import adds no group of its own, and nothing is gated.
+        var preview = ContentImportService.Inspect(RacePack);
+        Assert.True(preview.AnyImportable);
+        Assert.Null(preview.PieceGroupName);
+        Assert.All(preview.Units, u => Assert.Null(u.GateOption));
+
+        // And the sidecar still carries the piece. Dropping the gate must not drop the CONTENT with it —
+        // an ungated piece belongs in the always-on list, which is what the composite reads.
+        var sidecar = ContentImportService.BuildSidecar(preview, "Synthetic", "Synthetic");
+        Assert.Null(sidecar.PieceGroupName);
+        Assert.True(sidecar.HasContent);
+        var piece = Assert.Single(sidecar.Content!);
+        Assert.Null(piece.GateOption);                       // nothing to tick before it applies
+        Assert.Equal("0801", Assert.Single(piece.ModelCodes));
+        Assert.NotEmpty(piece.Materials);
+
+        // Each material is tied to the pack's own options, so the colour panel can show a tab per piece the
+        // user is actually wearing and NAME it after the checkbox that turns it on. Without this every
+        // material gets a tab whatever is ticked, labelled with a filename nobody can read.
+        // NotEmpty as well as NotNull: Assert.All passes vacuously on an empty list, and the [0] below would
+        // then report a raw index exception in place of the useful failure.
+        Assert.NotNull(piece.MaterialGates);
+        Assert.NotEmpty(piece.MaterialGates!);
+        Assert.All(piece.MaterialGates!, g =>
+        {
+            Assert.NotEmpty(g.Material);
+            Assert.Contains(pack.Groups, x => x.Name == g.Group);
+            Assert.Contains(pack.Groups.Single(x => x.Name == g.Group).Options, o => o.Name == g.Option);
+        });
+
+        // Real names off the pack's own tree, not file names.
+        var named = piece.MaterialGates!.Select(g => g.Option).ToList();
+        Assert.Contains("Belly Dermals", named);
+        Assert.Contains("Collarbone Top", named);
+
+        // And a material really is gated — GatesFor is what the panel filters on, so it has to resolve
+        // leaf-to-leaf the way the model names them.
+        var gatedLeaf = piece.MaterialGates![0].Material;
+        Assert.NotEmpty(piece.GatesFor(gatedLeaf));
+        Assert.NotEmpty(piece.GatesFor(gatedLeaf.TrimStart('/')));   // slash-insensitive, like MaterialFor
+    }
+
+    /// <summary>
+    /// A pack built for one race says so BEFORE it is imported.
+    /// <para/>
+    /// Proteus does not resize geometry between races, so such a pack only ever appears on that race.
+    /// Finding that out afterwards means staring at an enabled mod that shows nothing — and the shared-shape
+    /// case, which is nearly every pack, must stay silent or the warning means nothing.
+    /// </summary>
+    [Fact]
+    public void A_pack_built_for_one_race_is_flagged_in_the_preview()
+    {
+        // A single met model at c0801 — Miqo'te F — carrying an accessory set.
+        using (var racial = SyntheticPack.AttributeDriven("0801", "Accessories",
+                   new SyntheticPack.Toggle("Belly Dermals", "atrx_belly")))
+        {
+            var preview = ContentImportService.Inspect(racial.Path);
+            var warning = Assert.Single(preview.Warnings, w => w.Contains("Miqote F", StringComparison.Ordinal));
+            Assert.Contains("only appear on a character of that race", warning, StringComparison.Ordinal);
+        }
+
+        // And the ordinary shape stays quiet: c0201 is what the game resizes for everyone, so there is
+        // nothing to warn about. Same pack in every other respect — the race code is the only variable, which
+        // is the point.
+        using (var shared = SyntheticPack.AttributeDriven("0201", "Accessories",
+                   new SyntheticPack.Toggle("Belly Dermals", "atrx_belly")))
+        {
+            var preview = ContentImportService.Inspect(shared.Path);
+            Assert.DoesNotContain(preview.Warnings,
+                w => w.Contains("only appear on a character of that race", StringComparison.Ordinal));
+        }
+    }
 }

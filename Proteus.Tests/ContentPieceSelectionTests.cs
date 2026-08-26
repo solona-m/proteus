@@ -558,6 +558,175 @@ public class ContentPieceSelectionTests
         Assert.Equal(pack.SubRow, foreign.SubRow);
     }
 
+    /// <summary>
+    /// How a resolved content model has to be published, as a table.
+    /// <para/>
+    /// The game deforms a model by the race code of the path it loaded from, so a model in the shared cut
+    /// space is resized onto whoever wears it — which every content piece has relied on — while a model
+    /// already built at the wearer's race must not be touched. Getting this backwards is not subtle: a
+    /// Miqo'te-authored pack placed in cut space is deformed a second time and lands in the wrong place.
+    /// </summary>
+    [Fact]
+    public void A_content_model_is_cut_space_or_native_or_it_cannot_be_worn()
+    {
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
+
+        // The ordinary pack: built in the shared shape, worn by the Midlander F it was cut for. Stays Body,
+        // which is what lets it ride an appended ring instead of demanding a carrier — and all three codes
+        // agreeing here is exactly why cut space has to be tested BEFORE "matches the wearer".
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "0201", "0201"));
+
+        // Same pack on a Miqo'te: still cut space, still deformed onto her by the game.
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "0801", "0201"));
+
+        // A Miqo'te-authored pack on a Miqo'te: native, at her own race, and the race rides in the surface
+        // id so two races' pieces can never share a host or a published material.
+        Assert.Equal(new ShellSurfaceKey(ShellSurfaceKind.Native, "0801"),
+            SecondSkinService.ContentSurface(body, "0801", "0801", "0201"));
+
+        // A model for neither: a Hrothgar reaching a Roegadyn model down the fall-through chain would need a
+        // deform between two races Proteus does not do. Refused rather than shown at the wrong size.
+        Assert.Null(SecondSkinService.ContentSurface(body, "0901", "1501", "0101"));
+        Assert.Null(SecondSkinService.ContentSurface(body, "0801", "0201", "0201"));
+
+        // The shared shape is decided on the CODE, not by matching this character's cut code. Those are
+        // different questions and conflating them refused packs that work: the cut code is voted off the
+        // paths the body was cut from, and a character whose skin comes from a WHOLE-BODY model votes their
+        // own race. An Au Ra F in an ordinary c0201 pack then matched neither arm and lost every piece.
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "1401", "1401"));
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0101", "1501", "1501"));
+
+        // A pack that ships ONE model for everyone names no race at all, so there is none to disagree with.
+        // It reports a null code precisely so it is never judged against a code it did not claim.
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, null, "1401", "1401"));
+
+        // A sidecar that names a surface by hand means it; this only decides for the default.
+        var face = new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001");
+        Assert.Equal(face, SecondSkinService.ContentSurface(face, "0801", "0201", "0201"));
+    }
+
+    [Fact]
+    public void A_pack_shipping_one_model_for_everyone_claims_no_race()
+    {
+        // ModelFor falls back to Model for ANY code, so the exact-match arm always succeeds for an un-keyed
+        // piece. Reporting the code it was asked about would attribute a race the pack never named, and the
+        // surface decision would then refuse it on a character whose cut code differs from their gear's.
+        var universal = new ContentPiece { Model = "models/thing.mdl" };
+        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, "0201"));
+        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, "1401"));
+        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, null));
+
+        // A keyed piece still reports the code that matched, which is the whole point of returning one.
+        var keyed = new ContentPiece { Models = new() { ["0801"] = "models/miqo.mdl" } };
+        Assert.Equal(("0801", "models/miqo.mdl"), SecondSkinService.ResolveVariantForTest(keyed, "0801"));
+        Assert.Null(SecondSkinService.ResolveVariantForTest(keyed, "0201"));
+    }
+
+    [Fact]
+    public void A_native_surface_needs_a_carrier_and_names_itself()
+    {
+        var native = new ShellSurfaceKey(ShellSurfaceKind.Native, "0801");
+
+        // Only a carrier can promise no deform — an append host's EQDP belongs to the player's own item.
+        Assert.True(native.RequiresNativeHost);
+        Assert.False(native.IsBody);
+        Assert.False(new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty).RequiresNativeHost);
+
+        // Named, not swept into the catch-all that would have called it "Ear".
+        Assert.Equal("Native", ShellSurface.Label(ShellSurfaceKind.Native));
+
+        // And two races never merge into one surface, so they can never share a published material.
+        Assert.NotEqual(native, new ShellSurfaceKey(ShellSurfaceKind.Native, "1401"));
+        Assert.NotEqual(
+            SecondSkinService.ContentUnitKey("mod", native, "m.mtrl", null),
+            SecondSkinService.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Native, "1401"),
+                "m.mtrl", null));
+    }
+
+    /// <summary>
+    /// Race codes, the fall-through table, and how a code is said out loud — shared by the composite, the
+    /// importer and the panel, which must not disagree about what "0801" means.
+    /// </summary>
+    [Fact]
+    public void Race_codes_are_read_named_and_fall_through_the_way_the_game_does()
+    {
+        Assert.Equal(8, ModelRace.Index("0801"));
+        Assert.Equal(2, ModelRace.Index("0201"));
+        Assert.Null(ModelRace.Index("9101"));      // past the playable range
+        Assert.Null(ModelRace.Index(null));
+
+        Assert.Equal("Miqote F", ModelRace.Describe("0801"));
+        Assert.Equal("Midlander M", ModelRace.Describe("0101"));
+        Assert.Equal("nonsense", ModelRace.Describe("nonsense"));   // never renames what it can't read
+
+        // Only Midlander is the shape the game resizes for everyone.
+        Assert.True(ModelRace.IsSharedShape("0101"));
+        Assert.True(ModelRace.IsSharedShape("0201"));
+        Assert.False(ModelRace.IsSharedShape("0801"));
+        Assert.False(ModelRace.IsSharedShape("1201"));              // Lalafell ship their own, and are not it
+
+        // The game's own table, exceptions included.
+        Assert.Equal(0, ModelRace.Fallback(1));     // Midlander male is the root
+        Assert.Equal(1, ModelRace.Fallback(2));
+        Assert.Equal(11, ModelRace.Fallback(12));   // Lalafell female -> Lalafell male
+        Assert.Equal(9, ModelRace.Fallback(15));    // Hrothgar male   -> Roegadyn male
+        Assert.Equal(2, ModelRace.Fallback(8));     // Miqo'te female  -> Midlander female
+
+        Assert.Equal("Miqote F, Au Ra F".Replace("Au Ra", "AuRa"),
+            ModelRace.DescribeAll(["0801", "1401", "0801"]));       // deduped, in the order given
+    }
+
+    /// <summary>
+    /// Colours and glow belong to a MATERIAL, because that is what one of the panel's tabs governs.
+    /// <para/>
+    /// They used to be stored per option, which cannot express a pack holding nine accessories in one
+    /// always-on model: that is ONE option and nine materials, so every tab read and wrote the same
+    /// settings. Switching on a glow for the ear rings and finding the shin laces already glowing is the
+    /// same storage answering two different questions.
+    /// </summary>
+    [Fact]
+    public void Content_colours_and_glow_are_stored_per_material_not_per_option()
+    {
+        var meta = new ProteusMetadata();
+        const string EarRings = "common/2/mt_c0801e5505_met_a.mtrl";
+        const string ShinLaces = "common/9/mt_c0801e5505_met_e.mtrl";
+
+        // Reading never creates an entry — merely opening a panel must not change the mod.
+        Assert.Null(meta.PeekMaterialSettings(EarRings));
+        Assert.Null(meta.ContentMaterials);
+
+        meta.MaterialSettings(EarRings).Glow = new GearSettingsPreset { Scroll = "geometric.jpeg" };
+        meta.MaterialSettings(EarRings).ColorTableRows =
+            [new ColorTableRowPreset { Row = 16, SubRowA = new ColorTableSubRowPreset { Diffuse = "#FF0000" } }];
+
+        // The other material is untouched — the whole point.
+        Assert.Null(meta.PeekMaterialSettings(ShinLaces));
+        Assert.Equal("geometric.jpeg", meta.PeekMaterialSettings(EarRings)!.Glow!.Scroll);
+
+        // And it keeps its own answer once it has one.
+        meta.MaterialSettings(ShinLaces).Glow = new GearSettingsPreset { Scroll = "flames.jpeg" };
+        Assert.Equal("geometric.jpeg", meta.PeekMaterialSettings(EarRings)!.Glow!.Scroll);
+        Assert.Equal("flames.jpeg", meta.PeekMaterialSettings(ShinLaces)!.Glow!.Scroll);
+
+        // An entry SURVIVES being emptied, and a cleared glow is stored as a preset naming no effect rather
+        // than as null. Both say "cleared here", which is a different fact from "never set here": dropping
+        // either would fall back through to the older per-option value, so clearing an effect would make the
+        // pack's previous one reappear on the next composite.
+        meta.MaterialSettings(EarRings).Glow = new GearSettingsPreset();
+        meta.MaterialSettings(EarRings).ColorTableRows = [];
+        Assert.NotNull(meta.PeekMaterialSettings(EarRings));
+        Assert.NotNull(meta.PeekMaterialSettings(EarRings)!.Glow);
+        Assert.Null(meta.PeekMaterialSettings(EarRings)!.Glow!.GlowKey());
+        Assert.Empty(meta.PeekMaterialSettings(EarRings)!.ColorTableRows!);
+
+        // Two materials differing only in their settings publish different materials, so they cannot share
+        // a host slot — which is exactly why the settings must not be shared either.
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
+        Assert.NotEqual(
+            SecondSkinService.ContentUnitKey("mod", body, EarRings, null, "geometric.jpeg 0.15 0.15 5 5"),
+            SecondSkinService.ContentUnitKey("mod", body, ShinLaces, null, "geometric.jpeg 0.15 0.15 5 5"));
+    }
+
     [Fact]
     public void The_row_decode_rounds_to_the_nearest_pair_rather_than_truncating()
     {

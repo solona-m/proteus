@@ -30,8 +30,14 @@ public static class PenumbraPackage
 
     /// <summary>One option of one group.</summary>
     /// <param name="Files">Game path → the ARCHIVE ENTRY backing it, normalised to forward slashes.</param>
+    /// <param name="Attributes">
+    /// Model attributes this option switches on, if any. A pack whose pieces live in one model toggles them
+    /// by name rather than redirecting files, so an option with no <paramref name="Files"/> and a non-empty
+    /// list here is still a real selector — see <see cref="ReadAttributes"/>.
+    /// </param>
     public sealed record PackOption(
-        string Name, string? Description, IReadOnlyDictionary<string, string> Files);
+        string Name, string? Description, IReadOnlyDictionary<string, string> Files,
+        IReadOnlyList<string> Attributes);
 
     /// <summary>
     /// One option group. <paramref name="Index"/> is Penumbra's own ordinal — the position in the v4
@@ -213,7 +219,10 @@ public static class PenumbraPackage
                 if (o is not JsonObject oo) continue;
                 var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 ReadFiles(oo, files);
-                options.Add(new PackOption(Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files));
+                var attrs = new List<string>();
+                ReadAttributes(oo, attrs);
+                options.Add(new PackOption(
+                    Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs));
             }
 
         return new PackGroup(
@@ -230,6 +239,32 @@ public static class PenumbraPackage
         foreach (var p in files)
             if (p.Value is JsonValue v && v.TryGetValue<string>(out var rel) && !string.IsNullOrWhiteSpace(rel))
                 into[p.Key] = Normalize(rel);
+    }
+
+    /// <summary>
+    /// The model attributes an option switches ON — Penumbra's <c>Atr</c> manipulation, by name.
+    /// <para/>
+    /// This is how a pack ships one model holding a dozen accessories and a checkbox for each: every piece's
+    /// submeshes are tagged with an attribute, the pack's default turns them all off, and each option turns
+    /// one back on. Such an option redirects no FILES at all, so a reader that only looks at <c>Files</c>
+    /// sees an empty option and concludes the pack selects nothing.
+    /// <para/>
+    /// Only entries turning an attribute ON are collected. An option that switches one off is not what makes
+    /// the piece selectable.
+    /// </summary>
+    private static void ReadAttributes(JsonObject owner, List<string> into)
+    {
+        if (owner["Manipulations"] is not JsonArray manips) return;
+        foreach (var m in manips)
+        {
+            if (m is not JsonObject mo
+                || !string.Equals(Str(mo, "Type"), "Atr", StringComparison.OrdinalIgnoreCase)
+                || mo["Manipulation"] is not JsonObject inner) continue;
+
+            if (inner["Entry"] is JsonValue e && e.TryGetValue<bool>(out var on) && !on) continue;
+            if (Str(inner, "Attribute") is { Length: > 0 } name && !into.Contains(name, StringComparer.Ordinal))
+                into.Add(name);
+        }
     }
 
     /// <summary>The NNN out of <c>group_007_fabric.json</c>, or null when the name doesn't carry one.</summary>

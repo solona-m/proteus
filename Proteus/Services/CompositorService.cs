@@ -185,6 +185,14 @@ public class CompositorService : IDisposable
         => _contentMaterials.TryGetValue(modDir, out var mats) ? mats : null;
 
     /// <summary>
+    /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
+    /// they can. Read straight off the shell builder, which records it even on the runs that host nothing —
+    /// a pack built for another race, enabled by itself, is exactly that run.
+    /// </summary>
+    public string? GetUnwearableContentReason(string modDir)
+        => secondSkin.UnwearableContent.TryGetValue(modDir, out var why) ? why : null;
+
+    /// <summary>
     /// What the last shell build published, split by kind, for the drawn check after the redraw — see
     /// <see cref="SchedulePostRedrawShellCheck"/>.
     ///

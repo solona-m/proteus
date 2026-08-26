@@ -464,6 +464,15 @@ public sealed class ContentStrings
     /// option — a model the pack applies whenever it is enabled.</summary>
     public readonly string Unconditional = Loc.Localize("Content.Unconditional", "always on");
 
+    public readonly string NotForYourRaceFmt = Loc.Localize("Content.NotForYourRace.Fmt",
+        "This pack's models are built for {0}, and you are {1}. Gear made for one race is a different shape, "
+      + "so wearing it as-is would put it in the wrong place — Proteus leaves it off rather than show that.");
+
+    public readonly string NoRaceFitFmt = Loc.Localize("Content.NoRaceFit.Fmt",
+        "The nearest model this pack has is built for {0}, which is neither your own race ({1}) nor the "
+      + "shared shape the game resizes for everyone. Proteus leaves it off rather than show it at the wrong "
+      + "size.");
+
     public readonly string SamplesFmt = Loc.Localize("Content.Samples.Fmt",
         "Its index texture reads row {0}, column {1} — the other rows are dimmed because nothing samples "
       + "them, and editing the other column of this row will do nothing either.");
@@ -494,6 +503,13 @@ public sealed class ContentStrings
     public readonly string NoColorTable = Loc.Localize("Content.NoColorTable",
         "This material carries no colour table, so it has no rows to edit — nothing you change below will "
       + "reach the piece. Its colours come from its textures alone.");
+
+    public readonly string IndexCompressedFmt = Loc.Localize("Content.IndexCompressed.Fmt",
+        "Its index texture reads row {0}, column {1} — but that texture is compressed, so it could be a row "
+      + "or two out. The dimmed rows are still clickable: if a colour doesn't take, try one either side.");
+
+    /// <summary>Stands in for the column letter when an index uses both — see <see cref="IndexCompressedFmt"/>.</summary>
+    public readonly string EitherColumn = Loc.Localize("Content.EitherColumn", "A and B");
 
     public readonly string IndexEmpty = Loc.Localize("Content.IndexEmpty",
         "This material's index texture is fully transparent, so it selects no colour row at all. Every row "

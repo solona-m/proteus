@@ -8,6 +8,7 @@ using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
+using Proteus.Localization;
 
 namespace Proteus.Services;
 
@@ -191,9 +192,22 @@ public sealed class SecondSkinService
     /// really does contain cross-gender hops, and taking one means dressing someone in a body they do not
     /// have.
     /// </summary>
-    private static string? ResolveVariant(ContentPiece piece, string? modelCode)
+    /// <remarks>
+    /// Returns the CODE as well as the path, because the caller cannot tell how to publish the model without
+    /// knowing which race it was authored for — cut space is deformed onto the wearer, a race-authored model
+    /// must not be. See the surface decision in the content loop.
+    /// <para/>
+    /// A piece with one un-keyed model reports a NULL code, and that is not the same as an empty one.
+    /// <see cref="ContentPiece.ModelFor"/> falls back to <see cref="ContentPiece.Model"/> for any code at
+    /// all, so reporting the code it was asked about would attribute a race to a pack that never named one —
+    /// and the surface decision would then judge the model against a claim it did not make.
+    /// </remarks>
+    private static (string? Code, string Path)? ResolveVariant(ContentPiece piece, string? modelCode)
     {
-        if (piece.ModelFor(modelCode) is { } exact) return exact;
+        // Keyed pieces report the code that matched; an un-keyed one reports none. ModelCodes is empty in
+        // exactly the case ModelFor ignored the code it was given.
+        if (piece.ModelFor(modelCode) is { } exact)
+            return (piece.ModelCodes.Any() ? modelCode : null, exact);
         if (modelCode == null || RaceIndex(modelCode) is not { } from) return null;
 
         for (int i = 0, cur = from; i < 8; i++)
@@ -203,8 +217,54 @@ public sealed class SecondSkinService
             if (cur % 2 != from % 2) continue;   // a cross-gender hop is not ours to take
             foreach (var code in piece.ModelCodes)
                 if (RaceIndex(code) == cur)
-                    return piece.ModelFor(code);
+                    return (code, piece.ModelFor(code)!);
         }
+        return null;
+    }
+
+    /// <summary>Test seam for <see cref="ResolveVariant"/> — the null code it reports for an un-keyed piece
+    /// is load-bearing, and a test that cannot see it cannot check it.</summary>
+    internal static (string? Code, string Path)? ResolveVariantForTest(ContentPiece piece, string? modelCode)
+        => ResolveVariant(piece, modelCode);
+
+    /// <summary>
+    /// How a resolved content model has to be published — or that it cannot be, for this wearer.
+    /// <para/>
+    /// The whole question is whether the game's race deform helps or hurts. It deforms a model by the race
+    /// code of the PATH it loaded from, so:
+    /// <list type="bullet">
+    /// <item>a model in cut space is deformed onto the wearer, which is what every content piece has relied
+    /// on since the feature existed;</item>
+    /// <item>a model authored at the wearer's own race is already the right shape, so it goes on a carrier
+    /// with its EQDP entry set and takes no deform at all;</item>
+    /// <item>anything else — a Hrothgar reaching a Roegadyn model down the fall-through chain — would need a
+    /// deform between two races that Proteus does not do, and publishing it either way is wrong. It is
+    /// refused rather than rendered at the wrong size.</item>
+    /// </list>
+    /// Cut space is tested FIRST and that ordering is load-bearing. For a Midlander F wearing a c0201 pack
+    /// all three codes are the same; taking the native arm there would move a piece that works today off an
+    /// appended ring and onto a carrier, spending a host slot to change nothing.
+    /// <para/>
+    /// Being in the shared shape is decided on the CODE, not by comparing it to this character's cut code.
+    /// Those are different questions and conflating them refused packs that work: <paramref name="cutCode"/>
+    /// is voted off the paths the body was cut from, and a character whose skin comes from a whole-body
+    /// model votes their own race — so an Au Ra in a c0201 pack had a resolved code matching neither arm and
+    /// lost every piece to the "no race fit" branch, which exists for a different problem entirely.
+    /// </summary>
+    internal static ShellSurfaceKey? ContentSurface(
+        ShellSurfaceKey declared, string? resolvedCode, string? wearerCode, string cutCode)
+    {
+        // A sidecar that names a surface by hand means it; this only decides for the default.
+        if (!declared.IsBody) return declared;
+
+        // One model for everyone. The pack named no race, so there is no race to disagree with.
+        if (resolvedCode == null) return declared;
+
+        // c0101/c0201 IS cut space, by definition — the game deforms it onto whoever wears it.
+        if (ModelRace.IsSharedShape(resolvedCode)) return declared;
+        if (string.Equals(resolvedCode, cutCode, StringComparison.OrdinalIgnoreCase)) return declared;
+        if (wearerCode != null && string.Equals(resolvedCode, wearerCode, StringComparison.OrdinalIgnoreCase))
+            return new ShellSurfaceKey(ShellSurfaceKind.Native, resolvedCode);
         return null;
     }
 
@@ -311,6 +371,20 @@ public sealed class SecondSkinService
     // Content pieces last warned about as unplaceable, so that chat notice prints once per changed
     // situation rather than every composite. -1 = everything currently fits.
     private int _lastUnhostedContent = -1;
+
+    /// <summary>
+    /// Mod directory → why none of that pack's content pieces can be worn by this character, in the words
+    /// the panel shows. Empty when everything fits.
+    /// <para/>
+    /// Instance state rather than part of <see cref="Result"/> because <see cref="Build"/> returns null when
+    /// no host took anything — which is exactly the case this has to explain. A pack built for another race,
+    /// enabled on its own, produces no hosts and no result, and the reason would go nowhere.
+    /// <para/>
+    /// Assembled on the composite thread and swapped in as one reference, the same publish contract the
+    /// compositor's own maps use.
+    /// </summary>
+    public volatile IReadOnlyDictionary<string, string> UnwearableContent =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     // Surfaces last warned about as unhostable, joined, so that guidance prints once per changed situation
     // too. Keyed on the SET rather than a count: swapping one face overlay for another keeps the count at 1
@@ -470,6 +544,12 @@ public sealed class SecondSkinService
         IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
     {
         int contentIn = contentLayers?.Count ?? 0;
+
+        // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
+        // resets it, and several paths below return before the content loop runs — turn off the pack that
+        // could not be worn and the panel would go on explaining it, having never been told otherwise.
+        UnwearableContent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         if (gearOverlays.Count == 0 && contentIn == 0) return null;
 
         // Which "v####" folder the game will ask for a host's materials under.
@@ -1037,13 +1117,26 @@ public sealed class SecondSkinService
             return keys[0];
         }
 
-        // The .mdl folder a human part's models live under, matching ShellSurfaceKind.
-        static string PartFolder(ShellSurfaceKind kind) => kind switch
+        // The .mdl folder a human part's models live under, matching ShellSurfaceKind — or null for a kind
+        // that names no such folder.
+        //
+        // Body and Native are the two, for opposite reasons: a Body surface is cut from equipment, and a
+        // Native one is a pack's OWN geometry published at a race rather than a part cut from the character.
+        // Neither has a chara/human folder to read from, and the old catch-all quietly called both "zear"
+        // and went looking for Viera ears.
+        //
+        // Null rather than a throw. The kind is deserialised from a sidecar someone can hand-edit, and JSON
+        // will map a number naming no member straight onto the enum; throwing turned one unresolvable
+        // overlay into a failed composite that loses every shell, where returning null drops that overlay
+        // alone with a line saying so — which is what the resolver already does for every other way a
+        // surface can fail to resolve.
+        static string? PartFolder(ShellSurfaceKind kind) => kind switch
         {
             ShellSurfaceKind.Face => "face",
             ShellSurfaceKind.Hair => "hair",
             ShellSurfaceKind.Tail => "tail",
-            _                     => "zear",
+            ShellSurfaceKind.Ear  => "zear",
+            _                     => null,
         };
 
         // Resolve one human-part surface: the model the character is DRAWING for it, cut down to the meshes
@@ -1055,7 +1148,14 @@ public sealed class SecondSkinService
         // to cut. Guessing here would cut a shell for a face she isn't wearing.
         ResolvedSurface? ResolveHumanSurface(ShellSurfaceKey key, IReadOnlySet<string> targetLeaves)
         {
-            var folder = $"/obj/{PartFolder(key.Kind)}/{key.Id}/";
+            if (PartFolder(key.Kind) is not { } part)
+            {
+                log.Warning("[Proteus] second skin: {0} overlay(s) skipped — {1} names no human part to cut "
+                          + "from. Check the Surface in this mod's sidecar", key, key.Kind);
+                return null;
+            }
+
+            var folder = $"/obj/{part}/{key.Id}/";
             var candidates = (humanPartModels ?? [])
                 .Where(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)).ToList();
             if (candidates.Count == 0)
@@ -1171,20 +1271,56 @@ public sealed class SecondSkinService
         // Model path → its bytes and the materials its LOD0 meshes actually draw with. A null Model is a
         // file that could not be read, cached so the warning is printed once rather than per option.
         var modelCache = new Dictionary<string, (byte[]? Model, List<string> Used)>(StringComparer.OrdinalIgnoreCase);
+
+        // Mod directory → why none of its pieces can be worn, for the panel to say out loud. Recorded per
+        // MOD rather than per piece: a pack authored for one race fails identically for every piece it has,
+        // and fifteen copies of the same sentence is not more informative than one. First reason wins.
+        var unwearable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Unwearable(string modDir, string reason)
+        {
+            if (!unwearable.ContainsKey(modDir)) unwearable[modDir] = reason;
+        }
+
         for (int i = 0; i < contentIn; i++)
         {
             var (cEntry, rc) = contentLayers![i];
             var piece = rc.Piece;
             var modRoot = cEntry.ModRoot;
-            // The equipment code the wearer loads gear at — what a per-race pack keys its variants by.
-            var wearerCode = equipCode;
-            var modelRel = ResolveVariant(piece, wearerCode);
-            if (modRoot == null || modelRel == null)
+            // TWO codes, and they are not the same question.
+            //
+            // equipCode is what this character's GEAR loads at — usually the shared c0201/c0101, because most
+            // sets ship no per-race model. charCode is the character's own race. A pack in the shared shape
+            // is found by the first; a pack built for one race is found only by the second, and looking for
+            // it under equipCode is why a Miqo'te could not wear a Miqo'te-authored pack: their gear still
+            // loads at c0201, so the c0801 model was never even a candidate.
+            //
+            // Shared shape first, so a pack offering both keeps the cheaper, deform-able path.
+            var ownCode = drawnRaceCode ?? charCode;
+            var variant = ResolveVariant(piece, equipCode)
+                       ?? ResolveVariant(piece, ownCode);
+            if (modRoot == null || variant is not { } v)
             {
-                log.Warning("[Proteus] content: {0} \"{1}/{2}\" has no model for c{3} — skipping. "
-                          + "The pack ships [{4}]",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", wearerCode,
-                    string.Join(", ", piece.ModelCodes.Select(c => "c" + c)));
+                // Named by RACE, not by code. "ships [c0801]" tells a modder something and tells everyone
+                // else nothing, and this is the message that has to explain an enabled pack showing nothing.
+                var reason = string.Format(Strings.Content.NotForYourRaceFmt,
+                    ModelRace.DescribeAll(piece.ModelCodes), ModelRace.Describe(ownCode));
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
+                Unwearable(cEntry.ModDirectory, reason);
+                continue;
+            }
+            var modelRel = v.Path;
+
+            // Cut space or native — see ContentSurface. Null means the model is authored for neither, and
+            // publishing it either way would put it on the character at the wrong size.
+            var surfaceKey = ContentSurface(piece.SurfaceKey, v.Code, ownCode, bodySurface.CutCode);
+            if (surfaceKey is not { } pieceSurface)
+            {
+                var reason = string.Format(Strings.Content.NoRaceFitFmt,
+                    ModelRace.Describe(v.Code), ModelRace.Describe(ownCode));
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
+                Unwearable(cEntry.ModDirectory, reason);
                 continue;
             }
 
@@ -1248,17 +1384,25 @@ public sealed class SecondSkinService
                     continue;
                 }
 
-                var rows = BuildSparseRows(rc.ColorTableRows);
+                // Per-MATERIAL settings win over the option's. That is where the colour panel writes, because
+                // a tab governs a material: a pack holding nine accessories in one always-on piece has one
+                // option and nine materials, and per-option storage gave all nine tabs the same settings.
+                // The option's values remain the fallback, so packs edited before that keep their colours.
+                var matSettings = cEntry.Metadata.PeekMaterialSettings(rel);
+                var rowPresets = matSettings?.ColorTableRows ?? rc.ColorTableRows;
+                var rows = BuildSparseRows(rowPresets);
+
                 // Only a glow that actually names an effect counts. A preset left behind with its numbers
                 // but no scroll map is not a glow, and treating it as one would split a material slot for
                 // nothing.
-                var glow = rc.Glow?.GlowKey() != null ? rc.Glow : null;
-                var key = ContentUnitKey(cEntry.ModDirectory, piece.SurfaceKey, rel,
-                    rows == null ? null : JsonSerializer.Serialize(rc.ColorTableRows), glow?.GlowKey());
+                var glowSource = matSettings?.Glow ?? rc.Glow;
+                var glow = glowSource?.GlowKey() != null ? glowSource : null;
+                var key = ContentUnitKey(cEntry.ModDirectory, pieceSurface, rel,
+                    rows == null ? null : JsonSerializer.Serialize(rowPresets), glow?.GlowKey());
 
                 if (!unitByKey.TryGetValue(key, out var unit))
                 {
-                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, glow, piece.SurfaceKey, [], []);
+                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, glow, pieceSurface, [], []);
                     contentUnits.Add(unit);
                 }
 
@@ -1289,6 +1433,13 @@ public sealed class SecondSkinService
                     unit.Owners.Add((cEntry, rc));
             }
         }
+
+        // Published the moment the loop that fills it ends, and NOT later. Sitting it beside the host
+        // allocation looked equivalent and was not: a pack refused for its race is the run where nothing
+        // gets hosted, so the build returns at the `placed == 0` guard well before that point and the reason
+        // never reached the panel — which then said "no active options", the exact unhelpful line this
+        // exists to replace. It appeared only when some unrelated overlay happened to publish something.
+        UnwearableContent = unwearable;
 
         // The surfaces those units live on, resolved AFTER the gear layers so a key both use is the one cut
         // from real geometry. A surface introduced HERE carries no sources at all: the piece brought its own
@@ -2720,11 +2871,7 @@ public sealed class SecondSkinService
 
     // ── EQDP ─────────────────────────────────────────────────────────────────
 
-    private static readonly string[] RaceNames =
-    [
-        "Midlander", "Highlander", "Elezen", "Miqote", "Roegadyn",
-        "Lalafell", "AuRa", "Hrothgar", "Viera",
-    ];
+    private static readonly string[] RaceNames = ModelRace.Names;
 
     /// <summary>
     /// The accessory a second skin rides on. For an already-equipped ring/bracelet <see cref="BaseModel"/>
@@ -3118,9 +3265,7 @@ public sealed class SecondSkinService
     /// number: unbounded, <see cref="EqdpFallbackIndex"/>'s catch-all arm made every unknown index look
     /// like a child of Midlander, so <see cref="CanFallThrough"/> waved through pairs like c9101 -> c0101.
     /// A guard that decides how a shell is published should not accept a race that cannot exist.</summary>
-    private static int? RaceIndex(string? code)
-        => code is { Length: >= 2 } && int.TryParse(code.AsSpan(0, 2), out var n)
-        && n > 0 && n <= RaceNames.Length * 2 ? n : null;
+    private static int? RaceIndex(string? code) => ModelRace.Index(code);
 
     /// <summary>
     /// The race the game falls through to when a set declares no model for <paramref name="n"/>, or 0 at
@@ -3128,15 +3273,7 @@ public sealed class SecondSkinService
     /// encodes): most races fall to their own gender's Midlander, with three exceptions — Hrothgar males
     /// go to Roegadyn males, Lalafell females to Lalafell males, and Midlander females to Midlander males.
     /// </summary>
-    private static int EqdpFallbackIndex(int n) => n switch
-    {
-        1  => 0,   // Midlander male — the root, nothing below it
-        2  => 1,   // Midlander female -> Midlander male
-        11 => 1,   // Lalafell male    -> Midlander male
-        12 => 11,  // Lalafell female  -> Lalafell male
-        15 => 9,   // Hrothgar male    -> Roegadyn male
-        _  => n % 2 == 1 ? 1 : 2,
-    };
+    private static int EqdpFallbackIndex(int n) => ModelRace.Fallback(n);
 
     /// <summary>
     /// Would emptying <paramref name="from"/>'s entry actually land the game on <paramref name="to"/>?

@@ -491,6 +491,10 @@
     "message": "Penumbra 팩 선택",
     "description": ""
   },
+  "Content.EitherColumn": {
+    "message": "A와 B",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "메시 {0}, 정점 {1}",
     "description": ""
@@ -505,6 +509,10 @@
   },
   "Content.GlowNeedsEmissive.Fmt": {
     "message": "이 머티리얼이 읽는 곳은 {0}행 {1}열 하나뿐인데 그곳의 Glow가 0이라 효과가 꺼진 상태입니다. 그 자리에서 Glow를 올려 켜고 강도를 정하세요. 다른 행의 Glow는 아무 일도 하지 않습니다.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "이 인덱스 텍스처는 {0}행 {1}열을 읽지만, 해당 텍스처가 압축되어 있어 한두 행 어긋날 수 있습니다. 흐리게 표시된 행도 클릭할 수 있으니, 색이 적용되지 않으면 인접한 행을 시도해 보세요.",
     "description": ""
   },
   "Content.IndexEmpty": {
@@ -529,6 +537,14 @@
   },
   "Content.NoIndex.Fmt": {
     "message": "이 머티리얼에는 인덱스 텍스처가 없어 모두 {0}행을 사용합니다.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "이 팩에서 가장 가까운 모델은 {0}용이며, 당신의 종족({1})도 아니고 게임이 모두에게 맞춰 조정하는 공용 형태도 아닙니다. Proteus는 잘못된 크기로 표시하지 않습니다.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었고, 당신은 {1}입니다. 특정 종족용 장비는 형태가 달라 그대로 입히면 엉뚱한 위치에 놓이므로, Proteus는 표시하지 않습니다.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -633,6 +649,14 @@
   },
   "ContentImport.Warn.NoModels": {
     "message": "이 팩에는 모델을 리디렉션하는 옵션이 없어 Proteus가 덧붙일 지오메트리가 없습니다. 대신 Penumbra에서 설치하세요.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었습니다. Proteus는 종족 간에 지오메트리를 조정하지 않으므로, 해당 종족의 캐릭터에서만 부품이 표시됩니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "이 팩은 자체적으로 부품을 켜고 끄므로 Proteus는 별도의 체크박스를 추가하지 않습니다. 팩의 옵션을 사용하세요. 팩이 전환하지 않는 부품은 모드가 활성화된 동안 항상 착용됩니다.",
     "description": ""
   },
   "Create.Author.Label": {

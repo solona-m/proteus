@@ -491,6 +491,10 @@
     "message": "Penumbra-Paket auswählen",
     "description": ""
   },
+  "Content.EitherColumn": {
+    "message": "A und B",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} Mesh, {1} Vertices",
     "description": ""
@@ -505,6 +509,10 @@
   },
   "Content.GlowNeedsEmissive.Fmt": {
     "message": "In Zeile {0}{1} — der einzigen Zelle, die dieses Material liest — steht Glow auf null, also bleibt der Effekt aus. Erhöhe Glow dort, um ihn einzuschalten und seine Stärke festzulegen. Glow in jeder anderen Zeile bewirkt nichts.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — diese Textur ist jedoch komprimiert, es können also ein bis zwei Zeilen daneben sein. Die ausgegrauten Zeilen bleiben anklickbar: wirkt eine Farbe nicht, probiere eine daneben.",
     "description": ""
   },
   "Content.IndexEmpty": {
@@ -529,6 +537,14 @@
   },
   "Content.NoIndex.Fmt": {
     "message": "Dieses Material bringt keine Index-Textur mit, es nimmt also für alles Zeile {0}.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "Das nächstgelegene Modell dieses Packs ist für {0} gebaut — weder deine eigene Rasse ({1}) noch die gemeinsame Form, die das Spiel für alle skaliert. Proteus zeigt es lieber gar nicht als in falscher Größe.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "Die Modelle dieses Packs sind für {0} gebaut, du bist {1}. Für eine Rasse gefertigte Ausrüstung hat eine andere Form, unverändert getragen säße sie also falsch — Proteus lässt sie lieber weg.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -633,6 +649,14 @@
   },
   "ContentImport.Warn.NoModels": {
     "message": "Keine Option in diesem Paket leitet ein Modell um, es gibt also keine Geometrie zum Anhängen. Installiere es stattdessen in Penumbra.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "Die Modelle dieses Packs sind für {0} gebaut. Proteus skaliert Geometrie nicht zwischen Rassen, seine Teile erscheinen also nur auf einem Charakter dieser Rasse.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "Dieses Paket schaltet seine Teile selbst ein und aus, daher fügt Proteus keine eigenen Kontrollkästchen hinzu — nutze die des Pakets. Jedes Teil, das es nicht schaltet, wird getragen, solange die Mod aktiv ist.",
     "description": ""
   },
   "Create.Author.Label": {

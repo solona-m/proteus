@@ -120,6 +120,160 @@ public class SecondSkinWriterVerbatimTests
         => new(model, SecondSkinWriter.KeepByLeaf(
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { materialLeaf.TrimStart('/') }), mirrorUv1);
 
+    /// <summary>
+    /// A pack's own mesh toggles survive the merge.
+    /// <para/>
+    /// An accessory pack ships one model holding a dozen pieces, tags each piece's submeshes with a named
+    /// attribute, and switches them with Penumbra's <c>Atr</c> manipulation — that is what the checkboxes in
+    /// its option groups drive. This writer used to drop attributes outright ("attributes dropped", twice),
+    /// so the merged model had nothing to toggle: every piece drew at once and the mod's own options did
+    /// nothing at all.
+    /// <para/>
+    /// Built from a synthetic model rather than a pack on disk. The pack version of this test spent its life
+    /// returning at its first line, because the file it named had been moved off the Desktop — the riskiest
+    /// change in the writer looked covered and was not. See <see cref="SyntheticModel"/>.
+    /// </summary>
+    [Fact]
+    public void A_packs_own_attribute_toggles_survive_the_merge()
+    {
+        string[] attrs = ["atrx_ears", "atrx_belly", "atrx_shins"];
+        var content = SyntheticModel.Build(attrs,
+            new SyntheticModel.Mesh("/mt_pack_a.mtrl",
+                new SyntheticModel.Sub(1u << 0),      // ears
+                new SyntheticModel.Sub(1u << 2)),     // shins
+            new SyntheticModel.Mesh("/mt_pack_b.mtrl",
+                new SyntheticModel.Sub(1u << 1)));    // belly
+
+        // The fixture has to be a model the production parser accepts, or this proves nothing about the
+        // writer. Reading its names back through the real reader is that check.
+        Assert.Equal(attrs, SecondSkinWriter.MaterialsAndAttributes(content).Attributes
+            .SelectMany(kv => kv.Value).Distinct().OrderBy(n => n, StringComparer.Ordinal)
+            .ToList().OrderBy(n => Array.IndexOf(attrs, n)).ToArray());
+
+        var outBytes = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry = [Geometry(content, "/mt_pack_a.mtrl"), Geometry(content, "/mt_pack_b.mtrl")],
+            }],
+            null, out _);
+
+        Validate(outBytes);
+
+        // Every name carried is one the source actually had — a merged model naming an attribute nobody
+        // tagged would be a checkbox that toggles nothing.
+        var names = AttributeNames(outBytes);
+        Assert.NotEmpty(names);
+        Assert.All(names, n => Assert.Contains(n, attrs));
+
+        // Names without masks is the same failure in a different disguise: the toggle exists and moves no
+        // geometry. Checked by NAME rather than by "some mask is non-zero", which a scrambled remap passes.
+        var tagged = SubmeshAttributeMasks(outBytes)
+            .SelectMany(m => Enumerable.Range(0, names.Count).Where(b => (m & (1u << b)) != 0))
+            .Select(b => names[b])
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(3, tagged.Count);
+        Assert.All(attrs, a => Assert.Contains(a, tagged));
+    }
+
+    /// <summary>
+    /// Merging two models whose attribute tables list the SAME names in different orders renumbers both onto
+    /// one union — every submesh still toggles with the attribute it was authored against.
+    /// <para/>
+    /// This is the case <see cref="SecondSkinWriter"/>'s remap exists for, and the one a single-source test
+    /// cannot reach: with one source the union is that source's own table in its own order, so the remap is
+    /// the identity and a version that ignored the lookup entirely would pass. Getting it wrong here is
+    /// worse than dropping attributes, because the checkbox then moves the WRONG accessory.
+    /// </summary>
+    [Fact]
+    public void Two_models_with_differently_ordered_attributes_merge_onto_one_union()
+    {
+        // Same three names, deliberately opposite orders, so bit 0 in one model means bit 2 in the other.
+        var first = SyntheticModel.Build(["atrx_a", "atrx_b", "atrx_c"],
+            new SyntheticModel.Mesh("/mt_one.mtrl", new SyntheticModel.Sub(1u << 0)));   // atrx_a
+        var second = SyntheticModel.Build(["atrx_c", "atrx_b", "atrx_a"],
+            new SyntheticModel.Mesh("/mt_two.mtrl", new SyntheticModel.Sub(1u << 0)));   // atrx_c
+
+        var outBytes = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry = [Geometry(first, "/mt_one.mtrl"), Geometry(second, "/mt_two.mtrl")],
+            }],
+            null, out _);
+
+        Validate(outBytes);
+
+        var names = AttributeNames(outBytes);
+        var masks = SubmeshAttributeMasks(outBytes).Where(m => m != 0).ToList();
+        Assert.Equal(2, masks.Count);
+
+        // Each submesh names exactly the attribute it was authored with. Carried through verbatim — the raw
+        // masks are both bit 0 — this would read as "atrx_a" twice.
+        var named = masks
+            .Select(m => Enumerable.Range(0, names.Count).First(b => (m & (1u << b)) != 0))
+            .Select(b => names[b])
+            .ToList();
+        Assert.Contains("atrx_a", named);
+        Assert.Contains("atrx_c", named);
+        Assert.DoesNotContain("atrx_b", named);   // nothing was tagged with it
+    }
+
+    /// <summary>
+    /// Where a .mdl's tables begin — derived ONCE, because these offsets are the thing under test and three
+    /// hand-rolled copies of the same arithmetic can agree with each other while all disagreeing with the
+    /// writer. The attribute table in particular sits between the meshes and the submeshes, so getting
+    /// <see cref="AttrStart"/> wrong silently shifts <see cref="SubStart"/> and everything after it.
+    /// </summary>
+    private readonly record struct Tables(int StrBlock, int Mh, int MeshStart, int AttrStart, int SubStart)
+    {
+        internal int AttrCount(byte[] m) => BitConverter.ToUInt16(m, Mh + 6);
+        internal int SubmeshCount(byte[] m) => BitConverter.ToUInt16(m, Mh + 8);
+
+        internal static Tables Of(byte[] m)
+        {
+            int declCount = BitConverter.ToUInt16(m, 12);
+            int declEnd = 0x44 + declCount * 17 * 8;
+            int strSize = (int)BitConverter.ToUInt32(m, declEnd + 4);
+            int strBlock = declEnd + 8;
+            int mh = strBlock + strSize;
+
+            int meshCount = BitConverter.ToUInt16(m, mh + 4);
+            int attrCount = BitConverter.ToUInt16(m, mh + 6);
+            int elemCount = BitConverter.ToUInt16(m, mh + 24);
+            int lodStart = mh + 56 + elemCount * 32;
+            int meshStart = lodStart + 3 * 60 + ((m[mh + 27] & 0x10) != 0 ? 3 * 40 : 0);
+            int attrStart = meshStart + meshCount * 36;
+            return new Tables(strBlock, mh, meshStart, attrStart, attrStart + attrCount * 4);
+        }
+    }
+
+    /// <summary>The attribute name table of a .mdl, in the order submesh masks index it.</summary>
+    private static List<string> AttributeNames(byte[] m)
+    {
+        var t = Tables.Of(m);
+        var names = new List<string>();
+        for (int i = 0; i < t.AttrCount(m); i++)
+        {
+            int o = t.StrBlock + (int)BitConverter.ToUInt32(m, t.AttrStart + i * 4), e = o;
+            while (m[e] != 0) e++;
+            names.Add(System.Text.Encoding.ASCII.GetString(m, o, e - o));
+        }
+        return names;
+    }
+
+    private static List<uint> SubmeshAttributeMasks(byte[] m)
+    {
+        var t = Tables.Of(m);
+        var masks = new List<uint>();
+        for (int i = 0; i < t.SubmeshCount(m); i++)
+            masks.Add(BitConverter.ToUInt32(m, t.SubStart + i * 16 + 8));
+        return masks;
+    }
+
     [Fact]
     public void A_glowing_content_mesh_gets_uv1_mirrored_from_its_own_uv0()
     {
@@ -408,13 +562,17 @@ public class SecondSkinWriterVerbatimTests
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
         uint U32(int o) => BitConverter.ToUInt32(m, o);
 
+        int attrCount       = U16(mh + 6);
         int submeshCount    = U16(mh + 8);
         int matCount        = U16(mh + 10);
         int boneCount       = U16(mh + 12);
         int boneTableCount  = U16(mh + 14);
         int boneTableShorts = U16(mh + 44);
 
-        int subStart = meshStart + meshCount * 36;
+        // The attribute name table sits between the meshes and the submeshes, so every table after it moves
+        // by attrCount * 4. Stepping over it was free while the writer dropped attributes and emitted none;
+        // it is not now that a pack's own mesh toggles are carried through.
+        int subStart = meshStart + meshCount * 36 + attrCount * 4;
         int p = subStart + submeshCount * 16
               + matCount * 4                                   // material name offsets
               + boneCount * 4                                  // bone name offsets

@@ -19,6 +19,21 @@ public enum ShellSurfaceKind
     Tail,
     /// <summary>Viera ears (<c>obj/zear</c>).</summary>
     Ear,
+
+    /// <summary>
+    /// Geometry an imported pack authored for ONE race, which must be published at that race with no
+    /// deform. Not cut from the character at all — the pack brought it.
+    /// <para/>
+    /// Its <see cref="ShellSurfaceKey.Id"/> is the race code the model was authored for ("0801"), so two
+    /// pieces built for different races can never share a surface, a host, or a published material.
+    /// <para/>
+    /// The distinction it exists for: a model at <c>c0201</c> is in the shared cut space every "Midlander-
+    /// bodied" race falls through to, and the game deforms it onto the wearer — which is what content pieces
+    /// have always relied on. A model at <c>c0801</c> is already Miqo'te-shaped, so that same deform is
+    /// damage. Deciding between the two is <c>SecondSkinService</c>'s job, because it depends on who is
+    /// wearing it: a pack shipping both is cut space for a Midlander and native for a Miqo'te.
+    /// </summary>
+    Native,
 }
 
 /// <summary>
@@ -126,10 +141,11 @@ public static class ShellSurface
     /// <summary>Short display tag for a surface, shared with the material picker's left column.</summary>
     public static string Label(ShellSurfaceKind kind) => kind switch
     {
-        ShellSurfaceKind.Body => "Body",
-        ShellSurfaceKind.Face => "Face",
-        ShellSurfaceKind.Hair => "Hair",
-        ShellSurfaceKind.Tail => "Tail",
-        _                     => "Ear",
+        ShellSurfaceKind.Body   => "Body",
+        ShellSurfaceKind.Face   => "Face",
+        ShellSurfaceKind.Hair   => "Hair",
+        ShellSurfaceKind.Tail   => "Tail",
+        ShellSurfaceKind.Native => "Native",
+        _                       => "Ear",
     };
 }

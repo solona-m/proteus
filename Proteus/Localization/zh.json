@@ -491,6 +491,10 @@
     "message": "选择 Penumbra 包",
     "description": ""
   },
+  "Content.EitherColumn": {
+    "message": "A 和 B",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "网格 {0}，顶点 {1}",
     "description": ""
@@ -505,6 +509,10 @@
   },
   "Content.GlowNeedsEmissive.Fmt": {
     "message": "此材质只读取第 {0} 行 {1} 列这一处，而那里的 Glow 为零，因此效果仍处于关闭状态。请在该处提高 Glow 以开启它并设置强度。其他行的 Glow 不起任何作用。",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "其索引贴图读取第 {0} 行、{1} 列——但该贴图经过压缩，可能相差一两行。变灰的行仍可点击：若某个颜色没有生效，请试试相邻的行。",
     "description": ""
   },
   "Content.IndexEmpty": {
@@ -529,6 +537,14 @@
   },
   "Content.NoIndex.Fmt": {
     "message": "此材质未提供索引贴图，因此全部使用第 {0} 行。",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "此包最接近的模型是为{0}制作的，既不是您的种族（{1}），也不是游戏为所有人缩放的通用形状。Proteus 不会以错误的尺寸显示它。",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "此包的模型是为{0}制作的，而您是{1}。为特定种族制作的装备形状不同，直接穿戴会出现在错误的位置——Proteus 因此选择不显示它。",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -633,6 +649,14 @@
   },
   "ContentImport.Warn.NoModels": {
     "message": "此包中没有任何选项重定向模型，因此没有可供 Proteus 追加的几何体。请改为在 Penumbra 中安装。",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "此包的模型是为{0}制作的。Proteus 不会在种族之间缩放几何体，因此其部件只会出现在该种族的角色上。",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "该整合包自行控制各部件的显隐，因此 Proteus 不会另外添加复选框——请使用整合包自带的选项。它未加控制的部件，只要模组启用就会一直穿戴。",
     "description": ""
   },
   "Create.Author.Label": {

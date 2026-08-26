@@ -491,6 +491,10 @@
     "message": "Sélectionner un pack Penumbra",
     "description": ""
   },
+  "Content.EitherColumn": {
+    "message": "A et B",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} maillage, {1} sommets",
     "description": ""
@@ -505,6 +509,10 @@
   },
   "Content.GlowNeedsEmissive.Fmt": {
     "message": "Glow est à zéro sur la ligne {0}{1} — la seule cellule que lit ce matériau — donc l'effet reste éteint. Augmentez Glow là pour l'activer et régler sa force. Glow sur toute autre ligne ne fait rien.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "Sa texture d'index lit la ligne {0}, colonne {1} — mais cette texture est compressée, elle peut donc être décalée d'une ligne ou deux. Les lignes grisées restent cliquables : si une couleur ne prend pas, essayez une ligne voisine.",
     "description": ""
   },
   "Content.IndexEmpty": {
@@ -529,6 +537,14 @@
   },
   "Content.NoIndex.Fmt": {
     "message": "Ce matériau ne fournit pas de texture d'index : il prend donc la ligne {0} pour tout.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "Le modèle le plus proche de ce pack est fait pour {0}, ni votre race ({1}) ni la forme commune que le jeu redimensionne pour tous. Proteus préfère ne pas l'afficher plutôt qu'à la mauvaise taille.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "Les modèles de ce pack sont faits pour {0}, et vous êtes {1}. Un équipement conçu pour une race a une autre forme : porté tel quel il tomberait au mauvais endroit — Proteus préfère ne pas l'afficher.",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -633,6 +649,14 @@
   },
   "ContentImport.Warn.NoModels": {
     "message": "Aucune option de ce pack ne redirige de modèle : il n'y a donc aucune géométrie à ajouter. Installez-le plutôt dans Penumbra.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "Les modèles de ce pack sont faits pour {0}. Proteus ne redimensionne pas la géométrie entre races : ses pièces n'apparaîtront que sur un personnage de cette race.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "Ce pack active et désactive ses propres pièces ; Proteus n'ajoute donc aucune case à cocher — utilisez celles du pack. Toute pièce qu'il ne commute pas est portée dès que le mod est activé.",
     "description": ""
   },
   "Create.Author.Label": {

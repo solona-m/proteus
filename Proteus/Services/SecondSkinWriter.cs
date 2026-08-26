@@ -107,6 +107,61 @@ public static class SecondSkinWriter
     public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
 
     /// <summary>
+    /// The model's material names, and for each the attribute names of the LOD0 submeshes drawn with it —
+    /// both from ONE walk of the file. An empty attribute list means the material is drawn unconditionally.
+    /// <para/>
+    /// The attributes are what connect a material to the mod's own checkboxes. A pack holding many
+    /// accessories in one model tags each piece's submeshes with an attribute and gives it an option;
+    /// walking submesh → mask → attribute → option is the only way to say which of the pack's switches a
+    /// given material answers to, and therefore whether its colours are worth showing at all right now.
+    /// <para/>
+    /// One walk because the importer wants both of a file it has just opened, and parsing is the expensive
+    /// half of either question — the pack that motivated this carries 116k vertices across 21 meshes.
+    /// </summary>
+    /// <remarks>
+    /// The two halves fail DIFFERENTLY, and deliberately so. A model whose material names cannot be read is
+    /// not a model this can use, and the exception carries that. Attributes are a nicety on top: they decide
+    /// whether the panel can name a material after the checkbox that reveals it, and losing a whole piece
+    /// over them would trade something that works for something that is merely nicer. The submesh ranges
+    /// this walks are not validated by <see cref="Parse"/> against the submesh count, so a malformed one
+    /// throws here while the names above read perfectly well.
+    /// </remarks>
+    public static (List<string> Names, Dictionary<string, List<string>> Attributes) MaterialsAndAttributes(byte[] s)
+    {
+        var src = Parse(s);
+        var names = ReadMaterialNames(s, src);
+        try { return (names, ReadMaterialAttributes(src)); }
+        catch { return (names, []); }
+    }
+
+    private static Dictionary<string, List<string>> ReadMaterialAttributes(Source src)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        int end = src.Lod0MeshIndex + src.Lod0MeshCount;
+        for (int m = src.Lod0MeshIndex; m < end && m < src.MeshCount; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (BitConverter.ToUInt16(src.S, mo) == 0) continue;   // empty placeholder mesh
+
+            ushort mat = BitConverter.ToUInt16(src.S, mo + 8);
+            if (mat >= src.MatNames.Count) continue;
+            if (!result.TryGetValue(src.MatNames[mat], out var names))
+                result[src.MatNames[mat]] = names = [];
+
+            ushort subIdx = BitConverter.ToUInt16(src.S, mo + 10), subCount = BitConverter.ToUInt16(src.S, mo + 12);
+            for (int su = 0; su < subCount; su++)
+            {
+                uint mask = BitConverter.ToUInt32(src.S, src.SubmeshStart + (subIdx + su) * 16 + 8);
+                for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+                    if ((mask & (1u << bit)) != 0 && !names.Contains(src.AttrNames[bit], StringComparer.Ordinal))
+                        names.Add(src.AttrNames[bit]);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// LOD0 triangle geometry — object-space position and uv0 per vertex, plus triangle indices — for UV
     /// seam analysis (see <see cref="UvSeamMapService"/>). Every LOD0 mesh is concatenated into one vertex
     /// array with its indices rebased, so a seam BETWEEN two meshes is found exactly like one inside a
@@ -297,6 +352,17 @@ public static class SecondSkinWriter
         public VElem[][] Decls = [];      // one element list per mesh (declCount == meshCount)
         public List<string> MatNames = [];
         public string[] BoneNames = [];
+
+        /// <summary>
+        /// The model's attribute names, indexed the way its submesh masks reference them (bit <c>i</c> of a
+        /// submesh's mask means attribute <c>i</c>).
+        /// <para/>
+        /// Carried because a mod can switch whole parts of a model on and off through these, by NAME, with
+        /// Penumbra's <c>Atr</c> manipulation — which is how an accessory pack ships one model holding a
+        /// dozen pieces and a checkbox for each. Drop them and every piece draws at once, whatever the mod's
+        /// own options say.
+        /// </summary>
+        public string[] AttrNames = [];
         public ushort[][] BoneTables = [];
         public ushort[] SubmeshBoneMap = [];
         public ushort Lod0MeshIndex, Lod0MeshCount;   // only LOD0 meshes are shelled
@@ -434,7 +500,10 @@ public static class SecondSkinWriter
         var boneBBox = new List<byte[]>();
         // Content models contribute bones too — a piece skinned to j_sebo_a needs that bone present in the
         // merged table or its vertices collapse onto the root.
-        var boneSources = (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed).Concat(geomSrcs);
+        // Materialised, not lazy: this is walked three times below (bones, attributes, the overflow count)
+        // and re-running the concat each time is work for nothing.
+        List<Source> boneSources =
+            [.. baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed, .. geomSrcs];
         foreach (var src in boneSources)
             for (int i = 0; i < src.BoneNames.Length; i++)
             {
@@ -446,6 +515,40 @@ public static class SecondSkinWriter
                     Array.Copy(src.BoneBBoxes, i * BBoxSize, bb, 0, BBoxSize);
                 boneBBox.Add(bb);
             }
+
+        // Union ATTRIBUTE list, on exactly the same reasoning as the bones above: a submesh's mask indexes
+        // its own model's attribute table, so merging two models means renumbering both onto one list.
+        //
+        // These are what a mod's own checkboxes drive. An accessory pack ships one model carrying a dozen
+        // pieces, tags each piece's submeshes with an attribute, and toggles them by NAME through Penumbra's
+        // Atr manipulation. Dropping them — which this writer used to do outright — leaves a model with
+        // nothing to toggle, so every piece draws at once and the mod's options do nothing.
+        //
+        // 32 is the ceiling, not a choice: the mask is a u32, so bit 32 does not exist. Past that the extras
+        // are left unnamed rather than silently aliased onto another attribute's bit, which would toggle the
+        // wrong geometry.
+        var attrNames = new List<string>();
+        var attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var src in boneSources)
+            foreach (var name in src.AttrNames)
+            {
+                if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
+                attrIndex[name] = attrNames.Count;
+                attrNames.Add(name);
+            }
+        int attrOverflow = boneSources.SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
+            .Count() - attrNames.Count;
+
+        // One submesh's attribute mask, renumbered from its own model's table onto the union.
+        uint RemapAttrs(Source src, uint mask)
+        {
+            if (mask == 0 || src.AttrNames.Length == 0) return 0;
+            uint outMask = 0;
+            for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+                if ((mask & (1u << bit)) != 0 && attrIndex.TryGetValue(src.AttrNames[bit], out var to))
+                    outMask |= 1u << to;
+            return outMask;
+        }
 
         var vBuf = new MemoryStream();
         var iBuf = new MemoryStream();
@@ -655,7 +758,7 @@ public static class SecondSkinWriter
                 var ns = new byte[16];
                 W32(ns, 0, subStart);
                 W32(ns, 4, (uint)keep.Length);
-                W32(ns, 8, 0);                                            // attributes dropped
+                W32(ns, 8, RemapAttrs(src, U32(ss + 8)));                 // attribute mask, renumbered
                 W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));            // boneStart, rebased
                 W16(ns, 14, U16(ss + 14));                                // boneCount, as authored
                 subsForMesh.Add(ns);
@@ -791,7 +894,7 @@ public static class SecondSkinWriter
         int meshCount = meshOut.Count;
         int boneCount = boneNames.Count;
 
-        // ── string block: bone names (union) + material names. Attributes are dropped. ──
+        // ── string block: bone names (union), attribute names (union), material names ──
         var strMs = new MemoryStream();
         var boneStrOff = new List<uint>();
         foreach (var b in boneNames)
@@ -800,6 +903,14 @@ public static class SecondSkinWriter
             strMs.Write(Encoding.ASCII.GetBytes(b));
             strMs.WriteByte(0);
         }
+        var attrStrOff = new List<uint>();
+        foreach (var a in attrNames)
+        {
+            attrStrOff.Add((uint)strMs.Position);
+            strMs.Write(Encoding.ASCII.GetBytes(a));
+            strMs.WriteByte(0);
+        }
+
         var matStrOff = new List<uint>();
         // Host materials FIRST (indices 0..baseMatCount-1, referenced verbatim by the host's own meshes),
         // then the appended shell layer materials.
@@ -855,7 +966,7 @@ public static class SecondSkinWriter
         var mh = new byte[56];
         BitConverter.GetBytes(radius).CopyTo(mh, 0);
         W16(mh, 4, (ushort)meshCount);
-        W16(mh, 6, 0);                                              // attributes dropped
+        W16(mh, 6, (ushort)attrNames.Count);                        // attribute names, carried
         W16(mh, 8, (ushort)subOut.Count);
         W16(mh, 10, (ushort)(baseMatCount + layers.Count));
         W16(mh, 12, (ushort)boneCount);
@@ -876,6 +987,10 @@ public static class SecondSkinWriter
         ms.Write(head.Lods, 0, 3 * 60);                             // patched below
 
         foreach (var nm in meshOut) ms.Write(nm);
+        // BETWEEN the meshes and the submeshes — the format puts the attribute name table there, and the
+        // parser above locates the submeshes by stepping over it. Writing it anywhere else shifts every
+        // table after it.
+        foreach (var off in attrStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
         foreach (var ns in subOut) ms.Write(ns);
         foreach (var off in matStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
         foreach (var off in boneStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
@@ -950,6 +1065,14 @@ public static class SecondSkinWriter
                 diag?.Invoke($"BONE MAP: {badEntry} entry(ies) name a bone past the {boneNames.Count}-bone "
                            + "union list — the by-name remap failed to place them");
         }
+
+        if (attrNames.Count > 0)
+            diag?.Invoke($"attributes: {attrNames.Count} carried [{string.Join(", ", attrNames)}]");
+        // Said out loud because the consequence is a checkbox that quietly stops working: the mask is a u32,
+        // so an attribute past the 32nd has no bit to live in and whatever it switched is stuck on.
+        if (attrOverflow > 0)
+            diag?.Invoke($"ATTRIBUTES: {attrOverflow} past the 32 a submesh mask can address were dropped — "
+                       + "whatever those switched can no longer be turned off");
 
         if (shapedTotal > 0) diag?.Invoke($"shape bake: {shapedTotal} index entries rewired to morphed vertices");
         // Per LAYER, not per vertex: every layer rebuilds the same sources, so these count each source's
@@ -1086,6 +1209,10 @@ public static class SecondSkinWriter
         var boneNames = new string[boneCount];
         for (int i = 0; i < boneCount; i++) boneNames[i] = Str(U32(boneOffStart + i * 4));
 
+        // Attribute names, in the order the submesh masks index them — see Source.AttrNames.
+        var attrNames = new string[attrCount];
+        for (int i = 0; i < attrCount; i++) attrNames[i] = Str(U32(attrStart + i * 4));
+
         // v6 bone tables — offset is in dwords, relative to each table's own header.
         var tables = new ushort[boneTableCount][];
         for (int i = 0; i < boneTableCount; i++)
@@ -1180,6 +1307,7 @@ public static class SecondSkinWriter
             SubmeshCount = submeshCount,
             BoneCount = boneCount,
             BoneNames = boneNames,
+            AttrNames = attrNames,
             BoneTables = tables,
             SubmeshBoneMap = map,
             BoneBBoxes = boneBB,

@@ -491,6 +491,10 @@
     "message": "Penumbraパックを選択",
     "description": ""
   },
+  "Content.EitherColumn": {
+    "message": "A と B",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "メッシュ{0}、頂点{1}",
     "description": ""
@@ -505,6 +509,10 @@
   },
   "Content.GlowNeedsEmissive.Fmt": {
     "message": "この材質が読むのは行{0}{1}の一箇所だけですが、そこの Glow が 0 のためエフェクトはオフのままです。その行の Glow を上げてオンにし、表示の強さを決めてください。他の行の Glow は何もしません。",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "このインデックステクスチャは行 {0}、列 {1} を参照しますが、圧縮されているため 1〜2 行ずれている可能性があります。淡色表示の行もクリックできます。色が反映されない場合は前後の行をお試しください。",
     "description": ""
   },
   "Content.IndexEmpty": {
@@ -529,6 +537,14 @@
   },
   "Content.NoIndex.Fmt": {
     "message": "このマテリアルにはインデックステクスチャがないため、すべて行{0}を使います。",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "このパックで最も近いモデルは{0}向けで、あなたの種族（{1}）でも、ゲームが全員に合わせて拡縮する共通の形状でもありません。Proteus は誤ったサイズで表示せず、装着を見送ります。",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "このパックのモデルは{0}向けに作られており、あなたは{1}です。特定の種族用の装備は形が異なるため、そのまま着せると位置がずれてしまいます。Proteus はそれを表示せず、装着を見送ります。",
     "description": ""
   },
   "Content.NothingUsable": {
@@ -633,6 +649,14 @@
   },
   "ContentImport.Warn.NoModels": {
     "message": "このパックにはモデルを差し替えるオプションがないため、Proteusが追加できるジオメトリがありません。Penumbraでそのままインストールしてください。",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "このパックのモデルは{0}向けに作られています。Proteus は種族間でジオメトリを拡縮しないため、パーツはその種族のキャラクターにのみ表示されます。",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "このパックは自前でパーツの表示を切り替えるため、Proteus は独自のチェックボックスを追加しません。パック側の設定をご利用ください。パックが切り替えないパーツは、Mod が有効な間つねに装着されます。",
     "description": ""
   },
   "Create.Author.Label": {

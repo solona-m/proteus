@@ -1689,6 +1689,17 @@ public class StatusWindow : Window
             }
         }
 
+        // Said before anything else, and in amber: a pack the composite refused is enabled, selected and
+        // completely correct-looking, so "no active options" below would be answering a question nobody
+        // asked. The reason comes from the shell builder, which records it even on a run that hosts nothing.
+        if (compositor.GetUnwearableContentReason(entry.ModDirectory) is { } unwearable)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, unwearable);
+            ImGui.PopTextWrapPos();
+            return;
+        }
+
         if (options.Count == 0)
         {
             ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
@@ -1726,22 +1737,67 @@ public class StatusWindow : Window
         // and cost one of the host's ten slots between them (see SecondSkinService.ContentUnitKey), so one
         // grid governs all of them — and the edit fans out to every option it covers, because rows differing
         // is precisely what would split that one slot back into several.
-        var byMaterial = new List<(string Mtrl, List<ContentOwner> Owners)>();
+        var byMaterial = new List<(string Mtrl, List<string> Names, List<ContentOwner> Owners)>();
         foreach (var (group, option, _, _) in options)
         {
             var live = PiecesFor(entry, group, option, gateOn);
-            foreach (var mtrl in live.SelectMany(p => p.Materials.Values)
-                         .Where(m => liveMaterials == null || liveMaterials.Contains(m))
-                         .Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                int at = byMaterial.FindIndex(m => string.Equals(m.Mtrl, mtrl, StringComparison.OrdinalIgnoreCase));
-                if (at < 0) { byMaterial.Add((mtrl, [])); at = byMaterial.Count - 1; }
-                // The pieces carried along are the ones that made this owner a user of THIS material — an
-                // option binding two materials contributes different pieces to each. They are what the
-                // caption names, since a piece knows the switch that turned it on and its option may not.
-                byMaterial[at].Owners.Add(new ContentOwner(group, option,
-                    [.. live.Where(p => p.Materials.Values.Contains(mtrl, StringComparer.OrdinalIgnoreCase))]));
-            }
+            foreach (var piece in live)
+                foreach (var (leaf, mtrl) in piece.Materials)
+                {
+                    if (liveMaterials != null && !liveMaterials.Contains(mtrl)) continue;
+
+                    // The pack's OWN checkboxes, for a pack that switches pieces on by model attribute
+                    // rather than by shipping separate models. A material nothing currently reveals belongs
+                    // to a piece the user left unticked: showing it would be nine tabs for two worn
+                    // accessories, none of them saying which is which.
+                    //
+                    // Only gates Penumbra still recognises get a vote. Group and option names are recorded
+                    // at import and are exactly what someone renames when they edit a mod afterwards; a gate
+                    // naming a group that no longer exists cannot be evaluated, and hiding a material on the
+                    // strength of a test that could not run would empty the panel with no way to tell why.
+                    // Unevaluable gates leave the material ungated, which shows the tab under its file name.
+                    var gates = piece.GatesFor(leaf);
+                    List<string>? gateNames = null;
+                    if (gates.Count > 0)
+                    {
+                        var known = gates.Where(g => Selection(g.Group) != null).ToList();
+                        if (known.Count > 0)
+                        {
+                            gateNames = [.. known
+                                .Where(g => Selection(g.Group)!.Any(s =>
+                                    string.Equals(s, g.Option, StringComparison.OrdinalIgnoreCase)))
+                                .Select(g => g.Option)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)];
+                            if (gateNames.Count == 0) continue;
+                        }
+                    }
+
+                    int at = byMaterial.FindIndex(m =>
+                        string.Equals(m.Mtrl, mtrl, StringComparison.OrdinalIgnoreCase));
+                    if (at < 0)
+                    {
+                        byMaterial.Add((mtrl, gateNames ?? [], []));
+                        at = byMaterial.Count - 1;
+                    }
+                    else if (gateNames != null)
+                    {
+                        // Two ticked options sharing one material: name it after both, since the colours
+                        // below reach both of them. Compared name by name — testing whether the JOINED label
+                        // already contained the new one let "Gold Trim" swallow a genuinely separate "Gold".
+                        foreach (var n in gateNames)
+                            if (!byMaterial[at].Names.Contains(n, StringComparer.OrdinalIgnoreCase))
+                                byMaterial[at].Names.Add(n);
+                    }
+
+                    // The pieces carried along are the ones that made this owner a user of THIS material — an
+                    // option binding two materials contributes different pieces to each. They are what the
+                    // caption names, since a piece knows the switch that turned it on and its option may not.
+                    if (!byMaterial[at].Owners.Any(o =>
+                            string.Equals(o.Group, group, StringComparison.OrdinalIgnoreCase)
+                         && string.Equals(o.Option, option, StringComparison.OrdinalIgnoreCase)))
+                        byMaterial[at].Owners.Add(new ContentOwner(group, option,
+                            [.. live.Where(p => p.Materials.Values.Contains(mtrl, StringComparer.OrdinalIgnoreCase))]));
+                }
         }
 
         if (byMaterial.Count == 0)
@@ -1762,9 +1818,12 @@ public class StatusWindow : Window
         using var tabs = ImRaii.TabBar($"##contentTabs_{entry.ModDirectory}");
         if (!tabs) return;
 
-        foreach (var (mtrl, owners) in byMaterial)
+        foreach (var (mtrl, names, owners) in byMaterial)
         {
-            using var tab = ImRaii.TabItem($"{Path.GetFileNameWithoutExtension(mtrl)}##content_{mtrl}");
+            // Named after the options that reveal it, falling back to the file name for a material nothing
+            // gates — "mt_c0801e5505_met_a" tells nobody which accessory it is.
+            var label = names.Count > 0 ? string.Join(", ", names) : Path.GetFileNameWithoutExtension(mtrl);
+            using var tab = ImRaii.TabItem($"{label}##content_{mtrl}");
             if (!tab) continue;
             DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp, effects);
         }
@@ -1807,6 +1866,12 @@ public class StatusWindow : Window
                 ProteusStyle.DisabledWrapped(Strings.Content.IndexEmpty);
                 break;
 
+            case ContentIndexState.Compressed:
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.IndexCompressedFmt,
+                    string.Join(", ", idx.Rows!.OrderBy(r => r)),
+                    idx.SubRow ?? Strings.Content.EitherColumn));
+                break;
+
             case ContentIndexState.NoColorTable:
                 // Amber, not dimmed: everything below this line is a control with nothing behind it, and
                 // that is worth interrupting for.
@@ -1842,13 +1907,13 @@ public class StatusWindow : Window
         // Where the rows live. Same rule as every other editor here: while a binding is being edited we work
         // on a COPY and only install it once something actually changes, so merely opening the panel never
         // creates an override — and the compositor is reading the real one from another thread meanwhile.
-        var stored  = StoredContentRows(entry, leadGroup, leadOption);
+        var stored  = StoredContentRows(entry, leadGroup, leadOption, mtrl);
         var ovrRows = editingBinding
             ? designBindings.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
         var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
 
         // The glow, on the same copy-while-binding rule as the rows above.
-        var storedGlow = StoredContentGlow(entry, leadGroup, leadOption);
+        var storedGlow = StoredContentGlow(entry, leadGroup, leadOption, mtrl);
         var ovrGlow = editingBinding
             ? designBindings.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
         var glow = (ovrGlow ?? storedGlow).Clone();
@@ -1932,32 +1997,33 @@ public class StatusWindow : Window
 
         if (!changed && !glowChanged) return;
 
-        foreach (var (group, option, _) in owners)
-        {
-            // A copy each: one list shared between options would serialise identically but ALIAS in memory,
-            // so a later edit to one would silently move the others in ways nothing asked for. The same goes
-            // for the glow, and there it also decides whether they still SHARE a material — settings that
-            // drift split one host slot into several.
-            if (changed)
-            {
-                var mine = DesignBindingService.CopyRows(rows);
-                if (editingBinding) designBindings.SetOverrideRows(entry.ModDirectory, group, option, mine);
-                else StoreContentRows(entry, group, option, mine);
-            }
-            if (glowChanged)
-            {
-                if (editingBinding)
-                    designBindings.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
-                        ?.ApplyScrollFrom(glow);
-                else StoreContentGlow(entry, group, option, glow.Clone());
-            }
-        }
-
+        // Written once, against the MATERIAL this tab governs — not fanned out across the options that use
+        // it. Fanning out was what made a pack with one always-on piece share one set of settings between
+        // every tab, and it is no longer needed for the reason it existed: a per-material edit cannot make
+        // two options disagree about a material they share, because there is only one place to disagree.
         if (!editingBinding)
         {
+            if (changed) StoreContentRows(entry, mtrl, DesignBindingService.CopyRows(rows));
+            if (glowChanged) StoreContentGlow(entry, mtrl, glow.Clone());
             discovery.SaveMetadata(entry);
             InvalidateDefaultsCache(entry);
+            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+            return;
         }
+
+        // A design binding still keys on the option, which is the shape its override was built around. Every
+        // owner gets its own COPY: one list shared between options would serialise identically but ALIAS in
+        // memory, so a later edit to one would silently move the others.
+        foreach (var (group, option, _) in owners)
+        {
+            if (changed)
+                designBindings.SetOverrideRows(
+                    entry.ModDirectory, group, option, DesignBindingService.CopyRows(rows));
+            if (glowChanged)
+                designBindings.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
+                    ?.ApplyScrollFrom(glow);
+        }
+
         compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
     }
 
@@ -1979,19 +2045,21 @@ public class StatusWindow : Window
     /// Deliberately does NOT install that empty preset, on the same rule as <see cref="StoredContentRows"/>:
     /// drawing a panel must not change the mod.
     /// </summary>
-    private static GearSettingsPreset StoredContentGlow(OverlayEntry entry, string? group, string? option)
-        => ContentOptionFor(entry, group, option)?.Glow
+    /// <remarks>Keyed by MATERIAL — see <see cref="StoredContentRows"/> for why.</remarks>
+    private static GearSettingsPreset StoredContentGlow(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+        => entry.Metadata.PeekMaterialSettings(materialRel)?.Glow
+        ?? ContentOptionFor(entry, group, option)?.Glow
         ?? entry.Metadata.ContentGlow
         ?? new GearSettingsPreset();
 
-    private static void StoreContentGlow(
-        OverlayEntry entry, string? group, string? option, GearSettingsPreset glow)
+    private static void StoreContentGlow(OverlayEntry entry, string materialRel, GearSettingsPreset glow)
     {
-        // Null rather than an empty preset once the effect is cleared, so the sidecar goes back to saying
-        // nothing about glow at all — which is what makes the pack's own material publish verbatim again.
-        var value = glow.GlowKey() == null ? null : glow;
-        if (ContentOptionFor(entry, group, option) is { } o) o.Glow = value;
-        else entry.Metadata.ContentGlow = value;
+        // Stored even when it names no effect, and the entry is never dropped. A cleared glow IS a decision:
+        // deleting it instead would fall back through to the older per-option glow, so clearing the effect
+        // would make the pack's previous one reappear on the next composite. A preset with no glow key
+        // publishes the material verbatim, which is what clearing is supposed to mean.
+        entry.Metadata.MaterialSettings(materialRel).Glow = glow;
     }
 
     /// <summary>
@@ -2017,6 +2085,17 @@ public class StatusWindow : Window
         /// <summary>The index texture was read and every texel is fully transparent, so it selects no row at
         /// all. Read fine — a different fact from Unknown, and a different message.</summary>
         SelectsNothing,
+        /// <summary>
+        /// Read, and it names a cell — but the texture is stored compressed, so the reading may be a row or
+        /// two out. Filter on it anyway and say the caveat.
+        /// <para/>
+        /// Its red and green are row SELECTORS rather than colour, and a lossy codec can move a value across
+        /// a bucket boundary. Refusing to read one at all was the first attempt and it was too blunt: a flat
+        /// index decodes exactly (one pack's BC7 came back as a clean uniform value on every texel), so that
+        /// threw away a filter that worked. Since the rows it does not name are dimmed and still clickable,
+        /// being wrong here costs a moment rather than access to the row that renders.
+        /// </summary>
+        Compressed,
         /// <summary>The index texture was read and names rows.</summary>
         Scanned,
     }
@@ -2103,7 +2182,17 @@ public class StatusWindow : Window
                     {
                         var disk = ResolveContentTexture(entry, modRoot, slots.Index);
                         if (disk != null && textureLoader.LoadTexAsRgba(disk) is { } tex)
+                        {
                             result = ScanContentIndex(tex.rgba);
+                            // A compressed index still gets read and still narrows the grid — refusing to
+                            // read one at all threw away a perfectly good answer, since a flat index decodes
+                            // exactly. It is only flagged, because the values are row SELECTORS and a lossy
+                            // codec can move one across a bucket boundary. The rows it doesn't name are
+                            // dimmed rather than disabled, so being wrong here costs a moment, not access.
+                            if (result.State == ContentIndexState.Scanned
+                                && TextureLoader.IsUncompressed(disk) == false)
+                                result = result with { State = ContentIndexState.Compressed };
+                        }
                         else
                             Plugin.Log.Warning("[Proteus] content: {0} names index texture {1}, which could not "
                                              + "be resolved or decoded", entry.ModDirectory, slots.Index);
@@ -2238,19 +2327,22 @@ public class StatusWindow : Window
     /// Deliberately does NOT install that empty list. Drawing a panel must not change the mod: the list is
     /// only written back by <see cref="StoreContentRows"/>, and only once something actually changed.
     /// </summary>
-    private static List<ColorTableRowPreset> StoredContentRows(OverlayEntry entry, string? group, string? option)
-        => ContentOptionFor(entry, group, option)?.ColorTableRows
+    /// <remarks>
+    /// Keyed by MATERIAL, because that is what one of these tabs governs. The per-option values are still
+    /// read as a fallback so packs edited before this keep their colours, but nothing writes there any more:
+    /// a pack holding nine accessories in one always-on model has ONE option and nine materials, so
+    /// per-option storage made every tab read and write the same settings — a glow set on the ear rings and
+    /// the shin laces were already glowing.
+    /// </remarks>
+    private static List<ColorTableRowPreset> StoredContentRows(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+        => entry.Metadata.PeekMaterialSettings(materialRel)?.ColorTableRows
+        ?? ContentOptionFor(entry, group, option)?.ColorTableRows
         ?? entry.Metadata.ColorTableRows
         ?? [];
 
-    private static void StoreContentRows(
-        OverlayEntry entry, string? group, string? option, List<ColorTableRowPreset> rows)
-    {
-        // Onto the option when there is one, else the mod-wide list — which is also where an unconditional
-        // piece's colours live, since it belongs to no option.
-        if (ContentOptionFor(entry, group, option) is { } o) o.ColorTableRows = rows;
-        else entry.Metadata.ColorTableRows = rows;
-    }
+    private static void StoreContentRows(OverlayEntry entry, string materialRel, List<ColorTableRowPreset> rows)
+        => entry.Metadata.MaterialSettings(materialRel).ColorTableRows = rows;
 
     /// <summary>The sidecar's content option for a (group, option) pair, or null for an unconditional piece
     /// — or for a name pair the sidecar no longer carries.</summary>
