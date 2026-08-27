@@ -35,12 +35,6 @@ internal sealed class SyntheticPack : IDisposable
     }
 
     /// <summary>
-    /// A pack holding one model on the <c>met</c> slot at <paramref name="raceCode"/>, whose pieces are
-    /// revealed by <paramref name="toggles"/> — one option per toggle, in a single multi-select group named
-    /// <paramref name="groupName"/>. Each toggle's attribute tags its own material's submesh, so the gates
-    /// the importer records map option → material one to one.
-    /// </summary>
-    /// <summary>
     /// A pack whose pieces are shown and hidden by an <c>Imc</c> group — the Denim Shorts shape. The model
     /// carries <paramref name="attributes"/> in that order, and the group's options each clear one bit,
     /// starting at bit 0.
@@ -94,6 +88,66 @@ internal sealed class SyntheticPack : IDisposable
         return new SyntheticPack(path);
     }
 
+    /// <summary>
+    /// A pack whose garment has "ex" bones — the Cerise kimono shape. One model on the <c>met</c> slot in a
+    /// single-select group, and an <c>Est</c> manipulation declaring the extra skeleton its bones live in.
+    /// <para/>
+    /// Mirrors what real packs do, which the implementation has to survive: the manipulation is repeated
+    /// once per race (a real pack lists eight), it names the set the PACK replaces rather than anything the
+    /// wearer has on, and <paramref name="alsoZeroEntry"/> adds the <c>Entry: 0</c> record that most
+    /// EST-bearing packs carry and that must never be written anywhere.
+    /// </summary>
+    internal static SyntheticPack EstBearing(
+        string groupName, string optionName, string estSlot, int entry, bool alsoZeroEntry = false)
+    {
+        const int PackSet = 6085;
+        var model = SyntheticModel.Build([],
+            new SyntheticModel.Mesh("/mt_c0201e6085_met_a.mtrl", new SyntheticModel.Sub(0)));
+
+        const string ModelEntry = "model.mdl";
+        string modelGamePath = $"chara/equipment/e{PackSet}/model/c0201e{PackSet}_met.mdl";
+        const string MaterialLeaf = "mt_c0201e6085_met_a.mtrl";
+
+        string Est(int setId, int e, string race) =>
+            "{\"Type\":\"Est\",\"Manipulation\":{\"Gender\":\"Female\",\"Race\":" + Quote(race)
+          + ",\"SetId\":" + setId + ",\"Slot\":" + Quote(estSlot) + ",\"Entry\":" + e + "}}";
+
+        // Eight races, as a real pack writes it — the reader must collapse them, since a composite dresses
+        // one character and the race it needs is that character's.
+        var manips = new List<string>();
+        foreach (var race in new[] { "Midlander", "Highlander", "Elezen", "Miqote",
+                                     "Roegadyn", "Lalafell", "AuRa", "Viera" })
+            manips.Add(Est(PackSet, entry, race));
+        if (alsoZeroEntry) manips.Add(Est(PackSet, 0, "Midlander"));
+
+        var sb = new StringBuilder();
+        sb.Append("{\"FileVersion\":4,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\",");
+        sb.Append("\"DefaultData\":{\"Files\":{");
+        sb.Append(Quote($"chara/equipment/e{PackSet}/material/v0001/{MaterialLeaf}"));
+        sb.Append(':').Append(Quote(MaterialLeaf));
+        sb.Append("},\"FileSwaps\":{},\"Manipulations\":[]},");
+        sb.Append("\"Groups\":[{\"Type\":\"Single\",\"Name\":").Append(Quote(groupName));
+        sb.Append(",\"Options\":[{\"Name\":").Append(Quote(optionName));
+        sb.Append(",\"Files\":{").Append(Quote(modelGamePath)).Append(':').Append(Quote(ModelEntry));
+        sb.Append("},\"Manipulations\":[").Append(string.Join(",", manips)).Append("]}]}]}");
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            Write(zip, "meta.json", Encoding.UTF8.GetBytes(sb.ToString()));
+            Write(zip, ModelEntry, model);
+            Write(zip, MaterialLeaf, [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
+    /// <summary>
+    /// A pack holding one model on the <c>met</c> slot at <paramref name="raceCode"/>, whose pieces are
+    /// revealed by <paramref name="toggles"/> — one option per toggle, in a single multi-select group named
+    /// <paramref name="groupName"/>. Each toggle's attribute tags its own material's submesh, so the gates
+    /// the importer records map option → material one to one.
+    /// </summary>
     internal static SyntheticPack AttributeDriven(
         string raceCode, string groupName, params Toggle[] toggles)
     {

@@ -231,6 +231,108 @@ public class ContentImportTests
             new Dictionary<string, List<string>> { ["Toggles"] = ["atr_sne Hide"] })!.Order());
     }
 
+    /// <summary>
+    /// A pack whose garment has "ex" bones records the extra skeleton, and which body part must ask for it.
+    /// <para/>
+    /// The bones are not in the model — they live in a skeleton the game loads only when the EST table
+    /// points at it. The pack aims that entry at the set it replaces; Proteus moves the geometry onto a host
+    /// accessory, which has no EST at all, so unless this reaches the sidecar the bones never load and the
+    /// garment hangs off the root.
+    /// </summary>
+    [Fact]
+    public void A_pack_with_ex_bones_records_its_extra_skeleton_and_the_body_part_that_loads_it()
+    {
+        using var built = SyntheticPack.EstBearing("Fabric", "Satin", "Body", 6085, alsoZeroEntry: true);
+
+        // Read off the pack. A real pack repeats the entry once per race; the reader keeps slot/set/entry
+        // and drops the races, because a composite dresses ONE character.
+        var pack = PenumbraPackage.Read(built.Path);
+        var opt = Assert.Single(pack.Groups.SelectMany(g => g.Options));
+        Assert.Equal([("Body", 6085, 6085), ("Body", 6085, 0)],
+            opt.Est.Select(e => (e.Slot, e.SetId, e.Entry)));
+
+        var sidecar = ContentImportService.BuildSidecar(
+            ContentImportService.Inspect(built.Path), "Synthetic", "Synthetic");
+
+        // Only the real skeleton survives. Entry 0 means "no extra skeleton": writing it would not enable
+        // anything, it would CLEAR whichever body part the composite aimed it at.
+        var rec = Assert.Single(sidecar.ContentSkeletons!);
+        Assert.Equal("Body", rec.Slot);
+        Assert.Equal(6085, rec.Entry);
+        Assert.Equal("Fabric", rec.Group);
+        Assert.Equal("Satin", rec.Option);
+    }
+
+    /// <summary>
+    /// Which body part's entry gets written, resolved from what the character is actually drawing.
+    /// <para/>
+    /// "Body" means the chest piece — the set the report named — and a BARE chest still has an answer, since
+    /// the equipment walk filters e0000 out and the bare-body walk is where that case lives.
+    /// </summary>
+    [Fact]
+    public void The_est_entry_targets_the_body_part_the_character_is_drawing()
+    {
+        var worn = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["top"] = "chara/equipment/e0233/model/c0201e0233_top.mdl",
+            ["met"] = "chara/equipment/e6112/model/c0201e6112_met.mdl",
+        };
+        var bare = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["top"] = "chara/equipment/e0000/model/c0201e0000_top.mdl",
+        };
+        string[] humanParts = ["chara/human/c0201/obj/hair/h0101/model/c0201h0101_hir.mdl"];
+
+        // Body -> the worn chest piece. This is the number the whole feature turns on.
+        Assert.Equal(233, SecondSkinService.EstSetId("Body", worn, bare, humanParts));
+        Assert.Equal(6112, SecondSkinService.EstSetId("Head", worn, bare, humanParts));
+        Assert.Equal(101, SecondSkinService.EstSetId("Hair", worn, bare, humanParts));
+
+        // Bare chest: e0000 is filtered out of the equipment walk, so without the bare-body fallback this
+        // would be null and a naked character's ex bones would silently not load.
+        Assert.Equal(0, SecondSkinService.EstSetId("Body", null, bare, humanParts));
+
+        // Nothing drawn there, and a slot name we don't know: null rather than a guess. The entry is written
+        // onto someone else's item, so guessing moves a skeleton the user never asked about.
+        Assert.Null(SecondSkinService.EstSetId("Face", worn, bare, humanParts));
+        Assert.Null(SecondSkinService.EstSetId("Body", null, null, null));
+        Assert.Null(SecondSkinService.EstSetId("Elbow", worn, bare, humanParts));
+    }
+
+    /// <summary>
+    /// The manipulation Proteus writes is the one Penumbra reads.
+    /// <para/>
+    /// Pinned against a literal lifted out of a real installed mod ("Always a Bridesmaid"), because this is
+    /// serialised straight into the managed mod's meta and a wrong field name would simply be ignored —
+    /// the bones would not load and nothing anywhere would say why.
+    /// </summary>
+    [Fact]
+    public void The_est_manipulation_matches_penumbras_own_shape()
+    {
+        // c0201 = Midlander female. Set 233 worn on the chest, loading extra skeleton 6085.
+        var json = JsonSerializer.Serialize(
+            SecondSkinService.EstManipulation("0201", "Body", 233, 6085));
+        var m = JsonNode.Parse(json)!;
+
+        Assert.Equal("Est", (string?)m["Type"]);
+        var inner = m["Manipulation"]!;
+        Assert.Equal("Female", (string?)inner["Gender"]);
+        Assert.Equal("Midlander", (string?)inner["Race"]);
+        Assert.Equal(233, (int?)inner["SetId"]);
+        Assert.Equal("Body", (string?)inner["Slot"]);
+        Assert.Equal(6085, (int?)inner["Entry"]);
+
+        // Exactly those five fields — Penumbra matches an identifier by its whole shape.
+        Assert.Equal(["Entry", "Gender", "Race", "SetId", "Slot"],
+            inner.AsObject().Select(p => p.Key).Order());
+
+        // The race half comes from the character's code, not the pack's.
+        var male = JsonNode.Parse(JsonSerializer.Serialize(
+            SecondSkinService.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
+        Assert.Equal("Male", (string?)male["Gender"]);
+        Assert.Equal("Midlander", (string?)male["Race"]);
+    }
+
     /// <summary>A pack with no Imc group records nothing — most packs, and the field stays absent.</summary>
     [Fact]
     public void A_pack_without_imc_toggles_records_no_attribute_groups()
@@ -240,6 +342,9 @@ public class ContentImportTests
         var sidecar = ContentImportService.BuildSidecar(
             ContentImportService.Inspect(plain.Path), "Synthetic", "Synthetic");
         Assert.Null(sidecar.ContentAttributes);
+        // And no ex bones either — nine of 967 packs surveyed declared an EST entry at all, so the common
+        // case is that this field never appears and the composite writes no manipulation.
+        Assert.Null(sidecar.ContentSkeletons);
     }
 
     private static string TempDir()

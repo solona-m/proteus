@@ -127,6 +127,12 @@ public class ProteusMetadata
     [JsonPropertyName("ContentAttributes")]
     public List<ContentAttributeGroup>? ContentAttributes { get; set; }
 
+    /// <summary>The extra skeletons this pack's pieces need, and which body part must ask for each — see
+    /// <see cref="ContentSkeleton"/>. Null for a pack with no "ex" bones, which is nearly all of them: of
+    /// 967 packs surveyed, nine declared an EST entry at all.</summary>
+    [JsonPropertyName("ContentSkeletons")]
+    public List<ContentSkeleton>? ContentSkeletons { get; set; }
+
     /// <summary>
     /// The settings stored for one material path, creating the entry if this is its first edit.
     /// <para/>
@@ -464,6 +470,40 @@ public class ContentPiece
     [JsonIgnore]
     public ShellSurfaceKey SurfaceKey
         => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+}
+
+/// <summary>
+/// An extra skeleton one of a pack's pieces needs, and the body part that has to ask for it.
+/// <para/>
+/// A garment with "ex" bones does not carry them: <c>j_ex_*</c> live in an extra skeleton the game loads
+/// only when the EST table points at it, keyed by race, gender, slot and SET. The Cerise kimono jacket
+/// rides the <c>met</c> slot but its bones are top-space, so what loads them is the entry for the wearer's
+/// CHEST piece — "t6085 on the chest piece", in the words of the report.
+/// <para/>
+/// Recorded because Proteus breaks the pack's own arrangement twice over: it moves the geometry onto a host
+/// accessory, so the pack's entry names a set nobody is wearing, and accessories have no EST of their own.
+/// The composite re-points the entry at whatever body part the character actually has on — see
+/// <c>SecondSkinService.EstManipulation</c>.
+/// </summary>
+public class ContentSkeleton
+{
+    /// <summary>The Penumbra group and option that must be selected for this to apply, or null for a piece
+    /// the pack applies unconditionally.</summary>
+    [JsonPropertyName("Group")]
+    public string? Group { get; set; }
+
+    [JsonPropertyName("Option")]
+    public string? Option { get; set; }
+
+    /// <summary>The EST slot — "Body", "Head", "Hair" or "Face". Names the body part whose entry has to be
+    /// written, NOT the slot the pack's own model rides.</summary>
+    [JsonPropertyName("Slot")]
+    public string Slot { get; set; } = string.Empty;
+
+    /// <summary>The extra skeleton id. Never 0 here: an entry of 0 means "no extra skeleton", which enables
+    /// nothing and is dropped at import rather than stored.</summary>
+    [JsonPropertyName("Entry")]
+    public int Entry { get; set; }
 }
 
 /// <summary>

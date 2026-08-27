@@ -1318,6 +1318,23 @@ public sealed class SecondSkinService
         // Mod directory → why none of its pieces can be worn, for the panel to say out loud. Recorded per
         // MOD rather than per piece: a pack authored for one race fails identically for every piece it has,
         // and fifteen copies of the same sentence is not more informative than one. First reason wins.
+        // (EST slot, set id) → the skeleton already claimed for it this build. EST holds one entry per body
+        // part, so this is what stops two packs writing contradictory manipulations for one item and lets
+        // the second one be reported instead of silently losing.
+        //
+        // The slot is lower-cased into the key. Everything that CONSUMES it is case-insensitive — EstPartKey
+        // lower-cases before matching — so keying case-sensitively would let "Body" and "body" occupy two
+        // entries, emit two contradictory manipulations for one body part, and skip the very warning that
+        // exists to catch that.
+        var estClaimed = new Dictionary<(string Slot, int SetId), int>();
+
+        // Extra-skeleton claims noted while resolving content, written only for the options that actually
+        // reached a host. Deferred because the entry lands on an item that is NOT the pack's: claiming a
+        // chest piece's skeleton for geometry that never published would break that item's own ex bones in
+        // exchange for nothing, and a pack whose materials all fail to bind — or that loses its host to the
+        // material budget — is exactly that case.
+        var estPending = new List<((string Mod, string? Group, string? Option) Owner, string Slot, int Entry)>();
+
         var unwearable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         void Unwearable(string modDir, string reason)
         {
@@ -1459,6 +1476,20 @@ public sealed class SecondSkinService
                     log.Information("[Proteus] content: {0} — {1} hides [{2}]",
                         cEntry.ModDirectory, modelRel, string.Join(", ", hidden));
             }
+
+            // The extra skeleton this piece's "ex" bones live in — NOTED here, written far below once the
+            // piece is known to have reached a host. See ContentSkeleton and EstManipulation: the pack
+            // declares the entry against the set it replaces, and this geometry is about to leave that set
+            // for a host accessory, which has no EST of its own, so the bones would never load.
+            //
+            // Tagged with this LAYER's option so the claim can be matched against what actually published.
+            // A record from the pack's default data carries no option of its own and is noted against every
+            // layer, which is what makes it fire if any one of them lands.
+            foreach (var skel in cEntry.Metadata.ContentSkeletons ?? [])
+                if (skel.Group == null
+                    || (string.Equals(skel.Group, rc.OptionGroup, StringComparison.OrdinalIgnoreCase)
+                     && string.Equals(skel.Option, rc.Option, StringComparison.OrdinalIgnoreCase)))
+                    estPending.Add(((cEntry.ModDirectory, rc.OptionGroup, rc.Option), skel.Slot, skel.Entry));
 
             foreach (var leaf in used)
             {
@@ -2023,6 +2054,43 @@ public sealed class SecondSkinService
                 unit.Glow?.Scroll is { Length: > 0 } s
                     ? (glowBuilt ? s : s + " (FAILED — published the pack's own material)")
                     : "(none)");
+        }
+
+        // ── extra skeletons, now that we know what published ──────────────────
+        //
+        // shellMaterials holds a key per option whose material actually reached a host, so it is the exact
+        // record of "this pack put something on the character". A claim whose option is not in it is
+        // dropped: the entry would rewrite a body part the user is wearing, and doing that for geometry
+        // that never appeared is all cost and no benefit.
+        foreach (var (owner, slot, entry) in estPending)
+        {
+            if (!shellMaterials.ContainsKey(owner)) continue;
+
+            if (EstSetId(slot, equippedPartModels, bareBodyModels, humanPartModels) is not { } estSet)
+            {
+                log.Warning("[Proteus] content: {0} needs extra skeleton {1} on the {2}, but this character "
+                          + "is drawing nothing there — its ex bones will not load",
+                    owner.Mod, entry, slot);
+                continue;
+            }
+
+            // Deduplicated on the TARGET, not the source: several options of one pack asking the same body
+            // part for the same skeleton is one entry, and two asking for DIFFERENT skeletons is a conflict
+            // the table cannot express — first wins, and the second says so.
+            var key = (slot.ToLowerInvariant(), estSet);
+            if (!estClaimed.TryAdd(key, entry))
+            {
+                if (estClaimed[key] != entry)
+                    log.Warning("[Proteus] content: {0} wants extra skeleton {1} on the {2} (set {3}), which "
+                              + "is already claimed for {4} — EST holds one entry per body part",
+                        owner.Mod, entry, slot, estSet, estClaimed[key]);
+                continue;
+            }
+
+            manipulations.Add(EstManipulation(drawnRaceCode ?? charCode, slot, estSet, entry));
+            log.Information("[Proteus] content: {0} — extra skeleton {1} claimed on the {2}, set {3}. "
+                          + "That replaces whatever entry that item had",
+                owner.Mod, entry, slot, estSet);
         }
 
         if (contentUnhosted.Count > 0)
@@ -3450,4 +3518,95 @@ public sealed class SecondSkinService
             },
         };
     }
+
+    /// <summary>
+    /// Point one body part's EST entry at an extra skeleton: "wearing <paramref name="setId"/> on
+    /// <paramref name="estSlot"/> loads skeleton <paramref name="entry"/>".
+    /// <para/>
+    /// This is what makes an imported pack's <c>j_ex_*</c> bones exist. They are not in the model — the game
+    /// loads them from an extra skeleton, and only when this table says so. The pack declares the entry
+    /// against the set IT replaces; Proteus has moved that geometry onto a host accessory, which has no EST
+    /// of its own, so the entry is re-pointed at the body part the bones actually belong to.
+    /// <para/>
+    /// One entry per (race, slot, set) is all the table holds, so writing this REPLACES whatever the worn
+    /// item had. A modded chest piece with ex bones of its own loses them. That is the mechanism, not this
+    /// code: two garments cannot both own one EST slot, and knowing there was a clash would mean reading
+    /// the live table. The caller logs what it claimed so the trade is at least visible.
+    /// </summary>
+    /// <param name="estSlot">"Body", "Head", "Hair" or "Face" — Penumbra's own EST slot names.</param>
+    internal static object EstManipulation(string charCode, string estSlot, int setId, int entry)
+    {
+        int n = RaceIndex(charCode) ?? 2;
+        return new
+        {
+            Type = "Est",
+            Manipulation = new
+            {
+                Gender = n % 2 == 1 ? "Male" : "Female",
+                Race = RaceNames[Math.Clamp((n - 1) / 2, 0, RaceNames.Length - 1)],
+                SetId = setId,
+                Slot = estSlot,
+                Entry = entry,
+            },
+        };
+    }
+
+    /// <summary>
+    /// The set id whose EST entry governs <paramref name="estSlot"/> for this character — the number that
+    /// says WHICH body part is being asked to load the skeleton. Null when it cannot be determined.
+    /// <para/>
+    /// Equipment slots come off the live equipment walk, then the bare-body walk. That order matters and the
+    /// fallback is not cosmetic: <c>EquippedPartModelsFromModels</c> filters e0000 out, so a character with a
+    /// bare chest has no "top" entry at all, and the answer for them is set 0 — the bare body's own — rather
+    /// than nothing.
+    /// <para/>
+    /// Hair and face are read from the drawn human-part paths, where the id is the folder
+    /// (<c>chara/human/c0201/obj/hair/h0101/…</c> → 101), because those are not equipment and appear in
+    /// neither equipment map.
+    /// </summary>
+    internal static int? EstSetId(
+        string estSlot,
+        IReadOnlyDictionary<string, string>? equipped,
+        IReadOnlyDictionary<string, string>? bare,
+        IReadOnlyList<string>? humanParts)
+    {
+        if (EstPartKey(estSlot) is not { } key) return null;
+
+        if (key is "hair" or "face")
+        {
+            var folder = $"/obj/{key}/";
+            foreach (var p in humanParts ?? [])
+            {
+                int at = p.IndexOf(folder, StringComparison.OrdinalIgnoreCase);
+                if (at < 0) continue;
+                var rest = p[(at + folder.Length)..];
+                int end = rest.IndexOf('/');
+                if (end <= 1) continue;
+                if (int.TryParse(rest[1..end], out var id)) return id;   // skip the h/f kind letter
+            }
+            return null;
+        }
+
+        foreach (var map in new[] { equipped, bare })
+            if (map != null && map.TryGetValue(key, out var path)
+             && ContentSlot.Parse(path) is { } parsed)
+                return ContentSlot.SetIdOf(parsed.SetTag);
+        return null;
+    }
+
+    /// <summary>
+    /// Which of the character's own models an EST slot is about — Penumbra's slot names against the model
+    /// keys the compositor's equipment walk uses.
+    /// <para/>
+    /// Null for a name this does not know rather than a guess: the entry is written onto someone else's
+    /// item, and picking the wrong one would move a skeleton the user never asked about.
+    /// </summary>
+    internal static string? EstPartKey(string estSlot) => estSlot.ToLowerInvariant() switch
+    {
+        "body" => "top",
+        "head" => "met",
+        "hair" => "hair",
+        "face" => "face",
+        _      => null,
+    };
 }
