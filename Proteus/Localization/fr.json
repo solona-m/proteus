@@ -607,6 +607,10 @@
     "message": "Échec de l'écriture du mod : {0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "chacun de ses maillages est le corps du porteur lui-même ({0}) ; il n'y a rien à ajouter.",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "aucune géométrie — tous ses maillages sont vides",
     "description": ""

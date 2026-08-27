@@ -607,6 +607,10 @@
     "message": "Mod konnte nicht geschrieben werden: {0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "jede Mesh darin ist der eigene Körper des Trägers ({0}) — es gibt nichts hinzuzufügen.",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "keine Geometrie — jedes Mesh darin ist leer",
     "description": ""

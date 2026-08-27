@@ -196,7 +196,7 @@ public class ContentImportTests
     [Fact]
     public void An_imc_hide_group_is_read_from_the_pack_and_recorded_in_the_sidecar()
     {
-        using var built = SyntheticPack.ImcToggled("0101", "Toggles", "atr_sne", "atr_hiz");
+        using var built = SyntheticPack.ImcToggled("0101", "Toggles", "atr_dv_a", "atr_dv_b");
 
         // Read off the pack: the group carries the identifier and masks, not the options' Files.
         var pack = PenumbraPackage.Read(built.Path);
@@ -214,21 +214,21 @@ public class ContentImportTests
         Assert.Equal("Toggles", rec.Group);
         Assert.Equal(6058, rec.SetId);
         Assert.Equal(3, rec.DefaultMask);
-        Assert.Equal(1, rec.Options["atr_sne Hide"]);
-        Assert.Equal(2, rec.Options["atr_hiz Hide"]);
+        Assert.Equal(1, rec.Options["atr_dv_a Hide"]);
+        Assert.Equal(2, rec.Options["atr_dv_b Hide"]);
 
         // The masks compose the way the composite will use them: selecting an option CLEARS its bits.
         Assert.Equal(3, rec.MaskFor(null));
-        Assert.Equal(2, rec.MaskFor(["atr_sne Hide"]));
-        Assert.Equal(0, rec.MaskFor(["atr_sne Hide", "atr_hiz Hide"]));
+        Assert.Equal(2, rec.MaskFor(["atr_dv_a Hide"]));
+        Assert.Equal(0, rec.MaskFor(["atr_dv_a Hide", "atr_dv_b Hide"]));
 
         // End to end: the recorded group resolves against the model's own attribute table to the name whose
         // submeshes the writer then drops.
-        Assert.Equal(["atr_sne"], SecondSkinService.HiddenAttributes(
+        Assert.Equal(["atr_dv_a"], SecondSkinService.HiddenAttributes(
             sidecar.ContentAttributes,
             "chara/equipment/e6058/model/c0101e6058_dwn.mdl",
-            ["atr_sne", "atr_hiz"],
-            new Dictionary<string, List<string>> { ["Toggles"] = ["atr_sne Hide"] })!.Order());
+            ["atr_dv_a", "atr_dv_b"],
+            new Dictionary<string, List<string>> { ["Toggles"] = ["atr_dv_a Hide"] })!.Order());
     }
 
     /// <summary>
@@ -331,6 +331,85 @@ public class ContentImportTests
             SecondSkinService.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
         Assert.Equal("Male", (string?)male["Gender"]);
         Assert.Equal("Midlander", (string?)male["Race"]);
+    }
+
+    /// <summary>
+    /// A material the pack ships more than once records every game path it is published under, options
+    /// first — so the composite can ask Penumbra which one is live instead of using whichever the importer
+    /// happened to see first.
+    /// <para/>
+    /// This is the dye-and-metal case every dress mod has. deadrose redirects one dress material from nine
+    /// different files; with a single path baked at import, eight of its nine dye options published the
+    /// wrong material.
+    /// </summary>
+    [Fact]
+    public void A_material_shipped_under_several_paths_records_them_all_options_first()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_dress.mtrl", new SyntheticModel.Sub(0)));
+
+            // Both candidates are OPTION redirects, and the fixed one is declared FIRST — the deadrose
+            // shape. So neither "options before default data" nor declaration order picks the right one;
+            // only counting the files behind each path does.
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "Dyeable",
+              "Author": "Someone",
+              "DefaultData": { "Files": {} },
+              "Groups": [
+                {
+                  "Name": "Main", "Type": "Multi",
+                  "Options": [
+                    { "Name": "Install", "Files": { "chara/equipment/e0043/material/v0002/mt_dress.mtrl": "base\\mt_dress.mtrl" } }
+                  ]
+                },
+                {
+                  "Name": "Dye", "Type": "Single",
+                  "Options": [
+                    { "Name": "Gold",   "Files": { "chara/equipment/e0043/material/v0001/mt_dress.mtrl": "gold\\mt_dress.mtrl" } },
+                    { "Name": "Silver", "Files": { "chara/equipment/e0043/material/v0001/mt_dress.mtrl": "silver\\mt_dress.mtrl" } }
+                  ]
+                },
+                {
+                  "Name": "Piece", "Type": "Multi",
+                  "Options": [
+                    { "Name": "Dress", "Files": { "chara/equipment/e0043/model/c0201e0043_top.mdl": "dress\\model.mdl" } }
+                  ]
+                }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("base/mt_dress.mtrl", new byte[64]),
+                ("gold/mt_dress.mtrl", new byte[64]),
+                ("silver/mt_dress.mtrl", new byte[64]),
+                ("dress/model.mdl", model),
+            });
+
+            var sidecar = ContentImportService.BuildSidecar(
+                ContentImportService.Inspect(pmp), "Dyeable", "Someone");
+            var piece = Assert.Single(
+                sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces));
+
+            // Both paths, the DYED one first: two files compete over v0001, one sits at v0002. It is
+            // declared second and is not the default data, so counting is the only thing that finds it.
+            Assert.Equal(
+                ["chara/equipment/e0043/material/v0001/mt_dress.mtrl",
+                 "chara/equipment/e0043/material/v0002/mt_dress.mtrl"],
+                piece.GamePathsFor("mt_dress.mtrl"));
+
+            // Reachable with or without the model's leading slash, like MaterialFor.
+            Assert.Equal(2, piece.GamePathsFor("/mt_dress.mtrl").Count);
+
+            // And the single baked file is still recorded as the fallback.
+            Assert.NotNull(piece.MaterialFor("mt_dress.mtrl"));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     /// <summary>A pack with no Imc group records nothing — most packs, and the field stays absent.</summary>

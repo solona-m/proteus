@@ -607,6 +607,10 @@
     "message": "모드를 저장하지 못했습니다: {0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "모든 메시가 착용자 자신의 몸({0})이므로 추가할 것이 없습니다.",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "지오메트리 없음 — 모든 메시가 비어 있습니다",
     "description": ""

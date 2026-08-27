@@ -274,6 +274,137 @@ public class SecondSkinWriterVerbatimTests
     }
 
     /// <summary>
+    /// Geometry emitted untagged spends nothing from the merged model's attribute table.
+    /// <para/>
+    /// The table holds 32 names because a submesh mask is a u32, and names past that are dropped — with
+    /// whatever they switched stuck on. A pack whose visibility Proteus resolved has no submesh left
+    /// referencing its names, so carrying them would spend that budget on nothing and could push a
+    /// name-toggled pack's own attributes off the end.
+    /// </summary>
+    [Fact]
+    public void Untagged_geometry_contributes_no_names_to_the_attribute_table()
+    {
+        var owned = SyntheticModel.Build(["atr_owned_a", "atr_owned_b"],
+            new SyntheticModel.Mesh("/mt_owned.mtrl", new SyntheticModel.Sub(1u << 0)));
+        var runtime = SyntheticModel.Build(["atrx_runtime"],
+            new SyntheticModel.Mesh("/mt_runtime.mtrl", new SyntheticModel.Sub(1u << 0)));
+
+        var outBytes = SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    // Proteus resolved this one's visibility, so its tags are stripped…
+                    new ContentGeometry(owned, _ => true, OwnAttributes: true),
+                    // …while this one is switched at runtime by name and must keep its own.
+                    new ContentGeometry(runtime, _ => true),
+                ],
+            }],
+            null, out _);
+
+        Validate(outBytes);
+
+        // Only the name something still references survives into the table.
+        Assert.Equal(["atrx_runtime"], AttributeNames(outBytes));
+
+        // And the mask that names it still points at it, so the runtime toggle keeps working.
+        var names = AttributeNames(outBytes);
+        var tagged = SubmeshAttributeMasks(outBytes)
+            .SelectMany(m => Enumerable.Range(0, names.Count).Where(b => (m & (1u << b)) != 0))
+            .Select(b => names[b])
+            .ToList();
+        Assert.Equal(["atrx_runtime"], tagged);
+    }
+
+    /// <summary>
+    /// A submesh tagged with several attributes needs them ALL on — one hidden name drops it.
+    /// <para/>
+    /// The deadrose dress is what settles this. Its dress material has a submesh tagged <c>atr_tv_b</c> and,
+    /// separately, ones tagged <c>atr_tv_b + atr_tv_c</c>. Under a "keep while any name is on" rule the
+    /// second pair could never differ from the first, so authoring both would be pointless — they are
+    /// distinct only if the extra tag is a further requirement.
+    /// </summary>
+    [Fact]
+    public void A_submesh_tagged_with_several_attributes_needs_all_of_them()
+    {
+        // The deadrose shape in miniature: "b alone", "b and c", and an untagged base.
+        var content = SyntheticModel.Build(["atr_a", "atr_b", "atr_c"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl",
+                new SyntheticModel.Sub(1u << 1),                 // atr_b
+                new SyntheticModel.Sub((1u << 1) | (1u << 2)),   // atr_b + atr_c
+                new SyntheticModel.Sub(0)));                     // always drawn
+
+        byte[] BuildWith(params string[] hide) => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    new ContentGeometry(content, _ => true,
+                        HiddenAttributes: new HashSet<string>(hide, StringComparer.Ordinal)),
+                ],
+            }],
+            null, out _);
+
+        // Hiding only atr_c drops the PAIR and leaves the atr_b-only one — the distinction that makes the
+        // two worth authoring. A "keep while any is on" rule would leave all three.
+        var less = BuildWith("atr_c");
+        Validate(less);
+        Assert.Equal([0u, 1u << 1], SubmeshAttributeMasks(less).Order());
+
+        // Hiding atr_b takes both tagged submeshes, since both require it.
+        var fewer = BuildWith("atr_b");
+        Validate(fewer);
+        Assert.Equal([0u], SubmeshAttributeMasks(fewer));
+    }
+
+    /// <summary>
+    /// When Proteus owns the visibility answer, the surviving submeshes come out UNTAGGED.
+    /// <para/>
+    /// Otherwise the decision is made twice. A submesh's attribute mask is a gate the game closes from the
+    /// IMC entry of the item being WORN, and this geometry ends up on a host accessory — so a piece the
+    /// pack's toggles said to keep would be judged again by the host's mask, which knows nothing about the
+    /// garment. That is arbitrary per bit, and it is why a dress's toggles could look inert while the same
+    /// pack's shoes toggles worked.
+    /// </summary>
+    [Fact]
+    public void Geometry_whose_visibility_proteus_resolved_is_emitted_untagged()
+    {
+        var content = SyntheticModel.Build(["atr_a", "atr_b"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl",
+                new SyntheticModel.Sub(1u << 0),
+                new SyntheticModel.Sub(1u << 1)));
+
+        byte[] BuildWith(bool own) => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    new ContentGeometry(content, _ => true,
+                        HiddenAttributes: new HashSet<string>(StringComparer.Ordinal) { "atr_a" },
+                        OwnAttributes: own),
+                ],
+            }],
+            null, out _);
+
+        // Owned: atr_a's submesh is dropped, and the one we kept carries no tag for anything else to cull.
+        var owned = BuildWith(true);
+        Validate(owned);
+        Assert.Equal([0u], SubmeshAttributeMasks(owned));
+
+        // Not owned — a pack switched by Penumbra's Atr manipulation, where the runtime IS the mechanism —
+        // keeps its tag, or the mod's own checkboxes would have nothing left to act on.
+        var tagged = BuildWith(false);
+        Validate(tagged);
+        Assert.Contains(SubmeshAttributeMasks(tagged), m => m != 0);
+    }
+
+    /// <summary>
     /// A host carrying nothing but hidden geometry fails in a way the caller can tell apart from a fault —
     /// switching off the only piece on a carrier is the user getting what they asked for, not a broken
     /// build, and it used to arrive as "no geometry survived coverage trimming".

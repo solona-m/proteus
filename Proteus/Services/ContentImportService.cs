@@ -171,9 +171,16 @@ public sealed class ContentImportService
         {
             if (!IsSelectable(group.Type))
             {
-                warnings.Add(string.Format(Loc.Localize("ContentImport.Warn.GroupType.Fmt",
-                    "Group \"{0}\" is a {1} group, which Proteus can't place — its options are left alone."),
-                    group.Name, group.Type));
+                // Silent for an Imc group. It selects no MODEL, so it contributes nothing to the piece list
+                // — but that is not news worth a warning: its options are the pack's own show/hide toggles
+                // and the composite honours them (see ContentAttributeGroup). A pack like deadrose carries
+                // one per garment, so warning per group filled the preview with three amber lines saying
+                // that a thing which works does not.
+                if (!string.Equals(group.Type, "Imc", StringComparison.OrdinalIgnoreCase))
+                    warnings.Add(string.Format(Loc.Localize("ContentImport.Warn.GroupType.Fmt",
+                        "Group \"{0}\" is a {1} group, which Proteus can't place — its options are left "
+                      + "alone."),
+                        group.Name, group.Type));
                 continue;
             }
             foreach (var option in group.Options)
@@ -325,6 +332,9 @@ public sealed class ContentImportService
     {
         var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var unbound = new List<string>();
+        // Meshes left to the character's own skin — reported apart from `unbound` because they are a choice
+        // rather than a shortfall, and only matter when they are ALL a model has.
+        var skinOnly = new List<string>();
 
         PiecePlan Unreadable(string why)
             => new(gamePath, entry, bindings, unbound, 0, 0,
@@ -357,24 +367,44 @@ public sealed class ContentImportService
         foreach (var name in used)
         {
             var leaf = name.TrimStart('/');
-            if (SecondSkinWriter.TryReadLod0Geometry(model, out var pos, out _, out var tri,
-                    SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { leaf })))
-            {
-                vertices += pos.Length / 3;
-                if (tri.Length > 0) meshes++;
-            }
 
+            // The pack's OWN binding is asked for first, and that ordering matters. A material can be named
+            // like the body's and still be the pack's — the rebound piercings pack redirects
+            // mt_c0201b0001_a.mtrl at its own piercing material, and skipping it on the name alone would
+            // throw away the very meshes that redirect exists to serve.
             if (materialsByLeaf.TryGetValue(leaf, out var mtrlEntry))
+            {
                 bindings[leaf] = mtrlEntry;
-            else
+                if (SecondSkinWriter.TryReadLod0Geometry(model, out var pos, out _, out var tri,
+                        SecondSkinWriter.KeepByLeaf(
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { leaf })))
+                {
+                    vertices += pos.Length / 3;
+                    if (tri.Length > 0) meshes++;
+                }
+            }
+            // Unbound AND named like the body's own material: a mesh Proteus deliberately leaves behind, not
+            // a binding the author forgot. An outfit pack ships the body it was fitted to so the garment
+            // sits right in Penumbra; the wearer already has one, and appending a second would put a
+            // duplicate body on them. Counting it as unbound made the preview advise a re-export that would
+            // fix nothing.
+            else if (!SecondSkinWriter.IsBodySkinMaterial(leaf))
                 unbound.Add(leaf);
+            else
+                skinOnly.Add(leaf);
         }
 
         string? problem = null;
         if (bindings.Count == 0)
-            problem = string.Format(Loc.Localize("ContentImport.Problem.Unbound.Fmt",
-                "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's own "
-              + "materials and re-export."), string.Join(", ", unbound));
+            problem = unbound.Count > 0
+                ? string.Format(Loc.Localize("ContentImport.Problem.Unbound.Fmt",
+                    "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's "
+                  + "own materials and re-export."), string.Join(", ", unbound))
+                // Nothing unbound and nothing bound: every mesh in it is the body. Real — an outfit pack
+                // ships one per size — and not a fault, so it says what it is rather than asking for a fix.
+                : string.Format(Loc.Localize("ContentImport.Problem.BodyOnly.Fmt",
+                    "every mesh in it is the wearer's own body ({0}), so there is nothing to add."),
+                    string.Join(", ", skinOnly));
 
         return new PiecePlan(gamePath, entry, bindings, unbound, meshes, vertices, problem,
                              MaterialAttributes: byMaterial);
@@ -618,6 +648,7 @@ public sealed class ContentImportService
             {
                 Group       = g.Name,
                 SetId       = g.ImcSetId,
+                Slot        = g.ImcSlot,
                 DefaultMask = g.DefaultAttributeMask,
                 Options     = opts,
             });
@@ -698,6 +729,48 @@ public sealed class ContentImportService
         foreach (var v in usable)
             foreach (var (leaf, entry) in v.Bindings)
                 piece.Materials[leaf] = entry;
+
+        // The GAME paths each bound material is published under, so the composite can ask Penumbra which
+        // file is live instead of using the one frozen above — see ContentPiece.MaterialGamePaths.
+        //
+        // Ordered by how many DIFFERENT files the pack puts behind each path, most first. That is the rule
+        // in one sentence: a path several files compete over is a path the user chooses between, and a path
+        // with one file behind it is fixed. Nothing simpler works — "options before default data" does not,
+        // because both candidates can be option redirects. deadrose is the case: its dress material sits at
+        // v0002 shipped once by [ dress - main files ], and at v0001 shipped eight times over by
+        // [ dress - metal + dye template ]. Only the second is a choice, and only counting finds it.
+        var backing = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
+        void Candidate(string gamePath, string entry)
+        {
+            if (!gamePath.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)) return;
+            if (!backing.TryGetValue(gamePath, out var files))
+            {
+                backing[gamePath] = files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                order.Add(gamePath);
+            }
+            files.Add(entry);
+        }
+
+        foreach (var g in pack.Groups)
+            foreach (var o in g.Options)
+                foreach (var (gp, entry) in o.Files)
+                    Candidate(gp, entry);
+        foreach (var (gp, entry) in pack.DefaultFiles)
+            Candidate(gp, entry);
+
+        foreach (var leaf in piece.Materials.Keys)
+        {
+            var trimmed = leaf.TrimStart('/');
+            // OrderByDescending is stable, so paths tied on count keep the order they were seen in.
+            var paths = order
+                .Where(gp => string.Equals(Path.GetFileName(gp.Replace('\\', '/')), trimmed,
+                                           StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(gp => backing[gp].Count)
+                .ToList();
+            if (paths.Count > 0)
+                (piece.MaterialGamePaths ??= new(StringComparer.OrdinalIgnoreCase))[leaf] = paths;
+        }
 
         // Which of the PACK'S options reveal each material — see ContentPiece.MaterialGates. Worked out
         // here, where the model has just been read, because the panel that needs it draws every frame.

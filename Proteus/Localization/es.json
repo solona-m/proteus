@@ -607,6 +607,10 @@
     "message": "No se pudo escribir el mod: {0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "cada malla suya es el propio cuerpo de quien lo lleva ({0}), así que no hay nada que añadir.",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "sin geometría — todas sus mallas están vacías",
     "description": ""
