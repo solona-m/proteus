@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
+using Proteus.Localization;
 
 namespace Proteus.Services;
 
@@ -113,7 +115,20 @@ public sealed class SecondSkinService
         // recovering, so they are the only ones PrimeUpstreamCache should ever unpublish to go looking (see
         // there). A CARRIER host is replaced outright and its base is never read, so priming it would blank
         // the shell for the width of the prime and learn nothing.
-        List<string> AppendHostModelPaths);
+        List<string> AppendHostModelPaths,
+        // Mod directory → the content materials of that mod which back at least one DRAWN mesh this
+        // composite, as paths relative to the mod root. What the colour editor should offer a grid for.
+        //
+        // The editor groups its tabs by the materials a piece DECLARES, which is the larger set: a material
+        // bound only to meshes with no LOD0 vertices is declared and never drawn, and a tab for one would
+        // save rows that reach nothing and offer a glow button with no target.
+        //
+        // DRAWN, deliberately, not "placed on a host". A unit that found no free material slot is still a
+        // real material the user can see on their character — the fix is another ring, which the unhosted
+        // notice already tells them — and taking its colour grid away would be the same silent nothing in
+        // the other direction. Keyed by mod so the editor's per-frame lookup is a dictionary hit rather
+        // than a filter over the whole set.
+        Dictionary<string, HashSet<string>> ContentMaterials);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell for it is cut from, and the two spaces that geometry
@@ -133,6 +148,222 @@ public sealed class SecondSkinService
         IReadOnlyList<string> SourcePaths,
         string CutCode,
         string? UvSpace);
+
+    /// <summary>
+    /// One MATERIAL an imported content pack publishes, and every mesh drawn with it.
+    /// <para/>
+    /// A material is the allocation unit because a material is what costs a slot on the host — ten of them,
+    /// shared with the shells. So the unit is not a piece: pieces that want the same .mtrl with the same
+    /// colours all land here together and spend one slot between them. A pack of five piercings on a single
+    /// material is the case that makes this worth doing, and it is the common shape.
+    /// <para/>
+    /// <paramref name="Owners"/> is every (mod, group, option) this material serves. All of them need the
+    /// material registered under their own key, or the colour editor's glow button silently loses its target
+    /// for every option but the first.
+    /// </summary>
+    private sealed record ContentUnit(
+        byte[] Mtrl,
+        /// <summary>The source .mtrl, relative to the mod root — what the colour editor knows this material
+        /// by, and therefore what it has to be told was published.</summary>
+        string MtrlRel,
+        Dictionary<int, GearColorRow>? Rows,
+        /// <summary>The animated glow, or null to publish the pack's material as its author wrote it. Set
+        /// means the material is REBUILT onto characterscroll — see the emit loop.</summary>
+        GearSettingsPreset? Glow,
+        ShellSurfaceKey Surface,
+        List<ContentGeometry> Geometries,
+        List<(OverlayEntry Entry, ResolvedContent Content)> Owners)
+    {
+        /// <summary>The entry any per-mod lookup should use. Merged owners are all one mod — the merge key
+        /// carries the mod directory — so the first is as good as any.</summary>
+        public OverlayEntry Entry => Owners[0].Entry;
+    }
+
+    /// <summary>
+    /// The model of <paramref name="piece"/> that belongs on a character wearing equipment code
+    /// <paramref name="modelCode"/>: the exact variant if the pack ships one, else the NEAREST one its own
+    /// fall-through chain reaches, else null.
+    /// <para/>
+    /// Nearest, not merely reachable: a pack shipping both Midlander and Highlander male models must give a
+    /// Highlander his own, and "any ancestor" would be free to hand him the Midlander one. The chain is
+    /// walked outward from the wearer and the first code the pack has wins.
+    /// <para/>
+    /// Gender is checked at every hop for the same reason <see cref="CanFallThrough"/> checks it: the chain
+    /// really does contain cross-gender hops, and taking one means dressing someone in a body they do not
+    /// have.
+    /// </summary>
+    /// <remarks>
+    /// Returns the CODE as well as the path, because the caller cannot tell how to publish the model without
+    /// knowing which race it was authored for — cut space is deformed onto the wearer, a race-authored model
+    /// must not be. See the surface decision in the content loop.
+    /// <para/>
+    /// A piece with one un-keyed model reports a NULL code, and that is not the same as an empty one.
+    /// <see cref="ContentPiece.ModelFor"/> falls back to <see cref="ContentPiece.Model"/> for any code at
+    /// all, so reporting the code it was asked about would attribute a race to a pack that never named one —
+    /// and the surface decision would then judge the model against a claim it did not make.
+    /// </remarks>
+    private static (string? Code, string Path)? ResolveVariant(ContentPiece piece, string? modelCode)
+    {
+        // Keyed pieces report the code that matched; an un-keyed one reports none. ModelCodes is empty in
+        // exactly the case ModelFor ignored the code it was given.
+        if (piece.ModelFor(modelCode) is { } exact)
+            return (piece.ModelCodes.Any() ? modelCode : null, exact);
+        if (modelCode == null || RaceIndex(modelCode) is not { } from) return null;
+
+        for (int i = 0, cur = from; i < 8; i++)
+        {
+            cur = EqdpFallbackIndex(cur);
+            if (cur == 0) break;
+            if (cur % 2 != from % 2) continue;   // a cross-gender hop is not ours to take
+            foreach (var code in piece.ModelCodes)
+                if (RaceIndex(code) == cur)
+                    return (code, piece.ModelFor(code)!);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The attribute names a pack's own hide-toggles currently switch off for one of its models, or null
+    /// when nothing is hidden. The composite drops the submeshes tagged with them.
+    /// <para/>
+    /// Resolved from the model's OWN attribute table, because an IMC mask addresses attributes by position
+    /// and the position is not fixed — Denim Shorts lists <c>[atr_sne, atr_hiz]</c> on its Midlander model
+    /// and <c>[atr_hiz, atr_sne]</c> on its Lalafell one, so bit 0 means a different piece of geometry
+    /// depending on who is wearing it. Mapping through the table is what makes the toggle mean the same
+    /// thing on every race.
+    /// </summary>
+    /// <param name="selected">The mod's live Penumbra selection: group name → chosen options.</param>
+    internal static IReadOnlySet<string>? HiddenAttributes(
+        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
+        IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        if (groups is not { Count: > 0 } || attrNames.Count == 0) return null;
+
+        // Which set this model belongs to, so a pack with several items applies each toggle to its own.
+        var setId = ContentSlot.Parse(modelRel) is { } p ? ContentSlot.SetIdOf(p.SetTag) : null;
+
+        HashSet<string>? hidden = null;
+        foreach (var g in groups)
+        {
+            if (g.SetId >= 0 && setId is { } s && g.SetId != s) continue;
+
+            int mask = g.MaskFor(
+                selected != null && selected.TryGetValue(g.Group, out var sel) ? sel : null);
+
+            // Every bit the mask does NOT hold names an attribute that is off. Bounded by the table rather
+            // than by the mask's ten bits: a mask bit past the end of a model's own attribute list names
+            // nothing, and inventing a name for it would hide nothing or, worse, the wrong thing.
+            for (int bit = 0; bit < attrNames.Count && bit < 10; bit++)
+                if ((mask & (1 << bit)) == 0)
+                    (hidden ??= new HashSet<string>(StringComparer.Ordinal)).Add(attrNames[bit]);
+        }
+        return hidden;
+    }
+
+    /// <summary>Test seam for <see cref="ResolveVariant"/> — the null code it reports for an un-keyed piece
+    /// is load-bearing, and a test that cannot see it cannot check it.</summary>
+    internal static (string? Code, string Path)? ResolveVariantForTest(ContentPiece piece, string? modelCode)
+        => ResolveVariant(piece, modelCode);
+
+    /// <summary>
+    /// How a resolved content model has to be published — or that it cannot be, for this wearer.
+    /// <para/>
+    /// The whole question is whether the game's race deform helps or hurts. It deforms a model by the race
+    /// code of the PATH it loaded from, so:
+    /// <list type="bullet">
+    /// <item>a model in cut space is deformed onto the wearer, which is what every content piece has relied
+    /// on since the feature existed;</item>
+    /// <item>a model authored at the wearer's own race is already the right shape, so it goes on a carrier
+    /// with its EQDP entry set and takes no deform at all;</item>
+    /// <item>anything else — a Hrothgar reaching a Roegadyn model down the fall-through chain — would need a
+    /// deform between two races that Proteus does not do, and publishing it either way is wrong. It is
+    /// refused rather than rendered at the wrong size.</item>
+    /// </list>
+    /// Cut space is tested FIRST and that ordering is load-bearing. For a Midlander F wearing a c0201 pack
+    /// all three codes are the same; taking the native arm there would move a piece that works today off an
+    /// appended ring and onto a carrier, spending a host slot to change nothing.
+    /// <para/>
+    /// Being in the shared shape is decided on the CODE, not by comparing it to this character's cut code.
+    /// Those are different questions and conflating them refused packs that work: <paramref name="cutCode"/>
+    /// is voted off the paths the body was cut from, and a character whose skin comes from a whole-body
+    /// model votes their own race — so an Au Ra in a c0201 pack had a resolved code matching neither arm and
+    /// lost every piece to the "no race fit" branch, which exists for a different problem entirely.
+    /// </summary>
+    internal static ShellSurfaceKey? ContentSurface(
+        ShellSurfaceKey declared, string? resolvedCode, string? wearerCode, string cutCode)
+    {
+        // A sidecar that names a surface by hand means it; this only decides for the default.
+        if (!declared.IsBody) return declared;
+
+        // One model for everyone. The pack named no race, so there is no race to disagree with.
+        if (resolvedCode == null) return declared;
+
+        // c0101/c0201 IS cut space, by definition — the game deforms it onto whoever wears it.
+        if (ModelRace.IsSharedShape(resolvedCode)) return declared;
+        if (string.Equals(resolvedCode, cutCode, StringComparison.OrdinalIgnoreCase)) return declared;
+        if (wearerCode != null && string.Equals(resolvedCode, wearerCode, StringComparison.OrdinalIgnoreCase))
+            return new ShellSurfaceKey(ShellSurfaceKind.Native, resolvedCode);
+        return null;
+    }
+
+    /// <summary>
+    /// What makes two pieces share one published material, and therefore one of the host's ten slots.
+    /// <para/>
+    /// Everything that decides the material's BYTES is in here and nothing else is: the mod it came from,
+    /// the .mtrl file, the colour rows stamped into it, and the animated glow — which decides whether the
+    /// material is the pack's own or one rebuilt onto characterscroll, and at what speed it scrolls. Two
+    /// pieces agreeing on all of them would publish the same file twice and spend a slot each, so they
+    /// publish it once and both draw with it. Different colours or a different glow really are a different
+    /// material and legitimately cost two; merging on the effect NAME alone would silently hand one option
+    /// the other's speed.
+    /// <para/>
+    /// The SURFACE is in the key despite having nothing to do with the bytes. A Body piece and a Face piece
+    /// are allocated to different hosts — a natively-authored face must not be race-deformed, so only a
+    /// carrier can hold it — and one material cannot live on two models at once however identical it is.
+    /// <para/>
+    /// Note what is NOT here: the model path. Sharing a material ACROSS models is the entire point. Which
+    /// meshes a unit draws is <see cref="ContentGeometryKey"/>'s job, deduped inside the unit.
+    /// </summary>
+    internal static string ContentUnitKey(
+        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson, string? glowKey = null)
+        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-", glowKey ?? "-");
+
+    /// <summary>
+    /// What makes two meshes the same mesh WITHIN a unit — the resolved model, and the material its meshes
+    /// are bound by.
+    /// <para/>
+    /// Keyed on the RESOLVED model path, never on <see cref="ContentPiece.Model"/>. That field is empty for
+    /// anything the importer wrote: a model path names the race it was authored for, so the paths live in
+    /// <see cref="ContentPiece.Models"/> and only a hand-authored sidecar fills Model in. Keying on it made
+    /// every piece of a pack that shares one material look identical, and a mod offering a belly piercing
+    /// and a hip piercing could only ever show whichever discovery reached first.
+    /// </summary>
+    internal static string ContentGeometryKey(string modelRel, string materialLeaf)
+        => modelRel + '\u0000' + materialLeaf;
+
+    /// <summary>
+    /// The material names of a model's LOD0 meshes that actually have vertices, in declaration order.
+    /// <para/>
+    /// Emptied meshes are the norm in a content pack: an author starts from a stock model, deletes the
+    /// vanilla geometry and adds their own, leaving zero-vertex meshes still bound to the vanilla materials.
+    /// Those materials are declared but never drawn, so asking a pack to bind them would reject it over
+    /// meshes that emit nothing.
+    /// </summary>
+    internal static List<string> UsedMaterialNames(byte[] model, List<string> declared)
+    {
+        var used = new List<string>();
+        foreach (var name in declared)
+        {
+            if (used.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            var leaf = name;
+            if (SecondSkinWriter.TryReadLod0Geometry(model, out var pos, out _, out _,
+                    SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        { leaf.TrimStart('/') }))
+                && pos.Length >= 3)
+                used.Add(name);
+        }
+        return used;
+    }
 
     /// <summary>
     /// Write only if the content differs; reports whether it did.
@@ -174,6 +405,24 @@ public sealed class SecondSkinService
     // Layer count last warned about as over the host's material budget — so the chat guidance prints once
     // per changed situation, not every composite. -1 = not currently over budget.
     private int _lastOverBudgetLayers = -1;
+
+    // Content pieces last warned about as unplaceable, so that chat notice prints once per changed
+    // situation rather than every composite. -1 = everything currently fits.
+    private int _lastUnhostedContent = -1;
+
+    /// <summary>
+    /// Mod directory → why none of that pack's content pieces can be worn by this character, in the words
+    /// the panel shows. Empty when everything fits.
+    /// <para/>
+    /// Instance state rather than part of <see cref="Result"/> because <see cref="Build"/> returns null when
+    /// no host took anything — which is exactly the case this has to explain. A pack built for another race,
+    /// enabled on its own, produces no hosts and no result, and the reason would go nowhere.
+    /// <para/>
+    /// Assembled on the composite thread and swapped in as one reference, the same publish contract the
+    /// compositor's own maps use.
+    /// </summary>
+    public volatile IReadOnlyDictionary<string, string> UnwearableContent =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     // Surfaces last warned about as unhostable, joined, so that guidance prints once per changed situation
     // too. Keyed on the SET rather than a count: swapping one face overlay for another keeps the count at 1
@@ -325,9 +574,21 @@ public sealed class SecondSkinService
         // CompositorService.HumanPartModelsFromModels). These are the ONLY source of non-body geometry —
         // there is no rebuild-from-a-code fallback, because a human part loads from its literal path and an
         // absence here means the character genuinely is not drawing it.
-        IReadOnlyList<string>? humanPartModels = null)
+        IReadOnlyList<string>? humanPartModels = null,
+        // Geometry imported content packs contribute this composite — their own meshes and materials,
+        // appended into the carrier verbatim rather than cut from the character. Allocated to hosts AFTER
+        // the gear shells above, from whatever material capacity they leave, so a character with no content
+        // packs gets a bit-identical shell allocation to before this existed.
+        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
     {
-        if (gearOverlays.Count == 0) return null;
+        int contentIn = contentLayers?.Count ?? 0;
+
+        // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
+        // resets it, and several paths below return before the content loop runs — turn off the pack that
+        // could not be worn and the panel would go on explaining it, having never been told otherwise.
+        UnwearableContent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (gearOverlays.Count == 0 && contentIn == 0) return null;
 
         // Which "v####" folder the game will ask for a host's materials under.
         //
@@ -391,6 +652,9 @@ public sealed class SecondSkinService
         // can hold SEVERAL: a mod/option may carry more than one gear overlay, all baking the same shared
         // colour table, so a row's glow must reach every one of their shell materials.
         var shellMaterials = new Dictionary<(string, string?, string?), List<string>>();
+        // Per mod, the content materials backing a drawn mesh — see Result.ContentMaterials for why the
+        // declared set is not good enough, and why this is not the hosted set either.
+        var contentMaterials = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
         var modelsDir = Path.Combine(outputRoot, "models");
         var materialsDir = Path.Combine(outputRoot, "materials");
@@ -406,7 +670,11 @@ public sealed class SecondSkinService
         // gen2 (vanilla) is opt-in per the gear mode, exactly like the skin layer's gen2 sibling — but the
         // gate is per-PART, not per-character: a bibo torso plus a vanilla skirt's exposed legs is ONE
         // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
-        bool anyGen2Allowed = gen2Allowed == null || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
+        // Content packs are in the "allowed" set unconditionally: they paint nothing onto the body, and the
+        // body is resolved here only to derive the cut code and the hosts. Gating them out would leave a
+        // vanilla-bodied wearer with no resolved parts at all and drop a pack that never touched her skin.
+        bool anyGen2Allowed = gen2Allowed == null || contentIn > 0
+                           || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
 
         // FFXIV keys EQUIPMENT to a model race, not the character's race. Viera and Hrothgar wear Midlander
         // models, race-deformed onto their own skeleton, so a c1801 character's gear, accessories AND e0000
@@ -540,6 +808,12 @@ public sealed class SecondSkinService
             modelCode ??= charCode;
         }
 
+        // Non-null from here, and pinned into its own local rather than left to flow analysis: the block
+        // above always ends in a value, but Build is long enough that the compiler stops carrying that
+        // guarantee to the far end of it — and scattering `!` at each use would be asserting the same fact
+        // five times with nothing to point at.
+        string equipCode = modelCode;
+
         if (!string.Equals(modelCode, charCode, StringComparison.OrdinalIgnoreCase))
             log.Information("[Proteus] second skin: c{0} wears c{1} equipment models (race-deformed) — any "
                           + "bare slot the live walk missed is rebuilt in c{1}", charCode, modelCode);
@@ -569,7 +843,7 @@ public sealed class SecondSkinService
             // (nothing drawn there, or the walk came back empty) — same path as before.
             var bareBody = bareBodyModels != null && bareBodyModels.TryGetValue(part, out var drawnBare)
                 ? drawnBare
-                : $"chara/equipment/e0000/model/c{modelCode}e0000_{part}.mdl";
+                : $"chara/equipment/e0000/model/c{equipCode}e0000_{part}.mdl";
             var bodyGamePath = equippedPartModels != null && equippedPartModels.TryGetValue(part, out var eq)
                 ? eq
                 : bareBody;
@@ -816,7 +1090,7 @@ public sealed class SecondSkinService
         // Majority, because one host serves the whole shell: a race-native gear top cut beside bare c0201
         // legs is genuinely two spaces at once. Ties and unreadable paths fall back to the equipment code.
         var cutVotes = CodeVotes(bodies.Select(b => b.Path));
-        var cutCode = modelCode;
+        var cutCode = equipCode;
         if (cutVotes.Count == 1
             // A tie means the shell is half in each space and neither is more right than the other, so
             // keep the equipment code rather than letting grouping order decide it.
@@ -836,7 +1110,7 @@ public sealed class SecondSkinService
             cutCode, bodies.Count,
             cutVotes.Count > 0
                 ? string.Join(", ", cutVotes.Select(g => $"c{g.Key}x{g.Count()}"))
-                : $"no readable path codes, fell back to the equipment code c{modelCode}");
+                : $"no readable path codes, fell back to the equipment code c{equipCode}");
 
         // ── the surfaces this build cuts from ─────────────────────────────────────────────────
         // The body first — it is the only surface assembled from everything resolved above, and the only one
@@ -881,13 +1155,26 @@ public sealed class SecondSkinService
             return keys[0];
         }
 
-        // The .mdl folder a human part's models live under, matching ShellSurfaceKind.
-        static string PartFolder(ShellSurfaceKind kind) => kind switch
+        // The .mdl folder a human part's models live under, matching ShellSurfaceKind — or null for a kind
+        // that names no such folder.
+        //
+        // Body and Native are the two, for opposite reasons: a Body surface is cut from equipment, and a
+        // Native one is a pack's OWN geometry published at a race rather than a part cut from the character.
+        // Neither has a chara/human folder to read from, and the old catch-all quietly called both "zear"
+        // and went looking for Viera ears.
+        //
+        // Null rather than a throw. The kind is deserialised from a sidecar someone can hand-edit, and JSON
+        // will map a number naming no member straight onto the enum; throwing turned one unresolvable
+        // overlay into a failed composite that loses every shell, where returning null drops that overlay
+        // alone with a line saying so — which is what the resolver already does for every other way a
+        // surface can fail to resolve.
+        static string? PartFolder(ShellSurfaceKind kind) => kind switch
         {
             ShellSurfaceKind.Face => "face",
             ShellSurfaceKind.Hair => "hair",
             ShellSurfaceKind.Tail => "tail",
-            _                     => "zear",
+            ShellSurfaceKind.Ear  => "zear",
+            _                     => null,
         };
 
         // Resolve one human-part surface: the model the character is DRAWING for it, cut down to the meshes
@@ -899,7 +1186,14 @@ public sealed class SecondSkinService
         // to cut. Guessing here would cut a shell for a face she isn't wearing.
         ResolvedSurface? ResolveHumanSurface(ShellSurfaceKey key, IReadOnlySet<string> targetLeaves)
         {
-            var folder = $"/obj/{PartFolder(key.Kind)}/{key.Id}/";
+            if (PartFolder(key.Kind) is not { } part)
+            {
+                log.Warning("[Proteus] second skin: {0} overlay(s) skipped — {1} names no human part to cut "
+                          + "from. Check the Surface in this mod's sidecar", key, key.Kind);
+                return null;
+            }
+
+            var folder = $"/obj/{part}/{key.Id}/";
             var candidates = (humanPartModels ?? [])
                 .Where(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)).ToList();
             if (candidates.Count == 0)
@@ -1001,6 +1295,275 @@ public sealed class SecondSkinService
         for (int i = 0; i < gearOverlays.Count; i++)
             if (layerSurface[i] < 0) droppedLayers.Add(i);
 
+        // ── imported content, resolved into units before anything is allocated ────────────────
+        // A UNIT is one published MATERIAL and every mesh drawn with it, because a material is what costs a
+        // slot on the host. Pieces that want the same .mtrl with the same colours therefore land in one unit
+        // and spend one slot between them — a pack of five piercings on a single material is the ordinary
+        // shape, and charging it five of ten would be most of the budget for one mod.
+        //
+        // Resolved here, before anything is allocated: a piece that cannot be built must never consume
+        // capacity a shell could have used, and its reason is reported once rather than once per host.
+        var contentUnits = new List<ContentUnit>();
+        var unitByKey = new Dictionary<string, ContentUnit>(StringComparer.OrdinalIgnoreCase);
+        var unitGeometry = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Model path → its bytes and the materials its LOD0 meshes actually draw with. A null Model is a
+        // file that could not be read, cached so the warning is printed once rather than per option.
+        // Attrs rides along with Used because both are properties of the MODEL, not of the option that
+        // named it — and a pack whose options all point at one file was re-parsing it once per option just
+        // to read the same attribute table back.
+        var modelCache =
+            new Dictionary<string, (byte[]? Model, List<string> Used, List<string> Attrs)>(
+                StringComparer.OrdinalIgnoreCase);
+
+        // Mod directory → why none of its pieces can be worn, for the panel to say out loud. Recorded per
+        // MOD rather than per piece: a pack authored for one race fails identically for every piece it has,
+        // and fifteen copies of the same sentence is not more informative than one. First reason wins.
+        var unwearable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Unwearable(string modDir, string reason)
+        {
+            if (!unwearable.ContainsKey(modDir)) unwearable[modDir] = reason;
+        }
+
+        // A mod's live Penumbra selection, fetched once per mod per composite. Only the IMC hide-toggles
+        // need it — every other gate is resolved upstream into the content layers — and a pack's options do
+        // not change mid-build, so asking again for each of its nine materials would be nine round trips
+        // for one answer. Null (Penumbra unavailable, or the mod unknown to it) leaves every toggle at the
+        // pack's own default, which is the state it ships in.
+        //
+        // Marshalled ONTO THE FRAMEWORK THREAD, unlike the ResolvePlayer calls elsewhere in this build.
+        // This reads Penumbra's collection state, which a user editing a collection is concurrently
+        // writing, and every other caller of GetModSettings in this plugin is already on that thread — the
+        // draw loop and the ModSettingChanged handler. Blocking for a frame is affordable because the cache
+        // makes it once per mod; the same trade CompositorService makes for GetActivePlayerMaterialPaths.
+        var selectionCache = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(
+            StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, List<string>>? ModSelection(string modDir)
+        {
+            if (selectionCache.TryGetValue(modDir, out var known)) return known;
+            IReadOnlyDictionary<string, List<string>>? found = null;
+            try
+            {
+                found = Plugin.Framework.RunOnFrameworkThread(() =>
+                        penumbra.GetPlayerCollectionId() is { } id
+                            ? penumbra.GetModSettings(id, modDir)?.Options
+                            : null)
+                    .GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                log.Warning("[Proteus] content: could not read {0}'s Penumbra settings ({1}) — its hide "
+                          + "toggles fall back to the pack's defaults", modDir, ex.Message);
+            }
+            return selectionCache[modDir] = found;
+        }
+
+        for (int i = 0; i < contentIn; i++)
+        {
+            var (cEntry, rc) = contentLayers![i];
+            var piece = rc.Piece;
+            var modRoot = cEntry.ModRoot;
+            // TWO codes, and they are not the same question.
+            //
+            // equipCode is what this character's GEAR loads at — usually the shared c0201/c0101, because most
+            // sets ship no per-race model. charCode is the character's own race. A pack in the shared shape
+            // is found by the first; a pack built for one race is found only by the second, and looking for
+            // it under equipCode is why a Miqo'te could not wear a Miqo'te-authored pack: their gear still
+            // loads at c0201, so the c0801 model was never even a candidate.
+            //
+            // Shared shape first, so a pack offering both keeps the cheaper, deform-able path.
+            var ownCode = drawnRaceCode ?? charCode;
+            var variant = ResolveVariant(piece, equipCode)
+                       ?? ResolveVariant(piece, ownCode);
+            if (modRoot == null || variant is not { } v)
+            {
+                // Named by RACE, not by code. "ships [c0801]" tells a modder something and tells everyone
+                // else nothing, and this is the message that has to explain an enabled pack showing nothing.
+                var reason = string.Format(Strings.Content.NotForYourRaceFmt,
+                    ModelRace.DescribeAll(piece.ModelCodes), ModelRace.Describe(ownCode));
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
+                Unwearable(cEntry.ModDirectory, reason);
+                continue;
+            }
+            var modelRel = v.Path;
+
+            // Cut space or native — see ContentSurface. Null means the model is authored for neither, and
+            // publishing it either way would put it on the character at the wrong size.
+            var surfaceKey = ContentSurface(piece.SurfaceKey, v.Code, ownCode, bodySurface.CutCode);
+            if (surfaceKey is not { } pieceSurface)
+            {
+                var reason = string.Format(Strings.Content.NoRaceFitFmt,
+                    ModelRace.Describe(v.Code), ModelRace.Describe(ownCode));
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
+                Unwearable(cEntry.ModDirectory, reason);
+                continue;
+            }
+
+            // Read and inspected ONCE per file, however many options name it. Two options binding different
+            // meshes of one .mdl is ordinary, and the scan below is not cheap — UsedMaterialNames walks the
+            // LOD0 geometry once per declared material. Handing back the same byte[] also lets the writer's
+            // reference-keyed parse cache recognise it as one model rather than parsing it twice.
+            var modelPath = Path.Combine(modRoot, modelRel);
+            if (!modelCache.TryGetValue(modelPath, out var parsedModel))
+            {
+                try
+                {
+                    var bytes = File.ReadAllBytes(modelPath);
+                    // The attribute table fails on its own terms: it is what the pack's hide toggles resolve
+                    // through, and losing it costs those toggles, not the piece. Everything else about a
+                    // model whose submesh ranges will not walk still reads.
+                    List<string> attrs;
+                    try { attrs = [.. SecondSkinWriter.AttributeNames(bytes)]; }
+                    catch (Exception ex)
+                    {
+                        attrs = [];
+                        log.Warning("[Proteus] content: {0} — could not read {1}'s attribute table, so its "
+                                  + "hide toggles do nothing ({2})", cEntry.ModDirectory, modelRel, ex.Message);
+                    }
+                    parsedModel = (bytes, UsedMaterialNames(bytes, SecondSkinWriter.MaterialNames(bytes)), attrs);
+                }
+                catch (Exception ex)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} could not be read as a model ({4})",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel, ex.Message);
+                    parsedModel = (null, [], []);
+                }
+                modelCache[modelPath] = parsedModel;
+            }
+            if (parsedModel.Model == null) continue;   // unreadable, and already reported
+            var model = parsedModel.Model;
+
+            // Which of the model's materials actually carry geometry. A pack commonly ships a stock model
+            // with the vanilla meshes emptied out (0 vertices) and its own mesh added, so the materials on
+            // those empty meshes are declared but never drawn — demanding a binding for them would reject
+            // a pack over meshes that emit nothing.
+            var used = parsedModel.Used;
+            if (used.Count == 0)
+            {
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} has no LOD0 geometry at all, skipping",
+                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel);
+                continue;
+            }
+
+            // The pack's own hide-toggles, applied by DROPPING geometry rather than by letting the game do
+            // it. The game reads an IMC attribute mask off the item being worn, and these meshes are about
+            // to move onto a host accessory — so the pack's own mask governs a set nobody has equipped.
+            // See ContentAttributeGroup.
+            IReadOnlySet<string>? hidden = null;
+            if (cEntry.Metadata.ContentAttributes is { Count: > 0 } attrGroups)
+            {
+                hidden = HiddenAttributes(attrGroups, modelRel, parsedModel.Attrs,
+                    ModSelection(cEntry.ModDirectory));
+                if (hidden is { Count: > 0 })
+                    log.Information("[Proteus] content: {0} — {1} hides [{2}]",
+                        cEntry.ModDirectory, modelRel, string.Join(", ", hidden));
+            }
+
+            foreach (var leaf in used)
+            {
+                // Binding is by NAME and never guessed — see ContentPiece.Materials. A mesh whose material
+                // the pack does not ship is dropped, loudly, with the fix in the message: the alternative is
+                // binding it to whatever else is lying around, which renders a metal piercing as skin.
+                var rel = piece.MaterialFor(leaf);
+                if (rel == null)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — mesh material {3} is not bound to any "
+                              + "material this pack ships, so those meshes are dropped. Rebind the mesh to one "
+                              + "of [{4}] and re-export",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", leaf,
+                        string.Join(", ", piece.Materials.Values));
+                    continue;
+                }
+
+                byte[] mtrl;
+                try { mtrl = File.ReadAllBytes(Path.Combine(modRoot, rel)); }
+                catch (Exception ex)
+                {
+                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — material {3} could not be read ({4})",
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", rel, ex.Message);
+                    continue;
+                }
+
+                // Per-MATERIAL settings win over the option's. That is where the colour panel writes, because
+                // a tab governs a material: a pack holding nine accessories in one always-on piece has one
+                // option and nine materials, and per-option storage gave all nine tabs the same settings.
+                // The option's values remain the fallback, so packs edited before that keep their colours.
+                var matSettings = cEntry.Metadata.PeekMaterialSettings(rel);
+                var rowPresets = matSettings?.ColorTableRows ?? rc.ColorTableRows;
+                var rows = BuildSparseRows(rowPresets);
+
+                // Only a glow that actually names an effect counts. A preset left behind with its numbers
+                // but no scroll map is not a glow, and treating it as one would split a material slot for
+                // nothing.
+                var glowSource = matSettings?.Glow ?? rc.Glow;
+                var glow = glowSource?.GlowKey() != null ? glowSource : null;
+                var key = ContentUnitKey(cEntry.ModDirectory, pieceSurface, rel,
+                    rows == null ? null : JsonSerializer.Serialize(rowPresets), glow?.GlowKey());
+
+                if (!unitByKey.TryGetValue(key, out var unit))
+                {
+                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, glow, pieceSurface, [], []);
+                    contentUnits.Add(unit);
+                }
+
+                // Recorded HERE, where the material is known to back a drawn mesh — not down at the emit
+                // loop, which only sees the units a host had room for. A piece the user can see but that
+                // spilled past the material budget still needs its colour grid; see Result.ContentMaterials.
+                if (!contentMaterials.TryGetValue(cEntry.ModDirectory, out var modMats))
+                    contentMaterials[cEntry.ModDirectory] =
+                        modMats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                modMats.Add(rel);
+
+                // Same mesh of the same model twice — an option listing a piece it already lists, or two
+                // options sharing one file — is still drawn once.
+                if (unitGeometry.Add(key + '\u0000' + ContentGeometryKey(modelRel, leaf)))
+                    unit.Geometries.Add(new ContentGeometry(model,
+                        SecondSkinWriter.KeepByLeaf(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                            { leaf.TrimStart('/') }),
+                        // characterscroll samples its scroll map with uv1, so a glowing mesh is the only
+                        // content mesh that is not copied byte-for-byte. Per GEOMETRY rather than per layer:
+                        // the glow belongs to the unit, and the unit is what owns these.
+                        MirrorUv1: glow != null,
+                        // The pack's own hide toggles, baked in — see ContentGeometry.HiddenAttributes.
+                        HiddenAttributes: hidden));
+
+                // Every option this material serves, so the colour editor can find it under any of them.
+                // Compared case-insensitively, as option names are everywhere else in this codebase.
+                if (!unit.Owners.Any(o =>
+                        string.Equals(o.Content.OptionGroup, rc.OptionGroup, StringComparison.OrdinalIgnoreCase)
+                     && string.Equals(o.Content.Option, rc.Option, StringComparison.OrdinalIgnoreCase)))
+                    unit.Owners.Add((cEntry, rc));
+            }
+        }
+
+        // Published the moment the loop that fills it ends, and NOT later. Sitting it beside the host
+        // allocation looked equivalent and was not: a pack refused for its race is the run where nothing
+        // gets hosted, so the build returns at the `placed == 0` guard well before that point and the reason
+        // never reached the panel — which then said "no active options", the exact unhelpful line this
+        // exists to replace. It appeared only when some unrelated overlay happened to publish something.
+        UnwearableContent = unwearable;
+
+        // The surfaces those units live on, resolved AFTER the gear layers so a key both use is the one cut
+        // from real geometry. A surface introduced HERE carries no sources at all: the piece brought its own
+        // meshes, so the surface exists only to name the race space it was authored in and — through
+        // RequiresNativeHost — which hosts are allowed to carry it.
+        var unitSurface = new int[contentUnits.Count];
+        var contentByKey = new Dictionary<ShellSurfaceKey, int>();
+        for (int i = 0; i < contentUnits.Count; i++)
+        {
+            var key = contentUnits[i].Surface;
+            if (resolvedByKey.TryGetValue(key, out var known) && known >= 0) { unitSurface[i] = known; continue; }
+            if (contentByKey.TryGetValue(key, out var made)) { unitSurface[i] = made; continue; }
+
+            // A natively-authored part is already the character's own shape, so its space is the character's
+            // own race — not the shared equipment cut space the body lives in.
+            var cut = key.IsBody ? bodySurface.CutCode : (drawnRaceCode ?? charCode);
+            surfaces.Add(new ResolvedSurface(key, [], [], cut, null));
+            contentByKey[key] = surfaces.Count - 1;
+            unitSurface[i] = surfaces.Count - 1;
+        }
+
         // Accessories the shell can spill across, in fill priority (glasses -> rings -> bracelet -> necklace
         // -> Emperor fallback). Each holds MaxMaterials - BaseMatCount layers; layers are distributed across
         // them so a big look can span several items. An already-equipped host APPENDS; the Emperor REPLACES.
@@ -1008,7 +1571,7 @@ public sealed class SecondSkinService
         // Chosen against the BODY's cut space. With one surface that is simply the shell's space; with more
         // than one, the body is the surface that has to be able to spill across several hosts, and the
         // others are carrier-only anyway (ShellSurfaceKey.RequiresNativeHost).
-        var hosts = ChooseHosts(bodySurface.CutCode, modelCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
+        var hosts = ChooseHosts(bodySurface.CutCode, equipCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
             emperorRingVariant, invisibleGlassesVariant);
 
         // Which surface each host carries. A host is one model at one path with one EQDP entry, so it can
@@ -1176,6 +1739,37 @@ public sealed class SecondSkinService
         // Layers whose surface could not be resolved at all (the character isn't drawing that part, or its
         // model names no such material). Already logged in detail by the resolver.
         unhostedLayers.AddRange(droppedLayers);
+
+        // ── content units take what the shells left ───────────────────────────
+        // After the shells, and out of the same remaining[]/hostClaim[]/diskBudget state, so a character
+        // with no content packs gets the allocation it always got. One slot per unit, first host that has
+        // room and is allowed to carry that surface; a unit that finds none is reported, never squeezed in
+        // over a shell.
+        var contentWork = new List<(int Unit, int HostIdx)>();
+        var contentUnhosted = new List<int>();
+        for (int u = 0; u < contentUnits.Count; u++)
+        {
+            int surfIdx = unitSurface[u];
+            bool carrierOnly = surfaces[surfIdx].Key.RequiresNativeHost;
+            int chosen = -1;
+            for (int h = 0; h < hosts.Count && diskBudget > 0; h++)
+            {
+                if (remaining[h] <= 0) continue;
+                // A carrier is the only host whose EQDP we may rewrite, so it is the only one that can
+                // publish a natively-authored piece without the game deforming it.
+                if (carrierOnly && hosts[h].BaseModel != null) continue;
+                if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
+                chosen = h;
+                break;
+            }
+            if (chosen < 0) { contentUnhosted.Add(u); continue; }
+
+            remaining[chosen]--;
+            diskBudget--;
+            hostClaim[chosen] = surfIdx;
+            hostSurface[chosen] = surfIdx;
+            contentWork.Add((u, chosen));
+        }
 
         // Per host, and reading THAT host's surface's cut code — not an ambient one. Computed AFTER the
         // allocation, because which surface a host carries is what the allocation decides. This is what lets
@@ -1348,7 +1942,112 @@ public sealed class SecondSkinService
             if (isMaskShell) maskLayers++; else clothLayers++;
         }
 
-        int placed = maskLayers + clothLayers;
+        // ── imported content: the pack's own meshes and its own material ──────────────────────
+        // Everything about the host — its name, its variant folder, its material letter — comes from the
+        // same convention the shells above use, because from the host's side there is no difference: a
+        // content unit is one more material on the accessory. What differs is what fills it. The .mtrl is
+        // the PACK'S, published byte-for-byte (colour rows aside): it already names its own textures and its
+        // own shader, and those textures are still served by the pack's own Penumbra redirects, so there is
+        // nothing here for Proteus to bake.
+        int contentPlaced = 0;
+        foreach (var (u, hIdx) in contentWork)
+        {
+            var unit = contentUnits[u];
+            var host = hosts[hIdx];
+            char matLetter = (char)('a' + host.BaseMatCount + inHost[hIdx]);
+            char diskChar  = DiskId(diskLetter);
+
+            var hostCode = host.ModelPath != null
+                ? PathCharCode(host.ModelPath) ?? plan[hIdx].PublishCode
+                : plan[hIdx].PublishCode;
+            string matName     = $"mt_c{hostCode}{host.Prefix}{host.SetId:D4}_{host.Slot}_{matLetter}.mtrl";
+            string matVariant  = VariantFolderFor(host);
+            string matGamePath = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/material/{matVariant}/{matName}";
+            string texPrefix   = $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{diskChar}_";
+
+            byte[]? mtrl;
+            bool glowBuilt = false;
+            if (unit.Glow != null)
+            {
+                mtrl = BuildContentGlowMaterial(unit, texPrefix, texturesDir, diskChar, effectsFolder,
+                    redirects, ref shellChanged);
+                glowBuilt = mtrl != null;
+                // The pack's own material rather than nothing: an effect file that has gone missing, or a
+                // template the game could not hand us, must not take the piece off the character.
+                mtrl ??= GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+            }
+            else
+            {
+                // Only the colour rows the user edited are stamped in; every other row stays as the author
+                // left it. PatchColorTable no-ops on a material with no colour set, so a pack that ships one
+                // is not a requirement — it just cannot be recoloured.
+                mtrl = GearMaterialWriter.PatchColorTable(unit.Mtrl, unit.Rows);
+            }
+
+            var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
+            shellChanged |= WriteIfChanged(matDisk, mtrl);
+            redirects[matGamePath] = Rel(outputRoot, matDisk);
+
+            // Same "ss_" naming as a shell, deliberately: ShellColorsetApplier and ColorTableHighlighter
+            // both key on that prefix and on the single disk char, so a content material gets the live
+            // colour re-assert and the editor's glow highlight for free.
+            //
+            // Registered under EVERY option this material serves. One shared material is reached from any of
+            // the options that share it, and keying it to only the first would leave the colour editor's
+            // glow button pointing at nothing for all the others.
+            foreach (var (oEntry, oContent) in unit.Owners)
+            {
+                var cKey = (oEntry.ModDirectory, oContent.OptionGroup, oContent.Option);
+                if (!shellMaterials.TryGetValue(cKey, out var cList))
+                    shellMaterials[cKey] = cList = new List<string>();
+                cList.Add($"ss_{diskChar}.mtrl");
+            }
+
+            perHostLayers[hIdx].Add(new SecondSkinLayer
+            {
+                MaterialName = "/" + matName,   // the model stores material names with a leading slash
+                Geometry = unit.Geometries,
+            });
+            inHost[hIdx]++; diskLetter++;
+            contentPlaced++;
+
+            // The glow state is in here because its absence is otherwise invisible: a unit that resolved no
+            // effect, and one whose effect failed to build and fell back to the pack's own material, publish
+            // the same-looking line and the same-looking piece. Says which of the two, every composite.
+            log.Information("[Proteus] content mat={0}/{7}/disk={1} -> host {2}{3:D4}/{4}: {5} — {8} mesh(es) "
+                          + "for [{6}] glow={9}",
+                matLetter, diskChar, host.Prefix, host.SetId, host.Slot,
+                unit.Entry.ModDirectory,
+                string.Join(", ", unit.Owners.Select(o => o.Content.Option ?? "(default)")),
+                matVariant, unit.Geometries.Count,
+                unit.Glow?.Scroll is { Length: > 0 } s
+                    ? (glowBuilt ? s : s + " (FAILED — published the pack's own material)")
+                    : "(none)");
+        }
+
+        if (contentUnhosted.Count > 0)
+        {
+            // In chat as well as the log, and deduped by count the same way the over-budget notice is. A
+            // piece that silently does not appear is the failure mode this whole file is most careful about:
+            // nothing on screen says the accessory ran out of material slots, and the mod, its option and
+            // its enable state all still look completely correct.
+            if (_lastUnhostedContent != contentUnhosted.Count)
+            {
+                _lastUnhostedContent = contentUnhosted.Count;
+                var msg = string.Format(Loc.Localize("Chat.ContentUnplaced.Fmt",
+                    "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are "
+                  + "out of material slots. Equip another ring / bracelet / necklace, or turn off a layer."),
+                    contentUnhosted.Count);
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+            }
+            log.Warning("[Proteus] content: {0} piece material(s) could not be placed — every host is full or "
+                      + "cannot carry their surface. Free an accessory slot, or turn off a layer",
+                contentUnhosted.Count);
+        }
+        else _lastUnhostedContent = -1;
+
+        int placed = maskLayers + clothLayers + contentPlaced;
         if (placed == 0) return null;
 
         // Layers whose SURFACE could not be hosted, reported apart from a capacity overflow because the
@@ -1383,7 +2082,7 @@ public sealed class SecondSkinService
         // Guidance when even all equipped accessories can't hold the look (deduped by total layer count).
         if (overBudget > 0)
         {
-            int totalLayers = placed + overBudget;
+            int totalLayers = maskLayers + clothLayers + overBudget;
             int totalMask = maskLayers + overBudgetMask;
             if (_lastOverBudgetLayers != totalLayers)
             {
@@ -1426,8 +2125,24 @@ public sealed class SecondSkinService
             SecondSkinWriter.Stats stats;
             try
             {
-                shell = SecondSkinWriter.Build(surface.Sources, perHostLayers[h], host.BaseModel,
+                // A host filled entirely with imported content needs NO sources: every layer brought its own
+                // geometry, so parsing the body here would cost the whole header walk to contribute nothing —
+                // and worse, the merged model's flags and LOD block are taken from source 0, which would then
+                // describe a body rather than the piece actually being emitted.
+                var srcs = perHostLayers[h].All(l => l.Geometry.Count > 0)
+                    ? []
+                    : surface.Sources;
+                shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                     out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
+            }
+            catch (EmptyShellException ex) when (ex.ByToggle)
+            {
+                // Not a failure: the user switched off the only thing this host was carrying. Reported at
+                // Information for the same reason it gets its own arm — an error here sent someone who had
+                // ticked two "hide" checkboxes hunting for a UV-coverage bug.
+                log.Information("[Proteus] second skin: host {0}{1:D4}/{2} has nothing to draw — {3}",
+                    host.Prefix, host.SetId, host.Slot, ex.Message);
+                continue;
             }
             catch (Exception ex)
             {
@@ -1598,7 +2313,7 @@ public sealed class SecondSkinService
         if (hostModelPaths.Count == 0) return null;
 
         return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                          hostModelPaths, appendHostModelPaths);
+                          hostModelPaths, appendHostModelPaths, contentMaterials);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
@@ -1746,6 +2461,15 @@ public sealed class SecondSkinService
     /// failure. The overlay's alpha is written into the NORMAL's BLUE channel — that is what gates
     /// transparency for gear, and therefore what lets stacked shells composite instead of occlude.
     /// </summary>
+    /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
+    /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
+    private static byte[] Solid(byte r, byte g, byte b, byte a)
+    {
+        var t = new byte[TexSize * TexSize * 4];
+        for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
+        return t;
+    }
+
     private List<string>? WriteTextures(
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
@@ -1774,13 +2498,6 @@ public sealed class SecondSkinService
                 scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
             else
                 log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
-        }
-
-        byte[] Solid(byte r, byte g, byte b, byte a)
-        {
-            var t = new byte[TexSize * TexSize * 4];
-            for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
-            return t;
         }
 
         // ── Proteus "Masks" options ──────────────────────────────────────────
@@ -1962,6 +2679,199 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
+    /// Rebuild an imported pack's material onto <c>characterscroll.shpk</c>, so its meshes can carry the
+    /// same animated glow a second-skin shell can. Null when it cannot be done, and the caller falls back to
+    /// publishing the pack's own material — a missing effect file must never take the piece off the wearer.
+    /// <para/>
+    /// Three things make this cheap. The pack's norm/mask/index textures are still served by the pack's OWN
+    /// Penumbra redirects, so the rebuilt material just names the same game paths and nothing is copied.
+    /// The shader's four slots are <c>norm, mask, id, catc</c> with no base, which is exactly what a pack
+    /// like the piercings ships once the scroll map is added. And nothing here touches the pack on disk:
+    /// this runs from <c>unit.Mtrl</c>, re-read every composite, so clearing the effect republishes the
+    /// author's bytes with no undo state to keep.
+    /// <para/>
+    /// What IS lost is a base texture, if the pack has one — characterscroll has no slot for it, and that is
+    /// load-bearing rather than an oversight (see <see cref="GearMaterialWriter.TextureOrder"/>: a base
+    /// present drives the diffuse and the colour table's is ignored, so a glow on white art can never read).
+    /// The panel says so before the user turns it on.
+    /// </summary>
+    private byte[]? BuildContentGlowMaterial(
+        ContentUnit unit, string texPrefix, string texturesDir, char letter, string? effectsFolder,
+        Dictionary<string, string> redirects, ref bool texturesChanged)
+    {
+        var glow = unit.Glow;
+        // ToScrollSettings returns null exactly when Scroll is empty, so a non-null result also pins the
+        // effect name for the lookups below.
+        if (glow?.ToScrollSettings() is not { } scrollSettings || glow.Scroll is not { } effectName) return null;
+
+        // The scroll map, from the mod's own Effects/ folder then the user's library — the same lookup a
+        // shell's glow uses, so one library serves both.
+        var effectPath = SidecarDiscoveryService.ResolveEffectPath(unit.Entry, effectsFolder, effectName);
+        if (effectPath == null)
+        {
+            // The library folder is named as well as the effect. It comes from Penumbra's mod directory, so
+            // it is null whenever that IPC is momentarily unavailable — and a null library silently reduces
+            // the lookup to the pack's own Effects folder, which most packs do not have. That reads exactly
+            // like a missing file while the file is sitting in the library.
+            log.Warning("[Proteus] content: {0} wants effect \"{1}\", which is in neither its own Effects "
+                      + "folder nor the library ({2}) — publishing the pack's own material instead",
+                unit.Entry.ModDirectory, effectName, effectsFolder ?? "(library unavailable)");
+            return null;
+        }
+        var scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+        if (scroll == null)
+        {
+            log.Warning("[Proteus] content: effect \"{0}\" could not be decoded ({1})", effectName, effectPath);
+            return null;
+        }
+
+        var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(RenderModeInference.GlowShader));
+        if (template == null)
+        {
+            log.Error("[Proteus] content: missing the {0} template material", RenderModeInference.GlowShader);
+            return null;
+        }
+
+        // The pack's own texture paths, kept verbatim. A slot the pack doesn't name gets the same fallback
+        // WriteTextures picks for a shell, written beside the scroll map.
+        var packTex = TextureLoader.ParseMtrlBytes(unit.Mtrl);
+        var outputRoot = Directory.GetParent(texturesDir)!.FullName;
+        // A ref parameter can't be captured by a local function; folded back into the caller's flag below.
+        bool wroteAnything = false;
+
+        string? Publish(string slot, byte[] rgba)
+        {
+            var gamePath = texPrefix + slot + ".tex";
+            var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
+            // Same rules as the shell path: never compress "id" (its red/green are discrete row selectors
+            // and a lossy bucket crossing picks the wrong row), BC7 for the continuous ones.
+            var encoding = config.EnableCompression && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase)
+                ? TexEncoding.Bc7
+                : TexEncoding.Uncompressed;
+
+            var hash = Hash(rgba) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
+            {
+                if (!textureLoader.WriteTex(rgba, TexSize, TexSize, disk, encoding))
+                {
+                    log.Error("[Proteus] content: failed to write {0}", disk);
+                    return null;
+                }
+                _texHashes[disk] = hash;
+                wroteAnything = true;
+            }
+            redirects[gamePath] = Rel(outputRoot, disk);
+            return gamePath;
+        }
+
+        // Republish the pack's OWN textures under paths Proteus owns, rather than naming the pack's paths
+        // and hoping they resolve to the pack.
+        //
+        // They do not always. A content pack names its textures in whatever namespace its author invented,
+        // and nothing makes that unique: this pack asks for chara/neolithe/neolithe_piercings_index.tex, a
+        // path Neolithe [ALL IN ONE] also claims — and wins. The game therefore sampled ALL IN ONE's index
+        // (red 255 → row 16) while the pack's own selects row 1, so every colour and glow written to row 1
+        // rendered as nothing and the piece drew from row 16's silver instead. The piece looked untouched
+        // and nothing anywhere said another mod had taken the texture.
+        //
+        // Copied by BYTES, not decoded and re-encoded: whatever the author shipped is what gets published,
+        // and WriteIfChanged means a recomposite is not a rewrite.
+        var packRoot = unit.Entry.ModRoot;
+        string? Republish(string slot, string? packPath, byte[] fallback)
+        {
+            // Nothing named at all: the shell's own fallback for an empty slot.
+            if (packPath == null) return Publish(slot, fallback);
+
+            // Named, but the pack does not ship it — a material may legitimately point at a VANILLA game
+            // texture. Keep the author's path so the game supplies it; substituting a flat colour here
+            // would blank a texture that was resolving perfectly well.
+            var file = packRoot == null ? null : ContentTextureFile(packRoot, packPath);
+            if (file == null) return packPath;
+
+            try
+            {
+                var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
+                if (WriteIfChanged(disk, File.ReadAllBytes(file))) wroteAnything = true;
+                var gamePath = texPrefix + slot + ".tex";
+                redirects[gamePath] = Rel(outputRoot, disk);
+                return gamePath;
+            }
+            catch (Exception ex)
+            {
+                log.Warning("[Proteus] content: could not republish {0} ({1}) — naming the pack's own path "
+                          + "instead: {2}", slot, file, ex.Message);
+                return packPath;
+            }
+        }
+
+        // Fallbacks match the shell path exactly, so the two can't disagree about what "no texture" means:
+        // a white mask (a grey one halves the lighting everywhere) and a row-16-A index.
+        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255));
+        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255));
+        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255));
+        var catc = Publish("catc", scroll);
+        texturesChanged |= wroteAnything;
+        if (norm == null || mask == null || id == null || catc == null) return null;
+
+        // Built with NO rows, then the pack's own colour table grafted on, then the user's rows written over
+        // that. Order matters: Build clones vanilla e6257, so grafting is what keeps the author's silver,
+        // metalness and roughness instead of inheriting the template's — and doing it after Build restores
+        // the author's tile alpha, which Build zeroes because a second skin is skin and a piercing is not.
+        var built = GearMaterialWriter.Build(template, [norm, mask, id, catc], rows: null, scroll: scrollSettings);
+        var grafted = GearMaterialWriter.CopyColorTable(built, unit.Mtrl);
+        return GearMaterialWriter.PatchColorTable(grafted, unit.Rows, isScroll: true);
+    }
+
+    /// <summary>
+    /// The file inside a pack that backs one of the textures its material names.
+    /// <para/>
+    /// Penumbra first, because it is the only thing that knows which of the pack's OPTIONS is selected — a
+    /// pack whose texture is a colour picker ships several files under one name, and a plain name search
+    /// would freeze it on whichever the directory walk reached first.
+    /// <para/>
+    /// But its answer is only accepted from inside THIS pack. "What does the game load at this path" and
+    /// "which file did this pack ship" are different questions, and they diverge exactly when another mod
+    /// has claimed the same path — which is the case this republish exists to defeat. Accepting a foreign
+    /// answer would copy the collision into our own output and change nothing.
+    /// <para/>
+    /// Null when the pack ships nothing by that name. That is normal and not an error: a material may name
+    /// a vanilla game texture it does not provide, and that one should keep resolving through the game.
+    /// </summary>
+    private string? ContentTextureFile(string modRoot, string gamePath)
+    {
+        var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+        // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
+        if (viaPenumbra != null
+            && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(viaPenumbra)
+            && IsUnder(modRoot, viaPenumbra))
+            return viaPenumbra;
+
+        try
+        {
+            var leaf = Path.GetFileName(gamePath.Replace('\\', '/'));
+            return leaf.Length == 0
+                ? null
+                : Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="root"/>. Through
+    /// <see cref="Path.GetRelativePath"/> so <c>..</c> and mixed separators cannot smuggle a path out.</summary>
+    private static bool IsUnder(string root, string path)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(Path.GetFullPath(root), Path.GetFullPath(path));
+            return !Path.IsPathRooted(rel)
+                && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && rel != "..";
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
     /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
     /// colour. The index texture can select ANY pair — one the colorset never defined, or the undefined
     /// sub-row of a pair that set only the other — and that row must not paint something the author never
@@ -2001,26 +2911,65 @@ public sealed class SecondSkinService
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
             if (sub == null) return;   // leaves the neutral-white row from the init above
-            var rgb = ParseHex(sub.Diffuse);
-            // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
-            // with a white emissive), falling back to the diffuse when not given.
-            var emis = ParseHex(sub.EmissiveColor) ?? rgb;
-            rows[rowIndex] = new GearColorRow
-            {
-                Diffuse = rgb,
-                Specular = ParseHex(sub.Specular),
-                // Always write emissive — a template's own emissive must be CLEARED, not inherited.
-                // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
-                // white glow and drowns out the scroll map entirely.
-                Emissive = sub.Emissive > 0f && emis is { } c
-                    ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
-                    : (0f, 0f, 0f),
-                SphereMapIndex = sub.SphereMap,
-                SphereMapMask = sub.SphereIntensity,
-                Roughness = sub.Roughness,
-                Metalness = sub.Metalness,
-            };
+            rows[rowIndex] = RowFrom(sub);
         }
+    }
+
+    /// <summary>
+    /// The rows an imported content pack's OWN material should have overwritten — only the ones the user
+    /// actually edited.
+    /// <para/>
+    /// Deliberately NOT <see cref="BuildRows"/>: that one starts from <see cref="NeutralRows"/> and returns
+    /// all 32 rows, because a shell's material is cloned from a vanilla template whose colours have to be
+    /// neutralised wholesale. A content material is the author's own, and everything they set and the user
+    /// did not touch has to survive — so this returns a SPARSE dictionary, and
+    /// <see cref="GearMaterialWriter.PatchColorTable"/> leaves every row not in it alone.
+    /// </summary>
+    internal static Dictionary<int, GearColorRow>? BuildSparseRows(List<ColorTableRowPreset>? presets)
+    {
+        if (presets == null || presets.Count == 0) return null;
+        var rows = new Dictionary<int, GearColorRow>();
+        foreach (var p in presets)
+        {
+            if (p.Row is < 1 or > 16) continue;
+            if (p.SubRowA is { } a) rows[(p.Row - 1) * 2] = RowFrom(a);
+            if (p.SubRowB is { } b) rows[(p.Row - 1) * 2 + 1] = RowFrom(b);
+        }
+        return rows.Count > 0 ? rows : null;
+    }
+
+    /// <summary>One sub-row preset as the material writer's row. Shared by both row builders so a shell and
+    /// a content material can never disagree about what a preset means.</summary>
+    private static GearColorRow RowFrom(ColorTableSubRowPreset sub)
+    {
+        var rgb = ParseHex(sub.Diffuse);
+        // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
+        // with a white emissive), falling back to the diffuse when not given.
+        //
+        // A row with an intensity but NO colour anywhere stays dark, and that is deliberate. The editor's
+        // swatch shows an unset colour as white, so this used to be a genuine mismatch — but the fix for it
+        // belongs where the value is WRITTEN, not here: the Glow slider now stores white the moment someone
+        // raises it (see ColorTableEditor). Resolving it white here instead reinterpreted every row already
+        // authored, and mods carrying an inert Glow value suddenly emitted at full strength — one shipped
+        // bodysuit had five of them and its patterns blew out.
+        var emis = ParseHex(sub.EmissiveColor) ?? rgb;
+        return new GearColorRow
+        {
+            Diffuse = rgb,
+            Specular = ParseHex(sub.Specular),
+            // Always write emissive — a template's own emissive must be CLEARED, not inherited.
+            // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
+            // white glow and drowns out the scroll map entirely.
+            Emissive = sub.Emissive > 0f && emis is { } c
+                ? (c.R * sub.Emissive, c.G * sub.Emissive, c.B * sub.Emissive)
+                : (0f, 0f, 0f),
+            // The dial itself, for characterscroll — see GearColorRow.EmissiveStrength.
+            EmissiveStrength = sub.Emissive,
+            SphereMapIndex = sub.SphereMap,
+            SphereMapMask = sub.SphereIntensity,
+            Roughness = sub.Roughness,
+            Metalness = sub.Metalness,
+        };
     }
 
     private static (float R, float G, float B)? ParseHex(string? hex)
@@ -2034,11 +2983,7 @@ public sealed class SecondSkinService
 
     // ── EQDP ─────────────────────────────────────────────────────────────────
 
-    private static readonly string[] RaceNames =
-    [
-        "Midlander", "Highlander", "Elezen", "Miqote", "Roegadyn",
-        "Lalafell", "AuRa", "Hrothgar", "Viera",
-    ];
+    private static readonly string[] RaceNames = ModelRace.Names;
 
     /// <summary>
     /// The accessory a second skin rides on. For an already-equipped ring/bracelet <see cref="BaseModel"/>
@@ -2432,9 +3377,7 @@ public sealed class SecondSkinService
     /// number: unbounded, <see cref="EqdpFallbackIndex"/>'s catch-all arm made every unknown index look
     /// like a child of Midlander, so <see cref="CanFallThrough"/> waved through pairs like c9101 -> c0101.
     /// A guard that decides how a shell is published should not accept a race that cannot exist.</summary>
-    private static int? RaceIndex(string? code)
-        => code is { Length: >= 2 } && int.TryParse(code.AsSpan(0, 2), out var n)
-        && n > 0 && n <= RaceNames.Length * 2 ? n : null;
+    private static int? RaceIndex(string? code) => ModelRace.Index(code);
 
     /// <summary>
     /// The race the game falls through to when a set declares no model for <paramref name="n"/>, or 0 at
@@ -2442,15 +3385,7 @@ public sealed class SecondSkinService
     /// encodes): most races fall to their own gender's Midlander, with three exceptions — Hrothgar males
     /// go to Roegadyn males, Lalafell females to Lalafell males, and Midlander females to Midlander males.
     /// </summary>
-    private static int EqdpFallbackIndex(int n) => n switch
-    {
-        1  => 0,   // Midlander male — the root, nothing below it
-        2  => 1,   // Midlander female -> Midlander male
-        11 => 1,   // Lalafell male    -> Midlander male
-        12 => 11,  // Lalafell female  -> Lalafell male
-        15 => 9,   // Hrothgar male    -> Roegadyn male
-        _  => n % 2 == 1 ? 1 : 2,
-    };
+    private static int EqdpFallbackIndex(int n) => ModelRace.Fallback(n);
 
     /// <summary>
     /// Would emptying <paramref name="from"/>'s entry actually land the game on <paramref name="to"/>?

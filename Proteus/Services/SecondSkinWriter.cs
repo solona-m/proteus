@@ -20,6 +20,57 @@ public sealed class SecondSkinLayer
 
     public int CoverageWidth { get; init; }
     public int CoverageHeight { get; init; }
+
+    /// <summary>
+    /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
+    /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
+    /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
+    /// second-skin shell, which is cut from the body sources instead.
+    /// <para/>
+    /// A LIST because a material is what costs a slot on the host, not a mesh. Several pieces of an imported
+    /// pack that want the same material with the same colours — a mod of five piercings usually ships
+    /// exactly one — would otherwise publish byte-identical materials and spend a slot each, out of a budget
+    /// of ten.
+    /// </summary>
+    public IReadOnlyList<ContentGeometry> Geometry { get; init; } = [];
+}
+
+/// <summary>
+/// One imported model and the meshes of it that belong to a layer.
+/// <paramref name="KeepMaterial"/> is matched against the model's own material names (leading slash
+/// included, as the model stores them) — see <see cref="SecondSkinWriter.KeepByLeaf"/>.
+/// <para/>
+/// <paramref name="MirrorUv1"/> overwrites every uv1 slot with the mesh's own uv0. It is the ONE deviation
+/// from a byte-for-byte copy, and it is set only when the layer's material was rebuilt onto
+/// <c>characterscroll.shpk</c> for an animated glow: that shader samples its scroll map with uv1, and a
+/// model's uv1 is as likely to hold an unrelated aux coordinate as a usable texcoord.
+/// </summary>
+/// <param name="HiddenAttributes">
+/// Attribute names this pack's own toggles currently switch OFF, by the source model's own naming. A
+/// submesh tagged only with these is dropped rather than emitted.
+/// <para/>
+/// Applied here, at build time, because the runtime mechanism cannot survive the move. The game decides a
+/// submesh's visibility from the IMC attribute mask of the item being WORN, and Proteus appends this
+/// geometry onto a host accessory — so the pack's own mask governs a set nobody has equipped, and the
+/// host's governs geometry it knows nothing about. Baking the answer into the mesh sidesteps both, and
+/// composes when several packs share one host, which a single per-item mask could not.
+/// </param>
+public sealed record ContentGeometry(
+    byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
+    IReadOnlySet<string>? HiddenAttributes = null);
+
+/// <summary>
+/// A host's shell came out with no meshes in it.
+/// <para/>
+/// Its own type, and <see cref="ByToggle"/> in particular, because the two ways to get here deserve
+/// opposite reactions. Coverage trimming removing everything is a fault. A pack's own hide toggles
+/// removing everything is the user having switched off the only thing on that host, and reporting it as a
+/// failed build makes a routine action look like a bug.
+/// </summary>
+public sealed class EmptyShellException(string message, bool byToggle) : InvalidOperationException(message)
+{
+    /// <summary>The pack's own show/hide toggles emptied it, rather than anything going wrong.</summary>
+    public bool ByToggle { get; } = byToggle;
 }
 
 /// <summary>
@@ -80,6 +131,73 @@ public static class SecondSkinWriter
     /// far more reliable than guessing from whatever body materials happen to be loaded.
     /// </summary>
     public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
+
+    /// <summary>
+    /// The model's attribute names, in the order its submesh masks index them — bit <c>i</c> of a submesh's
+    /// mask means entry <c>i</c> here.
+    /// <para/>
+    /// The ORDER is the point, and it is why this exists beside the material-keyed reader below. An IMC
+    /// attribute mask addresses these by POSITION rather than by name, so turning "bit 0 is off" into
+    /// "submeshes tagged atr_sne are off" needs the table as the model wrote it. The same pack proves the
+    /// position is not fixed: Denim Shorts lists <c>[atr_sne, atr_hiz]</c> on its Midlander model and
+    /// <c>[atr_hiz, atr_sne]</c> on its Lalafell one.
+    /// </summary>
+    public static IReadOnlyList<string> AttributeNames(byte[] s) => Parse(s).AttrNames;
+
+    /// <summary>
+    /// The model's material names, and for each the attribute names of the LOD0 submeshes drawn with it —
+    /// both from ONE walk of the file. An empty attribute list means the material is drawn unconditionally.
+    /// <para/>
+    /// The attributes are what connect a material to the mod's own checkboxes. A pack holding many
+    /// accessories in one model tags each piece's submeshes with an attribute and gives it an option;
+    /// walking submesh → mask → attribute → option is the only way to say which of the pack's switches a
+    /// given material answers to, and therefore whether its colours are worth showing at all right now.
+    /// <para/>
+    /// One walk because the importer wants both of a file it has just opened, and parsing is the expensive
+    /// half of either question — the pack that motivated this carries 116k vertices across 21 meshes.
+    /// </summary>
+    /// <remarks>
+    /// The two halves fail DIFFERENTLY, and deliberately so. A model whose material names cannot be read is
+    /// not a model this can use, and the exception carries that. Attributes are a nicety on top: they decide
+    /// whether the panel can name a material after the checkbox that reveals it, and losing a whole piece
+    /// over them would trade something that works for something that is merely nicer. The submesh ranges
+    /// this walks are not validated by <see cref="Parse"/> against the submesh count, so a malformed one
+    /// throws here while the names above read perfectly well.
+    /// </remarks>
+    public static (List<string> Names, Dictionary<string, List<string>> Attributes) MaterialsAndAttributes(byte[] s)
+    {
+        var src = Parse(s);
+        var names = ReadMaterialNames(s, src);
+        try { return (names, ReadMaterialAttributes(src)); }
+        catch { return (names, []); }
+    }
+
+    private static Dictionary<string, List<string>> ReadMaterialAttributes(Source src)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        int end = src.Lod0MeshIndex + src.Lod0MeshCount;
+        for (int m = src.Lod0MeshIndex; m < end && m < src.MeshCount; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (BitConverter.ToUInt16(src.S, mo) == 0) continue;   // empty placeholder mesh
+
+            ushort mat = BitConverter.ToUInt16(src.S, mo + 8);
+            if (mat >= src.MatNames.Count) continue;
+            if (!result.TryGetValue(src.MatNames[mat], out var names))
+                result[src.MatNames[mat]] = names = [];
+
+            ushort subIdx = BitConverter.ToUInt16(src.S, mo + 10), subCount = BitConverter.ToUInt16(src.S, mo + 12);
+            for (int su = 0; su < subCount; su++)
+            {
+                uint mask = BitConverter.ToUInt32(src.S, src.SubmeshStart + (subIdx + su) * 16 + 8);
+                for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+                    if ((mask & (1u << bit)) != 0 && !names.Contains(src.AttrNames[bit], StringComparer.Ordinal))
+                        names.Add(src.AttrNames[bit]);
+            }
+        }
+        return result;
+    }
 
     /// <summary>
     /// LOD0 triangle geometry — object-space position and uv0 per vertex, plus triangle indices — for UV
@@ -272,6 +390,17 @@ public static class SecondSkinWriter
         public VElem[][] Decls = [];      // one element list per mesh (declCount == meshCount)
         public List<string> MatNames = [];
         public string[] BoneNames = [];
+
+        /// <summary>
+        /// The model's attribute names, indexed the way its submesh masks reference them (bit <c>i</c> of a
+        /// submesh's mask means attribute <c>i</c>).
+        /// <para/>
+        /// Carried because a mod can switch whole parts of a model on and off through these, by NAME, with
+        /// Penumbra's <c>Atr</c> manipulation — which is how an accessory pack ships one model holding a
+        /// dozen pieces and a checkbox for each. Drop them and every piece draws at once, whatever the mod's
+        /// own options say.
+        /// </summary>
+        public string[] AttrNames = [];
         public ushort[][] BoneTables = [];
         public ushort[] SubmeshBoneMap = [];
         public ushort Lod0MeshIndex, Lod0MeshCount;   // only LOD0 meshes are shelled
@@ -351,8 +480,12 @@ public static class SecondSkinWriter
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null)
     {
-        if (sources.Count == 0) throw new ArgumentException("need at least one source model", nameof(sources));
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
+        // Sources are the character geometry a SHELL is cut from, so a build made entirely of content
+        // layers — an imported pack that brings its own meshes — legitimately has none. Anything else
+        // still does: a shell layer with no source would emit nothing at all.
+        if (sources.Count == 0 && layers.Any(l => l.Geometry.Count == 0))
+            throw new ArgumentException("need at least one source model", nameof(sources));
 
         var parsed = sources.Select(s => Parse(s.Model)).ToList();
 
@@ -374,6 +507,25 @@ public static class SecondSkinWriter
                     diag($"shape '{name}' enabled but not present in source {i} — not baked");
         }
         Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
+
+        // Imported content models, parsed ONCE each: several layers of one pack commonly bind different
+        // materials of the same .mdl, and re-parsing it per layer would cost the whole header walk again
+        // for no new information. Reference identity is the key because that is exactly what "the same
+        // model" means here — the caller hands the same byte[] to every layer cut from it.
+        var geomSrcs = new List<Source>();
+        var geomByModel = new Dictionary<byte[], Source>(ReferenceEqualityComparer.Instance);
+        foreach (var g in layers.SelectMany(l => l.Geometry))
+        {
+            if (geomByModel.ContainsKey(g.Model)) continue;
+            var gs = Parse(g.Model);
+            // Deliberately NOT `gs.Keep = g.KeepMaterial`. Source.Keep is unused on this path — the emit
+            // loop filters with the GEOMETRY's own predicate — and now that two geometries may share one
+            // model (two meshes of one file, or one file bound by two pieces) storing a single filter on
+            // the shared Source would quietly be one of them.
+            geomByModel[g.Model] = gs;
+            geomSrcs.Add(gs);
+        }
+
         int baseMatCount = baseSrc?.MatNames.Count ?? 0;
         if (baseMatCount + layers.Count > MaxMaterials)
             throw new InvalidOperationException(
@@ -384,7 +536,12 @@ public static class SecondSkinWriter
         var boneNames = new List<string>();
         var boneIndex = new Dictionary<string, ushort>(StringComparer.Ordinal);
         var boneBBox = new List<byte[]>();
-        var boneSources = baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed;
+        // Content models contribute bones too — a piece skinned to j_sebo_a needs that bone present in the
+        // merged table or its vertices collapse onto the root.
+        // Materialised, not lazy: this is walked three times below (bones, attributes, the overflow count)
+        // and re-running the concat each time is work for nothing.
+        List<Source> boneSources =
+            [.. baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed, .. geomSrcs];
         foreach (var src in boneSources)
             for (int i = 0; i < src.BoneNames.Length; i++)
             {
@@ -396,6 +553,40 @@ public static class SecondSkinWriter
                     Array.Copy(src.BoneBBoxes, i * BBoxSize, bb, 0, BBoxSize);
                 boneBBox.Add(bb);
             }
+
+        // Union ATTRIBUTE list, on exactly the same reasoning as the bones above: a submesh's mask indexes
+        // its own model's attribute table, so merging two models means renumbering both onto one list.
+        //
+        // These are what a mod's own checkboxes drive. An accessory pack ships one model carrying a dozen
+        // pieces, tags each piece's submeshes with an attribute, and toggles them by NAME through Penumbra's
+        // Atr manipulation. Dropping them — which this writer used to do outright — leaves a model with
+        // nothing to toggle, so every piece draws at once and the mod's options do nothing.
+        //
+        // 32 is the ceiling, not a choice: the mask is a u32, so bit 32 does not exist. Past that the extras
+        // are left unnamed rather than silently aliased onto another attribute's bit, which would toggle the
+        // wrong geometry.
+        var attrNames = new List<string>();
+        var attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var src in boneSources)
+            foreach (var name in src.AttrNames)
+            {
+                if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
+                attrIndex[name] = attrNames.Count;
+                attrNames.Add(name);
+            }
+        int attrOverflow = boneSources.SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
+            .Count() - attrNames.Count;
+
+        // One submesh's attribute mask, renumbered from its own model's table onto the union.
+        uint RemapAttrs(Source src, uint mask)
+        {
+            if (mask == 0 || src.AttrNames.Length == 0) return 0;
+            uint outMask = 0;
+            for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+                if ((mask & (1u << bit)) != 0 && attrIndex.TryGetValue(src.AttrNames[bit], out var to))
+                    outMask |= 1u << to;
+            return outMask;
+        }
 
         var vBuf = new MemoryStream();
         var iBuf = new MemoryStream();
@@ -410,6 +601,7 @@ public static class SecondSkinWriter
         int shapedTotal = 0;   // index entries rewired to a morphed vertex by an enabled body shape key
         int uvMoved = 0, uvUnmapped = 0;   // vertices put through a UV-space conversion, and those it couldn't place
         int uvRetangented = 0;             // meshes whose tangent frame was re-fitted to the converted UVs
+        int hiddenSubs = 0;                // submeshes dropped by a pack's own hide toggles
 
         // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
         // byte copy, keep every triangle, keep the authored material index) and the shell layers
@@ -417,7 +609,8 @@ public static class SecondSkinWriter
         // accumulators; `cov` null keeps all triangles; `mapBase`/`mapAppended` share the src's submesh bone
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
-                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors)
+                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
+                      bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -438,7 +631,7 @@ public static class SecondSkinWriter
             (float U, float V)[]? uvPre = null;
             if (preserve)
             {
-                CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs,
+                CopyVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, mirrorUv1,
                     out outStreams, out outStrides, out declBlock);
                 uv = [];   // no coverage trim for the host mesh
             }
@@ -513,6 +706,16 @@ public static class SecondSkinWriter
                 // never applied to a single-submesh mesh (that IS the whole part).
                 if (dropConnectors && srcSubCount > 1 && (sc / 3 < 200 || su == srcSubCount - 1))
                 {
+                    keptPerSub.Add(keep.ToArray());
+                    continue;
+                }
+
+                // Switched off by one of the pack's own toggles — see ContentGeometry.HiddenAttributes.
+                // Kept empty, exactly like the connector case above, so the submesh contributes nothing
+                // while every index and bone table around it keeps its shape.
+                if (hiddenAttrs is { Count: > 0 } && IsHidden(src, U32(ss + 8), hiddenAttrs))
+                {
+                    hiddenSubs++;
                     keptPerSub.Add(keep.ToArray());
                     continue;
                 }
@@ -604,7 +807,7 @@ public static class SecondSkinWriter
                 var ns = new byte[16];
                 W32(ns, 0, subStart);
                 W32(ns, 4, (uint)keep.Length);
-                W32(ns, 8, 0);                                            // attributes dropped
+                W32(ns, 8, RemapAttrs(src, U32(ss + 8)));                 // attribute mask, renumbered
                 W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));            // boneStart, rebased
                 W16(ns, 14, U16(ss + 14));                                // boneCount, as authored
                 subsForMesh.Add(ns);
@@ -666,6 +869,41 @@ public static class SecondSkinWriter
             float push = BaseOffset + LayerSeparation * layer;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
+            // An imported content layer brings its own geometry, so it is copied exactly as the host is —
+            // preserve:true, no push, no coverage trim. Pushing it would lift a piercing off the skin it
+            // was modelled against, and trimming it would need a coverage map the pack never authored: its
+            // silhouette IS its mesh. Only the material index is ours to set.
+            //
+            // Every geometry of the layer is emitted at the SAME material index. That is what lets a mod's
+            // several pieces share one published material and therefore one of the host's ten slots.
+            if (def.Geometry.Count > 0)
+            {
+                foreach (var geo in def.Geometry)
+                {
+                    var gsrc = geomByModel[geo.Model];
+                    var gs = gsrc.S;
+                    // Per geometry, not per layer: each contributes its own copy of its source's submesh
+                    // bone map, exactly as each (source, layer) pair does on the shell path below.
+                    int gMapBase = submeshBoneMap.Count;
+                    bool gMapAppended = false;
+                    int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
+                    for (int m = gsrc.Lod0MeshIndex; m < gEnd && m < gsrc.MeshCount; m++)
+                    {
+                        int gmo = gsrc.MeshStart + m * 36;
+                        if (BitConverter.ToUInt16(gs, gmo) == 0) continue;   // empty placeholder mesh
+
+                        ushort gMat = BitConverter.ToUInt16(gs, gmo + 8);
+                        if (gMat >= gsrc.MatNames.Count || !geo.KeepMaterial(gsrc.MatNames[gMat]))
+                            continue;
+
+                        EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
+                            dropConnectors: false, mirrorUv1: geo.MirrorUv1,
+                            hiddenAttrs: geo.HiddenAttributes);
+                    }
+                }
+                continue;
+            }
+
             foreach (var src in parsed)
             {
                 var s = src.S;
@@ -701,12 +939,21 @@ public static class SecondSkinWriter
             }
         }
 
-        if (meshOut.Count == 0) throw new InvalidOperationException("no geometry survived coverage trimming");
+        // Nothing to write. WHICH filter emptied it decides how the caller reports this: coverage trimming
+        // going this far is a fault worth an error in the log, while a pack's own hide toggles emptying a
+        // host is the user getting exactly what they asked for. Both used to arrive as "no geometry
+        // survived coverage trimming", which sent someone who had ticked two checkboxes looking for a UV
+        // bug that was not there.
+        if (meshOut.Count == 0)
+            throw new EmptyShellException(hiddenSubs > 0
+                ? $"every mesh was hidden by the pack's own toggles ({hiddenSubs} submesh(es))"
+                : "no geometry survived coverage trimming",
+                byToggle: hiddenSubs > 0);
 
         int meshCount = meshOut.Count;
         int boneCount = boneNames.Count;
 
-        // ── string block: bone names (union) + material names. Attributes are dropped. ──
+        // ── string block: bone names (union), attribute names (union), material names ──
         var strMs = new MemoryStream();
         var boneStrOff = new List<uint>();
         foreach (var b in boneNames)
@@ -715,6 +962,14 @@ public static class SecondSkinWriter
             strMs.Write(Encoding.ASCII.GetBytes(b));
             strMs.WriteByte(0);
         }
+        var attrStrOff = new List<uint>();
+        foreach (var a in attrNames)
+        {
+            attrStrOff.Add((uint)strMs.Position);
+            strMs.Write(Encoding.ASCII.GetBytes(a));
+            strMs.WriteByte(0);
+        }
+
         var matStrOff = new List<uint>();
         // Host materials FIRST (indices 0..baseMatCount-1, referenced verbatim by the host's own meshes),
         // then the appended shell layer materials.
@@ -737,7 +992,9 @@ public static class SecondSkinWriter
         // Flags, the 0x44 file header and the LOD block still come from source 0. That is a real choice, not
         // an accident: source 0 is the surface this shell was cut from, and its flags are the ones that
         // describe the geometry we are actually emitting. (The host's would describe a ring.)
-        var head = parsed[0];
+        // …or, for a build made entirely of imported content, that pack's first model — same reasoning:
+        // whichever source the emitted geometry actually came from is the one whose flags describe it.
+        var head = parsed.Count > 0 ? parsed[0] : geomSrcs[0];
 
         // The CULLING quantities are different — they are about extent, and the merged model's extent is the
         // union of everything in it, exactly as UnionModelBBoxes already treats the bounding boxes. Taking
@@ -746,7 +1003,7 @@ public static class SecondSkinWriter
         // the shell blinking out at an angle or a distance, with nothing in the log. Max is the only safe
         // direction here: too large costs a little overdraw, too small loses the shell.
         float radius = head.Radius, modelClip = head.ModelClip, shadowClip = head.ShadowClip;
-        foreach (var src in (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed))
+        foreach (var src in (baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed).Concat(geomSrcs))
         {
             if (src.Radius     > radius)     radius     = src.Radius;
             if (src.ModelClip  > modelClip)  modelClip  = src.ModelClip;
@@ -768,7 +1025,7 @@ public static class SecondSkinWriter
         var mh = new byte[56];
         BitConverter.GetBytes(radius).CopyTo(mh, 0);
         W16(mh, 4, (ushort)meshCount);
-        W16(mh, 6, 0);                                              // attributes dropped
+        W16(mh, 6, (ushort)attrNames.Count);                        // attribute names, carried
         W16(mh, 8, (ushort)subOut.Count);
         W16(mh, 10, (ushort)(baseMatCount + layers.Count));
         W16(mh, 12, (ushort)boneCount);
@@ -789,6 +1046,10 @@ public static class SecondSkinWriter
         ms.Write(head.Lods, 0, 3 * 60);                             // patched below
 
         foreach (var nm in meshOut) ms.Write(nm);
+        // BETWEEN the meshes and the submeshes — the format puts the attribute name table there, and the
+        // parser above locates the submeshes by stepping over it. Writing it anywhere else shifts every
+        // table after it.
+        foreach (var off in attrStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
         foreach (var ns in subOut) ms.Write(ns);
         foreach (var off in matStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
         foreach (var off in boneStrOff) { BitConverter.TryWriteBytes(tmp4, off); ms.Write(tmp4); }
@@ -807,7 +1068,7 @@ public static class SecondSkinWriter
 
         // Bounding boxes: 4 model-level boxes then one per union bone. The model box must cover EVERY
         // part, or the merged model gets culled whenever only one part is on screen.
-        ms.Write(UnionModelBBoxes(baseSrc != null ? [baseSrc, .. parsed] : parsed));
+        ms.Write(UnionModelBBoxes(baseSrc != null ? [baseSrc, .. parsed, .. geomSrcs] : [.. parsed, .. geomSrcs]));
         foreach (var bb in boneBBox) ms.Write(bb);
 
         long vtxOffOut = ms.Position;
@@ -863,6 +1124,14 @@ public static class SecondSkinWriter
                 diag?.Invoke($"BONE MAP: {badEntry} entry(ies) name a bone past the {boneNames.Count}-bone "
                            + "union list — the by-name remap failed to place them");
         }
+
+        if (attrNames.Count > 0)
+            diag?.Invoke($"attributes: {attrNames.Count} carried [{string.Join(", ", attrNames)}]");
+        // Said out loud because the consequence is a checkbox that quietly stops working: the mask is a u32,
+        // so an attribute past the 32nd has no bit to live in and whatever it switched is stuck on.
+        if (attrOverflow > 0)
+            diag?.Invoke($"ATTRIBUTES: {attrOverflow} past the 32 a submesh mask can address were dropped — "
+                       + "whatever those switched can no longer be turned off");
 
         if (shapedTotal > 0) diag?.Invoke($"shape bake: {shapedTotal} index entries rewired to morphed vertices");
         // Per LAYER, not per vertex: every layer rebuilds the same sources, so these count each source's
@@ -941,6 +1210,31 @@ public static class SecondSkinWriter
         return outBB;
     }
 
+    /// <summary>
+    /// Is this submesh switched off by the pack's toggles?
+    /// <para/>
+    /// Only when it is tagged AND every attribute it names is hidden. An untagged submesh (mask 0) is drawn
+    /// unconditionally, and one naming several attributes survives while any of them is still on.
+    /// <para/>
+    /// "Any survives" rather than "all must be on" is a deliberate lean. The two rules agree on the case
+    /// that actually occurs — one attribute per submesh, which is what every toggle-shipping pack seen so
+    /// far does — and they differ only where the game's own rule is not something this codebase has
+    /// measured. Where the answer is unknown the cost is not symmetric: geometry wrongly kept is a piece
+    /// the user can still switch off, geometry wrongly dropped is a hole they cannot get back.
+    /// </summary>
+    private static bool IsHidden(Source src, uint mask, IReadOnlySet<string> hidden)
+    {
+        if (mask == 0) return false;
+        bool tagged = false;
+        for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+        {
+            if ((mask & (1u << bit)) == 0) continue;
+            tagged = true;
+            if (!hidden.Contains(src.AttrNames[bit])) return false;   // still on by one of its names
+        }
+        return tagged;
+    }
+
     private static Source Parse(byte[] s)
     {
         uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -998,6 +1292,10 @@ public static class SecondSkinWriter
 
         var boneNames = new string[boneCount];
         for (int i = 0; i < boneCount; i++) boneNames[i] = Str(U32(boneOffStart + i * 4));
+
+        // Attribute names, in the order the submesh masks index them — see Source.AttrNames.
+        var attrNames = new string[attrCount];
+        for (int i = 0; i < attrCount; i++) attrNames[i] = Str(U32(attrStart + i * 4));
 
         // v6 bone tables — offset is in dwords, relative to each table's own header.
         var tables = new ushort[boneTableCount][];
@@ -1093,6 +1391,7 @@ public static class SecondSkinWriter
             SubmeshCount = submeshCount,
             BoneCount = boneCount,
             BoneNames = boneNames,
+            AttrNames = attrNames,
             BoneTables = tables,
             SubmeshBoneMap = map,
             BoneBBoxes = boneBB,
@@ -1132,26 +1431,118 @@ public static class SecondSkinWriter
     /// shell tricks — no push, no colour-whiten, no uv1 mirroring, no UV normalization. The accessory must
     /// render exactly as authored, so its format passes through untouched.
     /// </summary>
+    /// <summary>
+    /// Where a mesh's uv1 lives, and what it would take to give it one — the single description
+    /// <see cref="BuildVerbatim"/> and <see cref="CopyVerbatim"/> both work from.
+    /// <para/>
+    /// Three shapes, and the reason there are three is the format: a Float4 (type 3) or Half4 (type 14) uv0
+    /// packs a second UV in its <c>.zw</c>; some models instead declare a separate <c>usage 4 index 1</c>
+    /// element; and a mesh with a bare 2-component uv0 and neither has no uv1 at all, so one must be
+    /// APPENDED to uv0's own stream — that stream is guaranteed present, which a hard-coded stream 1 is not.
+    /// <para/>
+    /// A model can have both the packed and the explicit form at once (the sample piercings pack does), and
+    /// which one the shader reads is not worth guessing: every slot is written.
+    /// </summary>
+    private readonly record struct Uv1Plan(
+        bool ZwValid, int ZwOffset, bool ZwHalf, VElem? Explicit, bool Append, int Stream, int AppendOffset)
+    {
+        /// <summary>Bytes this adds to <see cref="Stream"/>'s stride. Zero unless a uv1 is appended.</summary>
+        public int ExtraBytes => Append ? 8 : 0;
+    }
+
+    private static Uv1Plan PlanUv1(VElem? uv0, VElem? uv1El, byte[] bs)
+    {
+        bool zwValid = uv0 is { } uz && (uz.Type == 3 || uz.Type == 14);
+        int  zwOff   = uv0 is { } uo ? uo.Offset + (uo.Type == 3 ? 8 : 4) : 0;
+        bool zwHalf  = uv0 is { } uh && uh.Type == 14;
+        int  stream  = uv0 is { } us ? us.Stream : 1;
+        return new Uv1Plan(zwValid, zwOff, zwHalf, uv1El,
+            Append: uv0 is not null && !zwValid && uv1El is null,
+            Stream: stream, AppendOffset: bs[stream]);
+    }
+
+    /// <summary>Write one vertex's (u, v) into every uv1 slot the plan names.</summary>
+    private static void WriteUv1(
+        in Uv1Plan p, VElem uv0, byte[][] outStreams, byte[] outStrides, int i, float u, float v)
+    {
+        if (p.ZwValid)
+            WriteUV2(outStreams[uv0.Stream], i * outStrides[uv0.Stream] + p.ZwOffset, p.ZwHalf, u, v);
+        if (p.Explicit is { } e1)
+            WriteUV2(outStreams[e1.Stream], i * outStrides[e1.Stream] + e1.Offset, e1.Type is 13 or 14, u, v);
+        if (p.Append)
+            WriteUV2(outStreams[p.Stream], i * outStrides[p.Stream] + p.AppendOffset, false, u, v);
+    }
+
+    /// <summary>Splice a Float2 uv1 into a declaration block, when the plan appended one. The .zw and
+    /// existing-uidx1 cases already declare theirs, so this no-ops for them.</summary>
+    private static void SpliceUv1Decl(byte[] declBlock, in Uv1Plan p)
+    {
+        if (!p.Append) return;
+        for (int e = 0; e < 17; e++)
+        {
+            int o = e * 8;
+            if (declBlock[o] != 0xFF) continue;
+            declBlock[o]     = (byte)p.Stream;
+            declBlock[o + 1] = (byte)p.AppendOffset;
+            declBlock[o + 2] = 1;                         // Float2
+            declBlock[o + 3] = UseUV;
+            declBlock[o + 4] = 1;                         // usageIndex 1
+            if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
+            break;
+        }
+    }
+
     private static void CopyVerbatim(
-        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs,
+        byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, bool mirrorUv1,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock)
     {
         // Match BuildVerbatim's stream count: every stream carrying data OR named by a decl element.
         int streamCount = bs[2] > 0 ? 3 : (bs[1] > 0 ? 2 : 1);
         foreach (var el in decl) streamCount = Math.Max(streamCount, Math.Min((int)el.Stream, 2) + 1);
 
+        // uv1 is touched ONLY for a glowing content piece — characterscroll samples its scroll map with it,
+        // and a model's own uv1 is as likely to hold an unrelated aux coordinate as a usable texcoord (see
+        // BuildVerbatim, which resolved the same ambiguity by overwriting). Everything else about this copy
+        // stays byte-for-byte: the piece must render exactly as its author built it.
+        VElem? uv0 = null, uv1El = null;
+        if (mirrorUv1)
+            foreach (var el in decl)
+                if (el.Usage == UseUV)
+                {
+                    if (el.UsageIndex == 0) uv0 ??= el; else uv1El ??= el;
+                }
+        var plan = PlanUv1(uv0, uv1El, bs);
+        bool doMirror = mirrorUv1 && uv0 is not null;
+
         outStrides = new byte[streamCount];
         for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
+        if (doMirror && plan.Append) outStrides[plan.Stream] = (byte)(bs[plan.Stream] + plan.ExtraBytes);
+
         outStreams = new byte[streamCount][];
         for (int st = 0; st < streamCount; st++)
         {
-            outStreams[st] = new byte[vc * bs[st]];
+            outStreams[st] = new byte[vc * outStrides[st]];
             for (int i = 0; i < vc; i++)
-                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * bs[st], bs[st]);
+                Array.Copy(s, vb + (int)vbo[st] + i * bs[st], outStreams[st], i * outStrides[st], bs[st]);
         }
 
         declBlock = new byte[DeclSize];
         Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
+
+        if (doMirror)
+        {
+            var u0 = uv0!.Value;
+            Span<float> tmp = stackalloc float[4];
+            for (int i = 0; i < vc; i++)
+            {
+                // The AUTHORED uv0, unshifted and unnormalized — unlike the shell path, which mirrors the
+                // value it moved onto the [0,1] tile. A content mesh keeps its own UV island and the
+                // material's tiling constants set how densely the pattern repeats across it.
+                ReadTyped(s, vb + (int)vbo[u0.Stream] + i * bs[u0.Stream] + u0.Offset, u0.Type, tmp);
+                WriteUv1(plan, u0, outStreams, outStrides, i, tmp[0], tmp[1]);
+            }
+            SpliceUv1Decl(declBlock, plan);
+        }
     }
 
     /// <summary>Returns the number of vertices <paramref name="uvConv"/> had no correspondence for (0 when
@@ -1186,17 +1577,13 @@ public static class SecondSkinWriter
         // The model's own uv1 slot holds an unrelated aux coord (a Float4/Half4 uv0 packs it in .zw; some
         // models add a separate uidx1 element) — junk for scrolling, so we overwrite every uv1 slot with
         // uv0. Only when uv0 is a bare 2-component element with no uidx1 do we append a Float2 uv1 — into
-        // uv0's OWN stream (guaranteed present), not a hard-coded stream 1.
-        bool zwValid = uv0 is { } uz && (uz.Type == 3 || uz.Type == 14);
-        int  zwOff   = uv0 is { } uo ? uo.Offset + (uo.Type == 3 ? 8 : 4) : 0;
-        bool zwHalf  = uv0 is { } uh && uh.Type == 14;
-        bool appendUv1 = uv0 is not null && !zwValid && uv1El is null;
-        int  uv1Stream = uv0 is { } us ? us.Stream : 1;
-        int  uv1Bytes  = appendUv1 ? 8 : 0;                  // appended as Float2
+        // uv0's OWN stream (guaranteed present), not a hard-coded stream 1. See Uv1Plan, which CopyVerbatim
+        // shares so a glowing content mesh cannot drift from this.
+        var uv1Plan = PlanUv1(uv0, uv1El, bs);
 
         outStrides = new byte[streamCount];
         for (int st = 0; st < streamCount; st++) outStrides[st] = bs[st];
-        if (appendUv1) outStrides[uv1Stream] = (byte)(bs[uv1Stream] + uv1Bytes);
+        if (uv1Plan.Append) outStrides[uv1Plan.Stream] = (byte)(bs[uv1Plan.Stream] + uv1Plan.ExtraBytes);
         outStreams = new byte[streamCount][];
         for (int st = 0; st < streamCount; st++) outStreams[st] = new byte[vc * outStrides[st]];
 
@@ -1264,11 +1651,8 @@ public static class SecondSkinWriter
                     else uvUnmapped++;
                 }
                 uvs[i] = (u, v);
-                int so = i * outStrides[u0e.Stream];
-                WriteUV2(outStreams[u0e.Stream], so + u0e.Offset, uv0Half, u, v);   // uv0.xy (normalized)
-                if (zwValid)         WriteUV2(outStreams[u0e.Stream], so + zwOff, zwHalf, u, v);
-                if (uv1El is { } e1) WriteUV2(outStreams[e1.Stream], i * outStrides[e1.Stream] + e1.Offset, e1.Type is 13 or 14, u, v);
-                if (appendUv1)       WriteUV2(outStreams[uv1Stream], i * outStrides[uv1Stream] + bs[uv1Stream], false, u, v);
+                WriteUV2(outStreams[u0e.Stream], i * outStrides[u0e.Stream] + u0e.Offset, uv0Half, u, v);
+                WriteUv1(uv1Plan, u0e, outStreams, outStrides, i, u, v);   // the SHIFTED value, unlike content
             }
         }
 
@@ -1276,19 +1660,7 @@ public static class SecondSkinWriter
         // appended one (the .zw / existing-uidx1 cases already declare their uv1).
         declBlock = new byte[DeclSize];
         Array.Copy(s, srcDeclOff, declBlock, 0, DeclSize);
-        if (appendUv1)
-            for (int e = 0; e < 17; e++)
-            {
-                int o = e * 8;
-                if (declBlock[o] != 0xFF) continue;
-                declBlock[o]     = (byte)uv1Stream;
-                declBlock[o + 1] = bs[uv1Stream];
-                declBlock[o + 2] = 1;                         // Float2
-                declBlock[o + 3] = UseUV;
-                declBlock[o + 4] = 1;                         // usageIndex 1
-                if (e + 1 < 17) declBlock[(e + 1) * 8] = 0xFF;
-                break;
-            }
+        SpliceUv1Decl(declBlock, uv1Plan);
         return uvUnmapped;
     }
 

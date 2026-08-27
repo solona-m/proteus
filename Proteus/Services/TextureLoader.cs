@@ -510,7 +510,41 @@ public class TextureLoader
             else if (samplerId == SamplerIdMask)                          mask    = path;
             else if (samplerId == SamplerIdIndex)                         index   = path;
         }
-        return new MtrlTexturePaths(diffuse, normal, mask, index);
+        // Parsed: true only HERE, at the one exit that walked the whole file. Every bail above returns the
+        // default false, so a caller can tell "this material names no index texture" from "this material
+        // could not be read" — two states that look identical in the paths alone and mean opposite things
+        // to anything deciding what a colour row does.
+        //
+        // The colour-table test is LITERALLY the one PatchColorTable refuses on, called rather than
+        // restated. Restating it drifted: this asked whether the header DECLARED a big enough data set,
+        // while the writer resolves the table's offset and checks it against the actual buffer. A material
+        // promising a full table in a file too short to hold one passed here and failed there — so the grid
+        // drew live, took a colour, and the write returned the material byte-for-byte unchanged, which is
+        // exactly the "controls with nothing behind them" case the warning above exists to prevent.
+        bool hasColorTable = GearMaterialWriter.ColorTableStart(b) >= 0;
+        return new MtrlTexturePaths(diffuse, normal, mask, index, Parsed: true, HasColorTable: hasColorTable);
+    }
+
+    /// <summary>
+    /// Whether an on-disk <c>.tex</c> stores its pixels uncompressed, or null when the file cannot be read.
+    /// <para/>
+    /// Asked before trusting a texture whose VALUES carry meaning rather than colour. An <c>_id</c> texture's
+    /// red and green are discrete colour-table row selectors — <c>red / 17</c> picks a row pair — so a lossy
+    /// codec moves a value across a bucket boundary and the number read back names a different row than the
+    /// author wrote. It is the same reason this loader's own writer never compresses that slot.
+    /// </summary>
+    public static bool? IsUncompressed(string diskPath)
+    {
+        try
+        {
+            if (!File.Exists(diskPath)) return null;
+            using var fs = File.OpenRead(diskPath);
+            Span<byte> head = stackalloc byte[8];
+            if (fs.Read(head) < 8) return null;
+            uint format = BitConverter.ToUInt32(head[4..]);
+            return format is 0x1450 or 0x1451;   // B8G8R8A8 / B8G8R8X8
+        }
+        catch { return null; }
     }
 
     /// <summary>Load an on-disk .tex file as RGBA8. Returns null on failure.</summary>

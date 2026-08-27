@@ -99,6 +99,10 @@
     "message": "現在のProteus状態（有効／優先度／オプション／カラー）をこの紐付けに\n記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] MODのメッシュパーツ{0}個を配置できませんでした — アクセサリのマテリアル枠が不足しています。指輪・ブレスレット・ネックレスをもう一つ装備するか、レイヤーをオフにしてください。",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus]「{0}」は肌レイヤーにグローを設定しています。肌はもう発光できないため、このオプションは布レイヤーとして描画されます。空いているアクセサリが必要になり、表面の見え方も少し変わります。",
     "description": ""
@@ -232,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "characterscrollではこれは明るさではなく小さなゲートです：\n0 = まったく発光しません。大きすぎるとスクロールマップの色が飛びます。\nバニラのアニメーション素材では約0.025です。",
+    "message": "この行がどれだけ明るく光るか。0 でオフになります。\nアニメーション光る効果ではこれが効果の明るさで、値が高いと\n色鮮やかなスクロールマップが白飛びします。25% 前後が目安です。",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -469,6 +473,178 @@
   },
   "Common.None": {
     "message": "（なし）",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "パーツはすべてオフの状態でインポートされます。インポート後、Penumbraの「{0}」で使いたいものにチェックを入れてください。それまでは何も着用されません。",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A と B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "メッシュ{0}、頂点{1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "このパックはテクスチャで表面を描いています。アニメーション光る効果はテクスチャ枠のないシェーダーで動くため、効果が有効な間は上の色が代わりに使われます。効果を解除すればテクスチャは戻ります。",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "エフェクト「{0}」はこのモッドのEffectsフォルダーにもライブラリにも見つからないため、パーツはそれなしで描画されています。別のものを選ぶか、ファイルを戻してください。",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "この材質が読むのは行{0}{1}の一箇所だけですが、そこの Glow が 0 のためエフェクトはオフのままです。その行の Glow を上げてオンにし、表示の強さを決めてください。他の行の Glow は何もしません。",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "このインデックステクスチャは行 {0}、列 {1} を参照しますが、圧縮されているため 1〜2 行ずれている可能性があります。淡色表示の行もクリックできます。色が反映されない場合は前後の行をお試しください。",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "このマテリアルのインデックステクスチャは完全に透明なため、カラー行を一つも選択しません。下の行はすべて編集できますが、パーツはテクスチャだけから色を取得します。",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "このマテリアルが指定するインデックステクスチャをProteusが読み取れなかったため、どの行が有効か判別できません。下の行はすべて編集できますが、実際に反映されるのはインデックスが選ぶ行だけです。",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "通常の Mod (.pmp) をインポートします。装備枠を使わずに一部だけを着用でき、高度なカラーテーブル機能を追加できます。",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "マテリアル{0}個",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "このマテリアルにはカラーテーブルがないため、編集できる行がありません。下で何を変えてもパーツには届きません。色はテクスチャだけから決まります。",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "このマテリアルにはインデックステクスチャがないため、すべて行{0}を使います。",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "このパックで最も近いモデルは{0}向けで、あなたの種族（{1}）でも、ゲームが全員に合わせて拡縮する共通の形状でもありません。Proteus は誤ったサイズで表示せず、装着を見送ります。",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "このパックのモデルは{0}向けに作られており、あなたは{1}です。特定の種族用の装備は形が異なるため、そのまま着せると位置がずれてしまいます。Proteus はそれを表示せず、装着を見送ります。",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "このパックには、Proteusが追加できるメッシュを含むオプションがありません。",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "パーツ：{1}個中{0}個",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nスキップ：{1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0}種族",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "そのパックを読み込めませんでした：{0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "このマテリアルのインデックステクスチャは行{0}の列{1}を参照します。他の行は使われないため無効表示です。この行のもう一方の列を編集しても何も起きません。",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "このマテリアルのインデックステクスチャは行 {0} を参照します。他の行は使われないため無効表示です。",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "共有：{0}。これらのパーツは一つのマテリアルで描画されるため、ここでの色はそのすべてに適用されます。触れていない行は作者が設定したまま残ります。",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "マテリアル未割当",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "常時有効",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "そのMOD名には使用できる文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "「{0}」という名前のMODフォルダーは既に存在します。",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "パックが見つかりません：{0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "PenumbraのMODディレクトリを利用できません。",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "このパックにはインポートできるものがありません。",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "「Proteus」は予約名です。別のMOD名を選んでください。",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "MODの書き出しに失敗しました：{0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "ジオメトリがありません（すべてのメッシュが空です）",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "メッシュが{0}を参照していますが、このパックには含まれていません。パック同梱のマテリアルに割り当て直して再エクスポートしてください。",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "読み取れないモデルです（{0}）",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — パーツ：{1}{2}。有効化してPenumbraで開きました。オプションの選択はPenumbraで行い、選択したものはすべて同時に着用されます。",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "「{0}」をインポートしました — パーツ：{1}{2}。すべてオフの状態です。Penumbra（このMODを開いています）の「{3}」で使いたいものにチェックを入れてください。",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": "（スキップ：{0}）",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "グループ「{0}」は{1}タイプのため、Proteusでは配置できません。このグループのオプションはそのままにします。",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "このパックにはモデルを差し替えるオプションがないため、Proteusが追加できるジオメトリがありません。Penumbraでそのままインストールしてください。",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "このパックのモデルは{0}向けに作られています。Proteus は種族間でジオメトリを拡縮しないため、パーツはその種族のキャラクターにのみ表示されます。",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "このパックは自前でパーツの表示を切り替えるため、Proteus は独自のチェックボックスを追加しません。パック側の設定をご利用ください。パックが切り替えないパーツは、Mod が有効な間つねに装着されます。",
     "description": ""
   },
   "Create.Author.Label": {
@@ -732,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onionパック",
+    "message": "Mod パック",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Onionパックを選択",
+    "message": "パックを選択",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Onionオーバーレイパック（.omp）をインポートします。Proteusはパックのレイヤーを読み取り、Proteusサイドカー付きの新しいPenumbra MODを書き出します。元のファイルは変更されません。",
+    "message": "Onion のオーバーレイパック (.omp) をインポートします。レイヤーは Proteus のオーバーレイとして着用でき、色の変更や重ね順の入れ替えができます。",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -812,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": ".ompファイルを選ぶと内容が表示されます。",
+    "message": "パックを選択すると内容が表示されます。",
     "description": ""
   },
   "Import.NothingUsable": {

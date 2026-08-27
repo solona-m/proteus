@@ -41,6 +41,7 @@ public static class Strings
     public static BandStrings     Band     { get; private set; } = new();
     public static FooterStrings   Footer   { get; private set; } = new();
     public static ImportStrings   Import   { get; private set; } = new();
+    public static ContentStrings  Content  { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
@@ -61,6 +62,7 @@ public static class Strings
         Band     = new BandStrings();
         Footer   = new FooterStrings();
         Import   = new ImportStrings();
+        Content  = new ContentStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
         ColorPanel = new ColorPanelStrings();
@@ -420,17 +422,120 @@ public sealed class SettingsStrings
         "skin, and hiding it would leave gaps.");
 }
 
+/// <summary>The Import tab's content-pack (.pmp) half — packs that ship their own meshes.</summary>
+public sealed class ContentStrings
+{
+    /// <summary>
+    /// The .pmp half of the Import tab's two lines, in the same voice as <see cref="ImportStrings.Intro"/>:
+    /// what you get, not how it is done. The mechanism it used to describe — copying the pack in, stopping
+    /// Penumbra publishing its models, appending option meshes onto a carrier accessory so options sharing
+    /// a game path can coexist — is all true and none of it belongs on the button someone is deciding
+    /// whether to press.
+    /// </summary>
+    public readonly string Intro = Loc.Localize("Content.Intro",
+        "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour "
+      + "table features.");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Content.ReadFailed.Fmt",
+        "Couldn't read that pack: {0}");
+
+    public readonly string PieceCountFmt = Loc.Localize("Content.PieceCount.Fmt",
+        "Pieces: {0} of {1}");
+
+    public readonly string RacesFmt = Loc.Localize("Content.Races.Fmt", "{0} races");
+
+    public readonly string AllOffFmt = Loc.Localize("Content.AllOff.Fmt",
+        "Pieces arrive switched OFF. After importing, tick the ones you want under \"{0}\" in Penumbra — "
+      + "nothing is worn until you do.");
+
+    public readonly string GeometryFmt = Loc.Localize("Content.Geometry.Fmt", "{0} mesh, {1} verts");
+    public readonly string MaterialsFmt = Loc.Localize("Content.Materials.Fmt", "{0} materials");
+    public readonly string Skipped = Loc.Localize("Content.Skipped", "skipped");
+    public readonly string Unbound = Loc.Localize("Content.Unbound", "unbound material");
+
+    public readonly string ProblemFmt = Loc.Localize("Content.Problem.Fmt", "{0}\nSkipped: {1}");
+
+    public readonly string NothingUsable = Loc.Localize("Content.NothingUsable",
+        "No option in this pack ships a mesh Proteus can append.");
+
+    public readonly string SharedByFmt = Loc.Localize("Content.SharedBy.Fmt",
+        "Shared by: {0}. Those pieces are drawn with one material, so these colours reach all of them — and "
+      + "rows you don't touch stay exactly as the pack's author wrote them.");
+
+    /// <summary>Stands in for an option name in <see cref="SharedByFmt"/> when a piece belongs to no
+    /// option — a model the pack applies whenever it is enabled.</summary>
+    public readonly string Unconditional = Loc.Localize("Content.Unconditional", "always on");
+
+    public readonly string NotForYourRaceFmt = Loc.Localize("Content.NotForYourRace.Fmt",
+        "This pack's models are built for {0}, and you are {1}. Gear made for one race is a different shape, "
+      + "so wearing it as-is would put it in the wrong place — Proteus leaves it off rather than show that.");
+
+    public readonly string NoRaceFitFmt = Loc.Localize("Content.NoRaceFit.Fmt",
+        "The nearest model this pack has is built for {0}, which is neither your own race ({1}) nor the "
+      + "shared shape the game resizes for everyone. Proteus leaves it off rather than show it at the wrong "
+      + "size.");
+
+    public readonly string SamplesFmt = Loc.Localize("Content.Samples.Fmt",
+        "Its index texture reads row {0}, column {1} — the other rows are dimmed because nothing samples "
+      + "them, and editing the other column of this row will do nothing either.");
+
+    public readonly string NoIndexFmt = Loc.Localize("Content.NoIndex.Fmt",
+        "This material ships no index texture, so it takes row {0} for everything.");
+
+    public readonly string SamplesRowsFmt = Loc.Localize("Content.SamplesRows.Fmt",
+        "Its index texture reads rows {0} — the others are dimmed because nothing samples them.");
+
+    public readonly string IndexUnreadable = Loc.Localize("Content.IndexUnreadable",
+        "This material names an index texture Proteus couldn't read, so it can't tell which rows are live. "
+      + "Every row is editable below, but only the ones the index selects will show.");
+
+    public readonly string GlowNeedsEmissiveFmt = Loc.Localize("Content.GlowNeedsEmissive.Fmt",
+        "Glow is at zero on row {0}{1} — the one cell this material reads — so the effect stays off. Raise "
+      + "Glow there to turn it on and set how strongly it shows. Glow on any other row does nothing.");
+
+    public readonly string GlowEffectMissingFmt = Loc.Localize("Content.GlowEffectMissing.Fmt",
+        "The effect \"{0}\" is no longer in this mod's Effects folder or your library, so the piece is "
+      + "rendering without it. Pick another, or put the file back.");
+
+    public readonly string GlowDropsDiffuse = Loc.Localize("Content.GlowDropsDiffuse",
+        "This pack paints its surface with a texture. An animated glow runs the material on a shader that "
+      + "has no slot for one, so the colours above take over while the glow is on. Clearing the effect puts "
+      + "the texture back.");
+
+    public readonly string NoColorTable = Loc.Localize("Content.NoColorTable",
+        "This material carries no colour table, so it has no rows to edit — nothing you change below will "
+      + "reach the piece. Its colours come from its textures alone.");
+
+    public readonly string IndexCompressedFmt = Loc.Localize("Content.IndexCompressed.Fmt",
+        "Its index texture reads row {0}, column {1} — but that texture is compressed, so it could be a row "
+      + "or two out. The dimmed rows are still clickable: if a colour doesn't take, try one either side.");
+
+    /// <summary>Stands in for the column letter when an index uses both — see <see cref="IndexCompressedFmt"/>.</summary>
+    public readonly string EitherColumn = Loc.Localize("Content.EitherColumn", "A and B");
+
+    public readonly string IndexEmpty = Loc.Localize("Content.IndexEmpty",
+        "This material's index texture is fully transparent, so it selects no colour row at all. Every row "
+      + "is editable below, but the piece will take its colours from the textures alone.");
+}
+
 public sealed class ImportStrings
 {
+    /// <summary>
+    /// What an .omp gets you, in one line. Says the PAYOFF, not the machinery: it used to explain sidecars
+    /// and that the original file is left alone, which answers a question nobody has asked yet at the point
+    /// they are deciding whether to click.
+    /// </summary>
     public readonly string Intro = Loc.Localize("Import.Intro",
-        "Import an Onion overlay pack (.omp). Proteus reads the pack's layers and writes " +
-        "a new Penumbra mod with a Proteus sidecar — the original file isn't modified.");
+        "Import an Onion overlay pack (.omp). Wear its layers as Proteus overlays you can recolour and "
+      + "restack.");
 
+    /// <summary>Shared by BOTH formats — see DrawImportTab, which has one browse button and picks the
+    /// reader off the extension.</summary>
     public readonly string BrowseBtn    = Loc.Localize("Import.Browse.Btn", "Browse for a pack") + "###importBrowse";
-    public readonly string DialogTitle  = Loc.Localize("Import.Dialog.Title", "Select an Onion pack");
-    public readonly string DialogFilter = Loc.Localize("Import.Dialog.Filter", "Onion pack");
+    public readonly string DialogTitle  = Loc.Localize("Import.Dialog.Title", "Select a pack");
+    public readonly string DialogFilter = Loc.Localize("Import.Dialog.Filter", "Mod pack");
 
-    public readonly string NoPack = Loc.Localize("Import.NoPack", "Pick an .omp file to see what it contains.");
+    public readonly string NoPack = Loc.Localize("Import.NoPack", "Pick a pack to see what it contains.");
 
     public readonly string ModName = Loc.Localize("Import.ModName.Label", "Mod name") + "###importName";
     public readonly string Author  = Loc.Localize("Import.Author.Label", "Author") + "###importAuthor";
@@ -669,9 +774,9 @@ public sealed class ColorsStrings
     public readonly string GlowAmount = Loc.Localize("Colors.GlowAmount.Label", "Glow");
 
     public readonly string GlowAmountTip = Loc.Localize("Colors.GlowAmount.Tip",
-        "Under characterscroll this is a small GATE, not the brightness:\n" +
-        "0 = no glow at all; a large value washes the scroll map's colour out.\n" +
-        "The vanilla animated materials use ~0.025.");
+        "How brightly this row glows. 0 switches it off.\n" +
+        "Under an animated glow this is the effect's brightness, and a high value\n" +
+        "blows a colourful scroll map out to white. Around 25% is a good start.");
 
     public readonly string Opacity = Loc.Localize("Colors.Opacity.Label", "Opacity");
 

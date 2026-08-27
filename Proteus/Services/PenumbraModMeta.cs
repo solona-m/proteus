@@ -324,13 +324,35 @@ internal static class PenumbraModMeta
     {
         if (optionNames.Count == 0) return;
         if (defaultIndex < 0 || defaultIndex >= optionNames.Count) defaultIndex = 0;
+        Write(modRoot, index, name, optionNames, "Single", defaultIndex);
+    }
+
+    /// <summary>
+    /// The multi-select counterpart: every option is independently on or off, and
+    /// <paramref name="defaultSettings"/> is a BITMASK over them rather than an index — bit 0 is the first
+    /// option. 0 leaves everything switched off.
+    /// <para/>
+    /// Used for the group the content importer synthesizes so individual pieces of a pack can be picked.
+    /// Everything <see cref="WriteSingleSelectGroup"/> documents about ordinals, v3/v4 and same-name
+    /// replacement applies here unchanged.
+    /// </summary>
+    public static void WriteMultiSelectGroup(
+        string modRoot, int index, string name, IReadOnlyList<string> optionNames, ulong defaultSettings = 0)
+    {
+        if (optionNames.Count == 0) return;
+        Write(modRoot, index, name, optionNames, "Multi", (long)defaultSettings);
+    }
+
+    private static void Write(
+        string modRoot, int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
+    {
         if (index < 0) index = 0;
 
         var manifest = ReadManifest(modRoot);
         if (FileVersionOf(manifest) >= SingleFileVersion)
-            WriteGroupIntoManifest(modRoot, manifest, index, name, optionNames, defaultIndex);
+            WriteGroupIntoManifest(modRoot, manifest, index, name, optionNames, type, defaultSettings);
         else
-            WriteLegacyGroupFile(modRoot, index, name, optionNames, defaultIndex);
+            WriteLegacyGroupFile(modRoot, index, name, optionNames, type, defaultSettings);
     }
 
     /// <summary>
@@ -348,7 +370,7 @@ internal static class PenumbraModMeta
     /// </list>
     /// </summary>
     private static void WriteLegacyGroupFile(
-        string modRoot, int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+        string modRoot, int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
     {
         var taken = new HashSet<int>();
         try
@@ -375,7 +397,7 @@ internal static class PenumbraModMeta
 
         AtomicWrite(
             Path.Combine(modRoot, LegacyGroupFileName(number - 1, name)),
-            JsonSerializer.Serialize(BuildGroup(number - 1, name, optionNames, defaultIndex), WriteOptions));
+            JsonSerializer.Serialize(BuildGroup(number - 1, name, optionNames, type, defaultSettings), WriteOptions));
     }
 
     /// <summary>The <c>Name</c> inside a v3 group file, or null when it can't be read.</summary>
@@ -406,7 +428,8 @@ internal static class PenumbraModMeta
     /// The shape both formats share. <c>DefaultSettings</c> is the selected option's INDEX for a Single
     /// group (it is a bitmask only for Multi), and each option carries no redirects of its own.
     /// </summary>
-    private static object BuildGroup(int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+    private static object BuildGroup(
+        int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
         => new
         {
             Version         = 0,
@@ -415,8 +438,8 @@ internal static class PenumbraModMeta
             Image           = "",
             Page            = 0,
             Priority        = index,
-            Type            = "Single",
-            DefaultSettings = defaultIndex,
+            Type            = type,
+            DefaultSettings = defaultSettings,
             Options         = optionNames.Select(o => new
             {
                 Name          = o,
@@ -434,7 +457,7 @@ internal static class PenumbraModMeta
     /// </summary>
     private static void WriteGroupIntoManifest(
         string modRoot, Dictionary<string, JsonElement> preserved,
-        int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
+        int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
     {
         // The surviving groups in order. Any group of the same name is DROPPED rather than kept alongside
         // the new one — a duplicate name is something Penumbra would have to disambiguate, and it would
@@ -471,11 +494,11 @@ internal static class PenumbraModMeta
             w.WriteStartArray();
             for (int i = 0; i < others.Count; i++)
             {
-                if (i == slot) JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, defaultIndex));
+                if (i == slot) JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, type, defaultSettings));
                 others[i].WriteTo(w);
             }
             if (slot >= others.Count)
-                JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, defaultIndex));
+                JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, type, defaultSettings));
             w.WriteEndArray();
 
             w.WriteEndObject();

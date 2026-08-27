@@ -99,6 +99,10 @@
     "message": "현재 Proteus 상태(사용 여부 / 우선도 / 옵션 / 색상)를 이 연결에 기록합니다.\n수동 편집은 여기를 클릭해야만 유지됩니다.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] 모드의 메시 파츠 {0}개를 배치하지 못했습니다 — 장신구의 머티리얼 슬롯이 부족합니다. 반지 / 팔지 / 목걸이를 하나 더 착용하거나 레이어를 끄세요.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
     "description": ""
@@ -232,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "characterscroll에서 이 값은 밝기가 아니라 작은 게이트입니다:\n0 = 전혀 발광하지 않음. 값이 크면 스크롤 맵의 색이 날아갑니다.\n기본 애니메이션 재질은 약 0.025를 사용합니다.",
+    "message": "이 행이 얼마나 밝게 빛나는지입니다. 0이면 꺼집니다.\n애니메이션 발광에서는 이것이 효과의 밝기이며, 값이 높으면\n색이 진한 스크롤 맵이 하얗게 날아갑니다. 25% 정도가 적당한 시작점입니다.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -469,6 +473,178 @@
   },
   "Common.None": {
     "message": "(없음)",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "파츠는 모두 꺼진 상태로 들어옵니다. 가져온 뒤 Penumbra의 \"{0}\"에서 원하는 항목을 체크하세요. 그 전에는 아무것도 착용되지 않습니다.",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A와 B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "메시 {0}, 정점 {1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "이 팩은 텍스처로 표면을 칠합니다. 애니메이션 발광은 그 자리가 없는 셀이더로 머티리얼을 구동하므로, 켜져 있는 동안은 위의 색상이 대신 쓰입니다. 효과를 지우면 텍스처가 돌아옵니다.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "효과 \"{0}\"을(를) 이 모드의 Effects 폴더에서도 라이브러리에서도 찾을 수 없어 부품이 효과 없이 렌더링되고 있습니다. 다른 것을 고르거나 파일을 되돌려 주세요.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "이 머티리얼이 읽는 곳은 {0}행 {1}열 하나뿐인데 그곳의 Glow가 0이라 효과가 꺼진 상태입니다. 그 자리에서 Glow를 올려 켜고 강도를 정하세요. 다른 행의 Glow는 아무 일도 하지 않습니다.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "이 인덱스 텍스처는 {0}행 {1}열을 읽지만, 해당 텍스처가 압축되어 있어 한두 행 어긋날 수 있습니다. 흐리게 표시된 행도 클릭할 수 있으니, 색이 적용되지 않으면 인접한 행을 시도해 보세요.",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "이 머티리얼의 인덱스 텍스처가 완전히 투명해서 색상 행을 하나도 선택하지 않습니다. 아래 모든 행을 편집할 수 있지만, 부품은 텍스처에서만 색상을 가져옵니다.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "이 머티리얼이 지정한 인덱스 텍스처를 Proteus가 읽지 못해 어느 행이 적용되는지 알 수 없습니다. 아래 모든 행을 편집할 수 있지만 인덱스가 선택한 행만 반영됩니다.",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "일반 모드(.pmp)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "머티리얼 {0}개",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "이 머티리얼에는 색상 테이블이 없어 편집할 행이 없습니다. 아래에서 무엇을 바꿔도 부품에 전달되지 않으며, 색상은 텍스처에서만 결정됩니다.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "이 머티리얼에는 인덱스 텍스처가 없어 모두 {0}행을 사용합니다.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "이 팩에서 가장 가까운 모델은 {0}용이며, 당신의 종족({1})도 아니고 게임이 모두에게 맞춰 조정하는 공용 형태도 아닙니다. Proteus는 잘못된 크기로 표시하지 않습니다.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었고, 당신은 {1}입니다. 특정 종족용 장비는 형태가 달라 그대로 입히면 엉뚱한 위치에 놓이므로, Proteus는 표시하지 않습니다.",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "이 팩에는 Proteus가 덧붙일 수 있는 메시를 포함한 옵션이 없습니다.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "파츠: {1}개 중 {0}개",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0}종족",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "해당 팩을 읽을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행 {1}열을 읽습니다. 다른 행은 샘플링되지 않아 흐리게 표시되며, 이 행의 반대쪽 열을 만져도 아무 일도 일어나지 않습니다.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행을 읽습니다. 나머지 행은 샘플링되지 않아 흐리게 표시됩니다.",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "공유: {0}. 이 파츠들은 하나의 머티리얼로 그려지므로 이 색상은 전부에 적용됩니다. 건드리지 않은 행은 제작자가 설정한 그대로 유지됩니다.",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "머티리얼 미연결",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "항상 켜짐",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "그 모드 이름에는 사용할 수 있는 문자가 없습니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "\"{0}\"(이)라는 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\"는 예약된 이름입니다. 다른 모드 이름을 선택하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "모드를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "지오메트리 없음 — 모든 메시가 비어 있습니다",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "메시가 {0}을(를) 참조하지만 이 팩에는 없습니다. 메시를 팩에 포함된 머티리얼에 다시 연결한 뒤 다시 내보내세요.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "읽을 수 없는 모델입니다 ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 활성화하고 Penumbra에서 열었습니다. 옵션은 Penumbra에서 선택하며, 선택한 항목은 모두 동시에 착용됩니다.",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 모두 꺼진 상태입니다. 이 모드가 열린 Penumbra의 \"{3}\"에서 원하는 항목을 체크하세요.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (건너뜀: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "\"{0}\" 그룹은 {1} 유형이라 Proteus가 배치할 수 없습니다. 이 그룹의 옵션은 그대로 둡니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "이 팩에는 모델을 리디렉션하는 옵션이 없어 Proteus가 덧붙일 지오메트리가 없습니다. 대신 Penumbra에서 설치하세요.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었습니다. Proteus는 종족 간에 지오메트리를 조정하지 않으므로, 해당 종족의 캐릭터에서만 부품이 표시됩니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "이 팩은 자체적으로 부품을 켜고 끄므로 Proteus는 별도의 체크박스를 추가하지 않습니다. 팩의 옵션을 사용하세요. 팩이 전환하지 않는 부품은 모드가 활성화된 동안 항상 착용됩니다.",
     "description": ""
   },
   "Create.Author.Label": {
@@ -732,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion 팩",
+    "message": "모드 팩",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Onion 팩 선택",
+    "message": "팩 선택",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. Proteus가 팩의 레이어를 읽어 Proteus 사이드카가 포함된 새 Penumbra 모드를 작성합니다 — 원본 파일은 변경되지 않습니다.",
+    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. 레이어를 Proteus 오버레이로 착용하고, 색을 바꾸거나 순서를 다시 쌓을 수 있습니다.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -812,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": ".omp 파일을 선택하면 내용이 표시됩니다.",
+    "message": "팩을 선택하면 내용을 확인할 수 있습니다.",
     "description": ""
   },
   "Import.NothingUsable": {

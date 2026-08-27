@@ -45,7 +45,8 @@ public class MtrlParseTests
         int additionalSize = 0,
         int shaderKeyCount = 0,
         int constantCount = 0,
-        string shaderPackage = "character.shpk")
+        string shaderPackage = "character.shpk",
+        int colorSetCount = 0)
     {
         // String table: the shader package name first, then one entry per distinct texture path.
         var strings = new List<byte>();
@@ -63,7 +64,7 @@ public class MtrlParseTests
         while (strings.Count % 4 != 0) strings.Add(0);   // real files pad the table
 
         int textureCount = texOffsets.Count;
-        const int uvSetCount = 1, colorSetCount = 0;
+        const int uvSetCount = 1;
 
         var b = new List<byte>();
         void U16(int v) => b.AddRange(BitConverter.GetBytes((ushort)v));
@@ -76,7 +77,7 @@ public class MtrlParseTests
         U16(shaderOffset);               // 0x0A shader package name offset
         b.Add((byte)textureCount);       // 0x0C
         b.Add(uvSetCount);               // 0x0D
-        b.Add(colorSetCount);            // 0x0E
+        b.Add((byte)colorSetCount);      // 0x0E
         b.Add((byte)additionalSize);     // 0x0F
 
         foreach (var off in texOffsets) { U16(off); U16(0); }        // texture table
@@ -217,6 +218,66 @@ public class MtrlParseTests
         Assert.Null(p.Normal);
         Assert.Null(p.Mask);
         Assert.Null(p.Index);
+    }
+
+    /// <summary>
+    /// "This material names no index texture" and "Proteus could not read this material" must be separable.
+    /// <para/>
+    /// Both arrive as a null <c>Index</c>, because the parser is fail-open by design, and they mean opposite
+    /// things to the colour editor: the first justifies pinning the grid to one colour-table row, the second
+    /// justifies nothing at all. Only <see cref="MtrlTexturePaths.Parsed"/> tells them apart, and getting it
+    /// wrong is expensive — the editor DISABLES every row it doesn't name, so a row claimed on no evidence
+    /// puts the row that works out of reach.
+    /// </summary>
+    [Fact]
+    public void AWalkThatBailedIsNotAMaterialWithoutAnIndex()
+    {
+        // Every bail reports Parsed false: too short for the header, and a texture table past the end.
+        var full = BuildMtrl([(Normal, "chara/x/tex/n.tex")]);
+        foreach (var keep in new[] { 0, 8, 15, 24 })
+        {
+            var cut = new byte[Math.Min(keep, full.Length)];
+            Array.Copy(full, cut, cut.Length);
+            var got = TextureLoader.ParseMtrlBytes(cut);
+            Assert.False(got.Parsed);
+            Assert.Null(got.Index);
+        }
+
+        // A material that walks all the way through says so, whether or not it found an index.
+        Assert.True(TextureLoader.ParseMtrlBytes(full).Parsed);
+        Assert.Null(TextureLoader.ParseMtrlBytes(full).Index);
+        Assert.True(TextureLoader.ParseMtrlBytes(
+            BuildMtrl([(Index, "chara/x/tex/id.tex")])).Parsed);
+    }
+
+    /// <summary>
+    /// A material with no colour table is reported as having none, so nothing claims which of its rows is
+    /// live — it has none, and <c>GearMaterialWriter.PatchColorTable</c> discards anything written to it.
+    /// <para/>
+    /// Both halves of the test matter independently: a declared colour set with a data set too small for the
+    /// Dawntrail 32×64 rows is the legacy layout the writer refuses, and a data set big enough with no
+    /// colour set declared is not a colour table either.
+    /// </summary>
+    [Fact]
+    public void AColourTableIsOnlyReportedWhenTheRowsCouldActuallyBeThere()
+    {
+        (uint, string)[] one = [(Normal, "chara/x/tex/n.tex")];
+
+        // Neither half alone is enough.
+        Assert.False(TextureLoader.ParseMtrlBytes(BuildMtrl(one)).HasColorTable);
+        Assert.False(TextureLoader.ParseMtrlBytes(
+            BuildMtrl(one, dataSetSize: 2176)).HasColorTable);                       // no colour set declared
+        Assert.False(TextureLoader.ParseMtrlBytes(
+            BuildMtrl(one, dataSetSize: 544, colorSetCount: 1)).HasColorTable);      // legacy 16-row table
+
+        // A declared colour set with room for the 32×64 rows is one, with or without the dye table.
+        Assert.True(TextureLoader.ParseMtrlBytes(
+            BuildMtrl(one, dataSetSize: 2048, colorSetCount: 1)).HasColorTable);
+        Assert.True(TextureLoader.ParseMtrlBytes(
+            BuildMtrl(one, dataSetSize: 2176, colorSetCount: 1)).HasColorTable);
+
+        // A file that never finished parsing claims nothing either way.
+        Assert.False(TextureLoader.ParseMtrlBytes(new byte[8]).HasColorTable);
     }
 
     /// <summary>

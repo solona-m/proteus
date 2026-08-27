@@ -523,6 +523,48 @@ public class DesignBindingTests
         Assert.Null(ovr.Resolve("g", "o"));
     }
 
+    /// <summary>
+    /// A content pack's glow and a mod's overlay gear settings must not reach each other.
+    /// <para/>
+    /// Top is captured from the mod's first OVERLAY descriptor. A mod that ships both — the mixed case this
+    /// branch already supports — would otherwise hand its imported meshes whatever scroll effect one of its
+    /// overlays happens to use, and the piece would start glowing on its own.
+    /// </summary>
+    [Fact]
+    public void ResolveContent_TakesTheContentSlot_NeverTheOverlaysTop()
+    {
+        var overlayTop = new GearSettingsPreset { Scroll = "overlay-fire.png" };
+        var contentTop = new GearSettingsPreset { Scroll = "content-rainbow.png" };
+        var perOption  = new GearSettingsPreset { Scroll = "option-stars.png" };
+        var ovr = new OverlayGearOverride
+        {
+            Top = overlayTop,
+            Content = contentTop,
+            Options = new() { ["Metal"] = new() { ["Gold"] = perOption } },
+        };
+
+        // An option both kinds could name resolves to that option either way — the collision is inherent to
+        // keying by Penumbra group/option, and it is the one place they legitimately share.
+        Assert.Same(perOption, ovr.Resolve("Metal", "Gold"));
+        Assert.Same(perOption, ovr.ResolveContent("Metal", "Gold"));
+
+        // Everywhere else they part company. Overlays fall back to Top; content falls back to Content.
+        Assert.Same(overlayTop, ovr.Resolve(null, null));
+        Assert.Same(contentTop, ovr.ResolveContent(null, null));
+        Assert.Same(overlayTop, ovr.Resolve("Metal", "Silver"));
+        Assert.Same(contentTop, ovr.ResolveContent("Metal", "Silver"));
+
+        // A mod with overlays but no content glow gets NO glow on its pieces — not the overlay's.
+        var overlaysOnly = new OverlayGearOverride { Top = overlayTop };
+        Assert.Same(overlayTop, overlaysOnly.Resolve(null, null));
+        Assert.Null(overlaysOnly.ResolveContent(null, null));
+
+        // And the reverse: a pure content pack's glow never reaches an overlay added to it later.
+        var contentOnly = new OverlayGearOverride { Content = contentTop };
+        Assert.Null(contentOnly.Resolve(null, null));
+        Assert.Same(contentTop, contentOnly.ResolveContent(null, null));
+    }
+
     // ── PickMostRecent ─────────────────────────────────────────────────────────
 
     [Fact]
