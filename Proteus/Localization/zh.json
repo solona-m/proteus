@@ -607,6 +607,10 @@
     "message": "写入模组失败：{0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "其中每个网格都是穿戴者自身的身体（{0}），因此没有可添加的内容。",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "没有几何体——其中每个网格都是空的",
     "description": ""

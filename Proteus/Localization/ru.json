@@ -607,6 +607,10 @@
     "message": "Не удалось записать мод: {0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "каждая его сетка — это собственное тело носителя ({0}), так что добавлять нечего.",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "нет геометрии — все меши в нём пусты",
     "description": ""

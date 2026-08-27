@@ -456,6 +456,34 @@ public class ContentPiece
     [JsonPropertyName("MaterialGates")]
     public List<ContentMaterialGate>? MaterialGates { get; set; }
 
+    /// <summary>
+    /// Material leaf → the GAME paths this pack redirects it under, best candidate first.
+    /// <para/>
+    /// Recorded because <see cref="Materials"/> alone freezes the wrong answer. It names one file, chosen at
+    /// import from whichever redirect was seen first — but a pack routinely ships one material leaf many
+    /// times over, once per dye or metal option, and which of them applies is the user's live Penumbra
+    /// selection. deadrose redirects <c>mt_c0201e0043_top_deadrose_dress.mtrl</c> from nine different files;
+    /// baking one meant every dye option published the same material.
+    /// <para/>
+    /// The composite asks Penumbra to resolve these, which is what makes the live selection win, and falls
+    /// back to <see cref="Materials"/> when it cannot. Ordered options-first: a path the pack VARIES by
+    /// option is the one the user is choosing, while a copy sitting in the default data is the spare.
+    /// </summary>
+    [JsonPropertyName("MaterialGamePaths")]
+    public Dictionary<string, List<string>>? MaterialGamePaths { get; set; }
+
+    /// <summary>The game paths <paramref name="materialLeaf"/> may be published under, best first — compared
+    /// leaf-to-leaf like <see cref="MaterialFor"/>, for the same reason.</summary>
+    public IReadOnlyList<string> GamePathsFor(string materialLeaf)
+    {
+        if (MaterialGamePaths is not { Count: > 0 }) return [];
+        var leaf = materialLeaf.TrimStart('/');
+        foreach (var (k, v) in MaterialGamePaths)
+            if (string.Equals(k.TrimStart('/'), leaf, StringComparison.OrdinalIgnoreCase))
+                return v;
+        return [];
+    }
+
     /// <summary>Every option that reveals <paramref name="materialLeaf"/>, or an empty list when nothing
     /// gates it — compared leaf-to-leaf like <see cref="MaterialFor"/>, for the same reason.</summary>
     public IReadOnlyList<ContentMaterialGate> GatesFor(string materialLeaf)
@@ -509,10 +537,10 @@ public class ContentSkeleton
 /// <summary>
 /// A pack's own show/hide toggles for one of its items, as an IMC attribute mask.
 /// <para/>
-/// This is how a mod offers "Hide panty strap" without shipping a second model: the item's IMC entry
-/// carries ten attribute bits, one per entry in the model's own attribute name table BY POSITION, and the
-/// game culls a submesh whose attributes are all switched off. Penumbra exposes it as a group whose options
-/// each clear some of those bits.
+/// This is how a mod offers "Hide panty strap" or "+ skirt" without shipping a second model: the item's IMC
+/// entry carries ten attribute bits, one per entry in the model's own attribute name table BY POSITION, and
+/// the game culls a submesh whose attributes are all switched off. Penumbra exposes it as a group whose
+/// options each TOGGLE some of those bits.
 /// <para/>
 /// It cannot work through Proteus unaided, and that is why this is recorded. The mask belongs to the
 /// pack's own equipment set; Proteus moves the geometry onto a host accessory, so at draw time the game
@@ -531,6 +559,17 @@ public class ContentAttributeGroup
     [JsonPropertyName("SetId")]
     public int SetId { get; set; } = -1;
 
+    /// <summary>
+    /// The equipment slot the mask belongs to, as Penumbra names it ("Body", "Legs", "Feet"). Null matches
+    /// any slot, for a sidecar written before this was recorded.
+    /// <para/>
+    /// Load-bearing, not decoration: a pack can carry several IMC groups on ONE set that differ only by
+    /// slot. deadrose ships three on set 43 — dress, bottoms and shoes — and without the slot every group
+    /// matched every model, so each one's unselected bits hid the others' geometry and nothing appeared.
+    /// </summary>
+    [JsonPropertyName("Slot")]
+    public string? Slot { get; set; }
+
     /// <summary>The bits set when none of the options are selected.</summary>
     [JsonPropertyName("DefaultMask")]
     public int DefaultMask { get; set; }
@@ -540,18 +579,27 @@ public class ContentAttributeGroup
     public Dictionary<string, int> Options { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The mask left after <paramref name="selected"/> have had their bits cleared.
+    /// The mask left once every selected option has TOGGLED its bits against the default.
     /// <para/>
-    /// Selected options SUBTRACT, which is what makes them read as "hide". Denim Shorts is the evidence:
-    /// its default is 3 — both bits on — and its two options carry 1 and 2 under the names "Panty Strap
-    /// Hide" and "Pockets Hide". Inverting this would hide exactly the half the user asked to keep, so it
-    /// lives here, named, rather than inline at the call site.
+    /// Toggle — exclusive-or — and not "clear" or "set", which is the whole subtlety. Real packs sit on both
+    /// sides of that: across the library, 63 groups place their option bits INSIDE the default mask (so a
+    /// selection must clear to do anything) and 47 place them OUTSIDE it (so a selection must set). No
+    /// single one-directional rule can serve both, and a wrong one is silent — clearing on a pack that meant
+    /// "set" leaves every attribute off, which drops all of that garment's toggleable geometry.
+    /// <para/>
+    /// The 27 groups that OVERLAP the default without being contained in it are what settle it. "Nails" with
+    /// a default of 16 and an option mask of 48 means bit 4 off, bit 5 on — one nail style swapped for
+    /// another. Only xor produces that: OR would draw both meshes at once, AND-NOT would leave no nails.
+    /// <para/>
+    /// It reads correctly at both ends too. Denim Shorts defaults to 3 with "Panty Strap Hide" carrying 1,
+    /// so selecting gives 2 and the strap goes; deadrose defaults to 0 with "+ skirt" carrying 25, so
+    /// selecting gives 25 and the skirt arrives.
     /// </summary>
     public int MaskFor(IEnumerable<string>? selected)
     {
         int mask = DefaultMask;
         foreach (var name in selected ?? [])
-            if (Options.TryGetValue(name, out var off)) mask &= ~off;
+            if (Options.TryGetValue(name, out var bits)) mask ^= bits;
         return mask & 0x3FF;
     }
 }

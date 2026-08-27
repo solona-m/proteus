@@ -55,9 +55,23 @@ public sealed class SecondSkinLayer
 /// host's governs geometry it knows nothing about. Baking the answer into the mesh sidesteps both, and
 /// composes when several packs share one host, which a single per-item mask could not.
 /// </param>
+/// <param name="OwnAttributes">
+/// Proteus has already decided this geometry's visibility, so the surviving submeshes are emitted
+/// UNTAGGED — their attribute masks cleared.
+/// <para/>
+/// Without this the decision is made twice. A submesh's attribute mask is a gate the game closes using the
+/// IMC entry of the item being WORN, and this geometry is about to be appended to a host accessory: so
+/// every piece kept by <paramref name="HiddenAttributes"/> would then be judged again by the host's own
+/// mask, which knows nothing about this garment. Whichever bits that item happens to carry would decide
+/// what renders — arbitrary per bit, and the reason a dress's toggles could appear to do nothing while the
+/// same pack's shoes toggles worked.
+/// <para/>
+/// Only for geometry whose visibility Proteus resolved. A pack that switches its pieces by NAME through
+/// Penumbra's <c>Atr</c> manipulation still needs its tags, because there the runtime is the mechanism.
+/// </param>
 public sealed record ContentGeometry(
     byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
-    IReadOnlySet<string>? HiddenAttributes = null);
+    IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false);
 
 /// <summary>
 /// A host's shell came out with no meshes in it.
@@ -565,16 +579,31 @@ public static class SecondSkinWriter
         // 32 is the ceiling, not a choice: the mask is a u32, so bit 32 does not exist. Past that the extras
         // are left unnamed rather than silently aliased onto another attribute's bit, which would toggle the
         // wrong geometry.
+        //
+        // Which makes the ceiling worth spending carefully. A source whose every geometry is emitted
+        // UNTAGGED — Proteus resolved its visibility and cleared the masks, see ContentGeometry.OwnAttributes
+        // — has no submesh left that references its names, so contributing them buys nothing and can cost
+        // another pack everything: an outfit carrying a dozen attributes it no longer uses is a dozen slots
+        // a name-toggled pack does not get, and the names past 32 are the ones that stop working.
+        var ownedOnly = new HashSet<Source>();
+        foreach (var (model, src) in geomByModel)
+            if (layers.SelectMany(l => l.Geometry).Where(g => ReferenceEquals(g.Model, model))
+                      .All(g => g.OwnAttributes))
+                ownedOnly.Add(src);
+
         var attrNames = new List<string>();
         var attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var src in boneSources)
-            foreach (var name in src.AttrNames)
+            foreach (var name in ownedOnly.Contains(src) ? [] : src.AttrNames)
             {
                 if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                 attrIndex[name] = attrNames.Count;
                 attrNames.Add(name);
             }
-        int attrOverflow = boneSources.SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
+        // Counted over the same sources the union was built from. Including the untagged ones here would
+        // report every name they no longer need as a name that was DROPPED, which is the opposite of true.
+        int attrOverflow = boneSources.Where(s => !ownedOnly.Contains(s))
+            .SelectMany(s => s.AttrNames).Distinct(StringComparer.Ordinal)
             .Count() - attrNames.Count;
 
         // One submesh's attribute mask, renumbered from its own model's table onto the union.
@@ -610,7 +639,8 @@ public static class SecondSkinWriter
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
-                      bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null)
+                      bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
+                      bool clearAttrs = false)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -807,7 +837,10 @@ public static class SecondSkinWriter
                 var ns = new byte[16];
                 W32(ns, 0, subStart);
                 W32(ns, 4, (uint)keep.Length);
-                W32(ns, 8, RemapAttrs(src, U32(ss + 8)));                 // attribute mask, renumbered
+                // Cleared when Proteus owns this geometry's visibility — see
+                // ContentGeometry.OwnAttributes. Leaving the tag on would let the HOST item's IMC
+                // mask cull a submesh we already decided to keep.
+                W32(ns, 8, clearAttrs ? 0 : RemapAttrs(src, U32(ss + 8)));
                 W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));            // boneStart, rebased
                 W16(ns, 14, U16(ss + 14));                                // boneCount, as authored
                 subsForMesh.Add(ns);
@@ -898,7 +931,7 @@ public static class SecondSkinWriter
 
                         EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
                             dropConnectors: false, mirrorUv1: geo.MirrorUv1,
-                            hiddenAttrs: geo.HiddenAttributes);
+                            hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes);
                     }
                 }
                 continue;
@@ -1213,26 +1246,29 @@ public static class SecondSkinWriter
     /// <summary>
     /// Is this submesh switched off by the pack's toggles?
     /// <para/>
-    /// Only when it is tagged AND every attribute it names is hidden. An untagged submesh (mask 0) is drawn
-    /// unconditionally, and one naming several attributes survives while any of them is still on.
+    /// A submesh draws only when EVERY attribute it names is on, so one hidden name is enough to drop it.
+    /// An untagged submesh (mask 0) is drawn unconditionally.
     /// <para/>
-    /// "Any survives" rather than "all must be on" is a deliberate lean. The two rules agree on the case
-    /// that actually occurs — one attribute per submesh, which is what every toggle-shipping pack seen so
-    /// far does — and they differ only where the game's own rule is not something this codebase has
-    /// measured. Where the answer is unknown the cost is not symmetric: geometry wrongly kept is a piece
-    /// the user can still switch off, geometry wrongly dropped is a hole they cannot get back.
+    /// This started as the opposite lean — keep while any name is still on — chosen when nothing here had
+    /// measured the game's rule, on the grounds that geometry wrongly kept is recoverable and geometry
+    /// wrongly dropped is not. The deadrose dress settles it. Its dress material carries a submesh tagged
+    /// <c>atr_tv_b</c> AND, separately, two tagged <c>atr_tv_b + atr_tv_c</c>. Under "any name on" the
+    /// second pair could never differ from the first, so authoring them would be pointless; they only mean
+    /// something distinct if the extra tag is a further REQUIREMENT. That is how a pack says "this piece
+    /// only with the skirt and the long sleeves".
+    /// <para/>
+    /// It composes with the ten-bit limit rather than fighting it. An IMC mask addresses bits 0-9, so an
+    /// attribute past that — the same model's <c>atr_ude</c> at bit 11 — is never in
+    /// <paramref name="hidden"/> and never the reason a submesh goes. Its sleeve submeshes are tagged
+    /// <c>atr_tv_f + atr_ude</c> and correctly follow <c>atr_tv_f</c> alone.
     /// </summary>
     private static bool IsHidden(Source src, uint mask, IReadOnlySet<string> hidden)
     {
         if (mask == 0) return false;
-        bool tagged = false;
         for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
-        {
-            if ((mask & (1u << bit)) == 0) continue;
-            tagged = true;
-            if (!hidden.Contains(src.AttrNames[bit])) return false;   // still on by one of its names
-        }
-        return tagged;
+            if ((mask & (1u << bit)) != 0 && hidden.Contains(src.AttrNames[bit]))
+                return true;
+        return false;
     }
 
     private static Source Parse(byte[] s)

@@ -80,6 +80,30 @@ public static class ContentSlot
             known.Category);
     }
 
+    /// <summary>
+    /// Penumbra's <c>EquipSlot</c> name as this table's <see cref="Slot.Label"/>, or null for a name it does
+    /// not know.
+    /// <para/>
+    /// The five body slots are already spelled the same on both sides; the accessories are not, and a
+    /// manipulation naming "RFinger" has to find the row this table calls "Right ring". Needed because a
+    /// pack can carry several IMC groups that differ ONLY by slot — deadrose ships three on set 43, one each
+    /// for Body, Legs and Feet — so without the slot they all match every one of its models.
+    /// </summary>
+    public static string? LabelForEquipSlot(string equipSlot) => equipSlot.ToLowerInvariant() switch
+    {
+        "head"    => "Head",
+        "body"    => "Body",
+        "hands"   => "Hands",
+        "legs"    => "Legs",
+        "feet"    => "Feet",
+        "ears"    => "Earrings",
+        "neck"    => "Necklace",
+        "wrists"  => "Bracelets",
+        "rfinger" => "Right ring",
+        "lfinger" => "Left ring",
+        _         => null,
+    };
+
     /// <summary>The numeric set id out of a set tag ("e6085" → 6085), or null.</summary>
     public static int? SetIdOf(string setTag)
         => setTag.Length > 1 && int.TryParse(setTag[1..], out var n) ? n : null;

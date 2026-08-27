@@ -814,6 +814,104 @@ public class ContentPieceSelectionTests
     }
 
     /// <summary>
+    /// A selected IMC option TOGGLES its bits against the default — it does not simply clear or set them.
+    /// <para/>
+    /// All three shapes here are real, taken from the pack library, and no one-directional rule serves them
+    /// all: 63 groups put their option bits inside the default mask, 47 put them outside, and 27 overlap it.
+    /// The overlapping ones settle the question, because only xor turns a "swap one variant for another"
+    /// into exactly that.
+    /// <para/>
+    /// Getting it wrong is silent and destructive in one direction: clearing on a pack that meant "set"
+    /// leaves every attribute off, and every submesh those attributes gate is then dropped from the model.
+    /// </summary>
+    [Fact]
+    public void An_imc_option_toggles_its_bits_rather_than_only_clearing_them()
+    {
+        static ContentAttributeGroup G(int def, params (string Name, int Mask)[] opts) => new()
+        {
+            Group = "Toggles",
+            SetId = 43,
+            DefaultMask = def,
+            Options = opts.ToDictionary(o => o.Name, o => o.Mask, StringComparer.Ordinal),
+        };
+
+        // CONTAINED — Denim Shorts. Default has the bits, so a selection has to clear to mean anything.
+        var hide = G(3, ("Panty Strap Hide", 1), ("Pockets Hide", 2));
+        Assert.Equal(3, hide.MaskFor(null));
+        Assert.Equal(2, hide.MaskFor(["Panty Strap Hide"]));
+        Assert.Equal(0, hide.MaskFor(["Panty Strap Hide", "Pockets Hide"]));
+
+        // OUTSIDE — deadrose. Default is 0, so a selection has to SET. Under a clear-only rule every one of
+        // these reads 0, every attribute counts as off, and the whole dress loses its toggleable parts.
+        var add = G(0, ("+ top of the harness", 1), ("+ garter with the dagger", 2));
+        Assert.Equal(0, add.MaskFor(null));
+        Assert.Equal(1, add.MaskFor(["+ top of the harness"]));
+        Assert.Equal(3, add.MaskFor(["+ top of the harness", "+ garter with the dagger"]));
+
+        // OVERLAPPING — "Nails", default 16 and an option mask of 48. Bit 4 off, bit 5 on: one style swapped
+        // for another. OR would draw both meshes, clear would leave none.
+        Assert.Equal(32, G(16, ("Nails", 48)).MaskFor(["Nails"]));
+        Assert.Equal(2, G(1, ("Toenails", 3)).MaskFor(["Toenails"]));
+
+        // Still clamped to the ten bits the field holds, and an option nobody selected changes nothing.
+        Assert.Equal(0x3FF, G(0, ("All", ~0)).MaskFor(["All"]));
+        Assert.Equal(16, G(16, ("Nails", 48)).MaskFor(["something else entirely"]));
+    }
+
+    /// <summary>
+    /// Several IMC groups on ONE set are separated by their slot, so each judges only its own garment.
+    /// <para/>
+    /// deadrose is the shape: dress, bottoms and shoes all sit on set 43 and differ only by EquipSlot. With
+    /// the slot ignored every group matched every model, so each group's unselected bits hid the OTHER
+    /// garments' geometry — selecting a bottoms option changed nothing, because the dress and shoes groups
+    /// were still hiding it.
+    /// </summary>
+    [Fact]
+    public void Imc_groups_on_one_set_are_told_apart_by_their_slot()
+    {
+        static ContentAttributeGroup G(string slot, int def, params (string Name, int Mask)[] opts) => new()
+        {
+            Group = slot + " toggles",
+            SetId = 43,
+            Slot = slot,
+            DefaultMask = def,
+            Options = opts.ToDictionary(o => o.Name, o => o.Mask, StringComparer.Ordinal),
+        };
+
+        List<ContentAttributeGroup> groups =
+        [
+            G("Body", 16, ("+ skirt", 25)),
+            G("Legs", 0, ("+ harness", 1)),
+            G("Feet", 0, ("+ ruffles", 2)),
+        ];
+        string[] attrs = ["atr_a", "atr_b", "atr_c"];   // bits 0, 1, 2
+
+        const string Top = "chara/equipment/e0043/model/c0201e0043_top.mdl";
+        const string Legs = "chara/equipment/e0043/model/c0201e0043_dwn.mdl";
+
+        Dictionary<string, List<string>> Sel(string group, params string[] on) =>
+            new(StringComparer.Ordinal) { [group] = [.. on] };
+
+        // Selecting a LEGS option shows its attribute on the legs model. The Body and Feet groups have
+        // nothing to say about this model and must not reach it — they are the ones that used to hide it.
+        var onLegs = SecondSkinService.HiddenAttributes(groups, Legs, attrs, Sel("Legs toggles", "+ harness"));
+        Assert.DoesNotContain("atr_a", onLegs ?? new HashSet<string>());
+
+        // And the same selection changes nothing on the TOP model, which the Legs group does not govern.
+        // Body defaults to 16 — bit 4, past this three-name table — so every named attribute is off there.
+        var onTop = SecondSkinService.HiddenAttributes(groups, Top, attrs, Sel("Legs toggles", "+ harness"));
+        Assert.Equal(["atr_a", "atr_b", "atr_c"], onTop!.Order());
+
+        // A group naming no slot still matches anything, so sidecars written before the slot was recorded
+        // keep working rather than silently doing nothing.
+        var legacy = G("Legs", 0, ("+ harness", 1));
+        legacy.Slot = null;
+        Assert.DoesNotContain("atr_a",
+            SecondSkinService.HiddenAttributes([legacy], Top, attrs, Sel("Legs toggles", "+ harness"))
+            ?? new HashSet<string>());
+    }
+
+    /// <summary>
     /// A pack's IMC hide-toggles resolve to attribute NAMES through each model's own table.
     /// <para/>
     /// Denim Shorts is the shape under test: an Imc group on set 6058 whose default mask is 3 — both bits
@@ -837,37 +935,73 @@ public class ContentPieceSelectionTests
         List<ContentAttributeGroup> groups = [group];
         const string Mid = "items/chara/equipment/e6058/model/c0101e6058_dwn.mdl";
 
-        // The two orders Denim Shorts actually ships. Bit 0 is atr_sne on one model and atr_hiz on the
-        // other, so a mask copied across positionally would hide the wrong piece on Lalafell.
-        string[] midlander = ["atr_sne", "atr_hiz"];
-        string[] lalafell  = ["atr_hiz", "atr_sne"];
+        // A bit is matched to a name by the LETTER the name ends in, so the table's order is irrelevant —
+        // the same two names in either order give the same answer. Denim Shorts really does ship them both
+        // ways round (atr_sne/atr_hiz swap between its Midlander and Lalafell models), and under the old
+        // positional reading that alone changed which piece a toggle hid.
+        string[] forward = ["atr_dv_a", "atr_dv_b"];
+        string[] reversed = ["atr_dv_b", "atr_dv_a"];
 
         Dictionary<string, List<string>> Sel(params string[] on) => new(StringComparer.Ordinal)
             { ["Toggles"] = [.. on] };
 
         // Nothing selected: the default has both bits, so nothing is hidden at all.
-        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, midlander, Sel()));
-        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, midlander, null));
+        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, forward, Sel()));
+        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, forward, null));
 
-        // "Panty Strap Hide" clears bit 0 — atr_sne on the Midlander model, atr_hiz on the Lalafell one.
-        Assert.Equal(["atr_sne"],
-            SecondSkinService.HiddenAttributes(groups, Mid, midlander, Sel("Panty Strap Hide"))!.Order());
-        Assert.Equal(["atr_hiz"],
-            SecondSkinService.HiddenAttributes(groups, Mid, lalafell, Sel("Panty Strap Hide"))!.Order());
+        // Bit 0 is whichever name ends in "a" — in either table order.
+        Assert.Equal(["atr_dv_a"],
+            SecondSkinService.HiddenAttributes(groups, Mid, forward, Sel("Panty Strap Hide"))!.Order());
+        Assert.Equal(["atr_dv_a"],
+            SecondSkinService.HiddenAttributes(groups, Mid, reversed, Sel("Panty Strap Hide"))!.Order());
 
-        // Both selected: the mask empties and every named attribute goes.
-        Assert.Equal(["atr_hiz", "atr_sne"],
-            SecondSkinService.HiddenAttributes(groups, Mid, midlander,
+        // Both selected: the mask empties and every part attribute goes.
+        Assert.Equal(["atr_dv_a", "atr_dv_b"],
+            SecondSkinService.HiddenAttributes(groups, Mid, forward,
                 Sel("Panty Strap Hide", "Pockets Hide"))!.Order());
 
         // A group for a different set leaves this model alone — a pack can ship several items.
         Assert.Null(SecondSkinService.HiddenAttributes(groups,
-            "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", midlander, Sel("Panty Strap Hide")));
+            "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", forward, Sel("Panty Strap Hide")));
 
-        // Bits past the end of the model's own table name nothing, so they hide nothing.
-        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, ["atr_sne", "atr_hiz"], Sel()));
-        Assert.Equal(["atr_sne"], SecondSkinService.HiddenAttributes(
-            [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0x3FE }],
-            Mid, midlander, null)!.Order());
+        // Names that are not part attributes are never touched. atr_hij, atr_nek, atr_ude, atr_hiz and
+        // atr_sne suppress body geometry and the game drives them from EQP; reading them as parts is what
+        // made deadrose's "+ arm belts" toggle atr_nek and therefore do nothing visible at all.
+        Assert.Null(SecondSkinService.HiddenAttributes(
+            [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0 }],
+            Mid, ["atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne"], null));
+
+        // Part J is the last bit an IMC mask has; anything beyond it is not addressable and stays put.
+        Assert.Equal(["atr_tv_j"], SecondSkinService.HiddenAttributes(
+            [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0x1FF }],
+            Mid, ["atr_tv_j", "atr_tv_k"], null)!.Order());
+    }
+
+    /// <summary>
+    /// An attribute's bit is the letter it ends in — <c>atr_tv_a</c> is part A, <c>atr_tv_i</c> is part I.
+    /// Everything else answers to no bit at all.
+    /// </summary>
+    [Fact]
+    public void A_part_attributes_bit_is_the_letter_it_ends_in()
+    {
+        Assert.Equal(0, SecondSkinService.PartAttributeBit("atr_tv_a"));
+        Assert.Equal(1, SecondSkinService.PartAttributeBit("atr_tv_b"));
+        Assert.Equal(8, SecondSkinService.PartAttributeBit("atr_tv_i"));
+        Assert.Equal(9, SecondSkinService.PartAttributeBit("atr_tv_j"));
+
+        // The prefix does not matter — bottoms and shoes name their parts the same way.
+        Assert.Equal(0, SecondSkinService.PartAttributeBit("atr_dv_a"));
+        Assert.Equal(1, SecondSkinService.PartAttributeBit("atr_sv_b"));
+
+        // Body-suppression attributes: EQP's, not the mask's.
+        foreach (var n in new[] { "atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne", "atr_leg" })
+            Assert.Null(SecondSkinService.PartAttributeBit(n));
+
+        // A mask holds ten bits, so a letter past J answers to none of them.
+        Assert.Null(SecondSkinService.PartAttributeBit("atr_tv_k"));
+
+        // And nothing shaped like a part attribute at all.
+        foreach (var n in new[] { "a", "_a", "atr_", "heels_offset=0.0361", "" })
+            Assert.Null(SecondSkinService.PartAttributeBit(n));
     }
 }

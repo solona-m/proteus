@@ -607,6 +607,10 @@
     "message": "Failed to write the mod: {0}",
     "description": "Shown when unpacking the mod threw. {0} is the error message."
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "every mesh in it is the wearer's own body ({0}), so there is nothing to add.",
+    "description": "Import preview: a model whose every mesh is bound to the wearer's own body material, so Proteus has nothing to append. {0} is a list of material names. Not a fault — no fix is suggested."
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "no geometry — every mesh in it is empty",
     "description": "Why one piece was skipped, shown in a tooltip."

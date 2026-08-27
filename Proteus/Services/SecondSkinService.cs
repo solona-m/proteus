@@ -233,29 +233,87 @@ public sealed class SecondSkinService
     /// thing on every race.
     /// </summary>
     /// <param name="selected">The mod's live Penumbra selection: group name → chosen options.</param>
+    /// <summary>
+    /// Does this toggle group speak for that model? Set AND slot both.
+    /// <para/>
+    /// Set alone is not enough: deadrose puts its dress, bottoms and shoes on one set (43) and separates
+    /// them by slot, so matching on the set let every group judge every model — and each group's unselected
+    /// bits then hid the other garments' geometry. Selecting a bottoms option changed nothing, because the
+    /// dress and shoes groups were still hiding it.
+    /// <para/>
+    /// A group naming no slot, or one naming a slot this build does not know, matches anything. That is the
+    /// lenient direction on purpose: a sidecar written before the slot was recorded keeps working, and an
+    /// unrecognised name turns a toggle into an obvious wrong answer rather than a silent no-op.
+    /// </summary>
+    /// <summary>
+    /// Which IMC attribute bit an attribute NAME answers to, or null when it answers to none.
+    /// <para/>
+    /// The bit is in the name: a part attribute ends in a single letter, and that letter IS the part —
+    /// <c>atr_tv_a</c> is part A and so bit 0, <c>atr_tv_i</c> is part I and so bit 8. Everything else —
+    /// <c>atr_hij</c>, <c>atr_nek</c>, <c>atr_ude</c>, <c>atr_hiz</c>, <c>atr_sne</c> — is a body-suppression
+    /// attribute the game drives from EQP, and an IMC mask never touches it.
+    /// <para/>
+    /// This replaced reading the model's attribute table BY POSITION, which was wrong in a way that looked
+    /// almost right. On the deadrose dress, whose table begins <c>atr_hij, atr_nek, atr_tv_a, …</c>, every
+    /// part was off by two: "+ arm ruffles" (bit 2) moved the skirt, "+ arm belts" (bit 1) drove
+    /// <c>atr_nek</c> on body meshes that are dropped anyway so it did nothing at all, and the watch's own
+    /// tags sat at positions 9 and 10 — one of them past the ten bits a mask even has, so no toggle could
+    /// ever reach it.
+    /// </summary>
+    internal static int? PartAttributeBit(string attributeName)
+    {
+        // at > 0, so the letter has a real name in front of it: "_a" on its own is not an attribute.
+        int at = attributeName.LastIndexOf('_');
+        if (at <= 0 || at != attributeName.Length - 2) return null;
+        char letter = char.ToLowerInvariant(attributeName[^1]);
+        return letter is >= 'a' and <= 'j' ? letter - 'a' : null;
+    }
+
+    private static bool Governs(ContentAttributeGroup g, string modelRel)
+    {
+        var parsed = ContentSlot.Parse(modelRel);
+        if (g.SetId >= 0 && (parsed is { } p ? ContentSlot.SetIdOf(p.SetTag) : null) is { } s
+            && g.SetId != s)
+            return false;
+
+        return g.Slot is not { Length: > 0 } gs
+            || ContentSlot.LabelForEquipSlot(gs) is not { } wantLabel
+            || parsed is not { } mp
+            || string.Equals(mp.Label, wantLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether any of this pack's toggle groups governs the model — which is what makes the visibility
+    /// answer Proteus's to give, and therefore what makes it strip the model-side attribute tags. See
+    /// <see cref="ContentGeometry.OwnAttributes"/>.
+    /// <para/>
+    /// Separate from "is anything currently hidden", and deliberately so: a group whose mask happens to show
+    /// everything right now still owns the decision, and leaving the tags on in that case would hand the
+    /// host item's IMC mask a veto over geometry the user asked to see.
+    /// </summary>
+    internal static bool GovernsModel(IReadOnlyList<ContentAttributeGroup>? groups, string modelRel)
+        => groups is { Count: > 0 } && groups.Any(g => Governs(g, modelRel));
+
     internal static IReadOnlySet<string>? HiddenAttributes(
         IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
         IReadOnlyDictionary<string, List<string>>? selected)
     {
         if (groups is not { Count: > 0 } || attrNames.Count == 0) return null;
 
-        // Which set this model belongs to, so a pack with several items applies each toggle to its own.
-        var setId = ContentSlot.Parse(modelRel) is { } p ? ContentSlot.SetIdOf(p.SetTag) : null;
-
         HashSet<string>? hidden = null;
         foreach (var g in groups)
         {
-            if (g.SetId >= 0 && setId is { } s && g.SetId != s) continue;
+            if (!Governs(g, modelRel)) continue;
 
             int mask = g.MaskFor(
                 selected != null && selected.TryGetValue(g.Group, out var sel) ? sel : null);
 
-            // Every bit the mask does NOT hold names an attribute that is off. Bounded by the table rather
-            // than by the mask's ten bits: a mask bit past the end of a model's own attribute list names
-            // nothing, and inventing a name for it would hide nothing or, worse, the wrong thing.
-            for (int bit = 0; bit < attrNames.Count && bit < 10; bit++)
-                if ((mask & (1 << bit)) == 0)
-                    (hidden ??= new HashSet<string>(StringComparer.Ordinal)).Add(attrNames[bit]);
+            // Each attribute is matched to its bit BY NAME — see PartAttributeBit. A name that answers to no
+            // bit is not the mask's to switch: those are the body-suppression attributes the game drives
+            // from EQP, and treating them as parts is what made "+ arm belts" drive atr_nek.
+            foreach (var name in attrNames)
+                if (PartAttributeBit(name) is { } bit && (mask & (1 << bit)) == 0)
+                    (hidden ??= new HashSet<string>(StringComparer.Ordinal)).Add(name);
         }
         return hidden;
     }
@@ -1328,6 +1386,11 @@ public sealed class SecondSkinService
         // exists to catch that.
         var estClaimed = new Dictionary<(string Slot, int SetId), int>();
 
+        // Game path → the pack file Penumbra currently resolves it to, for this build only. See
+        // ContentMaterialFile: the lookup runs per drawn material of every layer, and the answer is a
+        // property of the path rather than of the layer asking.
+        var mtrlFileCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
         // Extra-skeleton claims noted while resolving content, written only for the options that actually
         // reached a host. Deferred because the entry lands on an item that is NOT the pack's: claiming a
         // chest piece's skeleton for geometry that never published would break that item's own ex bones in
@@ -1468,10 +1531,16 @@ public sealed class SecondSkinService
             // to move onto a host accessory — so the pack's own mask governs a set nobody has equipped.
             // See ContentAttributeGroup.
             IReadOnlySet<string>? hidden = null;
+            // Whether this pack's IMC toggles govern this model at all. When they do, Proteus owns the
+            // visibility answer end to end — it drops what the mask hides AND strips the tags from what
+            // survives, so the host accessory's own IMC mask cannot overrule the half we kept. See
+            // ContentGeometry.OwnAttributes.
+            bool ownAttributes = false;
             if (cEntry.Metadata.ContentAttributes is { Count: > 0 } attrGroups)
             {
                 hidden = HiddenAttributes(attrGroups, modelRel, parsedModel.Attrs,
                     ModSelection(cEntry.ModDirectory));
+                ownAttributes = GovernsModel(attrGroups, modelRel);
                 if (hidden is { Count: > 0 })
                     log.Information("[Proteus] content: {0} — {1} hides [{2}]",
                         cEntry.ModDirectory, modelRel, string.Join(", ", hidden));
@@ -1499,20 +1568,37 @@ public sealed class SecondSkinService
                 var rel = piece.MaterialFor(leaf);
                 if (rel == null)
                 {
-                    log.Warning("[Proteus] content: {0} \"{1}/{2}\" — mesh material {3} is not bound to any "
-                              + "material this pack ships, so those meshes are dropped. Rebind the mesh to one "
-                              + "of [{4}] and re-export",
-                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", leaf,
-                        string.Join(", ", piece.Materials.Values));
+                    // A mesh bound to the BODY's own material is a different thing entirely, and dropping it
+                    // is the wanted outcome rather than a shortfall. Outfit packs ship the body they were
+                    // fitted to so the garment sits right in Penumbra; the character here already has their
+                    // own, and publishing a second one would put a whole duplicate body on them. Said
+                    // quietly and without advice, because "rebind and re-export" is the wrong instruction —
+                    // there is nothing to fix.
+                    if (SecondSkinWriter.IsBodySkinMaterial(leaf))
+                        log.Information("[Proteus] content: {0} \"{1}/{2}\" — {3} is the body's own material, "
+                                      + "so those meshes are left to the character's own skin",
+                            cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", leaf);
+                    else
+                        log.Warning("[Proteus] content: {0} \"{1}/{2}\" — mesh material {3} is not bound to any "
+                                  + "material this pack ships, so those meshes are dropped. Rebind the mesh to "
+                                  + "one of [{4}] and re-export",
+                            cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", leaf,
+                            string.Join(", ", piece.Materials.Values));
                     continue;
                 }
 
+                // The file to publish, asked of Penumbra rather than taken from the sidecar — see
+                // ContentMaterialFile. The recorded path is the fallback, and is still what identifies the
+                // material to the colour panel and to the unit key below.
+                var mtrlDisk = ContentMaterialFile(modRoot, piece.GamePathsFor(leaf), mtrlFileCache)
+                            ?? Path.Combine(modRoot, rel);
+
                 byte[] mtrl;
-                try { mtrl = File.ReadAllBytes(Path.Combine(modRoot, rel)); }
+                try { mtrl = File.ReadAllBytes(mtrlDisk); }
                 catch (Exception ex)
                 {
                     log.Warning("[Proteus] content: {0} \"{1}/{2}\" — material {3} could not be read ({4})",
-                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", rel, ex.Message);
+                        cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", mtrlDisk, ex.Message);
                     continue;
                 }
 
@@ -1557,7 +1643,8 @@ public sealed class SecondSkinService
                         // the glow belongs to the unit, and the unit is what owns these.
                         MirrorUv1: glow != null,
                         // The pack's own hide toggles, baked in — see ContentGeometry.HiddenAttributes.
-                        HiddenAttributes: hidden));
+                        HiddenAttributes: hidden,
+                        OwnAttributes: ownAttributes));
 
                 // Every option this material serves, so the colour editor can find it under any of them.
                 // Compared case-insensitively, as option names are everywhere else in this codebase.
@@ -2905,6 +2992,48 @@ public sealed class SecondSkinService
     /// Null when the pack ships nothing by that name. That is normal and not an error: a material may name
     /// a vanilla game texture it does not provide, and that one should keep resolving through the game.
     /// </summary>
+    /// <summary>
+    /// The material file this piece should publish RIGHT NOW, out of the game paths its pack redirects the
+    /// leaf under — or null to fall back on the one the importer recorded.
+    /// <para/>
+    /// Asked live because the recorded answer cannot be right for a pack that ships one material many times.
+    /// The dye and metal option groups every dress mod carries redirect the same leaf once per colour, and
+    /// only Penumbra knows which one is selected; the importer sees them all at once and has to pick blind.
+    /// deadrose has nine files behind one leaf, so eight of its nine dye options published the wrong one.
+    /// <para/>
+    /// Constrained to the mod's own folder for the same reason the texture lookup is: a content material
+    /// belongs to its pack, and an answer from anywhere else is answering a different question.
+    /// </summary>
+    /// <param name="cache">
+    /// Per-build memo, keyed by mod root and game path. Not an optimisation so much as a bound: this runs
+    /// once per drawn material of every content layer, and a pack with fifteen layers of four materials
+    /// apiece was making over a hundred IPC round trips per composite for a handful of distinct answers —
+    /// several times per settle, since a redraw produces more than one composite. The answer cannot change
+    /// within a build, so one call per distinct path is all there is to make.
+    /// </param>
+    private string? ContentMaterialFile(
+        string modRoot, IReadOnlyList<string> gamePaths, Dictionary<string, string?> cache)
+    {
+        foreach (var gamePath in gamePaths)
+        {
+            var key = modRoot + '\u0000' + gamePath;
+            if (!cache.TryGetValue(key, out var hit))
+            {
+                var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+                // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
+                cache[key] = hit =
+                    viaPenumbra != null
+                 && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
+                 && File.Exists(viaPenumbra)
+                 && IsUnder(modRoot, viaPenumbra)
+                        ? viaPenumbra
+                        : null;
+            }
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
     private string? ContentTextureFile(string modRoot, string gamePath)
     {
         var viaPenumbra = penumbra.ResolvePlayer(gamePath);

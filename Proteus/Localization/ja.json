@@ -607,6 +607,10 @@
     "message": "MODの書き出しに失敗しました：{0}",
     "description": ""
   },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "すべてのメッシュが着用者自身のボディ（{0}）なので、追加するものはありません。",
+    "description": ""
+  },
   "ContentImport.Problem.NoGeometry": {
     "message": "ジオメトリがありません（すべてのメッシュが空です）",
     "description": ""
