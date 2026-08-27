@@ -222,6 +222,44 @@ public sealed class SecondSkinService
         return null;
     }
 
+    /// <summary>
+    /// The attribute names a pack's own hide-toggles currently switch off for one of its models, or null
+    /// when nothing is hidden. The composite drops the submeshes tagged with them.
+    /// <para/>
+    /// Resolved from the model's OWN attribute table, because an IMC mask addresses attributes by position
+    /// and the position is not fixed — Denim Shorts lists <c>[atr_sne, atr_hiz]</c> on its Midlander model
+    /// and <c>[atr_hiz, atr_sne]</c> on its Lalafell one, so bit 0 means a different piece of geometry
+    /// depending on who is wearing it. Mapping through the table is what makes the toggle mean the same
+    /// thing on every race.
+    /// </summary>
+    /// <param name="selected">The mod's live Penumbra selection: group name → chosen options.</param>
+    internal static IReadOnlySet<string>? HiddenAttributes(
+        IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
+        IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        if (groups is not { Count: > 0 } || attrNames.Count == 0) return null;
+
+        // Which set this model belongs to, so a pack with several items applies each toggle to its own.
+        var setId = ContentSlot.Parse(modelRel) is { } p ? ContentSlot.SetIdOf(p.SetTag) : null;
+
+        HashSet<string>? hidden = null;
+        foreach (var g in groups)
+        {
+            if (g.SetId >= 0 && setId is { } s && g.SetId != s) continue;
+
+            int mask = g.MaskFor(
+                selected != null && selected.TryGetValue(g.Group, out var sel) ? sel : null);
+
+            // Every bit the mask does NOT hold names an attribute that is off. Bounded by the table rather
+            // than by the mask's ten bits: a mask bit past the end of a model's own attribute list names
+            // nothing, and inventing a name for it would hide nothing or, worse, the wrong thing.
+            for (int bit = 0; bit < attrNames.Count && bit < 10; bit++)
+                if ((mask & (1 << bit)) == 0)
+                    (hidden ??= new HashSet<string>(StringComparer.Ordinal)).Add(attrNames[bit]);
+        }
+        return hidden;
+    }
+
     /// <summary>Test seam for <see cref="ResolveVariant"/> — the null code it reports for an un-keyed piece
     /// is load-bearing, and a test that cannot see it cannot check it.</summary>
     internal static (string? Code, string Path)? ResolveVariantForTest(ContentPiece piece, string? modelCode)
@@ -1270,7 +1308,12 @@ public sealed class SecondSkinService
         var unitGeometry = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Model path → its bytes and the materials its LOD0 meshes actually draw with. A null Model is a
         // file that could not be read, cached so the warning is printed once rather than per option.
-        var modelCache = new Dictionary<string, (byte[]? Model, List<string> Used)>(StringComparer.OrdinalIgnoreCase);
+        // Attrs rides along with Used because both are properties of the MODEL, not of the option that
+        // named it — and a pack whose options all point at one file was re-parsing it once per option just
+        // to read the same attribute table back.
+        var modelCache =
+            new Dictionary<string, (byte[]? Model, List<string> Used, List<string> Attrs)>(
+                StringComparer.OrdinalIgnoreCase);
 
         // Mod directory → why none of its pieces can be worn, for the panel to say out loud. Recorded per
         // MOD rather than per piece: a pack authored for one race fails identically for every piece it has,
@@ -1279,6 +1322,39 @@ public sealed class SecondSkinService
         void Unwearable(string modDir, string reason)
         {
             if (!unwearable.ContainsKey(modDir)) unwearable[modDir] = reason;
+        }
+
+        // A mod's live Penumbra selection, fetched once per mod per composite. Only the IMC hide-toggles
+        // need it — every other gate is resolved upstream into the content layers — and a pack's options do
+        // not change mid-build, so asking again for each of its nine materials would be nine round trips
+        // for one answer. Null (Penumbra unavailable, or the mod unknown to it) leaves every toggle at the
+        // pack's own default, which is the state it ships in.
+        //
+        // Marshalled ONTO THE FRAMEWORK THREAD, unlike the ResolvePlayer calls elsewhere in this build.
+        // This reads Penumbra's collection state, which a user editing a collection is concurrently
+        // writing, and every other caller of GetModSettings in this plugin is already on that thread — the
+        // draw loop and the ModSettingChanged handler. Blocking for a frame is affordable because the cache
+        // makes it once per mod; the same trade CompositorService makes for GetActivePlayerMaterialPaths.
+        var selectionCache = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(
+            StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, List<string>>? ModSelection(string modDir)
+        {
+            if (selectionCache.TryGetValue(modDir, out var known)) return known;
+            IReadOnlyDictionary<string, List<string>>? found = null;
+            try
+            {
+                found = Plugin.Framework.RunOnFrameworkThread(() =>
+                        penumbra.GetPlayerCollectionId() is { } id
+                            ? penumbra.GetModSettings(id, modDir)?.Options
+                            : null)
+                    .GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                log.Warning("[Proteus] content: could not read {0}'s Penumbra settings ({1}) — its hide "
+                          + "toggles fall back to the pack's defaults", modDir, ex.Message);
+            }
+            return selectionCache[modDir] = found;
         }
 
         for (int i = 0; i < contentIn; i++)
@@ -1334,13 +1410,24 @@ public sealed class SecondSkinService
                 try
                 {
                     var bytes = File.ReadAllBytes(modelPath);
-                    parsedModel = (bytes, UsedMaterialNames(bytes, SecondSkinWriter.MaterialNames(bytes)));
+                    // The attribute table fails on its own terms: it is what the pack's hide toggles resolve
+                    // through, and losing it costs those toggles, not the piece. Everything else about a
+                    // model whose submesh ranges will not walk still reads.
+                    List<string> attrs;
+                    try { attrs = [.. SecondSkinWriter.AttributeNames(bytes)]; }
+                    catch (Exception ex)
+                    {
+                        attrs = [];
+                        log.Warning("[Proteus] content: {0} — could not read {1}'s attribute table, so its "
+                                  + "hide toggles do nothing ({2})", cEntry.ModDirectory, modelRel, ex.Message);
+                    }
+                    parsedModel = (bytes, UsedMaterialNames(bytes, SecondSkinWriter.MaterialNames(bytes)), attrs);
                 }
                 catch (Exception ex)
                 {
                     log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} could not be read as a model ({4})",
                         cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel, ex.Message);
-                    parsedModel = (null, []);
+                    parsedModel = (null, [], []);
                 }
                 modelCache[modelPath] = parsedModel;
             }
@@ -1357,6 +1444,20 @@ public sealed class SecondSkinService
                 log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3} has no LOD0 geometry at all, skipping",
                     cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", modelRel);
                 continue;
+            }
+
+            // The pack's own hide-toggles, applied by DROPPING geometry rather than by letting the game do
+            // it. The game reads an IMC attribute mask off the item being worn, and these meshes are about
+            // to move onto a host accessory — so the pack's own mask governs a set nobody has equipped.
+            // See ContentAttributeGroup.
+            IReadOnlySet<string>? hidden = null;
+            if (cEntry.Metadata.ContentAttributes is { Count: > 0 } attrGroups)
+            {
+                hidden = HiddenAttributes(attrGroups, modelRel, parsedModel.Attrs,
+                    ModSelection(cEntry.ModDirectory));
+                if (hidden is { Count: > 0 })
+                    log.Information("[Proteus] content: {0} — {1} hides [{2}]",
+                        cEntry.ModDirectory, modelRel, string.Join(", ", hidden));
             }
 
             foreach (var leaf in used)
@@ -1423,7 +1524,9 @@ public sealed class SecondSkinService
                         // characterscroll samples its scroll map with uv1, so a glowing mesh is the only
                         // content mesh that is not copied byte-for-byte. Per GEOMETRY rather than per layer:
                         // the glow belongs to the unit, and the unit is what owns these.
-                        MirrorUv1: glow != null));
+                        MirrorUv1: glow != null,
+                        // The pack's own hide toggles, baked in — see ContentGeometry.HiddenAttributes.
+                        HiddenAttributes: hidden));
 
                 // Every option this material serves, so the colour editor can find it under any of them.
                 // Compared case-insensitively, as option names are everywhere else in this codebase.

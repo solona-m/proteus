@@ -812,4 +812,62 @@ public class ContentPieceSelectionTests
         Assert.Equal("Hair Ribbon", lookup(3, 6085));
         Assert.Null(lookup(4, 9999));
     }
+
+    /// <summary>
+    /// A pack's IMC hide-toggles resolve to attribute NAMES through each model's own table.
+    /// <para/>
+    /// Denim Shorts is the shape under test: an Imc group on set 6058 whose default mask is 3 — both bits
+    /// on — with "Panty Strap Hide" carrying bit 0 and "Pockets Hide" bit 1. Selecting an option CLEARS its
+    /// bits, which is what makes them read as "hide".
+    /// </summary>
+    [Fact]
+    public void An_imc_hide_toggle_resolves_to_the_attribute_names_that_models_own_table_uses()
+    {
+        var group = new ContentAttributeGroup
+        {
+            Group = "Toggles",
+            SetId = 6058,
+            DefaultMask = 3,
+            Options = new(StringComparer.Ordinal)
+            {
+                ["Panty Strap Hide"] = 1,
+                ["Pockets Hide"] = 2,
+            },
+        };
+        List<ContentAttributeGroup> groups = [group];
+        const string Mid = "items/chara/equipment/e6058/model/c0101e6058_dwn.mdl";
+
+        // The two orders Denim Shorts actually ships. Bit 0 is atr_sne on one model and atr_hiz on the
+        // other, so a mask copied across positionally would hide the wrong piece on Lalafell.
+        string[] midlander = ["atr_sne", "atr_hiz"];
+        string[] lalafell  = ["atr_hiz", "atr_sne"];
+
+        Dictionary<string, List<string>> Sel(params string[] on) => new(StringComparer.Ordinal)
+            { ["Toggles"] = [.. on] };
+
+        // Nothing selected: the default has both bits, so nothing is hidden at all.
+        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, midlander, Sel()));
+        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, midlander, null));
+
+        // "Panty Strap Hide" clears bit 0 — atr_sne on the Midlander model, atr_hiz on the Lalafell one.
+        Assert.Equal(["atr_sne"],
+            SecondSkinService.HiddenAttributes(groups, Mid, midlander, Sel("Panty Strap Hide"))!.Order());
+        Assert.Equal(["atr_hiz"],
+            SecondSkinService.HiddenAttributes(groups, Mid, lalafell, Sel("Panty Strap Hide"))!.Order());
+
+        // Both selected: the mask empties and every named attribute goes.
+        Assert.Equal(["atr_hiz", "atr_sne"],
+            SecondSkinService.HiddenAttributes(groups, Mid, midlander,
+                Sel("Panty Strap Hide", "Pockets Hide"))!.Order());
+
+        // A group for a different set leaves this model alone — a pack can ship several items.
+        Assert.Null(SecondSkinService.HiddenAttributes(groups,
+            "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", midlander, Sel("Panty Strap Hide")));
+
+        // Bits past the end of the model's own table name nothing, so they hide nothing.
+        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, ["atr_sne", "atr_hiz"], Sel()));
+        Assert.Equal(["atr_sne"], SecondSkinService.HiddenAttributes(
+            [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0x3FE }],
+            Mid, midlander, null)!.Order());
+    }
 }

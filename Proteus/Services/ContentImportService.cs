@@ -604,6 +604,25 @@ public sealed class ContentImportService
 
         metadata.PieceGroupName = preview.PieceGroupName;
 
+        // The pack's own IMC show/hide toggles. Recorded rather than left to Penumbra because Penumbra's
+        // edit lands on the pack's OWN equipment set, and the composite is about to move this geometry onto
+        // a host accessory — see ContentAttributeGroup. Options with no bits are skipped: an Imc group can
+        // carry a plain variant switch that hides nothing.
+        foreach (var g in preview.Pack.Groups.Where(g =>
+                     string.Equals(g.Type, "Imc", StringComparison.OrdinalIgnoreCase)))
+        {
+            var opts = g.Options.Where(o => o.AttributeMask != 0)
+                .ToDictionary(o => o.Name, o => (int)o.AttributeMask, StringComparer.Ordinal);
+            if (opts.Count == 0 && g.DefaultAttributeMask == 0) continue;
+            (metadata.ContentAttributes ??= []).Add(new ContentAttributeGroup
+            {
+                Group       = g.Name,
+                SetId       = g.ImcSetId,
+                DefaultMask = g.DefaultAttributeMask,
+                Options     = opts,
+            });
+        }
+
         // Models the pack redirects outside every option. These used to be dropped: they were looked up
         // against the grouped plans, which never contained them, so a pack with no option groups at all
         // imported as "nothing usable" while the warning claimed they had been taken as always-on pieces.

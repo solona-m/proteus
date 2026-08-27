@@ -35,9 +35,13 @@ public static class PenumbraPackage
     /// by name rather than redirecting files, so an option with no <paramref name="Files"/> and a non-empty
     /// list here is still a real selector — see <see cref="ReadAttributes"/>.
     /// </param>
+    /// <param name="AttributeMask">
+    /// For an option of an <c>Imc</c> group: the attribute bits this option turns OFF when it is selected.
+    /// Zero everywhere else. See <see cref="PackGroup.DefaultAttributeMask"/>.
+    /// </param>
     public sealed record PackOption(
         string Name, string? Description, IReadOnlyDictionary<string, string> Files,
-        IReadOnlyList<string> Attributes);
+        IReadOnlyList<string> Attributes, ushort AttributeMask = 0);
 
     /// <summary>
     /// One option group. <paramref name="Index"/> is Penumbra's own ordinal — the position in the v4
@@ -46,8 +50,25 @@ public static class PenumbraPackage
     /// is on disk.
     /// </summary>
     /// <param name="Entry">The archive entry this group came from, or null when it was inline in meta.json.</param>
+    /// <param name="ImcSetId">
+    /// For an <c>Imc</c> group: the equipment set its entry belongs to (the manifest's <c>PrimaryId</c>),
+    /// or -1 for every other kind of group.
+    /// <para/>
+    /// An Imc group hides and shows parts of a model without redirecting a single file. It edits the IMC
+    /// entry's ATTRIBUTE MASK — ten bits, one per entry in the model's own attribute name table, by
+    /// position — and the game culls a submesh whose attributes are all switched off. Denim Shorts does its
+    /// "Panty Strap Hide" this way. It is a different mechanism entirely from the <c>Atr</c> manipulation
+    /// <see cref="ReadAttributes"/> reads, which names attributes rather than numbering them.
+    /// </param>
+    /// <param name="ImcSlot">For an <c>Imc</c> group: the equipment slot its entry belongs to ("Legs").</param>
+    /// <param name="DefaultAttributeMask">
+    /// For an <c>Imc</c> group: the attribute bits set when no option is selected. Each SELECTED option
+    /// clears its own bits from this — that is why the options read as "hide": Denim Shorts defaults to 3
+    /// (both bits on) with options carrying 1 and 2.
+    /// </param>
     public sealed record PackGroup(
-        string Name, string Type, int Index, IReadOnlyList<PackOption> Options, string? Entry);
+        string Name, string Type, int Index, IReadOnlyList<PackOption> Options, string? Entry,
+        int ImcSetId = -1, string? ImcSlot = null, ushort DefaultAttributeMask = 0);
 
     /// <summary>A parsed pack.</summary>
     /// <param name="Entries">Every archive entry, normalised, with its uncompressed size.</param>
@@ -222,16 +243,41 @@ public static class PenumbraPackage
                 var attrs = new List<string>();
                 ReadAttributes(oo, attrs);
                 options.Add(new PackOption(
-                    Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs));
+                    Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
+                    Mask(oo, "AttributeMask")));
             }
+
+        // An Imc group's edit lives on the GROUP — an identifier, a default entry, and per-option masks —
+        // rather than on the options as files or manipulations. Read only for that kind, so nothing else
+        // picks up an "AttributeMask" that happens to share the name.
+        bool imc = string.Equals(Str(g, "Type"), "Imc", StringComparison.OrdinalIgnoreCase);
+        int setId = -1;
+        string? slot = null;
+        ushort defaultMask = 0;
+        if (imc)
+        {
+            if (g["Identifier"] is JsonObject id)
+            {
+                setId = Int(id, "PrimaryId") ?? -1;
+                slot = Str(id, "EquipSlot");
+            }
+            if (g["DefaultEntry"] is JsonObject de) defaultMask = Mask(de, "AttributeMask");
+        }
 
         return new PackGroup(
             Str(g, "Name") ?? string.Empty,
             Str(g, "Type") ?? "Single",
             index,
             options,
-            entry);
+            entry,
+            setId,
+            slot,
+            defaultMask);
     }
+
+    /// <summary>One IMC attribute mask field, clamped to the ten bits the format actually carries.</summary>
+    private static ushort Mask(JsonObject owner, string key)
+        => (ushort)((Int(owner, key) ?? 0) & 0x3FF);
 
     private static void ReadFiles(JsonObject owner, Dictionary<string, string> into)
     {

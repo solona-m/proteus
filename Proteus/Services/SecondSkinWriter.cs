@@ -45,7 +45,19 @@ public sealed class SecondSkinLayer
 /// <c>characterscroll.shpk</c> for an animated glow: that shader samples its scroll map with uv1, and a
 /// model's uv1 is as likely to hold an unrelated aux coordinate as a usable texcoord.
 /// </summary>
-public sealed record ContentGeometry(byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false);
+/// <param name="HiddenAttributes">
+/// Attribute names this pack's own toggles currently switch OFF, by the source model's own naming. A
+/// submesh tagged only with these is dropped rather than emitted.
+/// <para/>
+/// Applied here, at build time, because the runtime mechanism cannot survive the move. The game decides a
+/// submesh's visibility from the IMC attribute mask of the item being WORN, and Proteus appends this
+/// geometry onto a host accessory — so the pack's own mask governs a set nobody has equipped, and the
+/// host's governs geometry it knows nothing about. Baking the answer into the mesh sidesteps both, and
+/// composes when several packs share one host, which a single per-item mask could not.
+/// </param>
+public sealed record ContentGeometry(
+    byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
+    IReadOnlySet<string>? HiddenAttributes = null);
 
 /// <summary>
 /// Builds the "second skin" model: every skin part (chest, legs, hands, feet…) duplicated, pushed out
@@ -105,6 +117,18 @@ public static class SecondSkinWriter
     /// far more reliable than guessing from whatever body materials happen to be loaded.
     /// </summary>
     public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
+
+    /// <summary>
+    /// The model's attribute names, in the order its submesh masks index them — bit <c>i</c> of a submesh's
+    /// mask means entry <c>i</c> here.
+    /// <para/>
+    /// The ORDER is the point, and it is why this exists beside the material-keyed reader below. An IMC
+    /// attribute mask addresses these by POSITION rather than by name, so turning "bit 0 is off" into
+    /// "submeshes tagged atr_sne are off" needs the table as the model wrote it. The same pack proves the
+    /// position is not fixed: Denim Shorts lists <c>[atr_sne, atr_hiz]</c> on its Midlander model and
+    /// <c>[atr_hiz, atr_sne]</c> on its Lalafell one.
+    /// </summary>
+    public static IReadOnlyList<string> AttributeNames(byte[] s) => Parse(s).AttrNames;
 
     /// <summary>
     /// The model's material names, and for each the attribute names of the LOD0 submeshes drawn with it —
@@ -571,7 +595,7 @@ public static class SecondSkinWriter
         // map across its meshes.
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
-                      bool mirrorUv1 = false)
+                      bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -666,6 +690,15 @@ public static class SecondSkinWriter
                 // submesh (a duplicate variant, e.g. the second calf). Kept empty ⇒ contributes nothing;
                 // never applied to a single-submesh mesh (that IS the whole part).
                 if (dropConnectors && srcSubCount > 1 && (sc / 3 < 200 || su == srcSubCount - 1))
+                {
+                    keptPerSub.Add(keep.ToArray());
+                    continue;
+                }
+
+                // Switched off by one of the pack's own toggles — see ContentGeometry.HiddenAttributes.
+                // Kept empty, exactly like the connector case above, so the submesh contributes nothing
+                // while every index and bone table around it keeps its shape.
+                if (hiddenAttrs is { Count: > 0 } && IsHidden(src, U32(ss + 8), hiddenAttrs))
                 {
                     keptPerSub.Add(keep.ToArray());
                     continue;
@@ -848,7 +881,8 @@ public static class SecondSkinWriter
                             continue;
 
                         EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
-                            dropConnectors: false, mirrorUv1: geo.MirrorUv1);
+                            dropConnectors: false, mirrorUv1: geo.MirrorUv1,
+                            hiddenAttrs: geo.HiddenAttributes);
                     }
                 }
                 continue;
@@ -1149,6 +1183,31 @@ public static class SecondSkinWriter
             }
         }
         return outBB;
+    }
+
+    /// <summary>
+    /// Is this submesh switched off by the pack's toggles?
+    /// <para/>
+    /// Only when it is tagged AND every attribute it names is hidden. An untagged submesh (mask 0) is drawn
+    /// unconditionally, and one naming several attributes survives while any of them is still on.
+    /// <para/>
+    /// "Any survives" rather than "all must be on" is a deliberate lean. The two rules agree on the case
+    /// that actually occurs — one attribute per submesh, which is what every toggle-shipping pack seen so
+    /// far does — and they differ only where the game's own rule is not something this codebase has
+    /// measured. Where the answer is unknown the cost is not symmetric: geometry wrongly kept is a piece
+    /// the user can still switch off, geometry wrongly dropped is a hole they cannot get back.
+    /// </summary>
+    private static bool IsHidden(Source src, uint mask, IReadOnlySet<string> hidden)
+    {
+        if (mask == 0) return false;
+        bool tagged = false;
+        for (int bit = 0; bit < 32 && bit < src.AttrNames.Length; bit++)
+        {
+            if ((mask & (1u << bit)) == 0) continue;
+            tagged = true;
+            if (!hidden.Contains(src.AttrNames[bit])) return false;   // still on by one of its names
+        }
+        return tagged;
     }
 
     private static Source Parse(byte[] s)

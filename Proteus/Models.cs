@@ -122,6 +122,11 @@ public class ProteusMetadata
     [JsonPropertyName("ContentMaterials")]
     public Dictionary<string, ContentMaterialSettings>? ContentMaterials { get; set; }
 
+    /// <summary>The pack's own IMC show/hide toggles, which the composite applies by dropping geometry —
+    /// see <see cref="ContentAttributeGroup"/>. Null for a pack that has none, which is most of them.</summary>
+    [JsonPropertyName("ContentAttributes")]
+    public List<ContentAttributeGroup>? ContentAttributes { get; set; }
+
     /// <summary>
     /// The settings stored for one material path, creating the entry if this is its first edit.
     /// <para/>
@@ -459,6 +464,56 @@ public class ContentPiece
     [JsonIgnore]
     public ShellSurfaceKey SurfaceKey
         => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+}
+
+/// <summary>
+/// A pack's own show/hide toggles for one of its items, as an IMC attribute mask.
+/// <para/>
+/// This is how a mod offers "Hide panty strap" without shipping a second model: the item's IMC entry
+/// carries ten attribute bits, one per entry in the model's own attribute name table BY POSITION, and the
+/// game culls a submesh whose attributes are all switched off. Penumbra exposes it as a group whose options
+/// each clear some of those bits.
+/// <para/>
+/// It cannot work through Proteus unaided, and that is why this is recorded. The mask belongs to the
+/// pack's own equipment set; Proteus moves the geometry onto a host accessory, so at draw time the game
+/// reads the HOST's mask and the pack's edit governs an item nobody is wearing. The composite therefore
+/// applies the toggle itself, by dropping the submeshes the mask switches off — see
+/// <c>SecondSkinService.HiddenAttributes</c>.
+/// </summary>
+public class ContentAttributeGroup
+{
+    /// <summary>The Penumbra group whose selection drives this — read live, like every other gate.</summary>
+    [JsonPropertyName("Group")]
+    public string Group { get; set; } = string.Empty;
+
+    /// <summary>The equipment set the mask belongs to, so a pack with several items applies each toggle to
+    /// the right models. -1 matches every piece of the mod.</summary>
+    [JsonPropertyName("SetId")]
+    public int SetId { get; set; } = -1;
+
+    /// <summary>The bits set when none of the options are selected.</summary>
+    [JsonPropertyName("DefaultMask")]
+    public int DefaultMask { get; set; }
+
+    /// <summary>Option name → the bits it CLEARS while selected.</summary>
+    [JsonPropertyName("Options")]
+    public Dictionary<string, int> Options { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The mask left after <paramref name="selected"/> have had their bits cleared.
+    /// <para/>
+    /// Selected options SUBTRACT, which is what makes them read as "hide". Denim Shorts is the evidence:
+    /// its default is 3 — both bits on — and its two options carry 1 and 2 under the names "Panty Strap
+    /// Hide" and "Pockets Hide". Inverting this would hide exactly the half the user asked to keep, so it
+    /// lives here, named, rather than inline at the call site.
+    /// </summary>
+    public int MaskFor(IEnumerable<string>? selected)
+    {
+        int mask = DefaultMask;
+        foreach (var name in selected ?? [])
+            if (Options.TryGetValue(name, out var off)) mask &= ~off;
+        return mask & 0x3FF;
+    }
 }
 
 /// <summary>
