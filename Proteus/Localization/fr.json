@@ -99,6 +99,10 @@
     "message": "Capture l'état actuel de Proteus (activation / priorité / options / couleurs)\ndans cette liaison. Les modifications manuelles ne persistent que si vous cliquez ici.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] {0} pièce(s) de maillage de vos mods n'ont pas pu être placées — vos accessoires n'ont plus d'emplacements de matériau. Équipez une autre bague / un bracelet / un collier, ou désactivez une couche.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] « {0} » applique une lueur sur un calque de peau. La peau ne peut plus briller, donc cette option est désormais rendue comme un calque de tissu — elle a besoin d'un accessoire libre, et sa surface aura un aspect légèrement différent.",
     "description": ""
@@ -232,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Sous characterscroll, il s'agit d'un petit SEUIL, pas de la luminosité :\n0 = aucune lueur ; une valeur élevée délave la couleur de la sphere map défilante.\nLes matériaux animés d'origine utilisent ~0,025.",
+    "message": "L'intensité avec laquelle cette ligne brille. 0 l'éteint.\nAvec une lueur animée, c'est la luminosité de l'effet ; une valeur élevée\nbrûle en blanc une texture de défilement colorée. Environ 25 % est un bon départ.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -469,6 +473,178 @@
   },
   "Common.None": {
     "message": "(aucune)",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "Les pièces arrivent DÉSACTIVÉES. Après l'import, cochez celles que vous voulez sous « {0} » dans Penumbra — rien n'est porté avant.",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A et B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "{0} maillage, {1} sommets",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "Ce pack peint sa surface avec une texture. Une lueur animée fait tourner le matériau sur un shader qui n'a pas d'emplacement pour elle : tant qu'elle est active, les couleurs ci-dessus prennent le relais. Retirer l'effet remet la texture.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "L'effet « {0} » n'est plus dans le dossier Effects de ce mod ni dans votre bibliothèque : la pièce s'affiche sans lui. Choisissez-en un autre, ou remettez le fichier.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "Glow est à zéro sur la ligne {0}{1} — la seule cellule que lit ce matériau — donc l'effet reste éteint. Augmentez Glow là pour l'activer et régler sa force. Glow sur toute autre ligne ne fait rien.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "Sa texture d'index lit la ligne {0}, colonne {1} — mais cette texture est compressée, elle peut donc être décalée d'une ligne ou deux. Les lignes grisées restent cliquables : si une couleur ne prend pas, essayez une ligne voisine.",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "La texture d'index de ce matériau est entièrement transparente : elle ne sélectionne donc aucune ligne de couleur. Toutes les lignes sont modifiables ci-dessous, mais la pièce tirera ses couleurs des seules textures.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "Ce matériau désigne une texture d'index que Proteus n'a pas pu lire ; impossible de dire quelles lignes sont actives. Toutes les lignes sont modifiables ci-dessous, mais seules celles que l'index sélectionne apparaîtront.",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "Importez un mod classique (.pmp). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} matériaux",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "Ce matériau ne comporte aucune table de couleurs, donc aucune ligne à modifier : rien de ce que vous changez ci-dessous n'atteindra la pièce. Ses couleurs viennent des seules textures.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "Ce matériau ne fournit pas de texture d'index : il prend donc la ligne {0} pour tout.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "Le modèle le plus proche de ce pack est fait pour {0}, ni votre race ({1}) ni la forme commune que le jeu redimensionne pour tous. Proteus préfère ne pas l'afficher plutôt qu'à la mauvaise taille.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "Les modèles de ce pack sont faits pour {0}, et vous êtes {1}. Un équipement conçu pour une race a une autre forme : porté tel quel il tomberait au mauvais endroit — Proteus préfère ne pas l'afficher.",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "Aucune option de ce pack ne fournit un maillage que Proteus puisse ajouter.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "Pièces : {0} sur {1}",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nIgnoré : {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} races",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "Impossible de lire ce pack : {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "Sa texture d'index lit la ligne {0}, colonne {1} — les autres lignes sont grisées car rien ne les échantillonne, et modifier l'autre colonne de cette ligne ne fera rien non plus.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Sa texture d'index lit les lignes {0} — les autres sont grisées car rien ne les échantillonne.",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "Partagé par : {0}. Ces pièces sont dessinées avec un seul matériau, ces couleurs les atteignent donc toutes — et les lignes que vous ne touchez pas restent exactement telles que l'auteur du pack les a écrites.",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "ignoré",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "matériau non lié",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "toujours actif",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "Ce nom de mod ne contient aucun caractère utilisable — utilisez des lettres ou des chiffres.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "Un dossier de mod nommé « {0} » existe déjà.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "Le pack n'est plus là : {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Le dossier de mods de Penumbra n'est pas disponible.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "« Proteus » est réservé — choisissez un autre nom de mod.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "Échec de l'écriture du mod : {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "aucune géométrie — tous ses maillages sont vides",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "son maillage nomme {0}, que ce pack ne fournit pas. Réassociez le maillage à l'un des matériaux du pack et réexportez.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "modèle illisible ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "« {0} » importé — pièces : {1}{2}. Activé et ouvert dans Penumbra. Ses options se choisissent dans Penumbra, et toutes celles que vous sélectionnez sont portées en même temps.",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "« {0} » importé — pièces : {1}{2}. Elles arrivent DÉSACTIVÉES : cochez celles que vous voulez sous « {3} » dans Penumbra, maintenant ouvert sur ce mod.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (ignoré : {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "Le groupe « {0} » est un groupe {1}, que Proteus ne peut pas placer — ses options sont laissées telles quelles.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "Aucune option de ce pack ne redirige de modèle : il n'y a donc aucune géométrie à ajouter. Installez-le plutôt dans Penumbra.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "Les modèles de ce pack sont faits pour {0}. Proteus ne redimensionne pas la géométrie entre races : ses pièces n'apparaîtront que sur un personnage de cette race.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "Ce pack active et désactive ses propres pièces ; Proteus n'ajoute donc aucune case à cocher — utilisez celles du pack. Toute pièce qu'il ne commute pas est portée dès que le mod est activé.",
     "description": ""
   },
   "Create.Author.Label": {
@@ -732,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Pack Onion",
+    "message": "Pack de mod",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Sélectionner un pack Onion",
+    "message": "Sélectionner un pack",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Importez un pack de calques Onion (.omp). Proteus lit les couches du pack et écrit un nouveau mod Penumbra accompagné d'un fichier Proteus — le fichier d'origine n'est pas modifié.",
+    "message": "Importez un pack d'overlays Onion (.omp). Portez ses calques comme des overlays Proteus, que vous pouvez recolorer et réempiler.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -812,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Choisissez un fichier .omp pour voir ce qu'il contient.",
+    "message": "Choisissez un pack pour voir ce qu'il contient.",
     "description": ""
   },
   "Import.NothingUsable": {

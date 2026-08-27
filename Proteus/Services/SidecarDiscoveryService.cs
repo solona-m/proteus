@@ -15,7 +15,19 @@ public record OverlayEntry(
     bool Enabled,        // current enabled state in the player's Penumbra collection
     ProteusMetadata Metadata,
     string SidecarRoot   // absolute path to the Proteus/ subfolder
-);
+)
+{
+    /// <summary>
+    /// The Penumbra mod folder this entry lives in — the parent of its <c>Proteus/</c> sidecar, and what
+    /// every path a content pack stores (models, materials, textures) is relative to.
+    /// <para/>
+    /// One place rather than four: this convention was open-coded in the compositor and three times over in
+    /// the status window, and a mod folder that failed to derive in one of them but not the others is the
+    /// kind of drift nothing would catch. Null only for a sidecar path with no parent at all.
+    /// </summary>
+    public string? ModRoot => Path.GetDirectoryName(
+        SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+}
 
 /// <summary>
 /// A single overlay descriptor paired with the color table rows that apply to it.
@@ -33,6 +45,24 @@ public record ResolvedOverlay(
     /// int.MaxValue for top-level overlays, which belong to no group.
     /// </summary>
     int GroupOrder = int.MaxValue
+);
+
+/// <summary>
+/// One geometry piece an imported content pack currently contributes, paired with the colour rows that
+/// apply to it. Mirrors <see cref="ResolvedOverlay"/> field for field so the compositor, the design
+/// bindings and the editor can key both on the same <c>(mod, group, option)</c> triple.
+/// </summary>
+public record ResolvedContent(
+    ContentPiece Piece,
+    List<ColorTableRowPreset>? ColorTableRows,
+    string? OptionGroup,
+    string? Option,
+    int GroupOrder = int.MaxValue,
+    /// <summary>
+    /// The animated glow this piece's material takes, resolved with the same option-then-mod fallback the
+    /// colour rows use. Null — the usual case — publishes the pack's own material untouched.
+    /// </summary>
+    GearSettingsPreset? Glow = null
 );
 
 public class SidecarDiscoveryService
@@ -174,6 +204,91 @@ public class SidecarDiscoveryService
         }
         return resolved;
     }
+
+    /// <summary>
+    /// Resolve the geometry an imported content pack currently contributes: its unconditional
+    /// <see cref="ProteusMetadata.Content"/> pieces, or the pieces of whichever options are selected in
+    /// Penumbra. The selection read is identical to <see cref="ResolveActiveOverlays"/>'s — Penumbra owns
+    /// which options are on, and Proteus only mirrors it.
+    /// </summary>
+    public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry)
+    {
+        var meta = entry.Metadata;
+        if (!meta.HasContent) return [];
+
+        // Ask Penumbra only when there is something to ask about. A pack whose pieces are all unconditional
+        // and ungated resolves without a single IPC hop, which is the same rule the sidecar pre-filter in
+        // Discover follows and the reason this stays cheap for the common case.
+        bool needsSettings = meta.PieceGroupName is { Length: > 0 } || meta.ContentGroups is { Count: > 0 };
+        (bool Enabled, int Priority, Dictionary<string, List<string>> Options)? settings = null;
+        if (needsSettings)
+        {
+            var collId = penumbra.GetPlayerCollectionId();
+            settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+        }
+
+        List<string>? Selection(string group)
+            => settings?.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, group, StringComparison.OrdinalIgnoreCase))
+                .Value;
+
+        // The synthesized piece group, if the importer added one. A gated piece whose option is not ticked
+        // is not worn — and when the selection cannot be read at all, nothing gated is worn either: the
+        // safe direction is to leave off something the user never asked for.
+        var gateOn = meta.PieceGroupName is { Length: > 0 } gateGroup ? Selection(gateGroup) : null;
+
+        bool Ungated(ContentPiece p) => PieceIsOn(p, gateOn);
+
+        var resolved = new List<ResolvedContent>();
+
+        // Unconditional pieces. Additive with the groups below rather than an either/or: one pack can
+        // legitimately ship both, and returning early on the first would silently drop the rest.
+        foreach (var piece in meta.Content ?? [])
+            if (Ungated(piece))
+                resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null, Glow: meta.ContentGlow));
+
+        if (meta.ContentGroups == null || !settings.HasValue) return resolved;
+
+        var modRoot = entry.ModRoot;
+        var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
+
+        foreach (var group in meta.ContentGroups)
+        {
+            if (group.Options.Count == 0) continue;
+
+            int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
+
+            var selected = Selection(group.PenumbraGroupName);
+            if (selected is not { Count: > 0 }) continue;
+
+            foreach (var opt in group.Options.Where(o => selected.Any(sel =>
+                         string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
+            {
+                var rows = opt.ColorTableRows ?? meta.ColorTableRows;
+                // Same option-then-mod fallback the rows take, so a pack-wide glow reaches an option that
+                // never set one of its own.
+                var glow = opt.Glow ?? meta.ContentGlow;
+                foreach (var piece in opt.Pieces)
+                    if (Ungated(piece))
+                        resolved.Add(new ResolvedContent(
+                            piece, rows, group.PenumbraGroupName, opt.Name, order, glow));
+            }
+        }
+        return resolved;
+    }
+
+    /// <summary>
+    /// Whether a piece's gate is open: it has none, or the option that switches it on is among
+    /// <paramref name="selection"/>.
+    /// <para/>
+    /// A null selection means the gate group's state could not be read at all, and everything gated stays
+    /// OFF. That is the safe direction — the alternative is wearing something the user never ticked — and it
+    /// is why this is a decision worth naming rather than an inline condition.
+    /// </summary>
+    internal static bool PieceIsOn(ContentPiece piece, IReadOnlyList<string>? selection)
+        => piece.GateOption == null
+        || (selection != null
+            && selection.Any(sel => string.Equals(sel, piece.GateOption, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Resolve the grayscale transparency-mask images currently selected for an entry. These come

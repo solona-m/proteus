@@ -99,6 +99,10 @@
     "message": "将当前 Proteus 状态（启用／优先级／选项／颜色）记录到此绑定中。\n手动修改只有在点击此处后才会保留。",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] 有 {0} 个模组网格部件无法放置——你的饰品已没有材质槽位。请再装备一件戒指 / 手镯 / 项链，或关闭一个图层。",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
     "description": ""
@@ -232,7 +236,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "在 characterscroll 下，这是一个很小的阈值，而不是亮度：\n0 = 完全不发光；数值过大会冲淡滚动贴图的颜色。\n原版动态材质使用约 0.025。",
+    "message": "此行发光的亮度。0 表示关闭。\n在动画发光下，这就是效果的亮度；数值过高会让\n彩色的滚动贴图过曝为白色。25% 左右是不错的起点。",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -469,6 +473,178 @@
   },
   "Common.None": {
     "message": "（无）",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "部件导入时均为关闭状态。导入后请在 Penumbra 的“{0}”中勾选你想要的部件——在那之前不会穿戴任何东西。",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A 和 B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "网格 {0}，顶点 {1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "此模组使用贴图绘制表面。动画发光会让材质运行在一个没有该槽位的着色器上，因此发光期间将改由上方的颜色接管。清除效果即可恢复贴图。",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "效果“{0}”已不在此模组的 Effects 文件夹或您的收藏库中，因此该部件正在不带效果地渲染。请另选一个，或将文件放回。",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "此材质只读取第 {0} 行 {1} 列这一处，而那里的 Glow 为零，因此效果仍处于关闭状态。请在该处提高 Glow 以开启它并设置强度。其他行的 Glow 不起任何作用。",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "其索引贴图读取第 {0} 行、{1} 列——但该贴图经过压缩，可能相差一两行。变灰的行仍可点击：若某个颜色没有生效，请试试相邻的行。",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "此材质的索引贴图完全透明，因此它不选择任何颜色行。下方每一行都可编辑，但该部件将仅从贴图获取颜色。",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "此材质指定了 Proteus 无法读取的索引贴图，因此无法判断哪些行有效。下方所有行均可编辑，但只有索引选中的行才会生效。",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "导入普通模组（.pmp）。无需占用装备栏即可穿戴其中的部件，并添加进阶色表功能。",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} 个材质",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "此材质没有颜色表，因此没有可编辑的行——您在下方做的任何修改都不会影响该部件。它的颜色仅来自贴图。",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "此材质未提供索引贴图，因此全部使用第 {0} 行。",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "此包最接近的模型是为{0}制作的，既不是您的种族（{1}），也不是游戏为所有人缩放的通用形状。Proteus 不会以错误的尺寸显示它。",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "此包的模型是为{0}制作的，而您是{1}。为特定种族制作的装备形状不同，直接穿戴会出现在错误的位置——Proteus 因此选择不显示它。",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "此包中没有任何选项提供 Proteus 可追加的网格。",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "部件：{1} 个中的 {0} 个",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} 个种族",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "无法读取该包：{0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "其索引贴图读取第 {0} 行、{1} 列——其余行因为无人采样而变灰，修改本行的另一列也同样不会生效。",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "其索引贴图读取第 {0} 行——其余行因为无人采样而变灰。",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "共用：{0}。这些部件使用同一个材质绘制，因此这些颜色会应用于全部——你未改动的行将完全保持作者设定的样子。",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "材质未绑定",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "常驻",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "该模组名称没有可用字符——请使用字母或数字。",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "已存在名为“{0}”的模组文件夹。",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "该包已不存在：{0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "无法访问 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "此包中没有可导入的内容。",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "“Proteus”为保留名称——请另选模组名称。",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "没有几何体——其中每个网格都是空的",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "其网格引用了 {0}，但此包并未提供该材质。请将网格重新绑定到包自带的材质后重新导出。",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "不是可读取的模型（{0}）",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "已导入“{0}”——部件：{1}{2}。已启用并在 Penumbra 中打开。其选项在 Penumbra 中选择，所选的全部会同时穿戴。",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "已导入“{0}”——部件：{1}{2}。它们均为关闭状态：请在已打开此模组的 Penumbra 中，于“{3}”内勾选你想要的部件。",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": "（已跳过：{0}）",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "分组“{0}”属于 {1} 类型，Proteus 无法放置——该分组的选项将保持原样。",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "此包中没有任何选项重定向模型，因此没有可供 Proteus 追加的几何体。请改为在 Penumbra 中安装。",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "此包的模型是为{0}制作的。Proteus 不会在种族之间缩放几何体，因此其部件只会出现在该种族的角色上。",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "该整合包自行控制各部件的显隐，因此 Proteus 不会另外添加复选框——请使用整合包自带的选项。它未加控制的部件，只要模组启用就会一直穿戴。",
     "description": ""
   },
   "Create.Author.Label": {
@@ -732,11 +908,11 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion 包",
+    "message": "模组整合包",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "选择一个 Onion 包",
+    "message": "选择整合包",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +928,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "导入 Onion 叠加包（.omp）。Proteus 会读取包中的层，并写入一个带有 Proteus 附属文件的新 Penumbra 模组——原始文件不会被修改。",
+    "message": "导入 Onion 叠加层整合包（.omp）。其图层可作为 Proteus 叠加层穿戴，并可重新上色和调整叠放顺序。",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -812,7 +988,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "选择一个 .omp 文件即可查看其内容。",
+    "message": "选择一个整合包以查看其内容。",
     "description": ""
   },
   "Import.NothingUsable": {
