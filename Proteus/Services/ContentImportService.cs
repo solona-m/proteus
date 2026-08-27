@@ -623,6 +623,34 @@ public sealed class ContentImportService
             });
         }
 
+        // The extra skeletons this pack's pieces need — see ContentSkeleton. Recorded for the same reason
+        // as the IMC toggles above: the pack's own entry names the set IT replaces, and the composite is
+        // about to move that geometry somewhere the entry cannot reach.
+        //
+        // Entries of 0 are dropped. Zero means "no extra skeleton", which is what most of these
+        // manipulations are — a mod clearing the set it takes over — and writing one would not enable
+        // anything, it would CLEAR the skeleton of whatever body part the composite pointed it at.
+        void Skeletons(IEnumerable<PenumbraPackage.PackEst> est, string? group, string? option)
+        {
+            foreach (var e in est)
+            {
+                if (e.Entry == 0) continue;
+                if ((metadata.ContentSkeletons ??= []).Any(s =>
+                        s.Group == group && s.Option == option
+                     && string.Equals(s.Slot, e.Slot, StringComparison.OrdinalIgnoreCase)
+                     && s.Entry == e.Entry)) continue;
+                metadata.ContentSkeletons.Add(new ContentSkeleton
+                {
+                    Group = group, Option = option, Slot = e.Slot, Entry = e.Entry,
+                });
+            }
+        }
+
+        Skeletons(preview.Pack.DefaultEst, null, null);
+        foreach (var g in preview.Pack.Groups)
+            foreach (var o in g.Options)
+                Skeletons(o.Est, g.Name, o.Name);
+
         // Models the pack redirects outside every option. These used to be dropped: they were looked up
         // against the grouped plans, which never contained them, so a pack with no option groups at all
         // imported as "nothing usable" while the warning claimed they had been taken as always-on pieces.

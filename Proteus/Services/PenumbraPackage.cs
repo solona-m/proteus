@@ -39,9 +39,31 @@ public static class PenumbraPackage
     /// For an option of an <c>Imc</c> group: the attribute bits this option turns OFF when it is selected.
     /// Zero everywhere else. See <see cref="PackGroup.DefaultAttributeMask"/>.
     /// </param>
+    /// <param name="Est">
+    /// Extra-skeleton entries this option declares — see <see cref="PackEst"/>.
+    /// </param>
     public sealed record PackOption(
         string Name, string? Description, IReadOnlyDictionary<string, string> Files,
-        IReadOnlyList<string> Attributes, ushort AttributeMask = 0);
+        IReadOnlyList<string> Attributes, ushort AttributeMask = 0,
+        IReadOnlyList<PackEst>? Est = null)
+    {
+        /// <summary>Never null, so callers can enumerate without a guard.</summary>
+        public IReadOnlyList<PackEst> Est { get; init; } = Est ?? [];
+    }
+
+    /// <summary>
+    /// One <c>Est</c> manipulation: "wearing <paramref name="SetId"/> on <paramref name="Slot"/> loads extra
+    /// skeleton <paramref name="Entry"/>".
+    /// <para/>
+    /// This is what makes a garment's <c>j_ex_*</c> bones exist. They are not in the model — they live in an
+    /// extra skeleton the game loads only when the EST table points at it, keyed by race, gender, slot and
+    /// SET. A jacket riding the <c>met</c> slot whose bones are top-space therefore depends on the entry for
+    /// the wearer's CHEST piece, not on its own.
+    /// <para/>
+    /// <paramref name="Entry"/> of 0 means "no extra skeleton" and is the common case — a mod clearing the
+    /// set it replaces. Only a non-zero entry enables anything.
+    /// </summary>
+    public sealed record PackEst(string Slot, int SetId, int Entry);
 
     /// <summary>
     /// One option group. <paramref name="Index"/> is Penumbra's own ordinal — the position in the v4
@@ -83,8 +105,12 @@ public static class PenumbraPackage
         string? Website,
         IReadOnlyDictionary<string, long> Entries,
         IReadOnlyDictionary<string, string> DefaultFiles,
-        IReadOnlyList<PackGroup> Groups)
+        IReadOnlyList<PackGroup> Groups,
+        IReadOnlyList<PackEst>? DefaultEst = null)
     {
+        /// <summary>The always-applied extra-skeleton entries, gated by no option. Never null.</summary>
+        public IReadOnlyList<PackEst> DefaultEst { get; init; } = DefaultEst ?? [];
+
         /// <summary>Every redirect the pack declares anywhere, default data and every option alike.</summary>
         public IEnumerable<KeyValuePair<string, string>> AllFiles
             => DefaultFiles.Concat(Groups.SelectMany(g => g.Options).SelectMany(o => o.Files));
@@ -120,11 +146,12 @@ public static class PenumbraPackage
         int fileVersion = Int(manifest, "FileVersion") ?? PenumbraModMeta.LegacyFileVersion;
 
         var defaultFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var defaultEst = new List<PackEst>();
         var groups = new List<PackGroup>();
 
         if (fileVersion >= PenumbraModMeta.SingleFileVersion)
         {
-            if (manifest["DefaultData"] is JsonObject dd) ReadFiles(dd, defaultFiles);
+            if (manifest["DefaultData"] is JsonObject dd) { ReadFiles(dd, defaultFiles); ReadEst(dd, defaultEst); }
             if (manifest["Groups"] is JsonArray arr)
                 for (int i = 0; i < arr.Count; i++)
                     if (arr[i] is JsonObject g)
@@ -132,7 +159,11 @@ public static class PenumbraPackage
         }
         else
         {
-            if (ReadNode(zip, LegacyDefaultEntry) is JsonObject legacy) ReadFiles(legacy, defaultFiles);
+            if (ReadNode(zip, LegacyDefaultEntry) is JsonObject legacy)
+            {
+                ReadFiles(legacy, defaultFiles);
+                ReadEst(legacy, defaultEst);
+            }
 
             // v3 group files, ordered by the number in their name — that number IS the group's priority,
             // and a zip's entry order is not guaranteed to follow it.
@@ -155,7 +186,8 @@ public static class PenumbraPackage
             Str(manifest, "Website"),
             entries,
             defaultFiles,
-            groups);
+            groups,
+            defaultEst);
     }
 
     /// <summary>
@@ -242,9 +274,11 @@ public static class PenumbraPackage
                 ReadFiles(oo, files);
                 var attrs = new List<string>();
                 ReadAttributes(oo, attrs);
+                var est = new List<PackEst>();
+                ReadEst(oo, est);
                 options.Add(new PackOption(
                     Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
-                    Mask(oo, "AttributeMask")));
+                    Mask(oo, "AttributeMask"), est));
             }
 
         // An Imc group's edit lives on the GROUP — an identifier, a default entry, and per-option masks —
@@ -278,6 +312,33 @@ public static class PenumbraPackage
     /// <summary>One IMC attribute mask field, clamped to the ten bits the format actually carries.</summary>
     private static ushort Mask(JsonObject owner, string key)
         => (ushort)((Int(owner, key) ?? 0) & 0x3FF);
+
+    /// <summary>
+    /// The extra-skeleton entries an owner declares — Penumbra's <c>Est</c> manipulation. See
+    /// <see cref="PackEst"/> for what one means.
+    /// <para/>
+    /// A pack repeats the same entry once per race it supports, so the races are deliberately NOT kept: a
+    /// composite dresses one character, and the race it needs is that character's, not whichever the pack
+    /// happened to list. What survives is slot, set and entry, deduplicated.
+    /// <para/>
+    /// Entries of 0 are kept here and dropped by the importer. This reader's job is to say what the pack
+    /// declares; deciding that "no skeleton" is not worth carrying belongs where the sidecar is written.
+    /// </summary>
+    private static void ReadEst(JsonObject owner, List<PackEst> into)
+    {
+        if (owner["Manipulations"] is not JsonArray manips) return;
+        foreach (var m in manips)
+        {
+            if (m is not JsonObject mo
+                || !string.Equals(Str(mo, "Type"), "Est", StringComparison.OrdinalIgnoreCase)
+                || mo["Manipulation"] is not JsonObject inner) continue;
+
+            if (Str(inner, "Slot") is not { Length: > 0 } slot) continue;
+            var rec = new PackEst(slot, Int(inner, "SetId") ?? -1, Int(inner, "Entry") ?? 0);
+            if (rec.SetId < 0 || into.Contains(rec)) continue;
+            into.Add(rec);
+        }
+    }
 
     private static void ReadFiles(JsonObject owner, Dictionary<string, string> into)
     {
