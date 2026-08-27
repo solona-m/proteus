@@ -40,6 +40,60 @@ internal sealed class SyntheticPack : IDisposable
     /// <paramref name="groupName"/>. Each toggle's attribute tags its own material's submesh, so the gates
     /// the importer records map option → material one to one.
     /// </summary>
+    /// <summary>
+    /// A pack whose pieces are shown and hidden by an <c>Imc</c> group — the Denim Shorts shape. The model
+    /// carries <paramref name="attributes"/> in that order, and the group's options each clear one bit,
+    /// starting at bit 0.
+    /// <para/>
+    /// The default mask has every bit the attributes occupy, so nothing is hidden until an option is
+    /// selected. That is what makes the options read as "hide".
+    /// </summary>
+    internal static SyntheticPack ImcToggled(
+        string raceCode, string groupName, params string[] attributes)
+    {
+        var meshes = attributes
+            .Select((_, i) => new SyntheticModel.Mesh($"/mt_c{raceCode}e6058_dwn_{(char)('a' + i)}.mtrl",
+                                                      new SyntheticModel.Sub(1u << i)))
+            .ToArray();
+        var model = SyntheticModel.Build(attributes, meshes);
+
+        const string ModelEntry = "model.mdl";
+        string modelGamePath = $"chara/equipment/e6058/model/c{raceCode}e6058_dwn.mdl";
+
+        var files = new List<(string GamePath, string Entry)> { (modelGamePath, ModelEntry) };
+        foreach (var mesh in meshes)
+        {
+            var leaf = mesh.Material.TrimStart('/');
+            files.Add(($"chara/equipment/e6058/material/v0001/{leaf}", leaf));
+        }
+
+        int defaultMask = (1 << attributes.Length) - 1;
+        var sb = new StringBuilder();
+        sb.Append("{\"FileVersion\":4,\"Name\":\"Synthetic\",\"Author\":\"Tests\",\"Description\":\"\",");
+        sb.Append("\"DefaultData\":{\"Files\":{");
+        sb.Append(string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry)}")));
+        sb.Append("},\"FileSwaps\":{},\"Manipulations\":[]},");
+        sb.Append("\"Groups\":[{\"Type\":\"Imc\",\"Name\":");
+        sb.Append(Quote(groupName));
+        sb.Append(",\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":6058,\"Variant\":1,");
+        sb.Append("\"EquipSlot\":\"Legs\"},\"DefaultEntry\":{\"MaterialId\":1,\"DecalId\":0,\"VfxId\":0,");
+        sb.Append("\"MaterialAnimationId\":0,\"AttributeMask\":").Append(defaultMask).Append(",\"SoundId\":0},");
+        sb.Append("\"Options\":[");
+        sb.Append(string.Join(",", attributes.Select((a, i) =>
+            "{\"Name\":" + Quote(a + " Hide") + ",\"AttributeMask\":" + (1 << i) + "}")));
+        sb.Append("]}]}");
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            Write(zip, "meta.json", Encoding.UTF8.GetBytes(sb.ToString()));
+            Write(zip, ModelEntry, model);
+            foreach (var mesh in meshes) Write(zip, mesh.Material.TrimStart('/'), [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
     internal static SyntheticPack AttributeDriven(
         string raceCode, string groupName, params Toggle[] toggles)
     {

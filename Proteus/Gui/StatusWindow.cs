@@ -1341,8 +1341,9 @@ public class StatusWindow : Window
                     if (!ok) return;
                     var picked = paths.FirstOrDefault();
                     if (string.IsNullOrEmpty(picked)) return;
+                    RememberImportDir(picked);
                     LoadPack(picked);
-                }, 1);
+                }, 1, LastImportDir());
         // SameLine inside each branch rather than once above them. The picked file's name goes beside the
         // button — the content preview prints it first thing, the Onion path prints it just below — but
         // when nothing has been picked there is no such name, and a SameLine left hanging would drag the
@@ -1448,6 +1449,33 @@ public class StatusWindow : Window
     {
         if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
         else LoadContentPack(path);
+    }
+
+    /// <summary>
+    /// Where the import picker should open — the folder a pack was last taken from, or null for the
+    /// dialog's own default.
+    /// <para/>
+    /// Checked for existence on the way OUT rather than trusted from the config: the folder may have been
+    /// renamed, emptied or unplugged since it was recorded, and handing the dialog a path that no longer
+    /// resolves is worse than handing it nothing.
+    /// </summary>
+    private string? LastImportDir()
+    {
+        var dir = config.LastImportDir;
+        return !string.IsNullOrEmpty(dir) && Directory.Exists(dir) ? dir : null;
+    }
+
+    /// <summary>Record the folder a pack was picked from, so the next import opens there.</summary>
+    private void RememberImportDir(string packPath)
+    {
+        string? dir;
+        try { dir = Path.GetDirectoryName(packPath); }
+        catch { return; }   // a path shape GetDirectoryName rejects is not one worth remembering
+
+        if (string.IsNullOrEmpty(dir)
+         || string.Equals(dir, config.LastImportDir, StringComparison.OrdinalIgnoreCase)) return;
+        config.LastImportDir = dir;
+        config.Save();
     }
 
     /// <summary>One bulleted line of wrapped body text. Honours whatever wrap position is pushed around

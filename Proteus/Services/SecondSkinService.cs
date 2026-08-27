@@ -2135,6 +2135,15 @@ public sealed class SecondSkinService
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                     out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
             }
+            catch (EmptyShellException ex) when (ex.ByToggle)
+            {
+                // Not a failure: the user switched off the only thing this host was carrying. Reported at
+                // Information for the same reason it gets its own arm — an error here sent someone who had
+                // ticked two "hide" checkboxes hunting for a UV-coverage bug.
+                log.Information("[Proteus] second skin: host {0}{1:D4}/{2} has nothing to draw — {3}",
+                    host.Prefix, host.SetId, host.Slot, ex.Message);
+                continue;
+            }
             catch (Exception ex)
             {
                 log.Error(ex, "[Proteus] second skin: model build failed for host {0}{1:D4}/{2}", host.Prefix, host.SetId, host.Slot);

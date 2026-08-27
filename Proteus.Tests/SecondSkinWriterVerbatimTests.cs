@@ -223,6 +223,86 @@ public class SecondSkinWriterVerbatimTests
     }
 
     /// <summary>
+    /// A pack's own hide toggle removes the geometry it names, and nothing else.
+    /// <para/>
+    /// This is the half of the toggle feature that actually deletes something. The resolution step —
+    /// mask bits to attribute names — is unit-tested elsewhere; what is checked here is that the names
+    /// reach the writer and that the right submesh is the one that disappears.
+    /// </summary>
+    [Fact]
+    public void A_hidden_attribute_drops_its_own_submeshes_and_leaves_the_rest()
+    {
+        // One mesh, three submeshes: one tagged atr_a, one tagged atr_b, one untagged.
+        var content = SyntheticModel.Build(["atr_a", "atr_b"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl",
+                new SyntheticModel.Sub(1u << 0),
+                new SyntheticModel.Sub(1u << 1),
+                new SyntheticModel.Sub(0)));
+
+        byte[] BuildWith(IReadOnlySet<string>? hidden) => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry = [new ContentGeometry(content, _ => true, HiddenAttributes: hidden)],
+            }],
+            null, out _);
+
+        // Nothing hidden: all three survive.
+        var all = BuildWith(null);
+        Validate(all);
+        Assert.Equal(3, SubmeshAttributeMasks(all).Count);
+
+        // atr_a hidden: its submesh goes, the other tagged one and the untagged one stay. Counting is not
+        // enough — a filter that dropped the WRONG submesh would also leave two — so the surviving masks
+        // are resolved back to names.
+        var less = BuildWith(new HashSet<string>(StringComparer.Ordinal) { "atr_a" });
+        Validate(less);
+        var names = AttributeNames(less);
+        var survivors = SubmeshAttributeMasks(less)
+            .Select(m => m == 0
+                ? "(untagged)"
+                : names[Enumerable.Range(0, names.Count).First(b => (m & (1u << b)) != 0)])
+            .Order()
+            .ToList();
+        Assert.Equal(["(untagged)", "atr_b"], survivors);
+
+        // An untagged submesh is drawn unconditionally, so hiding every NAMED attribute still leaves it.
+        var bare = BuildWith(new HashSet<string>(StringComparer.Ordinal) { "atr_a", "atr_b" });
+        Validate(bare);
+        Assert.Equal([0u], SubmeshAttributeMasks(bare));
+    }
+
+    /// <summary>
+    /// A host carrying nothing but hidden geometry fails in a way the caller can tell apart from a fault —
+    /// switching off the only piece on a carrier is the user getting what they asked for, not a broken
+    /// build, and it used to arrive as "no geometry survived coverage trimming".
+    /// </summary>
+    [Fact]
+    public void Hiding_every_mesh_reports_the_toggle_rather_than_coverage_trimming()
+    {
+        var content = SyntheticModel.Build(["atr_a"],
+            new SyntheticModel.Mesh("/mt_pack.mtrl", new SyntheticModel.Sub(1u << 0)));
+
+        var ex = Assert.Throws<EmptyShellException>(() => SecondSkinWriter.Build(
+            Array.Empty<SecondSkinWriter.SourceSpec>(),
+            [new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                Geometry =
+                [
+                    new ContentGeometry(content, _ => true,
+                        HiddenAttributes: new HashSet<string>(StringComparer.Ordinal) { "atr_a" }),
+                ],
+            }],
+            null, out _));
+
+        Assert.True(ex.ByToggle);
+        Assert.Contains("toggles", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("coverage", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Where a .mdl's tables begin — derived ONCE, because these offsets are the thing under test and three
     /// hand-rolled copies of the same arithmetic can agree with each other while all disagreeing with the
     /// writer. The attribute table in particular sits between the meshes and the submeshes, so getting
@@ -659,9 +739,13 @@ public class SecondSkinWriterVerbatimTests
         var keepNothing = SecondSkinWriter.KeepByLeaf(
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "mt_c1401f0001_fac_a.mtrl" });
 
-        Assert.Throws<InvalidOperationException>(() => SecondSkinWriter.Build(
+        // The OTHER half of EmptyShellException: nothing was hidden by a toggle here, the material filter
+        // simply matched no mesh. ByToggle false is what keeps this reported as the fault it is, rather
+        // than as a user having switched something off.
+        var empty = Assert.Throws<EmptyShellException>(() => SecondSkinWriter.Build(
             new[] { new SecondSkinWriter.SourceSpec(neo, KeepMaterial: keepNothing) },
             layers, null, out _));
+        Assert.False(empty.ByToggle);
 
         // And the body default still selects the body's skin, so the leaf filter is opt-in.
         var body = SecondSkinWriter.Build(

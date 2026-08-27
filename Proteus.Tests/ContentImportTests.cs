@@ -186,6 +186,62 @@ public class ContentImportTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>
+    /// An Imc group survives the import as something the composite can act on.
+    /// <para/>
+    /// Penumbra's own edit lands on the pack's equipment set, which nobody wears once Proteus has taken the
+    /// models over, so the mask has to reach the sidecar or the toggle silently does nothing — which is
+    /// exactly how Denim Shorts' "hide panty strap" arrived.
+    /// </summary>
+    [Fact]
+    public void An_imc_hide_group_is_read_from_the_pack_and_recorded_in_the_sidecar()
+    {
+        using var built = SyntheticPack.ImcToggled("0101", "Toggles", "atr_sne", "atr_hiz");
+
+        // Read off the pack: the group carries the identifier and masks, not the options' Files.
+        var pack = PenumbraPackage.Read(built.Path);
+        var g = Assert.Single(pack.Groups, x => string.Equals(x.Type, "Imc", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(6058, g.ImcSetId);
+        Assert.Equal("Legs", g.ImcSlot);
+        Assert.Equal(3, g.DefaultAttributeMask);       // both bits on, so nothing hides by default
+        Assert.Equal([1, 2], g.Options.Select(o => (int)o.AttributeMask));
+        Assert.All(g.Options, o => Assert.Empty(o.Files));
+
+        // And into the sidecar, which is what the composite reads.
+        var preview = ContentImportService.Inspect(built.Path);
+        var sidecar = ContentImportService.BuildSidecar(preview, "Synthetic", "Synthetic");
+        var rec = Assert.Single(sidecar.ContentAttributes!);
+        Assert.Equal("Toggles", rec.Group);
+        Assert.Equal(6058, rec.SetId);
+        Assert.Equal(3, rec.DefaultMask);
+        Assert.Equal(1, rec.Options["atr_sne Hide"]);
+        Assert.Equal(2, rec.Options["atr_hiz Hide"]);
+
+        // The masks compose the way the composite will use them: selecting an option CLEARS its bits.
+        Assert.Equal(3, rec.MaskFor(null));
+        Assert.Equal(2, rec.MaskFor(["atr_sne Hide"]));
+        Assert.Equal(0, rec.MaskFor(["atr_sne Hide", "atr_hiz Hide"]));
+
+        // End to end: the recorded group resolves against the model's own attribute table to the name whose
+        // submeshes the writer then drops.
+        Assert.Equal(["atr_sne"], SecondSkinService.HiddenAttributes(
+            sidecar.ContentAttributes,
+            "chara/equipment/e6058/model/c0101e6058_dwn.mdl",
+            ["atr_sne", "atr_hiz"],
+            new Dictionary<string, List<string>> { ["Toggles"] = ["atr_sne Hide"] })!.Order());
+    }
+
+    /// <summary>A pack with no Imc group records nothing — most packs, and the field stays absent.</summary>
+    [Fact]
+    public void A_pack_without_imc_toggles_records_no_attribute_groups()
+    {
+        using var plain = SyntheticPack.AttributeDriven("0201", "Accessories",
+            new SyntheticPack.Toggle("Belly Dermals", "atrx_belly"));
+        var sidecar = ContentImportService.BuildSidecar(
+            ContentImportService.Inspect(plain.Path), "Synthetic", "Synthetic");
+        Assert.Null(sidecar.ContentAttributes);
+    }
+
     private static string TempDir()
     {
         var d = Path.Combine(Path.GetTempPath(), "proteus-content-" + Guid.NewGuid().ToString("N"));

@@ -108,6 +108,15 @@ public class Configuration : IPluginConfiguration
     // note above CompositorService's decode-cache fields. A stale value left in an existing config.json
     // is ignored; the deserializer drops properties it doesn't know.
 
+    /// <summary>
+    /// The folder the Import tab's file picker opens in — wherever a pack was last picked from.
+    /// <para/>
+    /// Persisted rather than kept for the session because packs come from one download folder and importing
+    /// several is the normal case, so restarting the game should not send the picker back to the top of the
+    /// drive. Empty, or a folder since deleted, simply opens the dialog's own default.
+    /// </summary>
+    public string LastImportDir { get; set; } = string.Empty;
+
     public int ManagedModPriority { get; set; } = 900;
 
     /// <summary>

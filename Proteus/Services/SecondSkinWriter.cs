@@ -60,6 +60,20 @@ public sealed record ContentGeometry(
     IReadOnlySet<string>? HiddenAttributes = null);
 
 /// <summary>
+/// A host's shell came out with no meshes in it.
+/// <para/>
+/// Its own type, and <see cref="ByToggle"/> in particular, because the two ways to get here deserve
+/// opposite reactions. Coverage trimming removing everything is a fault. A pack's own hide toggles
+/// removing everything is the user having switched off the only thing on that host, and reporting it as a
+/// failed build makes a routine action look like a bug.
+/// </summary>
+public sealed class EmptyShellException(string message, bool byToggle) : InvalidOperationException(message)
+{
+    /// <summary>The pack's own show/hide toggles emptied it, rather than anything going wrong.</summary>
+    public bool ByToggle { get; } = byToggle;
+}
+
+/// <summary>
 /// Builds the "second skin" model: every skin part (chest, legs, hands, feet…) duplicated, pushed out
 /// along its normals, and MERGED into a single model so the whole thing rides one invisible accessory
 /// (the right ring). Each part × layer becomes its own mesh group, and each group carries its layer's
@@ -587,6 +601,7 @@ public static class SecondSkinWriter
         int shapedTotal = 0;   // index entries rewired to a morphed vertex by an enabled body shape key
         int uvMoved = 0, uvUnmapped = 0;   // vertices put through a UV-space conversion, and those it couldn't place
         int uvRetangented = 0;             // meshes whose tangent frame was re-fitted to the converted UVs
+        int hiddenSubs = 0;                // submeshes dropped by a pack's own hide toggles
 
         // Emit one source mesh into the merged model. Shared by the host pre-pass (preserve=true: an exact
         // byte copy, keep every triangle, keep the authored material index) and the shell layers
@@ -700,6 +715,7 @@ public static class SecondSkinWriter
                 // while every index and bone table around it keeps its shape.
                 if (hiddenAttrs is { Count: > 0 } && IsHidden(src, U32(ss + 8), hiddenAttrs))
                 {
+                    hiddenSubs++;
                     keptPerSub.Add(keep.ToArray());
                     continue;
                 }
@@ -923,7 +939,16 @@ public static class SecondSkinWriter
             }
         }
 
-        if (meshOut.Count == 0) throw new InvalidOperationException("no geometry survived coverage trimming");
+        // Nothing to write. WHICH filter emptied it decides how the caller reports this: coverage trimming
+        // going this far is a fault worth an error in the log, while a pack's own hide toggles emptying a
+        // host is the user getting exactly what they asked for. Both used to arrive as "no geometry
+        // survived coverage trimming", which sent someone who had ticked two checkboxes looking for a UV
+        // bug that was not there.
+        if (meshOut.Count == 0)
+            throw new EmptyShellException(hiddenSubs > 0
+                ? $"every mesh was hidden by the pack's own toggles ({hiddenSubs} submesh(es))"
+                : "no geometry survived coverage trimming",
+                byToggle: hiddenSubs > 0);
 
         int meshCount = meshOut.Count;
         int boneCount = boneNames.Count;
