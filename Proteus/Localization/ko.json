@@ -571,6 +571,10 @@
     "message": "건너뜀",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "착용자 자신의 몸",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "머티리얼 미연결",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "지오메트리 없음 — 모든 메시가 비어 있습니다",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "메시를 그리지 않으므로 추가할 것이 없습니다.",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "색상",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "적용 중인 디자인은 이 모드보다 먼저 저장되어, 이 모드의 오버레이는\n합성에서 제외됩니다. 모드 자체는 켜져 있으며 장비, 모델, 텍스처는\n평소대로 적용됩니다.\n\n연결 탭에서 \"업데이트\"를 클릭하면 이 디자인에 추가됩니다.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

@@ -73,9 +73,23 @@ public sealed class ContentImportService
         /// which of the pack's options each material answers to (so the colour panel can show tabs for the
         /// pieces actually being worn, named after the options that turn them on).
         /// </summary>
-        IReadOnlyDictionary<string, List<string>>? MaterialAttributes = null)
+        IReadOnlyDictionary<string, List<string>>? MaterialAttributes = null,
+        /// <summary>
+        /// This model was dropped ON PURPOSE: every mesh in it is the wearer's own body, which Proteus
+        /// leaves to the character's own skin.
+        /// <para/>
+        /// A flag rather than something inferred from the other fields, because the two "nothing bound"
+        /// endings are otherwise identical — a body-only model and an UNREADABLE one both arrive with empty
+        /// Bindings and empty Unbound. Reading emptiness as "deliberate" made a corrupt .mdl import as a
+        /// clean success with the piece silently missing.
+        /// </summary>
+        bool BodyOnly = false)
     {
         public bool Import => Problem == null && Bindings.Count > 0;
+
+        /// <summary>Dropped, and dropped because something is WRONG — an unbound material or a model that
+        /// would not read. The deliberate body drop is not one.</summary>
+        public bool Faulty => !Import && !BodyOnly;
     }
 
     /// <summary>
@@ -130,6 +144,30 @@ public sealed class ContentImportService
 
         /// <summary>Every piece the pack ships, importable or not — the count the tab reports against.</summary>
         public int TotalUnits => Units.Count;
+
+        /// <summary>
+        /// Pieces that were dropped because something is WRONG with them, as opposed to dropped on purpose.
+        /// <para/>
+        /// Not the same as <c>TotalUnits - ImportableUnits</c>, and the difference is the whole point of the
+        /// property. An outfit pack ships the body it was fitted to; Proteus deliberately leaves those
+        /// meshes to the character's own skin, which drops a unit and is the WANTED outcome. Counting that
+        /// as a shortfall would put a warning colour on nearly every outfit import — the same
+        /// cried-wolf problem as colouring the "pieces arrive switched off" line, which is exactly what this
+        /// exists to avoid.
+        /// <para/>
+        /// A real fault is a mesh naming a material the pack does not ship, a model that will not read, or
+        /// one that draws nothing — the import can only report those, and the fix is the author's.
+        /// <para/>
+        /// Read off <see cref="PiecePlan.BodyOnly"/> rather than inferred from an empty <c>Unbound</c> list:
+        /// a body-only model and an UNREADABLE one both arrive with nothing bound and nothing unbound, so
+        /// the inference called a corrupt .mdl a clean success.
+        /// <para/>
+        /// A unit that imports for SOME race is not faulty — a pack missing one race's material still works
+        /// for the races it ships, which is the rule <see cref="PieceUnit.Import"/> already states. Of the
+        /// rest, one variant failing for a bad reason is enough, so a piece that is body-only for one race
+        /// and unbound for another still reports.
+        /// </summary>
+        public int FaultyUnits => Units.Count(u => !u.Import && u.Variants.Any(v => v.Faulty));
 
         /// <summary>The names the synthesized group will offer, in listing order.</summary>
         public IReadOnlyList<string> GateOptions
@@ -395,8 +433,17 @@ public sealed class ContentImportService
         }
 
         string? problem = null;
+        bool bodyOnly = false;
         if (bindings.Count == 0)
-            problem = unbound.Count > 0
+        {
+            // Three ways to bind nothing, and only the middle one is deliberate. A model that names no
+            // drawn material at all is the third: not the body, not a missing material, and NOT something
+            // to wave through as a clean import — it lands in the same "faulty" bucket as an unreadable one.
+            bodyOnly = unbound.Count == 0 && skinOnly.Count > 0;
+            problem = unbound.Count == 0 && skinOnly.Count == 0
+                ? Loc.Localize("ContentImport.Problem.NoMeshes",
+                    "it draws no meshes, so there is nothing to append.")
+                : !bodyOnly
                 ? string.Format(Loc.Localize("ContentImport.Problem.Unbound.Fmt",
                     "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's "
                   + "own materials and re-export."), string.Join(", ", unbound))
@@ -405,9 +452,10 @@ public sealed class ContentImportService
                 : string.Format(Loc.Localize("ContentImport.Problem.BodyOnly.Fmt",
                     "every mesh in it is the wearer's own body ({0}), so there is nothing to add."),
                     string.Join(", ", skinOnly));
+        }
 
         return new PiecePlan(gamePath, entry, bindings, unbound, meshes, vertices, problem,
-                             MaterialAttributes: byMaterial);
+                             MaterialAttributes: byMaterial, BodyOnly: bodyOnly);
     }
 
     // ── write ────────────────────────────────────────────────────────────────
@@ -503,6 +551,17 @@ public sealed class ContentImportService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         StripModelRedirects(root, preview.Pack, taken, log);
 
+        // The name the user chose goes into the copied manifest too, not just the sidecar and the folder.
+        // An import leaves the original pack installable on its own terms, so the two sit together in
+        // Penumbra's mod list — and that list reads THIS file. Without it both rows carry the pack's own
+        // name and the only way to tell the Proteus copy apart is to open it.
+        EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log,
+            "the copied mod keeps the pack's own name and cannot be told from the original in Penumbra's "
+          + "mod list",
+            manifest => manifest["Name"] = modName);
+
+        ClearMultiSelectDefaults(root, preview.Pack, log);
+
         // The group that makes individual pieces pickable, written with EVERY option off. An imported
         // outfit therefore contributes nothing until the user asks for a piece, which is also what keeps it
         // off the host accessory's ten-material budget until then.
@@ -541,9 +600,12 @@ public sealed class ContentImportService
     private static void StripModelRedirects(
         string root, PenumbraPackage.Contents pack, IReadOnlySet<string> taken, IPluginLog? log)
     {
+        const string cost = "its model redirects are still Penumbra's — that pack's pieces will fight over "
+                          + "their game paths";
+
         if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
         {
-            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log, manifest =>
+            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log, cost, manifest =>
             {
                 if (manifest["DefaultData"] is JsonObject dd) StripFiles(dd, taken);
                 if (manifest["Groups"] is JsonArray groups)
@@ -554,11 +616,70 @@ public sealed class ContentImportService
             return;
         }
 
-        EditJson(Path.Combine(root, PenumbraModMeta.LegacyDefaultMod), log, o => StripFiles(o, taken));
+        EditJson(Path.Combine(root, PenumbraModMeta.LegacyDefaultMod), log, cost,
+            o => StripFiles(o, taken));
         foreach (var group in pack.Groups)
             if (group.Entry != null)
                 EditJson(Path.Combine(root, group.Entry.Replace('/', Path.DirectorySeparatorChar)), log,
-                    o => StripGroup(o, taken));
+                    cost, o => StripGroup(o, taken));
+    }
+
+    /// <summary>
+    /// Every multi-select group in the copied pack comes in with NOTHING ticked.
+    /// <para/>
+    /// The same rule the synthesized piece group is written under, extended to the pack's own: an imported
+    /// mod contributes only what the user has asked for. That is worth more here than tidiness, because a
+    /// multi-select group is the one place where the pack's selection can be genuinely ambiguous — two
+    /// ticked options may redirect the SAME file path, and Penumbra settles that by option priority while
+    /// <see cref="SecondSkinService.SelectedMaterialFile"/> takes the first one declared. Starting empty
+    /// means the ambiguity only ever arises if the user builds it themselves, one tick at a time.
+    /// <para/>
+    /// SINGLE groups are left alone. There is no "off" for one — Penumbra always has an option selected —
+    /// so clearing the field would just re-elect the first option and silently move a pack's chosen default
+    /// print or dye. Imc and Combining groups are likewise untouched: they are not selections of files.
+    /// <para/>
+    /// This edits the pack's DEFAULT, which Penumbra reads only for a collection that has never seen the
+    /// mod. That is exactly the case an import creates, and re-importing over an existing folder leaves a
+    /// collection's established choices alone — which is the wanted behaviour either way.
+    /// </summary>
+    private static void ClearMultiSelectDefaults(
+        string root, PenumbraPackage.Contents pack, IPluginLog? log)
+    {
+        const string cost = "its multi-select groups arrive with the pack's own options already ticked, so "
+                          + "the mod puts pieces on the character before anyone asks for them";
+
+        if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
+        {
+            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log, cost, manifest =>
+            {
+                if (manifest["Groups"] is JsonArray groups)
+                    foreach (var g in groups)
+                        if (g is JsonObject go) ClearGroupDefault(go);
+            });
+            return;
+        }
+
+        foreach (var group in pack.Groups)
+            if (group.Entry != null)
+                EditJson(Path.Combine(root, group.Entry.Replace('/', Path.DirectorySeparatorChar)), log,
+                    cost, ClearGroupDefault);
+    }
+
+    /// <summary>Zero one group's default selection, if it is a multi-select. See
+    /// <see cref="ClearMultiSelectDefaults"/> for why only that kind.</summary>
+    private static void ClearGroupDefault(JsonObject group)
+    {
+        // Through TryGetValue, like PenumbraPackage reads it: GetValue<string> THROWS on a Type that is a
+        // number or an object, and a hand-edited pack can carry one. A group whose kind cannot be read is
+        // left exactly as it is, which is the safe direction — the worst case is the pack's own default.
+        if (group["Type"] is not JsonValue tv
+         || !tv.TryGetValue<string>(out var type)
+         || !string.Equals(type, "Multi", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // Written even when the field is absent: Penumbra's own default for a missing DefaultSettings is not
+        // something to rely on, and an explicit zero says what this import meant.
+        group["DefaultSettings"] = 0;
     }
 
     private static void StripGroup(JsonObject group, IReadOnlySet<string> taken)
@@ -577,8 +698,12 @@ public sealed class ContentImportService
     private static void StripFiles(JsonObject owner, IReadOnlySet<string> taken)
     {
         if (owner["Files"] is not JsonObject files) return;
+        // Through TryGetValue: GetValue<string> THROWS on a value that is a number or an object, and a
+        // hand-edited manifest can carry one. EditJson now catches that, but a throw here would still cost
+        // the whole file's edit — every OTHER redirect in it included — over one malformed entry.
         var doomed = files
-            .Where(p => p.Value?.GetValue<string>() is { } entry
+            .Where(p => p.Value is JsonValue v
+                     && v.TryGetValue<string>(out var entry)
                      && taken.Contains(RedirectKey(p.Key, entry)))
             .Select(p => p.Key)
             .ToList();
@@ -597,29 +722,43 @@ public sealed class ContentImportService
     /// <summary>
     /// Edit one manifest in place, or say why it could not be.
     /// <para/>
-    /// A failure here is NOT harmless and must not pass in silence: leaving a model redirect behind is the
-    /// exact conflict this whole import exists to prevent, and its symptom in game — Penumbra replacing the
-    /// body with a mesh whose vanilla geometry has been emptied out — points nowhere near a manifest that
-    /// would not parse.
+    /// A failure here is NOT harmless and must not pass in silence. But the harm differs per caller, which
+    /// is why <paramref name="cost"/> is theirs to supply rather than baked in here: this helper started
+    /// with one caller and its message named that caller's consequence, so once a second and third arrived
+    /// a failed name-write reported a model-redirect conflict that was not happening and said nothing about
+    /// what had. A wrong diagnosis in this log is worse than none — it is read to work out why a pack
+    /// misbehaved, and it sends the reader at the wrong subsystem.
+    /// <para/>
+    /// <paramref name="cost"/> completes "…, so {cost}".
     /// </summary>
-    private static void EditJson(string path, IPluginLog? log, Action<JsonObject> edit)
+    private static void EditJson(string path, IPluginLog? log, string cost, Action<JsonObject> edit)
     {
         if (!File.Exists(path)) return;
         JsonNode? node;
         try { node = JsonNode.Parse(File.ReadAllText(path)); }
         catch (Exception ex)
         {
-            log?.Warning(ex, "[Proteus] content import: {0} could not be read, so its model redirects are "
-                           + "still Penumbra's — that pack's pieces will fight over their game paths", path);
+            log?.Warning(ex, "[Proteus] content import: {0} could not be read, so {1}", path, cost);
             return;
         }
         if (node is not JsonObject root)
         {
-            log?.Warning("[Proteus] content import: {0} is not a JSON object, so its model redirects are "
-                       + "still Penumbra's — that pack's pieces will fight over their game paths", path);
+            log?.Warning("[Proteus] content import: {0} is not a JSON object, so {1}", path, cost);
             return;
         }
-        edit(root);
+
+        // The edit itself is guarded too, and the write is skipped when it throws. A manifest can carry a
+        // shape the readers do not expect — a Files value that is a number rather than a string is enough,
+        // since StripFiles asks it for a string — and an exception escaping here would abandon WriteMod with
+        // the archive already extracted: a mod folder Penumbra loads happily, with none of the import's
+        // edits applied and no sidecar to mark it as one of ours. Leaving the file untouched is the same
+        // outcome as a manifest that would not parse, which the two arms above already report.
+        try { edit(root); }
+        catch (Exception ex)
+        {
+            log?.Warning(ex, "[Proteus] content import: {0} could not be edited, so {1}", path, cost);
+            return;
+        }
         PenumbraModMeta.AtomicWrite(path, root.ToJsonString(ProteusJson.MetadataWrite));
     }
 
@@ -706,6 +845,118 @@ public sealed class ContentImportService
     }
 
     /// <summary>
+    /// How well DRESSED each candidate material is: how many distinct files back the textures it names, and
+    /// how many bytes those come to.
+    /// <para/>
+    /// This is what tells the variant an author actually worked on from the copies sitting beside it. A pack
+    /// ships its material under one folder per IMC variant, and when only one of them is real the rest are
+    /// stubs pointing at a shared placeholder set. [LOONY] Light the Way ships nine, of which v0007
+    /// references four files totalling 33 MB while the other eight reference two totalling 2,208 bytes —
+    /// and its nine colour tables come to only two distinct values. Counting files finds that; where two
+    /// candidates name the same NUMBER of textures, only the byte total separates real art from a
+    /// placeholder.
+    /// <para/>
+    /// Sizes are free: <see cref="PenumbraPackage.Contents.Entries"/> already carries each entry's
+    /// uncompressed length from the archive's central directory, so this reads the materials but never the
+    /// textures.
+    /// <para/>
+    /// A hint, not a gate. A material that will not parse scores zero and sorts last rather than throwing —
+    /// the pack still publishes something, and a wrong guess here costs a look rather than a piece.
+    /// </summary>
+    private static Dictionary<string, (int Files, long Bytes)> DressedRank(
+        PenumbraPackage.Contents pack,
+        Dictionary<string, HashSet<string>> backing,
+        Dictionary<string, List<string>> candidatesByLeaf)
+    {
+        var rank = new Dictionary<string, (int Files, long Bytes)>(StringComparer.OrdinalIgnoreCase);
+
+        // Only leaves with a real choice to make are worth reading. One candidate needs no ranking.
+        var contested = candidatesByLeaf.Values.Where(p => p.Count > 1).SelectMany(p => p)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var gp in contested) rank[gp] = (0, 0L);
+        if (contested.Count == 0) return rank;
+
+        // Game path → the entry backing it, for turning a material's texture references into pack files.
+        var entryOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (gamePath, entry) in pack.AllFiles) entryOf.TryAdd(gamePath, entry);
+
+        Dictionary<string, byte[]> bytes;
+        try { bytes = PenumbraPackage.ReadEntries(pack.Path, contested.Select(gp => backing[gp].First())); }
+        catch { return rank; }   // unreadable archive — every candidate stays at zero, order unchanged
+
+        foreach (var gp in contested)
+        {
+            if (!bytes.TryGetValue(backing[gp].First(), out var mtrl)) continue;
+            MtrlTexturePaths slots;
+            try { slots = TextureLoader.ParseMtrlBytes(mtrl); }
+            catch { continue; }
+            if (!slots.Parsed) continue;
+
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tex in new[] { slots.Diffuse, slots.Normal, slots.Mask, slots.Index })
+                if (tex is { Length: > 0 } && entryOf.TryGetValue(tex, out var backedBy))
+                    files.Add(backedBy);
+
+            rank[gp] = (files.Count, files.Sum(f => pack.Entries.TryGetValue(f, out var n) ? n : 0L));
+        }
+        return rank;
+    }
+
+    /// <summary>
+    /// The textures this piece's materials name that the PACK itself ships, and which option supplies each.
+    /// <para/>
+    /// Read from the materials rather than taken from the pack wholesale, so a piece records only the
+    /// textures it can actually reach. A pack ships textures for every garment in it; a bracelet has no use
+    /// for the dress's normal map, and carrying all of them in every piece would bloat the sidecar and
+    /// invite the composite to republish files nothing draws.
+    /// <para/>
+    /// Every candidate material is read, not just the best-ranked one: which of them gets published is a
+    /// runtime decision, and the four prints of one leaf can name different textures from each other.
+    /// <para/>
+    /// Null when nothing came back — an unreadable archive or materials that will not parse leave the
+    /// textures to Penumbra, which is exactly the behaviour this replaces and still works for most packs.
+    /// </summary>
+    private static Dictionary<string, List<ContentMaterialSource>>? TextureSuppliers(
+        PenumbraPackage.Contents pack,
+        Dictionary<string, List<ContentMaterialSource>> suppliers,
+        Dictionary<string, List<ContentMaterialSource>>? materialOptions)
+    {
+        if (materialOptions is not { Count: > 0 }) return null;
+
+        var entries = materialOptions.Values.SelectMany(v => v).Select(s => s.File)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (entries.Count == 0) return null;
+
+        Dictionary<string, byte[]> bytes;
+        try { bytes = PenumbraPackage.ReadEntries(pack.Path, entries); }
+        catch { return null; }
+
+        var map = new Dictionary<string, List<ContentMaterialSource>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mtrl in bytes.Values)
+        {
+            MtrlTexturePaths slots;
+            try { slots = TextureLoader.ParseMtrlBytes(mtrl); }
+            catch { continue; }   // a hint, like DressedRank: one unreadable material costs its textures
+            if (!slots.Parsed) continue;
+
+            foreach (var tex in new[] { slots.Diffuse, slots.Normal, slots.Mask, slots.Index })
+            {
+                if (tex is not { Length: > 0 } || !suppliers.TryGetValue(tex, out var who)) continue;
+
+                // Only a path the pack VARIES is worth taking over. One file behind a texture is not a
+                // choice, and republishing it would copy every 4K map the pack ships on every composite for
+                // no decision at all — Cerise alone would move tens of megabytes to change nothing.
+                //
+                // The same shape as the material rule one level up: several files competing over one path is
+                // the user choosing, one file is fixed.
+                if (who.Select(s => s.File).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+                    map[tex] = who;
+            }
+        }
+        return map.Count > 0 ? map : null;
+    }
+
+    /// <summary>
     /// One unit as the sidecar stores it. Its race variants become a <c>Models</c> map rather than separate
     /// pieces, and their material bindings merge: the leaf names are race-specific
     /// (<c>mt_c0101…</c> vs <c>mt_c0201…</c>) so they cannot collide, and whichever model the wearer's race
@@ -741,9 +992,24 @@ public sealed class ContentImportService
         // [ dress - metal + dye template ]. Only the second is a choice, and only counting finds it.
         var backing = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var order = new List<string>();
-        void Candidate(string gamePath, string entry)
+        // Game path → who supplies it, in declaration order. This is the half that makes a print or dye
+        // group work: the pack's own selection decides, so each file has to remember the option it came from.
+        var suppliers = new Dictionary<string, List<ContentMaterialSource>>(StringComparer.OrdinalIgnoreCase);
+        void Candidate(string gamePath, string entry, string? group, string? option)
         {
-            if (!gamePath.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)) return;
+            bool isMtrl = gamePath.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase);
+            // Textures are recorded as suppliers but NOT as candidates: they are never ranked, because a
+            // material names the one path it wants and there is no variant folder to choose between. What
+            // they are here for is the option each file came from — see ContentPiece.TextureOptions.
+            if (!isMtrl && !gamePath.EndsWith(".tex", StringComparison.OrdinalIgnoreCase)) return;
+
+            if (!suppliers.TryGetValue(gamePath, out var who))
+                suppliers[gamePath] = who = [];
+            if (!who.Any(s => s.Group == group && s.Option == option
+                           && string.Equals(s.File, entry, StringComparison.OrdinalIgnoreCase)))
+                who.Add(new ContentMaterialSource { Group = group, Option = option, File = entry });
+
+            if (!isMtrl) return;
             if (!backing.TryGetValue(gamePath, out var files))
             {
                 backing[gamePath] = files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -755,22 +1021,48 @@ public sealed class ContentImportService
         foreach (var g in pack.Groups)
             foreach (var o in g.Options)
                 foreach (var (gp, entry) in o.Files)
-                    Candidate(gp, entry);
+                    Candidate(gp, entry, g.Name, o.Name);
         foreach (var (gp, entry) in pack.DefaultFiles)
-            Candidate(gp, entry);
+            Candidate(gp, entry, null, null);
 
+        // Everything a leaf could be published under, so the ranking below can weigh them together and the
+        // materials behind them can be read in ONE pass over the archive.
+        var candidatesByLeaf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var leaf in piece.Materials.Keys)
         {
             var trimmed = leaf.TrimStart('/');
-            // OrderByDescending is stable, so paths tied on count keep the order they were seen in.
             var paths = order
                 .Where(gp => string.Equals(Path.GetFileName(gp.Replace('\\', '/')), trimmed,
                                            StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(gp => backing[gp].Count)
                 .ToList();
-            if (paths.Count > 0)
-                (piece.MaterialGamePaths ??= new(StringComparer.OrdinalIgnoreCase))[leaf] = paths;
+            if (paths.Count > 0) candidatesByLeaf[leaf] = paths;
         }
+
+        var dressed = DressedRank(pack, backing, candidatesByLeaf);
+
+        foreach (var (leaf, paths) in candidatesByLeaf)
+        {
+            // Three keys, then declaration order — OrderByDescending is stable, so a full tie keeps the
+            // order the paths were seen in.
+            //
+            // Count of competing files first: a path several files compete over is a path the user chooses
+            // between, and a path with one file behind it is fixed. Then how well DRESSED the material is,
+            // which is what tells one variant folder from eight copies of it — see DressedRank.
+            var ranked = paths
+                .OrderByDescending(gp => backing[gp].Count)
+                .ThenByDescending(gp => dressed[gp].Files)
+                .ThenByDescending(gp => dressed[gp].Bytes)
+                .ToList();
+
+            (piece.MaterialGamePaths ??= new(StringComparer.OrdinalIgnoreCase))[leaf] = ranked;
+
+            // The same candidates as FILES, carrying the option that supplies each — in the same ranked
+            // order, so the composite walks best path first and only then asks which of its options is on.
+            (piece.MaterialOptions ??= new(StringComparer.OrdinalIgnoreCase))[leaf] =
+                [.. ranked.SelectMany(gp => suppliers[gp])];
+        }
+
+        piece.TextureOptions = TextureSuppliers(pack, suppliers, piece.MaterialOptions);
 
         // Which of the PACK'S options reveal each material — see ContentPiece.MaterialGates. Worked out
         // here, where the model has just been read, because the panel that needs it draws every frame.
@@ -843,16 +1135,26 @@ public sealed class ContentImportService
             ? string.Format(Loc.Localize("ContentImport.Result.SkippedTail.Fmt", " (skipped: {0})"), prepared.Skipped)
             : "";
 
-        // A pack whose pieces arrive switched off has, from the outside, done nothing at all. Say so in the
-        // result rather than letting the user go looking for a bug: this is the one message that explains
-        // why the character did not change.
+        // Amber is for a PROBLEM, and an import that took everything it was given does not have one.
+        //
+        // Pieces arriving switched off used to colour this line, on the reasoning that a character which did
+        // not change looks like a failure. But that is how every import ends — it is the design, not a
+        // fault — so the warning colour fired on every success and taught the user to read amber as "fine".
+        // Then a genuinely amber import, one that dropped pieces it could not bind, reads the same as all
+        // the others. The sentence explaining the switches is worth keeping; the colour is not.
+        //
+        // What is left to warn about is a piece that came out WRONG — see ImportPreview.FaultyUnits. Not the
+        // skipped count: that includes the body meshes Proteus drops on purpose, so warning on it would just
+        // move the cried-wolf amber from every gated pack to every outfit pack.
+        var warn = prepared.Preview.FaultyUnits > 0;
+
         if (prepared.Preview.PieceGroupName is { } gate)
-            return new(true, true, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
+            return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
                 "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want "
               + "under \"{3}\" in Penumbra, which is now open on this mod."),
                 dirName, prepared.Pieces, tail, gate));
 
-        return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Ok.Fmt",
+        return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Ok.Fmt",
             "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen "
           + "in Penumbra, and every one you select is worn at once."),
             dirName, prepared.Pieces, tail));

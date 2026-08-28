@@ -571,6 +571,10 @@
     "message": "omitido",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "cuerpo del portador",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "material sin vincular",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "sin geometría — todas sus mallas están vacías",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "no dibuja ninguna malla, así que no hay nada que añadir.",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "Colores",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "El diseño aplicado se guardó antes que este mod, así que sus superposiciones\nquedan fuera de la composición. El mod sigue activado: su equipo, su modelo y\nsus texturas se aplican con normalidad.\n\nHaz clic en «Actualizar» en la pestaña Vínculos para añadirlo a este diseño.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

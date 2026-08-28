@@ -571,6 +571,10 @@
     "message": "スキップ",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "着用者自身の身体",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "マテリアル未割当",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "ジオメトリがありません（すべてのメッシュが空です）",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "メッシュを描画しないため、追加するものがありません。",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "カラー",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "適用中のデザインはこのMODより前に保存されたため、そのオーバーレイは\n合成から除外されています。MOD自体は有効なままで、装備・モデル・\nテクスチャは通常どおり適用されます。\n\n「紐付け」タブの「更新」をクリックすると、このデザインに追加できます。",
     "description": ""
   },
   "Mods.NoSidecarMods": {

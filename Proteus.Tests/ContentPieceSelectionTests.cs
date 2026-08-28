@@ -814,6 +814,87 @@ public class ContentPieceSelectionTests
     }
 
     /// <summary>
+    /// An accessory may take the fall-through chain's cross-gender hop; a garment may not.
+    /// <para/>
+    /// The game itself hands accessories across genders — a Midlander female wears
+    /// <c>c0101a0002_wrs.mdl</c>, a male-coded model, and the live equipment walk reports exactly that. So
+    /// modders ship one c0101 ring or lantern for everyone, and refusing it leaves the piece invisible with
+    /// a message about body shape that does not apply to a prop hung off a bone.
+    /// <para/>
+    /// A fitted garment keeps the guard: c0101 and c0201 are different bodies, and the male cut of a top on
+    /// a female is exactly what the refusal is for.
+    /// </summary>
+    [Fact]
+    public void An_accessory_may_fall_through_to_the_other_gender_but_a_garment_may_not()
+    {
+        // The paths an IMPORT writes, not tidy game paths: the sidecar stores the pack's ARCHIVE ENTRY, and
+        // the real lantern is recorded as "base install/chara/accessory/a0189/model/c0101a0189_wrs.mdl".
+        // Written that way deliberately — a test using clean game paths would keep passing if the check
+        // regressed to matching a folder segment, which is exactly what it must not do.
+        const string lanternMdl = "base install/chara/accessory/a0189/model/c0101a0189_wrs.mdl";
+        const string topMdl     = "undershirt/cropped tee/chara/equipment/e0043/model/c0101e0043_top.mdl";
+
+        var lantern = new ContentPiece { Models = new() { ["0101"] = lanternMdl } };
+        var top     = new ContentPiece { Models = new() { ["0101"] = topMdl } };
+
+        // Midlander female. The chain's first hop is 2 -> 1, which IS the game's own fallback.
+        Assert.Equal(("0101", lanternMdl), SecondSkinService.ResolveVariantForTest(lantern, "0201"));
+        Assert.Null(SecondSkinService.ResolveVariantForTest(top, "0201"));
+
+        // Further out: Miqo'te female reaches c0101 as 8 -> 2 -> 1, so the hop is the last step rather than
+        // the first, and an accessory still gets there.
+        Assert.Equal(("0101", lanternMdl), SecondSkinService.ResolveVariantForTest(lantern, "0801"));
+        Assert.Null(SecondSkinService.ResolveVariantForTest(top, "0801"));
+
+        // An exact match never needed the chain, and a male character reaches c0101 without one either.
+        Assert.Equal(("0101", topMdl), SecondSkinService.ResolveVariantForTest(top, "0101"));
+
+        // A pack that does NOT mirror the game path under its option folder — nothing forbids it, and the
+        // folder-segment check this replaced would refuse this one and leave the lantern invisible.
+        var flat = new ContentPiece { Models = new() { ["0101"] = "a0189/model/c0101a0189_wrs.mdl" } };
+        Assert.Equal(("0101", "a0189/model/c0101a0189_wrs.mdl"),
+            SecondSkinService.ResolveVariantForTest(flat, "0201"));
+
+        // Backslashes, which a manifest may well use, and a bare filename with no folder at all.
+        var backslashed = new ContentPiece
+        {
+            Models = new() { ["0101"] = @"base install\chara\accessory\a0189\model\c0101a0189_wrs.mdl" },
+        };
+        Assert.NotNull(SecondSkinService.ResolveVariantForTest(backslashed, "0201"));
+        Assert.NotNull(SecondSkinService.ResolveVariantForTest(
+            new ContentPiece { Models = new() { ["0101"] = "c0101a0189_wrs.mdl" } }, "0201"));
+
+        // A garment sitting under an "accessory" FOLDER is still a garment — the name decides, and the
+        // folder-segment check got this one backwards.
+        var mislabelled = new ContentPiece
+        {
+            Models = new() { ["0101"] = "my accessory pack/chara/equipment/e0043/model/c0101e0043_top.mdl" },
+        };
+        Assert.Null(SecondSkinService.ResolveVariantForTest(mislabelled, "0201"));
+
+        // A name that is not the cNNNNxNNNN shape at all reads as unknown, and unknown takes the strict rule.
+        Assert.Null(SecondSkinService.ResolveVariantForTest(
+            new ContentPiece { Models = new() { ["0101"] = "models/lantern.mdl" } }, "0201"));
+
+        // A piece mixing an accessory and a garment is judged as the garment — unknown or mixed means the
+        // stricter rule, since the risk is one-sided.
+        var mixed = new ContentPiece
+        {
+            Models = new()
+            {
+                ["0101"] = lanternMdl,
+                ["0301"] = "undershirt/cropped tee/chara/equipment/e0043/model/c0301e0043_top.mdl",
+            },
+        };
+        Assert.Null(SecondSkinService.ResolveVariantForTest(mixed, "0201"));
+
+        // And a c0101 accessory is still cut space, so it is deformed onto the wearer rather than
+        // demanding a carrier of its own.
+        var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
+        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0101", "0201", "0201"));
+    }
+
+    /// <summary>
     /// A selected IMC option TOGGLES its bits against the default — it does not simply clear or set them.
     /// <para/>
     /// All three shapes here are real, taken from the pack library, and no one-directional rule serves them

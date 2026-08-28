@@ -571,6 +571,10 @@
     "message": "пропущено",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "собственное тело носителя",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "материал не привязан",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "нет геометрии — все меши в нём пусты",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "он не отрисовывает мешей, поэтому добавлять нечего.",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "Цвета",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "Применённый дизайн был сохранён раньше этого мода, поэтому его наложения\nне участвуют в композиции. Сам мод остаётся включённым: его экипировка,\nмодель и текстуры применяются как обычно.\n\nНажмите «Обновить» на вкладке привязок, чтобы добавить его в этот дизайн.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

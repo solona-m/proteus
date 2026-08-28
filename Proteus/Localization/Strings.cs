@@ -105,12 +105,6 @@ public sealed class ModsStrings
     public readonly string ColColors   = Loc.Localize("Mods.Col.Colors", "Colors") + "###modColors";
     public readonly string ColSkindent = Loc.Localize("Mods.Col.Skindent", "Skindent") + "###modSkindent";
 
-    public readonly string HeldOutByBindingTip = Loc.Localize("Mods.HeldOut.Tip",
-        "The design you have applied was saved before this mod, so its overlays are\n" +
-        "held out of the composite. The mod itself is still on: its gear, model and\n" +
-        "textures apply as normal.\n\n" +
-        "Click \"Update\" on the Bindings tab to add it to this design.");
-
     public readonly string ColorsBtn = Loc.Localize("Mods.Colors.Btn", "Colors");
 
     public readonly string ColorsBindingDrivenTip = Loc.Localize("Mods.Colors.BindingDriven.Tip",
@@ -452,6 +446,10 @@ public sealed class ContentStrings
     public readonly string MaterialsFmt = Loc.Localize("Content.Materials.Fmt", "{0} materials");
     public readonly string Skipped = Loc.Localize("Content.Skipped", "skipped");
     public readonly string Unbound = Loc.Localize("Content.Unbound", "unbound material");
+
+    /// <summary>The deliberate drop, said plainly and NOT in the warning colour — an outfit pack ships the
+    /// body it was fitted to, the wearer already has one, and leaving it out is the wanted outcome.</summary>
+    public readonly string BodyOnly = Loc.Localize("Content.BodyOnly", "wearer's own body");
 
     public readonly string ProblemFmt = Loc.Localize("Content.Problem.Fmt", "{0}\nSkipped: {1}");
 
