@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Привязать к дизайну",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "Наложить и перекрасить",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "Отключить что угодно",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "Носить без слота",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "сборщик наложений",
+    "message": "наложить · украсить · переключить · привязать",
     "description": ""
   },
   "Band.Pill.Disabled": {

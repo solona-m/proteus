@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Vincúlalo a un diseño",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "Superpón y recolorea todo",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "Desactiva lo que sea",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "Viste todo, sin ranura",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "compositor de superposiciones",
+    "message": "superponer · adornar · alternar · vincular",
     "description": ""
   },
   "Band.Pill.Disabled": {

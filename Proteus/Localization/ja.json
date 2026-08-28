@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "デザインに紐付け",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "何でも重ねて色替え",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "何でもオフに切替",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "装備枠なしで着用",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "オーバーレイ合成",
+    "message": "重ねる · 飾る · 切替 · 紐付け",
     "description": ""
   },
   "Band.Pill.Disabled": {

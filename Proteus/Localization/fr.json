@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Liez le tout à un design",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "Superposez et recolorez tout",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "Désactivez n’importe quoi",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "Portez tout, sans emplacement",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "compositeur de calques",
+    "message": "superposer · accessoiriser · activer · lier",
     "description": ""
   },
   "Band.Pill.Disabled": {
