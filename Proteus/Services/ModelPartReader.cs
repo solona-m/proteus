@@ -51,8 +51,9 @@ public sealed class ModelPart
     public required int[] Ordinals { get; init; }
 
     /// <summary>
-    /// The submesh's attribute mask as authored. NON-ZERO means the author already gates this geometry, and
-    /// this part is therefore not offered as a toggle target — see <see cref="Toggleable"/>.
+    /// The submesh's attribute mask as authored. Non-zero does NOT mean the author switches this geometry —
+    /// most of it is the game's own body suppression — so what may take a toggle is decided by
+    /// <see cref="Toggleable"/>, which reads the names behind the bits.
     /// </summary>
     public required uint AttributeMask { get; init; }
 
@@ -62,15 +63,30 @@ public sealed class ModelPart
     public int TriangleCount => Triangles.Length / 3;
 
     /// <summary>
-    /// Whether a toggle may claim this part.
+    /// Whether a toggle may claim this part — true unless one of the item's own ten IMC switches already
+    /// governs it.
     /// <para/>
-    /// Only an UNTAGGED submesh. An untagged submesh always draws, so tagging it with a fresh attribute can
-    /// only ever mean "draws while this bit is on" — true whichever way the game combines a mask with more
-    /// than one bit in it, which is a question this does not have to answer. A submesh the author already
-    /// tagged is a different matter: it is already behind one of the item's ten bits, adding another changes
-    /// a rule that is currently working, and the user's own mod already has a toggle for it.
+    /// A submesh draws only when ALL of its attributes are enabled, so adding one is purely additive: the
+    /// geometry keeps every condition it had and gains "…and this switch is on". That was worth settling
+    /// rather than assuming, because the rule used to be the far stricter "untagged only", which refused
+    /// every part of a body model — the knee and shin of a pair of trousers carry <c>atr_hiz</c> and
+    /// <c>atr_sne</c> as a matter of course, and the panel told the user their author had switched them,
+    /// which was untrue and left nothing on the model tickable.
+    /// <para/>
+    /// The evidence for AND is in the mods themselves: across 3,000 installed models, 1,164 of 10,567 tagged
+    /// submeshes carry two or more attributes, and the commonest pairings put an IMC part attribute beside a
+    /// body one — <c>atr_dv_a + atr_sne</c> 122 times, <c>atr_hij + atr_tv_a</c> 28. Under "draw if ANY is
+    /// enabled" every one of those would defeat its own author's part switch, which is not something 122
+    /// submeshes are doing by accident. <c>atr_gv_a + atr_gv_e</c> settles it from the other side: two part
+    /// switches on one submesh is a sentence only AND can finish.
+    /// <para/>
+    /// What is still refused is a part an IMC switch already drives — see
+    /// <c>SecondSkinService.PartAttributeBit</c> for which names those are. Not because it would break
+    /// anything, but because the result is a part needing two checkboxes to appear, and the mod already
+    /// offers one of them. Body-suppression attributes (<c>atr_hiz</c>, <c>atr_sne</c>, <c>atr_hij</c>,
+    /// <c>atr_ude</c>, <c>atr_nek</c>) and the rest answer to no IMC bit and so do not count.
     /// </summary>
-    public bool Toggleable => AttributeMask == 0;
+    public required bool Toggleable { get; init; }
 }
 
 /// <summary>Everything one model offers, read once.</summary>
@@ -225,6 +241,17 @@ public static class ModelPartReader
                 uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
                 uint mask = BitConverter.ToUInt32(s, ss + 8);
 
+                // Which of this submesh's attributes are IMC switches — see ModelPart.Toggleable. A bit with
+                // no name behind it is treated as one, because an unreadable tag is not a licence to add to
+                // a rule we cannot read.
+                bool toggleable = true;
+                for (int b = 0; b < 32 && toggleable; b++)
+                {
+                    if ((mask & (1u << b)) == 0) continue;
+                    toggleable = b < src.AttrNames.Length
+                              && SecondSkinService.PartAttributeBit(src.AttrNames[b]) == null;
+                }
+
                 var tris = new List<int>((int)sc);
                 var ordinals = new List<int>((int)sc / 3);
                 for (uint t = 0; t + 2 < sc; t += 3)
@@ -245,7 +272,7 @@ public static class ModelPartReader
                 var label = $"{ordinal}.{su + 1}";
                 var triArr = tris.ToArray();
                 var ordArr = ordinals.ToArray();
-                parts.Add(Make(m, su, -1, label, material, triArr, ordArr, mask, pos));
+                parts.Add(Make(m, su, -1, label, material, triArr, ordArr, mask, toggleable, pos));
 
                 // Islands are offered only when they say something the submesh row does not. One island IS
                 // the submesh, and a shattered submesh is reported rather than listed — see MaxIslands.
@@ -264,7 +291,7 @@ public static class ModelPartReader
                 {
                     parts.Add(Make(m, su, i, $"{label}.{i + 1}", material,
                         [.. island.SelectMany(k => new[] { triArr[k * 3], triArr[k * 3 + 1], triArr[k * 3 + 2] })],
-                        [.. island.Select(k => ordArr[k])], mask, pos));
+                        [.. island.Select(k => ordArr[k])], mask, toggleable, pos));
                     i++;
                 }
             }
@@ -286,11 +313,12 @@ public static class ModelPartReader
 
     private static ModelPart Make(
         int mesh, int submesh, int island, string label, string material, int[] triangles, int[] ordinals,
-        uint mask, List<float> pos)
+        uint mask, bool toggleable, List<float> pos)
     {
         var (min, max) = Bounds(pos, triangles);
         return new ModelPart
         {
+            Toggleable = toggleable,
             Mesh = mesh,
             Submesh = submesh,
             Island = island,

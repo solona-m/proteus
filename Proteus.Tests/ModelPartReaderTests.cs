@@ -108,15 +108,58 @@ public class ModelPartReaderTests
         Assert.Equal(many, parts.ShatteredSubmeshes["1.1"]);
     }
 
-    /// <summary>A submesh the author already gates is listed, so the user can see it, but not claimable.</summary>
+    /// <summary>A submesh an IMC switch already drives is listed, so the user can see it, but not claimable.</summary>
     [Fact]
-    public void AnAlreadyTaggedSubmesh_IsNotToggleable()
+    public void ASubmeshBehindTheModsOwnSwitch_IsNotToggleable()
     {
         var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_tv_a"],
             Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(1))));
 
         Assert.True(parts!.Parts[0].Toggleable);
         Assert.False(parts.Parts[1].Toggleable);
+    }
+
+    /// <summary>
+    /// Body-suppression attributes are the game's, not the author's: a pair of trousers carries
+    /// <c>atr_hiz</c> on the knee and <c>atr_sne</c> on the shin as a matter of course. Refusing those left
+    /// a body model with nothing tickable and told the user their author had switched them, which was untrue.
+    /// A submesh draws only when ALL its attributes are enabled, so adding one is purely additive.
+    /// </summary>
+    [Theory]
+    [InlineData("atr_hiz")]
+    [InlineData("atr_sne")]
+    [InlineData("atr_hij")]
+    [InlineData("atr_ude")]
+    [InlineData("atr_nek")]
+    [InlineData("atr_lod")]
+    public void ASubmeshBehindABodyAttribute_IsStillToggleable(string attribute)
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build([attribute],
+            Mesh(new SyntheticModel.Sub(1))));
+
+        Assert.Equal(1u, parts!.Parts[0].AttributeMask);
+        Assert.True(parts.Parts[0].Toggleable);
+    }
+
+    /// <summary>One IMC switch anywhere in the mask is enough to refuse it, however many body tags sit
+    /// beside it — the pairing real mods use most.</summary>
+    [Fact]
+    public void ASubmeshMixingABodyAttributeWithAnImcSwitch_IsNotToggleable()
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_sne", "atr_dv_a"],
+            Mesh(new SyntheticModel.Sub(0b11))));
+
+        Assert.False(parts!.Parts[0].Toggleable);
+    }
+
+    /// <summary>A bit with no name behind it is not a licence to add to a rule we cannot read.</summary>
+    [Fact]
+    public void ASubmeshTaggedPastTheAttributeTable_IsNotToggleable()
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_hiz"],
+            Mesh(new SyntheticModel.Sub(0b10))));
+
+        Assert.False(parts!.Parts[0].Toggleable);
     }
 
     [Fact]
