@@ -571,6 +571,10 @@
     "message": "omitido",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "Este paquete ya es un mod de Proteus. Se instalará exactamente como lo creó su autor: no se convierte nada y sus propias opciones se quedan en Penumbra.",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "cuerpo del portador",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "no es un modelo legible ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "«{0}» instalado. Ya era un mod de Proteus, así que entró exactamente como lo creó su autor: activado y abierto en Penumbra, donde se eligen sus opciones.",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {

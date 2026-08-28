@@ -571,6 +571,10 @@
     "message": "건너뜀",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "이 팩은 이미 Proteus 모드입니다. 제작자가 만든 그대로 설치되며, 아무것도 변환되지 않고 자체 옵션은 Penumbra에 그대로 남습니다.",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "착용자 자신의 몸",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "읽을 수 없는 모델입니다 ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "\"{0}\"을(를) 설치했습니다. 이미 Proteus 모드였기 때문에 제작자가 만든 그대로 들어갔습니다 — 활성화하여 Penumbra에서 열었으며, 옵션은 거기에서 선택합니다.",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {

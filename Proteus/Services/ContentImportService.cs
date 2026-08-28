@@ -130,7 +130,17 @@ public sealed class ContentImportService
         PenumbraPackage.Contents Pack,
         IReadOnlyList<PieceUnit> Units,
         string? PieceGroupName,
-        IReadOnlyList<string> Warnings)
+        IReadOnlyList<string> Warnings,
+        /// <summary>
+        /// The pack's OWN <c>Proteus/metadata.json</c>, when it ships one, or null for an ordinary mod.
+        /// <para/>
+        /// Non-null is what makes the import an INSTALL rather than a conversion — see
+        /// <see cref="InstallOnly"/>, which is simply this being present. Such a pack arrives with no units,
+        /// because none of its geometry is being taken over, and is still importable: it is copied in as it
+        /// stands. The top of <see cref="Inspect"/> has the reason converting it a second time can be
+        /// actively wrong.
+        /// </summary>
+        ProteusMetadata? AuthoredSidecar = null)
     {
         public string Name => Pack.Name;
         public string Author => Pack.Author;
@@ -141,6 +151,20 @@ public sealed class ContentImportService
         public int ImportableUnits => Units.Count(u => u.Import);
 
         public bool AnyImportable => ImportableUnits > 0;
+
+        /// <summary>
+        /// This pack is copied in UNCHANGED — it already carries a Proteus sidecar, so its author has
+        /// already chosen what Proteus handles and what Penumbra publishes.
+        /// <para/>
+        /// Nothing is stripped, no gate group is added, no defaults are cleared and the sidecar is left
+        /// exactly as written. The outcome is what dropping the file on Penumbra would have produced;
+        /// doing it here only saves the trip.
+        /// </summary>
+        public bool InstallOnly => AuthoredSidecar != null;
+
+        /// <summary>Whether the Import button does anything — either geometry to take over, or a
+        /// ready-made Proteus mod to install as it stands.</summary>
+        public bool CanImport => InstallOnly || AnyImportable;
 
         /// <summary>Every piece the pack ships, importable or not — the count the tab reports against.</summary>
         public int TotalUnits => Units.Count;
@@ -184,6 +208,23 @@ public sealed class ContentImportService
     {
         var pack = PenumbraPackage.Read(pmpPath);
         var warnings = new List<string>();
+
+        // A pack that is ALREADY a Proteus mod is INSTALLED, not converted — copied in exactly as it is,
+        // which is what dropping it on Penumbra would have done.
+        //
+        // Its author already decided which of its files Penumbra publishes and which its sidecar names. The
+        // import exists to make that decision for a mod that has never had it made; making it a second time
+        // does not refine the first, it overrides it, and the override can be flatly wrong. "Picklish - by
+        // Solona" is the case: nine of its models sit in SINGLE groups — Top Size XS/S/M/L, Skirt Size
+        // Small/Medium/Large — mutually exclusive by construction, where appending is the mechanism for
+        // wearing several options AT ONCE. Taking those over would strip the redirects that make Penumbra
+        // pick exactly one and hand the choice to a composite built to honour all of them.
+        //
+        // No units, because none of its geometry is being taken over; read before the models are planned,
+        // because that work is wanted for neither the preview nor the write.
+        var authored = ReadAuthoredSidecar(pack, log);
+        if (authored != null)
+            return new ImportPreview(pmpPath, pack, [], null, warnings, authored);
 
         // Materials are matched across the WHOLE pack, not within the option that ships the model. Packs
         // routinely put their shared material in one always-on group and their meshes in another — the
@@ -458,6 +499,36 @@ public sealed class ContentImportService
                              MaterialAttributes: byMaterial, BodyOnly: bodyOnly);
     }
 
+    /// <summary>
+    /// The pack's own <c>Proteus/metadata.json</c>, or null when it ships none — which is every ordinary
+    /// mod, and the common case.
+    /// <para/>
+    /// Fail-soft on a sidecar that will not parse: a hand-edited one is the author's problem, and refusing
+    /// the whole import over it would be worse than importing without carrying its fields. Absent reads the
+    /// same as unreadable, so the caller has one case to handle.
+    /// </summary>
+    private static ProteusMetadata? ReadAuthoredSidecar(PenumbraPackage.Contents pack, IPluginLog? log)
+    {
+        var entry = pack.Entries.Keys.FirstOrDefault(k =>
+            string.Equals(k, SidecarDiscoveryService.SidecarSubdir + "/metadata.json",
+                          StringComparison.OrdinalIgnoreCase));
+        if (entry == null) return null;
+
+        try
+        {
+            var bytes = PenumbraPackage.ReadEntries(pack.Path, [entry]);
+            return bytes.TryGetValue(entry, out var json)
+                ? JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead)
+                : null;
+        }
+        catch (Exception ex)
+        {
+            log?.Warning(ex, "[Proteus] content import: {0} carries a Proteus sidecar that could not be "
+                           + "read, so its overlays and colours will not be carried over", pack.Path);
+            return null;
+        }
+    }
+
     // ── write ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -481,7 +552,9 @@ public sealed class ContentImportService
         if (string.IsNullOrWhiteSpace(modName))
             // Same sentence, same situation as the Onion import's — one key, one translation.
             return Fail(Loc.Localize("Import.NeedName", "Enter a mod name."));
-        if (!preview.AnyImportable)
+        // CanImport, not AnyImportable: a ready-made Proteus mod has no units to take over and is still
+        // perfectly importable — it is copied in as it stands. See ImportPreview.InstallOnly.
+        if (!preview.CanImport)
             return Fail(Loc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
         if (!File.Exists(preview.SourcePath))
             return Fail(string.Format(Loc.Localize("ContentImport.Fail.Gone.Fmt",
@@ -541,6 +614,20 @@ public sealed class ContentImportService
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                 e.ExtractToFile(dest, overwrite: true);
             }
+
+        // A ready-made Proteus mod stops here: the copy above IS the whole import. Everything below edits
+        // the pack into something it already is — stripping redirects its author meant Penumbra to publish,
+        // adding a gate group over options that already gate themselves, clearing defaults the author set,
+        // and writing a derived sidecar over the authored one. See ImportPreview.InstallOnly.
+        //
+        // The name is still the user's, because the dialog asked for it and this is the file Penumbra's mod
+        // list reads.
+        if (preview.InstallOnly)
+        {
+            EditJson(Path.Combine(root, PenumbraModMeta.MetaFile), log,
+                "the installed mod keeps the pack's own name", manifest => manifest["Name"] = modName);
+            return;
+        }
 
         // The redirects the sidecar is about to name — and ONLY those. A unit this import refused keeps its
         // own, because Proteus is not taking it over and something has to publish it. Keyed on game path AND
@@ -765,8 +852,30 @@ public sealed class ContentImportService
     /// <summary>The Proteus sidecar mirroring the pack's groups, with one piece per importable model.</summary>
     internal static ProteusMetadata BuildSidecar(ImportPreview preview, string modName, string author)
     {
+        // Seeded from the pack's OWN sidecar when it has one. A BACKSTOP, not the mechanism: a pack that
+        // carries one is INSTALLED rather than converted (see ImportPreview.InstallOnly), and WriteMod
+        // returns before it reaches here — so nothing driven by the Import tab arrives with a non-null
+        // AuthoredSidecar.
+        //
+        // It stays because this method and WriteMod are internal and callable on their own, and the failure
+        // it prevents is silent data loss: BuildSidecar derives the CONTENT half and nothing else, so a
+        // freshly-built object written over an authored file deletes the overlays, colour rows, mask
+        // settings and per-material edits that are the author's.
+        //
+        // Name and Author are the user's to set — the import dialog asks for both — so they are assigned
+        // after, over whatever the authored file said.
+        var a = preview.AuthoredSidecar;
         var metadata = new ProteusMetadata
         {
+            Overlays           = a?.Overlays,
+            OptionGroups       = a?.OptionGroups,
+            ColorTableRows     = a?.ColorTableRows,
+            MaskColorTableRows = a?.MaskColorTableRows,
+            MaskDescriptor     = a?.MaskDescriptor,
+            AmbientOcclusion   = a?.AmbientOcclusion,
+            ContentGlow        = a?.ContentGlow,
+            ContentMaterials   = a?.ContentMaterials,
+
             Name = modName,
             Author = author,
         };
@@ -1147,6 +1256,14 @@ public sealed class ContentImportService
         // skipped count: that includes the body meshes Proteus drops on purpose, so warning on it would just
         // move the cried-wolf amber from every gated pack to every outfit pack.
         var warn = prepared.Preview.FaultyUnits > 0;
+
+        // Installed rather than converted, so none of the sentences below apply: there are no pieces to
+        // count and nothing arrives switched off. See ImportPreview.InstallOnly.
+        if (prepared.Preview.InstallOnly)
+            return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Installed.Fmt",
+                "Installed \"{0}\". It was already a Proteus mod, so it went in exactly as its author "
+              + "built it — enabled and opened in Penumbra, where its options are chosen."),
+                dirName));
 
         if (prepared.Preview.PieceGroupName is { } gate)
             return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",

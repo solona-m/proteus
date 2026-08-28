@@ -451,6 +451,12 @@ public sealed class ContentStrings
     /// body it was fitted to, the wearer already has one, and leaving it out is the wanted outcome.</summary>
     public readonly string BodyOnly = Loc.Localize("Content.BodyOnly", "wearer's own body");
 
+    /// <summary>Shown in place of the piece table for a pack that already carries a Proteus sidecar: it is
+    /// copied in unchanged rather than converted. Not a warning — this is the right outcome.</summary>
+    public readonly string AlreadyProteus = Loc.Localize("Content.AlreadyProteus",
+        "This pack is already a Proteus mod. It will be installed exactly as its author built it — nothing "
+      + "is converted, and its own options stay in Penumbra where they are.");
+
     public readonly string ProblemFmt = Loc.Localize("Content.Problem.Fmt", "{0}\nSkipped: {1}");
 
     public readonly string NothingUsable = Loc.Localize("Content.NothingUsable",

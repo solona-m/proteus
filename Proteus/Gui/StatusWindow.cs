@@ -1482,7 +1482,7 @@ public class StatusWindow : Window
             // that counts the body meshes Proteus drops on purpose, so an outfit pack shipping its own
             // fitted body would be sent back for a second click on an import the result line calls clean.
             // This is the same question the result colour asks, and the two must answer alike.
-            if (content.AnyImportable && content.Warnings.Count == 0 && content.FaultyUnits == 0)
+            if (content.CanImport && content.Warnings.Count == 0 && content.FaultyUnits == 0)
                 StartContentImport(content);
             return;
         }
@@ -1624,7 +1624,9 @@ public class StatusWindow : Window
         {
             var preview = ContentImportService.Inspect(path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log));
             _contentPreview = preview;
-            _importName = ProteusName(preview.Name);
+            // No "(Proteus)" on a pack that already IS one: the suffix exists to tell a converted copy from
+            // the pack it was made out of, and nothing is being converted here.
+            _importName = preview.InstallOnly ? preview.Name : ProteusName(preview.Name);
             _importAuthor = preview.Author;
         }
         catch (Exception ex)
@@ -1661,6 +1663,24 @@ public class StatusWindow : Window
         }
 
         ImGui.Separator();
+
+        // A ready-made Proteus mod has no piece list to draw — nothing of its geometry is being taken over.
+        // Said plainly and NOT in the warning colour: copying it in unchanged is a correct outcome, not a
+        // shortfall. See ImportPreview.InstallOnly.
+        if (preview.InstallOnly)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(cms.AlreadyProteus);
+            ImGui.PopTextWrapPos();
+            ImGui.Separator();
+            bool ok = !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+            using (ImRaii.Disabled(!ok))
+                if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                    StartContentImport(preview);
+            DrawImportStatus();
+            return;
+        }
+
         ImGui.TextUnformatted(string.Format(cms.PieceCountFmt, preview.ImportableUnits, preview.TotalUnits));
 
         // One row per PIECE, not per file: a pack that ships the same garment for five races ships one
@@ -1738,12 +1758,12 @@ public class StatusWindow : Window
 
         ImGui.Separator();
 
-        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        bool valid = preview.CanImport && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
         using (ImRaii.Disabled(!valid))
             if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
                 StartContentImport(preview);
         if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : cms.NothingUsable);
+            ImGui.SetTooltip(preview.CanImport ? ims.NeedName : cms.NothingUsable);
 
         DrawImportStatus();
     }

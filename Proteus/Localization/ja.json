@@ -571,6 +571,10 @@
     "message": "スキップ",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "このパックはすでに Proteus モッドです。作者が作ったままインストールされます—何も変換されず、オプションは Penumbra に残ります。",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "着用者自身の身体",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "読み取れないモデルです（{0}）",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "「{0}」をインストールしました。すでに Proteus モッドだったため、作者が作ったまま導入されました—有効化し、Penumbra で開きました。オプションはそこで選べます。",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {
