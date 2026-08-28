@@ -571,6 +571,10 @@
     "message": "skipped",
     "description": "A table cell marking a piece that will not be imported. Very tight space - one short word."
   },
+  "Content.BodyOnly": {
+    "message": "wearer's own body",
+    "description": "A table cell: every mesh in this piece is the body the pack was fitted to, which Proteus leaves to the character's own skin. Not an error - shown dimmed, not in the warning colour. Very tight space."
+  },
   "Content.Unbound": {
     "message": "unbound material",
     "description": "A table cell: the piece's mesh names a material the pack does not ship. Very tight space."
@@ -614,6 +618,10 @@
   "ContentImport.Problem.NoGeometry": {
     "message": "no geometry — every mesh in it is empty",
     "description": "Why one piece was skipped, shown in a tooltip."
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "it draws no meshes, so there is nothing to append.",
+    "description": "Why one piece was skipped, shown in a tooltip: the model names no drawn material at all - neither the wearer's body nor a missing one. Counts as a fault, unlike the body-only case."
   },
   "ContentImport.Problem.Unbound.Fmt": {
     "message": "its mesh names {0}, which this pack does not ship. Rebind the mesh to one of the pack's own materials and re-export.",
@@ -1082,10 +1090,6 @@
   "Mods.Colors.Btn": {
     "message": "Colors",
     "description": "Opens the colour editor. Narrow table column - keep short."
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "The design you have applied was saved before this mod, so its overlays are\nheld out of the composite. The mod itself is still on: its gear, model and\ntextures apply as normal.\n\nClick \"Update\" on the Bindings tab to add it to this design.",
-    "description": "Tooltip. Appears in the Mods tab on a mod whose overlays the active design binding is holding out of the composite. Contains deliberate line breaks - keep the same number, moving them where your language needs. \"Update\" and \"Bindings\" name controls translated elsewhere - match Bindings.Update.Btn and Tab.Bindings."
   },
   "Mods.NoSidecarMods": {
     "message": "No Proteus sidecar mods detected.",

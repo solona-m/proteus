@@ -571,6 +571,10 @@
     "message": "übersprungen",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "eigener Körper des Trägers",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "Material nicht zugeordnet",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "keine Geometrie — jedes Mesh darin ist leer",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "es zeichnet keine Meshes, es gibt also nichts hinzuzufügen.",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "Farben",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "Das angewendete Design wurde vor diesem Mod gespeichert, daher werden seine\nOverlays aus der Komposition herausgehalten. Der Mod selbst bleibt an: Ausrüstung,\nModell und Texturen gelten wie gewohnt.\n\nKlicke auf „Aktualisieren“ im Reiter „Bindungen“, um ihn diesem Design hinzuzufügen.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

@@ -1402,22 +1402,6 @@ public class CompositorService : IDisposable
         => _stackOverride = overrideByMod;
 
     /// <summary>
-    /// Mods a design RESTORE is holding OUT of the composite: ones the restored binding never captured
-    /// that also ship Penumbra content of their own (see <c>DesignBindingService.UnboundContentMods</c>).
-    /// A restore switches an unbound overlay pack off in Penumbra outright, but it cannot do that to a mod
-    /// whose gear or body would go with it — so those stay enabled and are silenced here instead.
-    /// <para/>
-    /// Null ⇒ nothing is held out, which is the state every path that ISN'T a restore leaves behind: a
-    /// boot restore, a capture and an "Update binding" all publish null. Holding a mod out is one half of
-    /// a restore's sweep and lives exactly as long as that restore, never longer — a mod installed after a
-    /// design was saved must still compose on the next login.
-    /// </summary>
-    private volatile IReadOnlySet<string>? _suppressedMods;
-
-    public void SetActiveSuppression(IReadOnlySet<string>? modDirs)
-        => _suppressedMods = modDirs;
-
-    /// <summary>
     /// Apply the plugin's enabled state, both visually and in Penumbra.
     ///
     /// Turning off in the wrong order leaves the character still wearing the last composite: the mod has
@@ -2761,13 +2745,13 @@ public class CompositorService : IDisposable
 
             LastDiscovered = allEntries;
 
-            // Mods a design binding is holding out (see _suppressedMods) drop out here and nowhere else:
-            // one filter, so they are absent from the overlay lists, from the fingerprint built out of
-            // them, and from every count taken off `entries`. They stay in LastDiscovered above — the UI
-            // still lists them, enabled, because that is what Penumbra says they are.
-            var suppressed = _suppressedMods;  // snapshot the volatile reference for this run
+            // Enabled is the whole test. A design binding used to hold unbound content mods out here as
+            // well, so a mod the user had switched on could still paint nothing — which is how a pack
+            // imported after the applied design was saved went silently missing. Whether a mod composites
+            // is now the same question as whether Penumbra says it is on, and the answer is visible in the
+            // one place the user already looks.
             var entries = allEntries
-                .Where(e => e.Enabled && (suppressed == null || !suppressed.Contains(e.ModDirectory)))
+                .Where(e => e.Enabled)
                 .OrderBy(e => e.Priority)
                 .ToList();
             CheckManagedModHealth(entries);

@@ -472,6 +472,58 @@ public class ContentPiece
     [JsonPropertyName("MaterialGamePaths")]
     public Dictionary<string, List<string>>? MaterialGamePaths { get; set; }
 
+    /// <summary>
+    /// Material leaf → every file this pack can supply it from, and the option that supplies each, best
+    /// candidate first.
+    /// <para/>
+    /// This is what makes a print or dye group work. Cerise redirects one kimono material from four options
+    /// — Blue Rose, Cranes, Crochet, Pink Floral — and which applies is the user's live Penumbra selection.
+    /// <para/>
+    /// Recorded because asking PENUMBRA which file a game path resolves to answers a different question: it
+    /// reports who wins that path across every installed mod, and a second mod claiming it wins instead.
+    /// That really happens — "Royally Bundled Bun" claims Cerise's kimono material, so the resolve came back
+    /// pointing outside the Cerise folder, was rightly refused, and the import's frozen choice was published
+    /// no matter which print was ticked. The pack's own options are the right thing to read, and they are
+    /// read the same way every other content gate is.
+    /// </summary>
+    [JsonPropertyName("MaterialOptions")]
+    public Dictionary<string, List<ContentMaterialSource>>? MaterialOptions { get; set; }
+
+    /// <summary>
+    /// Texture GAME PATH → every file this pack can supply it from, and the option that supplies each.
+    /// <para/>
+    /// The other half of a print group, and on its own the bigger half. Choosing the right .mtrl is not
+    /// enough because a print usually is not IN the material: all four Cerise prints name the same four
+    /// texture paths, and two of them share one .mtrl byte-for-byte. What separates Blue Rose from Pink
+    /// Floral is which file <c>v01_c0201e6085_met_d.tex</c> redirects to, and nothing else.
+    /// <para/>
+    /// Left alone, those paths are resolved by Penumbra across every installed mod, so the print depended on
+    /// who won a global path fight rather than on what the user ticked. Recorded here so the composite can
+    /// republish the selected files under Proteus's own mod, which outranks the packs it reads.
+    /// <para/>
+    /// Keyed by game path rather than by leaf: a material names its textures by their full path, which is
+    /// what the lookup has in hand, and two textures in different folders can share a filename.
+    /// </summary>
+    [JsonPropertyName("TextureOptions")]
+    public Dictionary<string, List<ContentMaterialSource>>? TextureOptions { get; set; }
+
+    /// <summary>Every file the texture at <paramref name="gamePath"/> can come from. Empty when the pack
+    /// does not ship it — a vanilla texture the material names is left to the game.</summary>
+    public IReadOnlyList<ContentMaterialSource> TextureSourcesFor(string gamePath)
+        => TextureOptions is { Count: > 0 } && TextureOptions.TryGetValue(gamePath, out var v) ? v : [];
+
+    /// <summary>Every file <paramref name="materialLeaf"/> can come from, best first — compared leaf-to-leaf
+    /// like <see cref="MaterialFor"/>, for the same reason.</summary>
+    public IReadOnlyList<ContentMaterialSource> SourcesFor(string materialLeaf)
+    {
+        if (MaterialOptions is not { Count: > 0 }) return [];
+        var leaf = materialLeaf.TrimStart('/');
+        foreach (var (k, v) in MaterialOptions)
+            if (string.Equals(k.TrimStart('/'), leaf, StringComparison.OrdinalIgnoreCase))
+                return v;
+        return [];
+    }
+
     /// <summary>The game paths <paramref name="materialLeaf"/> may be published under, best first — compared
     /// leaf-to-leaf like <see cref="MaterialFor"/>, for the same reason.</summary>
     public IReadOnlyList<string> GamePathsFor(string materialLeaf)
@@ -498,6 +550,26 @@ public class ContentPiece
     [JsonIgnore]
     public ShellSurfaceKey SurfaceKey
         => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+}
+
+/// <summary>
+/// One file a pack can supply a material from, and the option that supplies it.
+/// <para/>
+/// <see cref="Group"/> null means the pack's default data — always in play, and the fallback for a leaf
+/// whose option groups are all unselected. See <see cref="ContentPiece.MaterialOptions"/>.
+/// </summary>
+public class ContentMaterialSource
+{
+    [JsonPropertyName("Group")]
+    public string? Group { get; set; }
+
+    [JsonPropertyName("Option")]
+    public string? Option { get; set; }
+
+    /// <summary>The pack file, relative to the mod root — the same form <see cref="ContentPiece.Materials"/>
+    /// stores.</summary>
+    [JsonPropertyName("File")]
+    public string File { get; set; } = string.Empty;
 }
 
 /// <summary>

@@ -1343,6 +1343,7 @@ public class StatusWindow : Window
                     if (string.IsNullOrEmpty(picked)) return;
                     RememberImportDir(picked);
                     LoadPack(picked);
+                    AutoImport();
                 }, 1, LastImportDir());
         // SameLine inside each branch rather than once above them. The picked file's name goes beside the
         // button — the content preview prints it first thing, the Onion path prints it just below — but
@@ -1452,6 +1453,51 @@ public class StatusWindow : Window
     }
 
     /// <summary>
+    /// Import a just-picked pack outright when the preview has nothing to say about it.
+    /// <para/>
+    /// The preview earns a second click when it is telling the user something they might act on — a pack
+    /// that drops pieces, one that needs the sibling mode raised, one carrying warnings of its own. When it
+    /// says none of those, the click is a confirmation of a screen nobody needed to read, and the pack goes
+    /// in either way.
+    /// <para/>
+    /// The condition is written as "everything the preview would have coloured amber is absent", so the two
+    /// stay in step: each clause below is one of the warnings the panel draws. The quiet informational
+    /// lines — the all-off note, the remap note, the material-target list — are NOT clauses, because
+    /// nothing about them is a decision.
+    /// <para/>
+    /// Called from the file dialog's callback, which runs inside <see cref="Draw"/> on the framework thread,
+    /// so it is the same context the Import button itself would be clicked in. Both Start methods only set a
+    /// flag and hand the disk work to the pool, so nothing blocks here either way.
+    /// <para/>
+    /// The preview stays on screen after it fires. The panel it draws is still the truth about what went in,
+    /// and the status line under it reports the result.
+    /// </summary>
+    private void AutoImport()
+    {
+        if (_importBusy || string.IsNullOrWhiteSpace(_importName)) return;
+
+        if (_contentPreview is { } content)
+        {
+            // No piece that came out WRONG — see ImportPreview.FaultyUnits. Not "every piece imported":
+            // that counts the body meshes Proteus drops on purpose, so an outfit pack shipping its own
+            // fitted body would be sent back for a second click on an import the result line calls clean.
+            // This is the same question the result colour asks, and the two must answer alike.
+            if (content.AnyImportable && content.Warnings.Count == 0 && content.FaultyUnits == 0)
+                StartContentImport(content);
+            return;
+        }
+
+        if (_importPreview is { } onion
+         && onion.AnyImportable
+         && onion.Warnings.Count == 0
+         && onion.Layers.All(l => l.Import)
+         && !onion.NeedsAllBodies
+         // Only a warning when there IS a material list to be wrong about; an unresolved one prints nothing.
+         && (_importMaterials is null or { Count: 0 } || _importMaterialsFromGameData))
+            StartImport(onion);
+    }
+
+    /// <summary>
     /// Where the import picker should open — the folder a pack was last taken from, or null for the
     /// dialog's own default.
     /// <para/>
@@ -1476,6 +1522,24 @@ public class StatusWindow : Window
          || string.Equals(dir, config.LastImportDir, StringComparison.OrdinalIgnoreCase)) return;
         config.LastImportDir = dir;
         config.Save();
+    }
+
+    /// <summary>
+    /// The name an imported pack is offered under: the pack's own, marked as the Proteus copy.
+    /// <para/>
+    /// An import writes a SECOND mod beside the original — the pack stays installable in Penumbra on its
+    /// own terms — so the two sit together in the mod list and need telling apart. It is only a default:
+    /// the name box is right there and the user owns what finally gets written.
+    /// <para/>
+    /// A pack that already says Proteus is left alone rather than made to say it twice; the sample packs
+    /// here are called things like "Neolithe Piercings for Proteus" already.
+    /// </summary>
+    private static string ProteusName(string packName)
+    {
+        var name = (packName ?? string.Empty).Trim();
+        return name.Length == 0 || name.Contains("proteus", StringComparison.OrdinalIgnoreCase)
+            ? name
+            : name + " (Proteus)";
     }
 
     /// <summary>One bulleted line of wrapped body text. Honours whatever wrap position is pushed around
@@ -1505,7 +1569,7 @@ public class StatusWindow : Window
         {
             var preview = onionImport.Inspect(path);
             _importPreview = preview;
-            _importName = preview.Name;
+            _importName = ProteusName(preview.Name);
             _importAuthor = preview.Author;
             // Best effort: a failure here only costs the "Material targets" list, not the import, which
             // resolves them again for itself.
@@ -1560,7 +1624,7 @@ public class StatusWindow : Window
         {
             var preview = ContentImportService.Inspect(path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log));
             _contentPreview = preview;
-            _importName = preview.Name;
+            _importName = ProteusName(preview.Name);
             _importAuthor = preview.Author;
         }
         catch (Exception ex)
@@ -1640,10 +1704,14 @@ public class StatusWindow : Window
                             ? string.Format(cms.MaterialsFmt, lead.Bindings.Count)
                             : mtrl);
                     }
+                    // Amber only for a piece that came out WRONG. A body-only model is dropped on purpose —
+                    // the wearer has their own — so it reads as a plain dimmed note. Colouring it, and
+                    // labelling it "unbound material" when nothing is unbound, put an amber row under a
+                    // green result line and made the two look like they disagreed about the same import.
+                    else if (lead.BodyOnly)
+                        ImGui.TextDisabled(cms.BodyOnly);
                     else
-                    {
                         ImGui.TextColored(ImportWarnColour, cms.Unbound);
-                    }
 
                     if (lead.Problem != null && ImGui.IsItemHovered())
                         ImGui.SetTooltip(string.Format(cms.ProblemFmt, unit.Label, lead.Problem));
@@ -2884,20 +2952,18 @@ public class StatusWindow : Window
                     compositor.TriggerRecomposite("penumbra-enable");
                 }
 
-                // Mod name (dimmed when disabled, or when the active design binding is holding this mod's
-                // overlays out — it is on in Penumbra and its own content still applies, but Proteus is
-                // painting nothing for it, and a row that looks fully live would be a lie about that).
+                // Mod name, dimmed when disabled and for no other reason. An applied design binding used to
+                // dim it too, for a mod the binding never captured — but that mod was ON, and a row greyed
+                // out for a state the user never chose reads as "broken" rather than as "not in this
+                // design". Enabled mods composite now, so enabled is the only thing this colour says.
                 ImGui.TableNextColumn();
-                bool heldOut = active && designBindings.IsHeldOutByBinding(entry.ModDirectory);
-                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active || heldOut))
+                using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
                 {
                     if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
                     {
                         penumbra.OpenToMod(entry.ModDirectory);
                     }
                 }
-                if (heldOut && ImGui.IsItemHovered())
-                    ImGui.SetTooltip(ms.HeldOutByBindingTip);
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();

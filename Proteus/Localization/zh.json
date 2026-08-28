@@ -571,6 +571,10 @@
     "message": "已跳过",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "穿戴者自身的身体",
+    "description": ""
+  },
   "Content.Unbound": {
     "message": "材质未绑定",
     "description": ""
@@ -613,6 +617,10 @@
   },
   "ContentImport.Problem.NoGeometry": {
     "message": "没有几何体——其中每个网格都是空的",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "它不绘制任何网格，因此没有可添加的内容。",
     "description": ""
   },
   "ContentImport.Problem.Unbound.Fmt": {
@@ -1081,10 +1089,6 @@
   },
   "Mods.Colors.Btn": {
     "message": "颜色",
-    "description": ""
-  },
-  "Mods.HeldOut.Tip": {
-    "message": "当前生效的设计保存于此模组之前，因此它的叠加层\n被排除在合成之外。模组本身仍处于启用状态：\n其装备、模型和贴图照常生效。\n\n点击“绑定”页的“更新”即可将它加入此设计。",
     "description": ""
   },
   "Mods.NoSidecarMods": {

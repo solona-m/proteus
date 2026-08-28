@@ -172,7 +172,11 @@ public sealed class SecondSkinService
         GearSettingsPreset? Glow,
         ShellSurfaceKey Surface,
         List<ContentGeometry> Geometries,
-        List<(OverlayEntry Entry, ResolvedContent Content)> Owners)
+        List<(OverlayEntry Entry, ResolvedContent Content)> Owners,
+        /// <summary>Texture game path → the file this pack's selection supplies for it, republished under
+        /// Proteus's own mod at emit time. Empty leaves every texture to Penumbra, which is what a pack with
+        /// no per-option textures wants.</summary>
+        Dictionary<string, string> TexFiles)
     {
         /// <summary>The entry any per-mod lookup should use. Merged owners are all one mod — the merge key
         /// carries the mod directory — so the first is as good as any.</summary>
@@ -210,16 +214,75 @@ public sealed class SecondSkinService
             return (piece.ModelCodes.Any() ? modelCode : null, exact);
         if (modelCode == null || RaceIndex(modelCode) is not { } from) return null;
 
+        // An ACCESSORY may take the chain's cross-gender hops; a garment may not. A ring, bracelet, necklace
+        // or earring is a prop hung off a bone rather than a fitted shape, and the game hands them across
+        // genders as a matter of course — a Midlander FEMALE character here is wearing
+        // chara/accessory/a0002/model/c0101a0002_wrs.mdl, a MALE-coded model, straight from the live
+        // equipment walk. Modders rely on that and ship one c0101 model for everyone; refusing it left an
+        // imported lantern invisible with a message about body shape that does not apply to a lantern.
+        //
+        // Everything else keeps the guard, for the reason CanFallThrough keeps it: c0101 and c0201 really
+        // are different bodies, and putting the male cut of a fitted top on a female is the failure the
+        // refusal exists to prevent.
+        bool crossGenderOk = IsAccessoryPiece(piece);
+
         for (int i = 0, cur = from; i < 8; i++)
         {
             cur = EqdpFallbackIndex(cur);
             if (cur == 0) break;
-            if (cur % 2 != from % 2) continue;   // a cross-gender hop is not ours to take
+            if (!crossGenderOk && cur % 2 != from % 2) continue;
             foreach (var code in piece.ModelCodes)
                 if (RaceIndex(code) == cur)
                     return (code, piece.ModelFor(code)!);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Is every model this piece ships an accessory — a ring, bracelet, necklace or earring?
+    /// <para/>
+    /// Read off the model FILENAME rather than its folder, and that distinction is the whole point. What the
+    /// sidecar stores is the pack's ARCHIVE ENTRY, not a game path: the lantern's model is recorded as
+    /// <c>base install/chara/accessory/a0189/model/c0101a0189_wrs.mdl</c>. Testing that for a
+    /// <c>/accessory/</c> segment happens to work, but only because that pack mirrors the game path under
+    /// its option folder — one laid out as <c>a0189/model/…</c>, which nothing forbids, would come back
+    /// false and put the lantern back to invisible.
+    /// <para/>
+    /// The filename cannot be laid out away. <c>cNNNN</c><b>a</b><c>NNNN_slot.mdl</c> against
+    /// <c>cNNNN</c><b>e</b><c>NNNN_slot.mdl</c> is the game's own spelling of accessory vs equipment, and it
+    /// is the same string wherever the file sits.
+    /// <para/>
+    /// Not the sidecar's Slot label either: that is display text a hand-authored sidecar may not carry.
+    /// Conservative on anything unreadable — unknown means "not an accessory", so the stricter rule applies.
+    /// </summary>
+    private static bool IsAccessoryPiece(ContentPiece piece)
+    {
+        var paths = piece.ModelCodes.Select(piece.ModelFor)
+            .Concat([piece.Model])
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToList();
+        return paths.Count > 0 && paths.All(p => ModelCategory(p) == 'a');
+    }
+
+    /// <summary>
+    /// The category letter of a character model — <c>a</c> for accessory, <c>e</c> for equipment — out of
+    /// the <c>cNNNNxNNNN_slot.mdl</c> name, or null when the name is not that shape.
+    /// <para/>
+    /// Takes the leaf of whatever it is given, so an archive entry and a game path answer alike.
+    /// </summary>
+    private static char? ModelCategory(string? modelPath)
+    {
+        if (string.IsNullOrEmpty(modelPath)) return null;
+
+        var leaf = modelPath.Replace('\\', '/');
+        var slash = leaf.LastIndexOf('/');
+        if (slash >= 0) leaf = leaf[(slash + 1)..];
+
+        // c + four digits + the letter. Anything shorter cannot carry a second id and a slot after it.
+        if (leaf.Length < 11 || char.ToLowerInvariant(leaf[0]) != 'c') return null;
+        for (int i = 1; i <= 4; i++)
+            if (!char.IsAsciiDigit(leaf[i])) return null;
+        return char.ToLowerInvariant(leaf[5]);
     }
 
     /// <summary>
@@ -383,8 +446,9 @@ public sealed class SecondSkinService
     /// meshes a unit draws is <see cref="ContentGeometryKey"/>'s job, deduped inside the unit.
     /// </summary>
     internal static string ContentUnitKey(
-        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson, string? glowKey = null)
-        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-", glowKey ?? "-");
+        string modDir, ShellSurfaceKey surface, string mtrlRel, string? rowsJson, string? glowKey = null,
+        string? texKey = null)
+        => string.Join('\u0000', modDir, surface.ToString(), mtrlRel, rowsJson ?? "-", glowKey ?? "-", texKey ?? "-");
 
     /// <summary>
     /// What makes two meshes the same mesh WITHIN a unit — the resolved model, and the material its meshes
@@ -459,6 +523,72 @@ public sealed class SecondSkinService
     /// reload either, because the texture belongs to an accessory rather than the body.
     /// </summary>
     private readonly Dictionary<string, ulong> _texHashes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Copy a pack file into the output, doing nothing when the same source is already there. Returns true
+    /// when the bytes on disk changed.
+    /// <para/>
+    /// Not <see cref="WriteIfChanged"/>, because that reads the destination in full to compare it and the
+    /// caller has already read the source in full to hand it over — so the steady state, where nothing has
+    /// changed and every byte matches, is the EXPENSIVE one. Affordable for shell textures, which Proteus
+    /// generates at a bounded size; not for a pack's own art. Cerise's four contested kimono textures come
+    /// to 290 MB, so a composite that changed nothing was moving ~580 MB and four LOH allocations, on every
+    /// gear change and several times per settle.
+    /// <para/>
+    /// The skip is recorded in <see cref="_texHashes"/>, the SAME memo the generated writers use, and that
+    /// sharing is load-bearing rather than tidy. All of <see cref="WriteTextures"/>, the glow builder's
+    /// <c>Publish</c> and its <c>Republish</c> write <c>ss_{letter}_{slot}.tex</c>, and the letter is a
+    /// placement ordinal — so a path owned by a shell this composite belongs to a content unit the next.
+    /// Two memos over one path never invalidate each other: the shell would regenerate identical bytes,
+    /// match its own stale entry, skip, and go on sampling the texture the content unit had overwritten it
+    /// with. One dictionary means whoever wrote last is what the next reader compares against.
+    /// <para/>
+    /// A source that cannot be stat'd falls through to the copy rather than being skipped, so the caller's
+    /// own error handling still gets to see the read fail.
+    /// </summary>
+    private bool CopyPackFile(string srcDisk, string dstDisk)
+        => CopyPackFile(_texHashes, srcDisk, dstDisk);
+
+    /// <summary>The body of <see cref="CopyPackFile(string,string)"/> with its memo passed in, so the skip
+    /// rule can be exercised without standing up the service.</summary>
+    internal static bool CopyPackFile(Dictionary<string, ulong> memo, string srcDisk, string dstDisk)
+    {
+        ulong? stamp = null;
+        try
+        {
+            var info = new FileInfo(srcDisk);
+            if (info.Exists) stamp = StampHash(srcDisk, info.LastWriteTimeUtc.Ticks, info.Length);
+        }
+        catch { /* unreadable — fall through and copy, which reports properly */ }
+
+        if (stamp is { } s && memo.TryGetValue(dstDisk, out var prev) && prev == s && File.Exists(dstDisk))
+            return false;
+
+        var wrote = WriteIfChanged(dstDisk, File.ReadAllBytes(srcDisk));
+        // Recorded only once the copy is through: a throw above must not leave a memo claiming the
+        // destination holds this source, or the next composite would skip the retry.
+        if (stamp is { } ok) memo[dstDisk] = ok;
+        return wrote;
+    }
+
+    /// <summary>
+    /// Identity of a source file as a path plus its mtime and length — what a copy is memoised on.
+    /// <para/>
+    /// A stamp rather than a content hash, because hashing the source means READING the source, which is
+    /// half the cost being avoided. The source is a file on disk that only changes when the user edits the
+    /// pack, and mtime and length answer that without opening it.
+    /// <para/>
+    /// Salted away from <see cref="Hash"/>'s space so a stamp can never coincidentally equal a content hash
+    /// for the same path — the two share one dictionary, and a false match there is a skipped write.
+    /// </summary>
+    private static ulong StampHash(string src, long ticks, long length)
+    {
+        ulong h = 14695981039346656037;   // FNV-1a, as Hash
+        foreach (var c in src) { h ^= char.ToLowerInvariant(c); h *= 1099511628211; }
+        h ^= (ulong)ticks;  h *= 1099511628211;
+        h ^= (ulong)length; h *= 1099511628211;
+        return h ^ 0x5350414D_5354414Dul;   // "STAMP" salt
+    }
 
     // Layer count last warned about as over the host's material budget — so the chat guidance prints once
     // per changed situation, not every composite. -1 = not currently over budget.
@@ -1587,10 +1717,20 @@ public sealed class SecondSkinService
                     continue;
                 }
 
-                // The file to publish, asked of Penumbra rather than taken from the sidecar — see
-                // ContentMaterialFile. The recorded path is the fallback, and is still what identifies the
-                // material to the colour panel and to the unit key below.
-                var mtrlDisk = ContentMaterialFile(modRoot, piece.GamePathsFor(leaf), mtrlFileCache)
+                // The file to publish. Three questions in order, and the order is the point.
+                //
+                // First: which of THIS PACK'S options supplies it, which is what a print or dye group is
+                // asking. Then Penumbra, for a pack whose layout the option map cannot describe. Then the
+                // file the importer froze.
+                //
+                // The pack's own options come first because Penumbra answers a different question — who wins
+                // this game path across every installed mod. A second mod claiming it wins, the resolve
+                // lands outside this mod, ContentMaterialFile rightly refuses it, and the frozen choice gets
+                // published however the pack's own options are set. That is Cerise: "Royally Bundled Bun"
+                // claims its kimono material, so every print rendered as whichever one the import baked.
+                var mtrlDisk = SelectedMaterialFile(modRoot, piece.SourcesFor(leaf),
+                                   ModSelection(cEntry.ModDirectory))
+                            ?? ContentMaterialFile(modRoot, piece.GamePathsFor(leaf), mtrlFileCache)
                             ?? Path.Combine(modRoot, rel);
 
                 byte[] mtrl;
@@ -1615,12 +1755,20 @@ public sealed class SecondSkinService
                 // nothing.
                 var glowSource = matSettings?.Glow ?? rc.Glow;
                 var glow = glowSource?.GlowKey() != null ? glowSource : null;
+
+                // The textures the selection puts behind this material — the half of a print that is not in
+                // the .mtrl at all. In the unit key for the same reason the rows are: two options that share
+                // a material but not its textures are two materials to publish.
+                var texFiles = SelectedTextureFiles(modRoot, piece, mtrl, ModSelection(cEntry.ModDirectory));
+
                 var key = ContentUnitKey(cEntry.ModDirectory, pieceSurface, rel,
-                    rows == null ? null : JsonSerializer.Serialize(rowPresets), glow?.GlowKey());
+                    rows == null ? null : JsonSerializer.Serialize(rowPresets), glow?.GlowKey(),
+                    TextureKey(texFiles));
 
                 if (!unitByKey.TryGetValue(key, out var unit))
                 {
-                    unitByKey[key] = unit = new ContentUnit(mtrl, rel, rows, glow, pieceSurface, [], []);
+                    unitByKey[key] = unit =
+                        new ContentUnit(mtrl, rel, rows, glow, pieceSurface, [], [], texFiles);
                     contentUnits.Add(unit);
                 }
 
@@ -2106,6 +2254,57 @@ public sealed class SecondSkinService
             shellChanged |= WriteIfChanged(matDisk, mtrl);
             redirects[matGamePath] = Rel(outputRoot, matDisk);
 
+            // ── the pack's own textures, republished ──────────────────────────────
+            //
+            // The material keeps naming its textures at the pack's paths — nothing is rewritten inside the
+            // .mtrl — but Proteus now serves those paths itself, from the files the selection chose. That is
+            // what makes a print group work: all four Cerise prints name the same four paths, so leaving
+            // them to Penumbra put the print in the hands of whichever installed mod won the path.
+            //
+            // Copied rather than pointed at. A Penumbra mod's file map is relative to the mod folder, so a
+            // redirect cannot reach into the pack's own directory, and the copy is what makes Proteus's
+            // output stand on its own — the source mod can be disabled and the piece still draws.
+            //
+            // Only textures a SELECTED option supplies are here (see SelectedTextureFiles). A pack with no
+            // per-option textures produces an empty map and nothing below runs, which is every pack that
+            // worked before this.
+            //
+            // Skipped entirely for a material the glow builder rebuilt: that one names texPrefix paths it
+            // published itself — from the same unit.TexFiles — so redirecting the PACK'S paths as well would
+            // copy files nothing reads, and would hand a spurious "two materials want different files"
+            // warning to whichever non-glow unit legitimately claims the same path. A glow that FAILED to
+            // build falls back to the pack's own material, which does name these paths, so it belongs here.
+            int texIdx = 0;
+            var republish = glowBuilt
+                ? Enumerable.Empty<KeyValuePair<string, string>>()
+                : unit.TexFiles.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase);
+            foreach (var (texGamePath, srcDisk) in republish)
+            {
+                var dstDisk = Path.Combine(texturesDir, $"ct_{diskChar}_{texIdx++}.tex");
+                try { shellChanged |= CopyPackFile(srcDisk, dstDisk); }
+                catch (Exception ex)
+                {
+                    // Left to Penumbra, which is where it was before — a texture that will not copy is not
+                    // worth dropping the piece over.
+                    log.Warning("[Proteus] content: {0} — could not republish {1} from {2} ({3}); that "
+                              + "texture falls back to whichever mod Penumbra resolves it to",
+                        unit.Entry.ModDirectory, texGamePath, srcDisk, ex.Message);
+                    continue;
+                }
+
+                // Two units claiming one texture path with DIFFERENT files cannot both win — the map has one
+                // slot per path. Said out loud rather than silently letting the last one through, because the
+                // symptom (one piece wearing another's print) reads as this fix having failed.
+                var relTex = Rel(outputRoot, dstDisk);
+                if (redirects.TryGetValue(texGamePath, out var already)
+                 && !string.Equals(already, relTex, StringComparison.OrdinalIgnoreCase))
+                    log.Warning("[Proteus] content: {0} — two materials want different files at {1}; the "
+                              + "later one wins and the earlier piece may show the wrong texture",
+                        unit.Entry.ModDirectory, texGamePath);
+
+                redirects[texGamePath] = relTex;
+            }
+
             // Same "ss_" naming as a shell, deliberately: ShellColorsetApplier and ColorTableHighlighter
             // both key on that prefix and on the single disk char, so a content material gets the live
             // colour re-assert and the editor's glow highlight for free.
@@ -2149,15 +2348,21 @@ public sealed class SecondSkinService
         // record of "this pack put something on the character". A claim whose option is not in it is
         // dropped: the entry would rewrite a body part the user is wearing, and doing that for geometry
         // that never appeared is all cost and no benefit.
+        // A pack that offers one skeleton to several body parts is offering ALTERNATIVES, not requirements:
+        // the Cerise jacket declares 6085 for both Body and Head so it works whether it is worn as a coat or
+        // a hood. Whichever part the character is actually drawing takes it, and the others have nothing to
+        // say. So an unresolvable slot is only worth a warning once the whole list is walked and no part
+        // took that skeleton at all — reported after the loop rather than inside it.
+        var estMissed = new List<(string Mod, string Slot, int Entry)>();
+        var estLanded = new HashSet<(string Mod, int Entry)>();
+
         foreach (var (owner, slot, entry) in estPending)
         {
             if (!shellMaterials.ContainsKey(owner)) continue;
 
             if (EstSetId(slot, equippedPartModels, bareBodyModels, humanPartModels) is not { } estSet)
             {
-                log.Warning("[Proteus] content: {0} needs extra skeleton {1} on the {2}, but this character "
-                          + "is drawing nothing there — its ex bones will not load",
-                    owner.Mod, entry, slot);
+                estMissed.Add((owner.Mod, slot, entry));
                 continue;
             }
 
@@ -2175,9 +2380,19 @@ public sealed class SecondSkinService
             }
 
             manipulations.Add(EstManipulation(drawnRaceCode ?? charCode, slot, estSet, entry));
+            estLanded.Add((owner.Mod, entry));
             log.Information("[Proteus] content: {0} — extra skeleton {1} claimed on the {2}, set {3}. "
                           + "That replaces whatever entry that item had",
                 owner.Mod, entry, slot, estSet);
+        }
+
+        // Deduplicated, because a pack with several options offering the same alternative would otherwise
+        // say it once per option.
+        foreach (var (mod, slot, entry) in estMissed.Distinct())
+        {
+            if (estLanded.Contains((mod, entry))) continue;
+            log.Warning("[Proteus] content: {0} needs extra skeleton {1} on the {2}, but this character "
+                      + "is drawing nothing there — its ex bones will not load", mod, entry, slot);
         }
 
         if (contentUnhosted.Count > 0)
@@ -2937,16 +3152,28 @@ public sealed class SecondSkinService
             // Nothing named at all: the shell's own fallback for an empty slot.
             if (packPath == null) return Publish(slot, fallback);
 
+            // The pack's OWN selection first, exactly as the non-glow path resolves it — see
+            // SelectedTextureFiles. This used to go straight to ContentTextureFile, which asks Penumbra who
+            // wins the path globally and then, when that answer is refused, name-searches the mod folder and
+            // takes whatever the walk reaches first. Both are wrong for a print group: Cerise ships
+            // v01_c0201e6085_met_d.tex under four print folders, so putting a glow on the kimono handed the
+            // print to directory order. The unit already carries the answer; ask it before guessing.
+            var file = unit.TexFiles.TryGetValue(packPath, out var chosen) ? chosen
+                     : packRoot == null ? null
+                     : ContentTextureFile(packRoot, packPath);
+
             // Named, but the pack does not ship it — a material may legitimately point at a VANILLA game
             // texture. Keep the author's path so the game supplies it; substituting a flat colour here
             // would blank a texture that was resolving perfectly well.
-            var file = packRoot == null ? null : ContentTextureFile(packRoot, packPath);
             if (file == null) return packPath;
 
             try
             {
                 var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
-                if (WriteIfChanged(disk, File.ReadAllBytes(file))) wroteAnything = true;
+                // Through the memo for the same reason the non-glow path is: this is the pack's own art,
+                // whatever size the author shipped, and re-reading it to discover it has not changed is the
+                // cost that dominates a composite. See _packCopies.
+                if (CopyPackFile(file, disk)) wroteAnything = true;
                 var gamePath = texPrefix + slot + ".tex";
                 redirects[gamePath] = Rel(outputRoot, disk);
                 return gamePath;
@@ -2978,31 +3205,104 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
-    /// The file inside a pack that backs one of the textures its material names.
+    /// The file this pack's own selection supplies for a material, or null when its options say nothing.
     /// <para/>
-    /// Penumbra first, because it is the only thing that knows which of the pack's OPTIONS is selected — a
-    /// pack whose texture is a colour picker ships several files under one name, and a plain name search
-    /// would freeze it on whichever the directory walk reached first.
+    /// Candidates arrive best-path-first (see <see cref="ContentPiece.MaterialOptions"/>); within a path the
+    /// first whose option is actually ticked wins, and a source from the pack's default data always counts
+    /// as ticked. So a print group hands over the selected print, and a leaf nobody switches falls through
+    /// to the default copy.
     /// <para/>
-    /// But its answer is only accepted from inside THIS pack. "What does the game load at this path" and
-    /// "which file did this pack ship" are different questions, and they diverge exactly when another mod
-    /// has claimed the same path — which is the case this republish exists to defeat. Accepting a foreign
-    /// answer would copy the collision into our own output and change nothing.
-    /// <para/>
-    /// Null when the pack ships nothing by that name. That is normal and not an error: a material may name
-    /// a vanilla game texture it does not provide, and that one should keep resolving through the game.
+    /// Null rather than a guess when a group is entirely unselected — the caller has two more answers to
+    /// try, and inventing one here would take precedence over both.
     /// </summary>
+    internal static string? SelectedMaterialFile(
+        string modRoot, IReadOnlyList<ContentMaterialSource> sources,
+        IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        foreach (var s in sources)
+        {
+            if (s.File.Length == 0) continue;
+            if (s.Group != null)
+            {
+                if (selected == null
+                    || !selected.TryGetValue(s.Group, out var on)
+                    || !on.Any(x => string.Equals(x, s.Option, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+            }
+            // Constrained to the mod's own folder, like ContentMaterialFile — and here the check is doing
+            // more than restating "this pack's file". A source File is a manifest VALUE, and those are only
+            // ever slash-normalised (PenumbraPackage.ReadFiles); the traversal rejection guards zip ENTRY
+            // names, which is a different list. So a pack claiming "C:/Users/…/id_rsa" hands Path.Combine a
+            // rooted second argument, gets it back verbatim, and — through SelectedTextureFiles — has that
+            // file copied into the mod Proteus publishes.
+            var disk = Path.Combine(modRoot, s.File.Replace('/', Path.DirectorySeparatorChar));
+            if (IsUnder(modRoot, disk) && File.Exists(disk)) return disk;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The texture files this pack's selection supplies for a material, keyed by the game path the material
+    /// names them at. Empty when the pack ships none of them.
+    /// <para/>
+    /// This is what actually decides a print. All four Cerise prints name the same four texture paths and
+    /// two of them share one .mtrl byte-for-byte, so <see cref="SelectedMaterialFile"/> alone cannot tell
+    /// Blue Rose from Pink Floral — only the file behind <c>..._met_d.tex</c> does. Publishing the material
+    /// while leaving its textures to Penumbra's global resolve left the print to whichever mod won the path.
+    /// <para/>
+    /// Each path is answered by the same rule as the material: the pack's own selection, default data
+    /// counting as always on. A path no selected option supplies is absent from the result and left exactly
+    /// as the material names it, so a vanilla texture stays vanilla.
+    /// </summary>
+    internal static Dictionary<string, string> SelectedTextureFiles(
+        string modRoot, ContentPiece piece, byte[] mtrl,
+        IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        var picked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (piece.TextureOptions is not { Count: > 0 }) return picked;
+
+        MtrlTexturePaths slots;
+        try { slots = TextureLoader.ParseMtrlBytes(mtrl); }
+        catch { return picked; }
+        if (!slots.Parsed) return picked;
+
+        foreach (var tex in new[] { slots.Diffuse, slots.Normal, slots.Mask, slots.Index })
+        {
+            if (tex is not { Length: > 0 }) continue;
+            var sources = piece.TextureSourcesFor(tex);
+            if (sources.Count == 0) continue;
+            if (SelectedMaterialFile(modRoot, sources, selected) is { } disk) picked[tex] = disk;
+        }
+        return picked;
+    }
+
+    /// <summary>A stable digest of a texture selection, for the unit key. Two options that share a material
+    /// but point it at different textures are two different materials to publish — without this in the key
+    /// Blue Rose and Pink Floral merge into one unit and one of them silently wins.</summary>
+    private static string TextureKey(Dictionary<string, string> picked)
+        => picked.Count == 0
+            ? ""
+            : string.Join(" ", picked.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+                                          .Select(p => p.Key + "=" + p.Value));
+
     /// <summary>
     /// The material file this piece should publish RIGHT NOW, out of the game paths its pack redirects the
     /// leaf under — or null to fall back on the one the importer recorded.
     /// <para/>
+    /// The SECOND question the publish asks, not the first: <see cref="SelectedMaterialFile"/> reads the
+    /// pack's own option state and gets there without Penumbra. This one remains for a pack whose layout the
+    /// option map cannot describe — nothing recorded for the leaf, or a group structure the importer could
+    /// not resolve into sources.
+    /// <para/>
     /// Asked live because the recorded answer cannot be right for a pack that ships one material many times.
     /// The dye and metal option groups every dress mod carries redirect the same leaf once per colour, and
-    /// only Penumbra knows which one is selected; the importer sees them all at once and has to pick blind.
-    /// deadrose has nine files behind one leaf, so eight of its nine dye options published the wrong one.
+    /// the importer sees them all at once and has to pick blind. deadrose has nine files behind one leaf, so
+    /// eight of its nine dye options published the wrong one.
     /// <para/>
     /// Constrained to the mod's own folder for the same reason the texture lookup is: a content material
-    /// belongs to its pack, and an answer from anywhere else is answering a different question.
+    /// belongs to its pack, and an answer from anywhere else is answering a different question. That refusal
+    /// is what sent Cerise back to its frozen print — "Royally Bundled Bun" claims the same kimono path and
+    /// wins it — and why the option map above had to exist.
     /// </summary>
     /// <param name="cache">
     /// Per-build memo, keyed by mod root and game path. Not an optimisation so much as a bound: this runs
@@ -3034,6 +3334,23 @@ public sealed class SecondSkinService
         return null;
     }
 
+    /// <summary>
+    /// The file inside a pack that backs one of the textures its material names.
+    /// <para/>
+    /// The FALLBACK now, not the first answer: the glow builder asks <c>unit.TexFiles</c> before this, which
+    /// carries the pack's own option state. Both routes here are guesses by comparison — Penumbra reports
+    /// who wins the path across every installed mod, and the name search below takes whatever the directory
+    /// walk reaches first. On a print group both are wrong, and the walk is wrong at random: Cerise ships
+    /// one texture name under four print folders.
+    /// <para/>
+    /// Penumbra's answer is only accepted from inside THIS pack. "What does the game load at this path" and
+    /// "which file did this pack ship" are different questions, and they diverge exactly when another mod
+    /// has claimed the same path — which is the case this republish exists to defeat. Accepting a foreign
+    /// answer would copy the collision into our own output and change nothing.
+    /// <para/>
+    /// Null when the pack ships nothing by that name. That is normal and not an error: a material may name
+    /// a vanilla game texture it does not provide, and that one should keep resolving through the game.
+    /// </summary>
     private string? ContentTextureFile(string modRoot, string gamePath)
     {
         var viaPenumbra = penumbra.ResolvePlayer(gamePath);
