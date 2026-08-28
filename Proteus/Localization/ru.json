@@ -1111,28 +1111,20 @@
     "message": "У этой модели осталось переключателей: {0} из 10",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "Щёлкните по части модели, чтобы включить или выключить её. Перетаскивание вращает, Shift+перетаскивание сдвигает, колесо приближает.",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Уже добавлено Proteus",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "кусков: {0} ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "Выберите геометрию в модели мода и добавьте к ней переключатель. Он записывается в сам мод как обычная опция Penumbra, поэтому продолжает работать и с выключенным Proteus.",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "Кусок этой части, не соединённый с остальным. Чаще всего это отдельный объект — бант, ремень, пряжка.",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "Показать отдельно",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "Показать на персонаже ТОЛЬКО отмеченные части, чтобы точно увидеть, что это. В мод ничего не записывается — нажмите ещё раз, чтобы вернуть всё на место.",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "Показана только эта часть",
     "description": ""
   },
   "Parts.Mod": {
@@ -1184,7 +1176,11 @@
     "description": ""
   },
   "Parts.Revert.Btn": {
-    "message": "Отменить — восстановить исходную модель",
+    "message": "Отменить — восстановить исходные модели",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Модели восстановлены, но группу опций удалить не удалось: {0}",
     "description": ""
   },
   "Parts.Revert.Nothing": {
@@ -1195,12 +1191,20 @@
     "message": "Отменено. Восстановлено файлов модели: {0}; группа опций удалена.",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} тр.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "Отмечено частей: {0}",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "Часть {0} состоит из {1} несвязанных кусков — слишком много, чтобы их перечислять. Переключить можно только часть целиком.",
+    "message": "Часть {0} распадается на {1} отдельных кусков — больше, чем можно перечислить. Щёлкните по модели, чтобы выбрать один, или переключите часть целиком.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "кусков: {0} ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "Имя",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} тр.",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "Не удалось прочитать эту модель. Ничего не изменено.",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "Записать переключатели в мод",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "У этого предмета уже есть переключатель «{0}». Дайте новому другое имя.",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "Нечего записывать.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "«{0}» и «{1}» оба претендуют на часть {2}. Один из них забирает часть целиком, поэтому отдельными переключателями они быть не могут.",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Части",
+    "message": "Переключатели",
     "description": ""
   },
   "Tab.Settings": {

@@ -1111,28 +1111,20 @@
     "message": "Noch {0} von 10 Schaltern für dieses Modell frei",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "Klicke auf ein Stück des Modells, um es ein- oder auszuschalten. Ziehen dreht es, Umschalt+Ziehen verschiebt es, Scrollen zoomt.",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Von Proteus bereits hinzugefügt",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} Stücke ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "Wähle Geometrie aus dem Modell eines Mods aus und gib ihr einen Ein/Aus-Schalter. Der Schalter wird als gewöhnliche Penumbra-Option in den Mod selbst geschrieben und funktioniert daher auch bei abgeschaltetem Proteus.",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "Ein Stück dieses Teils, das nicht mit dem Rest verbunden ist. Meist ist das ein eigenes Objekt – eine Schleife, ein Gürtel, eine Schnalle.",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "Isolieren",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "Zeigt NUR die markierten Teile an deinem Charakter, damit du genau siehst, worum es sich handelt. Am Mod wird nichts geändert – erneut klicken, um alles zurückzusetzen.",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "Nur dieses Teil",
     "description": ""
   },
   "Parts.Mod": {
@@ -1184,7 +1176,11 @@
     "description": ""
   },
   "Parts.Revert.Btn": {
-    "message": "Rückgängig – Originalmodell wiederherstellen",
+    "message": "Rückgängig – Originalmodelle wiederherstellen",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Die Modelle wurden wiederhergestellt, aber die Optionsgruppe ließ sich nicht entfernen: {0}",
     "description": ""
   },
   "Parts.Revert.Nothing": {
@@ -1195,12 +1191,20 @@
     "message": "Rückgängig gemacht. {0} Modelldatei(en) wiederhergestellt und die Optionsgruppe entfernt.",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} Tris",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} Teil(e) markiert",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "Teil {0} besteht aus {1} nicht verbundenen Stücken – zu viele, um sie aufzulisten. Es lässt sich nur als Ganzes schalten.",
+    "message": "Teil {0} zerfällt in {1} einzelne Stücke – mehr, als sich auflisten lassen. Klicke ins Modell, um eines auszuwählen, oder schalte das ganze Teil.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} Stücke ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "Name",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} Tris",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "Dieses Modell konnte nicht gelesen werden. Es wurde nichts geändert.",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "Schalter in den Mod schreiben",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Dieser Gegenstand hat bereits einen Schalter namens „{0}“. Gib dem neuen einen anderen Namen.",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "Keine Schalter zu schreiben.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "„{0}“ und „{1}“ beanspruchen beide Teil {2}. Einer von beiden nimmt das ganze Teil, daher können es keine getrennten Schalter sein.",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Teile",
+    "message": "Schalter",
     "description": ""
   },
   "Tab.Settings": {

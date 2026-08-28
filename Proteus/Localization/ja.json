@@ -1111,28 +1111,20 @@
     "message": "このモデルに残っているスイッチ: 10個中{0}個",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "モデルの一部をクリックすると、そのパーツのオン/オフを切り替えます。ドラッグで回転、Shift+ドラッグで移動、スクロールで拡大縮小します。",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Proteusが追加済み",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0}個のピース ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "MODのモデルから任意の形状を選び、オン/オフのスイッチを付けます。スイッチは通常のPenumbraオプションとしてMOD自体に書き込まれるため、Proteusを無効にしても機能します。",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "このパーツのうち、他とつながっていない部分です。多くの場合はリボンやベルト、留め具などの独立したオブジェクトです。",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "単独表示",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "チェックしたパーツだけをキャラクターに表示し、実際の形を確認します。MODには何も書き込まれません。もう一度押すと元に戻ります。",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "単独表示中",
     "description": ""
   },
   "Parts.Mod": {
@@ -1187,6 +1179,10 @@
     "message": "元に戻す — 元のモデルを復元",
     "description": ""
   },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "モデルは復元しましたが、オプショングループを削除できませんでした: {0}",
+    "description": ""
+  },
   "Parts.Revert.Nothing": {
     "message": "このMODにProteusが追加したスイッチはありません。",
     "description": ""
@@ -1195,12 +1191,20 @@
     "message": "元に戻しました。モデルファイル{0}個を復元し、オプショングループを削除しました。",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0}三角形",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0}個のパーツを選択中",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "パーツ{0}は{1}個の分離した断片で構成されており、多すぎて一覧表示できません。パーツ全体のみ切り替えられます。",
+    "message": "パーツ{0}は{1}個に分かれており、一覧に表示しきれません。モデルをクリックして個別に選ぶか、パーツ全体を切り替えてください。",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0}個のピース ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "名前",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0}三角形",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "このモデルを読み込めませんでした。変更は行われていません。",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "スイッチをMODに書き込む",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "このアイテムには「{0}」というスイッチが既にあります。別の名前を付けてください。",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "書き込むスイッチがありません。",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "「{0}」と「{1}」がどちらもパーツ{2}を対象にしています。一方がパーツ全体を占めるため、別々のスイッチにはできません。",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "パーツ",
+    "message": "トグル",
     "description": ""
   },
   "Tab.Settings": {

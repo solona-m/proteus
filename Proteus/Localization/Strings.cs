@@ -90,7 +90,7 @@ public sealed class TabStrings
     public readonly string Bindings = Loc.Localize("Tab.Bindings", "Bindings");
     public readonly string Create   = Loc.Localize("Tab.Create", "Create");
     public readonly string Import   = Loc.Localize("Tab.Import", "Import");
-    public readonly string Parts    = Loc.Localize("Tab.Parts", "Parts");
+    public readonly string Parts    = Loc.Localize("Tab.Parts", "Toggles");
     public readonly string Export   = Loc.Localize("Tab.Export", "Export");
     public readonly string Settings = Loc.Localize("Tab.Settings", "Settings");
 }
@@ -931,26 +931,24 @@ public sealed class PartsStrings
     public readonly string Unreadable = Loc.Localize("Parts.Unreadable",
         "This model could not be read. Nothing has been changed.");
 
-    public readonly string TrianglesFmt = Loc.Localize("Parts.Triangles.Fmt", "{0:N0} tris");
+    public readonly string ClickTip = Loc.Localize("Parts.Click.Tip",
+        "Click a piece of the model to switch it on or off. Drag to turn it, shift-drag to move it, scroll " +
+        "to zoom.");
 
-    public readonly string IslandsTip = Loc.Localize("Parts.Islands.Tip",
-        "A piece of this part that is not joined to the rest of it. Most of the time that is a separate " +
-        "object — a bow, a belt, a buckle.");
+    /// <summary>Material and size beside a part's checkbox. {0} is a file name, {1} a triangle count.</summary>
+    public readonly string RowFmt = Loc.Localize("Parts.Row.Fmt", "{0} · {1:N0} tris");
 
     public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
-        "Part {0} is made of {1} disconnected pieces, which is too many to list. Only the whole part can " +
-        "be switched.");
+        "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +
+        "one, or switch the whole part.");
 
     public readonly string AlreadyGatedTip = Loc.Localize("Parts.AlreadyGated.Tip",
         "The mod's author already put this part behind one of its own switches, so it cannot take another.");
 
-    public readonly string IsolateBtn = Loc.Localize("Parts.Isolate.Btn", "Isolate") + "###partsIsolate";
+    /// <summary>Expander on a submesh row. {0} is how many separate pieces it holds.</summary>
+    public readonly string ShowPiecesFmt = Loc.Localize("Parts.ShowPieces.Fmt", "{0} pieces ▾");
 
-    public readonly string IsolatingBtn = Loc.Localize("Parts.Isolating.Btn", "Showing only this") + "###partsIsolate";
-
-    public readonly string IsolateTip = Loc.Localize("Parts.Isolate.Tip",
-        "Show ONLY the ticked parts on your character, so you can see exactly what they are. Nothing is " +
-        "written to the mod — click again to put everything back.");
+    public readonly string HidePiecesFmt = Loc.Localize("Parts.HidePieces.Fmt", "{0} pieces ▴");
 
     public readonly string SelectedFmt = Loc.Localize("Parts.Selected.Fmt", "{0} part(s) ticked");
 
@@ -991,7 +989,7 @@ public sealed class PartsStrings
 
     public readonly string ExistingHeader = Loc.Localize("Parts.Existing.Header", "Already added by Proteus");
 
-    public readonly string RevertBtn = Loc.Localize("Parts.Revert.Btn", "Undo — restore the original model");
+    public readonly string RevertBtn = Loc.Localize("Parts.Revert.Btn", "Undo — restore the original models");
 
     public readonly string RevertedFmt = Loc.Localize("Parts.Reverted.Fmt",
         "Undone. {0} model file(s) restored, and the option group removed.");

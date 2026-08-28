@@ -1111,29 +1111,21 @@
     "message": "{0} of 10 switches left on this model",
     "description": "{0} is a count. The game allows ten switches per item; this says how many are still free."
   },
+  "Parts.Click.Tip": {
+    "message": "Click a piece of the model to switch it on or off. Drag to turn it, shift-drag to move it, scroll to zoom.",
+    "description": "Instructions above the part list, next to a 3D view of the model the user can click on."
+  },
   "Parts.Existing.Header": {
     "message": "Already added by Proteus",
     "description": "Section heading over the switches Proteus has already written into this mod."
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} pieces ▴",
+    "description": "Button that folds a part's separate pieces away again. {0} is how many there are. The arrow is decorative - keep it."
+  },
   "Parts.Intro": {
     "message": "Pick geometry out of a mod's model and give it an on/off switch. The switch is written into the mod itself as an ordinary Penumbra option, so it keeps working with Proteus turned off.",
     "description": "Explains what the Parts tab does. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
-  },
-  "Parts.Islands.Tip": {
-    "message": "A piece of this part that is not joined to the rest of it. Most of the time that is a separate object — a bow, a belt, a buckle.",
-    "description": "Tooltip on an indented sub-row: a disconnected piece found inside a larger part."
-  },
-  "Parts.Isolate.Btn": {
-    "message": "Isolate",
-    "description": "Button. Shows only the ticked parts on the character so the user can see what they are. Keep it short."
-  },
-  "Parts.Isolate.Tip": {
-    "message": "Show ONLY the ticked parts on your character, so you can see exactly what they are. Nothing is written to the mod — click again to put everything back.",
-    "description": "Tooltip for the Isolate button. Stress that it is a preview and changes nothing."
-  },
-  "Parts.Isolating.Btn": {
-    "message": "Showing only this",
-    "description": "The Isolate button's label while the preview is active. Keep it short."
   },
   "Parts.Mod": {
     "message": "Mod",
@@ -1184,8 +1176,12 @@
     "description": "Button. Discards one staged switch. Keep it short."
   },
   "Parts.Revert.Btn": {
-    "message": "Undo — restore the original model",
+    "message": "Undo — restore the original models",
     "description": "Button. Restores the mod's original model files and removes the option group Proteus added."
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "The models were restored, but the option group could not be removed: {0}",
+    "description": "Undo restored the models but could not remove the option group. {0} is the error. The mod renders correctly; the switches are just still listed."
   },
   "Parts.Revert.Nothing": {
     "message": "This mod has no Proteus switches to remove.",
@@ -1195,13 +1191,21 @@
     "message": "Undone. {0} model file(s) restored, and the option group removed.",
     "description": "{0} is a count of model files restored."
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} tris",
+    "description": "Material and size beside a part's checkbox. {0} is a .mtrl file name, {1} a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} part(s) ticked",
     "description": "{0} is a count of the parts currently ticked in the list."
   },
   "Parts.Shattered.Fmt": {
-    "message": "Part {0} is made of {1} disconnected pieces, which is too many to list. Only the whole part can be switched.",
+    "message": "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick one, or switch the whole part.",
     "description": "{0} is a part number such as \"1.2\", {1} a count. Explains why a part offers no sub-rows."
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} pieces ▾",
+    "description": "Button that lists out the separate pieces a part falls into. {0} is how many there are. The arrow is decorative - keep it."
   },
   "Parts.Skipped.Fmt": {
     "message": "{0} other model file(s) for this item were left alone, because their parts are arranged differently and the same edit would land on the wrong geometry.",
@@ -1211,10 +1215,6 @@
     "message": "Name",
     "description": "Label on the text box naming the switch being created. One word."
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} tris",
-    "description": "Size of a part. {0:N0} is a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
-  },
   "Parts.Unreadable": {
     "message": "This model could not be read. Nothing has been changed.",
     "description": "Shown when the chosen .mdl file cannot be parsed."
@@ -1222,6 +1222,10 @@
   "Parts.Write.Btn": {
     "message": "Write the switches into the mod",
     "description": "The button that actually edits the mod. Everything before this point is a preview."
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "This item already has a switch called \"{0}\". Give the new one a different name.",
+    "description": "Refusal. {0} is the switch name that already exists on this item."
   },
   "Parts.Write.EditFailed.Fmt": {
     "message": "{0} could not be edited: {1}. Nothing has been written.",
@@ -1254,6 +1258,10 @@
   "Parts.Write.Nothing": {
     "message": "No switches to write.",
     "description": "Shown when the write button is somehow reached with no switches staged."
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "\"{0}\" and \"{1}\" both claim part {2}. One of them takes the whole part, so they cannot be separate switches.",
+    "description": "Refusal. {0} and {1} are switch names, {2} a part number such as \"1.1\"."
   },
   "Parts.Write.Tip": {
     "message": "Edits the mod's model and adds a Penumbra option group to it. The original model is kept, so this can be undone.",
@@ -1496,7 +1504,7 @@
     "description": "Main tab: the list of Penumbra mods Proteus composites."
   },
   "Tab.Parts": {
-    "message": "Parts",
+    "message": "Toggles",
     "description": "Tab label. Very tight space - one short word."
   },
   "Tab.Settings": {

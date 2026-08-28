@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 502;
+    public const int BuildNumber = 511;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -59,7 +59,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
-    private readonly Gui.PartSilhouette partSilhouette;
+    private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
@@ -152,9 +152,9 @@ public sealed class Plugin : IDalamudPlugin
         var contentImport = new ContentImportService(penumbra, compositor, log);
         var modExport = new ModExportService(penumbra, log);
 
-        // Part thumbnails, and the panel that turns a mod's geometry into on/off switches.
-        partSilhouette = new Gui.PartSilhouette(TextureProvider, log);
-        partsPanel = new Gui.PartsPanel(penumbra, compositor, partSilhouette, textureLoader, log);
+        // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
+        partViewport = new Gui.PartViewport(TextureProvider, log);
+        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, modExport, textureLoader, partsPanel);
@@ -257,9 +257,8 @@ public sealed class Plugin : IDalamudPlugin
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
-        // Before the compositor below: clearing an isolate preview republishes the manifest through it.
-        partsPanel.Dispose();
-        partSilhouette.Dispose();
+
+        partViewport.Dispose();
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();

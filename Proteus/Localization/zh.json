@@ -1111,28 +1111,20 @@
     "message": "此模型还剩 {0}/10 个开关",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "点击模型上的某一块即可开启或关闭它。拖动可旋转，Shift+拖动可平移，滚轮可缩放。",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Proteus 已添加",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} 块 ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "从模组的模型中挑出一部分网格并为其添加开关。开关会作为普通的 Penumbra 选项写入模组本身，因此即使关闭 Proteus 也依然有效。",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "该部件中与其余部分不相连的一块。多数情况下这是一个独立物件——蝴蝶结、腰带或扣环。",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "单独显示",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "只在角色身上显示勾选的部件，以便确认它们究竟是什么。不会向模组写入任何内容——再次点击即可还原。",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "正在单独显示",
     "description": ""
   },
   "Parts.Mod": {
@@ -1187,6 +1179,10 @@
     "message": "撤销 — 还原原始模型",
     "description": ""
   },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "模型已还原，但无法移除选项组：{0}",
+    "description": ""
+  },
   "Parts.Revert.Nothing": {
     "message": "此模组没有由 Proteus 添加的开关。",
     "description": ""
@@ -1195,12 +1191,20 @@
     "message": "已撤销。还原了 {0} 个模型文件，并移除了选项组。",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} 三角面",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "已勾选 {0} 个部件",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "部件 {0} 由 {1} 块互不相连的碎片组成，数量过多无法逐一列出。只能整体切换。",
+    "message": "部件 {0} 分成了 {1} 个独立块，数量超出可列出的范围。请点击模型选择其中一块，或整体切换该部件。",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} 块 ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "名称",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} 三角面",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "无法读取此模型。未做任何更改。",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "将开关写入模组",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "此物品已有名为“{0}”的开关。请为新开关另取一个名字。",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "没有要写入的开关。",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "“{0}”和“{1}”都指向部件 {2}。其中一个占用了整个部件，因此二者不能作为独立的开关。",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "部件",
+    "message": "开关",
     "description": ""
   },
   "Tab.Settings": {

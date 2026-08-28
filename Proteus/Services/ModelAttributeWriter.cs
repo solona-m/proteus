@@ -35,11 +35,14 @@ public static class ModelAttributeWriter
     /// How many pieces one submesh may be cut into.
     /// <para/>
     /// A split makes one record per CONTIGUOUS RUN of triangles, and an island that interleaves with its
-    /// neighbours triangle by triangle would want one record each. That is legal but absurd, and it is a
-    /// sign the island split found something that is not really a separate object. Refused rather than
-    /// written.
+    /// neighbours triangle by triangle would want one record each. That is legal but absurd, and a sign the
+    /// island split found something that is not really a separate object. Refused rather than written.
+    /// <para/>
+    /// Generous, because a record costs sixteen bytes and models routinely carry dozens of submeshes: the
+    /// bound is here to catch geometry that is pathologically interleaved, not to second-guess a garment
+    /// whose author happened to export its straps out of order.
     /// </summary>
-    public const int MaxRuns = 64;
+    public const int MaxRuns = 256;
 
     public sealed class ModelEditException(string message) : InvalidOperationException(message);
 
