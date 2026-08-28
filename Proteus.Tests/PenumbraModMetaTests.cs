@@ -493,6 +493,54 @@ public class PenumbraModMetaTests
     }
 
     [Fact]
+    public void ReadAllRedirects_finds_files_in_default_data_and_every_group_option()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Dress",
+             "DefaultData":{"Files":{"chara/equipment/e6238/model/c0201e6238_dwn.mdl":"base/dwn.mdl"}},
+             "Groups":[{"Type":"Multi","Name":"Items","Options":[
+                {"Name":"Long","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"long/top.mdl"}},
+                {"Name":"Short","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"short/top.mdl"}}]}]}
+            """);
+
+        var found = PenumbraModMeta.ReadAllRedirects(tmp.Path);
+
+        Assert.Equal(3, found.Count);
+        Assert.Contains(found, r => r.File == "base/dwn.mdl" && r.Source == "");
+        Assert.Contains(found, r => r.File == "long/top.mdl" && r.Source == "Items / Long");
+        // Two options claiming ONE game path is the normal shape of a mod with variants, and an edit that
+        // has to reach the geometry has to reach both files — so neither may be deduplicated away.
+        Assert.Equal(2, found.Count(r => r.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void ReadAllRedirects_reads_the_v3_layout_and_Combining_containers()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Pack"}""");
+        File.WriteAllText(tmp.File("default_mod.json"),
+            """{"Files":{"chara/equipment/e0043/model/c0201e0043_top.mdl":"base/top.mdl"}}""");
+        File.WriteAllText(tmp.File("group_001_sizes.json"), """
+            {"Name":"Sizes","Type":"Combining","Options":[{"Name":"Large"}],
+             "Containers":[{},{"Files":{"chara/equipment/e0043/model/c0201e0043_dwn.mdl":"large/dwn.mdl"}}]}
+            """);
+
+        var found = PenumbraModMeta.ReadAllRedirects(tmp.Path);
+
+        Assert.Contains(found, r => r.File == "base/top.mdl" && r.Source == "");
+        Assert.Contains(found, r => r.File == "large/dwn.mdl" && r.Source == "Sizes / #2");
+    }
+
+    [Fact]
+    public void ReadAllRedirects_on_an_unreadable_mod_is_empty_not_a_throw()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), "{ this is not json");
+        Assert.Empty(PenumbraModMeta.ReadAllRedirects(tmp.Path));
+    }
+
+    [Fact]
     public void PublishesGameContent_sees_a_Combining_groups_containers()
     {
         using var tmp = new TempDir();
