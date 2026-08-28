@@ -237,6 +237,91 @@ internal static class PenumbraModMeta
         return false;
     }
 
+    /// <summary>
+    /// One file the mod publishes: the game path it claims, the file backing it (relative to the mod root),
+    /// and where in the mod that claim is made.
+    /// </summary>
+    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option" — display only,
+    /// so the user can tell two files claiming one game path apart.</param>
+    public readonly record struct Redirect(string GamePath, string File, string Source);
+
+    /// <summary>
+    /// Every file redirect in the mod, wherever it is declared — default data, and every option (or
+    /// Combining container) of every group — in whichever format the folder is in.
+    /// <para/>
+    /// Deliberately NOT deduplicated by game path. Two options claiming one path is the normal shape of a
+    /// mod with variants, and both files are equally real: which one wins is Penumbra's business at draw
+    /// time, while an edit that changes the geometry has to reach ALL of them or the toggle works on some
+    /// of the mod's options and not others.
+    /// <para/>
+    /// Empty rather than null on an unreadable manifest. The only callers list files for the user to pick
+    /// from, and "this mod publishes nothing we can read" is a list with no rows, not an error state.
+    /// </summary>
+    public static List<Redirect> ReadAllRedirects(string modRoot)
+    {
+        var found = new List<Redirect>();
+        try
+        {
+            var manifest = ReadManifest(modRoot);
+            if (FileVersionOf(manifest) >= SingleFileVersion)
+            {
+                if (manifest.TryGetValue("DefaultData", out var dd)) AddFiles(dd, "", found);
+                if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+                    foreach (var g in groups.EnumerateArray())
+                        AddGroup(g, found);
+                return found;
+            }
+
+            var legacy = Path.Combine(modRoot, LegacyDefaultMod);
+            if (File.Exists(legacy))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(legacy));
+                AddFiles(doc.RootElement, "", found);
+            }
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                AddGroup(doc.RootElement, found);
+            }
+        }
+        catch { /* missing or malformed — the caller shows an empty list */ }
+        return found;
+    }
+
+    private static void AddGroup(JsonElement group, List<Redirect> into)
+    {
+        if (group.ValueKind != JsonValueKind.Object) return;
+        var name = group.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+
+        // A Combining group's options are bare flag labels; its files hang off a parallel Containers array,
+        // one entry per COMBINATION of those flags. Named by ordinal because a container has no name of its
+        // own — see PenumbraPackage.ReadGroup, which refuses to import them for the same reason.
+        if (group.TryGetProperty("Containers", out var containers)
+            && containers.ValueKind == JsonValueKind.Array)
+        {
+            int i = 0;
+            foreach (var c in containers.EnumerateArray())
+                AddFiles(c, $"{name} / #{++i}", into);
+        }
+
+        if (!group.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array) return;
+        foreach (var o in opts.EnumerateArray())
+        {
+            var option = o.ValueKind == JsonValueKind.Object && o.TryGetProperty("Name", out var on)
+                ? on.GetString() ?? "" : "";
+            AddFiles(o, option.Length > 0 ? $"{name} / {option}" : name, into);
+        }
+    }
+
+    private static void AddFiles(JsonElement owner, string source, List<Redirect> into)
+    {
+        if (owner.ValueKind != JsonValueKind.Object) return;
+        if (!owner.TryGetProperty("Files", out var f) || f.ValueKind != JsonValueKind.Object) return;
+        foreach (var p in f.EnumerateObject())
+            if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { Length: > 0 } rel)
+                into.Add(new Redirect(p.Name, rel, source));
+    }
+
     /// <summary>The <c>Options[].Name</c> values of <paramref name="group"/>, in order.</summary>
     public static List<string> ReadOptionNames(JsonElement group)
     {
@@ -343,6 +428,113 @@ internal static class PenumbraModMeta
         Write(modRoot, index, name, optionNames, "Multi", (long)defaultSettings);
     }
 
+    /// <summary>
+    /// Writes an <c>Imc</c> group: a set of checkboxes over one item's ten attribute bits, which is how the
+    /// game itself switches parts of a model on and off.
+    /// <para/>
+    /// Unlike every other group Proteus writes, this one is not a selector Proteus reads back — it edits the
+    /// game directly, and keeps working with Proteus switched off entirely. That is the whole point of it.
+    /// <para/>
+    /// <paramref name="entry"/> must be the item's REAL entry (see <see cref="ImcEntrySource"/>) with the new
+    /// bits cleared. Penumbra replaces the whole entry, so every field of it that is not the attribute mask
+    /// has to arrive unchanged or the item's material variant, decal or sound changes with it.
+    /// <para/>
+    /// Each option carries a single bit that is NOT in <paramref name="entry"/>'s mask, and that constraint
+    /// is load-bearing: it makes the group's meaning the same whether Penumbra combines a selection with the
+    /// default by OR or by XOR. Bits placed inside the default mask behave differently under the two, and
+    /// nothing in this codebase is in a position to settle which one Penumbra does.
+    /// </summary>
+    /// <param name="defaultSettings">Bitmask over the options — bit 0 is the first. Ship this with every bit
+    /// set so a mod gains switches without changing how it looks until one is unticked.</param>
+    public static void WriteImcGroup(
+        string modRoot, int index, string name, ImcIdentifier identifier, ImcEntry entry,
+        IReadOnlyList<(string Name, ushort Mask)> options, ulong defaultSettings)
+    {
+        if (options.Count == 0) return;
+
+        var group = new Dictionary<string, object>
+        {
+            ["Type"] = "Imc",
+            ["Name"] = name,
+            ["Description"] = "",
+            ["Priority"] = 0,
+            ["DefaultSettings"] = defaultSettings,
+            ["Identifier"] = new Dictionary<string, object>
+            {
+                ["ObjectType"] = identifier.ObjectType,
+                ["PrimaryId"] = identifier.PrimaryId,
+                ["Variant"] = identifier.Variant,
+                ["EquipSlot"] = identifier.EquipSlot,
+            },
+            ["DefaultEntry"] = new Dictionary<string, object>
+            {
+                ["MaterialId"] = entry.MaterialId,
+                ["DecalId"] = entry.DecalId,
+                ["VfxId"] = entry.VfxId,
+                ["MaterialAnimationId"] = entry.MaterialAnimationId,
+                ["AttributeMask"] = entry.AttributeMask,
+                ["SoundId"] = entry.SoundId,
+            },
+            ["Options"] = options
+                .Select(o => new Dictionary<string, object> { ["Name"] = o.Name, ["AttributeMask"] = o.Mask })
+                .ToList(),
+        };
+
+        var manifest = ReadManifest(modRoot);
+        if (FileVersionOf(manifest) >= SingleFileVersion)
+            WriteGroupIntoManifest(modRoot, manifest, index, name, _ => group);
+        else
+            WriteLegacyGroupFile(modRoot, index, name, _ => group);
+    }
+
+    /// <summary>Which item an IMC edit names. Equipment and accessories only — see <see cref="ImcEntrySource.ImcPathFor"/>.</summary>
+    public readonly record struct ImcIdentifier(string ObjectType, int PrimaryId, int Variant, string EquipSlot);
+
+    /// <summary>
+    /// Remove the group of this name, in whichever layout the folder is in. Used to undo a group Proteus
+    /// wrote; a name that isn't there is not an error, since the point is to end up without it.
+    /// </summary>
+    public static void DeleteGroup(string modRoot, string name)
+    {
+        var manifest = ReadManifest(modRoot);
+        if (FileVersionOf(manifest) >= SingleFileVersion)
+        {
+            if (!manifest.TryGetValue("Groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+                return;
+            var others = groups.EnumerateArray()
+                .Where(g => !(g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                              && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            using var stream = new MemoryStream();
+            using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
+            {
+                w.WriteStartObject();
+                foreach (var (key, value) in manifest)
+                {
+                    if (key == "Groups") continue;
+                    w.WritePropertyName(key);
+                    value.WriteTo(w);
+                }
+                w.WritePropertyName("Groups");
+                w.WriteStartArray();
+                foreach (var g in others) g.WriteTo(w);
+                w.WriteEndArray();
+                w.WriteEndObject();
+            }
+            AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+            return;
+        }
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json").ToList())
+                if (string.Equals(GroupNameOf(file), name, StringComparison.OrdinalIgnoreCase))
+                    File.Delete(file);
+        }
+        catch { /* nothing to remove, or not ours to remove */ }
+    }
+
     private static void Write(
         string modRoot, int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
     {
@@ -350,9 +542,11 @@ internal static class PenumbraModMeta
 
         var manifest = ReadManifest(modRoot);
         if (FileVersionOf(manifest) >= SingleFileVersion)
-            WriteGroupIntoManifest(modRoot, manifest, index, name, optionNames, type, defaultSettings);
+            WriteGroupIntoManifest(modRoot, manifest, index, name,
+                slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
         else
-            WriteLegacyGroupFile(modRoot, index, name, optionNames, type, defaultSettings);
+            WriteLegacyGroupFile(modRoot, index, name,
+                slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
     }
 
     /// <summary>
@@ -369,8 +563,11 @@ internal static class PenumbraModMeta
     /// to do, and a half-completed renumber would leave their mod broken.</item>
     /// </list>
     /// </summary>
+    /// <param name="build">Builds the group object once its final ordinal is known. A factory rather than a
+    /// ready-made object because the plain group writes its ordinal into its own <c>Priority</c>, and that
+    /// ordinal is only settled here.</param>
     private static void WriteLegacyGroupFile(
-        string modRoot, int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
+        string modRoot, int index, string name, Func<int, object> build)
     {
         var taken = new HashSet<int>();
         try
@@ -397,7 +594,7 @@ internal static class PenumbraModMeta
 
         AtomicWrite(
             Path.Combine(modRoot, LegacyGroupFileName(number - 1, name)),
-            JsonSerializer.Serialize(BuildGroup(number - 1, name, optionNames, type, defaultSettings), WriteOptions));
+            JsonSerializer.Serialize(build(number - 1), WriteOptions));
     }
 
     /// <summary>The <c>Name</c> inside a v3 group file, or null when it can't be read.</summary>
@@ -455,9 +652,10 @@ internal static class PenumbraModMeta
     /// group of the same name and preserving every other key — the same care <see cref="WriteDefaultData"/>
     /// takes, and for the same reason: <c>Identifier</c> is how Penumbra keys the mod.
     /// </summary>
+    /// <param name="build">See <see cref="WriteLegacyGroupFile"/>.</param>
     private static void WriteGroupIntoManifest(
         string modRoot, Dictionary<string, JsonElement> preserved,
-        int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
+        int index, string name, Func<int, object> build)
     {
         // The surviving groups in order. Any group of the same name is DROPPED rather than kept alongside
         // the new one — a duplicate name is something Penumbra would have to disambiguate, and it would
@@ -494,11 +692,11 @@ internal static class PenumbraModMeta
             w.WriteStartArray();
             for (int i = 0; i < others.Count; i++)
             {
-                if (i == slot) JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, type, defaultSettings));
+                if (i == slot) JsonSerializer.Serialize(w, build(slot));
                 others[i].WriteTo(w);
             }
             if (slot >= others.Count)
-                JsonSerializer.Serialize(w, BuildGroup(slot, name, optionNames, type, defaultSettings));
+                JsonSerializer.Serialize(w, build(slot));
             w.WriteEndArray();
 
             w.WriteEndObject();
@@ -637,11 +835,17 @@ internal static class PenumbraModMeta
     /// and a half of someone's colour-slider drag to win it does not pay.
     /// </param>
     public static void AtomicWrite(string target, string contents, int maxRetries = 5)
+        // UTF-8 without a BOM, matching what File.WriteAllText would have produced.
+        => AtomicWrite(target, new System.Text.UTF8Encoding(false).GetBytes(contents), maxRetries);
+
+    /// <summary>
+    /// The binary form, for the same reason the text one exists: a mod's own model file is rewritten in
+    /// place while Penumbra may be serving it, and a torn write there is a model that fails to load.
+    /// </summary>
+    public static void AtomicWrite(string target, byte[] bytes, int maxRetries = 5)
     {
         var tmp = target + "." + Guid.NewGuid().ToString("N") + TempSuffix;
 
-        // UTF-8 without a BOM, matching what File.WriteAllText would have produced.
-        var bytes = new System.Text.UTF8Encoding(false).GetBytes(contents);
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None,
                    bufferSize: 4096, FileOptions.WriteThrough))
         {

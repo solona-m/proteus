@@ -479,6 +479,10 @@
     "message": "Детали прибывают ВЫКЛЮЧЕННЫМИ. После импорта отметьте нужные в «{0}» в Penumbra — до этого ничего не надевается.",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "собственное тело носителя",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A и B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "пропущено",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "собственное тело носителя",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,170 @@
     "message": "Proteus отключён — включите его в настройках.",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "Создать переключатель из отмеченных частей",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "Автор мода уже привязал эту часть к одному из своих переключателей, поэтому добавить ещё один нельзя.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "У этой модели осталось переключателей: {0} из 10",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Уже добавлено Proteus",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "Выберите геометрию в модели мода и добавьте к ней переключатель. Он записывается в сам мод как обычная опция Penumbra, поэтому продолжает работать и с выключенным Proteus.",
+    "description": ""
+  },
+  "Parts.Islands.Tip": {
+    "message": "Кусок этой части, не соединённый с остальным. Чаще всего это отдельный объект — бант, ремень, пряжка.",
+    "description": ""
+  },
+  "Parts.Isolate.Btn": {
+    "message": "Показать отдельно",
+    "description": ""
+  },
+  "Parts.Isolate.Tip": {
+    "message": "Показать на персонаже ТОЛЬКО отмеченные части, чтобы точно увидеть, что это. В мод ничего не записывается — нажмите ещё раз, чтобы вернуть всё на место.",
+    "description": ""
+  },
+  "Parts.Isolating.Btn": {
+    "message": "Показана только эта часть",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "Мод",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "Модель",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "Сначала задайте имя переключателя.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "Отметьте части, которые должен скрывать этот переключатель.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "У этой модели не осталось свободных мест под переключатели. Игра даёт десять на предмет, и автор занял все.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "Этот мод не публикует моделей, поэтому разделять нечего.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "В мод пока ничего не записано.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "Переключатели к записи",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "Выберите мод",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "Выберите модель",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "Удалить",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "Отменить — восстановить исходную модель",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "В этом моде нет переключателей, добавленных Proteus.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Отменено. Восстановлено файлов модели: {0}; группа опций удалена.",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "Отмечено частей: {0}",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "Часть {0} состоит из {1} несвязанных кусков — слишком много, чтобы их перечислять. Переключить можно только часть целиком.",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "Ещё {0} файл(ов) модели этого предмета остались нетронутыми: их части расположены иначе, и та же правка попала бы не на ту геометрию.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "Имя",
+    "description": ""
+  },
+  "Parts.Triangles.Fmt": {
+    "message": "{0:N0} тр.",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "Не удалось прочитать эту модель. Ничего не изменено.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "Записать переключатели в мод",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "Не удалось отредактировать {0}: {1}. Ничего не записано.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Не удалось записать: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "Ни один файл модели этого предмета не удалось отредактировать.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "Не удалось прочитать запись IMC этого предмета, а угадывать её нельзя — изменился бы материал, который он загружает. Ничего не записано.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "У этой модели осталось мест под переключатели: {0}, а запрошено {1}.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} — не путь модели персонажа, поэтому нет предмета, к которому можно привязать переключатель.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Переключатели можно добавлять только к экипировке и аксессуарам, а это {0}.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "Нечего записывать.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "Редактирует модель мода и добавляет к нему группу опций Penumbra. Исходная модель сохраняется, поэтому действие обратимо.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "Готово. Переключателей ({0}) теперь можно найти в настройках Penumbra самого мода, в разделе «{1}».",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "Каталог модов Penumbra недоступен.",
     "description": ""
@@ -1329,6 +1493,10 @@
   },
   "Tab.Mods": {
     "message": "Моды",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "Части",
     "description": ""
   },
   "Tab.Settings": {
