@@ -5822,9 +5822,70 @@ public class CompositorService : IDisposable
         foreach (var (gamePath, relPath) in redirects)
             files[gamePath] = relPath;
 
+        // Folded in HERE rather than at the composite's own publish, so it survives every path that writes
+        // this manifest — including the two that publish an EMPTY map (the plugin switched off, and no
+        // enabled mods). A preview that vanished whenever the composite had nothing else to say would be
+        // exactly the case a user is most likely to be in while picking parts out of a single mod.
+        // Last, so a preview always wins the path it claims; that is what makes it a preview.
+        if (_partPreview is { } preview)
+            files[preview.GamePath] = preview.RelPath;
+
         lock (_manifestLock)
             PenumbraModMeta.WriteRedirects(
                 managedModDir, SidecarDiscoveryService.ManagedModDir, files, swaps: null, manipulations: manipulations);
+    }
+
+    /// <summary>The Parts panel's live isolate preview, or null. See <see cref="SetPartPreview"/>.</summary>
+    /// <remarks>A class, and volatile, because it is set from the UI thread and read on whichever thread is
+    /// publishing — the same reason every other cross-thread field in this service is one or the other.</remarks>
+    private sealed record PartPreview(string GamePath, string RelPath);
+
+    private volatile PartPreview? _partPreview;
+
+    /// <summary>
+    /// The subfolder a part preview is written to. Deliberately NOT one of the three
+    /// <see cref="PruneManagedOutput"/> sweeps — a preview belongs to no composite and appears in no publish
+    /// history, so a pruner that judged it by that would delete the file out from under a live redirect.
+    /// That failure mode is not theoretical: a dangling redirect on a skin path hard-fails the load and
+    /// takes the whole body material with it.
+    /// </summary>
+    private const string PreviewSubdir = "preview";
+
+    /// <summary>
+    /// Publish (or clear) one model in place of whatever normally serves <paramref name="gamePath"/>, for
+    /// the Parts panel's Isolate button. Pass null to clear.
+    /// <para/>
+    /// Transient by construction: nothing is written to the mod being previewed, and clearing restores it
+    /// exactly. A model change cannot be picked up by an in-place reload — that only re-requests textures —
+    /// so this always forces a real redraw.
+    /// </summary>
+    public void SetPartPreview(string? gamePath, byte[]? model)
+    {
+        try
+        {
+            var dir = Path.Combine(managedModDir, PreviewSubdir);
+            var disk = Path.Combine(dir, "isolate.mdl");
+
+            if (gamePath == null || model == null)
+            {
+                if (_partPreview == null) return;   // nothing live — don't force a redraw for no reason
+                _partPreview = null;
+                try { if (File.Exists(disk)) File.Delete(disk); } catch { /* republished over next time */ }
+            }
+            else
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllBytes(disk, model);
+                _partPreview = new PartPreview(gamePath, PreviewSubdir + "/isolate.mdl");
+            }
+
+            _needFullRedraw = true;
+            TriggerRecomposite("parts-isolate");
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] parts: could not publish the isolate preview");
+        }
     }
 
     /// <summary>

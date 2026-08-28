@@ -479,6 +479,10 @@
     "message": "Pieces arrive switched OFF. After importing, tick the ones you want under \"{0}\" in Penumbra — nothing is worn until you do.",
     "description": "Shown in the Import tab before the Import button. {0} is the name of the option group the import adds. \"Penumbra\" is a plugin name - never translate it."
   },
+  "Content.BodyOnly": {
+    "message": "wearer's own body",
+    "description": "A table cell: every mesh in this piece is the body the pack was fitted to, which Proteus leaves to the character's own skin. Not an error - shown dimmed, not in the warning colour. Very tight space."
+  },
   "Content.EitherColumn": {
     "message": "A and B",
     "description": "Stands in for the column letter when an index texture uses both columns. Used inside Content.IndexCompressed.Fmt."
@@ -570,10 +574,6 @@
   "Content.Skipped": {
     "message": "skipped",
     "description": "A table cell marking a piece that will not be imported. Very tight space - one short word."
-  },
-  "Content.BodyOnly": {
-    "message": "wearer's own body",
-    "description": "A table cell: every mesh in this piece is the body the pack was fitted to, which Proteus leaves to the character's own skin. Not an error - shown dimmed, not in the warning colour. Very tight space."
   },
   "Content.Unbound": {
     "message": "unbound material",
@@ -1099,6 +1099,170 @@
     "message": "Proteus is disabled — enable it in Settings.",
     "description": "Appears in the Mods tab."
   },
+  "Parts.Add.Btn": {
+    "message": "Make a switch from the ticked parts",
+    "description": "Button. Creates one on/off switch covering every part currently ticked in the list above."
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "The mod's author already put this part behind one of its own switches, so it cannot take another.",
+    "description": "Tooltip on a part that cannot be picked, because the mod already controls its visibility."
+  },
+  "Parts.Budget.Fmt": {
+    "message": "{0} of 10 switches left on this model",
+    "description": "{0} is a count. The game allows ten switches per item; this says how many are still free."
+  },
+  "Parts.Existing.Header": {
+    "message": "Already added by Proteus",
+    "description": "Section heading over the switches Proteus has already written into this mod."
+  },
+  "Parts.Intro": {
+    "message": "Pick geometry out of a mod's model and give it an on/off switch. The switch is written into the mod itself as an ordinary Penumbra option, so it keeps working with Proteus turned off.",
+    "description": "Explains what the Parts tab does. \"Penumbra\" and \"Proteus\" are plugin names - never translate them."
+  },
+  "Parts.Islands.Tip": {
+    "message": "A piece of this part that is not joined to the rest of it. Most of the time that is a separate object — a bow, a belt, a buckle.",
+    "description": "Tooltip on an indented sub-row: a disconnected piece found inside a larger part."
+  },
+  "Parts.Isolate.Btn": {
+    "message": "Isolate",
+    "description": "Button. Shows only the ticked parts on the character so the user can see what they are. Keep it short."
+  },
+  "Parts.Isolate.Tip": {
+    "message": "Show ONLY the ticked parts on your character, so you can see exactly what they are. Nothing is written to the mod — click again to put everything back.",
+    "description": "Tooltip for the Isolate button. Stress that it is a preview and changes nothing."
+  },
+  "Parts.Isolating.Btn": {
+    "message": "Showing only this",
+    "description": "The Isolate button's label while the preview is active. Keep it short."
+  },
+  "Parts.Mod": {
+    "message": "Mod",
+    "description": "Label on the mod dropdown. One word."
+  },
+  "Parts.Model": {
+    "message": "Model",
+    "description": "Label on the model dropdown - a 3D model file inside the chosen mod. One word."
+  },
+  "Parts.NeedName": {
+    "message": "Give the switch a name first.",
+    "description": "Tooltip explaining why the create-switch button is unavailable."
+  },
+  "Parts.NeedParts": {
+    "message": "Tick the parts this switch should hide.",
+    "description": "Tooltip explaining why the create-switch button is unavailable."
+  },
+  "Parts.NoBudget": {
+    "message": "This model has no switch slots left. The game gives each item ten, and this one's author has used them all.",
+    "description": "Shown when all ten of the item's attribute slots are already in use."
+  },
+  "Parts.NoModels": {
+    "message": "This mod publishes no models, so there is no geometry to split up.",
+    "description": "Shown when the chosen mod redirects no .mdl files."
+  },
+  "Parts.NotWrittenYet": {
+    "message": "Nothing has been written to the mod yet.",
+    "description": "Warning under the list of staged switches - they are held in memory and not yet saved."
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": "One staged switch. {0} is its name, {1} a comma-separated list of part numbers such as \"1.1, 1.2a\"."
+  },
+  "Parts.Pending.Header": {
+    "message": "Switches to write",
+    "description": "Section heading over the list of switches staged but not yet saved."
+  },
+  "Parts.PickMod": {
+    "message": "Choose a mod",
+    "description": "Placeholder in the mod dropdown before anything is selected."
+  },
+  "Parts.PickModel": {
+    "message": "Choose a model",
+    "description": "Placeholder in the model dropdown before anything is selected."
+  },
+  "Parts.Remove.Btn": {
+    "message": "Remove",
+    "description": "Button. Discards one staged switch. Keep it short."
+  },
+  "Parts.Revert.Btn": {
+    "message": "Undo — restore the original model",
+    "description": "Button. Restores the mod's original model files and removes the option group Proteus added."
+  },
+  "Parts.Revert.Nothing": {
+    "message": "This mod has no Proteus switches to remove.",
+    "description": "Shown when undo is asked for on a mod Proteus never edited."
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Undone. {0} model file(s) restored, and the option group removed.",
+    "description": "{0} is a count of model files restored."
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0} part(s) ticked",
+    "description": "{0} is a count of the parts currently ticked in the list."
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "Part {0} is made of {1} disconnected pieces, which is too many to list. Only the whole part can be switched.",
+    "description": "{0} is a part number such as \"1.2\", {1} a count. Explains why a part offers no sub-rows."
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "{0} other model file(s) for this item were left alone, because their parts are arranged differently and the same edit would land on the wrong geometry.",
+    "description": "{0} is a count. Some mods supply one item from several model files; only the ones built the same way can take the same edit."
+  },
+  "Parts.ToggleName": {
+    "message": "Name",
+    "description": "Label on the text box naming the switch being created. One word."
+  },
+  "Parts.Triangles.Fmt": {
+    "message": "{0:N0} tris",
+    "description": "Size of a part. {0:N0} is a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
+  },
+  "Parts.Unreadable": {
+    "message": "This model could not be read. Nothing has been changed.",
+    "description": "Shown when the chosen .mdl file cannot be parsed."
+  },
+  "Parts.Write.Btn": {
+    "message": "Write the switches into the mod",
+    "description": "The button that actually edits the mod. Everything before this point is a preview."
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0} could not be edited: {1}. Nothing has been written.",
+    "description": "{0} is a file path, {1} an English technical reason. Nothing was written."
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Writing failed: {0}",
+    "description": "{0} is the error the filesystem gave."
+  },
+  "Parts.Write.NoFiles": {
+    "message": "None of this item's model files could be edited.",
+    "description": "Shown when none of the item's model files could be read or edited."
+  },
+  "Parts.Write.NoImc": {
+    "message": "Could not read this item's IMC entry, and guessing it would change which material the item loads. Nothing has been written.",
+    "description": "Refusal. \"IMC\" is the game's own name for the record holding an item's material, decal and attribute settings - leave it as it is."
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "This model has {0} switch slot(s) left and {1} were asked for.",
+    "description": "{0} is how many switch slots are free, {1} how many were asked for."
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} is not a character model path, so there is no item to attach a switch to.",
+    "description": "{0} is a game file path."
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Switches can only be added to equipment and accessories, and this is {0}.",
+    "description": "{0} is a slot name such as \"Hair\" or \"Face\", already localized."
+  },
+  "Parts.Write.Nothing": {
+    "message": "No switches to write.",
+    "description": "Shown when the write button is somehow reached with no switches staged."
+  },
+  "Parts.Write.Tip": {
+    "message": "Edits the mod's model and adds a Penumbra option group to it. The original model is kept, so this can be undone.",
+    "description": "Tooltip on the write button. Reassures that the edit is reversible."
+  },
+  "Parts.Written.Fmt": {
+    "message": "Done. {0} switch(es) are now in this mod's own Penumbra settings, under \"{1}\".",
+    "description": "{0} is a count of switches, {1} the name of the option group they were written into (\"Parts\")."
+  },
   "Service.NoPenumbraDir": {
     "message": "Penumbra's mod directory isn't available.",
     "description": "Appears in a background service result."
@@ -1330,6 +1494,10 @@
   "Tab.Mods": {
     "message": "Mods",
     "description": "Main tab: the list of Penumbra mods Proteus composites."
+  },
+  "Tab.Parts": {
+    "message": "Parts",
+    "description": "Tab label. Very tight space - one short word."
   },
   "Tab.Settings": {
     "message": "Settings",

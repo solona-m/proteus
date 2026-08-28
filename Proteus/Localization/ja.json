@@ -479,6 +479,10 @@
     "message": "パーツはすべてオフの状態でインポートされます。インポート後、Penumbraの「{0}」で使いたいものにチェックを入れてください。それまでは何も着用されません。",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "着用者自身の身体",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A と B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "スキップ",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "着用者自身の身体",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,170 @@
     "message": "Proteusは無効です。設定から有効にしてください。",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "チェックしたパーツからスイッチを作成",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "このパーツは作者が既に独自のスイッチに割り当てているため、追加できません。",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "このモデルに残っているスイッチ: 10個中{0}個",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Proteusが追加済み",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "MODのモデルから任意の形状を選び、オン/オフのスイッチを付けます。スイッチは通常のPenumbraオプションとしてMOD自体に書き込まれるため、Proteusを無効にしても機能します。",
+    "description": ""
+  },
+  "Parts.Islands.Tip": {
+    "message": "このパーツのうち、他とつながっていない部分です。多くの場合はリボンやベルト、留め具などの独立したオブジェクトです。",
+    "description": ""
+  },
+  "Parts.Isolate.Btn": {
+    "message": "単独表示",
+    "description": ""
+  },
+  "Parts.Isolate.Tip": {
+    "message": "チェックしたパーツだけをキャラクターに表示し、実際の形を確認します。MODには何も書き込まれません。もう一度押すと元に戻ります。",
+    "description": ""
+  },
+  "Parts.Isolating.Btn": {
+    "message": "単独表示中",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "MOD",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "モデル",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "先にスイッチの名前を入力してください。",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "このスイッチで隠すパーツにチェックを入れてください。",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "このモデルにはスイッチの空きがありません。ゲームの上限は1アイテムにつき10個で、作者が全て使用しています。",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "このMODはモデルを公開していないため、分割できる形状がありません。",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "まだMODには何も書き込まれていません。",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "書き込むスイッチ",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "MODを選択",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "モデルを選択",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "削除",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "元に戻す — 元のモデルを復元",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "このMODにProteusが追加したスイッチはありません。",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "元に戻しました。モデルファイル{0}個を復元し、オプショングループを削除しました。",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0}個のパーツを選択中",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "パーツ{0}は{1}個の分離した断片で構成されており、多すぎて一覧表示できません。パーツ全体のみ切り替えられます。",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "このアイテムの他のモデルファイル{0}個はパーツの構成が異なり、同じ編集では別の形状に適用されてしまうため、変更していません。",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "名前",
+    "description": ""
+  },
+  "Parts.Triangles.Fmt": {
+    "message": "{0:N0}三角形",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "このモデルを読み込めませんでした。変更は行われていません。",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "スイッチをMODに書き込む",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0}を編集できませんでした: {1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "このアイテムのモデルファイルはいずれも編集できませんでした。",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "このアイテムのIMCエントリを読み取れませんでした。推測で補うとアイテムが読み込むマテリアルが変わってしまうため、何も書き込んでいません。",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "このモデルの残りスイッチ枠は{0}個ですが、{1}個が要求されました。",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0}はキャラクターモデルのパスではないため、スイッチを付けるアイテムがありません。",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "スイッチを追加できるのは装備とアクセサリのみで、これは{0}です。",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "書き込むスイッチがありません。",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "MODのモデルを編集し、Penumbraのオプショングループを追加します。元のモデルは保存されるため、元に戻せます。",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "完了しました。{0}個のスイッチがこのMOD自身のPenumbra設定「{1}」に追加されました。",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "PenumbraのMODディレクトリを利用できません。",
     "description": ""
@@ -1329,6 +1493,10 @@
   },
   "Tab.Mods": {
     "message": "MOD",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "パーツ",
     "description": ""
   },
   "Tab.Settings": {

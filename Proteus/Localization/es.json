@@ -479,6 +479,10 @@
     "message": "Las piezas llegan DESACTIVADAS. Tras importar, marca las que quieras en «{0}» dentro de Penumbra — hasta entonces no se lleva nada.",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "cuerpo del portador",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A y B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "omitido",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "cuerpo del portador",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,170 @@
     "message": "Proteus está desactivado: actívalo en Ajustes.",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "Crear un interruptor con las piezas marcadas",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "El autor del mod ya colocó esta pieza detrás de uno de sus propios interruptores, así que no puede admitir otro.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "Quedan {0} de 10 interruptores en este modelo",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Ya añadido por Proteus",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "Elige geometría del modelo de un mod y dale un interruptor. El interruptor se escribe en el propio mod como una opción normal de Penumbra, así que sigue funcionando con Proteus desactivado.",
+    "description": ""
+  },
+  "Parts.Islands.Tip": {
+    "message": "Un trozo de esta pieza que no está unido al resto. Casi siempre es un objeto aparte: un lazo, un cinturón, una hebilla.",
+    "description": ""
+  },
+  "Parts.Isolate.Btn": {
+    "message": "Aislar",
+    "description": ""
+  },
+  "Parts.Isolate.Tip": {
+    "message": "Muestra SOLO las piezas marcadas en tu personaje, para que veas exactamente qué son. No se escribe nada en el mod: vuelve a pulsar para restaurarlo todo.",
+    "description": ""
+  },
+  "Parts.Isolating.Btn": {
+    "message": "Mostrando solo esto",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "Modelo",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "Primero dale un nombre al interruptor.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "Marca las piezas que debe ocultar este interruptor.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "A este modelo no le quedan huecos para interruptores. El juego da diez por objeto y su autor los ha usado todos.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "Este mod no publica ningún modelo, así que no hay geometría que dividir.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "Todavía no se ha escrito nada en el mod.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "Interruptores por escribir",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "Elegir un mod",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "Elegir un modelo",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "Quitar",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "Deshacer: restaurar el modelo original",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "Este mod no tiene interruptores añadidos por Proteus.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Deshecho. Se han restaurado {0} archivo(s) de modelo y se ha quitado el grupo de opciones.",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0} pieza(s) marcada(s)",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "La pieza {0} está formada por {1} trozos sueltos, demasiados para enumerarlos. Solo puede conmutarse la pieza entera.",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "Se han dejado intactos otros {0} archivo(s) de modelo de este objeto, porque sus piezas están dispuestas de otra forma y la misma edición caería sobre la geometría equivocada.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "Nombre",
+    "description": ""
+  },
+  "Parts.Triangles.Fmt": {
+    "message": "{0:N0} tris",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "No se ha podido leer este modelo. No se ha cambiado nada.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "Escribir los interruptores en el mod",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "No se ha podido editar {0}: {1}. No se ha escrito nada.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Fallo al escribir: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "No se ha podido editar ninguno de los archivos de modelo de este objeto.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "No se ha podido leer la entrada IMC de este objeto, y adivinarla cambiaría el material que carga. No se ha escrito nada.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "A este modelo le quedan {0} hueco(s) de interruptor y se han pedido {1}.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} no es una ruta de modelo de personaje, así que no hay ningún objeto al que añadir un interruptor.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Los interruptores solo pueden añadirse a equipo y accesorios, y esto es {0}.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "No hay interruptores que escribir.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "Edita el modelo del mod y le añade un grupo de opciones de Penumbra. El modelo original se conserva, así que puede deshacerse.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "Listo. {0} interruptor(es) aparecen ya en los ajustes de Penumbra de este mod, en «{1}».",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "El directorio de mods de Penumbra no está disponible.",
     "description": ""
@@ -1329,6 +1493,10 @@
   },
   "Tab.Mods": {
     "message": "Mods",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "Piezas",
     "description": ""
   },
   "Tab.Settings": {

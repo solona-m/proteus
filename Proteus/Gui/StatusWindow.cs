@@ -33,6 +33,9 @@ public class StatusWindow : Window
     // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
     private readonly TextureLoader textureLoader;
     private readonly ModExportService modExport;
+    // Turns a mod's own geometry into on/off switches. Its own class: it works on any installed mod, not
+    // just the sidecar ones this window otherwise lists.
+    private readonly PartsPanel parts;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static Vector4 BindingAccent => ProteusStyle.Binding;
@@ -209,7 +212,8 @@ public class StatusWindow : Window
         OnionImportService onionImport,
         ContentImportService contentImport,
         ModExportService modExport,
-        TextureLoader textureLoader)
+        TextureLoader textureLoader,
+        PartsPanel parts)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -227,6 +231,7 @@ public class StatusWindow : Window
         this.contentImport  = contentImport;
         this.textureLoader  = textureLoader;
         this.modExport      = modExport;
+        this.parts          = parts;
 
         SizeConstraints = new WindowSizeConstraints
         {
@@ -338,6 +343,9 @@ public class StatusWindow : Window
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
                     if (t) DrawImportTab();
 
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "parts"))
+                    if (t) parts.Draw();
+
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
                     if (t) DrawExportTab();
 
@@ -415,7 +423,12 @@ public class StatusWindow : Window
             barTop + ((barH - btnH) * 0.5f)));
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
+        {
             compositor.TriggerRecomposite("manual");
+            // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
+            // a recomposite alone would leave a mod installed since the window opened out of its picker.
+            parts.Refresh();
+        }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(Strings.Band.RecompositeTip);
 

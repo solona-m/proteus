@@ -479,6 +479,10 @@
     "message": "파츠는 모두 꺼진 상태로 들어옵니다. 가져온 뒤 Penumbra의 \"{0}\"에서 원하는 항목을 체크하세요. 그 전에는 아무것도 착용되지 않습니다.",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "착용자 자신의 몸",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A와 B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "건너뜀",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "착용자 자신의 몸",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,170 @@
     "message": "Proteus가 비활성화되어 있습니다 — 설정에서 켜 주세요.",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "선택한 부위로 스위치 만들기",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "모드 제작자가 이미 이 부위를 자체 스위치에 연결해 두어 추가할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "이 모델에 남은 스위치: 10개 중 {0}개",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Proteus가 이미 추가함",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "모드의 모델에서 원하는 형상을 골라 켜기/끄기 스위치를 붙입니다. 스위치는 일반적인 Penumbra 옵션으로 모드 자체에 기록되므로 Proteus를 꺼도 계속 작동합니다.",
+    "description": ""
+  },
+  "Parts.Islands.Tip": {
+    "message": "이 부위 중 나머지와 이어져 있지 않은 조각입니다. 대개 리본, 벨트, 버클 같은 별개의 물체입니다.",
+    "description": ""
+  },
+  "Parts.Isolate.Btn": {
+    "message": "단독 표시",
+    "description": ""
+  },
+  "Parts.Isolate.Tip": {
+    "message": "선택한 부위만 캐릭터에 표시해 정확히 무엇인지 확인합니다. 모드에는 아무것도 기록되지 않으며, 다시 누르면 원래대로 돌아갑니다.",
+    "description": ""
+  },
+  "Parts.Isolating.Btn": {
+    "message": "단독 표시 중",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "모드",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "모델",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "먼저 스위치 이름을 입력하세요.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "이 스위치로 숨길 부위를 선택하세요.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "이 모델에는 남은 스위치 자리가 없습니다. 게임은 아이템당 열 개를 제공하는데 제작자가 모두 사용했습니다.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "이 모드는 모델을 게시하지 않아 나눌 형상이 없습니다.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "아직 모드에 기록된 내용이 없습니다.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "기록할 스위치",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "모드 선택",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "모델 선택",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "제거",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "되돌리기 — 원본 모델 복원",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "이 모드에는 Proteus가 추가한 스위치가 없습니다.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "되돌렸습니다. 모델 파일 {0}개를 복원하고 옵션 그룹을 제거했습니다.",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "부위 {0}개 선택됨",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "부위 {0}은(는) 서로 떨어진 조각 {1}개로 이루어져 있어 모두 나열하기에는 너무 많습니다. 부위 전체만 전환할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "이 아이템의 다른 모델 파일 {0}개는 부위 구성이 달라 같은 편집이 엉뚱한 형상에 적용되므로 건드리지 않았습니다.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "이름",
+    "description": ""
+  },
+  "Parts.Triangles.Fmt": {
+    "message": "{0:N0} 삼각형",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "이 모델을 읽을 수 없습니다. 변경된 내용은 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "스위치를 모드에 기록",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0}을(를) 편집할 수 없습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "기록 실패: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "이 아이템의 모델 파일을 하나도 편집할 수 없었습니다.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "이 아이템의 IMC 항목을 읽을 수 없었고, 추측해서 채우면 아이템이 불러오는 머티리얼이 바뀝니다. 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "이 모델에 남은 스위치 자리는 {0}개인데 {1}개를 요청했습니다.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0}은(는) 캐릭터 모델 경로가 아니므로 스위치를 붙일 아이템이 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "스위치는 장비와 장신구에만 추가할 수 있으며, 이것은 {0}입니다.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "기록할 스위치가 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "모드의 모델을 편집하고 Penumbra 옵션 그룹을 추가합니다. 원본 모델은 보관되므로 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "완료했습니다. 스위치 {0}개가 이제 이 모드 자체의 Penumbra 설정 \"{1}\"에 표시됩니다.",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
     "description": ""
@@ -1329,6 +1493,10 @@
   },
   "Tab.Mods": {
     "message": "모드",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "부위",
     "description": ""
   },
   "Tab.Settings": {
