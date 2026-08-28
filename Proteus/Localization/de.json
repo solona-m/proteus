@@ -479,6 +479,10 @@
     "message": "Teile kommen AUSGESCHALTET an. Häkchen nach dem Import unter \"{0}\" in Penumbra setzen — vorher wird nichts getragen.",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "eigener Körper des Trägers",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A und B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "übersprungen",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "eigener Körper des Trägers",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,178 @@
     "message": "Proteus ist deaktiviert — aktiviere es in den Einstellungen.",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "Schalter aus den markierten Teilen erstellen",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "Die Autorin bzw. der Autor des Mods hat dieses Teil bereits hinter einen eigenen Schalter gelegt, daher kann es keinen weiteren aufnehmen.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "Noch {0} von 10 Schaltern für dieses Modell frei",
+    "description": ""
+  },
+  "Parts.Click.Tip": {
+    "message": "Klicke auf ein Stück des Modells, um es ein- oder auszuschalten. Ziehen dreht es, Umschalt+Ziehen verschiebt es, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Von Proteus bereits hinzugefügt",
+    "description": ""
+  },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} Stücke ▴",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "Wähle Geometrie aus dem Modell eines Mods aus und gib ihr einen Ein/Aus-Schalter. Der Schalter wird als gewöhnliche Penumbra-Option in den Mod selbst geschrieben und funktioniert daher auch bei abgeschaltetem Proteus.",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "Modell",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "Gib dem Schalter zuerst einen Namen.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "Markiere die Teile, die dieser Schalter ausblenden soll.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "Für dieses Modell sind keine Schalterplätze mehr frei. Das Spiel gibt jedem Gegenstand zehn, und hier sind bereits alle vergeben.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "Dieser Mod veröffentlicht keine Modelle, es gibt also keine Geometrie zum Aufteilen.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "Es wurde noch nichts in den Mod geschrieben.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "Zu schreibende Schalter",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "Mod auswählen",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "Modell auswählen",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "Entfernen",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "Rückgängig – Originalmodelle wiederherstellen",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Die Modelle wurden wiederhergestellt, aber die Optionsgruppe ließ sich nicht entfernen: {0}",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "Dieser Mod hat keine von Proteus hinzugefügten Schalter.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Rückgängig gemacht. {0} Modelldatei(en) wiederhergestellt und die Optionsgruppe entfernt.",
+    "description": ""
+  },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} Tris",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0} Teil(e) markiert",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "Teil {0} zerfällt in {1} einzelne Stücke – mehr, als sich auflisten lassen. Klicke ins Modell, um eines auszuwählen, oder schalte das ganze Teil.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} Stücke ▾",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "{0} weitere Modelldatei(en) dieses Gegenstands blieben unangetastet, weil ihre Teile anders angeordnet sind und dieselbe Änderung dort die falsche Geometrie träfe.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "Name",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "Dieses Modell konnte nicht gelesen werden. Es wurde nichts geändert.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "Schalter in den Mod schreiben",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Dieser Gegenstand hat bereits einen Schalter namens „{0}“. Gib dem neuen einen anderen Namen.",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0} konnte nicht bearbeitet werden: {1}. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Schreiben fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "Keine der Modelldateien dieses Gegenstands ließ sich bearbeiten.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "Der IMC-Eintrag dieses Gegenstands konnte nicht gelesen werden, und ihn zu raten würde ändern, welches Material der Gegenstand lädt. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "Dieses Modell hat noch {0} Schalterplatz/-plätze frei, angefragt wurden {1}.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} ist kein Charaktermodell-Pfad, es gibt also keinen Gegenstand für einen Schalter.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Schalter lassen sich nur zu Ausrüstung und Accessoires hinzufügen, und dies ist {0}.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "Keine Schalter zu schreiben.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "„{0}“ und „{1}“ beanspruchen beide Teil {2}. Einer von beiden nimmt das ganze Teil, daher können es keine getrennten Schalter sein.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "Bearbeitet das Modell des Mods und fügt ihm eine Penumbra-Optionsgruppe hinzu. Das Originalmodell bleibt erhalten, die Änderung ist also umkehrbar.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "Fertig. {0} Schalter stehen jetzt in den Penumbra-Einstellungen dieses Mods unter „{1}“.",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
     "description": ""
@@ -1329,6 +1501,10 @@
   },
   "Tab.Mods": {
     "message": "Mods",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "Schalter",
     "description": ""
   },
   "Tab.Settings": {

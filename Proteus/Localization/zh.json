@@ -479,6 +479,10 @@
     "message": "部件导入时均为关闭状态。导入后请在 Penumbra 的“{0}”中勾选你想要的部件——在那之前不会穿戴任何东西。",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "穿戴者自身的身体",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A 和 B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "已跳过",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "穿戴者自身的身体",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,178 @@
     "message": "Proteus 已禁用——请在设置中启用。",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "用勾选的部件创建开关",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "模组作者已将该部件绑定到自己的开关上，因此无法再添加一个。",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "此模型还剩 {0}/10 个开关",
+    "description": ""
+  },
+  "Parts.Click.Tip": {
+    "message": "点击模型上的某一块即可开启或关闭它。拖动可旋转，Shift+拖动可平移，滚轮可缩放。",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Proteus 已添加",
+    "description": ""
+  },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} 块 ▴",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "从模组的模型中挑出一部分网格并为其添加开关。开关会作为普通的 Penumbra 选项写入模组本身，因此即使关闭 Proteus 也依然有效。",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "模组",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "模型",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "请先为开关命名。",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "请勾选此开关要隐藏的部件。",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "此模型已没有可用的开关位。游戏为每件物品提供十个，作者已全部用完。",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "此模组未发布任何模型，因此没有可拆分的网格。",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "尚未向模组写入任何内容。",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "待写入的开关",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "选择模组",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "选择模型",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "移除",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "撤销 — 还原原始模型",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "模型已还原，但无法移除选项组：{0}",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "此模组没有由 Proteus 添加的开关。",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "已撤销。还原了 {0} 个模型文件，并移除了选项组。",
+    "description": ""
+  },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} 三角面",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "已勾选 {0} 个部件",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "部件 {0} 分成了 {1} 个独立块，数量超出可列出的范围。请点击模型选择其中一块，或整体切换该部件。",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} 块 ▾",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "此物品的另外 {0} 个模型文件未作改动：它们的部件排列方式不同，同样的编辑会落在错误的网格上。",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "名称",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "无法读取此模型。未做任何更改。",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "将开关写入模组",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "此物品已有名为“{0}”的开关。请为新开关另取一个名字。",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "无法编辑 {0}：{1}。未写入任何内容。",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "写入失败：{0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "此物品的模型文件均无法编辑。",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "无法读取此物品的 IMC 条目，而凭猜测填写会改变物品加载的材质。未写入任何内容。",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "此模型还剩 {0} 个开关位，但请求了 {1} 个。",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} 不是角色模型路径，因此没有可附加开关的物品。",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "只能为装备和配饰添加开关，而这是{0}。",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "没有要写入的开关。",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "“{0}”和“{1}”都指向部件 {2}。其中一个占用了整个部件，因此二者不能作为独立的开关。",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "编辑模组的模型并为其添加一个 Penumbra 选项组。原始模型会被保留，因此可以撤销。",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "完成。{0} 个开关现已出现在此模组自身的 Penumbra 设置中，位于“{1}”下。",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "无法访问 Penumbra 的模组目录。",
     "description": ""
@@ -1329,6 +1501,10 @@
   },
   "Tab.Mods": {
     "message": "模组",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "开关",
     "description": ""
   },
   "Tab.Settings": {

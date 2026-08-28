@@ -479,6 +479,10 @@
     "message": "Les pièces arrivent DÉSACTIVÉES. Après l'import, cochez celles que vous voulez sous « {0} » dans Penumbra — rien n'est porté avant.",
     "description": ""
   },
+  "Content.BodyOnly": {
+    "message": "corps du porteur",
+    "description": ""
+  },
   "Content.EitherColumn": {
     "message": "A et B",
     "description": ""
@@ -569,10 +573,6 @@
   },
   "Content.Skipped": {
     "message": "ignoré",
-    "description": ""
-  },
-  "Content.BodyOnly": {
-    "message": "corps du porteur",
     "description": ""
   },
   "Content.Unbound": {
@@ -1099,6 +1099,178 @@
     "message": "Proteus est désactivé — activez-le dans les Paramètres.",
     "description": ""
   },
+  "Parts.Add.Btn": {
+    "message": "Créer un interrupteur à partir des pièces cochées",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "L'auteur du mod a déjà placé cette pièce derrière l'un de ses propres interrupteurs, elle ne peut donc pas en recevoir un autre.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "{0} interrupteurs sur 10 encore disponibles sur ce modèle",
+    "description": ""
+  },
+  "Parts.Click.Tip": {
+    "message": "Cliquez sur une partie du modèle pour l'activer ou la désactiver. Faites glisser pour le tourner, Maj+glisser pour le déplacer, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Déjà ajouté par Proteus",
+    "description": ""
+  },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} morceaux ▴",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "Sélectionnez de la géométrie dans le modèle d'un mod et donnez-lui un interrupteur. Celui-ci est écrit dans le mod lui-même comme une option Penumbra ordinaire : il continue donc de fonctionner même si Proteus est désactivé.",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "Modèle",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "Donnez d'abord un nom à l'interrupteur.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "Cochez les pièces que cet interrupteur doit masquer.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "Ce modèle n'a plus d'emplacement d'interrupteur libre. Le jeu en accorde dix par objet et l'auteur les a tous utilisés.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "Ce mod ne publie aucun modèle : il n'y a donc pas de géométrie à découper.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "Rien n'a encore été écrit dans le mod.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "Interrupteurs à écrire",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "Choisir un mod",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "Choisir un modèle",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "Retirer",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "Annuler – restaurer les modèles d'origine",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Les modèles ont été restaurés, mais le groupe d'options n'a pas pu être supprimé : {0}",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "Ce mod n'a aucun interrupteur ajouté par Proteus.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Annulé. {0} fichier(s) de modèle restauré(s) et le groupe d'options supprimé.",
+    "description": ""
+  },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} tris",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0} pièce(s) cochée(s)",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "La pièce {0} se divise en {1} morceaux distincts, plus qu'on ne peut en lister. Cliquez sur le modèle pour en choisir un, ou commutez la pièce entière.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} morceaux ▾",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "{0} autre(s) fichier(s) de modèle de cet objet n'ont pas été touchés : leurs pièces sont agencées différemment et la même modification porterait sur la mauvaise géométrie.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "Nom",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "Ce modèle n'a pas pu être lu. Rien n'a été modifié.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "Écrire les interrupteurs dans le mod",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Cet objet a déjà un interrupteur nommé « {0} ». Donnez-en un autre au nouveau.",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "Impossible de modifier {0} : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "Aucun des fichiers de modèle de cet objet n'a pu être modifié.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "Impossible de lire l'entrée IMC de cet objet, et la deviner changerait le matériau qu'il charge. Rien n'a été écrit.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "Ce modèle dispose encore de {0} emplacement(s) d'interrupteur et {1} ont été demandés.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} n'est pas un chemin de modèle de personnage : il n'y a donc aucun objet auquel rattacher un interrupteur.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Les interrupteurs ne peuvent être ajoutés qu'aux équipements et aux accessoires, et ceci est {0}.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "Aucun interrupteur à écrire.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "« {0} » et « {1} » revendiquent tous deux la pièce {2}. L'un d'eux prend la pièce entière : ils ne peuvent pas être des interrupteurs distincts.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "Modifie le modèle du mod et lui ajoute un groupe d'options Penumbra. Le modèle d'origine est conservé : l'opération est réversible.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "Terminé. {0} interrupteur(s) figurent désormais dans les réglages Penumbra de ce mod, sous « {1} ».",
+    "description": ""
+  },
   "Service.NoPenumbraDir": {
     "message": "Le répertoire de mods de Penumbra n'est pas disponible.",
     "description": ""
@@ -1329,6 +1501,10 @@
   },
   "Tab.Mods": {
     "message": "Mods",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "Interrupteurs",
     "description": ""
   },
   "Tab.Settings": {

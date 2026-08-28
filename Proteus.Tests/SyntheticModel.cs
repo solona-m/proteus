@@ -33,9 +33,20 @@ internal static class SyntheticModel
     private const int BBoxSize = 32;
     private const int Stride = 20;   // position float3 at 0, uv float2 at 12
 
-    /// <summary>One submesh: three vertices forming a triangle, plus the attribute bits it is tagged with.
-    /// The mask indexes the model's own attribute list, which is what the merge has to renumber.</summary>
-    internal sealed record Sub(uint AttrMask);
+    /// <summary>
+    /// One submesh, tagged with the attribute bits it carries. The mask indexes the model's own attribute
+    /// list, which is what the merge has to renumber.
+    /// <para/>
+    /// <paramref name="Islands"/> and <paramref name="TrianglesPerIsland"/> shape the geometry for
+    /// <see cref="ModelPartReader"/>'s island split. Islands are placed far apart in X; triangles WITHIN an
+    /// island share a corner POSITION but never a vertex index, which is the case that matters — a real
+    /// model duplicates vertices along every UV seam, so connectivity is only visible by position and an
+    /// index-based split would report every triangle as its own island.
+    /// </summary>
+    internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1)
+    {
+        internal int TriangleCount => Islands * TrianglesPerIsland;
+    }
 
     /// <summary>One LOD0 mesh, drawn with <paramref name="Material"/>.</summary>
     internal sealed record Mesh(string Material, params Sub[] Submeshes);
@@ -84,36 +95,44 @@ internal static class SyntheticModel
 
             foreach (var sub in mesh.Submeshes)
             {
+                int tris = sub.TriangleCount;
                 var so = new byte[16];
                 W32(so, 0, indexCursor);
-                W32(so, 4, 3);
+                W32(so, 4, (uint)(tris * 3));
                 W32(so, 8, sub.AttrMask);
                 W16(so, 12, 0);   // boneStart
                 W16(so, 14, 1);   // boneCount
                 subBytes.Add(so);
 
-                // Three vertices, mesh-relative indices, spread so the model's bounding box is not degenerate.
-                for (int v = 0; v < 3; v++)
+                // Three fresh vertices per triangle, mesh-relative indices, spread so the model's bounding
+                // box is not degenerate. Corner 0 sits on the island's shared hub — same position every
+                // triangle, a different vertex each time.
+                for (int i = 0; i < sub.Islands; i++)
+                for (int j = 0; j < sub.TrianglesPerIsland; j++)
                 {
-                    var vtx = new byte[Stride];
-                    BitConverter.GetBytes(v == 0 ? 0f : 1f).CopyTo(vtx, 0);
-                    BitConverter.GetBytes(v == 2 ? 1f : 0f).CopyTo(vtx, 4);
-                    BitConverter.GetBytes(0f).CopyTo(vtx, 8);
-                    BitConverter.GetBytes(v == 0 ? 0f : 0.5f).CopyTo(vtx, 12);
-                    BitConverter.GetBytes(v == 2 ? 0.5f : 0f).CopyTo(vtx, 16);
-                    vBuf.Write(vtx);
+                    float ix = i * 10f;
+                    for (int v = 0; v < 3; v++)
+                    {
+                        var vtx = new byte[Stride];
+                        BitConverter.GetBytes(v == 0 ? ix : ix + 1f).CopyTo(vtx, 0);
+                        BitConverter.GetBytes(v == 0 ? 0f : j + (v == 2 ? 1f : 0f)).CopyTo(vtx, 4);
+                        BitConverter.GetBytes(0f).CopyTo(vtx, 8);
+                        BitConverter.GetBytes(v == 0 ? 0f : 0.5f).CopyTo(vtx, 12);
+                        BitConverter.GetBytes(v == 2 ? 0.5f : 0f).CopyTo(vtx, 16);
+                        vBuf.Write(vtx);
 
-                    var idx = new byte[2];
-                    BitConverter.TryWriteBytes(idx, (ushort)(meshVerts + v));
-                    iBuf.Write(idx);
+                        var idx = new byte[2];
+                        BitConverter.TryWriteBytes(idx, (ushort)(meshVerts + v));
+                        iBuf.Write(idx);
+                    }
+                    meshVerts += 3;
+                    indexCursor += 3;
                 }
-                meshVerts += 3;
-                indexCursor += 3;
             }
 
             var mo = new byte[36];
             W16(mo, 0, meshVerts);
-            W32(mo, 4, (uint)(mesh.Submeshes.Length * 3));                     // indexCount
+            W32(mo, 4, (uint)(mesh.Submeshes.Sum(x => x.TriangleCount) * 3));  // indexCount
             W16(mo, 8, (ushort)materials.IndexOf(mesh.Material));
             W16(mo, 10, (ushort)(subBytes.Count - mesh.Submeshes.Length));     // submeshIndex
             W16(mo, 12, (ushort)mesh.Submeshes.Length);
