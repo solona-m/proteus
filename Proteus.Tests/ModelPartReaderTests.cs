@@ -46,7 +46,7 @@ public class ModelPartReaderTests
         var parts = ModelPartReader.Read(SyntheticModel.Build([],
             Mesh(new SyntheticModel.Sub(0, Islands: 2, TrianglesPerIsland: 3))));
 
-        Assert.Equal(["1.1", "1.1a", "1.1b"], parts!.Parts.Select(p => p.Label));
+        Assert.Equal(["1.1", "1.1.1", "1.1.2"], parts!.Parts.Select(p => p.Label));
         Assert.Equal(6, parts.Parts[0].TriangleCount);
         Assert.Equal(3, parts.Parts[1].TriangleCount);
         Assert.Equal(3, parts.Parts[2].TriangleCount);
@@ -59,8 +59,8 @@ public class ModelPartReaderTests
         var parts = ModelPartReader.Read(SyntheticModel.Build([],
             Mesh(new SyntheticModel.Sub(0, Islands: 2, TrianglesPerIsland: 2))));
 
-        var a = parts!.Parts.Single(p => p.Label == "1.1a");
-        var b = parts.Parts.Single(p => p.Label == "1.1b");
+        var a = parts!.Parts.Single(p => p.Label == "1.1.1");
+        var b = parts.Parts.Single(p => p.Label == "1.1.2");
         Assert.True(a.Max.X < b.Min.X, $"islands overlap in X: {a.Max.X} .. {b.Min.X}");
         // The submesh row still spans both.
         Assert.Equal(parts.Parts[0].Min.X, a.Min.X);
@@ -78,8 +78,27 @@ public class ModelPartReaderTests
         Assert.Empty(parts.ShatteredSubmeshes);
     }
 
+    /// <summary>
+    /// The case the cap used to break. A pair of trousers put 78 belt straps in one submesh; the old limit
+    /// of 64 suppressed every island and offered only the whole 53,000-triangle piece — precisely the
+    /// "dependent on the authored subgrouping" outcome the feature exists to avoid.
+    /// </summary>
     [Fact]
-    public void AShatteredSubmesh_IsReported_NotListed()
+    public void ManyIslands_AreAllListed()
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0, Islands: 78, TrianglesPerIsland: 2))));
+
+        Assert.Equal(79, parts!.Parts.Count);           // the submesh, plus one row per strap
+        Assert.Empty(parts.ShatteredSubmeshes);
+        Assert.Equal("1.1.78", parts.Parts[^1].Label);  // numbered, because letters run out at 26
+        Assert.All(parts.Parts.Skip(1), p => Assert.Equal(2, p.TriangleCount));
+    }
+
+    /// <summary>The bound that remains is a backstop against a model whose every triangle is its own island,
+    /// not a judgement about how many pieces are useful.</summary>
+    [Fact]
+    public void ABsurdlyShatteredSubmesh_IsReported_NotListed()
     {
         int many = ModelPartReader.MaxIslands + 1;
         var parts = ModelPartReader.Read(SyntheticModel.Build([],

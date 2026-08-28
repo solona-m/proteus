@@ -446,9 +446,15 @@ internal static class PenumbraModMeta
     /// </summary>
     /// <param name="defaultSettings">Bitmask over the options — bit 0 is the first. Ship this with every bit
     /// set so a mod gains switches without changing how it looks until one is unticked.</param>
+    /// <param name="priority">
+    /// Must beat any other <c>Imc</c> group in the mod that edits the SAME identifier. Penumbra keeps only
+    /// the first group it reaches for one identifier and orders them by descending priority, so a group that
+    /// loses that race is not merely overruled — it is never applied. See
+    /// <see cref="ImcEntrySource.MaxPriorityFor"/>.
+    /// </param>
     public static void WriteImcGroup(
         string modRoot, int index, string name, ImcIdentifier identifier, ImcEntry entry,
-        IReadOnlyList<(string Name, ushort Mask)> options, ulong defaultSettings)
+        IReadOnlyList<(string Name, ushort Mask)> options, ulong defaultSettings, int priority = 0)
     {
         if (options.Count == 0) return;
 
@@ -457,8 +463,23 @@ internal static class PenumbraModMeta
             ["Type"] = "Imc",
             ["Name"] = name,
             ["Description"] = "",
-            ["Priority"] = 0,
+            ["Priority"] = priority,
             ["DefaultSettings"] = defaultSettings,
+
+            // Every variant of the item, attributes only.
+            //
+            // AllVariants because the variant an item is worn at cannot be known from a mod folder — it is
+            // read off a material path if the mod happens to publish one, and defaults to 1 otherwise. An
+            // edit pinned to the wrong variant produces a group whose checkboxes are present and inert,
+            // which is indistinguishable from the switch being broken.
+            //
+            // OnlyAttributes because that breadth would otherwise be dangerous: without it Penumbra writes
+            // this whole entry to every variant, so variant 2's material id would be replaced by variant
+            // 1's and the item would load the wrong textures. With it, Penumbra sources each variant's own
+            // entry and replaces nothing but the attribute mask — which is all a geometry switch wants.
+            // DefaultEntry below remains the fallback for a variant the game has no entry for.
+            ["AllVariants"] = true,
+            ["OnlyAttributes"] = true,
             ["Identifier"] = new Dictionary<string, object>
             {
                 ["ObjectType"] = identifier.ObjectType,
@@ -480,11 +501,27 @@ internal static class PenumbraModMeta
                 .ToList(),
         };
 
+        if (index < 0) index = 0;
+
         var manifest = ReadManifest(modRoot);
         if (FileVersionOf(manifest) >= SingleFileVersion)
             WriteGroupIntoManifest(modRoot, manifest, index, name, _ => group);
         else
             WriteLegacyGroupFile(modRoot, index, name, _ => group);
+    }
+
+    /// <summary>
+    /// How many option groups the mod has, in either layout — what a caller wanting to append one at the end
+    /// should pass as its ordinal.
+    /// <para/>
+    /// Exists because <see cref="TryReadGroups"/> answers null on a v3 folder, where there is no
+    /// <c>Groups</c> array to count, and callers were reaching for a sentinel instead.
+    /// </summary>
+    public static int GroupCount(string modRoot)
+    {
+        if (TryReadGroups(modRoot) is { } groups) return groups.Count;
+        try { return Directory.EnumerateFiles(modRoot, "group_*.json").Count(); }
+        catch { return 0; }
     }
 
     /// <summary>Which item an IMC edit names. Equipment and accessories only — see <see cref="ImcEntrySource.ImcPathFor"/>.</summary>
@@ -569,6 +606,13 @@ internal static class PenumbraModMeta
     private static void WriteLegacyGroupFile(
         string modRoot, int index, string name, Func<int, object> build)
     {
+        // Clamped before it is ever added to. A caller asking for "past the end" with int.MaxValue would
+        // otherwise wrap through int.MinValue into a file called group_-2147483648_name.json, which
+        // ReadGroupOrder then reads as an enormous NEGATIVE ordinal — the group would sort first, the exact
+        // opposite of what a past-the-end request means. The private Write dispatcher clamps the low side
+        // for the same reason; this is the high one.
+        index = Math.Clamp(index, 0, 9998);
+
         var taken = new HashSet<int>();
         try
         {

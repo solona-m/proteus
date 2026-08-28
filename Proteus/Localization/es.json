@@ -1111,28 +1111,20 @@
     "message": "Quedan {0} de 10 interruptores en este modelo",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "Haz clic en una parte del modelo para activarla o desactivarla. Arrastra para girarlo, Mayús+arrastrar para moverlo y la rueda para acercar o alejar.",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Ya añadido por Proteus",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} trozos ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "Elige geometría del modelo de un mod y dale un interruptor. El interruptor se escribe en el propio mod como una opción normal de Penumbra, así que sigue funcionando con Proteus desactivado.",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "Un trozo de esta pieza que no está unido al resto. Casi siempre es un objeto aparte: un lazo, un cinturón, una hebilla.",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "Aislar",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "Muestra SOLO las piezas marcadas en tu personaje, para que veas exactamente qué son. No se escribe nada en el mod: vuelve a pulsar para restaurarlo todo.",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "Mostrando solo esto",
     "description": ""
   },
   "Parts.Mod": {
@@ -1184,7 +1176,11 @@
     "description": ""
   },
   "Parts.Revert.Btn": {
-    "message": "Deshacer: restaurar el modelo original",
+    "message": "Deshacer: restaurar los modelos originales",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Los modelos se restauraron, pero no se pudo quitar el grupo de opciones: {0}",
     "description": ""
   },
   "Parts.Revert.Nothing": {
@@ -1195,12 +1191,20 @@
     "message": "Deshecho. Se han restaurado {0} archivo(s) de modelo y se ha quitado el grupo de opciones.",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} tris",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} pieza(s) marcada(s)",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "La pieza {0} está formada por {1} trozos sueltos, demasiados para enumerarlos. Solo puede conmutarse la pieza entera.",
+    "message": "La pieza {0} se divide en {1} trozos distintos, más de los que se pueden listar. Haz clic en el modelo para elegir uno, o conmuta la pieza entera.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} trozos ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "Nombre",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} tris",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "No se ha podido leer este modelo. No se ha cambiado nada.",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "Escribir los interruptores en el mod",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Este objeto ya tiene un interruptor llamado «{0}». Ponle otro nombre al nuevo.",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "No hay interruptores que escribir.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "«{0}» y «{1}» reclaman ambos la pieza {2}. Uno de ellos se lleva la pieza entera, así que no pueden ser interruptores separados.",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Piezas",
+    "message": "Interruptores",
     "description": ""
   },
   "Tab.Settings": {

@@ -324,8 +324,17 @@ public class StatusWindow : Window
         // height is FontSize + FramePadding*2 measured in JUPITER (HeaderTabBar pushes it), which is not
         // what ImGui.GetFrameHeight() reports — that answers for the default font.
         var barTop = ImGui.GetCursorPosY();
+        // ── the bar's id carries a generation suffix, and it is load-bearing ──
+        // An ImGui tab bar remembers each tab's SLOT by id and does not reorder on resubmission (the same
+        // fact the colour panel's stack strip works around by not using a TabBar at all). That state lives
+        // in Dalamud's ImGui context, not in the plugin, so it survives a plugin reload and outlives any
+        // rebuild — moving a tab in this file changes nothing until the game itself restarts.
+        //
+        // So when the ORDER here changes, bump the suffix. A bar id ImGui has never seen has no remembered
+        // slots and lays its tabs out in submission order, which is the order written below. The cost is
+        // that the selected tab resets to the first one, once, for anyone who had the window open.
         using (ProteusStyle.TabAccent())
-        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs"))
+        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs2"))
         {
             if (tabs)
             {
@@ -343,11 +352,11 @@ public class StatusWindow : Window
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
                     if (t) DrawImportTab();
 
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "parts"))
-                    if (t) parts.Draw();
-
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
                     if (t) DrawExportTab();
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
+                    if (t) parts.Draw();
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))

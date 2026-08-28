@@ -1111,28 +1111,20 @@
     "message": "{0} interrupteurs sur 10 encore disponibles sur ce modèle",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "Cliquez sur une partie du modèle pour l'activer ou la désactiver. Faites glisser pour le tourner, Maj+glisser pour le déplacer, molette pour zoomer.",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Déjà ajouté par Proteus",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} morceaux ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "Sélectionnez de la géométrie dans le modèle d'un mod et donnez-lui un interrupteur. Celui-ci est écrit dans le mod lui-même comme une option Penumbra ordinaire : il continue donc de fonctionner même si Proteus est désactivé.",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "Un morceau de cette pièce qui n'est pas rattaché au reste. C'est le plus souvent un objet distinct : un nœud, une ceinture, une boucle.",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "Isoler",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "Affiche UNIQUEMENT les pièces cochées sur votre personnage, pour voir exactement de quoi il s'agit. Rien n'est écrit dans le mod : cliquez à nouveau pour tout rétablir.",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "Affichage isolé",
     "description": ""
   },
   "Parts.Mod": {
@@ -1184,7 +1176,11 @@
     "description": ""
   },
   "Parts.Revert.Btn": {
-    "message": "Annuler – restaurer le modèle d'origine",
+    "message": "Annuler – restaurer les modèles d'origine",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Les modèles ont été restaurés, mais le groupe d'options n'a pas pu être supprimé : {0}",
     "description": ""
   },
   "Parts.Revert.Nothing": {
@@ -1195,12 +1191,20 @@
     "message": "Annulé. {0} fichier(s) de modèle restauré(s) et le groupe d'options supprimé.",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} tris",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} pièce(s) cochée(s)",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "La pièce {0} est composée de {1} morceaux disjoints, ce qui est trop pour les lister. Seule la pièce entière peut être commutée.",
+    "message": "La pièce {0} se divise en {1} morceaux distincts, plus qu'on ne peut en lister. Cliquez sur le modèle pour en choisir un, ou commutez la pièce entière.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} morceaux ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "Nom",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} tris",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "Ce modèle n'a pas pu être lu. Rien n'a été modifié.",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "Écrire les interrupteurs dans le mod",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Cet objet a déjà un interrupteur nommé « {0} ». Donnez-en un autre au nouveau.",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "Aucun interrupteur à écrire.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "« {0} » et « {1} » revendiquent tous deux la pièce {2}. L'un d'eux prend la pièce entière : ils ne peuvent pas être des interrupteurs distincts.",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Pièces",
+    "message": "Interrupteurs",
     "description": ""
   },
   "Tab.Settings": {

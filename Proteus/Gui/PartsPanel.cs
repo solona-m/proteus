@@ -25,40 +25,56 @@ namespace Proteus.Gui;
 /// the Mods list, for the same reason: that list is Proteus's sidecar mods, and this works on ANY installed
 /// mod — most of them will never have heard of Proteus.
 /// </summary>
-public sealed class PartsPanel : IDisposable
+public sealed class PartsPanel
 {
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
-    private readonly PartSilhouette silhouette;
+    private readonly PartViewport viewport;
     private readonly TextureLoader textureLoader;
     private readonly IPluginLog log;
 
     private Dictionary<string, string>? mods;
+    private string modFilter = string.Empty;
 
     private string? modDir;
+
+    /// <summary>Every redirect the mod publishes. Kept UNFILTERED alongside <see cref="models"/> because the
+    /// writer needs the material paths to read the item's variant off — filtering to models before handing
+    /// the list over left it with nothing to find.</summary>
+    private List<PenumbraModMeta.Redirect> redirects = [];
+
+    /// <summary>Just the models, for the picker.</summary>
     private List<PenumbraModMeta.Redirect> models = [];
     private int modelIndex = -1;
 
-    private byte[]? modelBytes;
     private ModelParts? parts;
+
+    /// <summary>
+    /// How many switch letters this model has left, resolved when the model is read rather than per frame.
+    /// <para/>
+    /// It only changes when the model does, and <c>FreeLetters</c> allocates a set and a list every call —
+    /// the same reason <see cref="Strings"/> resolves its text once per language instead of once per frame.
+    /// </summary>
+    private int freeLetters;
     private bool modelUnreadable;
 
     private readonly HashSet<string> ticked = new(StringComparer.Ordinal);
+    /// <summary>Submeshes whose islands are listed out. See <see cref="DrawPartRows"/>.</summary>
+    private readonly HashSet<(int Mesh, int Submesh)> expanded = [];
     private string toggleName = string.Empty;
     private readonly List<(string Name, List<string> Parts)> pending = [];
-    private bool isolating;
 
     private MeshToggleRecord? existing;
     private string? status;
     private bool statusIsError;
 
     public PartsPanel(
-        PenumbraBridge penumbra, CompositorService compositor, PartSilhouette silhouette,
+        PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport,
         TextureLoader textureLoader, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
-        this.silhouette = silhouette;
+        this.viewport = viewport;
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -66,12 +82,9 @@ public sealed class PartsPanel : IDisposable
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
 
-    public void Dispose() => ClearIsolate();
-
     public void Draw()
     {
         var ps = Strings.Parts;
-        silhouette.NewFrame();
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -107,29 +120,63 @@ public sealed class PartsPanel : IDisposable
         var ps = Strings.Parts;
         mods ??= penumbra.GetAllMods() ?? [];
 
-        ImGui.SetNextItemWidth(ProteusStyle.S(340f));
+        var width = ProteusStyle.S(340f);
+        ImGui.SetNextItemWidth(width);
+
+        // The height cap has to be explicit: BeginCombo applies its own row limit ONLY when the caller
+        // supplied no size constraint, so passing a width silently disables it and the popup would grow one
+        // row per mod — and this list is EVERY mod Penumbra knows, which is routinely several hundred.
+        var popupMaxH = ImGui.GetTextLineHeightWithSpacing() * 18 + ImGui.GetStyle().WindowPadding.Y * 2;
+        ImGui.SetNextWindowSizeConstraints(new Vector2(width, 0), new Vector2(width * 2.2f, popupMaxH));
+
         var current = modDir != null && mods.TryGetValue(modDir, out var name) ? name : ps.PickMod;
-        if (ImGui.BeginCombo(ps.Mod + "##partsMod", current))
+        if (!ImGui.BeginCombo(ps.Mod + "##partsMod", current)) return;
+
+        // Fresh filter each open, with the caret already in the box so the list can just be typed at.
+        // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
+        bool appearing = ImGui.IsWindowAppearing();
+        if (appearing) modFilter = "";
+        ImGui.SetNextItemWidth(-1);
+        if (appearing) ImGui.SetKeyboardFocusHere();
+        ImGui.InputTextWithHint("##partsFilter", Strings.Export.FilterHint, ref modFilter, 64);
+        ImGui.Separator();
+
+        int shown = 0;
+        foreach (var (dir, label) in mods.OrderBy(m => m.Value, StringComparer.OrdinalIgnoreCase))
         {
-            foreach (var (dir, label) in mods.OrderBy(m => m.Value, StringComparer.OrdinalIgnoreCase))
-                if (ImGui.Selectable(label + "##" + dir, dir == modDir) && dir != modDir)
-                    SelectMod(dir);
-            ImGui.EndCombo();
+            // Folder as well as name. The two routinely differ — Penumbra's folder is a sanitised form of
+            // the name, and either can be renamed — so filtering on the label alone hides mods someone is
+            // searching for by folder.
+            if (modFilter.Length > 0
+                && label?.Contains(modFilter, StringComparison.OrdinalIgnoreCase) != true
+                && dir?.Contains(modFilter, StringComparison.OrdinalIgnoreCase) != true)
+                continue;
+
+            shown++;
+            // ##dir: two mods can share a display name, and duplicate ImGui ids would route the click to
+            // the wrong row.
+            if (ImGui.Selectable($"{label}##{dir}", dir == modDir) && dir != modDir)
+                SelectMod(dir);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(dir);
         }
+        if (shown == 0)
+            ImGui.TextDisabled(string.Format(Strings.Export.NoMatchFmt, modFilter));
+
+        ImGui.EndCombo();
     }
 
     private void SelectMod(string dir)
     {
-        ClearIsolate();
         modDir = dir;
         modelIndex = -1;
         parts = null;
-        modelBytes = null;
         modelUnreadable = false;
         ticked.Clear();
+        expanded.Clear();
         pending.Clear();
 
         models = [];
+        redirects = [];
         status = null;
         var root = ModRoot();
         if (root == null) return;
@@ -140,7 +187,8 @@ public sealed class PartsPanel : IDisposable
         // nothing redirects to is dead weight the author left behind, and — the part that decides the whole
         // feature — a published model comes with the game path it claims, which is where the item's IMC
         // identity is read from when the switch is finally written.
-        models = PenumbraModMeta.ReadAllRedirects(root)
+        redirects = PenumbraModMeta.ReadAllRedirects(root);
+        models = redirects
             .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Source, StringComparer.OrdinalIgnoreCase)
@@ -182,9 +230,15 @@ public sealed class PartsPanel : IDisposable
 
     private void SelectModel(int index)
     {
-        ClearIsolate();
         modelIndex = index;
         ticked.Clear();
+        expanded.Clear();
+        freeLetters = 0;
+        // Staged switches name PARTS BY LABEL, and a label means something different on a different model —
+        // "1.1.3" is whatever the third island of that model's first submesh happens to be. Carrying them
+        // across would write one model's switch onto another's geometry, and any label the new model does
+        // not have would be dropped silently under a green "Done".
+        pending.Clear();
         parts = null;
         modelUnreadable = false;
 
@@ -193,20 +247,22 @@ public sealed class PartsPanel : IDisposable
 
         try
         {
-            modelBytes = File.ReadAllBytes(Path.Combine(root,
+            var bytes = File.ReadAllBytes(Path.Combine(root,
                 models[index].File.Replace('/', Path.DirectorySeparatorChar)));
-            parts = ModelPartReader.Read(modelBytes);
+            parts = ModelPartReader.Read(bytes);
             modelUnreadable = parts == null;
+            freeLetters = parts == null ? 0 : ModelPartReader.FreeLetters(parts.AttributeNames).Count;
         }
         catch (Exception ex)
         {
             log.Warning(ex, "[Proteus] parts: could not read {0}", models[index].File);
             modelUnreadable = true;
         }
-        silhouette.Forget(SilhouetteKey);
+        if (parts != null) viewport.Show(ViewportKey, parts);
+        else viewport.Clear();
     }
 
-    private string SilhouetteKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
+    private string ViewportKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
 
     private string? ModRoot()
     {
@@ -214,84 +270,141 @@ public sealed class PartsPanel : IDisposable
         return root == null || modDir == null ? null : Path.Combine(root, modDir);
     }
 
-    // ── the part list ───────────────────────────────────────────────────────
+    // ── the model, and the list beside it ───────────────────────────────────
 
+    /// <summary>
+    /// The model on the left, the parts on the right, each driving the other: clicking the model ticks a
+    /// part, hovering a row lights that part up on the model.
+    /// <para/>
+    /// The list is still here, and not just as a fallback. It is the only place that can show a part which
+    /// is entirely hidden behind another, say what material a part draws with, or say that the author has
+    /// already put one behind a switch of their own.
+    /// </summary>
     private void DrawParts()
     {
         var ps = Strings.Parts;
         var model = parts!;
 
-        foreach (var (label, count) in model.ShatteredSubmeshes)
+        viewport.Show(ViewportKey, model);
+        viewport.Selected = ticked;
+
+        float height = ProteusStyle.S(360f);
+        if (viewport.Draw(model, height) is { } clicked) Toggle(clicked);
+
+        // The model gives every sign that a click will work — the part lights up, the cursor becomes a hand
+        // — and then quietly absorbs it when the author already gates that geometry. The list says so with a
+        // disabled checkbox and a tooltip; without this the model says nothing at all.
+        if (viewport.PointerOverModel && viewport.Hovered is { } hot
+            && model.Parts.FirstOrDefault(p => p.Label == hot) is { Toggleable: false })
+            ImGui.SetTooltip(ps.AlreadyGatedTip);
+
+        ImGui.SameLine();
+        using (var group = ImRaii.Child("##partList", new Vector2(0, height)))
         {
-            ImGui.PushTextWrapPos(0);
-            ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
-            ImGui.PopTextWrapPos();
-        }
+            if (group)
+            {
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextDisabled(ps.ClickTip);
+                ImGui.PopTextWrapPos();
 
-        float rowHeight = ProteusStyle.S(34f);
-        using var table = ImRaii.Table("##parts", 4,
-            ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
-            new Vector2(0, ProteusStyle.S(300f)));
-        if (!table) return;
-
-        ImGui.TableSetupColumn("Pic", ImGuiTableColumnFlags.WidthFixed, rowHeight * 2f);
-        ImGui.TableSetupColumn("Part", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(90f));
-        ImGui.TableSetupColumn("Material", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(80f));
-
-        foreach (var part in model.Parts)
-        {
-            ImGui.TableNextRow();
-
-            ImGui.TableNextColumn();
-            silhouette.Draw(SilhouetteKey, model, part, rowHeight);
-
-            ImGui.TableNextColumn();
-            // An island is drawn under its submesh, indented, because it IS part of it — ticking both would
-            // ask for the same triangles twice.
-            if (part.Island >= 0) ImGui.Indent(ProteusStyle.S(12f));
-            bool on = ticked.Contains(part.Label);
-            using (ImRaii.Disabled(!part.Toggleable))
-                if (ImGui.Checkbox($"{part.Label}##p_{part.Label}", ref on))
+                foreach (var (label, count) in model.ShatteredSubmeshes)
                 {
-                    if (on) ticked.Add(part.Label); else ticked.Remove(part.Label);
-                    if (isolating) PushIsolate();
+                    ImGui.PushTextWrapPos(0);
+                    ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
+                    ImGui.PopTextWrapPos();
                 }
-            if (part.Island >= 0) ImGui.Unindent(ProteusStyle.S(12f));
 
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                ImGui.SetTooltip(!part.Toggleable ? ps.AlreadyGatedTip
-                               : part.Island >= 0 ? ps.IslandsTip
-                               : part.Label);
-
-            ImGui.TableNextColumn();
-            ImGui.TextDisabled(Path.GetFileName(part.Material.TrimStart('/')));
-
-            ImGui.TableNextColumn();
-            ImGui.TextDisabled(string.Format(ps.TrianglesFmt, part.TriangleCount));
+                ImGui.Spacing();
+                DrawPartRows(model);
+            }
         }
     }
 
-    // ── isolate + staging ───────────────────────────────────────────────────
+    /// <summary>
+    /// One row per part, with a submesh's islands folded away behind an expander.
+    /// <para/>
+    /// Folded because a submesh can hold a great many: a pair of trousers turned out to carry 78 straps in
+    /// one, and listing them all by default buries every other part of the garment under them. Ticked
+    /// islands are always shown whatever the expander says, so a piece clicked on the model always has a
+    /// row — otherwise clicking a strap would tick something the list did not admit existed.
+    /// </summary>
+    private void DrawPartRows(ModelParts model)
+    {
+        var ps = Strings.Parts;
+        string? hoveredRow = null;
+
+        // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
+        var islands = model.Parts.Where(p => p.Island >= 0)
+            .GroupBy(p => (p.Mesh, p.Submesh))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        foreach (var part in model.Parts)
+        {
+            bool isIsland = part.Island >= 0;
+            var owner = (part.Mesh, part.Submesh);
+
+            if (isIsland && !expanded.Contains(owner) && !ticked.Contains(part.Label)) continue;
+            if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
+
+            bool on = ticked.Contains(part.Label);
+            using (ImRaii.Disabled(!part.Toggleable))
+                if (ImGui.Checkbox($"{part.Label}##p_{part.Label}", ref on))
+                    Toggle(part.Label);
+
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) hoveredRow = part.Label;
+
+            ImGui.SameLine();
+            ImGui.TextDisabled(string.Format(ps.RowFmt,
+                Path.GetFileName(part.Material.TrimStart('/')), part.TriangleCount));
+            if (ImGui.IsItemHovered()) hoveredRow = part.Label;
+
+            // The expander sits on the SUBMESH row, because that is the thing being broken up.
+            if (!isIsland && islands.TryGetValue(owner, out var count))
+            {
+                ImGui.SameLine();
+                bool open = expanded.Contains(owner);
+                if (ImGui.SmallButton(string.Format(open ? ps.HidePiecesFmt : ps.ShowPiecesFmt, count)
+                                    + $"##x_{part.Label}"))
+                {
+                    if (!expanded.Add(owner)) expanded.Remove(owner);
+                }
+            }
+
+            if (isIsland) ImGui.Unindent(ProteusStyle.S(12f));
+
+            if (hoveredRow == part.Label && !part.Toggleable)
+                ImGui.SetTooltip(ps.AlreadyGatedTip);
+        }
+
+        // Only override the viewport's own hover when the cursor is actually over a row; otherwise the
+        // model's hover highlight would be cleared by every frame the list is idle.
+        if (hoveredRow != null && viewport.Hovered != hoveredRow)
+        {
+            viewport.Hovered = hoveredRow;
+            viewport.Recolour();
+        }
+    }
+
+    /// <summary>Tick or untick one part, from wherever the click came from.</summary>
+    private void Toggle(string label)
+    {
+        if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { Toggleable: true }) return;
+
+        if (!ticked.Add(label)) ticked.Remove(label);
+        viewport.Recolour();
+    }
+
+    // ── staging ─────────────────────────────────────────────────────────────
 
     private void DrawStaging()
     {
         var ps = Strings.Parts;
-        var free = ModelPartReader.FreeLetters(parts!.AttributeNames);
+        int free = freeLetters;
 
         ImGui.TextDisabled(string.Format(ps.SelectedFmt, ticked.Count));
-        ImGui.SameLine();
-
-        using (ProteusStyle.Selected(isolating))
-            if (ImGui.Button(isolating ? ps.IsolatingBtn : ps.IsolateBtn))
-            {
-                isolating = !isolating;
-                if (isolating) PushIsolate(); else ClearIsolate();
-            }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.IsolateTip);
 
         ImGui.Spacing();
-        int left = free.Count - pending.Count;
+        int left = free - pending.Count;
         if (left <= 0)
         {
             ImGui.PushTextWrapPos(0);
@@ -314,7 +427,7 @@ public sealed class PartsPanel : IDisposable
                 pending.Add((toggleName.Trim(), [.. ticked]));
                 ticked.Clear();
                 toggleName = string.Empty;
-                if (isolating) PushIsolate();
+                viewport.Recolour();
             }
         if (!canAdd && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(ticked.Count == 0 ? ps.NeedParts : ps.NeedName);
@@ -342,10 +455,13 @@ public sealed class PartsPanel : IDisposable
     private void DrawExisting()
     {
         var ps = Strings.Parts;
-        if (existing is not { Toggles.Count: > 0 } record) return;
+        if (existing is not { Items.Count: > 0 } record) return;
 
         ProteusStyle.SectionHeader(ps.ExistingHeader);
-        ImGui.TextDisabled(string.Join(", ", record.Toggles.Keys));
+        // Listed per item, because that is how they are grouped in Penumbra: a mod with a top and a pair of
+        // trousers gets a group each, and "Bow, Belt" on one line would not say which garment either is on.
+        foreach (var item in record.Items)
+            ImGui.TextDisabled($"{item.GroupName}: {string.Join(", ", item.Toggles.Keys)}");
         if (ImGui.Button(ps.RevertBtn)) Revert();
         ImGui.Separator();
     }
@@ -366,10 +482,6 @@ public sealed class PartsPanel : IDisposable
         var ps = Strings.Parts;
         if (parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
 
-        // The preview redirects this very model's game path, and the file behind that redirect is about to
-        // be replaced. Clearing first means the character reloads from the mod's real, edited model.
-        ClearIsolate();
-
         var byLabel = parts.Parts.ToDictionary(p => p.Label, StringComparer.Ordinal);
         var plans = pending
             .Select(t => new MeshToggleService.Plan(
@@ -378,7 +490,7 @@ public sealed class PartsPanel : IDisposable
             .ToList();
 
         var result = MeshToggleService.Write(
-            root, models[modelIndex], parts, plans, models,
+            root, models[modelIndex], parts, plans, redirects,
             gamePath => textureLoader.LoadRawFile(null, gamePath));
 
         statusIsError = !result.Ok;
@@ -389,7 +501,7 @@ public sealed class PartsPanel : IDisposable
             return;
         }
 
-        status = string.Format(ps.WrittenFmt, plans.Count, MeshToggleService.DefaultGroupName);
+        status = string.Format(ps.WrittenFmt, plans.Count, result.GroupName);
         if (result.Skipped.Count > 0) status += "\n" + string.Format(ps.SkippedFmt, result.Skipped.Count);
 
         pending.Clear();
@@ -400,7 +512,6 @@ public sealed class PartsPanel : IDisposable
     private void Revert()
     {
         if (ModRoot() is not { } root) return;
-        ClearIsolate();
 
         var result = MeshToggleService.Revert(root);
         statusIsError = !result.Ok;
@@ -414,36 +525,18 @@ public sealed class PartsPanel : IDisposable
     /// <summary>
     /// Re-read everything the mod's files say, and make Penumbra do the same.
     /// <para/>
-    /// The model on disk has changed, so the part list, the thumbnails and the record are all describing a
+    /// The model on disk has changed, so the part list, the viewport and the record are all describing a
     /// file that no longer exists in that form — and Penumbra is still serving the old one until it is told
-    /// otherwise.
+    /// otherwise. A split in particular renumbers parts, so a stale list would tick the wrong ones.
     /// </summary>
     private void AfterModChange(string root)
     {
         existing = MeshToggleService.ReadRecord(root);
-        silhouette.Forget(SilhouetteKey);
+        viewport.Clear();   // so it rebuilds its pickable set against the edited model
         if (modelIndex >= 0) SelectModel(modelIndex);
 
         if (modDir != null) penumbra.ReloadModDirectory(modDir);
         compositor.TriggerRecomposite("parts-written");
     }
 
-    /// <summary>
-    /// Publish a copy of the model showing only the ticked parts. Transient — see
-    /// <see cref="CompositorService.SetPartPreview"/>; the mod's own files are never touched.
-    /// </summary>
-    private void PushIsolate()
-    {
-        if (modelBytes == null || parts == null || modelIndex < 0) return;
-        var keep = parts.Parts.Where(p => ticked.Contains(p.Label)).ToList();
-        var isolated = ModelPartWriter.Isolate(modelBytes, keep);
-        if (isolated == null) return;
-        compositor.SetPartPreview(models[modelIndex].GamePath, isolated);
-    }
-
-    private void ClearIsolate()
-    {
-        isolating = false;
-        compositor.SetPartPreview(null, null);
-    }
 }

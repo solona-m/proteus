@@ -103,10 +103,41 @@ public class MeshToggleServiceTests
         Assert.Equal(["atr_tv_a"], after.AttributeNames);
         Assert.Equal([0u, 1u], after.Parts.Select(p => p.AttributeMask));
 
-        var group = mod.Group("Parts");
+        var group = mod.Group(MeshToggleService.GroupNameFor("Body"));
         Assert.Equal("Imc", group.GetProperty("Type").GetString());
         Assert.Equal("Bow", group.GetProperty("Options")[0].GetProperty("Name").GetString());
         Assert.Equal(1, group.GetProperty("Options")[0].GetProperty("AttributeMask").GetInt32());
+    }
+
+    /// <summary>
+    /// The attribute's name has to carry the SLOT's own letter, because that is how the game finds it: an
+    /// IMC bit is matched to a model attribute by the name <c>atr_</c> + slot letter + <c>v_</c> + the bit's
+    /// letter. Tagging a pair of trousers with a top's <c>atr_tv_a</c> tags geometry the game never looks
+    /// at, and the switch does nothing at all — which is exactly how this shipped and had to be found in
+    /// game.
+    /// <para/>
+    /// The letters are the first of each slot's path suffix (met, top, glv, dwn, sho, ear, nek, wrs, rir),
+    /// confirmed against Penumbra's own accessory workaround and a survey of 4,000 installed models.
+    /// </summary>
+    [Theory]
+    [InlineData("top", "Body", "atr_tv_a")]
+    [InlineData("dwn", "Legs", "atr_dv_a")]
+    [InlineData("glv", "Hands", "atr_gv_a")]
+    [InlineData("sho", "Feet", "atr_sv_a")]
+    [InlineData("met", "Head", "atr_mv_a")]
+    public void Write_NamesTheAttributeAfterTheSlot(string suffix, string _, string expected)
+    {
+        var gamePath = $"chara/equipment/e0043/model/c0201e0043_{suffix}.mdl";
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))), ModelRel, gamePath);
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var redirects = Redirects(mod);
+
+        var result = MeshToggleService.Write(
+            mod.Root, redirects.Single(), parts, [new MeshToggleService.Plan("Belt", [parts.Parts[0]])],
+            redirects, path => path == "chara/equipment/e0043/e0043.imc" ? Imc() : null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal([expected], ModelPartReader.Read(mod.Model())!.AttributeNames);
     }
 
     /// <summary>
@@ -121,7 +152,7 @@ public class MeshToggleServiceTests
 
         Write(mod, parts, new MeshToggleService.Plan("Hood", [parts.Parts[0]]));
 
-        var entry = mod.Group("Parts").GetProperty("DefaultEntry");
+        var entry = mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("DefaultEntry");
         Assert.Equal(3, entry.GetProperty("MaterialId").GetInt32());
         Assert.Equal(7, entry.GetProperty("DecalId").GetInt32());
         Assert.Equal(5, entry.GetProperty("VfxId").GetInt32());
@@ -141,7 +172,7 @@ public class MeshToggleServiceTests
 
         Write(mod, parts, new MeshToggleService.Plan("Hood", [parts.Parts[0]]));
 
-        var group = mod.Group("Parts");
+        var group = mod.Group(MeshToggleService.GroupNameFor("Body"));
         int def = group.GetProperty("DefaultEntry").GetProperty("AttributeMask").GetInt32();
         int option = group.GetProperty("Options")[0].GetProperty("AttributeMask").GetInt32();
 
@@ -161,7 +192,7 @@ public class MeshToggleServiceTests
         var parts = ModelPartReader.Read(mod.Model())!;
 
         var result = Write(mod, parts,
-            new MeshToggleService.Plan("Buckle", [parts.Parts.Single(p => p.Label == "1.1b")]));
+            new MeshToggleService.Plan("Buckle", [parts.Parts.Single(p => p.Label == "1.1.2")]));
 
         Assert.True(result.Ok, result.Message);
         var after = ModelPartReader.Read(mod.Model())!;
@@ -187,11 +218,11 @@ public class MeshToggleServiceTests
         Assert.True(result.Ok, result.Message);
         Assert.Equal(["atr_tv_a", "atr_tv_b"], ModelPartReader.Read(mod.Model())!.AttributeNames);
 
-        var options = mod.Group("Parts").GetProperty("Options").EnumerateArray()
+        var options = mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("Options").EnumerateArray()
             .ToDictionary(o => o.GetProperty("Name").GetString()!, o => o.GetProperty("AttributeMask").GetInt32());
         Assert.Equal(1, options["Bow"]);
         Assert.Equal(2, options["Belt"]);
-        Assert.Equal(0b11, mod.Group("Parts").GetProperty("DefaultSettings").GetInt32());
+        Assert.Equal(0b11, mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("DefaultSettings").GetInt32());
     }
 
     /// <summary>Two switches over different islands of ONE submesh — the split has to serve both at once.</summary>
@@ -203,8 +234,8 @@ public class MeshToggleServiceTests
         var parts = ModelPartReader.Read(mod.Model())!;
 
         var result = Write(mod, parts,
-            new MeshToggleService.Plan("Left", [parts.Parts.Single(p => p.Label == "1.1a")]),
-            new MeshToggleService.Plan("Right", [parts.Parts.Single(p => p.Label == "1.1c")]));
+            new MeshToggleService.Plan("Left", [parts.Parts.Single(p => p.Label == "1.1.1")]),
+            new MeshToggleService.Plan("Right", [parts.Parts.Single(p => p.Label == "1.1.3")]));
 
         Assert.True(result.Ok, result.Message);
         var subs = ModelPartReader.Read(mod.Model())!.Parts.Where(p => p.Island < 0).ToList();
@@ -226,7 +257,7 @@ public class MeshToggleServiceTests
         var parts = ModelPartReader.Read(mod.Model())!;
 
         var result = Write(mod, parts,
-            new MeshToggleService.Plan("Trim", [parts.Parts.Single(p => p.Label == "1.1a")]),
+            new MeshToggleService.Plan("Trim", [parts.Parts.Single(p => p.Label == "1.1.1")]),
             new MeshToggleService.Plan("Skirt", [parts.Parts.Single(p => p.Label == "1.2")]));
 
         Assert.True(result.Ok, result.Message);
@@ -353,9 +384,328 @@ public class MeshToggleServiceTests
         var parts = ModelPartReader.Read(mod.Model())!;
         Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]]));
 
-        var record = MeshToggleService.ReadRecord(mod.Root)!;
-        Assert.Equal("Parts", record.GroupName);
-        Assert.Equal([ModelRel], record.Files);
-        Assert.Equal("a", record.Toggles["Bow"]);
+        var item = Assert.Single(MeshToggleService.ReadRecord(mod.Root)!.Items);
+        Assert.Equal(MeshToggleService.GroupNameFor("Body"), item.GroupName);
+        Assert.Equal(43, item.SetId);
+        Assert.Equal("Body", item.Slot);
+        Assert.Equal([ModelRel], item.Files);
+        Assert.Equal("a", item.Toggles["Bow"]);
+    }
+
+    /// <summary>
+    /// A mod with two garments needs two groups and two independent letter budgets. Folded into one, the
+    /// second write replaced the first item's group with one carrying the WRONG identifier, and both
+    /// switches ended up driving the same bit.
+    /// </summary>
+    [Fact]
+    public void Write_KeepsTwoItemsInOneModApart()
+    {
+        const string legsPath = "chara/equipment/e0043/model/c0201e0043_dwn.mdl";
+        const string legsRel = "items/dwn.mdl";
+
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        // A second model, on a different slot of the same set.
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[],\"DefaultData\":{\"Files\":{"
+            + $"\"{GamePath}\":\"{ModelRel}\",\"{legsPath}\":\"{legsRel}\"" + "}}}");
+        var legsDest = Path.Combine(mod.Root, legsRel.Replace('/', Path.DirectorySeparatorChar));
+        File.WriteAllBytes(legsDest, SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+
+        var redirects = Redirects(mod);
+        byte[]? Read(string p) => p == "chara/equipment/e0043/e0043.imc" ? Imc() : null;
+
+        var top = redirects.Single(r => r.File == ModelRel);
+        var topParts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(MeshToggleService.Write(mod.Root, top, topParts,
+            [new MeshToggleService.Plan("Collar", [topParts.Parts[0]])], redirects, Read).Ok);
+
+        var legs = redirects.Single(r => r.File == legsRel);
+        var legParts = ModelPartReader.Read(mod.Model(legsRel))!;
+        Assert.True(MeshToggleService.Write(mod.Root, legs, legParts,
+            [new MeshToggleService.Plan("Belt", [legParts.Parts[0]])], redirects, Read).Ok);
+
+        // Two groups, each naming its own slot, each with exactly its own switch.
+        var bodyGroup = mod.Group(MeshToggleService.GroupNameFor("Body"));
+        var legsGroup = mod.Group(MeshToggleService.GroupNameFor("Legs"));
+        Assert.Equal("Body", bodyGroup.GetProperty("Identifier").GetProperty("EquipSlot").GetString());
+        Assert.Equal("Legs", legsGroup.GetProperty("Identifier").GetProperty("EquipSlot").GetString());
+        Assert.Equal("Collar", Assert.Single(bodyGroup.GetProperty("Options").EnumerateArray())
+            .GetProperty("Name").GetString());
+        Assert.Equal("Belt", Assert.Single(legsGroup.GetProperty("Options").EnumerateArray())
+            .GetProperty("Name").GetString());
+
+        // Each model is tagged with its OWN slot's attribute; both may use letter 'a' without colliding,
+        // because they are different items driven by different groups.
+        Assert.Equal(["atr_tv_a"], ModelPartReader.Read(mod.Model())!.AttributeNames);
+        Assert.Equal(["atr_dv_a"], ModelPartReader.Read(mod.Model(legsRel))!.AttributeNames);
+
+        Assert.Equal(2, MeshToggleService.ReadRecord(mod.Root)!.Items.Count);
+    }
+
+    /// <summary>Reusing a name would overwrite the letter the first switch is remembered by, leaving its
+    /// attribute tagged on geometry nothing can ever clear.</summary>
+    [Fact]
+    public void Write_RefusesASwitchNameTheItemAlreadyHas()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        var again = ModelPartReader.Read(mod.Model())!;
+        var result = Write(mod, again, new MeshToggleService.Plan("Bow", [again.Parts[1]]));
+
+        Assert.False(result.Ok);
+        Assert.Contains("Bow", result.Message);
+        Assert.Equal(["atr_tv_a"], ModelPartReader.Read(mod.Model())!.AttributeNames);
+    }
+
+    /// <summary>
+    /// One switch taking a submesh whole and another taking an island of it cannot both be honoured — the
+    /// island claim used to be dropped silently, writing an option that controlled nothing.
+    /// </summary>
+    [Fact]
+    public void Write_RefusesTwoSwitchesClaimingOneSubmesh()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0, Islands: 3, TrianglesPerIsland: 2))));
+        var parts = ModelPartReader.Read(mod.Model())!;
+
+        var result = Write(mod, parts,
+            new MeshToggleService.Plan("Skirt", [parts.Parts.Single(p => p.Label == "1.1")]),
+            new MeshToggleService.Plan("Belt", [parts.Parts.Single(p => p.Label == "1.1.2")]));
+
+        Assert.False(result.Ok);
+        Assert.Contains("1.1", result.Message);
+        Assert.Empty(ModelPartReader.Read(mod.Model())!.AttributeNames);
+    }
+
+    /// <summary>
+    /// A legacy record recorded no set or slot, so it could not be matched — and the next write to the same
+    /// garment added a SECOND item and a second group with the same IMC identifier. Penumbra keeps only the
+    /// first it reaches, so the new switch would report success and do nothing. The identity is recovered
+    /// from the group the legacy record names.
+    /// </summary>
+    [Fact]
+    public void Write_AdoptsALegacyRecordRatherThanAddingASecondGroup()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        // Rewrite the record in the old shape — no set, no slot — as an older build left it.
+        var sidecar = Path.Combine(mod.Root, "Proteus", MeshToggleService.RecordFile);
+        File.WriteAllText(sidecar,
+            "{\"GroupName\":\"" + MeshToggleService.GroupNameFor("Body") + "\","
+            + "\"Files\":[\"" + ModelRel + "\"],\"Toggles\":{\"Bow\":\"a\"}}");
+
+        var again = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, again, new MeshToggleService.Plan("Belt", [again.Parts[1]])).Ok);
+
+        // ONE group, carrying both switches — not two groups fighting over one identifier.
+        var groups = JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray()
+            .Where(g => g.GetProperty("Type").GetString() == "Imc").ToList();
+        Assert.Single(groups);
+        Assert.Equal(["Bow", "Belt"],
+            groups[0].GetProperty("Options").EnumerateArray()
+                .Select(o => o.GetProperty("Name").GetString()));
+
+        var item = Assert.Single(MeshToggleService.ReadRecord(mod.Root)!.Items);
+        Assert.Equal(43, item.SetId);
+        Assert.Equal("Body", item.Slot);
+    }
+
+    /// <summary>
+    /// A sibling whose submesh the author already tagged must be skipped: OR-ing our bit onto it would
+    /// leave a submesh carrying two attributes, whose combination rule this design does not assume.
+    /// </summary>
+    [Fact]
+    public void Write_SkipsASiblingThatAlreadyTagsASubmesh()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+
+        const string otherRel = "items/other.mdl";
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Multi\",\"Name\":\"Size\",\"Options\":["
+            + "{\"Name\":\"A\",\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}},"
+            + "{\"Name\":\"B\",\"Files\":{\"" + GamePath + "\":\"" + otherRel + "\"}}]}]}");
+        // Same part layout, but its second submesh is already behind the author's own attribute.
+        File.WriteAllBytes(Path.Combine(mod.Root, otherRel.Replace('/', Path.DirectorySeparatorChar)),
+            SyntheticModel.Build(["atr_tv_j"], Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(1))));
+
+        var redirects = Redirects(mod);
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var result = MeshToggleService.Write(
+            mod.Root, redirects.Single(r => r.File == ModelRel), parts,
+            [new MeshToggleService.Plan("Bow", [parts.Parts[1]])],
+            redirects, path => path == "chara/equipment/e0043/e0043.imc" ? Imc() : null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal([otherRel], result.Skipped);
+        // The sibling is untouched: still one attribute, still the author's own mask.
+        var other = ModelPartReader.Read(mod.Model(otherRel))!;
+        Assert.Equal(["atr_tv_j"], other.AttributeNames);
+        Assert.Equal([0u, 1u], other.Parts.Select(p => p.AttributeMask));
+    }
+
+    /// <summary>The record is a file a user may open; the legacy fields exist only to be read from an older
+    /// one and must not reappear as nulls beside the real data.</summary>
+    [Fact]
+    public void Write_LeavesNoNullLegacyFieldsInTheRecord()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]]));
+
+        var json = File.ReadAllText(Path.Combine(mod.Root, "Proteus", MeshToggleService.RecordFile));
+        Assert.DoesNotContain("null", json);
+        Assert.Contains("Items", json);
+    }
+
+    /// <summary>
+    /// Two IMC groups on one item are not merged — Penumbra keeps the first it reaches, ordered by
+    /// descending priority. Ours has to outrank an author's own edit for the same item, or it is never
+    /// applied at all and every switch is listed but inert.
+    /// </summary>
+    [Fact]
+    public void Write_OutranksTheModsOwnImcGroupForTheSameItem()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        // The author's own IMC edit on the same set and slot, sitting above the default priority.
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Imc\",\"Name\":\"Straps\",\"Priority\":4,"
+            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
+            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},\"Options\":[{\"Name\":\"Hide\",\"AttributeMask\":512}]}],"
+            + "\"DefaultData\":{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}}");
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        Assert.True(mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("Priority").GetInt32() > 4);
+    }
+
+    /// <summary>
+    /// A v3 folder has no Groups array to count, and the sentinel that stood in for one overflowed the
+    /// legacy writer's ordinal arithmetic into a file called group_-2147483648_….json — which reads back as
+    /// an enormous NEGATIVE ordinal, sorting the group first rather than last.
+    /// </summary>
+    [Fact]
+    public void Write_OnALegacyFolder_NumbersTheGroupFileSanely()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"), "{\"FileVersion\":3,\"Name\":\"Frock\"}");
+        File.WriteAllText(Path.Combine(mod.Root, "default_mod.json"),
+            "{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}");
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        var file = Assert.Single(Directory.GetFiles(mod.Root, "group_*.json"));
+        var number = Path.GetFileNameWithoutExtension(file).Split('_')[1];
+        Assert.True(int.TryParse(number, out var n) && n is > 0 and < 1000, $"nonsense ordinal: {number}");
+        Assert.Equal("Imc", JsonDocument.Parse(File.ReadAllText(file)).RootElement
+            .GetProperty("Type").GetString());
+    }
+
+    /// <summary>
+    /// A letter the item already uses must not be handed out again just because the model in front of the
+    /// user does not carry it. That happens when a sibling was skipped: the switch was written into the
+    /// other file, so this one's attribute table is empty and looks free. Two options on one bit flip each
+    /// other, and ticking both XORs it back to nothing.
+    /// </summary>
+    [Fact]
+    public void Write_DoesNotReuseALetterTheItemAlreadyClaimed()
+    {
+        const string otherRel = "items/other.mdl";
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0, Islands: 2, TrianglesPerIsland: 2))));
+
+        // Two files on one game path whose triangle ordering differs, so only one can ever be patched.
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Multi\",\"Name\":\"Size\",\"Options\":["
+            + "{\"Name\":\"A\",\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}},"
+            + "{\"Name\":\"B\",\"Files\":{\"" + GamePath + "\":\"" + otherRel + "\"}}]}]}");
+        File.WriteAllBytes(Path.Combine(mod.Root, otherRel.Replace('/', Path.DirectorySeparatorChar)),
+            SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: 4))));
+
+        var redirects = Redirects(mod);
+        byte[]? Read(string p) => p == "chara/equipment/e0043/e0043.imc" ? Imc() : null;
+
+        var first = ModelPartReader.Read(mod.Model())!;
+        Assert.True(MeshToggleService.Write(mod.Root, redirects.Single(r => r.File == ModelRel), first,
+            [new MeshToggleService.Plan("Belt", [first.Parts.Single(p => p.Label == "1.1.1")])],
+            redirects, Read).Ok);
+
+        // Now add a switch while the SKIPPED model is the one selected. Its table carries no attribute at
+        // all, so the letter has to come from the record instead.
+        var second = ModelPartReader.Read(mod.Model(otherRel))!;
+        Assert.Empty(second.AttributeNames);
+        Assert.True(MeshToggleService.Write(mod.Root, redirects.Single(r => r.File == otherRel), second,
+            [new MeshToggleService.Plan("Strap", [second.Parts[0]])], redirects, Read).Ok);
+
+        var item = Assert.Single(MeshToggleService.ReadRecord(mod.Root)!.Items);
+        Assert.Equal("a", item.Toggles["Belt"]);
+        Assert.Equal("b", item.Toggles["Strap"]);
+
+        // Distinct bits, or one switch would drive the other.
+        var masks = mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("Options").EnumerateArray()
+            .Select(o => o.GetProperty("AttributeMask").GetInt32()).ToList();
+        Assert.Equal(masks.Count, masks.Distinct().Count());
+    }
+
+    /// <summary>A record written before the file became per-item still has to be undoable.</summary>
+    [Fact]
+    public void Revert_UnderstandsALegacyRecord()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        var original = mod.Model();
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        // Rewrite the record in the old shape, naming the group that was actually written.
+        var sidecar = Path.Combine(mod.Root, "Proteus", MeshToggleService.RecordFile);
+        File.WriteAllText(sidecar,
+            "{\"GroupName\":\"" + MeshToggleService.GroupNameFor("Body") + "\","
+            + "\"Files\":[\"" + ModelRel + "\"],\"Toggles\":{\"Bow\":\"a\"}}");
+
+        Assert.True(MeshToggleService.Revert(mod.Root).Ok);
+        Assert.Equal(original, mod.Model());
+        Assert.Empty(JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray());
+    }
+
+    /// <summary>
+    /// Sibling files are patched with the reference model's ordinals, so a file that only AGREES ON COUNTS
+    /// must be refused — the same ordinals would otherwise tag different triangles.
+    /// </summary>
+    [Fact]
+    public void Write_SkipsASiblingWhoseTrianglesAreOrderedDifferently()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0, Islands: 2, TrianglesPerIsland: 2))));
+
+        // A second file on the same game path, same part counts, but its submesh holds one run instead of
+        // two islands — so the ordinals mean something different.
+        const string otherRel = "items/other.mdl";
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Multi\",\"Name\":\"Size\",\"Options\":["
+            + "{\"Name\":\"A\",\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}},"
+            + "{\"Name\":\"B\",\"Files\":{\"" + GamePath + "\":\"" + otherRel + "\"}}]}]}");
+        File.WriteAllBytes(Path.Combine(mod.Root, otherRel.Replace('/', Path.DirectorySeparatorChar)),
+            SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: 4))));
+
+        var redirects = Redirects(mod);
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var result = MeshToggleService.Write(
+            mod.Root, redirects.Single(r => r.File == ModelRel), parts,
+            [new MeshToggleService.Plan("Belt", [parts.Parts.Single(p => p.Label == "1.1.1")])],
+            redirects, path => path == "chara/equipment/e0043/e0043.imc" ? Imc() : null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal(1, result.FilesPatched);
+        Assert.Equal([otherRel], result.Skipped);
     }
 }

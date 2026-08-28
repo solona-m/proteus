@@ -108,13 +108,20 @@ public sealed class ModelParts
 public static class ModelPartReader
 {
     /// <summary>
-    /// Past this many islands a submesh is not offered broken up at all.
+    /// A safety bound on how finely one submesh is broken up, not a judgement about what is useful.
     /// <para/>
-    /// Not a performance limit — union-find over a few thousand triangles is nothing. It is that a submesh
-    /// which shatters into hundreds of pieces is not a garment with parts, it is chainmail or a particle
-    /// sheet, and a list of four hundred unnamed rows is worse than the single row it replaces.
+    /// It used to be 64, on the reasoning that a submesh shattering into hundreds of pieces is chainmail
+    /// rather than a garment with parts, and that a list of four hundred unnamed rows is worse than the one
+    /// row it replaces. Both halves of that were wrong. A pair of trousers with 78 belt straps in one
+    /// submesh is exactly the case this feature exists for, and it was the ONLY case the cap ever fired on —
+    /// it suppressed every island and handed back the whole 53,000-triangle piece, which is the opposite of
+    /// what was wanted. And the list stopped being the interface the moment the model became clickable:
+    /// picking a strap does not care how many other straps there are.
+    /// <para/>
+    /// So this is now only high enough to stop a degenerate model — one whose every triangle is its own
+    /// island — from building a part list the same size as its geometry.
     /// </summary>
-    public const int MaxIslands = 64;
+    public const int MaxIslands = 2048;
 
     /// <summary>
     /// How close two vertices must be to count as the same point when islands are found.
@@ -248,11 +255,18 @@ public static class ModelPartReader
 
                 // Largest first: on a garment the big island is the garment and the small ones are its
                 // trimmings, which is the order someone hunting for "the bow" wants to read.
+                //
+                // Numbered, not lettered. Letters read well for the two or three islands a tidy submesh has
+                // and then fall off a cliff: a real pair of trousers turned out to hold 78 straps in one
+                // submesh, where "a + 78" is not a letter at all but '{'.
                 int i = 0;
                 foreach (var island in islands.OrderByDescending(x => x.Count))
-                    parts.Add(Make(m, su, i, $"{label}{(char)('a' + i++)}", material,
+                {
+                    parts.Add(Make(m, su, i, $"{label}.{i + 1}", material,
                         [.. island.SelectMany(k => new[] { triArr[k * 3], triArr[k * 3 + 1], triArr[k * 3 + 2] })],
                         [.. island.Select(k => ordArr[k])], mask, pos));
+                    i++;
+                }
             }
         }
 

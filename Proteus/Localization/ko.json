@@ -1111,28 +1111,20 @@
     "message": "이 모델에 남은 스위치: 10개 중 {0}개",
     "description": ""
   },
+  "Parts.Click.Tip": {
+    "message": "모델의 한 부분을 클릭하면 켜거나 끌 수 있습니다. 드래그하면 회전, Shift+드래그하면 이동, 스크롤하면 확대·축소됩니다.",
+    "description": ""
+  },
   "Parts.Existing.Header": {
     "message": "Proteus가 이미 추가함",
     "description": ""
   },
+  "Parts.HidePieces.Fmt": {
+    "message": "조각 {0}개 ▴",
+    "description": ""
+  },
   "Parts.Intro": {
     "message": "모드의 모델에서 원하는 형상을 골라 켜기/끄기 스위치를 붙입니다. 스위치는 일반적인 Penumbra 옵션으로 모드 자체에 기록되므로 Proteus를 꺼도 계속 작동합니다.",
-    "description": ""
-  },
-  "Parts.Islands.Tip": {
-    "message": "이 부위 중 나머지와 이어져 있지 않은 조각입니다. 대개 리본, 벨트, 버클 같은 별개의 물체입니다.",
-    "description": ""
-  },
-  "Parts.Isolate.Btn": {
-    "message": "단독 표시",
-    "description": ""
-  },
-  "Parts.Isolate.Tip": {
-    "message": "선택한 부위만 캐릭터에 표시해 정확히 무엇인지 확인합니다. 모드에는 아무것도 기록되지 않으며, 다시 누르면 원래대로 돌아갑니다.",
-    "description": ""
-  },
-  "Parts.Isolating.Btn": {
-    "message": "단독 표시 중",
     "description": ""
   },
   "Parts.Mod": {
@@ -1187,6 +1179,10 @@
     "message": "되돌리기 — 원본 모델 복원",
     "description": ""
   },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "모델은 복원했지만 옵션 그룹을 제거하지 못했습니다: {0}",
+    "description": ""
+  },
   "Parts.Revert.Nothing": {
     "message": "이 모드에는 Proteus가 추가한 스위치가 없습니다.",
     "description": ""
@@ -1195,12 +1191,20 @@
     "message": "되돌렸습니다. 모델 파일 {0}개를 복원하고 옵션 그룹을 제거했습니다.",
     "description": ""
   },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} 삼각형",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "부위 {0}개 선택됨",
     "description": ""
   },
   "Parts.Shattered.Fmt": {
-    "message": "부위 {0}은(는) 서로 떨어진 조각 {1}개로 이루어져 있어 모두 나열하기에는 너무 많습니다. 부위 전체만 전환할 수 있습니다.",
+    "message": "부위 {0}은(는) 조각 {1}개로 나뉘어 있어 모두 나열할 수 없습니다. 모델을 클릭해 하나를 고르거나 부위 전체를 전환하세요.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "조각 {0}개 ▾",
     "description": ""
   },
   "Parts.Skipped.Fmt": {
@@ -1211,16 +1215,16 @@
     "message": "이름",
     "description": ""
   },
-  "Parts.Triangles.Fmt": {
-    "message": "{0:N0} 삼각형",
-    "description": ""
-  },
   "Parts.Unreadable": {
     "message": "이 모델을 읽을 수 없습니다. 변경된 내용은 없습니다.",
     "description": ""
   },
   "Parts.Write.Btn": {
     "message": "스위치를 모드에 기록",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "이 아이템에는 이미 \"{0}\" 스위치가 있습니다. 새 스위치에는 다른 이름을 지정하세요.",
     "description": ""
   },
   "Parts.Write.EditFailed.Fmt": {
@@ -1253,6 +1257,10 @@
   },
   "Parts.Write.Nothing": {
     "message": "기록할 스위치가 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "\"{0}\"과(와) \"{1}\"이(가) 모두 부위 {2}을(를) 차지합니다. 한쪽이 부위 전체를 가져가므로 별도의 스위치로 만들 수 없습니다.",
     "description": ""
   },
   "Parts.Write.Tip": {
@@ -1496,7 +1504,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "부위",
+    "message": "스위치",
     "description": ""
   },
   "Tab.Settings": {
