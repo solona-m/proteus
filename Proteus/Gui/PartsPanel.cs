@@ -45,6 +45,15 @@ public sealed class PartsPanel
 
     /// <summary>Just the models, for the picker.</summary>
     private List<PenumbraModMeta.Redirect> models = [];
+
+    /// <summary>
+    /// What the picker shows for each entry of <see cref="models"/>, resolved once when the list is built.
+    /// <para/>
+    /// Not per frame: naming a model runs <c>ContentSlot.Parse</c>, which is a compiled regex, and builds a
+    /// string — and the combo asks for the current label on every frame whether it is open or not. Same
+    /// reasoning as <see cref="Strings"/> resolving its text once per language.
+    /// </summary>
+    private List<string> modelLabels = [];
     private int modelIndex = -1;
 
     private ModelParts? parts;
@@ -176,6 +185,7 @@ public sealed class PartsPanel
         pending.Clear();
 
         models = [];
+        modelLabels = [];
         redirects = [];
         status = null;
         var root = ModRoot();
@@ -188,11 +198,17 @@ public sealed class PartsPanel
         // feature — a published model comes with the game path it claims, which is where the item's IMC
         // identity is read from when the switch is finally written.
         redirects = PenumbraModMeta.ReadAllRedirects(root);
+
+        // Grouped by item, but WITHIN an item left in the order the mod declares them, which is what the
+        // author's own group and option order is. That order is the whole point once a row is labelled by
+        // its option: sizes do not sort alphabetically into size order, and sorting on Source turned a
+        // small/medium/large list into large/medium/small. OrderBy is a stable sort, so dropping the
+        // secondary key is all it takes to keep the declaration order ReadAllRedirects already preserves.
         models = redirects
             .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.Source, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        modelLabels = ModelLabels(models);
     }
 
     private void DrawModelPicker()
@@ -205,27 +221,52 @@ public sealed class PartsPanel
         }
 
         ImGui.SetNextItemWidth(ProteusStyle.S(340f));
-        var current = modelIndex >= 0 ? ModelLabel(models[modelIndex]) : ps.PickModel;
+        var current = modelIndex >= 0 ? modelLabels[modelIndex] : ps.PickModel;
         if (ImGui.BeginCombo(ps.Model + "##partsModel", current))
         {
             for (int i = 0; i < models.Count; i++)
-                if (ImGui.Selectable(ModelLabel(models[i]) + "##m" + i, i == modelIndex) && i != modelIndex)
+                if (ImGui.Selectable(modelLabels[i] + "##m" + i, i == modelIndex) && i != modelIndex)
                     SelectModel(i);
             ImGui.EndCombo();
         }
     }
 
     /// <summary>
-    /// The slot and item a model path names, falling back to the path's own file name. The source — which
-    /// option supplies it — is appended only when there IS one, so a mod with a single always-on model reads
-    /// as one plain row.
+    /// What one model is called in the picker.
+    /// <para/>
+    /// The MOD'S OWN label leads — "Pant Size / Small" — because that is the choice being made. A mod
+    /// publishes one game path from several files precisely so the wearer can pick between them, and those
+    /// alternatives are almost always sizes; leading with the slot and set id put the one word that
+    /// distinguishes the rows ("Small") last, and a narrow combo cut it off.
+    /// <para/>
+    /// The slot is appended only to break a tie, since a mod with one garment in five sizes needs it on none
+    /// of them. See <see cref="ModelLabels"/>.
     /// </summary>
-    private static string ModelLabel(PenumbraModMeta.Redirect r)
+    internal static string ModelLabel(PenumbraModMeta.Redirect r)
+        => r.Source.Length > 0 ? r.Source : SlotOf(r);
+
+    /// <summary>The slot and set a model path names — "Legs — e0488" — or its file name if it names neither.</summary>
+    internal static string SlotOf(PenumbraModMeta.Redirect r)
+        => ContentSlot.Parse(r.GamePath) is { } p ? $"{p.Label} — {p.SetTag}" : Path.GetFileName(r.GamePath);
+
+    /// <summary>
+    /// One label per model, disambiguated only where it has to be.
+    /// <para/>
+    /// Two entries can share an option name — a mod whose "Small" option supplies both a top and a pair of
+    /// trousers gives two rows reading "Sizes / Small" — and a picker with two identical rows is worse than
+    /// a verbose one. So the slot is appended to every member of a colliding set, and to nothing else.
+    /// </summary>
+    internal static List<string> ModelLabels(IReadOnlyList<PenumbraModMeta.Redirect> models)
     {
-        var name = ContentSlot.Parse(r.GamePath) is { } p
-            ? $"{p.Label} — {p.SetTag}"
-            : Path.GetFileName(r.GamePath);
-        return r.Source.Length > 0 ? $"{name}  ({r.Source})" : name;
+        var labels = models.Select(ModelLabel).ToList();
+        var clashes = labels.GroupBy(l => l, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1).Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        for (int i = 0; i < labels.Count; i++)
+            if (clashes.Contains(labels[i]))
+                labels[i] = $"{labels[i]}  ({SlotOf(models[i])})";
+        return labels;
     }
 
     private void SelectModel(int index)

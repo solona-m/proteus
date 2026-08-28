@@ -514,6 +514,28 @@ public class PenumbraModMetaTests
         Assert.Equal(2, found.Count(r => r.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal)));
     }
 
+    /// <summary>
+    /// Declaration order is preserved, and the Toggles tab depends on it: once a model row is labelled by
+    /// the option that supplies it, the author's order IS the meaningful one — sizes do not sort
+    /// alphabetically into size order.
+    /// </summary>
+    [Fact]
+    public void ReadAllRedirects_keeps_the_manifest_order()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Trousers",
+             "Groups":[{"Type":"Single","Name":"Pant Size","Options":[
+                {"Name":"Small","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"s/dwn.mdl"}},
+                {"Name":"Medium","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"m/dwn.mdl"}},
+                {"Name":"Large","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"l/dwn.mdl"}}]}]}
+            """);
+
+        Assert.Equal(
+            ["Pant Size / Small", "Pant Size / Medium", "Pant Size / Large"],
+            PenumbraModMeta.ReadAllRedirects(tmp.Path).Select(r => r.Source));
+    }
+
     [Fact]
     public void ReadAllRedirects_reads_the_v3_layout_and_Combining_containers()
     {
