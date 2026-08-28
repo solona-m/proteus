@@ -571,6 +571,10 @@
     "message": "пропущено",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "Этот пак уже является модом Proteus. Он будет установлен ровно таким, каким его собрал автор: ничего не преобразуется, а его собственные параметры остаются в Penumbra.",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "собственное тело носителя",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "нечитаемая модель ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "«{0}» установлен. Это уже был мод Proteus, поэтому он попал внутрь ровно таким, каким его собрал автор — включён и открыт в Penumbra, где выбираются его параметры.",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {

@@ -1573,4 +1573,101 @@ public class ContentImportTests
                 w => w.Contains("only appear on a character of that race", StringComparison.Ordinal));
         }
     }
+
+    /// <summary>
+    /// A pack that is ALREADY a Proteus mod is INSTALLED, not converted — copied in byte for byte, which is
+    /// what dropping it on Penumbra would have done.
+    /// <para/>
+    /// Converting it would override a decision its author already made, and the override can be flatly
+    /// wrong. "Picklish - by Solona" is the case: nine of its models sit in SINGLE groups — Top Size
+    /// XS/S/M/L, Skirt Size Small/Medium/Large — mutually exclusive by construction, where appending is the
+    /// mechanism for wearing several options AT ONCE. It also carries two overlay option groups, a mask
+    /// colorset and a mask descriptor, which a derived sidecar would have written over.
+    /// </summary>
+    [Fact]
+    public void An_already_Proteus_pack_is_installed_unchanged_rather_than_converted()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_ring.mtrl", new SyntheticModel.Sub(0)));
+
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "Hybrid",
+              "Author": "Someone",
+              "DefaultData": { "Files": {
+                "chara/accessory/a0031/material/v0001/mt_ring.mtrl": "ring.mtrl"
+              } },
+              "Groups": [
+                { "Name": "Size", "Type": "Single", "DefaultSettings": 0, "Options": [
+                  { "Name": "Small", "Files": { "chara/accessory/a0031/model/c0201a0031_rir.mdl": "ring.mdl" } }
+                ] },
+                { "Name": "Extras", "Type": "Multi", "DefaultSettings": 1, "Options": [
+                  { "Name": "Charm", "Files": {} }
+                ] }
+              ]
+            }
+            """;
+
+            const string authored = """
+            {
+              "FormatVersion": 1,
+              "Name": "Hybrid",
+              "Author": "Someone",
+              "AmbientOcclusion": true,
+              "ColorTableRows": [ { "Row": 3, "SubRowA": { "Diffuse": "#FF0000" } } ],
+              "MaskColorTableRows": [ { "Row": 1, "SubRowA": { "Diffuse": "#00FF00" } } ],
+              "OptionGroups": [ { "PenumbraGroupName": "Fabric", "Options": [ { "Name": "Silk" } ] } ]
+            }
+            """;
+
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("ring.mtrl", Mtrl("chara/accessory/a0031/texture/ring_n.tex")),
+                ("ring.mdl", model),
+                ("Proteus/metadata.json", System.Text.Encoding.UTF8.GetBytes(authored)),
+            });
+
+            var preview = ContentImportService.Inspect(pmp);
+
+            // Recognised, and no geometry is taken over — but it is still importable, because installing it
+            // is a perfectly good thing to do with it.
+            Assert.NotNull(preview.AuthoredSidecar);
+            Assert.True(preview.InstallOnly);
+            Assert.True(preview.CanImport);
+            Assert.False(preview.AnyImportable);
+            Assert.Empty(preview.Units);
+
+            var root = Path.Combine(dir, "out");
+            ContentImportService.WriteMod(root, "Hybrid", "Someone", preview);
+
+            // The sidecar is the author's, byte for byte — not a derived one.
+            var after = JsonNode.Parse(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")))!.AsObject();
+            Assert.Single(after["OptionGroups"]!.AsArray());
+            Assert.Single(after["ColorTableRows"]!.AsArray());
+            Assert.Single(after["MaskColorTableRows"]!.AsArray());
+            Assert.True((bool)after["AmbientOcclusion"]!);
+            Assert.Null(after["ContentGroups"]);
+
+            var written = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!.AsObject();
+
+            // The model redirect stays with Penumbra: a Single group means "pick exactly one", and stripping
+            // it is what would have broken the size picker.
+            var size = written["Groups"]!.AsArray().First(g => (string?)g!["Name"] == "Size")!.AsObject();
+            Assert.Single(size["Options"]!.AsArray()[0]!["Files"]!.AsObject());
+
+            // The author's own defaults are left alone — no gate group, no cleared multi-select.
+            Assert.Equal(1, (int)written["Groups"]!.AsArray()
+                .First(g => (string?)g!["Name"] == "Extras")!["DefaultSettings"]!);
+            Assert.Equal(2, written["Groups"]!.AsArray().Count);
+
+            // Only the name the dialog asked for is written.
+            Assert.Equal("Hybrid", (string?)written["Name"]);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }

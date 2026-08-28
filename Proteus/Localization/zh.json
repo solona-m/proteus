@@ -571,6 +571,10 @@
     "message": "已跳过",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "此包已经是 Proteus 模组。它将按作者构建的原样安装——不会转换任何内容，其自身的选项仍留在 Penumbra 中。",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "穿戴者自身的身体",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "不是可读取的模型（{0}）",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "已安装“{0}”。它已经是 Proteus 模组，因此按作者构建的原样导入——已启用并在 Penumbra 中打开，选项在那里选择。",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {

@@ -571,6 +571,10 @@
     "message": "übersprungen",
     "description": ""
   },
+  "Content.AlreadyProteus": {
+    "message": "Dieses Paket ist bereits ein Proteus-Mod. Es wird genau so installiert, wie sein Autor es gebaut hat — nichts wird umgewandelt, und seine eigenen Optionen bleiben in Penumbra.",
+    "description": ""
+  },
   "Content.BodyOnly": {
     "message": "eigener Körper des Trägers",
     "description": ""
@@ -629,6 +633,10 @@
   },
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "kein lesbares Modell ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "„{0}“ installiert. Es war bereits ein Proteus-Mod und ist daher genau so hineingekommen, wie sein Autor es gebaut hat — aktiviert und in Penumbra geöffnet, wo seine Optionen gewählt werden.",
     "description": ""
   },
   "ContentImport.Result.Ok.Fmt": {

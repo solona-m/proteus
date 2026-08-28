@@ -571,6 +571,10 @@
     "message": "skipped",
     "description": "A table cell marking a piece that will not be imported. Very tight space - one short word."
   },
+  "Content.AlreadyProteus": {
+    "message": "This pack is already a Proteus mod. It will be installed exactly as its author built it — nothing is converted, and its own options stay in Penumbra where they are.",
+    "description": "Import preview. Shown instead of the piece table when the picked .pmp already carries a Proteus sidecar: it is copied in unchanged rather than converted. Not a warning."
+  },
   "Content.BodyOnly": {
     "message": "wearer's own body",
     "description": "A table cell: every mesh in this piece is the body the pack was fitted to, which Proteus leaves to the character's own skin. Not an error - shown dimmed, not in the warning colour. Very tight space."
@@ -630,6 +634,10 @@
   "ContentImport.Problem.Unreadable.Fmt": {
     "message": "not a readable model ({0})",
     "description": "Why one piece was skipped, shown in a tooltip. {0} is the error message."
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "Installed \"{0}\". It was already a Proteus mod, so it went in exactly as its author built it — enabled and opened in Penumbra, where its options are chosen.",
+    "description": "Import result for a pack that was already a Proteus mod and so was installed unchanged. {0} is the mod folder name."
   },
   "ContentImport.Result.Ok.Fmt": {
     "message": "Imported \"{0}\" — pieces: {1}{2}. Enabled it and opened it in Penumbra. Its options are chosen in Penumbra, and every one you select is worn at once.",
