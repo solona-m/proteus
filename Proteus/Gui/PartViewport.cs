@@ -151,7 +151,15 @@ public sealed class PartViewport : IDisposable
         if (wrap == null) { ImGui.Dummy(size); return null; }
 
         var origin = ImGui.GetCursorScreenPos();
-        ImGui.Image(wrap.Handle, size);
+
+        // An INVISIBLE BUTTON with the image painted into its rect, not a bare Image.
+        //
+        // ImGui moves a window when a drag begins on it and no item takes the press. An Image submits an
+        // item — so hovering and hit-testing work — but it is not clickable, never becomes the ACTIVE item,
+        // and so the press falls straight through to the window: turning the model dragged the whole Proteus
+        // window instead. A button is clickable, claims the press, and the window stays put.
+        ImGui.InvisibleButton("##viewportSurface", size);
+        ImGui.GetWindowDrawList().AddImage(wrap.Handle, origin, origin + size);
 
         string? clicked = null;
         PointerOverModel = ImGui.IsItemHovered();
@@ -166,10 +174,6 @@ public sealed class PartViewport : IDisposable
 
             ImGui.SetMouseCursor(label != null ? ImGuiMouseCursor.Hand : ImGuiMouseCursor.Arrow);
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-            {
-                dragging = true; dragMoved = false; dragFrom = ImGui.GetMousePos();
-            }
             if (ImGui.GetIO().MouseWheel != 0)
             {
                 zoom = Math.Clamp(zoom * MathF.Pow(0.9f, ImGui.GetIO().MouseWheel), 0.15f, 6f);
@@ -178,13 +182,21 @@ public sealed class PartViewport : IDisposable
         }
         else if (Hovered != null) { Hovered = null; coloursDirty = true; }
 
+        // Driven by the BUTTON'S own state, not raw mouse buttons: a press that began somewhere else in the
+        // window — the part list, the tab bar — must not steer the camera, and IsItemActive is exactly the
+        // question "is this button the one being held".
+        if (ImGui.IsItemActivated())
+        {
+            dragging = true; dragMoved = false; dragFrom = ImGui.GetMousePos();
+        }
+
         if (dragging)
         {
             var now = ImGui.GetMousePos();
             var moved = now - dragFrom;
             if (moved.LengthSquared() > 9f) dragMoved = true;
 
-            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            if (ImGui.IsItemActive())
             {
                 if (dragMoved)
                 {
