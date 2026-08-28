@@ -389,17 +389,40 @@ public static class SecondSkinWriter
     /// assuming a fixed layout — vanilla and modded models declare different offsets and types (half vs
     /// float, compressed positions), so a fixed layout skins the wrong bytes as garbage.
     /// </summary>
-    private readonly record struct VElem(byte Stream, byte Offset, byte Type, byte Usage, byte UsageIndex);
+    internal readonly record struct VElem(byte Stream, byte Offset, byte Type, byte Usage, byte UsageIndex);
 
     // Vertex Usage ids (FFXIV mdl).
-    private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2,
-                       UseNormal = 3, UseUV = 4, UseTangent2 = 5, UseTangent1 = 6, UseColor = 7;
+    internal const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2,
+                        UseNormal = 3, UseUV = 4, UseTangent2 = 5, UseTangent1 = 6, UseColor = 7;
 
-    /// <summary>A parsed body part.</summary>
-    private sealed class Source
+    /// <summary>
+    /// A parsed body part.
+    /// <para/>
+    /// Internal rather than private because two other services read a model through this parser rather than
+    /// writing a second one: <see cref="ModelPartReader"/>, which lists a model's toggleable pieces, and
+    /// <see cref="ModelAttributeWriter"/>, which edits its attribute table in place. Every offset either
+    /// needs is already computed here, and a duplicate walk of a format this fiddly would be a second thing
+    /// to get wrong.
+    /// </summary>
+    internal sealed class Source
     {
         public required byte[] S;
         public int Mh, MeshStart, SubmeshStart, Vb, Ib, StrBlock, MatOffStart;
+
+        /// <summary>End of the vertex-declaration block — where the string block's count and size live
+        /// (<c>DeclEnd+0</c> and <c>DeclEnd+4</c>), and so where a string-block edit starts measuring.</summary>
+        public int DeclEnd;
+
+        /// <summary>Declared size of the string block, at <c>DeclEnd+4</c>.</summary>
+        public uint StrSize;
+
+        /// <summary>First of the three 60-byte LOD structs. Their vertex/index data offsets are ABSOLUTE, so
+        /// anything that changes the file's length ahead of them has to shift them.</summary>
+        public int LodStart;
+
+        /// <summary>The attribute name-offset table, which the format puts BETWEEN the meshes and the
+        /// submeshes.</summary>
+        public int AttrStart;
         public ushort MeshCount, SubmeshCount, BoneCount, MatCount;
         public VElem[][] Decls = [];      // one element list per mesh (declCount == meshCount)
         public List<string> MatNames = [];
@@ -1271,7 +1294,7 @@ public static class SecondSkinWriter
         return false;
     }
 
-    private static Source Parse(byte[] s)
+    internal static Source Parse(byte[] s)
     {
         uint U32(int o) => BitConverter.ToUInt32(s, o);
         ushort U16(int o) => BitConverter.ToUInt16(s, o);
@@ -1413,6 +1436,10 @@ public static class SecondSkinWriter
             MatNames = matNames,
             S = s,
             Mh = mh,
+            DeclEnd = declEnd,
+            StrSize = strSize,
+            LodStart = lodStart,
+            AttrStart = attrStart,
             MeshStart = meshStart,
             SubmeshStart = submeshStart,
             Vb = (int)vtxOff,
@@ -1925,7 +1952,7 @@ public static class SecondSkinWriter
     /// four floats. Covers the types skin meshes actually use for position/normal/uv (float, half, and
     /// the normalized integer forms); unknown types leave the destination zeroed.
     /// </summary>
-    private static void ReadTyped(byte[] s, int addr, byte type, Span<float> o)
+    internal static void ReadTyped(byte[] s, int addr, byte type, Span<float> o)
     {
         o.Clear();
         float H(int a) => (float)BitConverter.ToHalf(s, a);

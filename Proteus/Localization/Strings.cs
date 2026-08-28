@@ -46,6 +46,7 @@ public static class Strings
     public static ModsListStrings ModsList { get; private set; } = new();
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
     public static ColorsStrings     Colors     { get; private set; } = new();
+    public static PartsStrings      Parts      { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -67,6 +68,7 @@ public static class Strings
         ModsList = new ModsListStrings();
         ColorPanel = new ColorPanelStrings();
         Colors     = new ColorsStrings();
+        Parts      = new PartsStrings();
     }
 }
 
@@ -88,6 +90,7 @@ public sealed class TabStrings
     public readonly string Bindings = Loc.Localize("Tab.Bindings", "Bindings");
     public readonly string Create   = Loc.Localize("Tab.Create", "Create");
     public readonly string Import   = Loc.Localize("Tab.Import", "Import");
+    public readonly string Parts    = Loc.Localize("Tab.Parts", "Toggles");
     public readonly string Export   = Loc.Localize("Tab.Export", "Export");
     public readonly string Settings = Loc.Localize("Tab.Settings", "Settings");
 }
@@ -900,4 +903,94 @@ public sealed class FooterStrings
     /// </summary>
     public readonly string LastCompositeFmt = Loc.Localize("Footer.LastComposite.Fmt",
         "Last composite: {0}   textures patched: {1}   mods: {2}");
+}
+
+/// <summary>
+/// The Parts tab: picking geometry out of a mod's model and putting it behind a toggle.
+/// <para/>
+/// The vocabulary matters here and is deliberately not the format's. A user does not know what a submesh is
+/// and should not have to; they know there is a bow on the dress and they want to take it off. So the panel
+/// says "part" throughout, numbers them the way a modder writes them (1.1, 1.2) because that is the one
+/// notation the surrounding community already shares, and shows a picture of each.
+/// </summary>
+public sealed class PartsStrings
+{
+    public readonly string Intro = Loc.Localize("Parts.Intro",
+        "Pick geometry out of a mod's model and give it an on/off switch. The switch is written into the " +
+        "mod itself as an ordinary Penumbra option, so it keeps working with Proteus turned off.");
+
+    public readonly string Mod   = Loc.Localize("Parts.Mod", "Mod");
+    public readonly string Model = Loc.Localize("Parts.Model", "Model");
+
+    public readonly string PickMod   = Loc.Localize("Parts.PickMod", "Choose a mod");
+    public readonly string PickModel = Loc.Localize("Parts.PickModel", "Choose a model");
+
+    public readonly string NoModels = Loc.Localize("Parts.NoModels",
+        "This mod publishes no models, so there is no geometry to split up.");
+
+    public readonly string Unreadable = Loc.Localize("Parts.Unreadable",
+        "This model could not be read. Nothing has been changed.");
+
+    public readonly string ClickTip = Loc.Localize("Parts.Click.Tip",
+        "Click a piece of the model to switch it on or off. Drag to turn it, shift-drag to move it, scroll " +
+        "to zoom.");
+
+    /// <summary>Material and size beside a part's checkbox. {0} is a file name, {1} a triangle count.</summary>
+    public readonly string RowFmt = Loc.Localize("Parts.Row.Fmt", "{0} · {1:N0} tris");
+
+    public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
+        "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +
+        "one, or switch the whole part.");
+
+    public readonly string AlreadyGatedTip = Loc.Localize("Parts.AlreadyGated.Tip",
+        "The mod's author already put this part behind one of its own switches, so it cannot take another.");
+
+    /// <summary>Expander on a submesh row. {0} is how many separate pieces it holds.</summary>
+    public readonly string ShowPiecesFmt = Loc.Localize("Parts.ShowPieces.Fmt", "{0} pieces ▾");
+
+    public readonly string HidePiecesFmt = Loc.Localize("Parts.HidePieces.Fmt", "{0} pieces ▴");
+
+    public readonly string SelectedFmt = Loc.Localize("Parts.Selected.Fmt", "{0} part(s) ticked");
+
+    public readonly string BudgetFmt = Loc.Localize("Parts.Budget.Fmt", "{0} of 10 switches left on this model");
+
+    public readonly string NoBudget = Loc.Localize("Parts.NoBudget",
+        "This model has no switch slots left. The game gives each item ten, and this one's author has " +
+        "used them all.");
+
+    public readonly string ToggleName = Loc.Localize("Parts.ToggleName", "Name") + "###partsToggleName";
+
+    public readonly string AddBtn = Loc.Localize("Parts.Add.Btn", "Make a switch from the ticked parts");
+
+    public readonly string NeedName  = Loc.Localize("Parts.NeedName", "Give the switch a name first.");
+    public readonly string NeedParts = Loc.Localize("Parts.NeedParts", "Tick the parts this switch should hide.");
+
+    public readonly string RemoveBtn = Loc.Localize("Parts.Remove.Btn", "Remove");
+
+    public readonly string PendingHeader = Loc.Localize("Parts.Pending.Header", "Switches to write");
+
+    public readonly string PendingFmt = Loc.Localize("Parts.Pending.Fmt", "{0} — {1}");
+
+    public readonly string NotWrittenYet = Loc.Localize("Parts.NotWrittenYet",
+        "Nothing has been written to the mod yet.");
+
+    public readonly string WriteBtn = Loc.Localize("Parts.Write.Btn", "Write the switches into the mod");
+
+    public readonly string WriteTip = Loc.Localize("Parts.Write.Tip",
+        "Edits the mod's model and adds a Penumbra option group to it. The original model is kept, so this " +
+        "can be undone.");
+
+    public readonly string WrittenFmt = Loc.Localize("Parts.Written.Fmt",
+        "Done. {0} switch(es) are now in this mod's own Penumbra settings, under \"{1}\".");
+
+    public readonly string SkippedFmt = Loc.Localize("Parts.Skipped.Fmt",
+        "{0} other model file(s) for this item were left alone, because their parts are arranged " +
+        "differently and the same edit would land on the wrong geometry.");
+
+    public readonly string ExistingHeader = Loc.Localize("Parts.Existing.Header", "Already added by Proteus");
+
+    public readonly string RevertBtn = Loc.Localize("Parts.Revert.Btn", "Undo — restore the original models");
+
+    public readonly string RevertedFmt = Loc.Localize("Parts.Reverted.Fmt",
+        "Undone. {0} model file(s) restored, and the option group removed.");
 }
