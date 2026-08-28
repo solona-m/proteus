@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "绑定到设计",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "叠加与改色",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "任意部件开关",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "无需装备栏穿戴",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "叠加合成器",
+    "message": "叠加 · 配饰 · 开关 · 绑定",
     "description": ""
   },
   "Band.Pill.Disabled": {

@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "디자인에 연결",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "무엇이든 덧씌우고 색 변경",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "무엇이든 끄기",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "장비 칸 없이 착용",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "오버레이 컴포지터",
+    "message": "덧씌우기 · 장식 · 스위치 · 연결",
     "description": ""
   },
   "Band.Pill.Disabled": {

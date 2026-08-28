@@ -238,10 +238,12 @@ public class StatusWindow : Window
             // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
             // doesn't shrink the window (it's AlwaysAutoResize).
             MinimumSize = new System.Numerics.Vector2(520, 80),
-            // 760, not the old 700: the header band adds a fixed ~46px, and at 700 the tallest tab
-            // (Settings) would start clipping into a scrollbar this window has never had.
+            // 774, not the old 700: the header band adds a fixed ~60px, and at 700 the tallest tab
+            // (Settings) would start clipping into a scrollbar this window has never had. Raised by the
+            // 14px the band itself gained when its caption became the capability row, so the margin
+            // Settings was given at 760 survives that change rather than being quietly spent.
             // Unscaled on purpose — Dalamud's window host multiplies these by the global UI scale itself.
-            MaximumSize = new System.Numerics.Vector2(1100, 760),
+            MaximumSize = new System.Numerics.Vector2(1100, 774),
         };
 
         // Free native chrome: the same two destinations as the band's button and the installer's gear,
@@ -445,7 +447,8 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The wordmark, the live status pills, and the Discord link, laid into the band's rect.
+    /// The wordmark, the capability row (<see cref="CapabilityStrip"/>), the live status pills, and the
+    /// Discord link, laid into the band's rect.
     /// <para/>
     /// This absorbs what used to be two separate pieces: a status banner that rendered NOTHING in the
     /// normal case (so the window opened onto a bare tab bar with no identity), and a right-aligned
@@ -460,11 +463,12 @@ public class StatusWindow : Window
         var padY = ProteusStyle.S(5f);
 
         // The Discord button's left edge is resolved FIRST, because everything else in the band is laid
-        // out against it. Both the caption and the download status can outgrow the space available — the
-        // caption because Dalamud's font size is configurable independently of UI scale, the status
-        // because the failure path reports an arbitrary error string — and either one would otherwise run
-        // underneath the right-aligned button, which paints over it. Measured outside the wordmark's font
-        // scope so it matches the font the button is actually drawn in.
+        // out against it. Both the capability row and the download status can outgrow the space available —
+        // the row because Dalamud's font size is configurable independently of UI scale (and because a
+        // translation runs longer than the English), the status because the failure path reports an
+        // arbitrary error string — and either one would otherwise run underneath the right-aligned button,
+        // which paints over it. Measured outside the wordmark's font scope so it matches the font the
+        // button is actually drawn in.
         const string label = "Discord";
         var btnW = ImGui.CalcTextSize(label).X + (ImGui.GetStyle().FramePadding.X * 2);
         var btnH = ImGui.GetFrameHeight();
@@ -477,13 +481,33 @@ public class StatusWindow : Window
 
         var afterMark = ImGui.GetItemRectMax().X;
 
-        // Caption under the wordmark. Deliberately NOT carrying the version: the title bar renders the
-        // same assembly version a few pixels above (see the base() call), and saying it twice in one
-        // corner of the window is noise. Still ellipsized, because Dalamud's font size is configurable
-        // independently of UI scale — a large enough font runs even this under the Discord button.
-        var captionX = min.X + padX;
-        ImGui.SetCursorScreenPos(new Vector2(captionX, ImGui.GetItemRectMax().Y - ProteusStyle.S(2f)));
-        ImGui.TextDisabled(ProteusStyle.Ellipsize(Strings.Band.Caption, btnX - captionX - padX));
+        // ── capability row ───────────────────────────────────────────────────
+        // What used to be a one-phrase caption ("overlay compositor"), which was accurate at launch and
+        // now covers about a quarter of the plugin. Deliberately still NOT carrying the version: the title
+        // bar renders the same assembly version a few pixels above (see the base() call), and saying it
+        // twice in one corner of the window is noise.
+        //
+        // rowY comes from the wordmark's MEASURED bottom rather than a constant, because Dalamud's font
+        // size is configurable independently of UI scale — the same hazard the ellipsis budgets below guard
+        // against, and a hardcoded offset would let a large body font collide with the wordmark.
+        var rowX = min.X + padX;
+        var rowY = ImGui.GetItemRectMax().Y + ProteusStyle.S(2f);
+        var strip = CapabilityStrip.Draw(new Vector2(rowX, rowY), btnX - rowX - padX);
+
+        // Icons alone are not self-explanatory, so the narrow layout owes the user words: the hovered
+        // item's label, or the fallback caption when nothing is hovered. Ellipsized and length-guarded for
+        // the same reasons the pills below are — Ellipsize returns "" when not even the ellipsis fits, and
+        // drawing that would leave a stray gap rather than text.
+        if (strip.Collapsed)
+        {
+            var readoutX = strip.Right + padX;
+            var readout  = ProteusStyle.Ellipsize(strip.Hovered ?? Strings.Band.Caption, btnX - readoutX - padX);
+            if (readout.Length > 0)
+            {
+                ImGui.SetCursorScreenPos(new Vector2(readoutX, rowY));
+                ImGui.TextDisabled(readout);
+            }
+        }
 
         // ── status pills ─────────────────────────────────────────────────────
         // Only when something needs doing. There used to be a green "active" pill here so the band never

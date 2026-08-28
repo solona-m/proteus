@@ -1,7 +1,23 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Bind it all to a design",
+    "description": "Glamourer design bindings. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  },
+  "Band.Cap.Overlay": {
+    "message": "Overlay & recolour anything",
+    "description": "Compositing overlays and editing their colours. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  },
+  "Band.Cap.Toggle": {
+    "message": "Toggle anything off",
+    "description": "Adding on/off switches to any mod's geometry. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  },
+  "Band.Cap.Wear": {
+    "message": "Wear anything, no slot",
+    "description": "Wearing part of a mod without spending a gear slot. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  },
   "Band.Caption": {
-    "message": "overlay compositor",
-    "description": "Small caption under the PROTEUS wordmark. Very tight space - it is ellipsised if it does not fit."
+    "message": "overlay · accessorize · toggle · bind",
+    "description": "Fallback text in the header band, shown only when the capability labels have been hidden for width and nothing is hovered. Very tight space - it is ellipsised if it does not fit."
   },
   "Band.Pill.Disabled": {
     "message": "disabled",

@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Alles an ein Design binden",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "Alles überlagern & umfärben",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "Alles abschaltbar",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "Tragen ohne Ausrüstungsplatz",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "Overlay-Compositor",
+    "message": "überlagern · schmücken · schalten · binden",
     "description": ""
   },
   "Band.Pill.Disabled": {

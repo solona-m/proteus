@@ -879,7 +879,18 @@ public sealed class BandStrings
 {
     // The wordmark ("PROTEUS") and the Discord button are brand names and are deliberately absent —
     // they are never translated.
-    public readonly string Caption = Loc.Localize("Band.Caption", "overlay compositor");
+
+    // Shown only when the capability row below has had to drop its labels and nothing is hovered, so this
+    // is the narrow-window fallback rather than the usual second line.
+    public readonly string Caption = Loc.Localize("Band.Caption", "overlay · accessorize · toggle · bind");
+
+    // The four capabilities named across the band's second line. Length is not cosmetic here: the row is
+    // measured every frame and hides ALL FOUR labels the moment they stop fitting, so a translation much
+    // longer than the English costs the whole row at window sizes where the English still shows.
+    public readonly string CapOverlay = Loc.Localize("Band.Cap.Overlay", "Overlay & recolour anything");
+    public readonly string CapWear    = Loc.Localize("Band.Cap.Wear",    "Wear anything, no slot");
+    public readonly string CapToggle  = Loc.Localize("Band.Cap.Toggle",  "Toggle anything off");
+    public readonly string CapBind    = Loc.Localize("Band.Cap.Bind",    "Bind it all to a design");
 
     public readonly string SettingsTip    = Loc.Localize("Band.Settings.Tip", "Settings");
     public readonly string RecompositeTip = Loc.Localize("Band.Recomposite.Tip", "Recomposite now");
