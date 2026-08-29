@@ -599,10 +599,6 @@
     "message": "Этот пак уже является модом Proteus. Он будет установлен ровно таким, каким его собрал автор: ничего не преобразуется, а его собственные параметры остаются в Penumbra.",
     "description": ""
   },
-  "Content.BodyOnly": {
-    "message": "собственное тело носителя",
-    "description": ""
-  },
   "Content.Unbound": {
     "message": "материал не привязан",
     "description": ""
@@ -1003,6 +999,110 @@
     "message": "В пакете {0} UV-раскладок, поэтому мод получает в Penumbra группу с единственным выбором «{1}» ({2}). Одновременно собирается только одна.",
     "description": ""
   },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Импортировано из пакета Atramentum Luminis «{0}».",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "В этом имени мода нет подходящих символов — используйте буквы или цифры.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "Папка мода «{0}» уже существует.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "Пакета больше нет: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Каталог модов Penumbra недоступен.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "Ни одну текстуру этого пакета не удалось прочитать при повторном проходе, поэтому ничего не записано.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "Из этого пакета нечего импортировать.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "Название «Proteus» зарезервировано — выберите другое.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "Не удалось записать мод: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "Светящаяся татуировка",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — свечение",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "Кожа автора",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — кожа автора",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}{2}, но Proteus не смог включить свечение. Отметьте его в «{3}» в Penumbra, иначе ничего не отрисуется.",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}{2}. Свечение включено; кожа автора доступна в «{3}» в Penumbra и изначально выключена.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "«{0}» — реальный игровой путь, то есть это обычный мод TexTools, а не пакет Atramentum Luminis. Установите его в Penumbra.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "её нет в блоке данных модпака.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "её альфа-канал ровный, то есть свечения в нём нет. Atramentum Luminis хранит свечение именно там, а текстура без него — обычная кожа, а не светящаяся татуировка.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "это не текстура — Atramentum Luminis содержит только их.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "это модель или материал (тип SqPack {0}), а не текстура.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "не удалось декодировать её пиксели.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus не знает тело «{0}» и не может спросить вашего персонажа, пока тот не загружен. Зайдите в игру и откройте пакет заново.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "её не удалось прочитать: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus не знает развёртку этого пакета, поэтому нанесёт рисунок на носимое вами тело ({0}) как есть, без пересчёта. Если пакет рисовался для другого тела, выйдет неверно — смените целевое тело ниже.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "«{0}» светится на {1:P0} тела. Это допустимо, но обычно означает, что у текстуры нет настоящего альфа-канала — проверьте результат перед использованием.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "Из этого пакета нечего импортировать — см. причины выше.",
+    "description": ""
+  },
   "Import.Materials.Fallback": {
     "message": "Proteus не смог прочитать список тел игры, поэтому этот импорт затронет только заведомо рабочий набор женских тел. Откройте этот пакет заново, когда войдёте в игру, чтобы охватить все расы.",
     "description": ""
@@ -1077,6 +1177,66 @@
   },
   "Import.Website.Tip": {
     "message": "Переносится на страницу мода в Penumbra.",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "путей: {0}",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "Пакет указывает, что нарисован для {0}, так что Proteus подгонит его под носимое вами тело.",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "Тело",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "На какой материал тела наносится рисунок. Proteus берёт его из пакета, если узнаёт тело, и из носимого вами — если нет. Измените, если знаете точнее.",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "светится {0:P1}",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "Импорт светящейся татуировки Atramentum Luminis (.ttmp2). Её свечение становится слоем Proteus, который можно перекрасить и приглушить, без шейдерного мода.",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "В Proteus нет фильтра по расе или полу: это раскрасит любого персонажа с телом на том же материале. Отключайте мод в Penumbra для тех, кому он не предназначен.",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "Ни одна текстура этого модпака не несёт маску свечения Atramentum Luminis.",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "Импортируется один раз, для:\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "Не удалось прочитать этот модпак: {0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinOff.Fmt": {
+    "message": "Свечение будет включено. Собственная текстура тела автора тоже импортируется — в «{0}» в Penumbra — и изначально ВЫКЛЮЧЕНА: она заменяет ваш тон кожи авторским, так что она есть, если нужны несветящиеся части татуировки.",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "пропущена",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\nПропущена: {1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "Текстур: {0} из {1}",
     "description": ""
   },
   "Mods.Ao.Off": {

@@ -30,6 +30,7 @@ public class StatusWindow : Window
     private readonly ModCreationService modCreation;
     private readonly OnionImportService onionImport;
     private readonly ContentImportService contentImport;
+    private readonly LuminisImportService luminisImport;
     // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
     private readonly TextureLoader textureLoader;
     private readonly ModExportService modExport;
@@ -157,6 +158,24 @@ public class StatusWindow : Window
     private ContentImportService.ImportPreview? _contentPreview;
     private volatile ContentImportService.PreparedImport? _contentPrepared;
 
+    // ── Atramentum Luminis (.ttmp2) import state ──
+    // A third set of fields for the same three-phase handoff, and kept apart from the other two for the
+    // reason given above: the packs describe different things and must not be imported under each other's
+    // rules.
+    private LuminisImportService.ImportPreview? _luminisPreview;
+    private volatile LuminisImportService.PreparedImport? _luminisPrepared;
+    // The body material suffix the overlays will target. Seeded from the preview on the frame the pack is
+    // picked, then owned by the user's combo — so re-seeding it per frame would fight their choice.
+    private string _luminisSuffix = "";
+    // Resolved ONCE per pick alongside the preview, like _importMaterials: the first call walks 72 game-data
+    // probes, which is not a per-frame cost.
+    private IReadOnlyList<string>? _luminisMaterials;
+    private bool _luminisMaterialsFromGameData;
+    // A registration Penumbra has accepted but not finished loading. Pumped every frame until it answers;
+    // see TickLuminisImport for why this one import can span frames when the other two cannot.
+    private bool _luminisAwaiting;
+    private LuminisImportService.PreparedImport? _luminisAwaited;
+
     // ── Export tab state ──
     // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
     // can reorder, and an index would then quietly point at a different mod than the one on screen.
@@ -211,6 +230,7 @@ public class StatusWindow : Window
         ModCreationService modCreation,
         OnionImportService onionImport,
         ContentImportService contentImport,
+        LuminisImportService luminisImport,
         ModExportService modExport,
         TextureLoader textureLoader,
         PartsPanel parts)
@@ -229,6 +249,7 @@ public class StatusWindow : Window
         this.modCreation    = modCreation;
         this.onionImport    = onionImport;
         this.contentImport  = contentImport;
+        this.luminisImport  = luminisImport;
         this.textureLoader  = textureLoader;
         this.modExport      = modExport;
         this.parts          = parts;
@@ -1299,6 +1320,7 @@ public class StatusWindow : Window
     public void TickImport(bool unloading = false)
     {
         TickContentImport(unloading);
+        TickLuminisImport(unloading);
 
         var done = _importPrepared;
         if (done == null) return;
@@ -1351,6 +1373,67 @@ public class StatusWindow : Window
         if (!IsOpen) Show();
     }
 
+    /// <summary>
+    /// The Atramentum Luminis half of <see cref="TickImport"/>. Unlike the other two this can span several
+    /// frames after the write: Penumbra loads an added mod asynchronously and will not enable one it is
+    /// still reading, so the registration is pumped until it answers. Twenty megabytes of overlay art is
+    /// enough for that to take a moment.
+    /// </summary>
+    private void TickLuminisImport(bool unloading)
+    {
+        if (_luminisAwaiting)
+        {
+            // Nothing to pump into during teardown: there are no more frames, no one to read a status
+            // message, and Pump would open Penumbra and schedule a recomposite into half-disposed services
+            // — the very things `quiet` exists to prevent. The mod is already added, so it isn't orphaned.
+            if (unloading) return;
+
+            // Still loading — try again next frame. The button stays inert meanwhile, because the import
+            // genuinely is not finished.
+            if (luminisImport.Pump() is not { } pumped) return;
+            _luminisAwaiting = false;
+            FinishLuminisImport(pumped, _luminisAwaited);
+            _luminisAwaited = null;
+            return;
+        }
+
+        var done = _luminisPrepared;
+        if (done == null) return;
+        _luminisPrepared = null;
+
+        var r = luminisImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        if (r == null)
+        {
+            // Penumbra has the mod but hasn't finished loading it. Hold the busy flag and keep pumping.
+            _luminisAwaiting = true;
+            _luminisAwaited = done;
+            return;
+        }
+
+        FinishLuminisImport(r.Value, done);
+    }
+
+    private void FinishLuminisImport(
+        LuminisImportService.ImportResult r, LuminisImportService.PreparedImport? done)
+    {
+        _importBusy = false;
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        // Guarded on identity because Browse stays live during an import: if the user has since picked a
+        // different pack, that one is not the one that just finished and must not be thrown away.
+        if (r.Ok && done != null && ReferenceEquals(_luminisPreview, done.Preview))
+        {
+            _luminisPreview = null;
+            _luminisMaterials = null;
+        }
+
+        if (!IsOpen) Show();
+    }
+
     private void DrawImportTab()
     {
         var ims = Strings.Import;
@@ -1369,6 +1452,7 @@ public class StatusWindow : Window
         ImGui.PushTextWrapPos(0);
         BulletLine(cms.Intro);
         BulletLine(ims.Intro);
+        BulletLine(Strings.Luminis.Intro);
         ImGui.PopTextWrapPos();
         ImGui.Unindent();
         ImGui.Separator();
@@ -1386,7 +1470,9 @@ public class StatusWindow : Window
         if (ImGui.Button(ims.BrowseBtn))
             _fileDialog.OpenFileDialog(ims.DialogTitle,
                 FilterLabel(ims.DialogFilter)
-                    + "{" + PenumbraPackage.Extension + "," + OnionPackage.Extension + "}",
+                    + "{" + PenumbraPackage.Extension
+                    + "," + OnionPackage.Extension
+                    + "," + TexToolsPackage.Extension + "}",
                 (ok, paths) =>
                 {
                     if (!ok) return;
@@ -1404,6 +1490,13 @@ public class StatusWindow : Window
         {
             ImGui.SameLine();
             DrawContentImport(_contentPreview);
+            return;
+        }
+
+        if (_luminisPreview != null)
+        {
+            ImGui.SameLine();
+            DrawLuminisImport(_luminisPreview);
             return;
         }
 
@@ -1491,15 +1584,16 @@ public class StatusWindow : Window
     /// <summary>
     /// Read a picked pack with whichever reader its extension calls for.
     /// <para/>
-    /// Everything that is not an <c>.omp</c> goes to the Penumbra reader rather than to a third
-    /// "unsupported" arm. That arm would need a string of its own to say something
+    /// Everything that is not an <c>.omp</c> or a <c>.ttmp2</c> goes to the Penumbra reader rather than to
+    /// an "unsupported" arm of its own. That arm would need a string to say something
     /// <see cref="PenumbraPackage.Read"/> already says better — it rejects a file with no manifest as "Not a
-    /// Penumbra pack", which <see cref="LoadContentPack"/> puts on screen. A file that is neither format
+    /// Penumbra pack", which <see cref="LoadContentPack"/> puts on screen. A file that is none of the three
     /// gets a true sentence, and the tab gets no message that exists only to be wrong about.
     /// </summary>
     private void LoadPack(string path)
     {
         if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
+        else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
         else LoadContentPack(path);
     }
 
@@ -1535,6 +1629,19 @@ public class StatusWindow : Window
             // This is the same question the result colour asks, and the two must answer alike.
             if (content.CanImport && content.Warnings.Count == 0 && content.FaultyUnits == 0)
                 StartContentImport(content);
+            return;
+        }
+
+        if (_luminisPreview is { } luminis)
+        {
+            // Every texture in, nothing to warn about. The warnings this preview raises are all decisions —
+            // an unrecognised body, no race filter, a mask that covers the whole sheet — so any of them
+            // earns the second click.
+            if (luminis.AnyImportable
+             && luminis.Warnings.Count == 0
+             && luminis.Textures.All(t => t.Import)
+             && (_luminisMaterials is null or { Count: 0 } || _luminisMaterialsFromGameData))
+                StartLuminisImport(luminis);
             return;
         }
 
@@ -1615,7 +1722,10 @@ public class StatusWindow : Window
         _importPath = path;
         _importStatus = null;
         _importMaterials = null;
-        _contentPreview = null;   // the two kinds of pack are imported under different rules
+        // The three kinds of pack are imported under different rules, and a stale preview of another kind
+        // would keep drawing its own panel over this one.
+        _contentPreview = null;
+        _luminisPreview = null;
         try
         {
             var preview = onionImport.Inspect(path);
@@ -1670,6 +1780,7 @@ public class StatusWindow : Window
         _importPath = path;
         _importStatus = null;
         _importPreview = null;    // see LoadOnionPack
+        _luminisPreview = null;
         _importMaterials = null;
         try
         {
@@ -1832,6 +1943,233 @@ public class StatusWindow : Window
             {
                 _contentPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
                     null, null, 0, 0);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.ttmp2</c> into the Atramentum Luminis preview, or report why it isn't one.
+    /// <para/>
+    /// Costlier than the other two loaders — it DECODES every candidate texture, roughly 90 ms a sheet —
+    /// and paid on this one frame for the reason <see cref="LuminisImportService.Inspect"/> gives: whether
+    /// a modpack is an AL pack at all is a question about its pixels, and it is the question the user
+    /// opened the preview to have answered.
+    /// </summary>
+    private void LoadLuminisPack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _importMaterials = null;
+        _luminisMaterials = null;
+        try
+        {
+            var preview = luminisImport.Inspect(path);
+            _luminisPreview = preview;
+            _importName = ProteusName(preview.Name);
+            _importAuthor = preview.Author;
+            _luminisSuffix = preview.DefaultSuffix ?? "";
+            // Best effort: a failure here only costs the "Material targets" list, not the import, which
+            // resolves them again for itself.
+            try
+            {
+                _luminisMaterials = luminisImport.MaterialsFor(preview, NullIfEmpty(_luminisSuffix));
+                _luminisMaterialsFromGameData = luminisImport.BodiesFromGameData;
+            }
+            catch { /* preview only */ }
+        }
+        catch (Exception ex)
+        {
+            _luminisPreview = null;
+            _importStatus = string.Format(Strings.Luminis.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The Atramentum Luminis preview: which textures carry a glow mask, and where they will
+    /// land.</summary>
+    private void DrawLuminisImport(LuminisImportService.ImportPreview preview)
+    {
+        var ls = Strings.Luminis;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(ims.Description);
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
+        }
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(ls.TextureCountFmt,
+            preview.Textures.Count(t => t.Import), preview.Textures.Count));
+
+        // One row per PICTURE, not per manifest path: an AL pack aliases one texture to a path per race,
+        // and listing six rows for one tattoo would read as six tattoos.
+        using (var table = ImRaii.Table("##luminisTextures", 4,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var t in preview.Textures)
+                {
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(t.Label);
+                    else ImGui.TextDisabled(t.Label);
+                    if (t.Paths.Count > 1 && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(ls.PathsFmt, string.Join("\n", t.Paths)));
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Import ? string.Format(ls.SizeFmt, t.Width, t.Height) : "");
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Paths.Count > 1
+                        ? string.Format(ls.AliasesFmt, t.Paths.Count)
+                        : "");
+
+                    // The glow percentage is the evidence that this is an AL pack rather than an ordinary
+                    // texture mod, so it goes in the table where it is read, not behind a hover.
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(string.Format(ls.GlowFmt, t.GlowFraction));
+                    else ImGui.TextColored(ImportWarnColour, ls.Skipped);
+
+                    if (t.SkipReason != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(ls.SkippedReasonFmt, t.Label, t.SkipReason));
+                }
+        }
+
+        // ── which body ──
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(200);
+        var suffixes = LuminisImportService.BodySuffixes;
+        var current = string.IsNullOrEmpty(_luminisSuffix) ? (preview.DefaultSuffix ?? "") : _luminisSuffix;
+        if (ImGui.BeginCombo(ls.BodyTarget, current))
+        {
+            foreach (var s in suffixes)
+                if (ImGui.Selectable(s, string.Equals(s, current, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _luminisSuffix = s;
+                    // Re-resolved on the CHANGE, not per frame: the catalogue rebuilds a list per call.
+                    try
+                    {
+                        _luminisMaterials = luminisImport.MaterialsFor(preview, s);
+                        _luminisMaterialsFromGameData = luminisImport.BodiesFromGameData;
+                    }
+                    catch { _luminisMaterials = null; }
+                }
+            // A body the combo doesn't list — the wearer is on something exotic — is still the live choice
+            // and has to be selectable, or picking anything else would be a one-way door.
+            if (!suffixes.Contains(current, StringComparer.OrdinalIgnoreCase) && current.Length > 0)
+                if (ImGui.Selectable(current, true)) _luminisSuffix = current;
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ls.BodyTargetTip);
+
+        var lead = preview.Importable.FirstOrDefault();
+        if (lead is { FromWearer: false, Token: { } token })
+            ImGui.TextDisabled(string.Format(ls.BodyFromPackFmt, token));
+
+        DrawLuminisMaterials();
+
+        ImGui.Spacing();
+        using (ImRaii.Disabled(!TextureLoader.NativeEncoderAvailable))
+            ImGui.Checkbox(ims.AsTex, ref _importAsTex);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable ? ims.AsTexTip : ims.AsTexUnavailableTip);
+
+        // Said before the button: the author's skin is the surprising half of this import. Plain text, not
+        // the warning colour — both of these are true of a CORRECT import, and amber would put a caution
+        // under a green result line and make the two look like they disagreed.
+        if (preview.AnyImportable)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(string.Format(ls.SkinOffFmt, LuminisImportService.GroupName));
+            ImGui.Spacing();
+            ImGui.TextUnformatted(ls.NoRaceFilter);
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartLuminisImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : ls.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    /// <summary>The material paths the imported overlays will claim, collapsed by default. The Onion
+    /// counterpart groups by layout; there is only ever one here, so this is the flat list.</summary>
+    private void DrawLuminisMaterials()
+    {
+        var mats = _luminisMaterials;
+        if (mats == null || mats.Count == 0) return;   // unresolved or unreadable — the import still works
+
+        var ims = Strings.Import;
+
+        // Outside the collapsing header, for the same reason as the Onion one: a fallback list is exactly
+        // what the user won't expand to check, and it silently names no male body.
+        if (!_luminisMaterialsFromGameData)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, ims.FallbackBodies);
+            ImGui.PopTextWrapPos();
+        }
+
+        if (!ImGui.CollapsingHeader(string.Format(ims.MaterialTargetsFmt, mats.Count) + "###luminisMats"))
+            return;
+
+        ImGui.TextWrapped(_luminisMaterialsFromGameData ? ims.MaterialsFromGame : ims.MaterialsFallbackNote);
+        foreach (var p in mats)
+        {
+            ImGui.Bullet();
+            ImGui.TextUnformatted(Path.GetFileName(p));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
+        }
+    }
+
+    /// <summary>Hand the decode and write to the pool; <see cref="TickLuminisImport"/> registers what comes
+    /// back.</summary>
+    private void StartLuminisImport(LuminisImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        var (name, author, asTex, suffix) =
+            (_importName, _importAuthor, _importAsTex, NullIfEmpty(_luminisSuffix));
+        Task.Run(() =>
+        {
+            try { _luminisPrepared = luminisImport.Prepare(preview, name, author, asTex, suffix); }
+            catch (Exception ex)
+            {
+                _luminisPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, [], 0, 0);
             }
         });
     }
@@ -4106,7 +4444,8 @@ public class StatusWindow : Window
     /// mode didn't cross the Glow boundary — so swapping one effect for another keeps the user's tuning.</summary>
     private static void ApplyGlowTransition(List<ColorTableRowPreset> rows, RenderMode before, RenderMode after)
     {
-        if (before != RenderMode.Glow && after == RenderMode.Glow) SetRowsEmissive(rows, 1.5f, "#FFFFFF");
+        if (before != RenderMode.Glow && after == RenderMode.Glow)
+            SetRowsEmissive(rows, RenderModeInference.GlowEmissive, RenderModeInference.GlowEmissiveColour);
         else if (before == RenderMode.Glow && after != RenderMode.Glow) SetRowsEmissive(rows, 0f);
     }
 

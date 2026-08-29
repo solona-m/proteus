@@ -140,6 +140,51 @@ public sealed class LocalizationTests
     }
 
     /// <summary>
+    /// The FORMAT SPECIFIER on each placeholder has to survive translation, even though the order does not.
+    /// <para/>
+    /// <see cref="PlaceholderIndicesMatchEnglish"/> cannot see this: it reduces every placeholder to its
+    /// index, so <c>{1}</c> and <c>{1:P0}</c> compare equal and a dropped specifier passes. It is not a
+    /// cosmetic difference — <c>:P0</c> turns 0.95 into "95 %", and without it the sentence reads "glows
+    /// across 0.95 of the body". Caught in the wild exactly that way, in seven languages at once.
+    /// <para/>
+    /// A specifier is the machine-readable half of a placeholder and is never a translator's to change,
+    /// unlike the order, which is theirs entirely.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    public void PlaceholderFormatSpecifiersMatchEnglish(string lang)
+    {
+        static Dictionary<int, string> Specifiers(string s)
+        {
+            var map = new Dictionary<int, string>();
+            foreach (Match m in PlaceholderRx.Matches(s))
+                map[int.Parse(m.Groups[1].Value)] = m.Value;
+            return map;
+        }
+
+        var en = Load(Source);
+        var tr = Load(lang);
+        var problems = new List<string>();
+
+        foreach (var (key, source) in en)
+        {
+            if (!tr.TryGetValue(key, out var t)) continue;   // KeysMatchEnglish reports this
+
+            // Index → the whole placeholder token, so ":P0" and ",-8" are both compared and neither is
+            // silently dropped. Keyed by index rather than positional, because reordering is allowed.
+            var expected = Specifiers(source.Message);
+            var actual   = Specifiers(t.Message);
+
+            foreach (var (index, token) in expected)
+                if (actual.TryGetValue(index, out var got) && got != token)
+                    problems.Add($"  {key}: en has \"{token}\", {lang} has \"{got}\"");
+        }
+
+        Assert.True(problems.Count == 0,
+            $"[{lang}] placeholder format mismatch:\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
     /// Actually runs <c>string.Format</c> over every <c>.Fmt</c> value, which is the only check that
     /// catches a MALFORMED brace.
     /// <para/>

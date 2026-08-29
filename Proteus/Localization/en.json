@@ -599,10 +599,6 @@
     "message": "This pack is already a Proteus mod. It will be installed exactly as its author built it — nothing is converted, and its own options stay in Penumbra where they are.",
     "description": "Import preview. Shown instead of the piece table when the picked .pmp already carries a Proteus sidecar: it is copied in unchanged rather than converted. Not a warning."
   },
-  "Content.BodyOnly": {
-    "message": "wearer's own body",
-    "description": "A table cell: every mesh in this piece is the body the pack was fitted to, which Proteus leaves to the character's own skin. Not an error - shown dimmed, not in the warning colour. Very tight space."
-  },
   "Content.Unbound": {
     "message": "unbound material",
     "description": "A table cell: the piece's mesh names a material the pack does not ship. Very tight space."
@@ -1003,6 +999,110 @@
     "message": "The pack has {0} UV layouts, so the mod gets a single-select \"{1}\" group in Penumbra ({2}). Only one composites at a time.",
     "description": "{0} is a count, {1} is the Penumbra option-group name, {2} is a comma-joined list of layout names."
   },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Imported from the Atramentum Luminis pack \"{0}\".",
+    "description": "Written into the imported mod's Penumbra description. {0} is the .ttmp2 file name. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "That mod name has no usable characters — use letters or numbers.",
+    "description": "The import was refused before anything was written: the mod name is punctuation only."
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "A mod folder named \"{0}\" already exists.",
+    "description": "The import was refused: {0} is a mod folder name already in Penumbra's mod directory."
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "The pack is no longer there: {0}",
+    "description": "The import was refused: {0} is the .ttmp2 path, which has been moved or deleted since it was picked."
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Penumbra's mod directory isn't available.",
+    "description": "The import was refused because Penumbra did not answer with its mod directory. \"Penumbra\" is a plugin name and is not translated."
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "None of this pack's textures could be read on the second pass, so nothing was written.",
+    "description": "The import was refused after the fact: every texture decoded during the preview and none of them would decode again during the write, so the mod was rolled back."
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "Nothing in this pack can be imported.",
+    "description": "The import was refused: no texture in the modpack carries a glow mask."
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "\"Proteus\" is reserved — choose a different mod name.",
+    "description": "The import was refused: \"Proteus\" is the plugin's own managed mod folder and cannot be reused. The quoted word is a folder name, not prose."
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "Failed to write the mod: {0}",
+    "description": "The import failed part-way and everything it wrote was rolled back. {0} is the underlying error, which arrives in English from the operating system."
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "Glow tattoo",
+    "description": "Name of the Penumbra option that switches the tattoo's glow on. Used when the pack has one picture; the .Fmt variant is used when it has several. Shown in Penumbra's own option list, so keep it short."
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — glow",
+    "description": "Name of the Penumbra option that switches one picture's glow on, when the pack ships several. {0} is the texture's own name, taken from the pack. Shown in Penumbra's option list, so keep it short."
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "Author's skin",
+    "description": "Name of the Penumbra option that adds the pack author's own body texture under the glow. Arrives switched off. Shown in Penumbra's own option list, so keep it short."
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — author's skin",
+    "description": "Name of the Penumbra option that adds one picture's underlying body texture, when the pack ships several. {0} is the texture's own name. Shown in Penumbra's option list, so keep it short."
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch the glow on for you. Tick it under \"{3}\" in Penumbra, or nothing will paint.",
+    "description": "Amber result line: the mod imported but Penumbra refused the option selection, so nothing renders until the user ticks it. {0} mod folder name, {1} texture count, {2} the optional \"(skipped: n)\" tail, {3} the Penumbra group name. \"Penumbra\" is a plugin name."
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}. The glow is on; the author's own skin is available under \"{3}\" in Penumbra and starts off.",
+    "description": "Green result line after a successful import. {0} mod folder name, {1} texture count, {2} the optional \"(skipped: n)\" tail, {3} the Penumbra group name. \"Penumbra\" is a plugin name."
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "\"{0}\" is a real game path, so this is an ordinary TexTools mod rather than an Atramentum Luminis pack. Install it in Penumbra instead.",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\". {0} is the path. It is a real game path, which means the modpack is an ordinary TexTools one. \"TexTools\" and \"Penumbra\" are program names. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "the modpack's data blob doesn't contain it.",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. The manifest lists the file but the modpack's data blob does not hold it."
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "its alpha channel is flat, so it carries no glow. Atramentum Luminis puts the glow there, and a texture without one is an ordinary skin rather than a glowing tattoo.",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. The texture's alpha channel carries no glow, which is where these packs put it. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "it isn't a texture — Atramentum Luminis only carries those.",
+    "description": "Why one file was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "it is a model or material (SqPack type {0}), not a texture.",
+    "description": "Why one file was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. {0} is a numeric file-type code from the game's archive format; \"SqPack\" is that format's name and is not translated."
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "its pixels couldn't be decoded.",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. The file is a texture but its pixels would not decode."
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus doesn't know the body \"{0}\", and can't ask your character which one they are wearing until they're drawn. Load in and reopen this pack.",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\". {0} is the body name the pack used, e.g. \"tbse\". Proteus normally falls back to the body the character is wearing, and cannot only when the character has not loaded yet."
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "it couldn't be read: {0}",
+    "description": "Why one texture was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. {0} is the reader's own reason and arrives in English."
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus doesn't know this pack's body layout, so it will paint the art onto the body you're wearing ({0}) exactly as it is, with no resizing. If the pack was painted for a different body it will look wrong — change the body target below if you know better.",
+    "description": "Amber warning in the Import tab. Proteus did not recognise the pack's body, so it will paint the art onto the character's current body with no resizing. {0} is a material file suffix such as \"_bibo.mtrl\" and must not be translated."
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "\"{0}\" glows across {1:P0} of the body. That is legal, but it usually means the texture has no real alpha channel — check the result before wearing it out.",
+    "description": "Amber warning in the Import tab. {0} is the texture path, {1} a percentage. Almost the whole body glowing usually means the texture has no real alpha channel rather than a very large tattoo."
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "Nothing in this pack can be imported — see the reasons above.",
+    "description": "Amber warning in the Import tab when every texture in the modpack was skipped. The per-texture reasons are listed above it."
+  },
   "Import.Materials.Fallback": {
     "message": "Proteus couldn't read the game's body list, so this import will target a known-good set of female bodies only. Reopen this pack once you're in game to pick up every race.",
     "description": "Appears in the Import tab."
@@ -1078,6 +1178,66 @@
   "Import.Website.Tip": {
     "message": "Carried into the mod's Penumbra page.",
     "description": "Tooltip. Appears in the Import tab."
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "{0} paths",
+    "description": "Table column in the Import tab. {0} is how many manifest paths point at this one picture — these packs normally ship one texture under a path per race. Keep it very short; it is a table cell."
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.",
+    "description": "Dimmed note under the body picker: the pack named its own body, so Proteus will resize the art onto whichever body the character wears. {0} is that body's name, e.g. \"bibo\", and is not translated."
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "Body",
+    "description": "Label of the combo choosing which body material the art is painted onto. Keep it to one word; the \"###\" suffix is a widget id and must be left exactly as it is."
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "Which body material the art is painted onto. Proteus picks this from the pack when it recognises the body, and from the one you're wearing when it doesn't — change it if you know the pack was made for a different one.",
+    "description": "Tooltip for the body picker. \"Proteus\" is the plugin name."
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} glows",
+    "description": "Table column in the Import tab: how much of the texture carries a glow mask. {0} is a fraction formatted as a percentage by the \"P1\" format specifier, which must be kept. Keep it very short."
+  },
+  "Luminis.Intro": {
+    "message": "Import an Atramentum Luminis glow tattoo (.ttmp2). Its glow becomes a Proteus overlay you can recolour and dim, with no shader mod needed.",
+    "description": "One of three bullets introducing the Import tab, in the same voice as the other two: what you get, not how it works. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus has no race or sex filter: this paints any character wearing a body with the same material. Turn the mod off in Penumbra for characters it wasn't painted for.",
+    "description": "Plain (not amber) note before the Import button. Deliberately not a warning: this is true of every Proteus overlay, not a fault in this pack. \"Penumbra\" is a plugin name."
+  },
+  "Luminis.NothingUsable": {
+    "message": "No texture in this modpack carries an Atramentum Luminis glow mask.",
+    "description": "Tooltip on the disabled Import button when no texture in the modpack carries a glow mask. \"Atramentum Luminis\" is the name of the older FFXIV shader mod these packs were made for; keep it as-is."
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "Imported once, for:\n{0}",
+    "description": "Tooltip listing every manifest path that points at one picture. {0} is those paths, one per line."
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "Couldn't read that modpack: {0}",
+    "description": "Shown when the picked file could not be read as a TexTools modpack at all. {0} is the reader's own reason and arrives in English."
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": "Table column in the Import tab: a texture's pixel dimensions. {0} width, {1} height. The separator is a multiplication sign, not the letter x."
+  },
+  "Luminis.SkinOff.Fmt": {
+    "message": "The glow goes on. The author's own body texture comes in too, under \"{0}\" in Penumbra, and starts OFF — it replaces your skin tone with theirs, so it is there if you want the parts of the tattoo that don't glow and ignorable if you don't.",
+    "description": "Plain (not amber) note before the Import button, saying what the import will do. {0} is the name of the option group added in Penumbra. \"Penumbra\" is a plugin name."
+  },
+  "Luminis.Skipped": {
+    "message": "skipped",
+    "description": "Table cell marking a texture that will not be imported. The reason is in its tooltip. Keep it very short and lower case."
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\nSkipped: {1}",
+    "description": "Tooltip on a skipped texture. {0} is its path and {1} the reason, which is a sentence fragment beginning in lower case."
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "Textures: {0} of {1}",
+    "description": "Header above the texture table. {0} is how many will be imported, {1} how many the modpack holds."
   },
   "Mods.Ao.Off": {
     "message": "Off",
