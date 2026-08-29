@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,7 +36,7 @@ public class UVMapDownloadService : IDisposable
     private readonly IPluginLog log;
     private readonly ResilientDownloader downloader;
     private readonly string mapsDir;
-    private readonly string? legacyMapsDir;
+    private readonly List<string> legacyMapsDirs;
     private readonly CancellationTokenSource cts = new();
 
     public UVMapDownloadState State { get; private set; } = UVMapDownloadState.Idle;
@@ -52,7 +53,7 @@ public class UVMapDownloadService : IDisposable
         this.log = log;
         downloader = new ResilientDownloader(log);
         mapsDir = Path.Combine(dataDir, "uvmaps");
-        legacyMapsDir = assemblyDir == null ? null : Path.Combine(assemblyDir, "uvmaps");
+        legacyMapsDirs = ProteusAssets.LegacyAssetDirs(assemblyDir, "uvmaps");
     }
 
     public bool MapsPresent()
@@ -84,29 +85,33 @@ public class UVMapDownloadService : IDisposable
     {
         if (migrated) return;
         migrated = true;
-        if (legacyMapsDir == null || !Directory.Exists(legacyMapsDir)) return;
-        if (string.Equals(Path.GetFullPath(legacyMapsDir), Path.GetFullPath(mapsDir),
-                          StringComparison.OrdinalIgnoreCase)) return;
 
-        foreach (var (name, _, _) in MapFiles)
+        foreach (var legacyDir in legacyMapsDirs)
         {
-            var dst = Path.Combine(mapsDir, name);
-            var src = Path.Combine(legacyMapsDir, name);
-            if (File.Exists(dst) && new FileInfo(dst).Length > 0) continue;
-            if (!File.Exists(src) || new FileInfo(src).Length == 0) continue;
+            if (!Directory.Exists(legacyDir)) continue;
+            if (string.Equals(Path.GetFullPath(legacyDir), Path.GetFullPath(mapsDir),
+                              StringComparison.OrdinalIgnoreCase)) continue;
 
-            try
+            foreach (var (name, _, _) in MapFiles)
             {
-                Directory.CreateDirectory(mapsDir);
-                // Move is a rename within a volume and a copy across one. XIVLauncher's plugin folder
-                // and AppData are usually the same volume, but nothing guarantees it.
-                try { File.Move(src, dst, overwrite: true); }
-                catch (IOException) { File.Copy(src, dst, overwrite: true); TryDelete(src); }
-                log.Information("[Proteus] Reclaimed UV map from the old plugin folder: {0}", name);
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "[Proteus] Could not reclaim {0} from the old plugin folder", name);
+                var dst = Path.Combine(mapsDir, name);
+                var src = Path.Combine(legacyDir, name);
+                if (File.Exists(dst) && new FileInfo(dst).Length > 0) continue;
+                if (!File.Exists(src) || new FileInfo(src).Length == 0) continue;
+
+                try
+                {
+                    Directory.CreateDirectory(mapsDir);
+                    // Move is a rename within a volume and a copy across one. XIVLauncher's plugin
+                    // folder and AppData are usually the same volume, but nothing guarantees it.
+                    try { File.Move(src, dst, overwrite: true); }
+                    catch (IOException) { File.Copy(src, dst, overwrite: true); TryDelete(src); }
+                    log.Information("[Proteus] Reclaimed UV map from {0}: {1}", legacyDir, name);
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] Could not reclaim {0} from {1}", name, legacyDir);
+                }
             }
         }
     }

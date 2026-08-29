@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,7 +60,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     private readonly IPluginLog log;
     private readonly ResilientDownloader downloader;
     private readonly string effectsDir;
-    private readonly string? legacyEffectsDir;
+    private readonly List<string> legacyEffectsDirs;
     private readonly CancellationTokenSource cts = new();
     private int started;
 
@@ -71,7 +72,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
         this.log = log;
         downloader = new ResilientDownloader(log);
         effectsDir = Path.Combine(dataDir, "DefaultEffects");
-        legacyEffectsDir = assemblyDir == null ? null : Path.Combine(assemblyDir, "DefaultEffects");
+        legacyEffectsDirs = ProteusAssets.LegacyAssetDirs(assemblyDir, "DefaultEffects");
     }
 
     /// <summary>
@@ -139,28 +140,35 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     /// </summary>
     private bool ReclaimFromAssemblyDir()
     {
-        if (legacyEffectsDir == null || !Directory.Exists(legacyEffectsDir)) return false;
-        if (string.Equals(Path.GetFullPath(legacyEffectsDir), Path.GetFullPath(effectsDir),
-                          StringComparison.OrdinalIgnoreCase)) return false;
-
         int moved = 0;
-        foreach (var src in Directory.EnumerateFiles(legacyEffectsDir))
+
+        foreach (var legacyDir in legacyEffectsDirs)
         {
-            var dst = Path.Combine(effectsDir, Path.GetFileName(src));
-            if (File.Exists(dst) && new FileInfo(dst).Length > 0) continue;
-            try
+            if (!Directory.Exists(legacyDir)) continue;
+            if (string.Equals(Path.GetFullPath(legacyDir), Path.GetFullPath(effectsDir),
+                              StringComparison.OrdinalIgnoreCase)) continue;
+
+            foreach (var src in Directory.EnumerateFiles(legacyDir))
             {
-                try { File.Move(src, dst, overwrite: true); }
-                catch (IOException) { File.Copy(src, dst, overwrite: true); TryDelete(src); }
-                moved++;
+                var dst = Path.Combine(effectsDir, Path.GetFileName(src));
+                if (File.Exists(dst) && new FileInfo(dst).Length > 0) continue;
+                try
+                {
+                    try { File.Move(src, dst, overwrite: true); }
+                    catch (IOException) { File.Copy(src, dst, overwrite: true); TryDelete(src); }
+                    moved++;
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] Could not reclaim starter effect {0}", Path.GetFileName(src));
+                }
             }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "[Proteus] Could not reclaim starter effect {0}", Path.GetFileName(src));
-            }
+
+            // Stop as soon as the set is complete; later siblings are older copies of the same art.
+            if (HaveEveryEffect()) break;
         }
 
-        if (moved > 0) log.Information("[Proteus] Reclaimed {0} starter effect(s) from the old plugin folder", moved);
+        if (moved > 0) log.Information("[Proteus] Reclaimed {0} starter effect(s) from an older install", moved);
         return HaveEveryEffect();
     }
 

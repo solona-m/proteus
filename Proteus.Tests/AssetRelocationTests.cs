@@ -217,6 +217,91 @@ public sealed class AssetRelocationTests : IDisposable
         Assert.Equal(expected, local.Replace(' ', '.'));
     }
 
+    // ── The real update layout ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Dalamud unpacks each plugin VERSION into its own directory and keeps the previous one around,
+    /// so on the update that first ships this relocation the assets sit in a SIBLING directory while
+    /// AssemblyLocation points at a freshly-unpacked, empty one.
+    /// <para/>
+    /// Searching only the assembly directory finds nothing on exactly that update, and every existing
+    /// user re-downloads 256 MB — the waste this whole change exists to remove, reintroduced on the
+    /// release that fixes it. A dev install hides this completely: it loads from one stable path, so
+    /// the assembly directory and the asset directory are the same place.
+    /// </summary>
+    private (string NewVersion, string OldVersion) InstalledPluginLayout()
+    {
+        var root = Path.Combine(this.root, "installedPlugins", "Proteus");
+        var oldV = Path.Combine(root, "2608.309.0.0");
+        var newV = Path.Combine(root, "2608.312.0.0");
+        Directory.CreateDirectory(oldV);
+        Directory.CreateDirectory(newV);
+        return (newV, oldV);
+    }
+
+    [Fact]
+    public void MapsPresent_ReclaimsFromThePreviousVersionDirectory()
+    {
+        var (newV, oldV) = InstalledPluginLayout();
+        foreach (var n in MapNames) Write(Path.Combine(oldV, "uvmaps", n), 64);
+
+        var present = new UVMapDownloadService(Log, DataDir, newV).MapsPresent();
+
+        Assert.True(present, "the previous version's maps must be reclaimed; finding nothing here is " +
+                             "a 256 MB re-download for every existing user on the update");
+        foreach (var n in MapNames)
+            Assert.True(File.Exists(Path.Combine(DataDir, "uvmaps", n)), $"{n} should be in the config dir");
+    }
+
+    [Fact]
+    public void Effects_ReclaimedFromThePreviousVersionDirectory()
+    {
+        var (newV, oldV) = InstalledPluginLayout();
+        foreach (var n in EffectNames) Write(Path.Combine(oldV, "DefaultEffects", n), 32);
+
+        using var svc = new DefaultEffectsDownloadService(Log, DataDir, newV);
+        svc.EnsureAsync();
+        WaitFor(() => EffectNames.All(n => File.Exists(Path.Combine(svc.EffectsDir, n))));
+
+        foreach (var n in EffectNames)
+            Assert.True(File.Exists(Path.Combine(svc.EffectsDir, n)), $"{n} should be reclaimed");
+    }
+
+    [Fact]
+    public void Reclaim_PrefersTheNewestSiblingButWillUseAnyCompleteCopy()
+    {
+        // Two old versions kept at once is the normal state, not an edge case — this machine had
+        // 2608.295.0.0 and 2608.309.0.0 side by side. Only the newer one still had the maps.
+        var (newV, _) = InstalledPluginLayout();
+        var ancient = Path.Combine(this.root, "installedPlugins", "Proteus", "2608.295.0.0");
+        foreach (var n in MapNames) Write(Path.Combine(ancient, "uvmaps", n), 32);
+
+        Assert.True(new UVMapDownloadService(Log, DataDir, newV).MapsPresent(),
+                    "a complete copy in ANY sibling is worth using; the alternative is re-downloading it");
+    }
+
+    [Fact]
+    public void LegacyAssetDirs_ListsTheOwnDirectoryFirstThenSiblings()
+    {
+        var (newV, oldV) = InstalledPluginLayout();
+
+        var dirs = ProteusAssets.LegacyAssetDirs(newV, "uvmaps");
+
+        Assert.Equal(Path.Combine(newV, "uvmaps"), dirs[0]);
+        Assert.Contains(Path.Combine(oldV, "uvmaps"), dirs);
+        // Never itself twice — the own directory is added explicitly and must be excluded from siblings.
+        Assert.Equal(dirs.Count, dirs.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void LegacyAssetDirs_ToleratesNullAndUnreadablePaths()
+    {
+        Assert.Empty(ProteusAssets.LegacyAssetDirs(null, "uvmaps"));
+        // A path whose parent does not exist must degrade to "just my own dir", not throw during load.
+        var orphan = Path.Combine(root, "nope", "deeper");
+        Assert.Equal(Path.Combine(orphan, "uvmaps"), ProteusAssets.LegacyAssetDirs(orphan, "uvmaps")[0]);
+    }
+
     // ── Sources ──────────────────────────────────────────────────────────────
 
     [Fact]
