@@ -7665,7 +7665,23 @@ public class CompositorService : IDisposable
         Dictionary<int, ColorTableRowOverride> rows,
         bool isNormal, int w, int h)
     {
-        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
+        // The row pair is `red / 17`, so there are only ever SIXTEEN distinct answers — resolved once here
+        // into flat arrays instead of per texel. The loop below runs w*h times (16.7M at 4K) six times per
+        // material, and it used to do a dictionary lookup on each, plus `new ColorTableRowOverride()` on
+        // every miss: a heap allocation per pixel, on the most common path for any index texture whose
+        // rows aren't all configured. Same shape of defect as the gear layer's per-texel FirstOrDefault.
+        const int Pairs = 16;
+        float[] aR = new float[Pairs], aG = new float[Pairs], aB = new float[Pairs], aE = new float[Pairs];
+        float[] bR = new float[Pairs], bG = new float[Pairs], bB = new float[Pairs], bE = new float[Pairs];
+        for (int p = 0; p < Pairs; p++)
+        {
+            // An absent row keeps the default-constructed values, exactly as the old per-pixel
+            // `new ColorTableRowOverride()` fallback did.
+            var pair = rows.TryGetValue(p, out var r) ? r : new ColorTableRowOverride();
+            aR[p] = pair.A.DiffuseR; aG[p] = pair.A.DiffuseG; aB[p] = pair.A.DiffuseB; aE[p] = pair.A.Emissive;
+            bR[p] = pair.B.DiffuseR; bG[p] = pair.B.DiffuseG; bB[p] = pair.B.DiffuseB; bE[p] = pair.B.Emissive;
+        }
+
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
@@ -7676,12 +7692,10 @@ public class CompositorService : IDisposable
                 int   pairIdx = idx[i]     / 17;        // red → pair 0–15
                 float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
 
-                if (!rows.TryGetValue(pairIdx, out var pair)) pair = new ColorTableRowOverride();
-
-                float dr = pair.B.DiffuseR + (pair.A.DiffuseR - pair.B.DiffuseR) * blendA;
-                float dg = pair.B.DiffuseG + (pair.A.DiffuseG - pair.B.DiffuseG) * blendA;
-                float db = pair.B.DiffuseB + (pair.A.DiffuseB - pair.B.DiffuseB) * blendA;
-                float em = pair.B.Emissive  + (pair.A.Emissive  - pair.B.Emissive)  * blendA;
+                float dr = bR[pairIdx] + (aR[pairIdx] - bR[pairIdx]) * blendA;
+                float dg = bG[pairIdx] + (aG[pairIdx] - bG[pairIdx]) * blendA;
+                float db = bB[pairIdx] + (aB[pairIdx] - bB[pairIdx]) * blendA;
+                float em = bE[pairIdx] + (aE[pairIdx] - bE[pairIdx]) * blendA;
 
                 if (!isNormal)
                 {
@@ -8969,7 +8983,19 @@ public class CompositorService : IDisposable
     internal static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
     {
         var dst = (byte[])src.Clone();
-        // rows is only read here, never mutated, so concurrent TryGetValue is safe.
+
+        // Sixteen possible row pairs, resolved once rather than looked up per texel — see
+        // ApplyIndexedOverlay. NaN marks "no row configured", which is the case the TryGetValue miss
+        // used to skip on.
+        const int Pairs = 16;
+        var opA = new float[Pairs];
+        var opB = new float[Pairs];
+        for (int p = 0; p < Pairs; p++)
+        {
+            if (rows.TryGetValue(p, out var r)) { opA[p] = r.A.Opacity; opB[p] = r.B.Opacity; }
+            else                                { opA[p] = opB[p] = float.NaN; }
+        }
+
         ParallelPixels(0, dst.Length, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
@@ -8977,9 +9003,9 @@ public class CompositorService : IDisposable
                 float a = dst[i + 3] / 255f;
                 if (a <= 0f) continue;
                 int pairIdx = idx[i] / 17;
-                if (!rows.TryGetValue(pairIdx, out var pair)) continue;
+                if (float.IsNaN(opA[pairIdx])) continue;      // no row configured for this pair
                 float blendA = idx[i + 1] / 255f;
-                float op = pair.B.Opacity + (pair.A.Opacity - pair.B.Opacity) * blendA;
+                float op = opB[pairIdx] + (opA[pairIdx] - opB[pairIdx]) * blendA;
                 if (op == 0f) continue;
                 float newA = op < 0f
                     ? a * (100f + op) / 100f
