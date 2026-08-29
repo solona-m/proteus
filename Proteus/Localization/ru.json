@@ -123,6 +123,10 @@
     "message": "[Proteus] «{0}» задаёт свечение на слое кожи. Кожа больше не может светиться, поэтому этот параметр теперь отрисовывается как тканевый слой — ему нужен свободный аксессуар, и поверхность будет выглядеть немного иначе.",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] Вы установили плагин по старому адресу репозитория. Если поменять его на https://dl.solona.info/repo.json в /xlplugins > Experimental, обновления станут быстрее, а нагрузка на GitHub снизится. Установка продолжит работать в любом случае. Это напоминание появится ещё несколько раз, а затем исчезнет.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] «{0}» задаёт свечение на наложении, для которого Proteus не может построить слой. Свечению нужен слой поверх меша, а это работает только на вашей собственной коже — теле, лице, волосах, хвосте или ушах — но не на экипировке, аксессуарах или оружии.",
     "description": ""

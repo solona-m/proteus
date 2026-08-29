@@ -682,11 +682,39 @@ public sealed class SecondSkinService
         return RemapPath(path, srcType, dstType, w, h);
     }
 
+    /// <summary>
+    /// Remapped buffers for the composite in flight, keyed by (path, srcType, dstType, size). Cleared at
+    /// the top of <see cref="Build"/>, so it never outlives one run.
+    /// <para/>
+    /// A cross-UV shell is the expensive case and it was doing the same work repeatedly: the SAME mask is
+    /// remapped by BuildAlpha, twice more in WriteTextures (the _id merge and the relief pass) and again by
+    /// BuildMaskCoverage — three or four full 4096² transfer-map remaps plus resizes, per mask, per layer.
+    /// Invisible until a gen2-UV top turned up, because a bibo→bibo shell returns on the equality
+    /// fast-path above and logs `remap 0ms`; the first gen2 top pushed the second-skin phase from ~1.0s to
+    /// 4.6s.
+    /// <para/>
+    /// Safe to share the array: every mutating consumer already clones first, which is the same contract
+    /// the no-op path relies on — it hands back TextureLoader's own cached buffer.
+    /// </summary>
+    private readonly Dictionary<(string Path, string? Src, string? Dst, int W, int H), byte[]?> remapCache = new();
+
     private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h)
     {
         var png = textureLoader.LoadPngAsRgba(path, w, h);
         if (png == null || srcType == null || dstType == null) return png;
         if (string.Equals(srcType, dstType, StringComparison.OrdinalIgnoreCase)) return png;
+
+        // Only the REMAPPING path is memoized. The two returns above are already cheap — LoadPngAsRgba has
+        // its own decode cache — and caching them would duplicate that for nothing.
+        var key = (path, srcType, dstType, w, h);
+        if (remapCache.TryGetValue(key, out var hit)) return hit;
+        var result = RemapPathCore(path, png, srcType, dstType, w, h);
+        remapCache[key] = result;
+        return result;
+    }
+
+    private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h)
+    {
 
         // Any source -> gen2 (vanilla): vanilla UV is the RIGHT HALF of bibo UV space, so convert to
         // bibo first (via transfer map when needed), crop, then resize.
@@ -770,6 +798,11 @@ public sealed class SecondSkinService
         IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
     {
         int contentIn = contentLayers?.Count ?? 0;
+
+        // Per-build, not per-session: a remapped buffer is a 4K-derived array and holding a run's worth of
+        // them across composites would dwarf the decode cache for no benefit — the inputs are re-read from
+        // TextureLoader's cache anyway, and only the repetition WITHIN one build is worth avoiding.
+        remapCache.Clear();
 
         // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
         // resets it, and several paths below return before the content loop runs — turn off the pack that

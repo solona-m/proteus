@@ -123,6 +123,10 @@
     "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] 你是通过旧的插件仓库地址安装的。在 /xlplugins > Experimental 中改为 https://dl.solona.info/repo.json 可以让更新更快，并减轻 GitHub 的负担。无论是否更改，你的安装都能继续使用。此提醒会显示几次后不再出现。",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus]“{0}”在一个 Proteus 无法为其构建层的叠加层上设置了发光。发光需要在网格之上叠加一层，而这只能用于你自己的皮肤——身体、面部、头发、尾巴或耳朵——不能用于装备、饰品或武器。",
     "description": ""

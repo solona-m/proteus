@@ -60,6 +60,22 @@ public class GlamourerBridge : IDisposable
     /// </summary>
     public event Action? LocalPlayerCustomizationChanged;
 
+    /// <summary>
+    /// Fired when Glamourer changes an equipped item or bonus item (glasses) on the local player.
+    /// <para/>
+    /// Exists because an equipment change had NO route to the compositor. It changes no mod settings, so
+    /// none of the OnModSettingChanged triggers fire; it is not Design/Reset/Reapply, so it was filtered
+    /// out below; and when Glamourer applies it without a redraw, the redraw hook's equipment-change
+    /// trigger never runs either. Measured: an equipment-only design apply produced a Design signal, a
+    /// DesignApplied finalization, and not one recomposite — leaving the second-skin shell cut for the
+    /// PREVIOUS outfit until something unrelated happened to trigger a composite.
+    /// <para/>
+    /// Consumers should treat this as AMBIENT: it fires per changed slot, so a design apply produces a
+    /// burst, and the unchanged-inputs gate is what makes that cheap. It deliberately does not carry which
+    /// slot changed — the compositor re-walks the draw object anyway, and the walk is the authority.
+    /// </summary>
+    public event Action? LocalPlayerEquipmentChanged;
+
     public GlamourerBridge(IDalamudPluginInterface pluginInterface, IObjectTable objectTable, IPluginLog log)
     {
         this.log             = log;
@@ -109,14 +125,16 @@ public class GlamourerBridge : IDisposable
     public Dictionary<Guid, string> GetDesigns()
     {
         try { return getDesignList.Invoke() ?? new(); }
-        catch (Exception ex) { log.Warning("[Proteus] GetDesignList failed: {0}", ex.Message); return new(); }
+        // The exception OBJECT, not ex.Message — see SetItem below for why: an IPC failure arrives wrapped
+        // in a TargetInvocationException whose message is a constant, and the cause is the inner one.
+        catch (Exception ex) { log.Warning(ex, "[Proteus] GetDesignList failed"); return new(); }
     }
 
     /// <summary>The serialized data for a single design (includes equipment + apply flags), or null on failure.</summary>
     public JObject? GetDesign(Guid id)
     {
         try { return getDesignJObject.Invoke(id); }
-        catch (Exception ex) { log.Warning("[Proteus] GetDesignJObject failed for {0}: {1}", id, ex.Message); return null; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] GetDesignJObject failed for {0}", id); return null; }
     }
 
     /// <summary>The current applied state of an object (default: local player, index 0), or null on failure.</summary>
@@ -127,7 +145,7 @@ public class GlamourerBridge : IDisposable
             var (ec, data) = getState.Invoke(objectIndex);
             return ec == GlamourerApiEc.Success ? data : null;
         }
-        catch (Exception ex) { log.Warning("[Proteus] GetState failed: {0}", ex.Message); return null; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] GetState failed"); return null; }
     }
 
     /// <summary>
@@ -335,6 +353,16 @@ public class GlamourerBridge : IDisposable
         if (changeType is StateChangeType.Model or StateChangeType.EntireCustomize)
         {
             LocalPlayerCustomizationChanged?.Invoke();
+            return;
+        }
+
+        // An equipped item or a bonus item (glasses) moved. Neither changes the mod set, so this is the
+        // only signal that reaches the compositor — see LocalPlayerEquipmentChanged. BonusItem matters as
+        // much as Equip: the gear shell is hosted on the facewear slot, so glasses coming off take the
+        // shell's host with them.
+        if (changeType is StateChangeType.Equip or StateChangeType.BonusItem)
+        {
+            LocalPlayerEquipmentChanged?.Invoke();
             return;
         }
 

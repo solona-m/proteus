@@ -123,6 +123,10 @@
     "message": "[Proteus] « {0} » applique une lueur sur un calque de peau. La peau ne peut plus briller, donc cette option est désormais rendue comme un calque de tissu — elle a besoin d'un accessoire libre, et sa surface aura un aspect légèrement différent.",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] Vous avez installé depuis l'ancienne URL du dépôt de plugins. La remplacer par https://dl.solona.info/repo.json dans /xlplugins > Experimental accélère les mises à jour et allège la charge sur GitHub. Votre installation continue de fonctionner dans tous les cas. Ce rappel s'affiche quelques fois, puis disparaît.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] « {0} » applique une lueur sur un calque pour lequel Proteus ne peut pas construire de couche. La lueur a besoin d'une couche par-dessus le maillage, et cela ne fonctionne que sur votre propre peau — corps, visage, cheveux, queue ou oreilles — pas sur l'équipement, les accessoires ou les armes.",
     "description": ""

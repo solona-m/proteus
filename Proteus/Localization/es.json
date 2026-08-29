@@ -123,6 +123,10 @@
     "message": "[Proteus] «{0}» aplica brillo en una capa de piel. La piel ya no puede brillar, así que esa opción se representa ahora como capa de tela: necesita un accesorio libre y su superficie se verá algo distinta.",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] Instalaste desde la URL antigua del repositorio de plugins. Cambiarla a https://dl.solona.info/repo.json en /xlplugins > Experimental hace que las actualizaciones sean más rápidas y reduce la carga en GitHub. Tu instalación seguirá funcionando de cualquier modo. Este aviso se muestra unas pocas veces y luego deja de aparecer.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] «{0}» aplica brillo en una superposición para la que Proteus no puede construir una capa. El brillo necesita una capa sobre la malla, y eso solo funciona en tu propia piel —cuerpo, cara, pelo, cola u orejas—, no en equipo, accesorios ni armas.",
     "description": ""

@@ -123,6 +123,10 @@
     "message": "[Proteus]「{0}」は肌レイヤーにグローを設定しています。肌はもう発光できないため、このオプションは布レイヤーとして描画されます。空いているアクセサリが必要になり、表面の見え方も少し変わります。",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] 古いプラグインリポジトリのURLからインストールされています。/xlplugins > Experimental で https://dl.solona.info/repo.json に変更すると、更新が速くなり、GitHubの負荷も減ります。変更しなくても引き続き動作します。この通知は数回表示された後、表示されなくなります。",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus]「{0}」は、Proteusがレイヤーを作成できないオーバーレイにグローを設定しています。グローにはメッシュの上に重ねるレイヤーが必要で、それが可能なのは自分の肌（体・顔・髪・尻尾・耳）だけです。装備・アクセサリ・武器では使えません。",
     "description": ""

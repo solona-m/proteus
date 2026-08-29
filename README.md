@@ -19,8 +19,11 @@ If you're a creator and want to make mods for Proteus, read the [Creator's Guide
 
 ### Installation
 
-Add this repo to your experimental tab under /xlplugins https://raw.githubusercontent.com/solona-m/plugins/main/repo.json
+Add this repo to your experimental tab under /xlplugins https://dl.solona.info/repo.json
 Save, then find Proteus in the main /xlplugins window.
+
+> Already installed from `raw.githubusercontent.com/solona-m/plugins/main/repo.json`? That still
+> works and always will, but the new url will be more reliable and not subject to github throttles.
 
 Install some overlay mods made for Proteus, choose your options and your character will update.
 
