@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -695,8 +696,18 @@ public sealed class SecondSkinService
     /// <para/>
     /// Safe to share the array: every mutating consumer already clones first, which is the same contract
     /// the no-op path relies on — it hands back TextureLoader's own cached buffer.
+    /// <para/>
+    /// CONCURRENT, and it has to be: composites genuinely overlap (see CompositorService's
+    /// _compositesInFlight), <see cref="Build"/> is not locked, and this one service instance is shared —
+    /// so two builds can be inside RemapPath at once while a third clears at the top of its own Build. A
+    /// plain Dictionary resizing under a concurrent read does not merely lose an entry; it can spin
+    /// forever in a bucket chain and hang the thread.
+    /// <para/>
+    /// Cross-build sharing is harmless by construction, so the worst a concurrent Clear costs is a repeat
+    /// of work: the key names every input the result depends on, so an entry another build put there is
+    /// exactly what this one would have computed.
     /// </summary>
-    private readonly Dictionary<(string Path, string? Src, string? Dst, int W, int H), byte[]?> remapCache = new();
+    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H), byte[]?> remapCache = new();
 
     private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h)
     {
@@ -3022,18 +3033,22 @@ public sealed class SecondSkinService
             // and linearly scans the row list on every one of them. The red channel is a /17 bucket, so
             // there are only ever 16 distinct answers.
             //
-            // NaN marks "no preset for this pair", which is the case the FirstOrDefault null stood for.
+            // A separate `present` flag rather than a NaN sentinel in the value array. NaN would be
+            // indistinguishable from a row whose Opacity genuinely IS NaN — corrupt sidecar JSON, or a
+            // deserializer turning a malformed number into one — and that row would then be silently
+            // skipped instead of applied, which is the kind of difference nobody traces back to here.
             const int PairCount = 17;                       // pairs are 1..16; index 0 is unused
+            var hasPreset = new bool[PairCount];
             var opAByPair = new float[PairCount];
             var opBByPair = new float[PairCount];
-            for (int p = 0; p < PairCount; p++) opAByPair[p] = opBByPair[p] = float.NaN;
             foreach (var preset in rows)
             {
                 if (preset.Row < 1 || preset.Row >= PairCount) continue;
                 // FIRST match wins, exactly as FirstOrDefault did: two presets can carry the same Row, and
                 // letting the later one overwrite would silently change which opacity a texel gets — and
                 // with it the output's content hash, which renames and re-uploads the texture.
-                if (!float.IsNaN(opAByPair[preset.Row])) continue;
+                if (hasPreset[preset.Row]) continue;
+                hasPreset[preset.Row] = true;
                 opAByPair[preset.Row] = preset.SubRowA?.Opacity ?? 0;
                 opBByPair[preset.Row] = preset.SubRowB?.Opacity ?? 0;
             }
@@ -3051,10 +3066,10 @@ public sealed class SecondSkinService
 
                     int pair = idx[i * 4] / 17 + 1;                     // red → 1-based row pair
                     if (pair < 1 || pair >= PairCount) continue;
-                    float opA = opAByPair[pair];
-                    if (float.IsNaN(opA)) continue;                     // no preset for this row pair
+                    if (!hasPreset[pair]) continue;                     // no preset for this row pair
 
                     float blendA = idx[i * 4 + 1] / 255f;               // green → sub-row A weight
+                    float opA = opAByPair[pair];
                     float op = opBByPair[pair] + (opA - opBByPair[pair]) * blendA;
                     if (op == 0f) continue;
 

@@ -2025,24 +2025,44 @@ public class CompositorService : IDisposable
     private volatile string? _lastCompositeFingerprint;
 
     /// <summary>
-    /// The SKIN half of the last published composite's inputs, and everything the skin phase produced.
+    /// The SKIN half of one published composite's inputs, and everything the skin phase produced from
+    /// them: the fingerprint that identifies the inputs, and the three outputs a later run has to restore
+    /// if it skips the phase.
     /// <para/>
-    /// Lets an outfit change reuse the skin outright. The unchanged-inputs gate above is all-or-nothing, so
-    /// swapping a top re-ran the entire skin decode+blend — measured at 2.5s of a 3.6s composite — to
-    /// produce byte-identical textures, because the equipped-item signature sits in the same fingerprint as
-    /// the overlays.
+    /// The skin phase does not merely compute pixels. It fills the redirect map, the colour-table editor's
+    /// glow targets and the contributions panel — so reusing it means reinstating all three, not just the
+    /// textures. Reinstating only the redirects leaves the panel blank and the Glow button inert on a
+    /// composite that changed nothing about the skin.
     /// <para/>
-    /// All four move together, only on a successful publish, and are only trusted when the files they name
-    /// are still on disk. The skin phase does not merely compute pixels: it fills the redirect map, the
-    /// glow-button targets and the contributions panel, so reusing it means restoring all three. A redirect
-    /// carried forward to a file that no longer exists is the "invisible body" failure — Penumbra drops the
-    /// dangling path, Bibo's invented texture paths have nothing behind them, and the material fails to
-    /// load — hence the existence check rather than trust.
+    /// ONE immutable record rather than separate fields, and that is the point of the type. Composites
+    /// overlap (see <see cref="_compositesInFlight"/>), so independent writes can be observed
+    /// half-applied: a reader picking up the NEW fingerprint beside the OLD redirects would carry the
+    /// previous skin's textures forward under a fingerprint claiming they are current, and publish a
+    /// manifest pointing at the pre-edit skin. The existence check cannot catch that — those files are
+    /// still on disk until the next composite prunes them. Grouping them behind one reference makes the
+    /// set indivisible: a reader sees the whole publish or none of it.
     /// </summary>
-    private volatile string? _lastSkinFingerprint;
-    private volatile IReadOnlyDictionary<string, string>? _lastSkinRedirects;
-    private volatile IReadOnlyList<ChannelContribution>? _lastSkinContributions;
-    private volatile IReadOnlyDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>? _lastSkinGlowTargets;
+    private sealed record SkinPublish(
+        string Fingerprint,
+        IReadOnlyDictionary<string, string> Redirects,
+        IReadOnlyList<ChannelContribution> Contributions,
+        IReadOnlyDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>> GlowTargets);
+
+    /// <summary>
+    /// The last successfully published <see cref="SkinPublish"/>, or null before the first one.
+    /// <para/>
+    /// This is what lets an outfit change reuse the skin outright. The unchanged-inputs gate above is
+    /// all-or-nothing, so swapping a top re-ran the entire skin decode+blend — measured at 2.5s of a 3.6s
+    /// composite — to produce byte-identical textures, purely because the equipped-item signature sits in
+    /// the same fingerprint as the overlays.
+    /// <para/>
+    /// Written only on a successful publish, and trusted only when the files it names are still on disk.
+    /// A redirect carried forward to a file that no longer exists is the "invisible body" failure:
+    /// Penumbra drops the dangling path, Bibo's invented texture paths have nothing behind them, and the
+    /// material fails to load. Hence the existence check rather than trust — see
+    /// <see cref="SkinOutputStillOnDisk"/>.
+    /// </summary>
+    private volatile SkinPublish? _lastSkinPublish;
 
     /// <summary>
     /// Whether every texture a remembered skin publish points at is still on disk AND intact.
@@ -3698,19 +3718,21 @@ public class CompositorService : IDisposable
             // Fail-safe by construction: anything unexpected — a missing or truncated output, no remembered
             // publish, a forced run — falls through to the full composite. The cost of being wrong in that
             // direction is a few seconds; the other direction is a character wearing stale skin.
-            var skinRedirects = _lastSkinRedirects;
+            // Read the whole group through ONE reference so the fingerprint and the redirects it vouches
+            // for cannot come from different publishes — see SkinPublish.
+            var lastSkin = _lastSkinPublish;
             bool skinReused =
                 !force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null
-                && _lastSkinFingerprint != null && skinFingerprint == _lastSkinFingerprint
-                && skinRedirects is { Count: > 0 }
-                && SkinOutputStillOnDisk(skinRedirects);
+                && lastSkin != null && skinFingerprint == lastSkin.Fingerprint
+                && lastSkin.Redirects.Count > 0
+                && SkinOutputStillOnDisk(lastSkin.Redirects);
 
             if (skinReused)
             {
-                foreach (var kv in skinRedirects!) redirects[kv.Key] = kv.Value;
+                foreach (var kv in lastSkin!.Redirects) redirects[kv.Key] = kv.Value;
                 log.Information("[Proteus] skin unchanged — reusing {0} published texture(s), "
-                              + "compositing the shell only", skinRedirects.Count);
+                              + "compositing the shell only", lastSkin.Redirects.Count);
             }
 
             // ── Inherited mask colorsets ─────────────────────────────────────
@@ -3855,7 +3877,11 @@ public class CompositorService : IDisposable
 
             // Skipped wholesale when the skin is being reused — the redirects it would produce are already
             // seeded above, and its other two outputs (contributions, glow targets) are restored below.
+            // BRACED: the statement it guards runs for well over a thousand lines, so an unbraced `if`
+            // would let anything appended after that closing `});` run unconditionally — on the reuse path
+            // that means skin code whose inputs were never computed.
             if (!skinReused)
+            {
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -5379,6 +5405,7 @@ public class CompositorService : IDisposable
                         mtrlGamePath, normalBlended ? "applied" : "not applied", maskBlended ? "applied" : "not applied");
 
             });
+            }   // end: if (!skinReused)
 
             // Filtered and sorted here, once per composite, so the status window can render it straight — that
             // panel redraws every frame and has no business doing either.
@@ -5393,7 +5420,7 @@ public class CompositorService : IDisposable
             // and the colour-table editor's Glow button would lose its targets, on a composite that changed
             // nothing about the skin.
             _channelContributions = skinReused
-                ? _lastSkinContributions ?? []
+                ? lastSkin!.Contributions
                 : contributions.Values
                     .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
                     .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
@@ -5402,8 +5429,8 @@ public class CompositorService : IDisposable
             LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
 
             // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
-            _skinGlowTargets = skinReused && _lastSkinGlowTargets != null
-                ? new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(_lastSkinGlowTargets)
+            _skinGlowTargets = skinReused
+                ? new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(lastSkin!.GlowTargets)
                 : new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
 
             // Everything in `redirects` up to this point is the skin's — the shell adds its own below — so
@@ -5783,11 +5810,10 @@ public class CompositorService : IDisposable
             _lastCompositeFingerprint = fingerprint;
             // The skin half moves with it, and only here — a run that returned early or threw leaves the
             // previous set standing, so a remembered redirect always describes a manifest that was actually
-            // published. Assigned even on a reuse, where these simply round-trip their own values.
-            _lastSkinFingerprint    = skinFingerprint;
-            _lastSkinRedirects      = skinRedirectsThisRun;
-            _lastSkinContributions  = _channelContributions;
-            _lastSkinGlowTargets    = _skinGlowTargets;
+            // published. ONE reference swap, so a concurrent reader can never pair this fingerprint with
+            // another publish's redirects. Assigned even on a reuse, where it round-trips its own values.
+            _lastSkinPublish = new SkinPublish(
+                skinFingerprint, skinRedirectsThisRun, _channelContributions, _skinGlowTargets);
             Interlocked.Exchange(ref _forcePending, 0);
 
             // Widen the recorded base set to what this run ACTUALLY resolved. baseKeys is the published
@@ -9125,16 +9151,17 @@ public class CompositorService : IDisposable
         var dst = (byte[])src.Clone();
 
         // Sixteen possible row pairs, resolved once rather than looked up per texel — see
-        // ApplyIndexedOverlay. NaN marks "no row configured", which is the case the TryGetValue miss
-        // used to skip on.
+        // ApplyIndexedOverlay.
+        //
+        // A separate `present` flag, not a NaN sentinel in the value array: NaN cannot be told apart from
+        // a row whose Opacity genuinely IS NaN (corrupt sidecar JSON, or a deserializer turning a
+        // malformed number into one), and that row would then be silently skipped rather than applied.
         const int Pairs = 16;
+        var present = new bool[Pairs];
         var opA = new float[Pairs];
         var opB = new float[Pairs];
         for (int p = 0; p < Pairs; p++)
-        {
-            if (rows.TryGetValue(p, out var r)) { opA[p] = r.A.Opacity; opB[p] = r.B.Opacity; }
-            else                                { opA[p] = opB[p] = float.NaN; }
-        }
+            if (rows.TryGetValue(p, out var r)) { present[p] = true; opA[p] = r.A.Opacity; opB[p] = r.B.Opacity; }
 
         ParallelPixels(0, dst.Length, 4, (from, to) =>
         {
@@ -9143,7 +9170,7 @@ public class CompositorService : IDisposable
                 float a = dst[i + 3] / 255f;
                 if (a <= 0f) continue;
                 int pairIdx = idx[i] / 17;
-                if (float.IsNaN(opA[pairIdx])) continue;      // no row configured for this pair
+                if (!present[pairIdx]) continue;              // no row configured for this pair
                 float blendA = idx[i + 1] / 255f;
                 float op = opB[pairIdx] + (opA[pairIdx] - opB[pairIdx]) * blendA;
                 if (op == 0f) continue;

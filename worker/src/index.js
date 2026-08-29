@@ -15,6 +15,7 @@
  */
 
 import README from './readme.generated.js';
+import { renderMarkdown } from './render.js';
 
 const OWNER = 'solona-m';
 const REPO = 'proteus';
@@ -93,7 +94,35 @@ const STATIC_PROXIES = {
     type: 'image/png',
     ttl: 86400,
   },
+  // The PROJECT readme — install instructions, the tab-by-tab guide — not this worker's own docs.
+  // Proxied rather than inlined so it tracks the repo without a redeploy; it is documentation whose
+  // whole value is being current, unlike the mirror's own notes, which must describe the deployment
+  // actually serving them.
+  '/README.md': {
+    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/README.md',
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+  },
+  // The two documents the README links to. Mirrored so those links resolve to rendered pages here
+  // rather than bouncing the reader back to GitHub halfway through the install instructions.
+  '/TROUBLESHOOTING.md': {
+    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md',
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+  },
+  // Stored DECODED, because the lookup decodes the path — a browser sends "For%20Creators.md".
+  '/For Creators.md': {
+    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md',
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+  },
 };
+
+/** Alias paths — same entry, different name. Keeps `/` meaning "tell me about Proteus". */
+const STATIC_ALIASES = { '/': '/README.md' };
 
 export default {
   async fetch(request, _env, ctx) {
@@ -103,14 +132,23 @@ export default {
 
     const url = new URL(request.url);
 
-    // Static, and it never builds an upstream URL — so it cannot participate in the open-proxy risk
-    // the route patterns below exist to contain.
-    if (url.pathname === '/' || url.pathname === '/README.md') {
-      return new Response(request.method === 'HEAD' ? null : README, {
+    // A browser asks for text/html and gets a rendered page; curl and every script send */* and keep
+    // getting the markdown source, so nothing that consumes these URLs programmatically changes.
+    const wantsHtml = (request.headers.get('accept') ?? '').includes('text/html');
+
+    // This worker's OWN documentation — deploy steps, path scheme, caching caveats. Inlined at build
+    // time rather than proxied so it always describes the deployment serving it, and static, so it
+    // never builds an upstream URL and cannot participate in the open-proxy risk the route patterns
+    // below exist to contain. The PROJECT readme is a different document, served from `/` via
+    // STATIC_PROXIES.
+    if (url.pathname === '/mirror.md') {
+      const body = wantsHtml ? renderMarkdown(README, 'Proteus asset mirror') : README;
+      return new Response(request.method === 'HEAD' ? null : body, {
         status: 200,
         headers: {
-          'content-type': 'text/markdown; charset=utf-8',
+          'content-type': wantsHtml ? 'text/html; charset=utf-8' : 'text/markdown; charset=utf-8',
           'cache-control': `public, max-age=${README_TTL}`,
+          vary: 'Accept',
           'x-proteus-mirror': 'readme',
         },
       });
@@ -118,10 +156,22 @@ export default {
 
     // Fixed-upstream proxies (the plugin manifest and its icon). Cached at the edge with their own
     // short TTLs, and re-asked on any failure so a transient upstream error is not pinned.
-    const stat = STATIC_PROXIES[url.pathname];
+    // Decoded, so "/For%20Creators.md" (what a browser sends) and a literal space are one entry.
+    // A malformed escape must fall through to the 404 below rather than throw out of the worker.
+    let decodedPath = url.pathname;
+    try { decodedPath = decodeURIComponent(url.pathname); } catch { /* keep raw; it will not match */ }
+
+    const statPath = STATIC_ALIASES[decodedPath] ?? decodedPath;
+    const stat = STATIC_PROXIES[statPath];
     if (stat) {
       const cache = caches.default;
-      const key = new Request(`${url.origin}${url.pathname}`, { method: 'GET' });
+      const renderHtml = wantsHtml && stat.markdown === true;
+
+      // The variant is part of the KEY, not just a Vary header. Cloudflare's Cache API keys on URL
+      // alone and ignores Vary, so one key for both variants would serve whichever arrived first to
+      // everyone after — HTML to curl, or raw markdown to every browser, at random.
+      const key = new Request(
+        `${url.origin}${encodeURI(statPath)}${renderHtml ? '?view=html' : ''}`, { method: 'GET' });
 
       let hit = await cache.match(key);
       if (!hit) {
@@ -138,11 +188,17 @@ export default {
             headers: { 'cache-control': 'no-store' },
           });
         }
-        hit = new Response(upstream.body, {
+
+        // Rendered once per TTL and cached, rather than per request: marked on a 400-line document is
+        // cheap but not free, and the free plan allows 10 ms of CPU per request.
+        const body = renderHtml ? renderMarkdown(await upstream.text()) : upstream.body;
+
+        hit = new Response(body, {
           status: 200,
           headers: {
-            'content-type': stat.type,
+            'content-type': renderHtml ? 'text/html; charset=utf-8' : stat.type,
             'cache-control': `public, max-age=${stat.ttl}`,
+            vary: 'Accept',
           },
         });
         ctx.waitUntil(cache.put(key, hit.clone()));

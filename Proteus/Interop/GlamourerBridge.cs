@@ -121,6 +121,23 @@ public class GlamourerBridge : IDisposable
         }
     }
 
+    /// <summary>
+    /// The user's <c>GlamourerDesignDirOverride</c>, when set. Assigned once at startup by the plugin,
+    /// which owns the configuration.
+    /// </summary>
+    public string? DesignsDirectoryOverride { get; set; }
+
+    /// <summary>
+    /// Where design files actually live: the override if the user set one, else the derived path.
+    /// <para/>
+    /// One property so every consumer agrees. The design WATCHER already honoured the override while
+    /// <see cref="ReadDesignFile"/> did not, which would have pointed the two at different folders — the
+    /// fallback then finds nothing for exactly the users who most need it, and reports a second failure
+    /// on top of the first.
+    /// </summary>
+    public string? EffectiveDesignsDirectory
+        => string.IsNullOrWhiteSpace(DesignsDirectoryOverride) ? DesignsDirectory : DesignsDirectoryOverride;
+
     /// <summary>Glamourer's design list (GUID → display name); empty on failure.</summary>
     public Dictionary<Guid, string> GetDesigns()
     {
@@ -130,11 +147,58 @@ public class GlamourerBridge : IDisposable
         catch (Exception ex) { log.Warning(ex, "[Proteus] GetDesignList failed"); return new(); }
     }
 
-    /// <summary>The serialized data for a single design (includes equipment + apply flags), or null on failure.</summary>
+    /// <summary>Whether the stack trace for a GetDesignJObject failure has been logged this session.</summary>
+    private int loggedDesignIpcFailure;
+
+    /// <summary>
+    /// The serialized data for a single design (includes equipment + apply flags), or null on failure.
+    /// <para/>
+    /// Falls back to the design's own file on disk, because the IPC is not reliable for every design:
+    /// Glamourer's serializer emits JSON it then fails to re-parse for certain designs — the observed
+    /// failure is <c>JsonReaderException: ':' is invalid after a value</c> raised inside
+    /// <c>SerializeToElement</c>, several thousand bytes into the output, for 7 of one user's designs
+    /// while the rest serialize fine. That is a Glamourer bug and nothing here can fix it; what it costs
+    /// Proteus is the ability to identify which design is applied, so those designs' bindings silently
+    /// never restore.
+    /// <para/>
+    /// The file is the same data by a different road, and Proteus already knows where it lives (see
+    /// <see cref="DesignsDirectory"/>, which GlamourerDesignWatcher watches). Its storage format carries
+    /// the Equipment / Bonus / Customize / Parameters sections that DesignBindingService.StateMatches
+    /// reads, in the same shape.
+    /// </summary>
     public JObject? GetDesign(Guid id)
     {
         try { return getDesignJObject.Invoke(id); }
-        catch (Exception ex) { log.Warning(ex, "[Proteus] GetDesignJObject failed for {0}", id); return null; }
+        catch (Exception ex)
+        {
+            // The stack ONCE per session, then a one-liner. It is the same Glamourer defect every time and
+            // it fires for every affected design on every boot restore — seven full traces per attempt
+            // buries the rest of the log without adding anything after the first.
+            if (Interlocked.Exchange(ref loggedDesignIpcFailure, 1) == 0)
+                log.Warning(ex, "[Proteus] GetDesignJObject failed for {0} — reading the design file instead. "
+                              + "This is a Glamourer serialization fault, logged once per session", id);
+            else
+                log.Debug("[Proteus] GetDesignJObject failed for {0} — reading the design file instead", id);
+
+            return ReadDesignFile(id);
+        }
+    }
+
+    /// <summary>The design's own JSON from Glamourer's config folder, or null if it can't be read.</summary>
+    private JObject? ReadDesignFile(Guid id)
+    {
+        try
+        {
+            if (EffectiveDesignsDirectory is not { } dir) return null;
+            var path = Path.Combine(dir, id.ToString("D") + ".json");
+            if (!File.Exists(path)) return null;
+            return JObject.Parse(File.ReadAllText(path));
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not read the design file for {0} either", id);
+            return null;
+        }
     }
 
     /// <summary>The current applied state of an object (default: local player, index 0), or null on failure.</summary>

@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 536;
+    public const int BuildNumber = 538;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -122,7 +122,11 @@ public sealed class Plugin : IDalamudPlugin
             });
         }
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
-        designWatcher = new GlamourerDesignWatcher(designBindings, config.GlamourerDesignDirOverride ?? glamourer.DesignsDirectory, log);
+        // Told to the bridge rather than only to the watcher: GetDesign's on-disk fallback reads from the
+        // same folder, and the two pointing at different places would break the fallback for precisely the
+        // users who set an override.
+        glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
+        designWatcher = new GlamourerDesignWatcher(designBindings, glamourer.EffectiveDesignsDirectory, log);
         ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, log);
 
         // Sphere-map thumbnails for the colour table editor.
