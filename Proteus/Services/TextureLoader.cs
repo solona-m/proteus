@@ -119,6 +119,81 @@ public class TextureLoader
     [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern void proteus_encode_bc5(IntPtr rgba, int width, int height, int blockRowStart, int blockRowCount, IntPtr outPtr);
 
+    [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int proteus_decode_bcn(int format, IntPtr blocks, int width, int blockRowStart, int blockRowCount, IntPtr rgbaOut);
+
+    /// <summary>Compressed bytes per 4×4 block, or 0 for a format the shim doesn't handle. Asked of the
+    /// NATIVE side rather than duplicated here, so the stride the caller slices with and the stride the
+    /// decoder walks with cannot drift apart.</summary>
+    [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int proteus_bcn_block_bytes(int format);
+
+    /// <summary>Formats <see cref="proteus_decode_bcn"/> understands. Values must match the
+    /// <c>proteus_bcn_format</c> enum in <c>native/src/proteus_bcn.cpp</c>.</summary>
+    private enum NativeBcFormat { Bc1 = 1, Bc3 = 3, Bc5 = 5, Bc7 = 7 }
+
+    /// <summary>
+    /// Copy the native DLL somewhere private and return that path, so the build output is never the file
+    /// Windows memory-maps.
+    /// <para/>
+    /// A loaded native library is locked for as long as it is mapped, and the runtime holds the handle the
+    /// DllImport resolver returned for the life of the load context. Unloading the plugin is SUPPOSED to
+    /// release it, but a plugin load context only unloads once nothing references it — a straggling task,
+    /// timer or event subscription keeps it alive — so in practice the lock survives an unload and the next
+    /// <c>dotnet build</c> fails with "used by another process: FINAL FANTASY XIV". Measured, not theorised.
+    /// <para/>
+    /// This became load-bearing when native DECODE arrived: compression is off by default, so the encoder
+    /// was never actually called on most setups and the DLL was never mapped at all. Decode runs on every
+    /// composite, so without this the file is locked from the first texture onward and every native change
+    /// costs a game restart.
+    /// <para/>
+    /// The copy is named by the source's length and write time, so a rebuilt DLL lands on a fresh path
+    /// while an unchanged one is reused. Returns the original path if anything goes wrong — a locked build
+    /// output is an annoyance, no shadow copy at all would be a missing feature.
+    /// </summary>
+    private static string ShadowCopyNative(string dll, IPluginLog log)
+    {
+        try
+        {
+            var fi = new FileInfo(dll);
+            if (!fi.Exists) return dll;
+
+            var root = Path.Combine(Path.GetTempPath(), "Proteus.native");
+            var stamp = $"{fi.Length:X}-{fi.LastWriteTimeUtc.Ticks:X}";
+            var dir = Path.Combine(root, stamp);
+            var shadow = Path.Combine(dir, NativeLib + ".dll");
+
+            if (!File.Exists(shadow) || new FileInfo(shadow).Length != fi.Length)
+            {
+                Directory.CreateDirectory(dir);
+                // Copy to a unique name and move into place, so two instances starting together can't read
+                // a half-written DLL. Losing the race is fine — the winner's file is byte-identical.
+                var tmp = shadow + "." + Path.GetRandomFileName() + ".tmp";
+                File.Copy(dll, tmp, overwrite: true);
+                try { File.Move(tmp, shadow, overwrite: true); }
+                catch (IOException) when (File.Exists(shadow)) { try { File.Delete(tmp); } catch { } }
+            }
+
+            // Best-effort sweep of copies from older builds. Anything still mapped by a running instance
+            // refuses to delete, which is the correct outcome and needs no handling beyond skipping it.
+            try
+            {
+                foreach (var old in Directory.GetDirectories(root))
+                    if (!string.Equals(old, dir, StringComparison.OrdinalIgnoreCase))
+                        try { Directory.Delete(old, recursive: true); } catch { }
+            }
+            catch { }
+
+            return shadow;
+        }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] native shim shadow copy failed ({0}) — loading it in place, which will "
+                      + "lock the build output until the game exits", ex.Message);
+            return dll;
+        }
+    }
+
     // Load proteus_bcn.dll from the plugin's own directory — Dalamud's assembly load context doesn't add
     // it to the native search path, so a plain DllImport("proteus_bcn") wouldn't find it. Runs once.
     private static void EnsureNativeCompressor(IPluginLog log)
@@ -132,6 +207,8 @@ public class TextureLoader
         if (string.IsNullOrEmpty(dir))
             dir = Path.GetDirectoryName(typeof(TextureLoader).Assembly.Location);
         var dll = string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, NativeLib + ".dll");
+        // Load a private copy, never the build output itself — see ShadowCopyNative.
+        if (dll != null) dll = ShadowCopyNative(dll, log);
 
         // Resolver so DllImport("proteus_bcn") at call time finds the DLL by full path.
         NativeLibrary.SetDllImportResolver(typeof(TextureLoader).Assembly, (name, _, _) =>
@@ -188,8 +265,23 @@ public class TextureLoader
 
     /// <summary>Time spent actually decoding (cache misses only), summed across all threads. Calls = misses.</summary>
     public readonly PhaseCounter DecodeStats = new();
-    /// <summary>Calls served from the decode cache — no time recorded, only the count.</summary>
+    /// <summary>Calls served from an ALREADY-MATERIALIZED cache entry — a true hit, near free.</summary>
     public readonly PhaseCounter DecodeHitStats = new();
+    /// <summary>
+    /// Calls that found an entry in the cache but had to BLOCK on another thread finishing its decode —
+    /// nearly always a prefetch the blend loop caught up with. Counted apart from a true hit because the
+    /// two cost wildly different amounts and the phases line was reporting them as one number, which made
+    /// a saturated prefetch pipeline look like a warm cache.
+    /// </summary>
+    public readonly PhaseCounter DecodeBlockedStats = new();
+    /// <summary>
+    /// Decodes served by the native shim rather than Lumina. Counted because "is the native decoder
+    /// actually being used" was otherwise unanswerable from a log: it can be off because the DLL failed
+    /// to load, because the format isn't block-compressed, or because a mismatch rejected that format —
+    /// and all three look identical, i.e. like nothing at all.
+    /// </summary>
+    public readonly PhaseCounter DecodeNativeStats = new();
+
     /// <summary>The RGBA→BGRA conversion loop in <see cref="WriteTex"/>.</summary>
     public readonly PhaseCounter SwizzleStats = new();
     /// <summary>The .tex disk write itself, with bytes written.</summary>
@@ -197,8 +289,13 @@ public class TextureLoader
 
     public void ResetStats()
     {
+        // One recomposite = one generation. Everything the run in flight touches is stamped with this and
+        // is thereby protected from the trim until the next run starts — see runGeneration.
+        Interlocked.Increment(ref runGeneration);
         DecodeStats.Reset();
         DecodeHitStats.Reset();
+        DecodeBlockedStats.Reset();
+        DecodeNativeStats.Reset();
         DecodeWaitStats.Reset();
         PrefetchWaitStats.Reset();
         SwizzleStats.Reset();
@@ -224,10 +321,25 @@ public class TextureLoader
         public int Width;
         public int Height;
         public long LastAccess;
+        /// <summary>The run that last touched this entry. See <see cref="runGeneration"/>.</summary>
+        public long Generation;
     }
 
     private readonly ConcurrentDictionary<string, Lazy<DecodedTex?>> decodeCache = new();
     private long accessClock;
+
+    /// <summary>
+    /// Bumped by <see cref="ResetStats"/>, i.e. once per recomposite. Entries stamped with the CURRENT
+    /// generation are exempt from eviction while anything older is still evictable.
+    /// <para/>
+    /// Plain LRU is the wrong policy for this cache and the numbers said so: the compositor prefetches
+    /// several files ahead of the blend loop, so the entry least-recently accessed is very often one that
+    /// was decoded FOR THIS RUN and has not been consumed yet. Evicting it throws away completed prefetch
+    /// work and makes the blend re-decode it on the critical path — a run was measured evicting 54 entries
+    /// while holding 32. Generation-aware trimming makes that specific mistake impossible: a file
+    /// prefetched for this run can never be evicted before this run consumes it.
+    /// </summary>
+    private long runGeneration;
     private long lastTouchTick = Environment.TickCount64;
     private int evictions;
 
@@ -256,6 +368,8 @@ public class TextureLoader
         }
     }
 
+    // Only the floor until Plugin's constructor pushes the configured value in — kept deliberately modest
+    // so a loader constructed outside the plugin (tests, tooling) doesn't reserve gigabytes by default.
     private long decodeCacheBudgetBytes = 2048L * 1024 * 1024;
 
     /// <summary>Entries currently materialized, and the bytes they hold. For the phases log — the number
@@ -340,6 +454,14 @@ public class TextureLoader
                 : new DecodedTex { Rgba = r.Value.rgba, Width = r.Value.width, Height = r.Value.height };
         }, LazyThreadSafetyMode.ExecutionAndPublication));
 
+        // Read BEFORE blocking on lazy.Value. If the value is not materialized yet and this call is not
+        // the one producing it, the wait below is a BLOCK on another thread's decode — most likely a
+        // prefetch that hasn't finished. That is not a cache hit in any sense a reader of the log would
+        // recognise, but it was counted as one: the local `decoded` stays false, so every "hit" figure
+        // silently included time spent stalled on the prefetch pipeline. Told apart, the phases line can
+        // finally distinguish a warm cache from a saturated one.
+        var wasMaterialized = lazy.IsValueCreated;
+
         DecodedTex? entry;
         try { entry = lazy.Value; }
         catch { decodeCache.TryRemove(new KeyValuePair<string, Lazy<DecodedTex?>>(key, lazy)); throw; }
@@ -351,8 +473,13 @@ public class TextureLoader
             return null;
         }
 
-        if (!decoded) DecodeHitStats.Count();
+        if (!decoded)
+        {
+            if (wasMaterialized) DecodeHitStats.Count();
+            else DecodeBlockedStats.Count();
+        }
 
+        entry.Generation = Volatile.Read(ref runGeneration);
         entry.LastAccess = Interlocked.Increment(ref accessClock);
         Volatile.Write(ref lastTouchTick, Environment.TickCount64);   // keeps ReleaseIfIdle off a live cache
         TrimCache();
@@ -393,8 +520,14 @@ public class TextureLoader
         return n;
     }
 
-    // Evict least-recently-accessed materialized entries until under the byte budget.
-    // O(n) over the cache, but n is small (tens of entries) so this stays cheap.
+    // Evict materialized entries until under the byte budget: oldest GENERATION first, least-recently
+    // accessed within a generation. O(n) over the cache, but n is small (tens of entries) so this stays
+    // cheap.
+    //
+    // The generation ordering is the point — see runGeneration. Entries decoded for the run in flight sort
+    // last, so they go only when nothing from an earlier run is left to take. Evicting one is still allowed
+    // (the alternative is unbounded growth when a single run's working set exceeds the budget outright),
+    // it is simply the last resort rather than the first choice LRU alone made it.
     private void TrimCache()
     {
         long total = 0;
@@ -407,7 +540,9 @@ public class TextureLoader
         foreach (var kv in decodeCache)
             if (kv.Value.IsValueCreated && kv.Value.Value is { } d)
                 live.Add((kv.Key, kv.Value, d));
-        live.Sort((a, b) => a.d.LastAccess.CompareTo(b.d.LastAccess));
+        live.Sort((a, b) => a.d.Generation != b.d.Generation
+            ? a.d.Generation.CompareTo(b.d.Generation)
+            : a.d.LastAccess.CompareTo(b.d.LastAccess));
 
         foreach (var (k, lz, d) in live)
         {
@@ -556,7 +691,7 @@ public class TextureLoader
             var bytes = SanitizeTexBytes(File.ReadAllBytes(diskPath));
             var tex = LoadLuminaFileFromBytes<TexFile>(bytes);
             if (tex == null) return null;
-            return ConvertTex(tex);
+            return DecodeTexSurface(bytes, tex);
         }
         catch (Exception ex)
         {
@@ -656,6 +791,15 @@ public class TextureLoader
         long mip0 = Mip0ByteSize(luminaFmt, width, height);
         if (mip0 <= 0 || dataOffset + mip0 > dds.Length) return null;
 
+        // Native decode straight off the DDS payload — no synthetic .tex wrap, no copy, no BGRA round-trip.
+        // Trusted only once this format has been checked against Lumina; the first .dds of an unverified
+        // format falls through and is compared below, exactly as the .tex path does. The block data here is
+        // located by this function's own header parse rather than by an offset table a mod tool wrote, but
+        // the STRIDE and channel conventions are the shim's, and those are what get a format wrong.
+        var fast = TryDecodeNative(luminaFmt, dds, dataOffset, width, height);
+        if (fast != null && _nativeDecodeVerified.ContainsKey(luminaFmt))
+            return (fast, width, height);
+
         // Wrap mip 0 as a minimal single-surface .tex (80-byte header + block data) so Lumina's
         // format decoder — which already handles every BC format the game ships — does the work.
         var tex = new byte[80 + mip0];
@@ -669,7 +813,26 @@ public class TextureLoader
         Array.Copy(dds, dataOffset, tex, 80, mip0);
 
         var texFile = LoadLuminaFileFromBytes<TexFile>(tex);
-        return texFile == null ? null : ConvertTex(texFile);
+        if (texFile == null) return null;
+        var reference = ConvertTex(texFile);
+
+        // First .dds of this format: the native result is in hand and so is Lumina's, so compare them and
+        // record the verdict for both paths. BC decode is exact, so a mismatch is a shim bug, not rounding.
+        if (fast != null)
+        {
+            if (!fast.AsSpan().SequenceEqual(reference.rgba))
+            {
+                _nativeDecodeRejected.TryAdd(luminaFmt, 0);
+                log.Warning("[Proteus] native BC decode disagreed with Lumina on a {0}x{1} format 0x{2:X4} "
+                          + ".dds — falling back to Lumina for THIS FORMAT for the rest of the session",
+                          width, height, luminaFmt);
+                return reference;
+            }
+            _nativeDecodeVerified.TryAdd(luminaFmt, 0);
+            log.Information("[Proteus] native BC decode verified against Lumina ({0}x{1}, format 0x{2:X4}, .dds)",
+                width, height, luminaFmt);
+        }
+        return reference;
     }
 
     // Reorders an uncompressed 32-bpp DDS surface to RGBA8 using per-channel bit masks. Assumes each
@@ -764,13 +927,18 @@ public class TextureLoader
         int h = tex.Header.Height;
         var bgra = tex.TextureBuffer.Filter(mip: 0, z: 0, format: TexFile.TextureFormat.B8G8R8A8).RawData;
         var rgba = new byte[bgra.Length];
-        for (int i = 0; i < bgra.Length; i += 4)
+        // 64 MB of byte-at-a-time channel swapping at 4K, on the thread the blend loop is waiting on.
+        // Per-pixel with no carried state, so ParallelPixels partitions it without changing a byte.
+        CompositorService.ParallelPixels(0, bgra.Length, 4, (from, to) =>
         {
-            rgba[i]     = bgra[i + 2];
-            rgba[i + 1] = bgra[i + 1];
-            rgba[i + 2] = bgra[i];
-            rgba[i + 3] = bgra[i + 3];
-        }
+            for (int i = from; i < to; i += 4)
+            {
+                rgba[i]     = bgra[i + 2];
+                rgba[i + 1] = bgra[i + 1];
+                rgba[i + 2] = bgra[i];
+                rgba[i + 3] = bgra[i + 3];
+            }
+        });
         return (rgba, w, h);
     }
 
@@ -952,16 +1120,22 @@ public class TextureLoader
             uint formatCode;
             if (encoding == TexEncoding.Uncompressed)
             {
-                // Convert RGBA → BGRA
+                // Convert RGBA → BGRA. Per-pixel with no carried state, so partitioning cannot change the
+                // bytes written; at 4K this is 16.7M iterations over a fresh 64 MB buffer, and with
+                // compression off (the default) it runs for every channel of every material.
                 var tSwizzle = PhaseCounter.Begin();
-                payload = new byte[rgba.Length];
-                for (int i = 0; i < rgba.Length; i += 4)
+                var dst = new byte[rgba.Length];
+                CompositorService.ParallelPixels(0, rgba.Length, 4, (from, to) =>
                 {
-                    payload[i]     = rgba[i + 2]; // B ← R
-                    payload[i + 1] = rgba[i + 1]; // G
-                    payload[i + 2] = rgba[i];     // R ← B
-                    payload[i + 3] = rgba[i + 3]; // A
-                }
+                    for (int i = from; i < to; i += 4)
+                    {
+                        dst[i]     = rgba[i + 2]; // B ← R
+                        dst[i + 1] = rgba[i + 1]; // G
+                        dst[i + 2] = rgba[i];     // R ← B
+                        dst[i + 3] = rgba[i + 3]; // A
+                    }
+                });
+                payload = dst;
                 SwizzleStats.Stop(tSwizzle);
                 formatCode = 0x1450u;             // B8G8R8A8
             }
@@ -1061,6 +1235,163 @@ public class TextureLoader
         }
         finally { hIn.Free(); hOut.Free(); }
         return outBuf;
+    }
+
+    /// <summary>
+    /// Map a Lumina/FFXIV texture format code onto a format the native decoder understands, or null when
+    /// it is not block-compressed (or is a BC variant the shim doesn't carry).
+    /// </summary>
+    private static NativeBcFormat? NativeFormatFor(uint luminaFormat) => luminaFormat switch
+    {
+        0x3420u => NativeBcFormat.Bc1,   // DXT1
+        0x3431u => NativeBcFormat.Bc3,   // DXT5
+        0x6230u => NativeBcFormat.Bc5,
+        0x6432u => NativeBcFormat.Bc7,
+        // BC2 (0x3430) is deliberately absent: rgbcx has no unpack for it, and the game does not ship it.
+        _ => null,
+    };
+
+    /// <summary>
+    /// Native block decode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows — the mirror of
+    /// <see cref="EncodeBlockCompressedNative"/>, and the answer to the single largest cost in a cold
+    /// composite: Lumina's decoder is scalar, single-threaded managed code, and a run was measured spending
+    /// 16s of decode work on 38 textures.
+    /// <para/>
+    /// Emits RGBA directly, so the serial BGRA→RGBA pass the managed path needed disappears with it.
+    /// <para/>
+    /// Returns null when the format isn't one we decode, the payload is short, or the native call reports
+    /// failure — every one of which means "use the managed path", never "produce wrong pixels".
+    /// </summary>
+    private static byte[]? DecodeBlockCompressedNative(uint luminaFormat, byte[] blocks, int blockOffset, int width, int height)
+    {
+        if (!_nativeAvailable) return null;
+        if (_nativeDecodeRejected.ContainsKey(luminaFormat)) return null;
+        if (NativeFormatFor(luminaFormat) is not { } fmt) return null;
+        if (width <= 0 || height <= 0 || width % 4 != 0 || height % 4 != 0) return null;
+
+        // Bytes per block is FORMAT-DEPENDENT: BC1 packs a block into 8, everything else into 16 (the same
+        // split Mip0ByteSize encodes). Assuming 16 for all of them made BC1 read every other block and
+        // decode a scrambled image — and it did so SILENTLY, because the over-large size below still fits
+        // inside any file that carries a mip chain after mip 0, so the bounds guard let it through.
+        // Asked of the native side so the slicing stride here can never disagree with the walking stride
+        // there.
+        int stride = proteus_bcn_block_bytes((int)fmt);
+        if (stride <= 0) return null;
+
+        int bw = width / 4, bh = height / 4;
+        long need = (long)bw * bh * stride;
+        // The native code reads `need` bytes and writes width*height*4 with no managed bounds check — a
+        // short buffer would be an AccessViolation (uncatchable, takes the game with it), not a fallback.
+        // Checked here, before anything is pinned.
+        if (blockOffset < 0 || blockOffset + need > blocks.Length) return null;
+
+        var rgba = new byte[(long)width * height * 4];
+        var hIn = GCHandle.Alloc(blocks, GCHandleType.Pinned);
+        var hOut = GCHandle.Alloc(rgba, GCHandleType.Pinned);
+        try
+        {
+            long inPtr = hIn.AddrOfPinnedObject().ToInt64() + blockOffset;
+            long outPtr = hOut.AddrOfPinnedObject().ToInt64();
+            int workers   = Math.Min(Environment.ProcessorCount, 16);
+            int chunkRows = Math.Max(1, (bh + workers - 1) / workers);
+            int chunks    = (bh + chunkRows - 1) / chunkRows;
+            int ok = 1;
+            Parallel.For(0, chunks, ci =>
+            {
+                int start = ci * chunkRows;
+                int count = Math.Min(chunkRows, bh - start);
+                if (count <= 0) return;
+                // Blocks are this worker's slice; the output pointer is the WHOLE image, because the native
+                // scatter computes absolute row offsets from the block-row index.
+                var blockP = new IntPtr(inPtr + (long)start * bw * stride);
+                if (proteus_decode_bcn((int)fmt, blockP, width, start, count, new IntPtr(outPtr)) == 0)
+                    Interlocked.Exchange(ref ok, 0);
+            });
+            return ok == 1 ? rgba : null;
+        }
+        finally { hIn.Free(); hOut.Free(); }
+    }
+
+    /// <summary>
+    /// <see cref="DecodeBlockCompressedNative"/> with the same one-shot fallback discipline the encoder
+    /// uses: any throw latches the native path off for the session and everything reverts to Lumina.
+    /// </summary>
+    private byte[]? TryDecodeNative(uint luminaFormat, byte[] blocks, int blockOffset, int width, int height)
+    {
+        if (!_nativeAvailable) return null;
+        try
+        {
+            var r = DecodeBlockCompressedNative(luminaFormat, blocks, blockOffset, width, height);
+            if (r != null) DecodeNativeStats.Count();
+            return r;
+        }
+        catch (Exception ex)
+        {
+            _nativeAvailable = false;
+            log.Warning("[Proteus] native BC decode failed ({0}) — falling back to Lumina", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Texture formats whose native decode has been checked against Lumina and agreed, this session.
+    /// <para/>
+    /// Keyed BY FORMAT, not a single flag. A session-wide flag verifies whichever format happens to be
+    /// decoded first — in practice the skin's BC7 — and then waves every other format through untested.
+    /// That is a safety net exactly one format wide, and it is how a BC1 block-stride bug survived both a
+    /// round-trip test suite and this check.
+    /// </summary>
+    private static readonly ConcurrentDictionary<uint, byte> _nativeDecodeVerified = new();
+
+    /// <summary>
+    /// Formats whose native decode disagreed with Lumina. Those fall back for the rest of the session;
+    /// every other format carries on natively.
+    /// <para/>
+    /// Per-format, because the decoders can legitimately differ on ONE format and agree on the others:
+    /// BC4/BC5's interpolation is a division by 7, and truncating versus rounding it shifts a channel by
+    /// one. Disabling the whole native path over that would surrender BC7 — which is the bulk of the
+    /// decode cost and provably identical — to fix a format that is a small share of it.
+    /// </summary>
+    private static readonly ConcurrentDictionary<uint, byte> _nativeDecodeRejected = new();
+
+    /// <summary>
+    /// Decode a sanitized .tex through the native shim, falling back to Lumina for anything it cannot do.
+    /// <para/>
+    /// The first native decode OF EACH FORMAT is checked against Lumina's, byte for byte, and the native
+    /// path is latched off for good if they disagree. BC decode is exact — unlike encode, there is no
+    /// legitimate reason for two decoders to differ — so any mismatch is a bug in the block offset, stride
+    /// or format mapping, and the failure mode without this check is silently wrong pixels in a baked
+    /// texture rather than an error anyone would see. One extra managed decode per format buys that away.
+    /// </summary>
+    private (byte[] rgba, int width, int height) DecodeTexSurface(byte[] sanitized, TexFile tex)
+    {
+        int w = tex.Header.Width, h = tex.Header.Height;
+        if (sanitized.Length < 80) return ConvertTex(tex);
+
+        // Format and mip-0 location straight out of the header Lumina itself just read, so the two decoders
+        // are looking at the same bytes. SanitizeTexBytes has already normalised the offset table.
+        uint fmt = BitConverter.ToUInt32(sanitized, 4);
+        long off = BitConverter.ToUInt32(sanitized, 28);
+        if (off <= 0 || off > int.MaxValue) return ConvertTex(tex);
+
+        var native = TryDecodeNative(fmt, sanitized, (int)off, w, h);
+        if (native == null) return ConvertTex(tex);
+
+        if (!_nativeDecodeVerified.ContainsKey(fmt))
+        {
+            var reference = ConvertTex(tex);
+            if (!native.AsSpan().SequenceEqual(reference.rgba))
+            {
+                _nativeDecodeRejected.TryAdd(fmt, 0);
+                log.Warning("[Proteus] native BC decode disagreed with Lumina on a {0}x{1} format 0x{2:X4} "
+                          + "surface — falling back to Lumina for THIS FORMAT for the rest of the session",
+                          w, h, fmt);
+                return reference;
+            }
+            _nativeDecodeVerified.TryAdd(fmt, 0);
+            log.Information("[Proteus] native BC decode verified against Lumina ({0}x{1}, format 0x{2:X4})", w, h, fmt);
+        }
+        return (native, w, h);
     }
 
     private static byte[] EncodeBlockCompressedManaged(byte[] rgba, int width, int height, TexEncoding encoding)
@@ -1390,11 +1721,16 @@ public class TextureLoader
     public byte[] ScaleRgba(byte[] src, int sw, int sh, int dw, int dh)
         => ScaleNearest(src, sw, sh, dw, dh);
 
-    // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match
+    // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match.
+    //
+    // Rows are independent and each writes only its own slice of dst, so this partitions by row with no
+    // change to the output. Worth doing: every overlay whose art is not already at the base resolution
+    // comes through here, at 4096x4096 that is 16.7M pixels, and it ran on one thread inside the decode
+    // the blend loop was waiting on.
     private static byte[] ScaleNearest(byte[] src, int sw, int sh, int dw, int dh)
     {
         var dst = new byte[dw * dh * 4];
-        for (int dy = 0; dy < dh; dy++)
+        void Row(int dy)
         {
             int sy = dy * sh / dh;
             for (int dx = 0; dx < dw; dx++)
@@ -1408,6 +1744,14 @@ public class TextureLoader
                 dst[di + 3] = src[si + 3];
             }
         }
+
+        // Partitioned by ROW rather than through ParallelPixels: that helper's small-image guard counts
+        // steps, so a 4096-row span reads as 4096 items and falls back to serial. Rows are the right unit
+        // here anyway — sy is hoisted out of the inner loop, so a worker has to own whole rows.
+        if (dh * dw < 256 * 256 || Environment.ProcessorCount < 2)
+            for (int dy = 0; dy < dh; dy++) Row(dy);
+        else
+            Parallel.For(0, dh, Row);
         return dst;
     }
 }

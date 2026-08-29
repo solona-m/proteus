@@ -1,0 +1,20 @@
+{
+  "name": "proteus-assets-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that edge-caches Proteus's GitHub release assets.",
+  "scripts": {
+    "embed": "node scripts/embed-readme.mjs",
+    "pretest": "npm run embed",
+    "test": "node test/routes.test.mjs",
+    "predev": "npm run embed",
+    "dev": "wrangler dev",
+    "predeploy": "npm run embed",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

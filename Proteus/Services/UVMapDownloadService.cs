@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using CheapLoc;
@@ -10,39 +9,106 @@ namespace Proteus.Services;
 
 public enum UVMapDownloadState { Idle, Downloading, Done, Failed }
 
+/// <summary>
+/// Fetches the two UV transfer maps on first run. They are ~128 MB each and are deliberately NOT in
+/// the plugin zip.
+/// <para/>
+/// The maps live in the CONFIG directory, not next to the DLL — see <see cref="MigrateFromAssemblyDir"/>
+/// for why that distinction is the entire point of this class.
+/// </summary>
 public class UVMapDownloadService : IDisposable
 {
-    private static readonly string BaseUrl =
-        "https://github.com/solona-m/proteus/releases/download/uvmaps-v1/";
+    /// <summary>
+    /// The release tag the maps are pinned to. Immutable by contract: a revised map gets a NEW tag
+    /// rather than replacing this one's assets, because a mirror caches by URL and would otherwise
+    /// keep serving the old bytes for its whole TTL. Bump this and <see cref="MapFiles"/> together.
+    /// </summary>
+    private const string MapsTag = "uvmaps-v1";
 
-    private static readonly string[] MapFiles =
+    /// <summary>Expected size and SHA-256 per map. See <see cref="ProteusAssets"/> for why they are pinned.</summary>
+    private static readonly (string Name, long Bytes, string Sha256)[] MapFiles =
     [
-        "bibo_to_gen3_transfer.tif",
-        "gen3_to_bibo_transfer.tif",
+        ("bibo_to_gen3_transfer.tif", 134217960L, "155e736ddfb78448552968cdac7cd32f76012c83d5488058387e9fc53bd61cba"),
+        ("gen3_to_bibo_transfer.tif", 134217960L, "1ec0280896cdd9b496dd5f76691ebbdbf1309229256f9126df5ee155bedbb946"),
     ];
 
     private readonly IPluginLog log;
+    private readonly ResilientDownloader downloader;
     private readonly string mapsDir;
+    private readonly string? legacyMapsDir;
     private readonly CancellationTokenSource cts = new();
 
     public UVMapDownloadState State { get; private set; } = UVMapDownloadState.Idle;
     public string StatusMessage { get; private set; } = string.Empty;
 
-    public UVMapDownloadService(IPluginLog log, string pluginDir)
+    /// <param name="dataDir">
+    /// Persistent per-user directory (the plugin's ConfigDirectory). Must NOT be the assembly directory.
+    /// </param>
+    /// <param name="assemblyDir">
+    /// Where a pre-519 install left its maps, so they can be reclaimed instead of re-downloaded.
+    /// </param>
+    public UVMapDownloadService(IPluginLog log, string dataDir, string? assemblyDir = null)
     {
         this.log = log;
-        mapsDir = Path.Combine(pluginDir, "uvmaps");
+        downloader = new ResilientDownloader(log);
+        mapsDir = Path.Combine(dataDir, "uvmaps");
+        legacyMapsDir = assemblyDir == null ? null : Path.Combine(assemblyDir, "uvmaps");
     }
 
     public bool MapsPresent()
     {
-        foreach (var file in MapFiles)
+        MigrateFromAssemblyDir();
+        foreach (var (name, _, _) in MapFiles)
         {
-            var path = Path.Combine(mapsDir, file);
+            var path = Path.Combine(mapsDir, name);
             if (!File.Exists(path) || new FileInfo(path).Length == 0)
                 return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Reclaims maps left in the old assembly-directory home by an earlier version.
+    /// <para/>
+    /// Dalamud installs each plugin version into its own folder, so maps stored next to the DLL were
+    /// destroyed by every update — which is how ~1.4k installs generated ~48k downloads of a 128 MB
+    /// release asset and got the whole repo's assets throttled. Moving rather than re-fetching means
+    /// an existing user pays nothing for the relocation.
+    /// <para/>
+    /// Deliberately does NOT verify the reclaimed file against <see cref="MapFiles"/>: an older map
+    /// revision that works is worth more than a forced 256 MB re-download, and the checksums exist to
+    /// guard transfers, not to police what is already on disk.
+    /// </summary>
+    private bool migrated;
+    private void MigrateFromAssemblyDir()
+    {
+        if (migrated) return;
+        migrated = true;
+        if (legacyMapsDir == null || !Directory.Exists(legacyMapsDir)) return;
+        if (string.Equals(Path.GetFullPath(legacyMapsDir), Path.GetFullPath(mapsDir),
+                          StringComparison.OrdinalIgnoreCase)) return;
+
+        foreach (var (name, _, _) in MapFiles)
+        {
+            var dst = Path.Combine(mapsDir, name);
+            var src = Path.Combine(legacyMapsDir, name);
+            if (File.Exists(dst) && new FileInfo(dst).Length > 0) continue;
+            if (!File.Exists(src) || new FileInfo(src).Length == 0) continue;
+
+            try
+            {
+                Directory.CreateDirectory(mapsDir);
+                // Move is a rename within a volume and a copy across one. XIVLauncher's plugin folder
+                // and AppData are usually the same volume, but nothing guarantees it.
+                try { File.Move(src, dst, overwrite: true); }
+                catch (IOException) { File.Copy(src, dst, overwrite: true); TryDelete(src); }
+                log.Information("[Proteus] Reclaimed UV map from the old plugin folder: {0}", name);
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "[Proteus] Could not reclaim {0} from the old plugin folder", name);
+            }
+        }
     }
 
     public void EnsureMapsAsync(Action? onComplete = null)
@@ -69,70 +135,67 @@ public class UVMapDownloadService : IDisposable
         {
             Directory.CreateDirectory(mapsDir);
 
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Proteus-Plugin");
-
-            long totalDownloaded = 0;
-            const long totalExpected = 256L * 1024 * 1024;
-
-            foreach (var file in MapFiles)
+            // Only the files still missing count toward the total, each at its FULL size. A partial
+            // .tmp is not subtracted: the downloader reports absolute per-file progress that already
+            // includes the resumed prefix, so subtracting it here would double-discount it and the pill
+            // would finish reading well past 100%.
+            long totalExpected = 0;
+            foreach (var (name, bytes, _) in MapFiles)
             {
-                var dest = Path.Combine(mapsDir, file);
-                var tmp  = dest + ".tmp";
+                var dest = Path.Combine(mapsDir, name);
+                if (File.Exists(dest) && new FileInfo(dest).Length > 0) continue;
+                totalExpected += bytes;
+            }
+            if (totalExpected <= 0) totalExpected = 1;   // guard the division in the progress line
 
+            // Bytes belonging to files already finished this run. The in-flight file's contribution is
+            // whatever it last reported, which is why the two are tracked separately: an attempt that
+            // restarts rewinds `current` to zero without disturbing what is already banked.
+            long completed = 0;
+            long current = 0;
+            long nextReport = 0;
+
+            void Progress(long fileBytes)
+            {
+                current = fileBytes;
+                var done = completed + current;
+                if (done < nextReport) return;
+                StatusMessage = string.Format(
+                    Loc.Localize("Service.UVMaps.Progress.Fmt", "Downloading UV maps... ({0} MB / {1} MB)"),
+                    done / (1024 * 1024), totalExpected / (1024 * 1024));
+                nextReport = done + 5L * 1024 * 1024;
+            }
+
+            foreach (var (name, bytes, sha) in MapFiles)
+            {
+                var dest = Path.Combine(mapsDir, name);
                 if (File.Exists(dest) && new FileInfo(dest).Length > 0)
                     continue;
 
-                if (File.Exists(tmp))
-                    File.Delete(tmp);
+                current = 0;
+                var r = await downloader.FetchAsync(
+                    ProteusAssets.BaseUrls(MapsTag), name, bytes, sha, dest, Progress, cts.Token);
 
-                var url = BaseUrl + file;
-                log.Information("[Proteus] Downloading {0}", url);
-
-                using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-                if (!response.IsSuccessStatusCode)
+                if (!r.Ok)
                 {
-                    Fail(string.Format(Loc.Localize("Service.UVMaps.HttpFailed.Fmt",
-                        "Download failed: HTTP {0} for {1}"), (int)response.StatusCode, file));
-                    return;
-                }
-
-                long fileBytes = 0;
-
-                await using (var src = await response.Content.ReadAsStreamAsync(cts.Token))
-                await using (var dst = File.Create(tmp))
-                {
-                    var buf = new byte[1024 * 1024]; // 1 MB buffer
-                    long nextReport = 5L * 1024 * 1024;
-                    int read;
-
-                    while ((read = await src.ReadAsync(buf, cts.Token)) > 0)
+                    Fail(r.Failure switch
                     {
-                        await dst.WriteAsync(buf.AsMemory(0, read), cts.Token);
-                        fileBytes       += read;
-                        totalDownloaded += read;
-
-                        if (totalDownloaded >= nextReport)
-                        {
-                            var mb    = totalDownloaded / (1024 * 1024);
-                            var total = totalExpected   / (1024 * 1024);
-                            StatusMessage = string.Format(Loc.Localize("Service.UVMaps.Progress.Fmt",
-                                "Downloading UV maps... ({0} MB / {1} MB)"), mb, total);
-                            nextReport += 5L * 1024 * 1024;
-                        }
-                    }
-                }
-
-                if (fileBytes < 100L * 1024 * 1024)
-                {
-                    File.Delete(tmp);
-                    Fail(string.Format(Loc.Localize("Service.UVMaps.TooSmall.Fmt",
-                        "Download too small ({0} bytes) for {1} — possible LFS pointer"), fileBytes, file));
+                        FetchFailure.Http => string.Format(
+                            Loc.Localize("Service.UVMaps.HttpFailed.Fmt", "Download failed: HTTP {0} for {1}"),
+                            r.StatusCode, name),
+                        FetchFailure.TooSmall => string.Format(
+                            Loc.Localize("Service.UVMaps.TooSmall.Fmt",
+                                "Download too small ({0} bytes) for {1} — possible LFS pointer"), r.Bytes, name),
+                        _ => string.Format(
+                            Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), r.Detail),
+                    });
                     return;
                 }
 
-                File.Move(tmp, dest, overwrite: true);
-                log.Information("[Proteus] UV map ready: {0}", file);
+                // Bank the file at its pinned size rather than at whatever the last progress call
+                // reported, so the running total cannot drift from the figure the pill is counting to.
+                completed += bytes;
+                current = 0;
             }
 
             State = UVMapDownloadState.Done;
@@ -142,17 +205,19 @@ public class UVMapDownloadService : IDisposable
         }
         catch (OperationCanceledException)
         {
-            foreach (var file in MapFiles)
-            {
-                var tmp = Path.Combine(mapsDir, file) + ".tmp";
-                if (File.Exists(tmp)) try { File.Delete(tmp); } catch { }
-            }
+            // The .tmp files are deliberately LEFT in place: they are the resume point for the next
+            // session, and every one of them is re-hashed before a byte is appended to it.
             State = UVMapDownloadState.Idle;
         }
         catch (Exception ex)
         {
             Fail(string.Format(Loc.Localize("Service.UVMaps.Error.Fmt", "Download error: {0}"), ex.Message));
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 
     private void Fail(string message)
@@ -162,5 +227,16 @@ public class UVMapDownloadService : IDisposable
         log.Error("[Proteus] {0}", message);
     }
 
-    public void Dispose() => cts.Cancel();
+    /// <summary>
+    /// Cancels any in-flight fetch and releases the HTTP client.
+    /// <para/>
+    /// Disposing the downloader is not tidiness: its <c>HttpClient</c> owns connection-pool timers that
+    /// the runtime roots from outside the plugin's load context, so leaving it alive can pin the context
+    /// and keep the plugin's native libraries mapped after an unload. See ResilientDownloader's field.
+    /// </summary>
+    public void Dispose()
+    {
+        cts.Cancel();
+        downloader.Dispose();
+    }
 }

@@ -947,8 +947,13 @@ public class StatusWindow : Window
 
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         int cacheMb = config.DecodeCacheBudgetMb;
-        if (ImGui.SliderInt(s.TextureCache, ref cacheMb, 512, 4096))
-            config.DecodeCacheBudgetMb = Math.Clamp(cacheMb, 512, 4096);
+        // Logarithmic: the useful range now spans 512 MB to 32 GB, and a linear slider over that puts every
+        // value anyone actually wants inside the first few pixels.
+        if (ImGui.SliderInt(s.TextureCache, ref cacheMb,
+                Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb,
+                "%d MB", ImGuiSliderFlags.Logarithmic))
+            config.DecodeCacheBudgetMb = Math.Clamp(cacheMb,
+                Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             config.Save();

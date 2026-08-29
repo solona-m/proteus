@@ -247,6 +247,42 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (models)"); return null; }
     }
 
+    /// <summary>
+    /// Both path sets from ONE GetGameObjectResourcePaths call.
+    /// <para/>
+    /// The two getters above make the same IPC call and differ only in which extension they keep, so asking
+    /// for both separately pays it twice — and, worse, the two answers can straddle two frames. A caller
+    /// deciding "has the draw object stopped changing" must compare readings of the SAME frame or it is
+    /// diffing noise, so that caller needs this rather than the pair.
+    /// <para/>
+    /// Each set is null when empty, matching the getters above: a character that exists always draws
+    /// something, so empty means the walk caught the draw object mid-teardown.
+    /// </summary>
+    public (HashSet<string>? Models, HashSet<string>? Materials) GetActivePlayerResourcePaths()
+    {
+        if (!IsAvailable) return (null, null);
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return (null, null);
+            var models = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var materials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var gamePaths in dict.Values)
+                foreach (var p in gamePaths)
+                {
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)) models.Add(p);
+                    else if (p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase)) materials.Add(p);
+                }
+            return (models.Count > 0 ? models : null, materials.Count > 0 ? materials : null);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "GetGameObjectResourcePaths failed (combined)");
+            return (null, null);
+        }
+    }
+
     /// <summary>Register a new mod directory with Penumbra.</summary>
     public PenumbraApiEc AddModDirectory(string modDirectory)
     {

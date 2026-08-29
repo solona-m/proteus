@@ -1,0 +1,30 @@
+name = "proteus-assets"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# ── EDIT THIS ────────────────────────────────────────────────────────────────────────────────────
+# One value: the hostname the plugin will fetch from. Its root domain must be a zone on your
+# Cloudflare account.
+#
+#   routes = [
+#     { pattern = "dl.YOURDOMAIN.com", custom_domain = true }
+#   ]
+#
+# custom_domain, NOT a plain `{ pattern = "dl.YOURDOMAIN.com/*", zone_name = ... }` route. A route
+# only attaches the worker to a hostname that ALREADY resolves through Cloudflare; pointing one at a
+# subdomain with no DNS record deploys cleanly and then fails to resolve, which looks like a broken
+# worker rather than a missing record. A custom domain creates the DNS record and the binding
+# together. Note the pattern has no "/*" — a custom domain is a hostname, not a path pattern.
+#
+# It MUST be a real domain on a Cloudflare zone, not a *.workers.dev subdomain: workers.dev cannot
+# use the Cache API or cf.cacheEverything, so a workers.dev deployment would proxy every byte from
+# GitHub uncached — strictly worse than having no mirror at all.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+routes = [
+  { pattern = "dl.solona.info", custom_domain = true }
+]
+
+# Deliberately no bindings, no KV, no R2, no secrets: this worker only caches public release assets
+# and holds nothing of its own. If the traffic ever outgrows a cached proxy, the swap is to point the
+# origin at an R2 bucket — no plugin change, because the plugin only ever knows the dl.* URL.

@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 518;
+    public const int BuildNumber = 528;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -51,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SidecarDiscoveryService discovery;
     private readonly UVRemapService uvRemap;
     private readonly UVMapDownloadService uvMapDl;
+    private readonly DefaultEffectsDownloadService effectsDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
     private readonly DesignBindingService designBindings;
@@ -89,16 +90,27 @@ public sealed class Plugin : IDalamudPlugin
         {
             DecodeCacheBudgetBytes = Math.Max(256, config.DecodeCacheBudgetMb) * 1024L * 1024,
         };
+        // Neither the UV maps nor the starter effects live next to the DLL any more. Dalamud installs
+        // each plugin version into its own folder, so anything stored there is re-downloaded on every
+        // update — which for the 128 MB maps meant ~48k downloads against ~1.4k installs, and is what
+        // got the release assets throttled. ConfigDirectory survives updates; the assembly directory is
+        // passed along only so an older install's copies can be reclaimed instead of re-fetched.
+        var dataDir     = pluginInterface.ConfigDirectory.FullName;
+        var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
+
+        effectsDl = new DefaultEffectsDownloadService(log, dataDir, assemblyDir);
         discovery = new SidecarDiscoveryService(penumbra, log)
         {
-            AssemblyDir = pluginInterface.AssemblyLocation.DirectoryName,
+            DefaultEffectsDir = effectsDl.EffectsDir,
         };
-        // Fill the global effects library with the bundled starter set (skips names already there).
-        // Safe to call before Penumbra is up — it no-ops until the mod directory is resolvable, and
-        // OnPenumbraReady calls it again once it is.
+        // Fill the global effects library with the starter set (skips names already there). Safe to call
+        // before Penumbra is up — it no-ops until the mod directory is resolvable, and OnPenumbraReady
+        // calls it again once it is. Called once more after each starter effect lands, so a library that
+        // is still downloading fills in rather than appearing empty.
         discovery.SeedDefaultEffects();
-        uvRemap = new UVRemapService(log, pluginInterface.AssemblyLocation.DirectoryName!);
-        uvMapDl = new UVMapDownloadService(log, pluginInterface.AssemblyLocation.DirectoryName!);
+        effectsDl.EnsureAsync(onProgress: () => { if (!_disposed) discovery.SeedDefaultEffects(); });
+        uvRemap = new UVRemapService(log, dataDir);
+        uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
         if (!uvMapDl.MapsPresent())
@@ -264,6 +276,7 @@ public sealed class Plugin : IDalamudPlugin
         designWatcher.Dispose();
         designBindings.Dispose();
         uvMapDl.Dispose();
+        effectsDl.Dispose();
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();

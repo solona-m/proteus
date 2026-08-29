@@ -70,6 +70,25 @@ jobs:
         shell: pwsh
         run: Copy-Item "Proteus\bin\Release\win-x64\Proteus\latest.zip" -Destination latest.zip
 
+      # Dalamud re-downloads this zip on every update, for every user, and a testing tag goes out most
+      # days — so anything large that sneaks into the build output is multiplied by all of that. It was
+      # 31 MB (29 MB of it the starter effect art) until that art moved to its own release assets; the
+      # UV maps have never belonged here. This guard exists because both regressions are invisible: the
+      # plugin works perfectly either way, it just quietly costs everyone the bandwidth.
+      - name: Guard the package size
+        shell: pwsh
+        run: |
+          $maxBytes = 8MB
+          $size = (Get-Item latest.zip).Length
+          Write-Host "latest.zip is $([math]::Round($size/1MB, 2)) MB"
+          if ($size -gt $maxBytes) {
+            $big = (Get-ChildItem "Proteus\bin\Release\win-x64" -Recurse -File |
+                    Sort-Object Length -Descending | Select-Object -First 10 |
+                    ForEach-Object { "  {0,10:N0}  {1}" -f $_.Length, $_.FullName }) -join "`n"
+            Write-Error "latest.zip is $([math]::Round($size/1MB, 2)) MB, over the $([math]::Round($maxBytes/1MB)) MB budget. Largest files in the build output:`n$big`n`nLarge assets belong in their own release (see .github/workflows/upload-effects.yml), not in the plugin zip."
+            exit 1
+          }
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
