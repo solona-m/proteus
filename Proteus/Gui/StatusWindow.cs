@@ -4000,8 +4000,10 @@ public class StatusWindow : Window
     /// <summary>
     /// After the header + rows are drawn, point Layer/Shader at the mode the features imply — a sphere map
     /// or metal ⇒ Cloth, a glow effect ⇒ Animated glow, nothing special ⇒ Skin — unless the user pinned it
-    /// in Advanced (<see cref="OverlayDescriptor.ManualShaderLock"/>). Writes the override when a design
-    /// binding is being edited, else the descriptors. Returns true when the mode actually changed.
+    /// in Advanced (<see cref="OverlayDescriptor.ManualShaderLock"/>). The one thing that outranks the pin is
+    /// a selected glow effect, which forces Animated glow and releases the pin — see the comment below for
+    /// why a pinned Cloth over an effect renders nothing at all. Writes the override when a design binding is
+    /// being edited, else the descriptors. Returns true when the mode actually changed.
     /// </summary>
     private static bool ReconcileMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr,
         List<ColorTableRowPreset> rows, FeatureEdit edited, bool canShell = true)
@@ -4011,10 +4013,32 @@ public class StatusWindow : Window
         if (edited == FeatureEdit.Neutral) return false;
         if (overlays.Count == 0) return false;
         bool locked = ovr != null ? (ovr.ManualShaderLock ?? false) : overlays.Any(d => d.ManualShaderLock);
-        if (locked) return false;
 
         var cur  = RenderModeInference.ModeOf(ovr?.Layer ?? overlays[0].Layer,
                                               ovr != null ? ovr.Shader : overlays[0].Shader);
+
+        // A chosen glow effect OUTRANKS the pin, and releases it.
+        //
+        // characterscroll.shpk is the only shader that emits: GearMaterialWriter.PatchColorTable arms the
+        // effect-enable field (23) — the master switch, without which nothing renders however right the rest
+        // is — solely under `isScroll`. So a pin holding Cloth (or Skin) over a selected effect does not
+        // render a subdued glow, it renders NONE, while the editor keeps the Glow slider and the effect
+        // thumbnail live and looking applied. That is the "I set Glow and the mask stays dark" report.
+        //
+        // Picking an effect is an unambiguous request to glow, so it wins. The pin is CLEARED rather than
+        // carried onto Glow: the effect is now what decides the mode, and a pin left behind would strand the
+        // option on characterscroll with no scroll map the moment the effect is cleared again.
+        //
+        // Narrow on purpose — a pin with no effect selected still holds, so Advanced's force-mode radios
+        // keep working, and a pin that ALREADY reads as Glow is left alone.
+        if (locked)
+        {
+            if (!canShell || cur == RenderMode.Glow || !RenderModeInference.HasGlow(overlays, ovr))
+                return false;
+            ColorTableEditor.ApplyMode(overlays, ovr, RenderMode.Glow);
+            ColorTableEditor.SetManualShaderLock(overlays, ovr, false);
+            return true;
+        }
 
         // Leaving Animated glow (the effect was just cleared): drop the Glow those rows carry BEFORE
         // inferring. ApplyGlowTransition zeroes it, but only after this runs — and since Glow now counts
