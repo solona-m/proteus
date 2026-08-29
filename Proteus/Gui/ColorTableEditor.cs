@@ -92,7 +92,7 @@ public static class ColorTableEditor
         void SetScroll(string? s)       { if (ovr != null) ovr.Scroll = s;  else foreach (var d in overlays) d.Scroll = s; }
         void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
         void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
-        void SetLock(bool v)            { if (ovr != null) ovr.ManualShaderLock = v; else foreach (var d in overlays) d.ManualShaderLock = v; }
+        void SetLock(bool v)            => SetManualShaderLock(overlays, ovr, v);
 
         // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
         using (ImRaii.Disabled(noShellReason != null))
@@ -401,6 +401,16 @@ public static class ColorTableEditor
         };
         if (ovr != null) { ovr.Layer = layer; ovr.Shader = shader; }
         else foreach (var d in overlays) { d.Layer = layer; d.Shader = shader; }
+    }
+
+    /// <summary>Set (or release) the manual mode pin, on the binding's override when one is active and on
+    /// every descriptor otherwise — the same target <see cref="ApplyMode"/> writes to, so the pin and the
+    /// mode it pins can never end up on different objects.</summary>
+    public static void SetManualShaderLock(IReadOnlyList<OverlayDescriptor> overlays,
+        GearSettingsPreset? ovr, bool locked)
+    {
+        if (ovr != null) ovr.ManualShaderLock = locked;
+        else foreach (var d in overlays) d.ManualShaderLock = locked;
     }
 
     /// <summary>
