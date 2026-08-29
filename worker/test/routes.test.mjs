@@ -39,7 +39,7 @@ async function check(name, path, expectStatus, expectOrigin) {
   const res = await worker.fetch(new Request('https://dl.example.com' + path), {}, ctx);
   const okStatus = res.status === expectStatus;
   const okOrigin = expectOrigin === undefined
-    || (expectOrigin === null ? fetched.length === 0 : fetched[0] === expectOrigin);
+    || (expectOrigin === null ? fetched.length === 0 : stripEpoch(fetched[0]) === expectOrigin);
   if (okStatus && okOrigin) { pass++; console.log(`  ok   ${name}`); }
   else {
     fail++;
@@ -48,7 +48,10 @@ async function check(name, path, expectStatus, expectOrigin) {
   }
 }
 
+// Release-asset subrequests carry the ORIGIN_EPOCH cache-buster; the exact value is not the point,
+// only that the path and tag reach the right upstream, so it is stripped before comparing.
 const GH = 'https://github.com/solona-m/proteus/releases/download';
+const stripEpoch = (u) => (u ?? '').replace(/\?e=\d+$/, '');
 
 console.log('accepted paths:');
 await check('uv map', '/uvmaps-v1/bibo_to_gen3_transfer.tif', 200,
@@ -107,6 +110,68 @@ console.log('readme endpoint:');
   if (!cc.includes('immutable') && /max-age=(\d+)/.test(cc) && +RegExp.$1 <= 3600) {
     pass++; console.log(`  ok   short, mutable cache-control (${cc})`);
   } else { fail++; console.log(`  FAIL cache-control on README: ${cc}`); }
+}
+
+console.log('fixed-upstream proxies (manifest + icon):');
+{
+  const RAW = 'https://raw.githubusercontent.com';
+  for (const [path, upstream, ctype] of [
+    ['/repo.json', `${RAW}/solona-m/plugins/main/repo.json`, 'application/json'],
+    ['/icon.png', `${RAW}/solona-m/proteus/main/Proteus/images/icon.png`, 'image/png'],
+  ]) {
+    store.clear();
+    fetched = [];
+    fetchOpts = [];
+    const res = await worker.fetch(new Request('https://dl.example.com' + path), {}, ctx);
+    const cc = res.headers.get('cache-control') ?? '';
+    const ttl = /max-age=(\d+)/.exec(cc)?.[1];
+    const ok = res.status === 200
+      && fetched[0] === upstream
+      && res.headers.get('content-type')?.startsWith(ctype)
+      // Both are MUTABLE. Inheriting the assets' immutable year would hide a new release from every
+      // client for that whole year — the worst possible failure for the manifest specifically.
+      && !cc.includes('immutable')
+      && +ttl <= 86400;
+    if (ok) { pass++; console.log(`  ok   ${path} -> raw.githubusercontent (${cc})`); }
+    else {
+      fail++;
+      console.log(`  FAIL ${path}: status ${res.status}, upstream ${fetched[0]}, ` +
+                  `type ${res.headers.get('content-type')}, cc "${cc}"`);
+    }
+  }
+
+  // Second request must come from cache, not from raw.githubusercontent — the whole point, given the
+  // manifest is re-fetched by every client on every launch.
+  fetched = [];
+  await worker.fetch(new Request('https://dl.example.com/icon.png'), {}, ctx);
+  if (fetched.length === 0) { pass++; console.log('  ok   repeat request served from cache'); }
+  else { fail++; console.log(`  FAIL repeat hit upstream: ${fetched[0]}`); }
+
+  // The map is an exact whole-pathname lookup, so nothing adjacent reaches the second origin host.
+  for (const p of ['/repo.json/x', '/x/repo.json', '/REPO.JSON', '/repo.json.bak']) {
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+    const reachedRaw = (fetched[0] ?? '').includes('raw.githubusercontent');
+    if (res.status === 404 && !reachedRaw) { pass++; console.log(`  ok   ${p} rejected`); }
+    else { fail++; console.log(`  FAIL ${p}: status ${res.status}, upstream ${fetched[0]}`); }
+  }
+
+  // Traversal normalises to an allowlisted path BEFORE matching, and serving that path's own resource
+  // is correct — the upstream is a hardcoded literal, so no request can redirect it elsewhere. This
+  // asserts the invariant that actually matters: whatever the path, the upstream is one of two fixed
+  // URLs or nothing.
+  for (const p of ['/icon.png/../repo.json', '/a/b/../../repo.json']) {
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+    const upstream = fetched[0] ?? '(none)';
+    const FIXED = [
+      '(none)',
+      'https://raw.githubusercontent.com/solona-m/plugins/main/repo.json',
+      'https://raw.githubusercontent.com/solona-m/proteus/main/Proteus/images/icon.png',
+    ];
+    if (FIXED.includes(upstream)) { pass++; console.log(`  ok   ${p} -> fixed upstream only (${res.status})`); }
+    else { fail++; console.log(`  FAIL ${p} reached ${upstream}`); }
+  }
 }
 
 console.log('origin failures pass through:');

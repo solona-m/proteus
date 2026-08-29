@@ -47,6 +47,54 @@ const ROUTES = [
 
 const YEAR = 31536000;
 
+/**
+ * Bump to invalidate Cloudflare's own edge cache of the UPSTREAM fetches.
+ *
+ * There are two caches here: `caches.default`, which this worker writes explicitly and only ever on a
+ * 200, and Cloudflare's cache of the `fetch()` subrequest, keyed by the origin URL. The second one is
+ * not reachable from Worker code — `caches.default.delete()` does not clear it — so a bad entry there
+ * can only be removed by purging the zone from the dashboard, or by changing the URL.
+ *
+ * That is not hypothetical: an earlier revision cached upstream responses with a bare `cacheTtl` of one
+ * year, which applied to a 404 as readily as to an asset. Every effects-v1 asset was requested through
+ * the mirror before that release was published, so all eleven 404s were pinned for a year — the tag
+ * went live and the mirror kept insisting the files did not exist. `cacheTtlByStatus` stops NEW
+ * failures being cached; this epoch is what releases the ones already stuck.
+ *
+ * Appended as a query parameter, which GitHub ignores on a release-download URL (verified: the asset
+ * returns 200 with or without it) but which Cloudflare treats as a different cache key.
+ */
+const ORIGIN_EPOCH = '2';
+
+/**
+ * Exact paths proxied to a fixed upstream. Deliberately a lookup of whole pathnames rather than a
+ * pattern: these point at raw.githubusercontent.com, a second origin host, and the safety of the
+ * route table above rests on the path never being able to name an arbitrary upstream. A literal map
+ * cannot, no matter what is thrown at it.
+ *
+ * These matter more than their size suggests. GitHub throttles on REQUEST COUNT, not bytes, and the
+ * plugin manifest is re-fetched by every Dalamud client on every startup and every list refresh —
+ * per user, forever. That is a far higher request rate than the release assets, which are fetched
+ * once per install. The icon is fetched by anyone who opens the plugin installer at all.
+ *
+ * Both are MUTABLE, so neither can take the assets' immutable one-year TTL: the manifest changes on
+ * every release, and a stale one would hide a new version from everybody for the length of the TTL.
+ */
+const STATIC_PROXIES = {
+  '/repo.json': {
+    origin: 'https://raw.githubusercontent.com/solona-m/plugins/main/repo.json',
+    type: 'application/json; charset=utf-8',
+    // Short: this is how a client learns a release exists. Long enough to collapse the startup
+    // stampede, short enough that a new release is visible almost immediately.
+    ttl: 300,
+  },
+  '/icon.png': {
+    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/Proteus/images/icon.png',
+    type: 'image/png',
+    ttl: 86400,
+  },
+};
+
 export default {
   async fetch(request, _env, ctx) {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -68,6 +116,43 @@ export default {
       });
     }
 
+    // Fixed-upstream proxies (the plugin manifest and its icon). Cached at the edge with their own
+    // short TTLs, and re-asked on any failure so a transient upstream error is not pinned.
+    const stat = STATIC_PROXIES[url.pathname];
+    if (stat) {
+      const cache = caches.default;
+      const key = new Request(`${url.origin}${url.pathname}`, { method: 'GET' });
+
+      let hit = await cache.match(key);
+      if (!hit) {
+        const upstream = await fetch(stat.origin, {
+          redirect: 'follow',
+          cf: {
+            cacheEverything: true,
+            cacheTtlByStatus: { '200-299': stat.ttl, '300-399': 0, '400-499': 0, '500-599': 0 },
+          },
+        });
+        if (!upstream.ok) {
+          return new Response(`Upstream ${upstream.status}`, {
+            status: upstream.status,
+            headers: { 'cache-control': 'no-store' },
+          });
+        }
+        hit = new Response(upstream.body, {
+          status: 200,
+          headers: {
+            'content-type': stat.type,
+            'cache-control': `public, max-age=${stat.ttl}`,
+          },
+        });
+        ctx.waitUntil(cache.put(key, hit.clone()));
+      }
+
+      const out = new Response(request.method === 'HEAD' ? null : hit.body, hit);
+      out.headers.set('x-proteus-mirror', 'raw');
+      return out;
+    }
+
     let tag = null;
     let file = null;
     for (const rx of ROUTES) {
@@ -86,7 +171,8 @@ export default {
 
     if (!hit) {
       const origin =
-        `https://github.com/${OWNER}/${REPO}/releases/download/${tag}/${encodeURIComponent(file)}`;
+        `https://github.com/${OWNER}/${REPO}/releases/download/${tag}/${encodeURIComponent(file)}` +
+        `?e=${ORIGIN_EPOCH}`;
 
       // Always fetch the WHOLE object, never the client's range: the cache needs a complete 200 to
       // store, and Cloudflare slices ranges out of it afterwards.

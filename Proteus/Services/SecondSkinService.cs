@@ -2718,7 +2718,11 @@ public sealed class SecondSkinService
                     artPath, entry.ModDirectory);
                 return null;
             }
-            for (int i = 0; i < n; i++) alpha[i] = art[i * 4 + 3];
+            // Every pass below is per-texel with no carried state, so partitioning them cannot change a
+            // byte — and at TexSize each is 4.19M iterations, run once per mask per layer.
+            var al = alpha; var ar = art;
+            CompositorService.ParallelPixels(0, n, 1, (from, to) =>
+            { for (int i = from; i < to; i++) al[i] = ar[i * 4 + 3]; });
         }
         else
         {
@@ -2733,36 +2737,49 @@ public sealed class SecondSkinService
             if (m == null) continue;
             if (wArr == null)
             {
-                wArr = new byte[n];
-                tArr = new byte[n];
-                for (int i = 0; i < n; i++)
+                var w0 = wArr = new byte[n];
+                var t0 = tArr = new byte[n];
+                CompositorService.ParallelPixels(0, n, 1, (from, to) =>
                 {
-                    int o = i * 4, a = m[o + 3];
-                    int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;   // luminance
-                    wArr[i] = (byte)(255 - a);
-                    tArr[i] = (byte)(g * a / 255);
-                }
+                    for (int i = from; i < to; i++)
+                    {
+                        int o = i * 4, a = m[o + 3];
+                        int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;   // luminance
+                        w0[i] = (byte)(255 - a);
+                        t0[i] = (byte)(g * a / 255);
+                    }
+                });
             }
             else
             {
-                for (int i = 0; i < n; i++)
+                var w0 = wArr; var t0 = tArr!;
+                CompositorService.ParallelPixels(0, n, 1, (from, to) =>
                 {
-                    int o = i * 4, a = m[o + 3];
-                    int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;
-                    int inv = 255 - a;
-                    tArr![i] = (byte)(tArr[i] * inv / 255 + g * a / 255);
-                    wArr[i] = (byte)(wArr[i] * inv / 255);
-                }
+                    for (int i = from; i < to; i++)
+                    {
+                        int o = i * 4, a = m[o + 3];
+                        int g = (m[o] * 77 + m[o + 1] * 150 + m[o + 2] * 29) >> 8;
+                        int inv = 255 - a;
+                        t0[i] = (byte)(t0[i] * inv / 255 + g * a / 255);
+                        w0[i] = (byte)(w0[i] * inv / 255);
+                    }
+                });
             }
         }
 
         if (wArr != null)
-            for (int i = 0; i < n; i++)
+        {
+            var al = alpha; var w0 = wArr; var t0 = tArr;
+            CompositorService.ParallelPixels(0, n, 1, (from, to) =>
             {
-                if (alpha[i] == 0) continue;                       // no base coverage -> mask has no say
-                int v = alpha[i] * wArr[i] / 255 + (maskAdds ? tArr![i] : 0);
-                alpha[i] = (byte)(v > 255 ? 255 : v);
-            }
+                for (int i = from; i < to; i++)
+                {
+                    if (al[i] == 0) continue;                      // no base coverage -> mask has no say
+                    int v = al[i] * w0[i] / 255 + (maskAdds ? t0![i] : 0);
+                    al[i] = (byte)(v > 255 ? 255 : v);
+                }
+            });
+        }
 
         long opaque = 0, clear = 0;
         foreach (var a in alpha) { if (a == 0) clear++; else if (a == 255) opaque++; }
@@ -2894,12 +2911,17 @@ public sealed class SecondSkinService
             if (maskPng == null || maskIdx == null) continue;
             // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
             index = index != null ? (byte[])index.Clone() : Solid(0, 0, 0, 255);
-            for (int i = 0; i < index.Length; i += 4)
+            var idxBuf = index; var mp = maskPng; var mi = maskIdx;
+            // Per texel, reading and writing only its own index, so partitioning is byte-identical.
+            CompositorService.ParallelPixels(0, idxBuf.Length, 4, (from, to) =>
             {
-                if (maskPng[i + 3] < 128) continue;   // only where the mask is actually present
-                index[i]     = maskIdx[i];            // red   → row pair
-                index[i + 1] = maskIdx[i + 1];        // green → sub-row
-            }
+                for (int i = from; i < to; i += 4)
+                {
+                    if (mp[i + 3] < 128) continue;    // only where the mask is actually present
+                    idxBuf[i]     = mi[i];            // red   → row pair
+                    idxBuf[i + 1] = mi[i + 1];        // green → sub-row
+                }
+            });
         }
 
         // Mask relief: same top-first claim-combine as the skin body normal (CombineMaskReliefs), so the two
@@ -2961,25 +2983,53 @@ public sealed class SecondSkinService
         // toward opaque, interpolated between sub-rows A and B by the index's green channel.
         if (alpha != null && index != null && rows is { Count: > 0 })
         {
-            alpha = (byte[])alpha.Clone();
-            for (int i = 0; i < alpha.Length; i++)
+            // The row's two opacities, indexed by the 1-based row pair the index texture names, resolved
+            // ONCE up front. This loop runs per texel — 4.19M times at TexSize — and it used to do
+            // `rows.FirstOrDefault(p => p.Row == pair)` inside, which allocates a closure capturing `pair`
+            // and linearly scans the row list on every one of them. The red channel is a /17 bucket, so
+            // there are only ever 16 distinct answers.
+            //
+            // NaN marks "no preset for this pair", which is the case the FirstOrDefault null stood for.
+            const int PairCount = 17;                       // pairs are 1..16; index 0 is unused
+            var opAByPair = new float[PairCount];
+            var opBByPair = new float[PairCount];
+            for (int p = 0; p < PairCount; p++) opAByPair[p] = opBByPair[p] = float.NaN;
+            foreach (var preset in rows)
             {
-                float a = alpha[i] / 255f;
-                if (a <= 0f) continue;
-
-                int pair = index[i * 4] / 17 + 1;                       // red → 1-based row pair
-                var preset = rows.FirstOrDefault(p => p.Row == pair);
-                if (preset == null) continue;
-
-                float blendA = index[i * 4 + 1] / 255f;                 // green → sub-row A weight
-                float opA = preset.SubRowA?.Opacity ?? 0;
-                float opB = preset.SubRowB?.Opacity ?? 0;
-                float op = opB + (opA - opB) * blendA;
-                if (op == 0f) continue;
-
-                float newA = op < 0f ? a * (100f + op) / 100f : a + (1f - a) * op / 100f;
-                alpha[i] = (byte)(Math.Clamp(newA, 0f, 1f) * 255f + 0.5f);
+                if (preset.Row < 1 || preset.Row >= PairCount) continue;
+                // FIRST match wins, exactly as FirstOrDefault did: two presets can carry the same Row, and
+                // letting the later one overwrite would silently change which opacity a texel gets — and
+                // with it the output's content hash, which renames and re-uploads the texture.
+                if (!float.IsNaN(opAByPair[preset.Row])) continue;
+                opAByPair[preset.Row] = preset.SubRowA?.Opacity ?? 0;
+                opBByPair[preset.Row] = preset.SubRowB?.Opacity ?? 0;
             }
+
+            var src = alpha;
+            var dst = (byte[])alpha.Clone();
+            var idx = index;
+            // Per texel, no carried state, so partitioning cannot change a byte.
+            CompositorService.ParallelPixels(0, src.Length, 1, (from, to) =>
+            {
+                for (int i = from; i < to; i++)
+                {
+                    float a = src[i] / 255f;
+                    if (a <= 0f) continue;
+
+                    int pair = idx[i * 4] / 17 + 1;                     // red → 1-based row pair
+                    if (pair < 1 || pair >= PairCount) continue;
+                    float opA = opAByPair[pair];
+                    if (float.IsNaN(opA)) continue;                     // no preset for this row pair
+
+                    float blendA = idx[i * 4 + 1] / 255f;               // green → sub-row A weight
+                    float op = opBByPair[pair] + (opA - opBByPair[pair]) * blendA;
+                    if (op == 0f) continue;
+
+                    float newA = op < 0f ? a * (100f + op) / 100f : a + (1f - a) * op / 100f;
+                    dst[i] = (byte)(Math.Clamp(newA, 0f, 1f) * 255f + 0.5f);
+                }
+            });
+            alpha = dst;
         }
 
         // norm: RG = the normal itself, B = TRANSPARENCY (the gear alpha gate), A = unused.
@@ -2987,8 +3037,14 @@ public sealed class SecondSkinService
         // opacity has to be translated into the normal map's BLUE channel or the shell renders solid.
         // (It also needs the material's transparency flag on — see GearMaterialWriter.)
         var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
-        for (int i = 0; i < TexSize * TexSize; i++)
-            norm[i * 4 + 2] = alpha?[i] ?? 255;   // blue is the gate; alpha is not used
+        {
+            var nrm = norm; var al = alpha;
+            CompositorService.ParallelPixels(0, TexSize * TexSize, 1, (from, to) =>
+            {
+                for (int i = from; i < to; i++)
+                    nrm[i * 4 + 2] = al?[i] ?? 255;   // blue is the gate; alpha is not used
+            });
+        }
 
         var slots = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
