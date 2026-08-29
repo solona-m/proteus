@@ -599,10 +599,6 @@
     "message": "Ce pack est déjà un mod Proteus. Il sera installé exactement tel que son auteur l'a conçu — rien n'est converti, et ses propres options restent dans Penumbra.",
     "description": ""
   },
-  "Content.BodyOnly": {
-    "message": "corps du porteur",
-    "description": ""
-  },
   "Content.Unbound": {
     "message": "matériau non lié",
     "description": ""
@@ -1003,6 +999,110 @@
     "message": "Le pack contient {0} dispositions UV, le mod reçoit donc dans Penumbra un groupe à choix unique « {1} » ({2}). Une seule est composée à la fois.",
     "description": ""
   },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Importé depuis le pack Atramentum Luminis « {0} ».",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "Ce nom de mod ne contient aucun caractère utilisable — utilisez des lettres ou des chiffres.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "Un dossier de mod nommé « {0} » existe déjà.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "Le pack n’est plus là : {0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Le dossier de mods de Penumbra n’est pas disponible.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "Aucune texture de ce pack n’a pu être lue au second passage ; rien n’a été écrit.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "« Proteus » est réservé — choisissez un autre nom de mod.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "Échec de l’écriture du mod : {0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "Tatouage lumineux",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — lueur",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "Peau de l’auteur",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — peau de l’auteur",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}, mais Proteus n’a pas pu activer la lueur pour vous. Cochez-la sous « {3} » dans Penumbra, sinon rien ne sera peint.",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}. La lueur est activée ; la peau de l’auteur est disponible sous « {3} » dans Penumbra et démarre désactivée.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "« {0} » est un vrai chemin du jeu : il s’agit d’un mod TexTools ordinaire, pas d’un pack Atramentum Luminis. Installez-le plutôt dans Penumbra.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "le bloc de données du pack ne la contient pas.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "son canal alpha est uniforme : elle ne porte aucune lueur. Atramentum Luminis y place la lueur, et une texture sans lueur est une peau ordinaire, pas un tatouage lumineux.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "ce n’est pas une texture — Atramentum Luminis n’en transporte que.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "c’est un modèle ou un matériau (type SqPack {0}), pas une texture.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "ses pixels n’ont pas pu être décodés.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus ne connaît pas le corps « {0} » et ne peut pas demander à votre personnage lequel il porte tant qu’il n’est pas chargé. Connectez-vous et rouvrez ce pack.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "elle n’a pas pu être lue : {0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus ne connaît pas la disposition corporelle de ce pack : il peindra donc l’image telle quelle sur le corps que vous portez ({0}), sans redimensionnement. Si le pack a été peint pour un autre corps, le rendu sera faux — changez la cible ci-dessous si vous le savez.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "« {0} » brille sur {1:P0} du corps. C’est valide, mais cela signifie généralement que la texture n’a pas de vrai canal alpha — vérifiez le résultat avant de l’utiliser.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "Rien dans ce pack ne peut être importé — voir les raisons ci-dessus.",
+    "description": ""
+  },
   "Import.Materials.Fallback": {
     "message": "Proteus n'a pas pu lire la liste des corps du jeu, cet import ne visera donc qu'un ensemble de corps féminins connus pour fonctionner. Rouvrez ce pack une fois en jeu pour prendre en compte toutes les races.",
     "description": ""
@@ -1077,6 +1177,66 @@
   },
   "Import.Website.Tip": {
     "message": "Repris sur la page Penumbra du mod.",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "{0} chemins",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "Le pack indique avoir été peint pour {0} ; Proteus l’adaptera au corps que vous portez.",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "Corps",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "Sur quel matériau de corps l’image est peinte. Proteus le déduit du pack quand il reconnaît le corps, et de celui que vous portez sinon — changez-le si vous savez que le pack visait un autre corps.",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} brille",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "Importez un tatouage lumineux Atramentum Luminis (.ttmp2). Sa lueur devient un calque Proteus que vous pouvez recolorer et atténuer, sans aucun mod de shader.",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus n’a aucun filtre de race ou de sexe : cela peindra tout personnage portant un corps au même matériau. Désactivez le mod dans Penumbra pour les personnages qui ne sont pas concernés.",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "Aucune texture de ce pack ne porte de masque de lueur Atramentum Luminis.",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "Importé une seule fois, pour :\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "Impossible de lire ce pack : {0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinOff.Fmt": {
+    "message": "La lueur est activée. La texture de corps de l’auteur est également importée, sous « {0} » dans Penumbra, et démarre DÉSACTIVÉE — elle remplace votre teint par le sien : elle est là si vous voulez les parties non lumineuses du tatouage, et ignorable sinon.",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "ignorée",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\nIgnorée : {1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "Textures : {0} sur {1}",
     "description": ""
   },
   "Mods.Ao.Off": {

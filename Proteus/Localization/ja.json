@@ -599,10 +599,6 @@
     "message": "このパックはすでに Proteus モッドです。作者が作ったままインストールされます—何も変換されず、オプションは Penumbra に残ります。",
     "description": ""
   },
-  "Content.BodyOnly": {
-    "message": "着用者自身の身体",
-    "description": ""
-  },
   "Content.Unbound": {
     "message": "マテリアル未割当",
     "description": ""
@@ -1003,6 +999,110 @@
     "message": "このパックにはUVレイアウトが{0}種類あるため、MODにはPenumbraで単一選択の「{1}」グループが作られます（{2}）。同時に合成されるのは1つだけです。",
     "description": ""
   },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Atramentum Luminis パック「{0}」からインポートしました。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "その MOD 名には使える文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "「{0}」という MOD フォルダーはすでに存在します。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "パックが見つかりません: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Penumbra の MOD ディレクトリを取得できません。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "このパックのテクスチャは2回目の読み込みでいずれも読み取れなかったため、何も書き込まれませんでした。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "このパックからインポートできるものはありません。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "「Proteus」は予約済みです。別の MOD 名を選んでください。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "MOD の書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "発光タトゥー",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — 発光",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "作者の肌テクスチャ",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — 作者の肌",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。ただし Proteus は発光を自動で有効にできませんでした。Penumbra の「{3}」でチェックしないと何も描画されません。",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。発光はオンです。作者の肌テクスチャは Penumbra の「{3}」にあり、初期状態ではオフです。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "「{0}」は実在するゲーム内パスです。つまりこれは Atramentum Luminis パックではなく通常の TexTools MOD です。Penumbra でインストールしてください。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "モッドパックのデータ内に含まれていません。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "アルファチャンネルが均一で、発光情報を持っていません。Atramentum Luminis は発光をそこに格納するため、それがないテクスチャは発光タトゥーではなく通常の肌です。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "テクスチャではありません。Atramentum Luminis が扱うのはテクスチャだけです。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "モデルまたはマテリアル（SqPack タイプ {0}）であり、テクスチャではありません。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "ピクセルをデコードできませんでした。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus はボディ「{0}」を知らず、キャラクターが読み込まれるまで確認できません。ログインしてからこのパックを開き直してください。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "読み取れませんでした: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus はこのパックのボディ UV を把握していないため、現在着用中のボディ（{0}）にそのままリサイズなしで描画します。別のボディ向けに作られている場合は崩れます。分かるなら下で対象ボディを変更してください。",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "「{0}」はボディの {1:P0} が発光します。問題ない場合もありますが、通常はテクスチャに実質的なアルファチャンネルがないことを意味します。使う前に結果を確認してください。",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "このパックからインポートできるものはありません — 上の理由をご確認ください。",
+    "description": ""
+  },
   "Import.Materials.Fallback": {
     "message": "Proteusがゲームのボディ一覧を読み取れなかったため、このインポートは動作確認済みの女性ボディのみを対象にします。ゲームに入ってからこのパックを開き直すと、すべての種族を取り込めます。",
     "description": ""
@@ -1077,6 +1177,66 @@
   },
   "Import.Website.Tip": {
     "message": "MODのPenumbraページに引き継がれます。",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "{0} パス",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "このパックは {0} 向けとのことなので、Proteus が着用中のボディに合わせて変換します。",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "ボディ",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "アートをどのボディマテリアルに描くかです。Proteus はボディを認識できればパックから、できなければ着用中のものから選びます。別のボディ向けだと分かっている場合は変更してください。",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} 発光",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "Atramentum Luminis の発光タトゥー（.ttmp2）をインポートします。発光は色や強さを調整できる Proteus オーバーレイになり、シェーダー MOD は不要です。",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus には種族・性別フィルターがありません。同じマテリアルのボディを着ているキャラクターにはすべて適用されます。対象外のキャラクターでは Penumbra で MOD をオフにしてください。",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "このモッドパックには Atramentum Luminis の発光マスクを持つテクスチャがありません。",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "次のパス向けに一度だけインポートされます:\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "このモッドパックを読み取れませんでした: {0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinOff.Fmt": {
+    "message": "発光はオンになります。作者自身の肌テクスチャも Penumbra の「{0}」に取り込まれますが、初期状態はオフです。これはあなたの肌色を作者のものに置き換えるため、発光しないタトゥー部分が欲しいときだけ使ってください。",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\nスキップ: {1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "テクスチャ: {1} 中 {0}",
     "description": ""
   },
   "Mods.Ao.Off": {

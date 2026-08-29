@@ -1,6 +1,6 @@
 # Proteus
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files or onion overlay omp files.
+Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos.
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
@@ -61,7 +61,7 @@ Texture slots the chosen material can't actually use are greyed out.
 
 #### Import
 
-Takes a mod pack and converts it to a Proteus mod. Two types are supported:
+Takes a mod pack and converts it to a Proteus mod. Three types are supported:
 
 **Regular Penumbra mods (`.pmp`)** — wear parts of a normal gear mod without using a gear slot, and get the advanced colour-table features on top.
 
@@ -76,6 +76,15 @@ The useful side effect is that **you can wear several of its options at once**. 
 **Onion overlay packs (`.omp`)** — wear its layers as Proteus overlays you can recolour and restack, make glow, etc.
 
 A pack that ships the same artwork in several UV layouts (bibo, gen3, vanilla) becomes a single-select **Body UV** group in Penumbra, pre-set to the layout matching the body you're wearing, so only one composites at a time. Layer opacity is baked into the image; a layer with a blend mode other than Normal is skipped and said so, because Proteus composites alpha-over only. Onion's own option groups and race filters aren't imported.
+
+**Atramentum Luminis glow tattoos (`.ttmp2`)** — wear the glow as a Proteus overlay you can recolour and dim, with no shader mod needed.
+
+Atramentum Luminis packs hide their glow in a texture's alpha channel, and without that shader mod installed they render nothing at all. Proteus reads the glow out and rebuilds it as an ordinary overlay: the panels the artist marked become a second skin, and the artwork itself drives an animated-glow material, so the neon keeps its own colours per pixel. The **Glow** dial in Colors then does what you'd expect, and you can bind the whole thing to a design like any other overlay.
+
+- The pack's own body texture comes in too, as a separate **Author's skin** option that arrives switched **off** — it replaces your skin tone with theirs, so it's there if you want the parts of a tattoo that don't glow, and ignorable if you don't.
+- Proteus recognises bibo and gen3 outright. For any other body it paints onto the one you're wearing without resizing, and says so; the **Body** picker overrides it if the pack was made for something else.
+- There's no race or sex filter, so the mod paints any character on a body with the same material. Turn it off in Penumbra for characters it wasn't painted for.
+- Eye glow isn't imported today, but message if you're interested.
 
 #### Export
 

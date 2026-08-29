@@ -402,7 +402,10 @@ public class SidecarDiscoveryService
 
     // ── Effects (characterscroll `_o` / `catc` scroll maps) ──────────────────
 
-    private const string EffectsSubdir = "Effects";
+    /// <summary>Where a mod keeps its own scroll maps. Internal because an importer writing one has to
+    /// land it in the folder <see cref="ResolveEffectPath"/> looks in, and two spellings of "Effects"
+    /// would leave the written effect invisible to the dropdown that is supposed to list it.</summary>
+    internal const string EffectsSubdir = "Effects";
 
     /// <summary>
     /// Image types an effect can be. .tex and .dds get the game-format decoders; everything else goes

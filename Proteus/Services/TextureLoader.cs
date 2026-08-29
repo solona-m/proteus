@@ -688,14 +688,36 @@ public class TextureLoader
         try
         {
             if (!File.Exists(diskPath)) return null;
-            var bytes = SanitizeTexBytes(File.ReadAllBytes(diskPath));
-            var tex = LoadLuminaFileFromBytes<TexFile>(bytes);
-            if (tex == null) return null;
-            return DecodeTexSurface(bytes, tex);
+            return LoadTexBytesAsRgba(File.ReadAllBytes(diskPath), diskPath);
         }
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] Failed to load .tex: {0}", diskPath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Load a <c>.tex</c> already in memory as RGBA8. Returns null on failure.
+    /// <para/>
+    /// The bytes overload exists for a texture that has no file: a <c>.ttmp2</c> keeps its textures inside
+    /// one SqPack blob, and <see cref="TexToolsPackage"/> reassembles them into <c>.tex</c> form without
+    /// ever putting them on disk. Writing a temp file just to read it back would be the same work twice
+    /// and a 22 MB round trip per texture.
+    /// </summary>
+    /// <param name="what">What these bytes are, for the log line when they will not decode.</param>
+    public (byte[] rgba, int width, int height)? LoadTexBytesAsRgba(byte[] bytes, string what)
+    {
+        try
+        {
+            var sanitized = SanitizeTexBytes(bytes);
+            var tex = LoadLuminaFileFromBytes<TexFile>(sanitized);
+            if (tex == null) return null;
+            return DecodeTexSurface(sanitized, tex);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] Failed to load .tex: {0}", what);
             return null;
         }
     }

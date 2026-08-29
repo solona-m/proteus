@@ -42,6 +42,7 @@ public static class Strings
     public static FooterStrings   Footer   { get; private set; } = new();
     public static ImportStrings   Import   { get; private set; } = new();
     public static ContentStrings  Content  { get; private set; } = new();
+    public static LuminisStrings  Luminis  { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
@@ -64,6 +65,7 @@ public static class Strings
         Footer   = new FooterStrings();
         Import   = new ImportStrings();
         Content  = new ContentStrings();
+        Luminis  = new LuminisStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
         ColorPanel = new ColorPanelStrings();
@@ -612,6 +614,69 @@ public sealed class ImportStrings
     public readonly string LayoutGroupFmt = Loc.Localize("Import.Materials.Layout.Fmt", "{0}  ({1})");
 
     public readonly string ImportFailedFmt = Loc.Localize("Import.Failed.Fmt", "Import failed: {0}");
+}
+
+/// <summary>The Atramentum Luminis (<c>.ttmp2</c>) half of the Import tab.</summary>
+public sealed class LuminisStrings
+{
+    /// <summary>
+    /// The third line of the Import tab's intro, in the same voice as the other two: what you get, not how.
+    /// Names the old mod outright, because that name is the only reason anyone has one of these files —
+    /// the packs themselves say "requires Atramentum Luminis" and nothing else identifies them.
+    /// </summary>
+    public readonly string Intro = Loc.Localize("Luminis.Intro",
+        "Import an Atramentum Luminis glow tattoo (.ttmp2). Its glow becomes a Proteus overlay you can "
+      + "recolour and dim, with no shader mod needed.");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Luminis.ReadFailed.Fmt",
+        "Couldn't read that modpack: {0}");
+
+    public readonly string TextureCountFmt = Loc.Localize("Luminis.TextureCount.Fmt",
+        "Textures: {0} of {1}");
+
+    /// <summary>How much of the sheet carries a glow mask — the number that says whether this really is an
+    /// Atramentum Luminis pack, so it goes in the table rather than in a tooltip.</summary>
+    public readonly string GlowFmt = Loc.Localize("Luminis.Glow.Fmt", "{0:P1} glows");
+
+    public readonly string SizeFmt = Loc.Localize("Luminis.Size.Fmt", "{0}×{1}");
+
+    /// <summary>Several manifest paths over one picture, which is the normal shape of these packs.</summary>
+    public readonly string AliasesFmt = Loc.Localize("Luminis.Aliases.Fmt", "{0} paths");
+
+    public readonly string Skipped = Loc.Localize("Luminis.Skipped", "skipped");
+
+    public readonly string SkippedReasonFmt = Loc.Localize("Luminis.SkippedReason.Fmt", "{0}\nSkipped: {1}");
+
+    public readonly string PathsFmt = Loc.Localize("Luminis.Paths.Fmt", "Imported once, for:\n{0}");
+
+    /// <summary>Said before the button. The author's skin is the surprising half of this import — it is a
+    /// whole body texture, not a tattoo — so what it is and that it starts off are both stated up front.</summary>
+    public readonly string SkinOffFmt = Loc.Localize("Luminis.SkinOff.Fmt",
+        "The glow goes on. The author's own body texture comes in too, under \"{0}\" in Penumbra, and starts "
+      + "OFF — it replaces your skin tone with theirs, so it is there if you want the parts of the tattoo "
+      + "that don't glow and ignorable if you don't.");
+
+    public readonly string BodyTarget = Loc.Localize("Luminis.BodyTarget.Label", "Body") + "###luminisBody";
+
+    public readonly string BodyTargetTip = Loc.Localize("Luminis.BodyTarget.Tip",
+        "Which body material the art is painted onto. Proteus picks this from the pack when it recognises "
+      + "the body, and from the one you're wearing when it doesn't — change it if you know the pack was "
+      + "made for a different one.");
+
+    public readonly string BodyFromPackFmt = Loc.Localize("Luminis.BodyFromPack.Fmt",
+        "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.");
+
+    /// <summary>
+    /// Stated plainly rather than in the warning colour. Proteus has never had a race or sex filter — it
+    /// is a standing property of every overlay, not something this pack did — and amber on every import is
+    /// the cried-wolf problem <see cref="ContentStrings.BodyOnly"/> exists to avoid.
+    /// </summary>
+    public readonly string NoRaceFilter = Loc.Localize("Luminis.NoRaceFilter",
+        "Proteus has no race or sex filter: this paints any character wearing a body with the same "
+      + "material. Turn the mod off in Penumbra for characters it wasn't painted for.");
+
+    public readonly string NothingUsable = Loc.Localize("Luminis.NothingUsable",
+        "No texture in this modpack carries an Atramentum Luminis glow mask.");
 }
 
 public sealed class ExportStrings

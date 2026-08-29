@@ -599,10 +599,6 @@
     "message": "此包已经是 Proteus 模组。它将按作者构建的原样安装——不会转换任何内容，其自身的选项仍留在 Penumbra 中。",
     "description": ""
   },
-  "Content.BodyOnly": {
-    "message": "穿戴者自身的身体",
-    "description": ""
-  },
   "Content.Unbound": {
     "message": "材质未绑定",
     "description": ""
@@ -1003,6 +999,110 @@
     "message": "此包含有 {0} 种 UV 布局，因此该模组会在 Penumbra 中获得一个单选组“{1}”（{2}）。同一时间只会合成其中一种。",
     "description": ""
   },
+  "Import.Luminis.Description.Fmt": {
+    "message": "从 Atramentum Luminis 整合包“{0}”导入。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "该模组名称没有可用字符 — 请使用字母或数字。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "名为“{0}”的模组文件夹已存在。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "整合包已不在原处：{0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "无法获取 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "第二次读取时该整合包的贴图均无法解析，因此未写入任何内容。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "此整合包中没有可导入的内容。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "“Proteus”为保留名称 — 请另选一个模组名称。",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "发光纹身",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — 发光",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "作者的肤色",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — 作者的肤色",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}{2}，但 Proteus 未能为你开启发光。请在 Penumbra 的“{3}”中勾选，否则不会绘制任何内容。",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}{2}。发光已开启；作者的肤色贴图位于 Penumbra 的“{3}”中，默认关闭。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "“{0}”是真实的游戏路径，因此这是普通的 TexTools 模组，而非 Atramentum Luminis 整合包。请改在 Penumbra 中安装。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "整合包的数据块中没有它。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "它的 Alpha 通道是平的，因此不包含发光信息。Atramentum Luminis 将发光存在那里，没有它的贴图只是普通肤色，而不是发光纹身。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "它不是贴图 — Atramentum Luminis 只包含贴图。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "它是模型或材质（SqPack 类型 {0}），而非贴图。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "无法解码其像素。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus 不认识身体“{0}”，在角色加载前也无法询问它穿的是哪一种。请登录后重新打开此整合包。",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "无法读取：{0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus 不知道此整合包的身体 UV，因此会将图像原样绘制到你当前穿着的身体（{0}）上，不做缩放。如果该包是为另一种身体绘制的，显示会出错 — 若你知道，请在下方更改目标身体。",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "“{0}”在身体的 {1:P0} 上发光。这是允许的，但通常意味着该贴图并没有真正的 Alpha 通道 — 使用前请先检查效果。",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "此整合包中没有可导入的内容 — 请参见上方的原因。",
+    "description": ""
+  },
   "Import.Materials.Fallback": {
     "message": "Proteus 无法读取游戏的身体列表，因此本次导入只会针对一组已知可用的女性身体。进入游戏后重新打开此包，即可涵盖所有种族。",
     "description": ""
@@ -1077,6 +1177,66 @@
   },
   "Import.Website.Tip": {
     "message": "会沿用到模组的 Penumbra 页面。",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "{0} 个路径",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "整合包声明它是为 {0} 绘制的，Proteus 会将其适配到你穿着的身体。",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "身体",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "将图像绘制到哪个身体材质上。能识别出身体时 Proteus 从整合包取值，否则取你当前穿着的身体 — 若你知道它是为另一种身体制作的，请自行更改。",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} 发光",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "导入 Atramentum Luminis 发光纹身（.ttmp2）。其发光会变成可重新上色、可调暗的 Proteus 叠层，无需着色器模组。",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus 没有种族或性别过滤：它会绘制到任何使用相同材质身体的角色上。对于非目标角色，请在 Penumbra 中关闭此模组。",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "此整合包中没有任何贴图包含 Atramentum Luminis 发光遮罩。",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "仅导入一次，适用于：\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "无法读取该整合包：{0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinOff.Fmt": {
+    "message": "发光会开启。作者自己的身体贴图也会一并导入，位于 Penumbra 的“{0}”中，且默认关闭 — 它会用作者的肤色替掉你的，所以只有在你需要纹身中不发光的部分时才需要它。",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "贴图：{0} / {1}",
     "description": ""
   },
   "Mods.Ao.Off": {
