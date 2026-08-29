@@ -1,12 +1,12 @@
 # Proteus
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files.
+Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files or onion overlay omp files.
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
-**Requires:** [Penumbra](https://github.com/xivdev/Penumbra) and [Glamourer](https://github.com/Ottermandias/Glamourer)
+- **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
+- **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Toggles** tab can split that piece out and give it a real switch.
 
-Glamourer is what lets Proteus refresh your character without the redraw flicker, bind overlay setups to your designs, and host second skins on an invisible item.
 
 If you need help, please look at this [Troubleshooting Guide](TROUBLESHOOTING.md).
 Then, join https://discord.gg/solona and ask in the #help channel. This is still new but I'll work to fix any bugs asap!
@@ -29,7 +29,7 @@ Install some overlay mods made for Proteus, choose your options and your charact
 
 ### Status Window
 
-Open the status window with `/proteus`. It has four tabs, and the last composite's result (textures patched, mods used, how long ago) always shows along the bottom.
+Open the status window with `/proteus`. It has seven tabs, and the last composite's result (textures patched, mods used, how long ago) always shows along the bottom.
 
 #### Mods
 
@@ -70,6 +70,22 @@ A pack that ships the same artwork in several UV layouts (bibo, gen3, vanilla) b
 Saves one of your Proteus mods as a Penumbra mod pack (`.pmp`) to share. Pick the mod from the dropdown, press **Export**, and choose where to put it — the file name is filled in from the mod name, and the dialog opens on your desktop the first time and wherever you saved last after that.
 
 The pack is a straight copy of the mod folder, so nothing is lost: options, colour tables, masks, glow effects and gear layers all come along, and the recipient's Proteus picks it up as soon as Penumbra installs it. Disabled mods can be exported too.
+
+#### Toggles
+
+Takes a piece of geometry out of a mod's model and puts it behind an on/off switch — a bow, a collar, a strap that the author welded into an always-on mesh. This works on **any** mod you have installed, not just Proteus ones; most of them will never have heard of Proteus.
+
+The switch is written into the mod itself as an ordinary Penumbra option, so it shows up in that mod's own settings and **keeps working with Proteus turned off**.
+
+Pick a mod, then one of its models. The parts of that model are listed with their triangle counts, and shown in a viewport beside them — click a piece to switch it on or off, drag to turn the model, shift-drag to move it, scroll to zoom. Tick the parts one switch should hide, give it a name, and press **Make a switch from the ticked parts**. Queue up as many as you want, then **Write the switches into the mod**.
+
+Things worth knowing:
+
+- **Ten switches per item.** That's the game's limit, not Proteus's. If an author has already used them all, the tab says so and won't let you add more.
+- **Equipment and accessories only.** There's nothing to attach a switch to on other model types.
+- **Parts the author already made optional can't take a second switch**, and the tab marks them.
+- **It's reversible.** The original models are kept, so **Undo — restore the original models** puts the mod back exactly as it was and removes the option group.
+- If an item has several model files whose parts are arranged differently, Proteus edits only the ones the switch lands on correctly and tells you which it left alone, rather than guessing and hitting the wrong geometry.
 
 #### Settings
 
