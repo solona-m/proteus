@@ -123,6 +123,10 @@
     "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] 이전 플러그인 저장소 URL로 설치되었습니다. /xlplugins > Experimental에서 https://dl.solona.info/repo.json 으로 변경하면 업데이트가 빨라지고 GitHub 부하도 줄어듭니다. 변경하지 않아도 설치는 계속 작동합니다. 이 알림은 몇 번 표시된 후 사라집니다.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] \"{0}\"이(가) Proteus가 레이어를 만들 수 없는 오버레이에 발광을 설정했습니다. 발광은 메시 위에 얹는 레이어가 필요하며, 이는 자신의 피부(몸, 얼굴, 머리카락, 꼬리, 귀)에서만 가능합니다. 장비, 장신구, 무기에서는 사용할 수 없습니다.",
     "description": ""

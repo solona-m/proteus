@@ -123,6 +123,10 @@
     "message": "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now renders as a cloth layer — it needs a free accessory to sit on, and its surface will look slightly different.",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] You installed from the old plugin repo URL. Switching it to https://dl.solona.info/repo.json under /xlplugins > Experimental makes updates faster and takes load off GitHub. Your install keeps working either way. This reminder shows a few times, then stops.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] \"{0}\" sets Glow on an overlay Proteus cannot build a layer for. Glow needs a layer over the mesh, and that only works on your own skin — body, face, hair, tail or ears — not on gear, accessories or weapons.",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."

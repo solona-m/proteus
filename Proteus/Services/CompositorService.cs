@@ -461,6 +461,7 @@ public class CompositorService : IDisposable
         penumbra.LocalPlayerRedrawn            += OnLocalPlayerRedrawn;
         glamourer.LocalPlayerStateChanged      += OnGlamourerStateChanged;
         glamourer.LocalPlayerCustomizationChanged += OnGlamourerCustomizationChanged;
+        glamourer.LocalPlayerEquipmentChanged  += OnGlamourerEquipmentChanged;
         Plugin.Framework.Update += OnBootPoll;
 
         // The decode cache is only ever trimmed when it EXCEEDS its budget, so left alone it holds the full
@@ -574,6 +575,7 @@ public class CompositorService : IDisposable
         penumbra.LocalPlayerRedrawn              -= OnLocalPlayerRedrawn;
         glamourer.LocalPlayerStateChanged        -= OnGlamourerStateChanged;
         glamourer.LocalPlayerCustomizationChanged -= OnGlamourerCustomizationChanged;
+        glamourer.LocalPlayerEquipmentChanged   -= OnGlamourerEquipmentChanged;
         Plugin.Framework.Update -= OnBootPoll;
 
         recompositeGate.Stop();
@@ -1015,6 +1017,24 @@ public class CompositorService : IDisposable
 
         if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
             TriggerRecomposite("glamourer-customization", force: false);
+    }
+
+    /// <summary>
+    /// Glamourer moved an equipped item or a pair of glasses.
+    /// <para/>
+    /// AMBIENT, and that is what makes it affordable. Glamourer raises this per changed slot, so applying
+    /// an outfit produces a burst — the 200ms debounce collapses those into one run, and the
+    /// unchanged-inputs gate then costs a fingerprint compare when nothing the composite reads actually
+    /// moved. With the skin-reuse gate in place a real outfit change rebuilds only the shell.
+    /// <para/>
+    /// Not narrowed to "only when a shell exists": equipping shoes replaces the bare foot model, which is
+    /// one of the meshes the skin's seam map is keyed on, so an equip can legitimately change the SKIN
+    /// too. Deciding that here would duplicate the fingerprint's job and get it wrong; let the gate answer.
+    /// </summary>
+    private void OnGlamourerEquipmentChanged()
+    {
+        if (!config.PluginEnabled) return;
+        TriggerRecomposite("glamourer-equip", force: false);
     }
 
     private void OnGlamourerCustomizationChanged()
@@ -2005,6 +2025,43 @@ public class CompositorService : IDisposable
     private volatile string? _lastCompositeFingerprint;
 
     /// <summary>
+    /// The SKIN half of the last published composite's inputs, and everything the skin phase produced.
+    /// <para/>
+    /// Lets an outfit change reuse the skin outright. The unchanged-inputs gate above is all-or-nothing, so
+    /// swapping a top re-ran the entire skin decode+blend — measured at 2.5s of a 3.6s composite — to
+    /// produce byte-identical textures, because the equipped-item signature sits in the same fingerprint as
+    /// the overlays.
+    /// <para/>
+    /// All four move together, only on a successful publish, and are only trusted when the files they name
+    /// are still on disk. The skin phase does not merely compute pixels: it fills the redirect map, the
+    /// glow-button targets and the contributions panel, so reusing it means restoring all three. A redirect
+    /// carried forward to a file that no longer exists is the "invisible body" failure — Penumbra drops the
+    /// dangling path, Bibo's invented texture paths have nothing behind them, and the material fails to
+    /// load — hence the existence check rather than trust.
+    /// </summary>
+    private volatile string? _lastSkinFingerprint;
+    private volatile IReadOnlyDictionary<string, string>? _lastSkinRedirects;
+    private volatile IReadOnlyList<ChannelContribution>? _lastSkinContributions;
+    private volatile IReadOnlyDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>? _lastSkinGlowTargets;
+
+    /// <summary>
+    /// Whether every texture a remembered skin publish points at is still on disk AND intact.
+    /// <para/>
+    /// <see cref="AlreadyWritten"/> rather than File.Exists: it validates the length against the .tex
+    /// header's own dimensions, so a write interrupted by a crash or antivirus reads as absent instead of
+    /// being re-approved forever under a name that promises content it does not have.
+    /// </summary>
+    private bool SkinOutputStillOnDisk(IReadOnlyDictionary<string, string> skinRedirects)
+    {
+        foreach (var rel in skinRedirects.Values)
+        {
+            var disk = Path.Combine(managedModDir, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!AlreadyWritten(disk)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Everything that decides what this composite will produce, as one comparable string. Built at the
     /// point where the inputs are settled but before any expensive work, so an ambient trigger whose world
     /// hasn't moved can return without paying for a composite.
@@ -2035,7 +2092,8 @@ public class CompositorService : IDisposable
         Dictionary<string, Dictionary<int, ColorTableRowOverride>> maskRowsByMod,
         HashSet<string> maskShellMods,
         List<string> baseKeys,
-        List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers)
+        List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        bool skinOnly = false)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -2061,13 +2119,18 @@ public class CompositorService : IDisposable
         // Imported geometry, in the order it will be placed. Without this a change of selection in a
         // content pack — a different piercing, a piece switched off — hashes identically to the
         // composite already published and is skipped, and the character keeps wearing the old one.
-        sb.Append("content:");
-        foreach (var (e, c) in contentLayers)
-            sb.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
-              .Append(c.OptionGroup).Append('/').Append(c.Option).Append('#').Append(c.GroupOrder).Append('#')
-              .Append(JsonSerializer.Serialize(c.Piece)).Append('#')
-              .Append(c.ColorTableRows == null ? "-" : JsonSerializer.Serialize(c.ColorTableRows)).Append(';');
-        sb.Append('\n');
+        //
+        // Shell-only: content pieces are meshes grafted onto the shell and never touch a skin texture.
+        if (!skinOnly)
+        {
+            sb.Append("content:");
+            foreach (var (e, c) in contentLayers)
+                sb.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
+                  .Append(c.OptionGroup).Append('/').Append(c.Option).Append('#').Append(c.GroupOrder).Append('#')
+                  .Append(JsonSerializer.Serialize(c.Piece)).Append('#')
+                  .Append(c.ColorTableRows == null ? "-" : JsonSerializer.Serialize(c.ColorTableRows)).Append(';');
+            sb.Append('\n');
+        }
 
         foreach (var mod in maskPathsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             sb.Append("mask:").Append(mod).Append('=')
@@ -2090,8 +2153,19 @@ public class CompositorService : IDisposable
         // Recomputed here, NOT read from _lastEquipSignature: that field is only written by the redraw hook,
         // so it is stale for every trigger that didn't come from a redraw — while TriggerRecomposite's
         // preamble has just refreshed the four maps it is built from.
+        //
+        // Under skinOnly the GEAR-side half is dropped and only the bare-body models are kept. That is the
+        // whole point of the split: swapping a top changes which equipment models are drawn, but not one
+        // texel of the skin composite. What must NOT be dropped is the bare-body half — which body parts
+        // are drawn depends on what the gear hides, and those are the meshes the seam map is keyed on, so a
+        // shoe that replaces the bare foot genuinely does change the skin's UV topology.
+        //
+        // `gear:` above stays in either way: gear OVERLAYS are Proteus mods, and their coverage drives the
+        // skin's ambient-occlusion pass. Only the equipped FFXIV items are gear-side.
         sb.Append("equip:")
-          .Append(EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels, _bareBodyModels))
+          .Append(skinOnly
+              ? EquipSignature(null, null, null, _bareBodyModels)
+              : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels, _bareBodyModels))
           .Append('\n');
         sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
         sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
@@ -3585,6 +3659,11 @@ public class CompositorService : IDisposable
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
                 baseKeys, contentLayers);
 
+            // The same inputs minus the ones only the shell reads — see the skin-reuse gate below.
+            var skinFingerprint = BuildCompositeFingerprint(
+                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
+                baseKeys, contentLayers, skinOnly: true);
+
             if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
             {
@@ -3604,6 +3683,34 @@ public class CompositorService : IDisposable
                 log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms)",
                     PhaseCounter.MsSince(tRunStart));
                 return;
+            }
+
+            // ── Skin reuse ───────────────────────────────────────────────────
+            // Something moved, but maybe not anything the SKIN depends on — the overwhelmingly common case
+            // being an outfit change, which alters the equipped-item signature and nothing else. The skin
+            // fingerprint drops the gear-side equip half and the content pieces (see BuildCompositeFingerprint's
+            // skinOnly), so when it matches, the published skin textures are already exactly what this run
+            // would recompute. Measured at 2.5s of a 3.6s composite.
+            //
+            // Gated on _lastCompositeFingerprint being non-null as well, so every site that invalidates the
+            // full gate invalidates this one too and there is only one field to remember to clear.
+            //
+            // Fail-safe by construction: anything unexpected — a missing or truncated output, no remembered
+            // publish, a forced run — falls through to the full composite. The cost of being wrong in that
+            // direction is a few seconds; the other direction is a character wearing stale skin.
+            var skinRedirects = _lastSkinRedirects;
+            bool skinReused =
+                !force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
+                && _lastCompositeFingerprint != null
+                && _lastSkinFingerprint != null && skinFingerprint == _lastSkinFingerprint
+                && skinRedirects is { Count: > 0 }
+                && SkinOutputStillOnDisk(skinRedirects);
+
+            if (skinReused)
+            {
+                foreach (var kv in skinRedirects!) redirects[kv.Key] = kv.Value;
+                log.Information("[Proteus] skin unchanged — reusing {0} published texture(s), "
+                              + "compositing the shell only", skinRedirects.Count);
             }
 
             // ── Inherited mask colorsets ─────────────────────────────────────
@@ -3746,6 +3853,9 @@ public class CompositorService : IDisposable
             // happens long before the publish block where these used to be declared.
             int encSalt = compress ? (TextureLoader.NativeEncoderAvailable ? 1 : 2) : 0;
 
+            // Skipped wholesale when the skin is being reused — the redirects it would produce are already
+            // seeded above, and its other two outputs (contributions, glow targets) are restored below.
+            if (!skinReused)
             Parallel.ForEach(byMaterial, new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 }, kvp =>
             {
                 var (mtrlGamePath, pairs) = kvp;
@@ -5277,15 +5387,29 @@ public class CompositorService : IDisposable
             // to the composite with no overlays attached, and those would render as "diffuse 0, normal 0,
             // mask 0" — a line that looks like a fault and is nothing of the kind. A row survives if something
             // reached it, or if something meant to.
-            _channelContributions = contributions.Values
-                .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
-                .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            //
+            // On a skin reuse the loop never ran, so `contributions` and `skinGlow` are empty. Restore what
+            // the last real skin composite produced instead of publishing nothing: the panel would go blank
+            // and the colour-table editor's Glow button would lose its targets, on a composite that changed
+            // nothing about the skin.
+            _channelContributions = skinReused
+                ? _lastSkinContributions ?? []
+                : contributions.Values
+                    .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
+                    .OrderBy(c => c.Material, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
-            LogPhaseBreakdown(tRunStart, tSetupEnd, byMaterial.Count);
+            LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
 
             // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
-            _skinGlowTargets = new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
+            _skinGlowTargets = skinReused && _lastSkinGlowTargets != null
+                ? new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(_lastSkinGlowTargets)
+                : new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
+
+            // Everything in `redirects` up to this point is the skin's — the shell adds its own below — so
+            // this is the snapshot a later run reuses. Captured now, published only if this run publishes.
+            var skinRedirectsThisRun =
+                new Dictionary<string, string>(redirects, StringComparer.OrdinalIgnoreCase);
 
             // ── Second skin: one gear shell per Layer:Gear overlay ────────────
             // Built from the body model the character is CURRENTLY drawing (resolved live through
@@ -5657,6 +5781,13 @@ public class CompositorService : IDisposable
             // gate can never claim output that was not produced. The forced-work latch is settled here too:
             // whatever the user asked for is now in the published manifest.
             _lastCompositeFingerprint = fingerprint;
+            // The skin half moves with it, and only here — a run that returned early or threw leaves the
+            // previous set standing, so a remembered redirect always describes a manifest that was actually
+            // published. Assigned even on a reuse, where these simply round-trip their own values.
+            _lastSkinFingerprint    = skinFingerprint;
+            _lastSkinRedirects      = skinRedirectsThisRun;
+            _lastSkinContributions  = _channelContributions;
+            _lastSkinGlowTargets    = _skinGlowTargets;
             Interlocked.Exchange(ref _forcePending, 0);
 
             // Widen the recorded base set to what this run ACTUALLY resolved. baseKeys is the published
@@ -5668,8 +5799,14 @@ public class CompositorService : IDisposable
             // whole run. Over-inclusive by an append host's .mdl or two, which errs toward compositing.
             // Authoritative: this has seen the whole run, so it is the record allowed to retire paths
             // left over from a previous composite shape.
+            //
+            // NOT authoritative when the skin was reused: the blend loop is what resolves those extra
+            // bases, and it did not run, so this run has seen only part of the picture. Retiring on it
+            // would drop paths a later mod change needs to be judged against, and the mod would read as
+            // "does not affect us" — a missed recomposite, which is exactly the failure the widening
+            // above exists to prevent. Adding is still safe and still useful.
             RecordCompositeBaseKeys(baseKeys.Concat(_upstreamByGamePath.Keys), baseSignature,
-                authoritative: true);
+                authoritative: !skinReused);
 
             // Reconcile the injected host items AFTER the redirect mod is live, so when the equip's redraw
             // loads the model it resolves straight to the shell (no visible frames, no bare ring). Each
@@ -5712,7 +5849,10 @@ public class CompositorService : IDisposable
             LastResult = new CompositorResult
             {
                 Success = true,
-                TexturesPatched = texturesPatched,
+                // On a skin reuse the loop never incremented this, but the textures ARE published — the
+                // redirects were carried forward. Report what the manifest actually carries, or the status
+                // window says "0 textures" for a character wearing a full composite.
+                TexturesPatched = skinReused ? skinRedirectsThisRun.Count : texturesPatched,
                 OverlayModsUsed = entries.Count,
             };
             ResultChanged?.Invoke();

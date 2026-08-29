@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 530;
+    public const int BuildNumber = 535;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -207,6 +207,59 @@ public sealed class Plugin : IDalamudPlugin
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
         ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
+
+        SuggestMirrorRepo(pluginInterface);
+    }
+
+    /// <summary>How many times <see cref="SuggestMirrorRepo"/> may speak before it gives up.</summary>
+    private const int MirrorNoticeLimit = 3;
+
+    /// <summary>The plugin repo URL this notice asks people to move away from.</summary>
+    private const string LegacyRepoHost = "raw.githubusercontent.com/solona-m/plugins";
+
+    /// <summary>
+    /// Nudges anyone still installed from the raw.githubusercontent.com manifest towards the mirrored
+    /// one, at most <see cref="MirrorNoticeLimit"/> times ever.
+    /// <para/>
+    /// Dalamud re-fetches the plugin manifest on every client launch and every list refresh, per user,
+    /// forever — far more requests than the plugin's own downloads, which happen once per install. Since
+    /// GitHub throttles on request count rather than bytes, that manifest is the single largest remaining
+    /// source of throttling, and it is the one thing this side cannot fix alone: the repo URL lives in
+    /// each user's own Dalamud config.
+    /// <para/>
+    /// Matched POSITIVELY against the legacy host, so anything unexpected stays silent. A dev-loaded
+    /// plugin has no source repository, and someone already on the mirror must never see this.
+    /// </summary>
+    private void SuggestMirrorRepo(IDalamudPluginInterface pluginInterface)
+    {
+        var source = pluginInterface.SourceRepository;
+
+        // Logged unconditionally, and before the early-outs: a dev-loaded plugin has no source
+        // repository, so this notice cannot be triggered on the machine that writes it. Without the
+        // value in the log there is no way to tell "correctly silent" from "quietly broken".
+        Log.Information("[Proteus] SourceRepository={0} (mirror notice shown {1}/{2})",
+                        string.IsNullOrEmpty(source) ? "<none, dev install>" : source,
+                        config.MirrorNoticeShown, MirrorNoticeLimit);
+
+        if (config.MirrorNoticeShown >= MirrorNoticeLimit) return;
+        if (string.IsNullOrEmpty(source) ||
+            !source.Contains(LegacyRepoHost, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        config.MirrorNoticeShown++;
+        config.Save();
+
+        // No count of remaining reminders: it would need a {0} that reads "1 more reminders" at the end,
+        // and plural agreement is a real cost across eight machine-translated locales for a line nobody
+        // needs. Saying it stops on its own carries the same reassurance with no arguments at all.
+        ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
+            .AddUiForeground(
+                Loc.Localize("Chat.MirrorRepo",
+                    "[Proteus] You installed from the old plugin repo URL. Switching it to " +
+                    "https://dl.solona.info/repo.json under /xlplugins > Experimental makes updates " +
+                    "faster and takes load off GitHub. Your install keeps working either way. " +
+                    "This reminder shows a few times, then stops."), 45)
+            .Build());
     }
 
     private void DrawUi()

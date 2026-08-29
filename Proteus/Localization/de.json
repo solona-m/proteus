@@ -123,6 +123,10 @@
     "message": "[Proteus] „{0}“ setzt Leuchten auf einer Hautebene. Haut kann nicht mehr leuchten, daher wird diese Option jetzt als Stoffebene dargestellt — sie braucht ein freies Accessoire und ihre Oberfläche sieht etwas anders aus.",
     "description": ""
   },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] Du hast über die alte Plugin-Repository-URL installiert. Wenn du sie unter /xlplugins > Experimental auf https://dl.solona.info/repo.json umstellst, werden Updates schneller und GitHub wird entlastet. Deine Installation funktioniert so oder so weiter. Dieser Hinweis erscheint noch einige Male und hört dann auf.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
+  },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] „{0}“ setzt Leuchten auf einem Overlay, für das Proteus keine Ebene bauen kann. Leuchten braucht eine Ebene über dem Mesh, und das geht nur auf deiner eigenen Haut — Körper, Gesicht, Haar, Schweif oder Ohren — nicht auf Ausrüstung, Accessoires oder Waffen.",
     "description": ""

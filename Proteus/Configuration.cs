@@ -62,6 +62,16 @@ public class Configuration : IPluginConfiguration
 
     public bool PluginEnabled { get; set; } = true;
 
+    /// <summary>
+    /// How many times the "you are on the old plugin repo URL" notice has been shown. Capped at
+    /// <see cref="MirrorNoticeLimit"/> — a hint worth giving is not worth nagging about, and someone
+    /// who has ignored it three times has decided.
+    /// <para/>
+    /// Persisted rather than counted per-session so it survives restarts; a per-session counter would
+    /// show it forever to anyone who never changes the URL, which is exactly who it would annoy most.
+    /// </summary>
+    public int MirrorNoticeShown { get; set; }
+
     public bool DisableAutoRedraw { get; set; } = false;
 
     /// <summary>
