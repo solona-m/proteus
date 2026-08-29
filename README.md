@@ -4,7 +4,7 @@ Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
-- **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
+- **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on, or appends it to your equipped accessories — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Toggles** tab can split that piece out and give it a real switch.
 
 
@@ -61,7 +61,19 @@ Texture slots the chosen material can't actually use are greyed out.
 
 #### Import
 
-Turns an Onion overlay pack (`.omp`) into a Proteus mod. Browse to the file and Proteus shows what's inside — every layer, its UV layout, and whether it can be imported — before writing anything.
+Takes a mod pack and converts it to a Proteus mod. Two types are supported:
+
+**Regular Penumbra mods (`.pmp`)** — wear parts of a normal gear mod without using a gear slot, and get the advanced colour-table features on top.
+
+It stays an ordinary Penumbra mod: Penumbra still owns whether it's on and which of its options are selected. What changes is that its pieces are drawn on Proteus's carrier item instead of on a real equipment slot, so your glamour is untouched.
+
+The useful side effect is that **you can wear several of its options at once**. Normally two options in the same group both claim the same model path and the game can only show one, so a pack physically can't offer "this piece *and* that piece" — after importing, each selected piece is added on its own.
+
+- Pieces arrive switched **off**. Tick the ones you want in Penumbra afterwards; nothing is worn until you do.
+- A pack that is *already* a Proteus mod is installed exactly as its author built it. Nothing is converted.
+- Skin is removed during import. This is ideal for acccessories like jewelry, piercings and jackets. If you import a shirt, the shirt will only fit if your equipped chest slot is the same size.
+
+**Onion overlay packs (`.omp`)** — wear its layers as Proteus overlays you can recolour and restack, make glow, etc.
 
 A pack that ships the same artwork in several UV layouts (bibo, gen3, vanilla) becomes a single-select **Body UV** group in Penumbra, pre-set to the layout matching the body you're wearing, so only one composites at a time. Layer opacity is baked into the image; a layer with a blend mode other than Normal is skipped and said so, because Proteus composites alpha-over only. Onion's own option groups and race filters aren't imported.
 
@@ -73,7 +85,7 @@ The pack is a straight copy of the mod folder, so nothing is lost: options, colo
 
 #### Toggles
 
-Takes a piece of geometry out of a mod's model and puts it behind an on/off switch — a bow, a collar, a strap that the author welded into an always-on mesh. This works on **any** mod you have installed, not just Proteus ones; most of them will never have heard of Proteus.
+Takes a piece of geometry out of a mod's model and puts it behind an on/off switch — a bow, a collar, a strap that the author welded into an always-on mesh. This works on **any** mod you have installed, not just Proteus ones.
 
 The switch is written into the mod itself as an ordinary Penumbra option, so it shows up in that mod's own settings and **keeps working with Proteus turned off**.
 

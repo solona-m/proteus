@@ -2,14 +2,18 @@
   "Author": "Solona",
   "Name": "Proteus",
   "InternalName": "Proteus",
-  "Description": "Overlay compositor for Penumbra. Discovers mods with a Proteus/ sidecar, composites their overlay textures in Penumbra priority order, and maintains a single managed mod at priority 999. Type /proteus to open the status window, or /proteus config for settings.",
+  "Description": "• Lets you use overlays — skin-tight gear, tattoos, scales and the like — as a regular Penumbra mod you can toggle on and off, bind to designs and collections, and more.\n\n• Overlays render two ways. Painted into your skin, except now your overlays are dyeable. Or as a second skin, which lets you use sphere maps, metalness and animated glow that skin materials can't do.\n\n• Cloth overlays can enable skindenting with one click.\n\n• Supports Penumbra .pmp and Onion .omp packs.\n\n• Import regular old mods and equip them without using a gear slot.\n\n• Add toggles to any mod.\n\nType /proteus to manage your Proteus mods.",
   "ApplicableVersion": "any",
   "Tags": [
     "texture",
     "overlay",
     "compositor",
     "penumbra",
+    "glamourer",
     "skin",
+    "gear",
+    "glamour",
+    "color",
     "mod"
   ],
   "CategoryTags": [
@@ -20,6 +24,6 @@
   "LoadSync": false,
   "CanUnloadAsync": false,
   "LoadPriority": 0,
-  "Punchline": "Automatic overlay compositor for Penumbra mods",
+  "Punchline": "Overlay compositor and second-skin renderer for Penumbra mods",
   "AcceptsFeedback": true
 }

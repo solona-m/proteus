@@ -35,14 +35,19 @@
          Proteus.Tests.csproj — a test project's warnings are its own business and blocking `dotnet
          test` on one helps nobody. -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- Dalamud plugin manifest -->
+    <!-- Dalamud plugin manifest.
+         THIS IS THE ONLY SOURCE OF THE SHIPPED MANIFEST. The SDK generates bin\…\Proteus.json from
+         these properties; the Proteus\Plugin.json sitting next to this file is a pre-SDK leftover that
+         nothing reads, so editing it changes nothing a user ever sees. Edit here.
+         Newlines are &#xA; entities rather than real line breaks, so the XML indentation cannot leak
+         into the description text. -->
     <Name>Proteus</Name>
     <Author>Solona</Author>
-    <Punchline>Automatic overlay compositor for Penumbra mods</Punchline>
-    <Description>Overlay compositor for Penumbra. Discovers mods with a Proteus/ sidecar, composites their overlay textures in Penumbra priority order, and maintains a single managed mod at priority 999. Type /proteus to open the status window, or /proteus config for settings.</Description>
+    <Punchline>Overlay compositor and second-skin renderer for Penumbra mods</Punchline>
+    <Description>• Lets you use overlays — skin-tight gear, tattoos, scales and the like — as a regular Penumbra mod you can toggle on and off, bind to designs and collections, and more.&#xA;&#xA;• Overlays render two ways. Painted into your skin, except now your overlays are dyeable. Or as a second skin, which lets you use sphere maps, metalness and animated glow that skin materials can't do.&#xA;&#xA;• Cloth overlays can enable skindenting with one click.&#xA;&#xA;• Supports Penumbra .pmp and Onion .omp packs.&#xA;&#xA;• Import regular old mods and equip them without using a gear slot.&#xA;&#xA;• Add toggles to any mod.&#xA;&#xA;Type /proteus to manage your Proteus mods.</Description>
     <ApplicableVersion>any</ApplicableVersion>
     <DalamudApiLevel>15</DalamudApiLevel>
-    <Tags>texture;overlay;compositor;penumbra;skin;mod</Tags>
+    <Tags>texture;overlay;compositor;penumbra;glamourer;skin;gear;glamour;color;mod</Tags>
     <CategoryTags>utility</CategoryTags>
     <!-- The icon shown in /xlplugins. Dalamud only reads the on-disk images\icon.png for DEV
          plugins; for anyone who installed from the plugin repo it fetches this URL instead, so
