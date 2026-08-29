@@ -125,15 +125,12 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Starter scroll-effect library. Shipped alongside the plugin and seeded into the user's
-         global Effects folder on first run (SidecarDiscoveryService.SeedDefaultEffects), so every
-         gear overlay's Effect dropdown has something to choose from out of the box. -->
-    <Content Include="DefaultEffects\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>DefaultEffects\%(RecursiveDir)%(Filename)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+  <!-- The starter scroll-effect library (DefaultEffects\) is deliberately NOT copied to the output and
+       so does not ship in the plugin zip. It was 29 of the zip's 31 MB, re-downloaded by every user on
+       every update purely to seed a folder that is seeded once. It is published as pinned release assets
+       under the effects-* tag instead and fetched once per machine into the config directory — see
+       DefaultEffectsDownloadService, which also holds the checksums that must be regenerated whenever
+       the art changes. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />

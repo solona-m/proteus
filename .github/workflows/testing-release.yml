@@ -64,6 +64,22 @@ jobs:
         shell: pwsh
         run: Copy-Item "Proteus\bin\Release\win-x64\Proteus\latest.zip" -Destination latest.zip
 
+      # Testing tags go out most days and every tester re-downloads this, so the size budget matters
+      # here even more than on a stable release. See release.yml for the reasoning.
+      - name: Guard the package size
+        shell: pwsh
+        run: |
+          $maxBytes = 8MB
+          $size = (Get-Item latest.zip).Length
+          Write-Host "latest.zip is $([math]::Round($size/1MB, 2)) MB"
+          if ($size -gt $maxBytes) {
+            $big = (Get-ChildItem "Proteus\bin\Release\win-x64" -Recurse -File |
+                    Sort-Object Length -Descending | Select-Object -First 10 |
+                    ForEach-Object { "  {0,10:N0}  {1}" -f $_.Length, $_.FullName }) -join "`n"
+            Write-Error "latest.zip is $([math]::Round($size/1MB, 2)) MB, over the $([math]::Round($maxBytes/1MB)) MB budget. Largest files in the build output:`n$big`n`nLarge assets belong in their own release (see .github/workflows/upload-effects.yml), not in the plugin zip."
+            exit 1
+          }
+
       # Marked prerelease so it never becomes /releases/latest — the stable
       # DownloadLinkInstall keeps resolving to the last non-prerelease build.
       - name: Create prerelease

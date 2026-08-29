@@ -387,4 +387,83 @@ public class IslandBlurTests
         var actual = CompositorService.BlurCoverageWithinIslands(cover, new int[w * h], new int[w * h], 0, new byte[w * h], null, w, h, radius);
         Assert.Equal(expected, actual);
     }
+
+    /// <summary>
+    /// The per-island loop runs in parallel, so its output must not depend on scheduling.
+    /// <para/>
+    /// This is not a general "races are bad" test — it guards a specific consequence. Proteus names every
+    /// composited texture by a hash of its content, so a single byte that varies between runs would rename
+    /// the output, re-bake it and re-upload it through the sync plugins, intermittently and for no visible
+    /// reason. Islands write disjoint texels and cache at their own index, so the result is order-
+    /// independent by construction; this is the check that it stays that way.
+    /// <para/>
+    /// Enough islands to occupy several workers, and enough repeats to make an ordering-dependent bug
+    /// show up rather than hide behind a lucky schedule.
+    /// </summary>
+    [Fact]
+    public void BlurWithinIslands_ManyIslands_IsDeterministicUnderParallelism()
+    {
+        const int w = 256, h = 256, radius = 5;
+
+        // A 6x6 grid of islands separated by gutters, each with its own coverage pattern so no two
+        // islands can be confused for one another.
+        var rects = new System.Collections.Generic.List<(int, int, int, int)>();
+        var covRects = new System.Collections.Generic.List<(int, int, int, int)>();
+        for (int gy = 0; gy < 6; gy++)
+            for (int gx = 0; gx < 6; gx++)
+            {
+                int x0 = gx * 42 + 2, y0 = gy * 42 + 2;
+                rects.Add((x0, y0, x0 + 33, y0 + 33));
+                // Coverage offset per island, so each produces a distinct blur.
+                covRects.Add((x0 + (gx % 3), y0 + (gy % 3), x0 + 20 + (gx % 4), y0 + 20 + (gy % 4)));
+            }
+
+        var inside = Plane(w, h, 255, rects.ToArray());
+        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        Assert.Equal(36, count);
+
+        var cover = Plane(w, h, 255, covRects.ToArray());
+
+        var first = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        for (int i = 0; i < 24; i++)
+        {
+            var again = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+            Assert.Equal(first, again);
+        }
+    }
+
+    /// <summary>
+    /// The same, with the shared <see cref="CompositorService.IslandBlurCache"/> in play — the parallel
+    /// loop fills Bd/Cd at its own index per island, and the SECOND call reads them back. A cache filled
+    /// out of order must produce exactly what an uncached pass does.
+    /// </summary>
+    [Fact]
+    public void BlurWithinIslands_CacheFilledInParallel_MatchesTheUncachedResult()
+    {
+        const int w = 192, h = 192, radius = 4;
+
+        var rects = new System.Collections.Generic.List<(int, int, int, int)>();
+        for (int gy = 0; gy < 4; gy++)
+            for (int gx = 0; gx < 4; gx++)
+            {
+                int x0 = gx * 47 + 3, y0 = gy * 47 + 3;
+                rects.Add((x0, y0, x0 + 38, y0 + 38));
+            }
+
+        var inside = Plane(w, h, 255, rects.ToArray());
+        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var cover = Plane(w, h, 255, (20, 20, 170, 170));
+
+        var uncached = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+
+        var cache = new CompositorService.IslandBlurCache();
+        var fill = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
+        Assert.True(cache.Matches(labels, owner, inside, null, radius, count));
+        var read = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
+
+        Assert.Equal(uncached, fill);
+        Assert.Equal(uncached, read);
+    }
 }

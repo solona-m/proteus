@@ -1,0 +1,100 @@
+name: Upload Default Effects
+
+# Publishes the starter scroll-effect library as pinned release assets. They used to ride along inside
+# the plugin zip, where they were 29 of its 31 MB and were re-downloaded by every user on every update
+# purely to seed a folder that is seeded once. DefaultEffectsDownloadService now fetches them once per
+# machine into the config directory.
+#
+# Shipped as LOOSE files rather than one zip on purpose: zip bytes are not reproducible across zip
+# implementations, so a checksum pinned in the client would break the moment CI's zipper disagreed with
+# whoever generated it. Loose files are uploaded verbatim and hash exactly.
+#
+# ORDER MATTERS. Push the effects-* tag BEFORE the next v* release. The client pins EffectsTag, so
+# shipping a plugin whose tag has no release yet gives every new install an empty Effect dropdown — and
+# it fails quietly, by design, because nothing depends on this art. Same rule for uvmaps-*, where the
+# consequence is louder (a visible download failure) but the ordering is identical:
+#   1. change the art  ->  2. push effects-vN  ->  3. paste the emitted checksums + bump EffectsTag
+#   ->  4. release the plugin
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'effects-*'
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same immutability contract as the UV maps: the client pins a tag plus a SHA-256 per file and the
+      # mirror caches by URL, so revised art means a NEW tag and a matching EffectsTag bump in the client.
+      - name: Refuse to overwrite an existing release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "effects-v1" }
+
+          # `gh release view` exits non-zero when the release is ABSENT — which is the normal, expected
+          # case here. Actions prepends $ErrorActionPreference = 'Stop' to every pwsh step, and
+          # PowerShell 7.4+ defaults $PSNativeCommandUseErrorActionPreference to $true, which promotes a
+          # native non-zero exit into a TERMINATING error. Testing stdout truthiness would therefore
+          # abort this step on exactly the path it exists to permit — a brand-new tag — and the release
+          # would never be created. Opt out for this one command and read the exit code directly.
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release view $tag *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $global:LASTEXITCODE = 0
+
+          if ($exists) {
+            Write-Error "Release $tag already exists. Its assets are immutable because the client pins their checksums and the mirror caches them — push a new tag (e.g. effects-v2) and bump EffectsTag in DefaultEffectsDownloadService instead."
+            exit 1
+          }
+          "TAG=$tag" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $files = Get-ChildItem "Proteus\DefaultEffects" -File
+          if ($files.Count -eq 0) { Write-Error "No files in Proteus\DefaultEffects"; exit 1 }
+          Write-Host "Uploading $($files.Count) file(s), $([math]::Round(($files | Measure-Object Length -Sum).Sum/1MB,1)) MB total"
+
+          # GitHub rewrites spaces in release asset names, so an asset uploaded as "hello kitty.png"
+          # cannot be requested under that name. Staging the uploads with spaces already replaced by
+          # dots makes the remote name deterministic instead of dependent on GitHub's rewriting rules;
+          # DefaultEffectsDownloadService.RemoteName performs the identical substitution. The files
+          # keep their original names on the user's disk — that is what the Effect dropdown shows.
+          $stage = Join-Path $env:RUNNER_TEMP "effects"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          foreach ($f in $files) {
+            Copy-Item $f.FullName (Join-Path $stage ($f.Name -replace ' ', '.'))
+          }
+
+          gh release create $env:TAG `
+            --title "Default Effects ($env:TAG)" `
+            --notes "Starter scroll-effect library for Proteus. Downloaded automatically on first run — do not install manually." `
+            @((Get-ChildItem $stage -File).FullName)
+
+      - name: Emit checksums for the client
+        shell: pwsh
+        run: |
+          # Emits the LOCAL names (spaces intact) — the client stores those and derives the dotted
+          # remote name itself via RemoteName().
+          $lines = @()
+          $lines += "Paste into DefaultEffectsDownloadService.Effects, and set EffectsTag = ""$env:TAG"":"
+          $lines += '```csharp'
+          foreach ($i in (Get-ChildItem "Proteus\DefaultEffects" -File | Sort-Object Name)) {
+            $h = (Get-FileHash $i.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += '        ("{0}", {1}L, "{2}"),' -f $i.Name, $i.Length, $h
+          }
+          $lines += '```'
+          $lines | ForEach-Object { Write-Host $_ }
+          $lines | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY

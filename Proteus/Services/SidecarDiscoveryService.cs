@@ -87,8 +87,13 @@ public class SidecarDiscoveryService
     public  const string MaskGroupName = "Masks";
     private const string MaskSubdir    = "Masks";
 
-    /// <summary>Plugin assembly directory — the bundled DefaultEffects live under it. Set once at startup.</summary>
-    public string? AssemblyDir { get; set; }
+    /// <summary>
+    /// Where the starter scroll-effect library is cached. Set once at startup to
+    /// <see cref="DefaultEffectsDownloadService.EffectsDir"/> — the config directory, not the assembly
+    /// directory, because the art is fetched once per machine instead of riding along in every plugin
+    /// update. Null until then, which <see cref="SeedDefaultEffects"/> treats as "nothing to seed yet".
+    /// </summary>
+    public string? DefaultEffectsDir { get; set; }
 
     public SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log)
     {
@@ -430,8 +435,8 @@ public class SidecarDiscoveryService
     /// </summary>
     public void SeedDefaultEffects()
     {
-        if (AssemblyDir == null) return;
-        var src = Path.Combine(AssemblyDir, "DefaultEffects");
+        if (DefaultEffectsDir == null) return;
+        var src = DefaultEffectsDir;
         var dst = EffectsLibraryPath();
         if (dst == null || !Directory.Exists(src)) return;
 

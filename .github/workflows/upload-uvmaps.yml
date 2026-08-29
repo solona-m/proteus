@@ -31,14 +31,59 @@ jobs:
             Write-Host "$f OK ($([math]::Round($size/1MB, 1)) MB)"
           }
 
-      - name: Create uvmaps-v1 release
+      # A tag's assets are IMMUTABLE. UVMapDownloadService pins a tag plus a SHA-256 per file, and the
+      # download mirror caches by URL — so replacing the assets under an existing tag would serve stale
+      # bytes from the edge and fail the client's checksum against whatever it eventually got. Revising a
+      # map means a NEW tag (uvmaps-v2, -v3, ...) and bumping MapsTag in the client to match.
+      - name: Refuse to overwrite an existing release
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete uvmaps-v1 --yes 2>$null
-          gh release create uvmaps-v1 `
-            --title "UV Transfer Maps v1" `
+          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "uvmaps-v1" }
+
+          # `gh release view` exits non-zero when the release is ABSENT — which is the normal, expected
+          # case here. Actions prepends $ErrorActionPreference = 'Stop' to every pwsh step, and
+          # PowerShell 7.4+ defaults $PSNativeCommandUseErrorActionPreference to $true, which promotes a
+          # native non-zero exit into a TERMINATING error. Testing stdout truthiness would therefore
+          # abort this step on exactly the path it exists to permit — a brand-new tag — and the release
+          # would never be created. Opt out for this one command and read the exit code directly.
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release view $tag *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $global:LASTEXITCODE = 0
+
+          if ($exists) {
+            Write-Error "Release $tag already exists. Its assets are immutable because the client pins their checksums and the mirror caches them — push a new tag (e.g. uvmaps-v2) and bump MapsTag in UVMapDownloadService instead."
+            exit 1
+          }
+          "TAG=$tag" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create $env:TAG `
+            --title "UV Transfer Maps ($env:TAG)" `
             --notes "Static UV transfer map data files for Proteus. Downloaded automatically on first use — do not install manually." `
             "Proteus\uvmaps\bibo_to_gen3_transfer.tif" `
             "Proteus\uvmaps\gen3_to_bibo_transfer.tif"
+
+      # The client verifies every download against a pinned size and SHA-256, which is what catches a
+      # THROTTLED transfer — a truncated body arrives with a 200 on it and no other check would notice.
+      # Printed as ready-to-paste C# so updating the client is a copy, not a retyping exercise.
+      - name: Emit checksums for the client
+        shell: pwsh
+        run: |
+          $lines = @()
+          $lines += "Paste into UVMapDownloadService.MapFiles, and set MapsTag = ""$env:TAG"":"
+          $lines += '```csharp'
+          foreach ($f in @("Proteus\uvmaps\bibo_to_gen3_transfer.tif", "Proteus\uvmaps\gen3_to_bibo_transfer.tif")) {
+            $i = Get-Item $f
+            $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+            $lines += '        ("{0}", {1}L, "{2}"),' -f $i.Name, $i.Length, $h
+          }
+          $lines += '```'
+          $lines | ForEach-Object { Write-Host $_ }
+          $lines | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
