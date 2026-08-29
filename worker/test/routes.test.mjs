@@ -14,10 +14,19 @@ let fetched = [];
 let fetchOpts = [];
 const store = new Map();
 
+// Keyed on pathname + search, because that is what Cloudflare's Cache API does. Keying on pathname
+// alone — as this stub first did — silently merges the HTML and markdown variants of a document and
+// makes the variant-bleed test unable to fail, which is the one bug the cache key exists to prevent.
 globalThis.caches = {
   default: {
-    async match(req) { return store.get(new URL(req.url).pathname)?.clone(); },
-    async put(req, res) { store.set(new URL(req.url).pathname, res); },
+    async match(req) {
+      const u = new URL(req.url);
+      return store.get(u.pathname + u.search)?.clone();
+    },
+    async put(req, res) {
+      const u = new URL(req.url);
+      store.set(u.pathname + u.search, res);
+    },
   },
 };
 globalThis.fetch = async (url, opts) => {
@@ -76,9 +85,9 @@ await check('zip under uvmaps tag', '/uvmaps-v1/latest.zip', 404, null);
 // with a real space is never legitimate and must not be forwarded.
 await check('space in effect name', '/effects-v1/hello kitty.png', 404, null);
 
-console.log('readme endpoint:');
+console.log('readme endpoint (the mirror\'s own docs, inlined):');
 {
-  for (const p of ['/', '/README.md']) {
+  for (const p of ['/mirror.md']) {
     fetched = [];
     const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
     const body = await res.text();
@@ -98,18 +107,46 @@ console.log('readme endpoint:');
 
   // HEAD must not carry a body, but must still report the same headers.
   const head = await worker.fetch(
-    new Request('https://dl.example.com/', { method: 'HEAD' }), {}, ctx);
+    new Request('https://dl.example.com/mirror.md', { method: 'HEAD' }), {}, ctx);
   const headBody = await head.text();
-  if (head.status === 200 && headBody === '') { pass++; console.log('  ok   HEAD / has no body'); }
-  else { fail++; console.log(`  FAIL HEAD /: status ${head.status}, body len ${headBody.length}`); }
+  if (head.status === 200 && headBody === '') { pass++; console.log('  ok   HEAD /mirror.md has no body'); }
+  else { fail++; console.log(`  FAIL HEAD /mirror.md: status ${head.status}, body len ${headBody.length}`); }
 
-  // The README is the one MUTABLE thing this worker serves, so it must not inherit the assets'
-  // immutable one-year TTL — a stale year-old copy of the docs would be worse than none.
-  const res = await worker.fetch(new Request('https://dl.example.com/'), {}, ctx);
+  // Documentation is MUTABLE, so it must not inherit the assets' immutable one-year TTL — a stale
+  // year-old copy of the docs would be worse than none.
+  const res = await worker.fetch(new Request('https://dl.example.com/mirror.md'), {}, ctx);
   const cc = res.headers.get('cache-control') ?? '';
   if (!cc.includes('immutable') && /max-age=(\d+)/.test(cc) && +RegExp.$1 <= 3600) {
     pass++; console.log(`  ok   short, mutable cache-control (${cc})`);
-  } else { fail++; console.log(`  FAIL cache-control on README: ${cc}`); }
+  } else { fail++; console.log(`  FAIL cache-control on /mirror.md: ${cc}`); }
+}
+
+console.log('project readme (proxied, and the front door):');
+{
+  const PROJECT = 'https://raw.githubusercontent.com/solona-m/proteus/main/README.md';
+  for (const p of ['/README.md', '/']) {
+    store.clear();
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com' + p), {}, ctx);
+    const ok = res.status === 200
+      && fetched[0] === PROJECT
+      && res.headers.get('content-type')?.startsWith('text/markdown');
+    if (ok) { pass++; console.log(`  ok   ${p} -> the project README`); }
+    else {
+      fail++;
+      console.log(`  FAIL ${p}: status ${res.status}, upstream ${fetched[0]}, ` +
+                  `type ${res.headers.get('content-type')}`);
+    }
+  }
+
+  // `/` is an alias, not a second entry: it must share the canonical cache slot rather than fetching
+  // and storing the same document twice.
+  store.clear();
+  await worker.fetch(new Request('https://dl.example.com/README.md'), {}, ctx);
+  fetched = [];
+  await worker.fetch(new Request('https://dl.example.com/'), {}, ctx);
+  if (fetched.length === 0) { pass++; console.log('  ok   / reuses the /README.md cache entry'); }
+  else { fail++; console.log(`  FAIL / re-fetched: ${fetched[0]}`); }
 }
 
 console.log('fixed-upstream proxies (manifest + icon):');
@@ -172,6 +209,135 @@ console.log('fixed-upstream proxies (manifest + icon):');
     if (FIXED.includes(upstream)) { pass++; console.log(`  ok   ${p} -> fixed upstream only (${res.status})`); }
     else { fail++; console.log(`  FAIL ${p} reached ${upstream}`); }
   }
+}
+
+console.log('markdown rendering + content negotiation:');
+{
+  const HTML = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
+  const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md).\n' +
+             'Also [elsewhere](docs/other.md) and [ext](https://example.com/x).\n\n' +
+             '| Column | What |\n|---|---|\n| On | Enables it. |\n';
+
+  const mdHandler = () => new Response(MD, {
+    status: 200,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+
+  async function get(path, headers) {
+    fetched = [];
+    const res = await worker.fetch(
+      new Request('https://dl.example.com' + path, { headers }), {}, ctx);
+    return { res, body: await res.text() };
+  }
+
+  // A browser gets a real page.
+  store.clear();
+  globalThis.fetch = async (url) => { fetched.push(url); return mdHandler(); };
+  {
+    const { res, body } = await get('/', HTML);
+    const ok = res.status === 200
+      && res.headers.get('content-type')?.startsWith('text/html')
+      && res.headers.get('vary') === 'Accept'
+      && body.includes('<h1')
+      && body.includes('<table')          // the README is mostly tables; GFM must be on
+      && body.includes('<title>Proteus</title>');   // title from the first heading
+    if (ok) { pass++; console.log('  ok   Accept: text/html -> rendered page'); }
+    else {
+      fail++;
+      console.log(`  FAIL html: ${res.status} ${res.headers.get('content-type')} ` +
+                  `vary=${res.headers.get('vary')} h1=${body.includes('<h1')} ` +
+                  `table=${body.includes('<table')} title=${/<title>[^<]*<\/title>/.exec(body)?.[0]}`);
+    }
+  }
+
+  // Tools keep getting the source, byte for byte. This is the existing contract.
+  store.clear();
+  {
+    const { res, body } = await get('/README.md', { Accept: '*/*' });
+    const ok = res.headers.get('content-type')?.startsWith('text/markdown') && body === MD;
+    if (ok) { pass++; console.log('  ok   Accept: */* -> unchanged markdown source'); }
+    else { fail++; console.log(`  FAIL raw: ${res.headers.get('content-type')}, identical=${body === MD}`); }
+  }
+
+  // THE bug the cache key exists to prevent. Cloudflare's Cache API ignores Vary, so if both variants
+  // shared a key, whoever arrived first would decide what everyone else got.
+  store.clear();
+  {
+    await get('/README.md', HTML);                       // populate the HTML variant first
+    const { res, body } = await get('/README.md', { Accept: '*/*' });
+    const ok = res.headers.get('content-type')?.startsWith('text/markdown')
+      && body === MD && !body.includes('<h1');
+    if (ok) { pass++; console.log('  ok   html and raw occupy separate cache entries'); }
+    else { fail++; console.log(`  FAIL variant bleed: ${res.headers.get('content-type')}, html-ish=${body.includes('<h1')}`); }
+  }
+
+  // Relative links must land somewhere real: mirrored docs stay here, everything else goes to GitHub
+  // so a doc added upstream later degrades to a working link instead of a 404.
+  store.clear();
+  {
+    const { body } = await get('/', HTML);
+    const checks = [
+      ['mirrored, plain', 'href="/TROUBLESHOOTING.md"'],
+      ['mirrored, encoded space', 'href="/For%20Creators.md"'],
+      ['unmirrored -> GitHub', 'href="https://github.com/solona-m/proteus/blob/main/docs/other.md"'],
+      ['absolute untouched', 'href="https://example.com/x"'],
+    ];
+    for (const [label, needle] of checks) {
+      if (body.includes(needle)) { pass++; console.log(`  ok   link ${label}`); }
+      else { fail++; console.log(`  FAIL link ${label}: expected ${needle}`); }
+    }
+  }
+
+  // The two newly mirrored documents, including the percent-encoded form a browser actually sends.
+  for (const [path, upstream] of [
+    ['/TROUBLESHOOTING.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md'],
+    ['/For%20Creators.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md'],
+  ]) {
+    store.clear();
+    const { res } = await get(path, { Accept: '*/*' });
+    if (res.status === 200 && fetched[0] === upstream) {
+      pass++; console.log(`  ok   ${path} -> mirrored`);
+    } else { fail++; console.log(`  FAIL ${path}: ${res.status}, upstream ${fetched[0]}`); }
+  }
+
+  // Encoded and literal-space forms are ONE document, not two cache entries and two upstream fetches.
+  store.clear();
+  await get('/For%20Creators.md', { Accept: '*/*' });
+  {
+    const { res } = await get('/For Creators.md', { Accept: '*/*' });
+    if (res.status === 200 && fetched.length === 0) {
+      pass++; console.log('  ok   encoded and literal space share one entry');
+    } else { fail++; console.log(`  FAIL space forms diverged: ${res.status}, refetched ${fetched[0]}`); }
+  }
+
+  // A malformed escape must 404, not throw out of the worker.
+  {
+    fetched = [];
+    const res = await worker.fetch(new Request('https://dl.example.com/%E0%A4%A'), {}, ctx);
+    if (res.status === 404 && fetched.length === 0) {
+      pass++; console.log('  ok   malformed percent-escape 404s without throwing');
+    } else { fail++; console.log(`  FAIL malformed escape: ${res.status}, upstream ${fetched[0]}`); }
+  }
+
+  // The worker's own inlined docs render under the same rule.
+  {
+    const { res, body } = await get('/mirror.md', HTML);
+    const ok = res.headers.get('content-type')?.startsWith('text/html') && body.includes('<h1');
+    if (ok) { pass++; console.log('  ok   /mirror.md renders for a browser'); }
+    else { fail++; console.log(`  FAIL /mirror.md: ${res.headers.get('content-type')}`); }
+  }
+
+  // Restore the shared stub for the suites below.
+  globalThis.fetch = async (url, opts) => {
+    fetched.push(url);
+    fetchOpts.push(opts ?? {});
+    if (url.includes('missing')) return new Response('nope', { status: 404 });
+    return new Response('BODY', {
+      status: 200,
+      headers: { 'content-type': 'application/octet-stream', 'content-length': '4', etag: '"abc"' },
+    });
+  };
+  store.clear();
 }
 
 console.log('origin failures pass through:');

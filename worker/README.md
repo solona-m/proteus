@@ -143,14 +143,47 @@ type, so there is no category segment for the client and the worker to disagree 
 | `/uvmaps-v1/bibo_to_gen3_transfer.tif` | `releases/download/uvmaps-v1/…` |
 | `/effects-v1/hello.kitty.png` | `releases/download/effects-v1/…` |
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
-| `/` and `/README.md` | this file — served so the host explains itself instead of answering a bare 404 |
+| `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
+| `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
+| `/mirror.md` | this file |
 
-The README is inlined into the worker at build time by
-[`scripts/embed-readme.mjs`](scripts/embed-readme.mjs), so the page always describes the deployment
-serving it and has no runtime dependency. **That means deploying with `npm run deploy`, not
+### Documents render for browsers, stay raw for tools
+
+The four document paths negotiate on `Accept`:
+
+- `Accept: text/html` (any browser) → a rendered, styled HTML page
+- anything else (`curl`, scripts, `*/*`) → the markdown source, byte for byte
+
+Nothing needs a different URL, and nothing that consumes these programmatically changed.
+
+Two details that are easy to get wrong if this is ever refactored:
+
+- **The variant is part of the cache key** (`?view=html`), not just a `Vary: Accept` header.
+  Cloudflare's Cache API keys on URL alone and *ignores* `Vary` — so a single key for both variants
+  would serve whichever arrived first to everyone afterwards, HTML to `curl` or markdown to every
+  browser, at random. `Vary` is still set, for downstream caches that do honour it.
+- **Paths are looked up decoded**, so `/For%20Creators.md` and a literal space are one document rather
+  than two cache entries and two upstream fetches. A malformed escape falls through to a 404 instead
+  of throwing.
+
+Relative links in the rendered output are rewritten: a link to a document this mirror serves stays
+here, anything else goes to `github.com/solona-m/proteus/blob/main/…`, so a doc added upstream later
+degrades to a working link rather than a 404.
+
+Rendering uses `marked`, which does **not** sanitise — raw HTML in the source passes through. Every
+document here comes from `solona-m/proteus`, which anyone who could inject into already has commit
+access to the plugin, so this is a trust argument rather than a safety one. Do not point the renderer
+at markdown from anywhere else without adding a sanitiser.
+
+This file is inlined into the worker at build time by
+[`scripts/embed-readme.mjs`](scripts/embed-readme.mjs), so `/mirror.md` always describes the
+deployment serving it and has no runtime dependency. **That means deploying with `npm run deploy`, not
 `npx wrangler deploy`** — the plain wrangler command skips the `predeploy` hook that regenerates it,
-and would ship whatever README was embedded last. It is also the only mutable thing here, so it gets a
-5-minute TTL rather than the assets' one-year `immutable`.
+and would ship whatever text was embedded last.
+
+The project docs are the opposite: proxied live from the repo with a 15-minute TTL, because their
+whole value is being current and they should not need a worker redeploy to update. Neither is
+immutable, so none of them take the assets' one-year TTL.
 
 Every one is immutable, which is what makes the one-year TTL safe: a tag's assets are never replaced,
 and the upload workflows refuse to overwrite an existing release. Revised content gets a new tag.
