@@ -2222,7 +2222,11 @@ public class StatusWindow : Window
             if (glowChanged) StoreContentGlow(entry, mtrl, glow.Clone());
             discovery.SaveMetadata(entry);
             InvalidateDefaultsCache(entry);
-            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+            // A content piece is grafted geometry with its own material; it never touches a skin texture,
+            // which is why the fingerprint's whole `content:` block is dropped under skinOnly. So the skin
+            // fingerprint is authoritative here by construction, not just by what happens to be hashed.
+            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+                skinFingerprintAuthoritative: true);
             return;
         }
 
@@ -2239,7 +2243,8 @@ public class StatusWindow : Window
                     ?.ApplyScrollFrom(glow);
         }
 
-        compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs);
+        compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+            skinFingerprintAuthoritative: true);   // see above
     }
 
     /// <summary>Thin wrappers onto <see cref="ContentGlowRow"/>, which owns the rule — see there for why it
@@ -3425,7 +3430,10 @@ public class StatusWindow : Window
                 if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
-                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+                // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
+                // that DOES move a skin texel still shows up in the skin fingerprint and rebuilds.
+                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+                    skinFingerprintAuthoritative: true);
             }
             return;
         }
@@ -3820,7 +3828,10 @@ public class StatusWindow : Window
                     InvalidateDefaultsCache(entry);
                 }
                 if (maskFooterChanged || maskModeChanged) compositor.TriggerRecomposite("mask-mode-change");
-                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
+                // Rows only: hashed at BuildCompositeFingerprint's `maskrow:` block, so the skin-reuse gate
+                // can be trusted with this one and a mask that lives on a shell costs no skin re-blend.
+                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs,
+                    skinFingerprintAuthoritative: true);
             }
             return;
         }
@@ -3952,7 +3963,9 @@ public class StatusWindow : Window
             if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
-            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+            // Rows only — see the simple-mod path above.
+            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+                skinFingerprintAuthoritative: true);
         }
     }
 
@@ -4029,11 +4042,23 @@ public class StatusWindow : Window
         // carried onto Glow: the effect is now what decides the mode, and a pin left behind would strand the
         // option on characterscroll with no scroll map the moment the effect is cleared again.
         //
-        // Narrow on purpose — a pin with no effect selected still holds, so Advanced's force-mode radios
-        // keep working, and a pin that ALREADY reads as Glow is left alone.
+        // Narrow on purpose. THIS EDIT must be the effect pick — FeatureEdit.Glow, which only the effect
+        // picker raises (ColorTableEditor's DrawEffectPicker branch). Testing merely that a scroll IS
+        // assigned was wrong and destructive: "pinned Cloth with an effect still assigned" is a deliberate
+        // state (pick an effect, then force Cloth in Advanced — ApplyMode never clears Scroll), and any
+        // later Cloth edit on such an overlay — a sphere-map nudge, which reports FeatureEdit.Cloth —
+        // would flip it to Glow, whereupon the caller's ApplyGlowTransition rewrites EVERY row to 150%
+        // white and SaveMetadata persists it, with no undo.
+        //
+        // The Glow SLIDER deliberately reports FeatureEdit.Cloth outside Glow mode, so it doesn't trip
+        // this — correct, since raising Glow without choosing an effect still cannot make anything emit.
+        //
+        // A pin with no effect selected also still holds, so Advanced's force-mode radios keep working,
+        // and a pin that ALREADY reads as Glow is left alone.
         if (locked)
         {
-            if (!canShell || cur == RenderMode.Glow || !RenderModeInference.HasGlow(overlays, ovr))
+            if (edited != FeatureEdit.Glow || !canShell || cur == RenderMode.Glow
+                || !RenderModeInference.HasGlow(overlays, ovr))
                 return false;
             ColorTableEditor.ApplyMode(overlays, ovr, RenderMode.Glow);
             ColorTableEditor.SetManualShaderLock(overlays, ovr, false);

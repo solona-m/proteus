@@ -211,6 +211,22 @@ public class CompositorService : IDisposable
     /// </summary>
     private volatile ShellDrawnProbe? _shellDrawnCheck;
 
+    /// <summary>
+    /// Drop all three shell locators together, for the tear-down paths that never reach the gear phase
+    /// where they are normally published: the plugin being disabled, and the composite's own "no enabled
+    /// mods" early return. They describe a shell on the character, so leaving them standing after the shell
+    /// has been dropped tells the editor's Glow locator a surface exists that does not.
+    /// <para/>
+    /// The composite does NOT call this on its way in — see the gear phase, where they are built into
+    /// locals and published in one step precisely so they are never observably empty while a shell stands.
+    /// </summary>
+    private void ClearShellLocators()
+    {
+        _shellMaterials   = new();
+        _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
+        _shellDrawnCheck  = null;
+    }
+
     // Per skin-overlay "glow" recipe (which composited-diffuse pixels map to each colour-table row),
     // keyed by (mod, group, option), from the last composite. Lets the colorset editor's glow button
     // light up a row's region on the live body diffuse via a texture rebind (no recomposite). Same
@@ -1487,6 +1503,7 @@ public class CompositorService : IDisposable
                 if (restoreAccessory) _needFullRedraw = true;
                 ReloadAndRedraw();   // character reverts to un-composited
                 _secondSkinActive = false;
+                ClearShellLocators();   // the shell is off the character; nothing left for them to describe
 
                 if (collId.HasValue)
                     penumbra.SetModEnabled(collId.Value, SidecarDiscoveryService.ManagedModDir, false);
@@ -1596,7 +1613,22 @@ public class CompositorService : IDisposable
         return _equippedPartModels != null;
     }
 
-    public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true)
+    /// <param name="skinFingerprintAuthoritative">
+    /// This trigger's effect on the SKIN composite is fully described by the skin fingerprint, so a forced
+    /// run may still reuse the published skin when that fingerprint matches.
+    /// <para/>
+    /// <paramref name="force"/> exists because the fingerprint deliberately does not hash everything — most
+    /// of all the config knobs (see BuildCompositeFingerprint's "standing requirement"). That makes it the
+    /// right veto for the full skip gate, but far too broad for the skin-reuse one: EVERY editor interaction
+    /// is forced, so skin reuse could never fire on the operation it was written for. A colour edit was
+    /// costing a 2.6 s skin re-blend that wrote nothing, because the content hashes came out identical.
+    /// <para/>
+    /// Set it only where the claim is checkable in BuildCompositeFingerprint — colour-table rows are, at the
+    /// `mtrl:`/`content:`/`maskrow:` blocks. It is NOT a licence to skip: reuse still requires the skin
+    /// fingerprint to match, so an edit that genuinely moves a skin texel rebuilds regardless.
+    /// </param>
+    public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
+        bool skinFingerprintAuthoritative = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
         Highlighter?.Clear();
@@ -1605,7 +1637,16 @@ public class CompositorService : IDisposable
         // sequence "drag a colour slider (5s debounce), zone before it fires" cancels the user's edit and
         // replaces it with a composite that skips — and the colour silently never applies. The latch is
         // cleared only when a composite actually publishes.
-        if (force) Interlocked.Exchange(ref _forcePending, 1);
+        if (force)
+        {
+            Interlocked.Exchange(ref _forcePending, 1);
+            // The skin half of the latch. Set only by a forced trigger whose skin effect the fingerprint
+            // CANNOT see — an AO knob, skin suppression, compression. If such a run is cancelled by a
+            // colour edit, the colour edit's composite must still rebuild the skin: it has no way to know
+            // what the run it replaced was owed. Without splitting the latch, the single bit this trigger
+            // sets for itself would veto its own reuse and the whole opt-in would be dead code.
+            if (!skinFingerprintAuthoritative) Interlocked.Exchange(ref _skinForcePending, 1);
+        }
 
         // Cancels whatever composite was pending and gives us the token for this one. The token is read
         // under the gate's own lock — doing it out here, off a source another thread can replace, is what
@@ -1743,7 +1784,7 @@ public class CompositorService : IDisposable
                     }
                 }
             }
-            Recomposite(token, force);
+            Recomposite(token, force, skinFingerprintAuthoritative);
         });
     }
 
@@ -2013,6 +2054,13 @@ public class CompositorService : IDisposable
     private int _forcePending;
 
     /// <summary>
+    /// The subset of <see cref="_forcePending"/> that the SKIN reuse gate must honour: a forced trigger
+    /// whose effect on the skin the fingerprint cannot see. Cleared with <see cref="_forcePending"/>, at
+    /// the same publish.
+    /// </summary>
+    private int _skinForcePending;
+
+    /// <summary>
     /// The composite inputs behind the manifest that is currently published, or null when that is unknown
     /// (nothing composited yet, the last one failed, or something happened that could have moved the world
     /// under us). An ambient trigger whose inputs hash to this can skip: the composite would rewrite the
@@ -2103,6 +2151,8 @@ public class CompositorService : IDisposable
     ///   • Configuration values. Every knob is reachable only through a FORCED trigger, and _forcePending
     ///     covers the case where an ambient trigger cancels one. THIS IS A STANDING REQUIREMENT: a new
     ///     config knob that affects output must trigger with force: true, or its change will be skipped.
+    ///     It must also NOT pass skinFingerprintAuthoritative — that flag is the assertion that this list
+    ///     already covers the trigger's effect on the skin, which for a config knob is exactly false.
     /// </summary>
     private string BuildCompositeFingerprint(
         Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>> byMaterial,
@@ -2110,6 +2160,7 @@ public class CompositorService : IDisposable
         Dictionary<string, List<string>> maskPathsByMod,
         Dictionary<string, List<(string MaskPath, string? NormalPath, string? IndexPath)>> maskAssetsByMod,
         Dictionary<string, Dictionary<int, ColorTableRowOverride>> maskRowsByMod,
+        Dictionary<string, OverlayDescriptor> maskDescByMod,
         HashSet<string> maskShellMods,
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
@@ -2161,11 +2212,42 @@ public class CompositorService : IDisposable
               .Append(string.Join(",", maskAssetsByMod[mod].Select(a => $"{a.MaskPath}|{a.NormalPath}|{a.IndexPath}")))
               .Append('\n');
 
+        // Shell-only for a mask-SHELL mod: its Masks colorset paints the shell's own material and nothing
+        // else. Every skin consumer of maskRowsByMod already refuses those mods by name — the fallback-rows
+        // build, LoadIndexMerged's _id merge, and the skin mask-colour pass all lead with
+        // `maskShellMods.Contains(modDir) ⇒ skip` — so the rows provably cannot move a skin texel.
+        //
+        // Leaving them in the skin fingerprint cost a full skin re-blend on every mask colour tweak, which
+        // then wrote nothing because the content hashes came out identical: 2.6 s of the 3.8 s a one-row
+        // colour change took, measured. The mods NOT on a shell keep their rows here — there the mask really
+        // is painted into the skin diffuse.
+        //
+        // Safe against the transition in both directions because `maskshell:` below is in the skin
+        // fingerprint too: a mod entering or leaving the set changes it, and the skin rebuilds.
         foreach (var mod in maskRowsByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+        {
+            if (skinOnly && maskShellMods.Contains(mod)) continue;
             sb.Append("maskrow:").Append(mod).Append('=')
               .Append(JsonSerializer.Serialize(maskRowsByMod[mod].OrderBy(kv => kv.Key)
                           .ToDictionary(kv => kv.Key, kv => kv.Value)))
               .Append('\n');
+        }
+
+        // The Masks tab's own render mode — layer, shader, and the scroll effect with its speed and tiling.
+        // Nothing else hashed it: `maskrow:` carries the colours and `maskshell:` only set membership, so
+        // switching a mask's glow effect (or its scroll speed) produced an IDENTICAL fingerprint and worked
+        // solely because mask-mode-change happens to trigger with force: true. That is the "standing
+        // requirement" hazard above, one line away from a flag whose whole meaning is "the fingerprint
+        // covers this" — so hash it instead of relying on a caller staying forced.
+        //
+        // Shell-only, on the same argument as `content:` and the mask rows: the descriptor reaches the skin
+        // ONLY by deciding maskShellMods membership, which `maskshell:` hashes for both fingerprints. Its
+        // shader and scroll describe a surface the skin composite never touches, so folding them into the
+        // skin fingerprint would re-blend the body for a glow-effect swap that cannot move a skin texel.
+        if (!skinOnly)
+            foreach (var mod in maskDescByMod.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+                sb.Append("maskdesc:").Append(mod).Append('=')
+                  .Append(JsonSerializer.Serialize(maskDescByMod[mod])).Append('\n');
 
         sb.Append("maskshell:")
           .Append(string.Join(",", maskShellMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase))).Append('\n');
@@ -2963,12 +3045,14 @@ public class CompositorService : IDisposable
     /// </summary>
     private int _compositesInFlight;
 
-    private void Recomposite(CancellationToken ct, bool force)
+    // Neither bool is defaulted, deliberately: `force` never was, and defaulting only its companion would
+    // let a future caller opt into skin reuse by omission. They are one decision, so they are passed together.
+    private void Recomposite(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
     {
         Interlocked.Increment(ref _compositesInFlight);
         try
         {
-            RecompositeBody(ct, force);
+            RecompositeBody(ct, force, skinFingerprintAuthoritative);
         }
         finally
         {
@@ -2976,7 +3060,7 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void RecompositeBody(CancellationToken ct, bool force)
+    private void RecompositeBody(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
     {
         try
         {
@@ -3066,11 +3150,16 @@ public class CompositorService : IDisposable
                 if (_secondSkinActive) _needFullRedraw = true;
                 _secondSkinActive = false;
                 _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+                // …and the UI-facing locators, for the same reason: this return skips the gear phase that
+                // would otherwise publish them, so without this they keep describing the shell that was
+                // standing before the last mod was switched off.
+                ClearShellLocators();
 
                 // This branch publishes an empty manifest, which no fingerprint describes — and it satisfies
                 // whatever forced work was owed, since "no enabled mods" IS the requested result.
                 _lastCompositeFingerprint = null;
                 Interlocked.Exchange(ref _forcePending, 0);
+                Interlocked.Exchange(ref _skinForcePending, 0);
                 // Nothing is hosted any more, so the redraw hook must not put a carrier back for a shell
                 // that no longer exists.
                 RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);
@@ -3566,6 +3655,15 @@ public class CompositorService : IDisposable
                 if (MaskRowsFor(entry) is { Count: > 0 } mr)
                     maskRowsByMod[entry.ModDirectory] = BuildRowDict(mr);
 
+            // The Masks tab's effective render mode per mod (layer, shader, scroll effect and its speed and
+            // tiling), resolved through the active design binding. Materialised ONCE here rather than
+            // re-resolved at each use: it feeds the shell-promotion loop below, the shell synthesis in the
+            // gear phase, and the composite fingerprint, and those three must not disagree.
+            var maskDescByMod = new Dictionary<string, OverlayDescriptor>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+                if (MaskDescriptorFor(entry) is { } md)
+                    maskDescByMod[entry.ModDirectory] = md;
+
             // Mods that will get a dedicated top mask SHELL: any mod with GEAR shells + mask _id/relief assets.
             // A mask colorset is OPTIONAL — with one the shell uses it, without one it inherits the fabric's
             // colours (see the shell synthesis). A mask mod with ONLY skin layers stays on the skin instead
@@ -3596,7 +3694,8 @@ public class CompositorService : IDisposable
             foreach (var entry in entries)
                 if (maskAssetsByMod.TryGetValue(entry.ModDirectory, out var mA2)
                     && mA2.Any(a => a.IndexPath != null || a.NormalPath != null)
-                    && MaskDescriptorFor(entry)?.Layer == OverlayLayer.Gear)
+                    && maskDescByMod.TryGetValue(entry.ModDirectory, out var md2)
+                    && md2.Layer == OverlayLayer.Gear)
                     maskShellMods.Add(entry.ModDirectory);
 
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
@@ -3676,13 +3775,13 @@ public class CompositorService : IDisposable
             // Penumbra temporary setting carries. Nothing persistent is mutated between here and the return
             // below, so a skip leaves the previous composite's shell state intact.
             var fingerprint = BuildCompositeFingerprint(
-                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
-                baseKeys, contentLayers);
+                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
+                maskShellMods, baseKeys, contentLayers);
 
             // The same inputs minus the ones only the shell reads — see the skin-reuse gate below.
             var skinFingerprint = BuildCompositeFingerprint(
-                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskShellMods,
-                baseKeys, contentLayers, skinOnly: true);
+                byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
+                maskShellMods, baseKeys, contentLayers, skinOnly: true);
 
             if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
@@ -3720,9 +3819,14 @@ public class CompositorService : IDisposable
             // direction is a few seconds; the other direction is a character wearing stale skin.
             // Read the whole group through ONE reference so the fingerprint and the redirects it vouches
             // for cannot come from different publishes — see SkinPublish.
+            // `force` is the wrong veto here on its own — see TriggerRecomposite's
+            // skinFingerprintAuthoritative, which is how a trigger whose skin effect IS hashed opts back in.
+            // _skinForcePending is the same distinction applied to a CANCELLED forced run whose work is
+            // still owed; the full gate above keeps using the undivided _forcePending.
             var lastSkin = _lastSkinPublish;
             bool skinReused =
-                !force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
+                (!force || skinFingerprintAuthoritative)
+                && config.SkipUnchangedComposites && Volatile.Read(ref _skinForcePending) == 0
                 && _lastCompositeFingerprint != null
                 && lastSkin != null && skinFingerprint == lastSkin.Fingerprint
                 && lastSkin.Redirects.Count > 0
@@ -5444,9 +5548,17 @@ public class CompositorService : IDisposable
             List<object>? manipulations = null;
             _needFullRedraw = false;
             _secondSkinActive = false;
-            _shellMaterials = new();   // repopulated below only if a shell actually builds — else stays empty
-            _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
-            _shellDrawnCheck = null;   // same: no shell this composite means nothing to check for on-screen
+            // The three UI-facing locators are built into LOCALS and published as one step after the gear
+            // phase (below), instead of being cleared here and refilled ~1.2 s later. That clear opened a
+            // window in which the fields said "no shell was built" while one plainly was: the editor's Glow
+            // locator reads GetShellMaterials every frame, saw the empty map mid-composite, and fired a
+            // mask-glow-warmup recomposite — a second full composite, ~3.8 s, for a one-row colour tweak.
+            // Holding the previous composite's values until this one has an answer closes it; they only ever
+            // describe a shell that IS on the character, and the publish below still empties them when no
+            // shell built this time.
+            Dictionary<(string ModDir, string? Group, string? Option), List<string>>? nextShellMaterials = null;
+            Dictionary<string, HashSet<string>>? nextContentMaterials = null;
+            ShellDrawnProbe? nextShellDrawnCheck = null;
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
             // branch). The injection below then needs no follow-up recomposite — the redirect is already
@@ -5503,7 +5615,8 @@ public class CompositorService : IDisposable
 
                     // The mask's own render mode: Cloth (character.shpk) by default, or the shader/scroll it
                     // was given (Glow ⇒ characterscroll.shpk). Null descriptor ⇒ plain Cloth, as before.
-                    var md = MaskDescriptorFor(seed.Entry);
+                    // The same instance the promotion loop and the fingerprint read — see maskDescByMod.
+                    maskDescByMod.TryGetValue(mod, out var md);
                     var maskDesc = new OverlayDescriptor
                     {
                         Layer          = OverlayLayer.Gear,
@@ -5737,11 +5850,11 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin host set changed — forcing a full redraw");
                             else if (shells.ShellChanged)
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
-                            _shellMaterials = shells.ShellMaterials;
-                            _contentMaterials = shells.ContentMaterials;
+                            nextShellMaterials = shells.ShellMaterials;
+                            nextContentMaterials = shells.ContentMaterials;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
-                            _shellDrawnCheck = new ShellDrawnProbe(
+                            nextShellDrawnCheck = new ShellDrawnProbe(
                                 [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))],
                                 [.. shells.Redirects.Keys.Where(k => k.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))]);
 
@@ -5773,6 +5886,17 @@ public class CompositorService : IDisposable
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
             }
+
+            // Publish the locators in one step, now that the gear phase has an answer. Null ⇒ no shell was
+            // built (no gear overlays at all, or the build threw), which is exactly when the editor SHOULD
+            // see them empty — so the warm-up it triggers then is the real cold-boot case it was written for.
+            //
+            // This covers only the paths that REACH here. The two tear-downs that return earlier — the
+            // plugin being disabled, and the "no enabled mods" branch above — clear them through
+            // ClearShellLocators instead.
+            _shellMaterials   = nextShellMaterials ?? new();
+            _contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
+            _shellDrawnCheck  = nextShellDrawnCheck;
 
             // No shell built this composite (no gear, or build failed) but hosts were redirected last time —
             // they've been dropped, so force a full redraw to reload the vacated accessories' real models.
@@ -5815,6 +5939,7 @@ public class CompositorService : IDisposable
             _lastSkinPublish = new SkinPublish(
                 skinFingerprint, skinRedirectsThisRun, _channelContributions, _skinGlowTargets);
             Interlocked.Exchange(ref _forcePending, 0);
+            Interlocked.Exchange(ref _skinForcePending, 0);
 
             // Widen the recorded base set to what this run ACTUALLY resolved. baseKeys is the published
             // manifest's keys plus the overlay material paths, but the blend loop resolves texture bases
