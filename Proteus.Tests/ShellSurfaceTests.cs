@@ -17,8 +17,47 @@ public class ShellSurfaceTests
     [InlineData("chara/human/c1401/obj/hair/h0133/material/v0001/mt_c1401h0133_hir_a.mtrl", ShellSurfaceKind.Hair, "h0133")]
     [InlineData("chara/human/c1401/obj/tail/t0001/material/v0001/mt_c1401t0001_etc_a.mtrl", ShellSurfaceKind.Tail, "t0001")]
     [InlineData("chara/human/c1801/obj/zear/z0001/material/mt_c1801z0001_zer_a.mtrl", ShellSurfaceKind.Ear, "z0001")]
+    // The eyes sit in the face's folder but are their own surface.
+    [InlineData("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_iri_a.mtrl", ShellSurfaceKind.Iris, "f0001")]
+    [InlineData("chara/human/c1401/obj/face/f0101/material/mt_c1401f0101_iri_a.mtrl", ShellSurfaceKind.Iris, "f0101")]
     public void HumanParts_classify_with_their_id(string path, ShellSurfaceKind kind, string id)
         => Assert.Equal(new ShellSurfaceKey(kind, id), ShellSurface.KeyFor(path));
+
+    /// <summary>
+    /// The iris must not share a surface with the face it lives in. Surfaces resolve once per key and every
+    /// layer on a key shares one source model and one mesh filter, so collapsing these gave a character
+    /// wearing both an eye overlay and a face overlay a single shell — one overlay's art on the other's
+    /// geometry, silently.
+    /// </summary>
+    [Fact]
+    public void Iris_and_face_are_different_surfaces()
+    {
+        var iris = ShellSurface.KeyFor("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_iri_a.mtrl");
+        var face = ShellSurface.KeyFor("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl");
+        Assert.NotEqual(iris, face);
+        Assert.Equal("f0001", iris!.Value.Id);   // same part id — only the kind separates them
+        Assert.Equal("f0001", face!.Value.Id);
+    }
+
+    /// <summary>`_etc` (lashes, brows) stays Face — only the eye material moves.</summary>
+    [Fact]
+    public void Only_the_iris_material_leaves_the_face_surface()
+        => Assert.Equal(new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001"),
+            ShellSurface.KeyFor("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_etc_a.mtrl"));
+
+    /// <summary>
+    /// An eye is millimetres across and the shell push is a millimetre tuned against a torso, so the iris
+    /// asks for a fraction of it. Everything else keeps the tuned value.
+    /// </summary>
+    [Fact]
+    public void Iris_asks_for_a_smaller_push_than_every_other_surface()
+    {
+        var iris = new ShellSurfaceKey(ShellSurfaceKind.Iris, "f0001");
+        Assert.True(iris.PushScale < 1f && iris.PushScale > 0f, $"iris push scale was {iris.PushScale}");
+        foreach (var kind in new[] { ShellSurfaceKind.Body, ShellSurfaceKind.Face, ShellSurfaceKind.Hair,
+                                     ShellSurfaceKind.Tail, ShellSurfaceKind.Ear, ShellSurfaceKind.Native })
+            Assert.Equal(1f, new ShellSurfaceKey(kind, "").PushScale);
+    }
 
     [Fact]
     public void Face_ids_are_different_surfaces()

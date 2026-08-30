@@ -651,6 +651,23 @@ public sealed class LuminisImportService
         var importable = preview.Importable;
         bool qualified = importable.Count > 1;
 
+        // An override only overrides when the user actually RETARGETED — measured against the value the
+        // Import tab seeded its combo with, not against each plan's own suffix.
+        //
+        // The tab hands a non-null suffix back on every import, so "non-null means retarget" was never the
+        // test it looked like. Comparing per-plan was worse than useless on the case it was meant to fix:
+        // in a pack mixing chara/bibo with chara/gen3 the gen3 plan differs from the seeded bibo default,
+        // so it read as retargeted and had its SourceBodyType overwritten with bibo — declaring gen3 art
+        // to already be in bibo space and skipping the very remap that would have made it fit.
+        //
+        // One decision for the whole write, because that is what it is: either the user left the combo
+        // where Proteus put it (every plan keeps the space its own token names, and mixed packs remap
+        // correctly) or they aimed it somewhere by hand (everything is declared already in the
+        // destination's space, so the remap is a no-op rather than a transfer map for a body they have
+        // just said it is not for).
+        bool retargeted = suffixOverride != null
+                       && !string.Equals(suffixOverride, preview.DefaultSuffix, StringComparison.OrdinalIgnoreCase);
+
         // Re-decoded rather than carried on the preview: holding every 2048² sheet as RGBA for as long as
         // the preview is on screen costs ~16 MB apiece, and this pass runs off the framework thread where
         // the second decode costs nobody anything.
@@ -678,16 +695,6 @@ public sealed class LuminisImportService
             }
 
             var (rgba, w, h) = src;
-            // An override only overrides when it actually RETARGETS. The Import tab seeds its body combo
-            // from the resolved default and hands that back on every import, so treating any non-null
-            // value as a retarget stamped one body type across every plan — a pack mixing chara/bibo with
-            // chara/gen3 would have written the gen3 art declared as bibo and skipped its remap.
-            //
-            // Where it does retarget, declaring the art to already be in the DESTINATION's space is the
-            // only safe reading: it makes the remap a no-op rather than running the art through a transfer
-            // map for a body the user has just said it is not for.
-            bool retargeted = suffixOverride != null
-                           && !string.Equals(suffixOverride, plan.Suffix, StringComparison.OrdinalIgnoreCase);
             string bodyType = retargeted
                 ? UVRemapService.InferBodyType(materials.FirstOrDefault() ?? "") ?? plan.BodyType ?? ""
                 : plan.BodyType ?? "";

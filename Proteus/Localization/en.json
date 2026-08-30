@@ -879,6 +879,58 @@
     "message": "Exporting…",
     "description": "The Export button's caption while the file is being written."
   },
+  "Eye.Cutout.Artwork": {
+    "message": "Artwork only",
+    "description": "The other choice in the glow-shape combo: confine the glow to the drawn shape, dropping the fade around it."
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Artwork and its falloff",
+    "description": "One of two choices in the glow-shape combo: keep the soft fade the artist drew around the artwork."
+  },
+  "Eye.Cutout.Label": {
+    "message": "Glow shape",
+    "description": "Label of the combo choosing how much of the mask becomes the glowing shape. Keep it short; the \"###\" suffix is a widget id and must be left exactly as it is."
+  },
+  "Eye.Cutout.Tip": {
+    "message": "How much of the mask's glow channel is cut into the shape that glows. Most packs mark the artwork brightly and fade out around it; keeping that falloff glows softly beyond the artwork, dropping it confines the glow to the shape itself.\nBaked in at import, so pick it now — afterwards the Glow dial can only scale what's left.",
+    "description": "Tooltip for the glow-shape combo. \"Glow\" is the name of a dial in this plugin's Colors tab."
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus couldn't read the game's face list, so the glow will target a known-good pair of faces only. Reopen this pack once you're in game to pick up every race.",
+    "description": "Amber note in the Import tab: the game data could not be read, so the glow will only reach two faces. \"Proteus\" is the plugin name."
+  },
+  "Eye.Glow.Fmt": {
+    "message": "The mask marks {0:P1} of the sheet as glowing, and that shape gets the animation — on {1} iris material(s), so it follows you across races and faces. Switch it off under \"{2}\" in Penumbra.",
+    "description": "Plain (not amber) line before the Import button, saying what the glow will do. {0} is a fraction shown as a percentage by the \"P1\" specifier, which must be kept; {1} a count of iris materials; {2} the Penumbra option group's name. \"Penumbra\" is a plugin name."
+  },
+  "Eye.Intro": {
+    "message": "Import an eye texture pack (.zip of loose images). Its eyes go in as normal, and the shape its mask marks out gets an animated glow you can recolour and dim.",
+    "description": "One of four bullets introducing the Import tab, in the same voice as the others: what you get, not how it works."
+  },
+  "Eye.NoGlow": {
+    "message": "No animated glow will be added — see below. The eye textures still import and work normally.",
+    "description": "Plain line before the Import button when no animated glow can be added. The reasons follow it in amber."
+  },
+  "Eye.NothingUsable": {
+    "message": "Nothing in this archive looks like an eye texture.",
+    "description": "Tooltip on the disabled Import button when the archive holds nothing that looks like an eye texture."
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "Couldn't read that archive: {0}",
+    "description": "Shown when the picked .zip could not be read at all. {0} is the reader's own reason and arrives in English."
+  },
+  "Eye.Skipped": {
+    "message": "skipped",
+    "description": "Table cell marking a file that will not be imported; the reason is in its tooltip. Keep it very short and lower case."
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nSkipped: {1}",
+    "description": "Tooltip on a skipped file. {0} is its name and {1} the reason, a sentence fragment beginning in lower case."
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Textures: {0} of {1}",
+    "description": "Header above the file table. {0} is how many will be imported, {1} how many the archive holds."
+  },
   "Footer.LastComposite.Fmt": {
     "message": "Last composite: {0}   textures patched: {1}   mods: {2}",
     "description": "{0} is a relative time, {1} and {2} are counts. The counts are labelled rather than glued to a noun so no plural form is needed."
@@ -954,6 +1006,94 @@
   "Import.Dialog.Title": {
     "message": "Select a pack",
     "description": "Title of the file picker. One dialog now offers both pack formats."
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Imported from the eye texture pack \"{0}\".",
+    "description": "Written into the imported mod's Penumbra description. {0} is the .zip file name."
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "That mod name has no usable characters — use letters or numbers.",
+    "description": "The import was refused before anything was written: the mod name is punctuation only."
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "A mod folder named \"{0}\" already exists.",
+    "description": "The import was refused: {0} is a mod folder name already in Penumbra's mod directory."
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "The archive is no longer there: {0}",
+    "description": "The import was refused: {0} is the .zip path, moved or deleted since it was picked."
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbra's mod directory isn't available.",
+    "description": "The import was refused because Penumbra did not answer with its mod directory. \"Penumbra\" is a plugin name."
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "None of this archive's textures could be read, so nothing was written.",
+    "description": "The import failed after the fact: not one texture could be decoded, so the mod folder was rolled back."
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "Nothing in this archive can be imported.",
+    "description": "The import was refused: no file in the archive is a recognisable eye texture."
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "\"Proteus\" is reserved — choose a different mod name.",
+    "description": "The import was refused: \"Proteus\" is the plugin's own managed folder. The quoted word is a folder name, not prose."
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "Failed to write the mod: {0}",
+    "description": "The import failed part-way and was rolled back. {0} is the underlying error, which arrives in English from the operating system."
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Animated glow",
+    "description": "Name of the Penumbra option that switches the animated glow on. Shown in Penumbra's own option list, so keep it short."
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}, but with no animated glow. See the reasons above; the eyes themselves are in and working.",
+    "description": "Amber result line: the eye textures imported but no animation could be added. {0} mod folder name, {1} texture count."
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}. Penumbra hasn't switched it on yet; tick it in Penumbra's mod list.",
+    "description": "Amber result line: the mod was written and added but Penumbra has not switched it on. {0} mod folder name, {1} texture count. \"Penumbra\" is a plugin name."
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}, with an animated glow on the shape the mask marks out. Tune it in Colors, or switch it off under \"{2}\" in Penumbra.",
+    "description": "Green result line after a successful import. {0} mod folder name, {1} texture count, {2} the Penumbra option group's name. \"Colors\" is a tab in this plugin."
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "another file in this archive is already the {0} texture.",
+    "description": "Why one file was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. {0} is a texture kind (Base, Mask or Norm) and is not translated."
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "this archive's names don't identify it as an eye pack, and Proteus won't point loose textures at your irises on a guess.",
+    "description": "Why a file was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. The archive's file names do not identify it as an eye pack."
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "its name doesn't end in a texture kind Proteus knows (base, mask or norm).",
+    "description": "Why one file was skipped, shown as a tooltip. Completes \"<file>\\nSkipped: …\", so it begins in lower case. The words base, mask and norm are file-name tokens and are not translated."
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Your character isn't drawn, so the glow is being cut for face {0}. If you wear a different face, import this again once you're in game.",
+    "description": "Amber warning in the Import tab. The glow is cut for one face id ({0}, e.g. \"f0001\", not translated) because a shell is resolved per face; the character was not drawn, so it was guessed."
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "The mask texture couldn't be decoded, so Proteus can't tell what should glow. The eye textures are still imported; only the glow is left out.",
+    "description": "Amber warning in the Import tab: the mask image would not decode, so the glow region is unknown."
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "The mask's red channel is empty, so nothing in this pack is marked as glowing. That channel is where the game reads the limbal ring from, and where a glowing eye mod puts its shape. The eye textures are still imported; only the glow is left out.",
+    "description": "Amber warning in the Import tab: the mask's red channel is empty. That channel is where the game reads the limbal ring from."
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus couldn't read the game's face list, so it has no iris material to put the glow on. The eye textures are still imported; only the glow is left out.",
+    "description": "Amber warning in the Import tab: the game's face list could not be read, so there is no iris material to put a glow on."
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "This pack ships no mask texture, so there is no shape for the animation to fill. The eye textures are still imported; only the glow is left out.",
+    "description": "Amber warning in the Import tab: the pack ships no mask, so there is no shape for the animation to fill."
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "Nothing in this archive can be imported — see the reasons above.",
+    "description": "Amber warning in the Import tab when every file in the archive was skipped."
   },
   "Import.Failed.Fmt": {
     "message": "Import failed: {0}",

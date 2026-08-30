@@ -879,6 +879,58 @@
     "message": "書き出し中…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "図柄のみ",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "図柄とその減衰",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "発光範囲",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "マスクの発光チャンネルのどこまでを発光範囲として切り出すかです。多くのパックは図柄を明るく描き、その周囲を徐々に減衰させています。減衰を残すと図柄の外までやわらかく光り、外すと図柄そのものに発光が収まります。\nインポート時に焼き込まれるため、ここで選んでください。以降は Glow ダイヤルで残った分を増減できるだけです。",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus がゲームの顔リストを読み取れなかったため、発光は既知の2つの顔にのみ適用されます。全種族に対応させるには、ゲーム内でこのパックを開き直してください。",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "マスクはテクスチャの {0:P1} を発光範囲として指定しており、その形にアニメーションが入ります。対象は {1} 個の虹彩マテリアルなので、種族や顔を変えても追従します。Penumbra の「{2}」でオフにできます。",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "瞳テクスチャパック（画像を直接収めた .zip）をインポートします。瞳は通常どおり適用され、マスクが示す形に色や強さを調整できるアニメーション発光が入ります。",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "アニメーション発光は追加されません（理由は下記）。瞳テクスチャは通常どおりインポートされ、問題なく動作します。",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "このアーカイブには瞳テクスチャらしきものがありません。",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "このアーカイブを読み取れませんでした: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nスキップ: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "テクスチャ: {1} 中 {0}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "最終合成: {0}   適用テクスチャ数: {1}   MOD数: {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "パックを選択",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "瞳テクスチャパック「{0}」からインポートしました。",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "その MOD 名には使える文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "「{0}」という MOD フォルダーはすでに存在します。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "アーカイブが見つかりません: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbra の MOD ディレクトリを取得できません。",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "このアーカイブのテクスチャをいずれも読み取れなかったため、何も書き込まれませんでした。",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "このアーカイブからインポートできるものはありません。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "「Proteus」は予約済みです。別の MOD 名を選んでください。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "MOD の書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "アニメーション発光",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}。ただしアニメーション発光はありません。理由は上記のとおりで、瞳自体は正しく適用されています。",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}。Penumbra 側でまだ有効になっていません。MOD 一覧でチェックを入れてください。",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}。マスクが示す形にアニメーション発光が入っています。Colors で調整するか、Penumbra の「{2}」でオフにできます。",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "このアーカイブ内の別のファイルがすでに {0} テクスチャになっています。",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "このアーカイブの名前からは瞳パックと判断できません。Proteus は推測で虹彩にテクスチャを割り当てません。",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "ファイル名が Proteus の知るテクスチャ種別（base、mask、norm）で終わっていません。",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "キャラクターが描画されていないため、発光は顔 {0} 用に切り出されます。別の顔を使っている場合は、ゲーム内でこのパックを取り込み直してください。",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "マスクテクスチャをデコードできず、何を光らせるべきか判断できません。瞳テクスチャはインポートされ、発光のみ省かれます。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "マスクの赤チャンネルが空で、このパックには発光指定がありません。ゲームはそのチャンネルからリンバルリングを読み取り、発光瞳 MOD もそこに形を置きます。瞳テクスチャはインポートされ、発光のみ省かれます。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus がゲームの顔リストを読み取れず、発光を載せる虹彩マテリアルがありません。瞳テクスチャはインポートされ、発光のみ省かれます。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "このパックにはマスクテクスチャがなく、アニメーションを収める形がありません。瞳テクスチャはインポートされ、発光のみ省かれます。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "このアーカイブからインポートできるものはありません — 上の理由をご確認ください。",
     "description": ""
   },
   "Import.Failed.Fmt": {

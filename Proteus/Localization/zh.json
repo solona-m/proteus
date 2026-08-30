@@ -879,6 +879,58 @@
     "message": "正在导出…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "仅图案",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "图案及其渐隐",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "发光形状",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "将遮罩发光通道中的多少裁剪为发光形状。多数整合包会把图案画得很亮，并在其周围逐渐淡出；保留该渐隐会让发光柔和地溢出图案之外，去掉则把发光限制在图案本身。\n在导入时即已固化，请现在选择 — 之后 Glow 旋钮只能缩放剩下的部分。",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus 无法读取游戏的面部列表，因此发光只会应用到已知的两个面部。请在游戏中重新打开此压缩包以覆盖所有种族。",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "遮罩将贴图的 {0:P1} 标记为发光区域，动画只作用于该形状 — 覆盖 {1} 个虹膜材质，因此会随你的种族和面部一同生效。可在 Penumbra 的“{2}”中关闭。",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "导入眼睛贴图包（内含散装图片的 .zip）。眼睛会照常应用，而其遮罩标记出的形状会获得可重新上色、可调暗的动态发光。",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "不会添加动态发光 — 原因见下方。眼睛贴图仍会正常导入并生效。",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "此压缩包中没有任何看起来像眼睛贴图的文件。",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "无法读取该压缩包：{0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "贴图：{0} / {1}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "上次合成：{0}   已处理贴图：{1}   模组数：{2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "选择整合包",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "从眼睛贴图包“{0}”导入。",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "该模组名称没有可用字符 — 请使用字母或数字。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "名为“{0}”的模组文件夹已存在。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "压缩包已不在原处：{0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "无法获取 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "该压缩包中的贴图均无法读取，因此未写入任何内容。",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "此压缩包中没有可导入的内容。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "“Proteus”为保留名称 — 请另选一个模组名称。",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "动态发光",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}，但没有动态发光。原因见上方；眼睛本身已生效。",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}。Penumbra 尚未启用它，请在模组列表中勾选。",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}，遮罩标记的形状已带动态发光。可在 Colors 中调整，或在 Penumbra 的“{2}”中关闭。",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "此压缩包中的另一个文件已作为 {0} 贴图。",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "此压缩包的文件名无法表明它是眼睛贴图包，Proteus 不会凭猜测把散装贴图指向你的虹膜。",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "其文件名未以 Proteus 已知的贴图类型结尾（base、mask 或 norm）。",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "你的角色尚未绘制，因此发光按面部 {0} 裁剪。如果你使用的是其他面部，请在游戏中重新导入此压缩包。",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "无法解码遮罩贴图，因此 Proteus 不知道哪里应该发光。眼睛贴图仍会导入，仅省略发光。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "遮罩的红色通道是空的，因此此包中没有任何区域被标记为发光。游戏正是从该通道读取角膜环，发光眼睛模组也把形状放在那里。眼睛贴图仍会导入，仅省略发光。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus 无法读取游戏的面部列表，因此没有可承载发光的虹膜材质。眼睛贴图仍会导入，仅省略发光。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "此包未提供遮罩贴图，因此没有可供动画填充的形状。眼睛贴图仍会导入，仅省略发光。",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "此压缩包中没有可导入的内容 — 请参见上方的原因。",
     "description": ""
   },
   "Import.Failed.Fmt": {

@@ -5745,10 +5745,16 @@ public class CompositorService : IDisposable
                             metModels == null ? "unknown" : string.Join(", ", metModels),
                             string.Join(", ", bareBodyModels.Select(kv => $"{kv.Key}={kv.Value}")),
                             _equippedPartModels == null ? "cache null" : "cached");
-                        // Observed only for now — nothing cuts from these yet. Logged because the whole
-                        // multi-surface plan rests on this walk actually reporting them, and this is the
-                        // line that says whether it does: whether a Viera's ears show up, whether a face
-                        // really does draw several models, and what the ids look like.
+                        // Shells ARE cut from these — SecondSkinService.ResolveHumanSurface filters this
+                        // very list by part folder and picks the model declaring the overlay's material.
+                        // (It said "observed only, nothing cuts from these yet" until now; that was stale
+                        // from birth, since the commit adding the line added the resolver too.)
+                        //
+                        // Still logged, because the whole multi-surface story rests on this walk actually
+                        // reporting them and this is the line that says whether it does: whether a Viera's
+                        // ears show up, whether a face really does draw several models, and — for an eye
+                        // overlay — whether anything here declares the iris material at all, since a
+                        // surface that resolves to nothing is dropped with a warning and no shell.
                         log.Information("[Proteus] second skin: human part models [{0}]",
                             string.Join(", ", _humanPartModels ?? []));
 

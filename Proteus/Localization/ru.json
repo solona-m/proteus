@@ -879,6 +879,58 @@
     "message": "Экспорт…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "Только рисунок",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Рисунок и его затухание",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "Форма свечения",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "Какая часть канала свечения маски становится светящейся формой. Большинство наборов рисуют сам рисунок ярко, а вокруг него делают затухание; если оставить его, свечение мягко выходит за пределы рисунка, если убрать — остаётся строго в его форме.\nЗапекается при импорте, так что выбирайте сейчас: потом регулятор Glow сможет лишь масштабировать то, что осталось.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus не смог прочитать список лиц игры, поэтому свечение затронет лишь пару известных лиц. Откройте пакет заново в игре, чтобы охватить все расы.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "Маска отмечает {0:P1} текстуры как светящуюся, и анимацию получает именно эта форма — на {1} материал(ах) радужки, так что она следует за вами между расами и лицами. Отключается в «{2}» в Penumbra.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "Импорт набора текстур глаз (.zip с обычными изображениями). Глаза встают как обычно, а форма, отмеченная их маской, получает анимированное свечение, которое можно перекрасить и приглушить.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "Анимированное свечение добавлено не будет — см. ниже. Текстуры глаз всё равно импортируются и работают как обычно.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "В этом архиве нет ничего похожего на текстуру глаз.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "Не удалось прочитать этот архив: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "пропущен",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nПропущен: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Текстур: {0} из {1}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "Последняя сборка: {0}   обработано текстур: {1}   модов: {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "Выберите пак",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Импортировано из набора текстур глаз «{0}».",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "В этом имени мода нет подходящих символов — используйте буквы или цифры.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "Папка мода «{0}» уже существует.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "Архива больше нет: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Каталог модов Penumbra недоступен.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "Ни одну текстуру этого архива не удалось прочитать, поэтому ничего не записано.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "Из этого архива нечего импортировать.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "Название «Proteus» зарезервировано — выберите другое.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "Не удалось записать мод: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Анимированное свечение",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}, но без анимированного свечения. Причины выше; сами глаза на месте и работают.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}. Penumbra ещё не включил его; отметьте его в списке модов.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}, с анимированным свечением на форме, отмеченной маской. Настройте его в Colors или отключите в «{2}» в Penumbra.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "другой файл в этом архиве уже является текстурой {0}.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "имена файлов в этом архиве не указывают на набор для глаз, а Proteus не направляет случайные текстуры на радужку наугад.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "его имя не оканчивается на известный Proteus тип текстуры (base, mask или norm).",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Ваш персонаж не отрисован, поэтому свечение вырезается для лица {0}. Если вы носите другое лицо, импортируйте пакет заново в игре.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "Текстуру маски не удалось декодировать, поэтому Proteus не знает, что должно светиться. Текстуры глаз всё равно импортируются; пропускается только свечение.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "Красный канал маски пуст, то есть в этом наборе ничего не помечено как светящееся. Именно из него игра читает лимбальное кольцо, и туда же кладёт свою форму мод светящихся глаз. Текстуры глаз всё равно импортируются; пропускается только свечение.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus не смог прочитать список лиц игры, поэтому у него нет материала радужки для свечения. Текстуры глаз всё равно импортируются; пропускается только свечение.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "В этом наборе нет текстуры маски, поэтому анимации нечего заполнять. Текстуры глаз всё равно импортируются; пропускается только свечение.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "Из этого архива нечего импортировать — см. причины выше.",
     "description": ""
   },
   "Import.Failed.Fmt": {

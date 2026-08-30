@@ -43,6 +43,7 @@ public static class Strings
     public static ImportStrings   Import   { get; private set; } = new();
     public static ContentStrings  Content  { get; private set; } = new();
     public static LuminisStrings  Luminis  { get; private set; } = new();
+    public static EyeStrings      Eye      { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
@@ -66,6 +67,7 @@ public static class Strings
         Import   = new ImportStrings();
         Content  = new ContentStrings();
         Luminis  = new LuminisStrings();
+        Eye      = new EyeStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
         ColorPanel = new ColorPanelStrings();
@@ -677,6 +679,56 @@ public sealed class LuminisStrings
 
     public readonly string NothingUsable = Loc.Localize("Luminis.NothingUsable",
         "No texture in this modpack carries an Atramentum Luminis glow mask.");
+}
+
+/// <summary>The loose eye-texture pack (<c>.zip</c>) half of the Import tab.</summary>
+public sealed class EyeStrings
+{
+    /// <summary>
+    /// The fourth bullet of the Import tab's intro, in the same voice as the other three: what you get.
+    /// Says "animated" because that is the only part Penumbra cannot already do on its own.
+    /// </summary>
+    public readonly string Intro = Loc.Localize("Eye.Intro",
+        "Import an eye texture pack (.zip of loose images). Its eyes go in as normal, and the shape its "
+      + "mask marks out gets an animated glow you can recolour and dim.");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Eye.ReadFailed.Fmt",
+        "Couldn't read that archive: {0}");
+
+    public readonly string TextureCountFmt = Loc.Localize("Eye.TextureCount.Fmt",
+        "Textures: {0} of {1}");
+
+    public readonly string Skipped = Loc.Localize("Eye.Skipped", "skipped");
+
+    public readonly string SkippedReasonFmt = Loc.Localize("Eye.SkippedReason.Fmt", "{0}\nSkipped: {1}");
+
+    /// <summary>Said before the Import button: what the glow will cover, and where to switch it off.</summary>
+    public readonly string GlowFmt = Loc.Localize("Eye.Glow.Fmt",
+        "The mask marks {0:P1} of the sheet as glowing, and that shape gets the animation — on {1} iris "
+      + "material(s), so it follows you across races and faces. Switch it off under \"{2}\" in Penumbra.");
+
+    public readonly string NoGlow = Loc.Localize("Eye.NoGlow",
+        "No animated glow will be added — see below. The eye textures still import and work normally.");
+
+    public readonly string FallbackIrises = Loc.Localize("Eye.FallbackIrises",
+        "Proteus couldn't read the game's face list, so the glow will target a known-good pair of faces "
+      + "only. Reopen this pack once you're in game to pick up every race.");
+
+    public readonly string NothingUsable = Loc.Localize("Eye.NothingUsable",
+        "Nothing in this archive looks like an eye texture.");
+
+    public readonly string CutoutLabel = Loc.Localize("Eye.Cutout.Label", "Glow shape") + "###eyeCutout";
+
+    public readonly string CutoutFalloff = Loc.Localize("Eye.Cutout.Falloff", "Artwork and its falloff");
+    public readonly string CutoutArtwork = Loc.Localize("Eye.Cutout.Artwork", "Artwork only");
+
+    /// <summary>Says why this is chosen here rather than tuned later — it is baked into the written art,
+    /// and the Glow dial can only scale what survived it.</summary>
+    public readonly string CutoutTip = Loc.Localize("Eye.Cutout.Tip",
+        "How much of the mask's glow channel is cut into the shape that glows. Most packs mark the artwork "
+      + "brightly and fade out around it; keeping that falloff glows softly beyond the artwork, dropping it "
+      + "confines the glow to the shape itself.\n"
+      + "Baked in at import, so pick it now — afterwards the Glow dial can only scale what's left.");
 }
 
 public sealed class ExportStrings

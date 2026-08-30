@@ -879,6 +879,58 @@
     "message": "Exportiere…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "Nur die Grafik",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Grafik samt Verlauf",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "Leuchtform",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "Wie viel vom Leuchtkanal der Maske zur leuchtenden Form wird. Die meisten Pakete markieren die Grafik hell und lassen sie ringsum auslaufen; behältst du diesen Verlauf, leuchtet es sanft über die Grafik hinaus, lässt du ihn weg, bleibt das Leuchten auf der Form selbst.\nWird beim Import fest eingebacken — wähle jetzt; danach kann der Glow-Regler nur noch skalieren, was übrig ist.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus konnte die Gesichtsliste des Spiels nicht lesen, daher zielt das Leuchten nur auf ein bekanntes Gesichterpaar. Öffne das Paket im Spiel erneut, um alle Rassen zu erfassen.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "Die Maske markiert {0:P1} der Textur als leuchtend, und genau diese Form bekommt die Animation — auf {1} Iris-Material(ien), sodass sie dir über Rassen und Gesichter folgt. Abschaltbar unter „{2}“ in Penumbra.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "Importiere ein Augen-Texturpaket (.zip mit losen Bildern). Die Augen kommen normal hinein, und die von der Maske markierte Form bekommt ein animiertes Leuchten, das du umfärben und dimmen kannst.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "Es wird kein animiertes Leuchten hinzugefügt — siehe unten. Die Augentexturen werden trotzdem importiert und funktionieren normal.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "Nichts in diesem Archiv sieht nach einer Augentextur aus.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "Dieses Archiv konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Texturen: {0} von {1}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "Letzte Komposition: {0}   gepatchte Texturen: {1}   Mods: {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "Paket auswählen",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Importiert aus dem Augen-Texturpaket „{0}“.",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "Dieser Modname enthält keine verwendbaren Zeichen — nutze Buchstaben oder Zahlen.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "Ein Modordner namens „{0}“ existiert bereits.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "Das Archiv ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbras Modverzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "Keine Textur dieses Archivs war lesbar, es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "Aus diesem Archiv kann nichts importiert werden.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "„Proteus“ ist reserviert — wähle einen anderen Modnamen.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "Der Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Animiertes Leuchten",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}, aber ohne animiertes Leuchten. Siehe die Gründe oben; die Augen selbst sind drin und funktionieren.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}. Penumbra hat den Mod noch nicht eingeschaltet; hake ihn in Penumbras Modliste an.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}, mit animiertem Leuchten auf der von der Maske markierten Form. Feinjustierung unter Colors, oder abschalten unter „{2}“ in Penumbra.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "eine andere Datei in diesem Archiv ist bereits die {0}-Textur.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "die Namen in diesem Archiv weisen es nicht als Augenpaket aus, und Proteus richtet lose Texturen nicht auf Verdacht auf deine Iris.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "sein Name endet nicht auf eine Texturart, die Proteus kennt (base, mask oder norm).",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Dein Charakter ist nicht gezeichnet, daher wird das Leuchten für Gesicht {0} zugeschnitten. Trägst du ein anderes Gesicht, importiere das Paket im Spiel erneut.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "Die Maskentextur konnte nicht dekodiert werden, daher weiß Proteus nicht, was leuchten soll. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "Der Rotkanal der Maske ist leer, in diesem Paket ist also nichts als leuchtend markiert. Aus diesem Kanal liest das Spiel den Limbalring, und dorthin legt ein Leuchtaugen-Mod seine Form. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus konnte die Gesichtsliste des Spiels nicht lesen und hat daher kein Iris-Material für das Leuchten. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "Dieses Paket enthält keine Maskentextur, es gibt also keine Form, die die Animation füllen könnte. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "Aus diesem Archiv kann nichts importiert werden — siehe die Gründe oben.",
     "description": ""
   },
   "Import.Failed.Fmt": {

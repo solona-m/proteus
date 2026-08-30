@@ -31,6 +31,7 @@ public class StatusWindow : Window
     private readonly OnionImportService onionImport;
     private readonly ContentImportService contentImport;
     private readonly LuminisImportService luminisImport;
+    private readonly EyeImportService eyeImport;
     // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
     private readonly TextureLoader textureLoader;
     private readonly ModExportService modExport;
@@ -176,6 +177,14 @@ public class StatusWindow : Window
     private bool _luminisAwaiting;
     private LuminisImportService.PreparedImport? _luminisAwaited;
 
+    // ── Eye pack (.zip) import state ──
+    // A fourth set, kept apart from the other three for the reason given above.
+    private EyeImportService.ImportPreview? _eyePreview;
+    private volatile EyeImportService.PreparedImport? _eyePrepared;
+    // A registration Penumbra has accepted but not finished loading; see TickEyeImport.
+    private bool _eyeAwaiting;
+    private EyeImportService.PreparedImport? _eyeAwaited;
+
     // ── Export tab state ──
     // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
     // can reorder, and an index would then quietly point at a different mod than the one on screen.
@@ -231,6 +240,7 @@ public class StatusWindow : Window
         OnionImportService onionImport,
         ContentImportService contentImport,
         LuminisImportService luminisImport,
+        EyeImportService eyeImport,
         ModExportService modExport,
         TextureLoader textureLoader,
         PartsPanel parts)
@@ -250,6 +260,7 @@ public class StatusWindow : Window
         this.onionImport    = onionImport;
         this.contentImport  = contentImport;
         this.luminisImport  = luminisImport;
+        this.eyeImport      = eyeImport;
         this.textureLoader  = textureLoader;
         this.modExport      = modExport;
         this.parts          = parts;
@@ -1321,6 +1332,7 @@ public class StatusWindow : Window
     {
         TickContentImport(unloading);
         TickLuminisImport(unloading);
+        TickEyeImport(unloading);
 
         var done = _importPrepared;
         if (done == null) return;
@@ -1434,6 +1446,55 @@ public class StatusWindow : Window
         if (!IsOpen) Show();
     }
 
+    /// <summary>
+    /// The eye-pack half of <see cref="TickImport"/>. Like the Atramentum Luminis one this can span
+    /// several frames after the write: Penumbra loads an added mod asynchronously and discards a settings
+    /// write that lands while it is still reading, so the registration is pumped until it answers.
+    /// </summary>
+    private void TickEyeImport(bool unloading)
+    {
+        if (_eyeAwaiting)
+        {
+            // Nothing to pump into during teardown — no more frames, nobody to read a message, and Pump
+            // would open Penumbra and schedule a recomposite into half-disposed services.
+            if (unloading) return;
+            if (eyeImport.Pump() is not { } pumped) return;
+            _eyeAwaiting = false;
+            FinishEyeImport(pumped, _eyeAwaited);
+            _eyeAwaited = null;
+            return;
+        }
+
+        var done = _eyePrepared;
+        if (done == null) return;
+        _eyePrepared = null;
+
+        var r = eyeImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        if (r == null)
+        {
+            _eyeAwaiting = true;
+            _eyeAwaited = done;
+            return;
+        }
+
+        FinishEyeImport(r.Value, done);
+    }
+
+    private void FinishEyeImport(EyeImportService.ImportResult r, EyeImportService.PreparedImport? done)
+    {
+        _importBusy = false;
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        if (r.Ok && done != null && ReferenceEquals(_eyePreview, done.Preview))
+            _eyePreview = null;
+
+        if (!IsOpen) Show();
+    }
+
     private void DrawImportTab()
     {
         var ims = Strings.Import;
@@ -1453,6 +1514,7 @@ public class StatusWindow : Window
         BulletLine(cms.Intro);
         BulletLine(ims.Intro);
         BulletLine(Strings.Luminis.Intro);
+        BulletLine(Strings.Eye.Intro);
         ImGui.PopTextWrapPos();
         ImGui.Unindent();
         ImGui.Separator();
@@ -1472,7 +1534,8 @@ public class StatusWindow : Window
                 FilterLabel(ims.DialogFilter)
                     + "{" + PenumbraPackage.Extension
                     + "," + OnionPackage.Extension
-                    + "," + TexToolsPackage.Extension + "}",
+                    + "," + TexToolsPackage.Extension
+                    + "," + EyePackage.Extension + "}",
                 (ok, paths) =>
                 {
                     if (!ok) return;
@@ -1497,6 +1560,13 @@ public class StatusWindow : Window
         {
             ImGui.SameLine();
             DrawLuminisImport(_luminisPreview);
+            return;
+        }
+
+        if (_eyePreview != null)
+        {
+            ImGui.SameLine();
+            DrawEyeImport(_eyePreview);
             return;
         }
 
@@ -1594,6 +1664,7 @@ public class StatusWindow : Window
     {
         if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
         else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
+        else if (path.EndsWith(EyePackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadEyePack(path);
         else LoadContentPack(path);
     }
 
@@ -1629,6 +1700,17 @@ public class StatusWindow : Window
             // This is the same question the result colour asks, and the two must answer alike.
             if (content.CanImport && content.Warnings.Count == 0 && content.FaultyUnits == 0)
                 StartContentImport(content);
+            return;
+        }
+
+        if (_eyePreview is { } eye)
+        {
+            // Every file recognised, a glow to add, and nothing to warn about. A pack that can only bring
+            // its textures in is still a real import, but "no animation" is the decision the user came
+            // here to make, so it earns the second click.
+            if (eye.AnyImportable && eye.Warnings.Count == 0 && eye.CanGlow
+             && eye.Files.All(f => f.Import) && eyeImport.IrisesFromGameData)
+                StartEyeImport(eye);
             return;
         }
 
@@ -1726,6 +1808,7 @@ public class StatusWindow : Window
         // would keep drawing its own panel over this one.
         _contentPreview = null;
         _luminisPreview = null;
+        _eyePreview = null;
         try
         {
             var preview = onionImport.Inspect(path);
@@ -1781,6 +1864,7 @@ public class StatusWindow : Window
         _importStatus = null;
         _importPreview = null;    // see LoadOnionPack
         _luminisPreview = null;
+        _eyePreview = null;
         _importMaterials = null;
         try
         {
@@ -1961,6 +2045,7 @@ public class StatusWindow : Window
         _importStatus = null;
         _importPreview = null;    // see LoadOnionPack
         _contentPreview = null;
+        _eyePreview = null;
         _importMaterials = null;
         _luminisMaterials = null;
         try
@@ -2153,6 +2238,159 @@ public class StatusWindow : Window
             ImGui.TextUnformatted(Path.GetFileName(p));
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
         }
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.zip</c> as a loose eye-texture pack, or report why it isn't one.
+    /// <para/>
+    /// Decodes one image — the mask, to measure what it marks as glowing. The other two are copied through
+    /// on the write without ever being looked at, so this stays cheap enough for the picking frame.
+    /// </summary>
+    private void LoadEyePack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _luminisPreview = null;
+        _importMaterials = null;
+        _luminisMaterials = null;
+        try
+        {
+            var preview = eyeImport.Inspect(path);
+            _eyePreview = preview;
+            _importName = ProteusName(preview.Name);
+            _importAuthor = "";
+        }
+        catch (Exception ex)
+        {
+            _eyePreview = null;
+            _importStatus = string.Format(Strings.Eye.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The eye-pack preview: which textures were recognised, and what will glow.</summary>
+    private void DrawEyeImport(EyeImportService.ImportPreview preview)
+    {
+        var es = Strings.Eye;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(es.TextureCountFmt,
+            preview.Files.Count(f => f.Import), preview.Files.Count));
+
+        using (var table = ImRaii.Table("##eyeFiles", 3,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var f in preview.Files)
+                {
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (f.Import) ImGui.TextUnformatted(f.Name);
+                    else ImGui.TextDisabled(f.Name);
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(f.Slot?.ToString() ?? "");
+
+                    ImGui.TableNextColumn();
+                    if (f.Import) ImGui.TextDisabled(Path.GetFileName(f.GamePath ?? ""));
+                    else ImGui.TextColored(ImportWarnColour, es.Skipped);
+
+                    if (f.SkipReason != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(es.SkippedReasonFmt, f.Name, f.SkipReason));
+                }
+        }
+
+        // How much of the mask to cut to. A taste decision that is baked into the written art, so it has
+        // to be made HERE rather than tuned afterwards — the Glow dial can only scale what survived.
+        if (preview.Fractions != null)
+        {
+            ImGui.Spacing();
+            ImGui.SetNextItemWidth(220);
+            // Inert while a write is running — the choice is already snapshotted, so changing it here
+            // would only misreport what is being baked.
+            using var busy = ImRaii.Disabled(_importBusy);
+            if (ImGui.BeginCombo(es.CutoutLabel, CutoutLabel(preview.Cutout, es)))
+            {
+                foreach (var mode in new[] { EyeImportService.EyeCutout.Falloff,
+                                             EyeImportService.EyeCutout.Artwork })
+                    if (ImGui.Selectable(CutoutLabel(mode, es), preview.Cutout == mode))
+                        preview.Cutout = mode;
+                ImGui.EndCombo();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(es.CutoutTip);
+        }
+
+        // What the glow will be, before the button — it is the whole reason this importer exists, and a
+        // pack that can't have one should say so where the decision is made.
+        ImGui.Spacing();
+        ImGui.PushTextWrapPos(0);
+        if (preview.CanGlow)
+            ImGui.TextUnformatted(string.Format(es.GlowFmt, preview.GlowFraction ?? 0f,
+                preview.IrisMaterials.Count, EyeImportService.GroupName));
+        else
+            ImGui.TextUnformatted(es.NoGlow);
+        ImGui.PopTextWrapPos();
+
+        if (!eyeImport.IrisesFromGameData && preview.IrisMaterials.Count > 0)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, es.FallbackIrises);
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartEyeImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : es.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    private static string CutoutLabel(EyeImportService.EyeCutout mode, Localization.EyeStrings es)
+        => mode == EyeImportService.EyeCutout.Artwork ? es.CutoutArtwork : es.CutoutFalloff;
+
+    /// <summary>Hand the decode and write to the pool; <see cref="TickEyeImport"/> registers what comes
+    /// back.</summary>
+    private void StartEyeImport(EyeImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        // Cutout snapshotted with the rest: it is a mutable field on a preview whose combo stays on
+        // screen, and the write reads it on a pool thread.
+        var (name, author, cutout) = (_importName, _importAuthor, preview.Cutout);
+        Task.Run(() =>
+        {
+            try { _eyePrepared = eyeImport.Prepare(preview, name, author, cutout); }
+            catch (Exception ex)
+            {
+                _eyePrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, false, 0, 0);
+            }
+        });
     }
 
     /// <summary>Hand the decode and write to the pool; <see cref="TickLuminisImport"/> registers what comes

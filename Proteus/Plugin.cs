@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 553;
+    public const int BuildNumber = 559;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -170,6 +170,10 @@ public sealed class Plugin : IDalamudPlugin
         // textures live in one SqPack blob rather than as archive entries.
         var luminisImport = new LuminisImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
+        // Loose eye-texture zips. Its own catalogue because faces are not shared between races the way
+        // bodies are, so the body probe can never answer for an iris.
+        var irisCatalog = new IrisMaterialCatalog(DataManager.FileExists);
+        var eyeImport = new EyeImportService(penumbra, compositor, textureLoader, irisCatalog, log);
         var modExport = new ModExportService(penumbra, log);
 
         // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
@@ -177,7 +181,8 @@ public sealed class Plugin : IDalamudPlugin
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
-            modCreation, onionImport, contentImport, luminisImport, modExport, textureLoader, partsPanel);
+            modCreation, onionImport, contentImport, luminisImport, eyeImport, modExport, textureLoader,
+            partsPanel);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
