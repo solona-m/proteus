@@ -83,6 +83,66 @@ public class ContentPieceSelectionTests
         return path;
     }
 
+    /// <summary>
+    /// The Cyr shape: ONE garment shipped twice — a base model per race in default data, plus a size group
+    /// that overrides the one race it was fitted to. Three races unconditionally, two size options over
+    /// <c>c0201</c>.
+    /// <para/>
+    /// Penumbra resolves one file per game path and an option outranks the default, so its <c>c0201</c>
+    /// default copy never rendered. Reading it as a piece of its own put the shorts on the character twice
+    /// and left the size copy ungated, which is what made the piece checkbox inert.
+    /// </summary>
+    /// <param name="groupType">
+    /// "Single" for the size-selector shape. "Multi" makes the override OPTIONAL, which is the case the
+    /// default copy must survive — a multi-select option can be off, and the import turns every one of them
+    /// off, so there the default is the copy that renders.
+    /// </param>
+    /// <param name="breakOneOption">
+    /// Give the second option an unreadable model, so Proteus refuses it. The default copy must then survive
+    /// too: with it gone, selecting that size would wear nothing at all.
+    /// </param>
+    private static string SizeGroupPack(
+        string dir, byte[] model, byte[] mtrl, string leaf,
+        string groupType = "Single", bool breakOneOption = false)
+    {
+        var files = new List<(string, byte[])> { ("common/shorts.mtrl", mtrl) };
+        var defaults = new List<string> { $"\"chara/x/{leaf}\": \"common\\\\shorts.mtrl\"" };
+
+        const string Path0201 = "chara/equipment/e6058/model/c0201e6058_dwn.mdl";
+
+        foreach (var r in new[] { "0101", "0201", "1101" })
+        {
+            var entry = $"default group/{r}.mdl";
+            files.Add((entry, model));
+            defaults.Add($"\"chara/equipment/e6058/model/c{r}e6058_dwn.mdl\": \"{entry.Replace("/", "\\\\")}\"");
+        }
+
+        var options = new List<string>();
+        foreach (var size in new[] { "WC", "Mini" })
+        {
+            var entry = $"shorts size/{size}/model.mdl";
+            files.Add((entry, breakOneOption && size == "Mini" ? new byte[8] : model));
+            options.Add("{ \"Name\": \"" + size + "\", \"Files\": { \"" + Path0201 + "\": \""
+                      + entry.Replace("/", "\\\\") + "\" } }");
+        }
+
+        var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Sized\",\n  \"Author\": \"Cyr\",\n"
+                     + "  \"DefaultData\": { \"Files\": {\n    " + string.Join(",\n    ", defaults) + "\n  } },\n"
+                     + "  \"Groups\": [ { \"Name\": \"Shorts Size\", \"Type\": \"" + groupType
+                     + "\", \"Options\": [ " + string.Join(", ", options) + " ] } ]\n}";
+
+        var path = Path.Combine(dir, "sized.pmp");
+        using var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create);
+        void Add(string name, byte[] data)
+        {
+            using var s = zip.CreateEntry(name).Open();
+            s.Write(data, 0, data.Length);
+        }
+        Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+        foreach (var (n, d) in files) Add(n, d);
+        return path;
+    }
+
     // ── collapsing and gating ────────────────────────────────────────────────
 
     [Fact]
@@ -213,6 +273,209 @@ public class ContentPieceSelectionTests
             var pack = PenumbraPackage.Read(path);
             Assert.Single(pack.Groups);
             Assert.Equal(ContentImportService.PieceGroup, pack.Groups[0].Name);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // ── a garment shipped both unconditionally and per size ──────────────────
+
+    [Fact]
+    public void A_default_model_an_option_replaces_is_dropped()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
+
+            // One unconditional unit and one per size option — never a fourth for the c0201 default, which
+            // Penumbra would never have loaded.
+            var free = preview.Units.Single(u => u.Group == null);
+            Assert.Equal(new[] { "0101", "1101" },
+                free.Variants.Select(v => v.RaceCode).OrderBy(x => x, StringComparer.Ordinal).ToArray());
+
+            // The size options are untouched: each still supplies the race it was fitted to.
+            var sized = preview.Units.Where(u => u.Group == "Shorts Size").ToList();
+            Assert.Equal(2, sized.Count);
+            Assert.All(sized, u => Assert.Equal("0201", Assert.Single(u.Variants).RaceCode));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void An_optional_multi_select_override_does_not_shadow_the_default_copy()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(
+                SizeGroupPack(dir, model, new byte[64], leaf, groupType: "Multi"));
+
+            // A Multi option can be OFF, and ClearMultiSelectDefaults turns every one of them off at import,
+            // so the default copy is the one that renders. Dropping it would leave a c0201 wearer with no
+            // shorts at all until they found the pack's own checkbox.
+            var free = preview.Units.Single(u => u.Group == null);
+            Assert.Contains("0201", free.Variants.Select(v => v.RaceCode));
+            Assert.Equal(new[] { "0101", "0201", "1101" },
+                free.Variants.Select(v => v.RaceCode).OrderBy(x => x, StringComparer.Ordinal).ToArray());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void An_option_proteus_refuses_does_not_shadow_the_default_copy()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(
+                SizeGroupPack(dir, model, new byte[64], leaf, breakOneOption: true));
+
+            // One size will not read, so its redirect stays with Penumbra and Proteus places nothing for it.
+            var broken = preview.Units.Single(u => u.Option == "Mini");
+            Assert.False(broken.Import);
+
+            // The default copy therefore has to stay: selecting "Mini" with it gone would wear nothing at
+            // all. Showing the garment twice is the better failure of the two.
+            var free = preview.Units.Single(u => u.Group == null);
+            Assert.Contains("0201", free.Variants.Select(v => v.RaceCode));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void One_checkbox_governs_a_garment_its_size_group_also_ships()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
+
+            // ONE option, not one for the default copy and none for the sizes. Gating only the unconditional
+            // copy left the size copy ungated, and a Single group always has an option selected — so the
+            // shorts were worn whatever the box said.
+            Assert.Equal(ContentImportService.PieceGroup, preview.PieceGroupName);
+            var gate = Assert.Single(preview.GateOptions);
+            Assert.All(preview.Units, u => Assert.Equal(gate, u.GateOption));
+
+            // …and it reaches the sidecar on both, so the runtime gate governs the whole garment.
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Sized", "Cyr", preview);
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")), ProteusJson.MetadataRead)!;
+
+            var sized = meta.ContentGroups!.Single().Options.SelectMany(o => o.Pieces).ToList();
+            var every = meta.Content!.Concat(sized).ToList();
+            Assert.Equal(3, every.Count);
+            Assert.All(every, p => Assert.Equal(gate, p.GateOption));
+
+            // Off: nothing of the garment is worn, Single-group selection notwithstanding.
+            Assert.All(every, p => Assert.False(SidecarDiscoveryService.PieceIsOn(p, [])));
+            // On: worn — and for the wearer's own race exactly once, because the default copy no longer
+            // carries c0201 at all.
+            Assert.All(every, p => Assert.True(SidecarDiscoveryService.PieceIsOn(p, [gate])));
+            Assert.Equal(1, every.Count(p => p.ModelFor("0201") != null));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void The_shadowed_default_redirect_is_stripped_from_the_copied_manifest()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Sized", "Cyr", preview);
+
+            var manifest = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!;
+            var defaults = (JsonObject)((JsonObject)manifest["DefaultData"]!)["Files"]!;
+
+            // The option's redirect is stripped because Proteus took that model over. Leaving the default's
+            // behind would promote it to winner and republish the geometry Proteus now appends itself.
+            Assert.DoesNotContain("chara/equipment/e6058/model/c0201e6058_dwn.mdl", defaults.Select(p => p.Key));
+
+            // The races no option claimed are Proteus's too, and go the same way.
+            Assert.DoesNotContain("chara/equipment/e6058/model/c0101e6058_dwn.mdl", defaults.Select(p => p.Key));
+            Assert.DoesNotContain("chara/equipment/e6058/model/c1101e6058_dwn.mdl", defaults.Select(p => p.Key));
+
+            // The material is not a model and was never taken — it must still publish.
+            Assert.Contains($"chara/x/{leaf}", defaults.Select(p => p.Key));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void A_garment_that_lives_only_in_a_group_still_gets_no_checkbox_of_ours()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+
+            // Same pack minus the default-data models: the author's own option already selects the garment,
+            // so a switch of ours would be a box to tick before any of theirs meant anything.
+            var files = new List<(string, byte[])> { ("common/shorts.mtrl", new byte[64]) };
+            var options = new List<string>();
+            foreach (var size in new[] { "WC", "Mini" })
+            {
+                var entry = $"shorts size/{size}/model.mdl";
+                files.Add((entry, model));
+                options.Add("{ \"Name\": \"" + size + "\", \"Files\": { "
+                          + "\"chara/equipment/e6058/model/c0201e6058_dwn.mdl\": \""
+                          + entry.Replace("/", "\\\\") + "\" } }");
+            }
+            var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Sized\",\n"
+                         + "  \"DefaultData\": { \"Files\": { \"chara/x/" + leaf + "\": \"common\\\\shorts.mtrl\" } },\n"
+                         + "  \"Groups\": [ { \"Name\": \"Shorts Size\", \"Type\": \"Single\", \"Options\": [ "
+                         + string.Join(", ", options) + " ] } ]\n}";
+
+            var path = Path.Combine(dir, "grouponly.pmp");
+            using (var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create))
+            {
+                void Add(string name, byte[] data)
+                {
+                    using var s = zip.CreateEntry(name).Open();
+                    s.Write(data, 0, data.Length);
+                }
+                Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+                foreach (var (n, d) in files) Add(n, d);
+            }
+
+            var preview = ContentImportService.Inspect(path);
+            Assert.Equal(2, preview.ImportableUnits);
+            Assert.All(preview.Units, u => Assert.Null(u.GateOption));
+            Assert.Null(preview.PieceGroupName);
         }
         finally { Directory.Delete(dir, true); }
     }
