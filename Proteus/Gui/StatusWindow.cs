@@ -122,6 +122,10 @@ public class StatusWindow : Window
     private string _createMask = "";
     private string _createNormal = "";
     private string _createIndex = "";
+    private bool _createWholeSkin;        // the textures ARE the skin → the normal replaces, never compounds
+    private bool _createWholeSkinLocked;  // user ticked it by hand — stop auto-detecting over their answer
+    private string _createWholeSkinProbedFor = "";   // the diffuse+normal pair the last probe was for
+    private Task<bool>? _createWholeSkinProbe;       // decodes two images, so never on the frame thread
     private bool _createMaterialLocked;   // stop auto-detecting once we have a real body (or the user edits)
     private string _createMaterialAuto = "";  // the value we last auto-filled, to tell a user edit apart
     private long _createDetectNextTick;   // throttle the detect poll while the character isn't drawn yet
@@ -1160,6 +1164,53 @@ public class StatusWindow : Window
         if (_createSlots == null && _createSlotsFor == _createMaterial && _createMaterial.Length > 0)
             ImGui.TextDisabled(cs.SlotsUnreadable);
 
+        // Auto-detect the answer from the art itself, on the same "fill it in until the user says
+        // otherwise" rule the material target follows. Keyed on everything that decides it, so it runs once
+        // per pick rather than per frame, and off the frame thread because it decodes the picked diffuse
+        // and the material's own. Only for a skin target: on gear or an accessory the question doesn't
+        // arise, and the comparison it rests on would have nothing to compare against.
+        var wholeSkinKey = SlotEnabled("Diffuse") && SlotEnabled("Normal")
+                        && _createDiffuse.Length > 0 && _createNormal.Length > 0
+                        && IsSkinMaterial(_createMaterial)
+            ? _createMaterial + " " + _createDiffuse + " " + _createNormal
+            : "";
+        if (!_createWholeSkinLocked && wholeSkinKey != _createWholeSkinProbedFor)
+        {
+            _createWholeSkinProbedFor = wholeSkinKey;
+            if (wholeSkinKey.Length == 0)
+            {
+                // Nothing to judge — a half-filled pair, or a target this can't apply to. Back to the
+                // default rather than leaving the last pick's verdict standing over different files.
+                _createWholeSkinProbe = null;
+                _createWholeSkin = false;
+            }
+            else
+            {
+                // Captured, not read from the fields inside the lambda: the user can browse again while
+                // this runs, and the result has to belong to the paths it was started for.
+                string m = _createMaterial, d = _createDiffuse, n = _createNormal;
+                _createWholeSkinProbe = Task.Run(() => modCreation.LooksLikeWholeSkin(m, d, n));
+            }
+        }
+        if (_createWholeSkinProbe is { IsCompleted: true } wholeSkinProbe)
+        {
+            _createWholeSkinProbe = null;
+            // A faulted or cancelled probe reads as "not a whole skin" — the same answer as a definite no,
+            // and the safe one: compounding a detail overlay is right, replacing a skin's normal by
+            // accident is not. The service already logged whatever went wrong.
+            if (!_createWholeSkinLocked)
+                _createWholeSkin = wholeSkinProbe.Status == TaskStatus.RanToCompletion && wholeSkinProbe.Result;
+        }
+
+        // Only decides anything for the NORMAL — whether it stacks onto the map already on the material or
+        // overwrites it — but drawn unconditionally rather than gated on a picked normal: this is the tab
+        // someone converts a whole skin mod from, and a control that appears only once the right file is
+        // browsed is a control nobody finds. Harmless with no normal, and the tooltip says what it touches.
+        if (ImGui.Checkbox(cs.WholeSkin, ref _createWholeSkin))
+            _createWholeSkinLocked = true;   // an explicit answer — auto-detect never writes over it again
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.WholeSkinTip);
+
         ImGui.Separator();
 
         // Only ENABLED slots count. The clearing above already empties disabled ones; this keeps the
@@ -1180,11 +1231,20 @@ public class StatusWindow : Window
                     SlotEnabled("Diffuse") ? NullIfEmpty(_createDiffuse) : null,
                     SlotEnabled("Mask")    ? NullIfEmpty(_createMask)    : null,
                     SlotEnabled("Normal")  ? NullIfEmpty(_createNormal)  : null,
-                    SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null);
+                    SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null,
+                    _createWholeSkin);
                 _createStatus = r.Message;
                 _createStatusOk = r.Ok;
                 if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
+                {
                     _createDiffuse = _createMask = _createNormal = _createIndex = "";
+                    // The tick belonged to the textures just consumed, not to the tab. Clearing the lock
+                    // too is the point: a hand-set answer that survived would silently decide the NEXT
+                    // mod, which is the one case the user has no reason to expect.
+                    _createWholeSkin = _createWholeSkinLocked = false;
+                    _createWholeSkinProbedFor = "";
+                    _createWholeSkinProbe = null;
+                }
             }
         if (!valid && ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.CreateDisabledTip);
@@ -3974,7 +4034,8 @@ public class StatusWindow : Window
                 out var footerEditSimple,
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
                 resetDisabledReason: ResetBlockedReason(entry),
-                drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
+                drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                editingBinding: editingBinding);
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -4386,7 +4447,8 @@ public class StatusWindow : Window
                     // Nothing reads MaskDescriptor.SkinToneMask — the mask paints into the diffuse in its
                     // own pass, and a promoted mask gets a shell descriptor built from scratch — so the
                     // slider would be a control that saves and does nothing.
-                    skinTintApplies: false);
+                    skinTintApplies: false,
+                    editingBinding: editingBinding);
                 maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
                     maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
                 ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
@@ -4514,7 +4576,8 @@ public class StatusWindow : Window
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             promotedToGear: promotedToGear,
-            noShellReason: noShellReason);
+            noShellReason: noShellReason,
+            editingBinding: editingBinding);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).

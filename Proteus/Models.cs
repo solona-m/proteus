@@ -182,6 +182,32 @@ public enum OverlayLayer
     Gear,
 }
 
+/// <summary>How an overlay's normal map combines with the normal already on the material.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NormalMode
+{
+    /// <summary>
+    /// Add this overlay's tangent slopes to the ones underneath, so relief stacks: a strap laid over skin
+    /// keeps the skin's pores and adds its own weave. The default, and right for anything that sits ON the
+    /// skin rather than being it.
+    /// </summary>
+    Compound,
+
+    /// <summary>
+    /// Overwrite the normal underneath, weighted by coverage. RED, GREEN and BLUE only — including the blue
+    /// channel skin.shpk reads as skin-colour influence, which <see cref="Compound"/> never writes at all.
+    /// The ALPHA channel is left as the base's on both paths, so an overlay that authors something into a
+    /// normal's alpha does not carry it across.
+    /// <para/>
+    /// For an overlay that IS the skin — a whole-skin mod converted to a Proteus mod — the map underneath is
+    /// already that same normal (either the mod's own, or the body mod it was derived from), so compounding
+    /// applies every slope twice. Measured on one such mod: mean deviation from flat went 5.95 → 11.83 (R)
+    /// and 4.73 → 9.39 (G), i.e. exactly 2×. The body then reads flat and over-detailed against a face that
+    /// nothing touched, and the mismatch shows as a hard step at the neck seam.
+    /// </summary>
+    Replace,
+}
+
 /// <summary>Describes one set of overlay textures targeting one or more materials.</summary>
 public class OverlayDescriptor
 {
@@ -231,6 +257,16 @@ public class OverlayDescriptor
     /// <summary>Relative path (from Proteus/ sidecar root) to the normal overlay PNG. Optional.</summary>
     [JsonPropertyName("Normal")]
     public string? Normal { get; set; }
+
+    /// <summary>
+    /// How <see cref="Normal"/> combines with the normal already on the material — stacked relief
+    /// (<see cref="NormalMode.Compound"/>, the default) or a straight coverage-weighted overwrite
+    /// (<see cref="NormalMode.Replace"/>). Set Replace when this overlay is the whole skin rather than
+    /// something laid on top of it; see <see cref="NormalMode.Replace"/> for why compounding doubles it.
+    /// Ignored when there is no normal.
+    /// </summary>
+    [JsonPropertyName("NormalMode")]
+    public NormalMode NormalMode { get; set; } = NormalMode.Compound;
 
     /// <summary>Relative path (from Proteus/ sidecar root) to the mask overlay PNG. Optional.</summary>
     [JsonPropertyName("Mask")]

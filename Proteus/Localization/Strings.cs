@@ -207,6 +207,19 @@ public sealed class CreateStrings
     public readonly string NoMask    = Loc.Localize("Create.Slot.NoMask", "This material has no mask texture.");
     public readonly string NoNormal  = Loc.Localize("Create.Slot.NoNormal", "This material has no normal texture.");
 
+    public readonly string WholeSkin = Loc.Localize("Create.WholeSkin.Label",
+        "These textures are the whole skin") + "###createWholeSkin";
+
+    public readonly string WholeSkinTip = Loc.Localize("Create.WholeSkin.Tip",
+        "Tick this when you're converting a full skin mod, not painting something onto skin.\n" +
+        "Proteus ticks it for you when the textures look like one; your own answer always wins.\n" +
+        "Three things follow. The normal REPLACES the one already on the material instead of\n" +
+        "stacking onto it — otherwise it lands on top of the same map underneath, every pore\n" +
+        "and crease is applied twice, and the body reads flat against the face with a hard line\n" +
+        "at the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\n" +
+        "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
+        "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
+
     public readonly string NoIndex = Loc.Localize("Create.Slot.NoIndex",
         "This material has no index texture, and it isn't skin or face — nothing here\n" +
         "would read a colour-table row selector.");
@@ -932,6 +945,20 @@ public sealed class ColorsStrings
     /// <summary>Shown beside the "Rendering as" badge while Advanced is collapsed, so a tab that has been
     /// turned down doesn't look untouched. Only drawn when the value isn't the default.</summary>
     public readonly string SkinTintBadgeFmt = Loc.Localize("Colors.SkinTint.Badge.Fmt", "tint {0:F2}");
+
+    public readonly string WholeSkin = Loc.Localize("Colors.WholeSkin.Label",
+        "This overlay is the whole skin");
+
+    public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
+        "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
+      + "It moves two settings together, and they only work as a pair.\n"
+      + "The normal REPLACES the one already on the material instead of being added to it. Off is\n"
+      + "right for a strap or a tattoo, which should keep the skin's pores underneath; for a skin\n"
+      + "the map underneath is that same skin, so adding lands every pore twice and the body goes\n"
+      + "flat against an untouched face, with a hard line at the neck seam.\n"
+      + "And skin-tint suppression drops to 0.00, so the wearer's tone comes through — it exists\n"
+      + "to stop fabric being re-tinted, which is backwards for skin. Turning this off restores\n"
+      + "both. You can still set the slider by hand afterwards.");
 }
 
 /// <summary>The colour window's own chrome — the panel StatusWindow draws around ColorTableEditor.</summary>

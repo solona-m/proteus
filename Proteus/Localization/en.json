@@ -491,6 +491,14 @@
     "message": "Toward top",
     "description": "Button caption only - the arrow is drawn separately by the code and always points the right way."
   },
+  "Colors.WholeSkin.Label": {
+    "message": "This overlay is the whole skin",
+    "description": "Checkbox in the colour-table editor's Advanced section. It is the editor's counterpart to Create.WholeSkin.Label - keep the two worded consistently."
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\nIt moves two settings together, and they only work as a pair.\nThe normal REPLACES the one already on the material instead of being added to it. Off is\nright for a strap or a tattoo, which should keep the skin's pores underneath; for a skin\nthe map underneath is that same skin, so adding lands every pore twice and the body goes\nflat against an untouched face, with a hard line at the neck seam.\nAnd skin-tint suppression drops to 0.00, so the wearer's tone comes through — it exists\nto stop fabric being re-tinted, which is backwards for skin. Turning this off restores\nboth. You can still set the slider by hand afterwards.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). \"0.00\" is a numeric value - keep the digits. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Command.Help": {
     "message": "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings.",
     "description": "Help line shown next to /proteus in Dalamud's command list. Leave the literal \"/proteus config\" untranslated - it is typed."
@@ -826,6 +834,14 @@
   "Create.SlotsUnreadable": {
     "message": "Couldn't read this material — offering every slot.",
     "description": "Appears in the Create tab."
+  },
+  "Create.WholeSkin.Label": {
+    "message": "These textures are the whole skin",
+    "description": "Checkbox in the Create tab. Keep the \"###createWholeSkin\" suffix out of the translation - it is not part of this string."
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nThree things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin. And\n\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). The two quoted names are UI labels - use exactly your translations of Colors.Bodies.Label and Colors.Bodies.All so the tooltip names the control the user sees. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Export.Dialog.Filter": {
     "message": "Penumbra mod pack",
