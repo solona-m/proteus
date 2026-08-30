@@ -36,6 +36,19 @@ public static class RenderModeInference
     public const string ClothShader = OverlayDescriptor.DefaultGearShader;   // character.shpk
     public const string GlowShader  = "characterscroll.shpk";
 
+    /// <summary>
+    /// The row emissive an animated-glow surface starts at: 150%, white.
+    /// <para/>
+    /// High on purpose. Under <see cref="GlowShader"/> the scroll map supplies the colour and the pattern
+    /// and this scales them, so it is what makes the map read at all; white keeps it from tinting a map
+    /// that already has its own colours. Shared by the editor's mode transition and by the Atramentum
+    /// Luminis importer, which builds the same kind of surface and must not drift from it.
+    /// </summary>
+    public const float GlowEmissive = 1.5f;
+
+    /// <summary>The glow colour that pairs with <see cref="GlowEmissive"/>.</summary>
+    public const string GlowEmissiveColour = "#FFFFFF";
+
     /// <summary>A sub-row uses a feature that genuinely needs the gear shader — a sphere map, metalness, a
     /// specular colour, or glow (skin.shpk can't do those). Roughness is NOT counted: skin has roughness
     /// too, and a bare/zero roughness does nothing on its own, so it shouldn't force Cloth.

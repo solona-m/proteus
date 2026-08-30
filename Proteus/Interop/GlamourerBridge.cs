@@ -60,6 +60,22 @@ public class GlamourerBridge : IDisposable
     /// </summary>
     public event Action? LocalPlayerCustomizationChanged;
 
+    /// <summary>
+    /// Fired when Glamourer changes an equipped item or bonus item (glasses) on the local player.
+    /// <para/>
+    /// Exists because an equipment change had NO route to the compositor. It changes no mod settings, so
+    /// none of the OnModSettingChanged triggers fire; it is not Design/Reset/Reapply, so it was filtered
+    /// out below; and when Glamourer applies it without a redraw, the redraw hook's equipment-change
+    /// trigger never runs either. Measured: an equipment-only design apply produced a Design signal, a
+    /// DesignApplied finalization, and not one recomposite — leaving the second-skin shell cut for the
+    /// PREVIOUS outfit until something unrelated happened to trigger a composite.
+    /// <para/>
+    /// Consumers should treat this as AMBIENT: it fires per changed slot, so a design apply produces a
+    /// burst, and the unchanged-inputs gate is what makes that cheap. It deliberately does not carry which
+    /// slot changed — the compositor re-walks the draw object anyway, and the walk is the authority.
+    /// </summary>
+    public event Action? LocalPlayerEquipmentChanged;
+
     public GlamourerBridge(IDalamudPluginInterface pluginInterface, IObjectTable objectTable, IPluginLog log)
     {
         this.log             = log;
@@ -105,18 +121,84 @@ public class GlamourerBridge : IDisposable
         }
     }
 
+    /// <summary>
+    /// The user's <c>GlamourerDesignDirOverride</c>, when set. Assigned once at startup by the plugin,
+    /// which owns the configuration.
+    /// </summary>
+    public string? DesignsDirectoryOverride { get; set; }
+
+    /// <summary>
+    /// Where design files actually live: the override if the user set one, else the derived path.
+    /// <para/>
+    /// One property so every consumer agrees. The design WATCHER already honoured the override while
+    /// <see cref="ReadDesignFile"/> did not, which would have pointed the two at different folders — the
+    /// fallback then finds nothing for exactly the users who most need it, and reports a second failure
+    /// on top of the first.
+    /// </summary>
+    public string? EffectiveDesignsDirectory
+        => string.IsNullOrWhiteSpace(DesignsDirectoryOverride) ? DesignsDirectory : DesignsDirectoryOverride;
+
     /// <summary>Glamourer's design list (GUID → display name); empty on failure.</summary>
     public Dictionary<Guid, string> GetDesigns()
     {
         try { return getDesignList.Invoke() ?? new(); }
-        catch (Exception ex) { log.Warning("[Proteus] GetDesignList failed: {0}", ex.Message); return new(); }
+        // The exception OBJECT, not ex.Message — see SetItem below for why: an IPC failure arrives wrapped
+        // in a TargetInvocationException whose message is a constant, and the cause is the inner one.
+        catch (Exception ex) { log.Warning(ex, "[Proteus] GetDesignList failed"); return new(); }
     }
 
-    /// <summary>The serialized data for a single design (includes equipment + apply flags), or null on failure.</summary>
+    /// <summary>Whether the stack trace for a GetDesignJObject failure has been logged this session.</summary>
+    private int loggedDesignIpcFailure;
+
+    /// <summary>
+    /// The serialized data for a single design (includes equipment + apply flags), or null on failure.
+    /// <para/>
+    /// Falls back to the design's own file on disk, because the IPC is not reliable for every design:
+    /// Glamourer's serializer emits JSON it then fails to re-parse for certain designs — the observed
+    /// failure is <c>JsonReaderException: ':' is invalid after a value</c> raised inside
+    /// <c>SerializeToElement</c>, several thousand bytes into the output, for 7 of one user's designs
+    /// while the rest serialize fine. That is a Glamourer bug and nothing here can fix it; what it costs
+    /// Proteus is the ability to identify which design is applied, so those designs' bindings silently
+    /// never restore.
+    /// <para/>
+    /// The file is the same data by a different road, and Proteus already knows where it lives (see
+    /// <see cref="DesignsDirectory"/>, which GlamourerDesignWatcher watches). Its storage format carries
+    /// the Equipment / Bonus / Customize / Parameters sections that DesignBindingService.StateMatches
+    /// reads, in the same shape.
+    /// </summary>
     public JObject? GetDesign(Guid id)
     {
         try { return getDesignJObject.Invoke(id); }
-        catch (Exception ex) { log.Warning("[Proteus] GetDesignJObject failed for {0}: {1}", id, ex.Message); return null; }
+        catch (Exception ex)
+        {
+            // The stack ONCE per session, then a one-liner. It is the same Glamourer defect every time and
+            // it fires for every affected design on every boot restore — seven full traces per attempt
+            // buries the rest of the log without adding anything after the first.
+            if (Interlocked.Exchange(ref loggedDesignIpcFailure, 1) == 0)
+                log.Warning(ex, "[Proteus] GetDesignJObject failed for {0} — reading the design file instead. "
+                              + "This is a Glamourer serialization fault, logged once per session", id);
+            else
+                log.Debug("[Proteus] GetDesignJObject failed for {0} — reading the design file instead", id);
+
+            return ReadDesignFile(id);
+        }
+    }
+
+    /// <summary>The design's own JSON from Glamourer's config folder, or null if it can't be read.</summary>
+    private JObject? ReadDesignFile(Guid id)
+    {
+        try
+        {
+            if (EffectiveDesignsDirectory is not { } dir) return null;
+            var path = Path.Combine(dir, id.ToString("D") + ".json");
+            if (!File.Exists(path)) return null;
+            return JObject.Parse(File.ReadAllText(path));
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Could not read the design file for {0} either", id);
+            return null;
+        }
     }
 
     /// <summary>The current applied state of an object (default: local player, index 0), or null on failure.</summary>
@@ -127,7 +209,7 @@ public class GlamourerBridge : IDisposable
             var (ec, data) = getState.Invoke(objectIndex);
             return ec == GlamourerApiEc.Success ? data : null;
         }
-        catch (Exception ex) { log.Warning("[Proteus] GetState failed: {0}", ex.Message); return null; }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] GetState failed"); return null; }
     }
 
     /// <summary>
@@ -335,6 +417,16 @@ public class GlamourerBridge : IDisposable
         if (changeType is StateChangeType.Model or StateChangeType.EntireCustomize)
         {
             LocalPlayerCustomizationChanged?.Invoke();
+            return;
+        }
+
+        // An equipped item or a bonus item (glasses) moved. Neither changes the mod set, so this is the
+        // only signal that reaches the compositor — see LocalPlayerEquipmentChanged. BonusItem matters as
+        // much as Equip: the gear shell is hosted on the facewear slot, so glasses coming off take the
+        // shell's host with them.
+        if (changeType is StateChangeType.Equip or StateChangeType.BonusItem)
+        {
+            LocalPlayerEquipmentChanged?.Invoke();
             return;
         }
 

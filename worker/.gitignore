@@ -1,0 +1,6 @@
+node_modules/
+package-lock.json
+.wrangler/
+
+# Generated from README.md by scripts/embed-readme.mjs on pretest/predeploy.
+src/readme.generated.js

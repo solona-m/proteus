@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "디자인에 연결",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "무엇이든 덧씌우고 색 변경",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "무엇이든 끄기",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "장비 칸 없이 착용",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "오버레이 컴포지터",
+    "message": "덧씌우기 · 장식 · 스위치 · 연결",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -99,9 +115,17 @@
     "message": "현재 Proteus 상태(사용 여부 / 우선도 / 옵션 / 색상)를 이 연결에 기록합니다.\n수동 편집은 여기를 클릭해야만 유지됩니다.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] 모드의 메시 파츠 {0}개를 배치하지 못했습니다 — 장신구의 머티리얼 슬롯이 부족합니다. 반지 / 팔지 / 목걸이를 하나 더 착용하거나 레이어를 끄세요.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
     "description": ""
+  },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] 이전 플러그인 저장소 URL로 설치되었습니다. /xlplugins > Experimental에서 https://dl.solona.info/repo.json 으로 변경하면 업데이트가 빨라지고 GitHub 부하도 줄어듭니다. 변경하지 않아도 설치는 계속 작동합니다. 이 알림은 몇 번 표시된 후 사라집니다.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
   },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] \"{0}\"이(가) Proteus가 레이어를 만들 수 없는 오버레이에 발광을 설정했습니다. 발광은 메시 위에 얹는 레이어가 필요하며, 이는 자신의 피부(몸, 얼굴, 머리카락, 꼬리, 귀)에서만 가능합니다. 장비, 장신구, 무기에서는 사용할 수 없습니다.",
@@ -232,7 +256,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "characterscroll에서 이 값은 밝기가 아니라 작은 게이트입니다:\n0 = 전혀 발광하지 않음. 값이 크면 스크롤 맵의 색이 날아갑니다.\n기본 애니메이션 재질은 약 0.025를 사용합니다.",
+    "message": "이 행이 얼마나 밝게 빛나는지입니다. 0이면 꺼집니다.\n애니메이션 발광에서는 이것이 효과의 밝기이며, 값이 높으면\n색이 진한 스크롤 맵이 하얗게 날아갑니다. 25% 정도가 적당한 시작점입니다.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -407,6 +431,18 @@
     "message": "스피어 맵",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "피부색 {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "피부색 억제",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "이 옵션이 착용자의 피부색에 얼마나 저항하는지.\n1.00은 어떤 피부색에서도 제작자의 색을 유지합니다 — 피부를 덮는 천에 적합합니다.\n0.00은 피부색이 비칠 수 있게 합니다 — 문신, 데칼, 또는 그 자체가 피부인 몸 텍스처에 적합합니다.\n설정 탭의 전역 슬라이더가 여기에 곱해지므로, 여기서의 0.00은 항상 우선합니다.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "스페큘러",
     "description": ""
@@ -455,6 +491,14 @@
     "message": "위로",
     "description": ""
   },
+  "Colors.WholeSkin.Label": {
+    "message": "이 오버레이가 피부 전체",
+    "description": ""
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "변환한 피부 모드에서 켜세요. 피부 위에 올리는 것이 아니라 피부 그 자체인 텍스처를 위한 것입니다.\n두 가지 설정이 함께 움직이며, 이 둘은 짝으로만 제대로 작동합니다.\n노멀 맵이 머티리얼에 이미 있는 것에 더해지지 않고 교체합니다. 끄는 쪽이 맞는 것은 아래의 모공을\n남겨야 하는 스트랩이나 타투입니다. 피부라면 아래에 있는 것이 같은 피부 맵이므로, 더하면 모공이\n두 번 적용되어 손대지 않은 얼굴에 비해 몸만 평평해지고 목 이음새에 뚜렷한 선이 생깁니다.\n그리고 피부색 억제가 0.00으로 내려가 착용자의 피부색이 드러납니다. 억제는 천이 다시 물드는 것을\n막기 위한 것이라 피부에는 반대로 작용합니다. 끄면 둘 다 되돌아갑니다. 이후 슬라이더를 직접\n조절할 수도 있습니다.",
+    "description": ""
+  },
   "Command.Help": {
     "message": "Proteus 오버레이 컴포지터 상태 창을 켜거나 끕니다. \"/proteus config\"를 입력하면 설정 탭이 열립니다.",
     "description": ""
@@ -469,6 +513,198 @@
   },
   "Common.None": {
     "message": "(없음)",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "파츠는 모두 꺼진 상태로 들어옵니다. 가져온 뒤 Penumbra의 \"{0}\"에서 원하는 항목을 체크하세요. 그 전에는 아무것도 착용되지 않습니다.",
+    "description": ""
+  },
+  "Content.BodyOnly": {
+    "message": "착용자 자신의 몸",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A와 B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "메시 {0}, 정점 {1}",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "이 팩은 텍스처로 표면을 칠합니다. 애니메이션 발광은 그 자리가 없는 셀이더로 머티리얼을 구동하므로, 켜져 있는 동안은 위의 색상이 대신 쓰입니다. 효과를 지우면 텍스처가 돌아옵니다.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "효과 \"{0}\"을(를) 이 모드의 Effects 폴더에서도 라이브러리에서도 찾을 수 없어 부품이 효과 없이 렌더링되고 있습니다. 다른 것을 고르거나 파일을 되돌려 주세요.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "이 머티리얼이 읽는 곳은 {0}행 {1}열 하나뿐인데 그곳의 Glow가 0이라 효과가 꺼진 상태입니다. 그 자리에서 Glow를 올려 켜고 강도를 정하세요. 다른 행의 Glow는 아무 일도 하지 않습니다.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "이 인덱스 텍스처는 {0}행 {1}열을 읽지만, 해당 텍스처가 압축되어 있어 한두 행 어긋날 수 있습니다. 흐리게 표시된 행도 클릭할 수 있으니, 색이 적용되지 않으면 인접한 행을 시도해 보세요.",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "이 머티리얼의 인덱스 텍스처가 완전히 투명해서 색상 행을 하나도 선택하지 않습니다. 아래 모든 행을 편집할 수 있지만, 부품은 텍스처에서만 색상을 가져옵니다.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "이 머티리얼이 지정한 인덱스 텍스처를 Proteus가 읽지 못해 어느 행이 적용되는지 알 수 없습니다. 아래 모든 행을 편집할 수 있지만 인덱스가 선택한 행만 반영됩니다.",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "일반 모드(.pmp)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "머티리얼 {0}개",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "이 머티리얼에는 색상 테이블이 없어 편집할 행이 없습니다. 아래에서 무엇을 바꿔도 부품에 전달되지 않으며, 색상은 텍스처에서만 결정됩니다.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "이 머티리얼에는 인덱스 텍스처가 없어 모두 {0}행을 사용합니다.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "이 팩에서 가장 가까운 모델은 {0}용이며, 당신의 종족({1})도 아니고 게임이 모두에게 맞춰 조정하는 공용 형태도 아닙니다. Proteus는 잘못된 크기로 표시하지 않습니다.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었고, 당신은 {1}입니다. 특정 종족용 장비는 형태가 달라 그대로 입히면 엉뚱한 위치에 놓이므로, Proteus는 표시하지 않습니다.",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "이 팩에는 Proteus가 덧붙일 수 있는 메시를 포함한 옵션이 없습니다.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "파츠: {1}개 중 {0}개",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0}종족",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "해당 팩을 읽을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행 {1}열을 읽습니다. 다른 행은 샘플링되지 않아 흐리게 표시되며, 이 행의 반대쪽 열을 만져도 아무 일도 일어나지 않습니다.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "이 머티리얼의 인덱스 텍스처는 {0}행을 읽습니다. 나머지 행은 샘플링되지 않아 흐리게 표시됩니다.",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "공유: {0}. 이 파츠들은 하나의 머티리얼로 그려지므로 이 색상은 전부에 적용됩니다. 건드리지 않은 행은 제작자가 설정한 그대로 유지됩니다.",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Content.AlreadyProteus": {
+    "message": "이 팩은 이미 Proteus 모드입니다. 제작자가 만든 그대로 설치되며, 아무것도 변환되지 않고 자체 옵션은 Penumbra에 그대로 남습니다.",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "머티리얼 미연결",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "항상 켜짐",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "그 모드 이름에는 사용할 수 있는 문자가 없습니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "\"{0}\"(이)라는 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\"는 예약된 이름입니다. 다른 모드 이름을 선택하세요.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "모드를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "모든 메시가 착용자 자신의 몸({0})이므로 추가할 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "지오메트리 없음 — 모든 메시가 비어 있습니다",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "메시를 그리지 않으므로 추가할 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "메시가 {0}을(를) 참조하지만 이 팩에는 없습니다. 메시를 팩에 포함된 머티리얼에 다시 연결한 뒤 다시 내보내세요.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "읽을 수 없는 모델입니다 ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "\"{0}\"을(를) 설치했습니다. 이미 Proteus 모드였기 때문에 제작자가 만든 그대로 들어갔습니다 — 활성화하여 Penumbra에서 열었으며, 옵션은 거기에서 선택합니다.",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 활성화하고 Penumbra에서 열었습니다. 옵션은 Penumbra에서 선택하며, 선택한 항목은 모두 동시에 착용됩니다.",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "\"{0}\"을(를) 가져왔습니다 — 파츠: {1}{2}. 모두 꺼진 상태입니다. 이 모드가 열린 Penumbra의 \"{3}\"에서 원하는 항목을 체크하세요.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (건너뜀: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "\"{0}\" 그룹은 {1} 유형이라 Proteus가 배치할 수 없습니다. 이 그룹의 옵션은 그대로 둡니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "이 팩에는 모델을 리디렉션하는 옵션이 없어 Proteus가 덧붙일 지오메트리가 없습니다. 대신 Penumbra에서 설치하세요.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "이 팩의 모델은 {0}용으로 제작되었습니다. Proteus는 종족 간에 지오메트리를 조정하지 않으므로, 해당 종족의 캐릭터에서만 부품이 표시됩니다.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "이 팩은 자체적으로 부품을 켜고 끄므로 Proteus는 별도의 체크박스를 추가하지 않습니다. 팩의 옵션을 사용하세요. 팩이 전환하지 않는 부품은 모드가 활성화된 동안 항상 착용됩니다.",
     "description": ""
   },
   "Create.Author.Label": {
@@ -599,6 +835,14 @@
     "message": "이 머티리얼을 읽지 못했습니다 — 모든 칸을 표시합니다.",
     "description": ""
   },
+  "Create.WholeSkin.Label": {
+    "message": "이 텍스처는 피부 전체입니다",
+    "description": ""
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "피부 위에 무언가를 덧그리는 것이 아니라 전체 피부 모드를 변환할 때 체크하세요.\n텍스처가 그렇게 보이면 Proteus가 대신 체크합니다. 직접 정한 값이 항상 우선합니다.\n세 가지가 따라옵니다. 노멀 맵이 머티리얼에 이미 있는 것 위에 더해지지 않고 교체합니다.\n그러지 않으면 아래의 같은 맵 위에 겹쳐져 모공과 주름이 두 번 적용되고, 몸이 얼굴에 비해\n평평해 보이며 목 이음새에 뚜렷한 선이 생깁니다.\n둘째로 피부색 억제가 꺼집니다. 착용자의 피부색이 그대로 반영됩니다. 억제는 천이 다시 물드는\n것을 막기 위한 것이고, 이 텍스처는 피부 그 자체이기 때문입니다.\n셋째로 \"바디\"가 \"모든 바디\"로 설정되어 바닐라 바디에도 적용됩니다.",
+    "description": ""
+  },
   "Export.Dialog.Filter": {
     "message": "Penumbra 모드 팩",
     "description": ""
@@ -661,6 +905,58 @@
   },
   "Export.Phase.Writing": {
     "message": "내보내는 중…",
+    "description": ""
+  },
+  "Eye.Cutout.Artwork": {
+    "message": "그림만",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "그림과 그 번짐",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "발광 모양",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "마스크의 발광 채널 중 어디까지를 발광 모양으로 잘라낼지입니다. 대부분의 팩은 그림을 밝게 그리고 그 주위를 서서히 흐리게 처리합니다. 그 번짐을 남기면 그림 바깥까지 은은하게 빛나고, 제거하면 그림 자체에만 발광이 머뭅니다.\n가져올 때 확정되므로 지금 고르세요. 이후에는 Glow 다이얼로 남은 부분의 세기만 조절할 수 있습니다.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus가 게임의 얼굴 목록을 읽지 못해, 빛은 알려진 두 얼굴에만 적용됩니다. 모든 종족에 적용하려면 게임에 접속한 뒤 이 팩을 다시 열어 주세요.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "마스크가 텍스처의 {0:P1}을(를) 발광 영역으로 지정하며, 그 모양에 애니메이션이 적용됩니다. 홍채 머티리얼 {1}개가 대상이라 종족과 얼굴을 바꿔도 따라옵니다. Penumbra의 “{2}”에서 끌 수 있습니다.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "눈 텍스처 팩(이미지가 그대로 담긴 .zip)을 가져옵니다. 눈은 그대로 적용되고, 마스크가 지정한 모양에는 색과 세기를 조절할 수 있는 애니메이션 발광이 들어갑니다.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "애니메이션 발광은 추가되지 않습니다(아래 사유 참고). 눈 텍스처는 그대로 가져와지며 정상 작동합니다.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "이 아카이브에는 눈 텍스처로 보이는 파일이 없습니다.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "이 아카이브를 읽지 못했습니다: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "텍스처: {1}개 중 {0}개",
     "description": ""
   },
   "Footer.LastComposite.Fmt": {
@@ -732,11 +1028,99 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion 팩",
+    "message": "모드 팩",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Onion 팩 선택",
+    "message": "팩 선택",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "눈 텍스처 팩 “{0}”에서 가져왔습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "사용할 수 있는 문자가 없는 모드 이름입니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "“{0}” 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "아카이브를 찾을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbra의 모드 폴더를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "이 아카이브의 텍스처를 하나도 읽지 못해 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "이 아카이브에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "“Proteus”는 예약된 이름입니다. 다른 모드 이름을 고르세요.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "모드를 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "애니메이션 발광",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. 다만 애니메이션 발광은 없습니다. 사유는 위를 참고하세요. 눈 자체는 정상 적용되었습니다.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. Penumbra가 아직 켜지 않았습니다. 모드 목록에서 직접 체크하세요.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. 마스크가 지정한 모양에 애니메이션 발광이 적용되었습니다. Colors에서 조정하거나 Penumbra의 “{2}”에서 끄세요.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "이 아카이브의 다른 파일이 이미 {0} 텍스처입니다.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "이 아카이브의 파일 이름만으로는 눈 팩인지 알 수 없습니다. Proteus는 추측으로 홍채에 텍스처를 적용하지 않습니다.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "파일 이름이 Proteus가 아는 텍스처 종류(base, mask, norm)로 끝나지 않습니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "캐릭터가 그려지지 않아 발광을 얼굴 {0} 기준으로 잘라냅니다. 다른 얼굴을 쓰고 있다면 게임에 접속한 뒤 다시 가져오세요.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "마스크 텍스처를 디코딩하지 못해 무엇이 빛나야 할지 알 수 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "마스크의 빨강 채널이 비어 있어 이 팩에는 발광으로 표시된 부분이 없습니다. 게임은 그 채널에서 림발링을 읽으며, 빛나는 눈 모드도 그곳에 모양을 넣습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus가 게임의 얼굴 목록을 읽지 못해 발광을 올릴 홍채 머티리얼이 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "이 팩에는 마스크 텍스처가 없어 애니메이션이 채울 모양이 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "이 아카이브에서 가져올 수 있는 것이 없습니다 — 위의 이유를 확인하세요.",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +1136,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. Proteus가 팩의 레이어를 읽어 Proteus 사이드카가 포함된 새 Penumbra 모드를 작성합니다 — 원본 파일은 변경되지 않습니다.",
+    "message": "Onion 오버레이 팩(.omp)을 가져옵니다. 레이어를 Proteus 오버레이로 착용하고, 색을 바꾸거나 순서를 다시 쌓을 수 있습니다.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -781,6 +1165,110 @@
   },
   "Import.Layouts.Fmt": {
     "message": "이 팩에는 UV 레이아웃이 {0}개 있어 모드에 Penumbra 단일 선택 그룹 \"{1}\"이(가) 생깁니다({2}). 한 번에 하나만 합성됩니다.",
+    "description": ""
+  },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Atramentum Luminis 팩 “{0}”에서 가져왔습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "사용할 수 있는 문자가 없는 모드 이름입니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "“{0}” 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "팩을 찾을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Penumbra의 모드 폴더를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "이 팩의 텍스처를 두 번째 단계에서 하나도 읽지 못해 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "“Proteus”는 예약된 이름입니다. 다른 모드 이름을 고르세요.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "모드를 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "빛나는 문신",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — 빛",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "제작자 피부",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — 제작자 피부",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 다만 Proteus가 켜지 못했습니다. Penumbra의 “{3}”에서 직접 체크하세요. 그렇지 않으면 아무것도 그려지지 않습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 빛과 제작자의 몸 텍스처가 모두 켜져 있습니다. 빛만 원한다면 Penumbra의 “{3}”에서 몸 텍스처를 체크 해제하세요.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "“{0}”은(는) 실제 게임 경로입니다. 즉 Atramentum Luminis 팩이 아니라 일반 TexTools 모드입니다. Penumbra에서 설치하세요.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "모드팩의 데이터 블록에 들어 있지 않습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "알파 채널이 평평해서 빛 정보가 없습니다. Atramentum Luminis는 빛을 거기에 넣으므로, 그것이 없는 텍스처는 빛나는 문신이 아니라 일반 피부입니다.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "텍스처가 아닙니다. Atramentum Luminis는 텍스처만 담습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "텍스처가 아니라 모델 또는 머티리얼(SqPack 유형 {0})입니다.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "픽셀을 디코딩할 수 없었습니다.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus는 바디 “{0}”을(를) 모르며, 캐릭터가 로드되기 전에는 물어볼 수도 없습니다. 접속한 뒤 이 팩을 다시 열어 주세요.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "읽을 수 없었습니다: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus가 이 팩의 바디 UV를 몰라서, 현재 입고 있는 바디({0}) 위에 그대로 크기 조정 없이 그립니다. 다른 바디용으로 만들어졌다면 이상하게 보입니다 — 아다면 아래에서 대상 바디를 바꿔 주세요.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "“{0}”은(는) 몸의 {1:P0}이(가) 빛납니다. 가능한 일이긴 하지만, 보통은 텍스처에 제대로 된 알파 채널이 없다는 뜻입니다. 쓰기 전에 결과를 확인하세요.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다 — 위의 이유를 확인하세요.",
     "description": ""
   },
   "Import.Materials.Fallback": {
@@ -812,7 +1300,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": ".omp 파일을 선택하면 내용이 표시됩니다.",
+    "message": "팩을 선택하면 내용을 확인할 수 있습니다.",
     "description": ""
   },
   "Import.NothingUsable": {
@@ -857,6 +1345,66 @@
   },
   "Import.Website.Tip": {
     "message": "모드의 Penumbra 페이지로 이어집니다.",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "경로 {0}개",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "팩이 {0}용으로 그려졌다고 밝혀서, Proteus가 착용 중인 바디에 맞게 변환합니다.",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "바디",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "아트를 어느 바디 머티리얼에 그릴지입니다. Proteus는 바디를 알아볼 수 있을 때는 팩에서, 그렇지 않으면 착용 중인 바디에서 고릅니다. 다른 바디용임을 안다면 바꾸세요.",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} 발광",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "Atramentum Luminis 빛나는 문신(.ttmp2)을 가져옵니다. 그 빛은 색을 바꾸고 세기를 줄일 수 있는 Proteus 오버레이가 되며, 셔이더 모드가 필요 없습니다.",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus에는 종족·성별 필터가 없습니다. 같은 머티리얼의 바디를 입은 모든 캐릭터에 그려집니다. 대상이 아닌 캐릭터에서는 Penumbra에서 모드를 끌주세요.",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "이 모드팩의 어느 텍스처에도 Atramentum Luminis 빛 마스크가 없습니다.",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "다음 경로용으로 한 번만 가져옵니다:\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "그 모드팩을 읽지 못했습니다: {0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "두 가지가 모두 켜집니다. 빛과, 그 아래에 깔리는 제작자 본인의 몸 텍스처로, 둘 다 Penumbra의 “{0}”에 있습니다. 몸 텍스처에는 빛나지 않는 문신 부분이 담겨 있고, 피부색은 제작자의 것이 아니라 당신의 것이 유지됩니다. 빛만 원한다면 거기서 체크를 해제하세요.",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "텍스처: {1}개 중 {0}개",
     "description": ""
   },
   "Mods.Ao.Off": {
@@ -909,6 +1457,178 @@
   },
   "Mods.PluginDisabled": {
     "message": "Proteus가 비활성화되어 있습니다 — 설정에서 켜 주세요.",
+    "description": ""
+  },
+  "Parts.Add.Btn": {
+    "message": "선택한 부위로 스위치 만들기",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "모드 제작자가 이미 이 부위를 자체 스위치에 연결해 두어 추가할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "이 모델에 남은 스위치: 10개 중 {0}개",
+    "description": ""
+  },
+  "Parts.Click.Tip": {
+    "message": "모델의 한 부분을 클릭하면 켜거나 끌 수 있습니다. 드래그하면 회전, Shift+드래그하면 이동, 스크롤하면 확대·축소됩니다.",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Proteus가 이미 추가함",
+    "description": ""
+  },
+  "Parts.HidePieces.Fmt": {
+    "message": "조각 {0}개 ▴",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "모드의 모델에서 원하는 형상을 골라 켜기/끄기 스위치를 붙입니다. 스위치는 일반적인 Penumbra 옵션으로 모드 자체에 기록되므로 Proteus를 꺼도 계속 작동합니다.",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "모드",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "모델",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "먼저 스위치 이름을 입력하세요.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "이 스위치로 숨길 부위를 선택하세요.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "이 모델에는 남은 스위치 자리가 없습니다. 게임은 아이템당 열 개를 제공하는데 제작자가 모두 사용했습니다.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "이 모드는 모델을 게시하지 않아 나눌 형상이 없습니다.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "아직 모드에 기록된 내용이 없습니다.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "기록할 스위치",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "모드 선택",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "모델 선택",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "제거",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "되돌리기 — 원본 모델 복원",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "모델은 복원했지만 옵션 그룹을 제거하지 못했습니다: {0}",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "이 모드에는 Proteus가 추가한 스위치가 없습니다.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "되돌렸습니다. 모델 파일 {0}개를 복원하고 옵션 그룹을 제거했습니다.",
+    "description": ""
+  },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} 삼각형",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "부위 {0}개 선택됨",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "부위 {0}은(는) 조각 {1}개로 나뉘어 있어 모두 나열할 수 없습니다. 모델을 클릭해 하나를 고르거나 부위 전체를 전환하세요.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "조각 {0}개 ▾",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "이 아이템의 다른 모델 파일 {0}개는 부위 구성이 달라 같은 편집이 엉뚱한 형상에 적용되므로 건드리지 않았습니다.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "이름",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "이 모델을 읽을 수 없습니다. 변경된 내용은 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "스위치를 모드에 기록",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "이 아이템에는 이미 \"{0}\" 스위치가 있습니다. 새 스위치에는 다른 이름을 지정하세요.",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0}을(를) 편집할 수 없습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "기록 실패: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "이 아이템의 모델 파일을 하나도 편집할 수 없었습니다.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "이 아이템의 IMC 항목을 읽을 수 없었고, 추측해서 채우면 아이템이 불러오는 머티리얼이 바뀝니다. 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "이 모델에 남은 스위치 자리는 {0}개인데 {1}개를 요청했습니다.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0}은(는) 캐릭터 모델 경로가 아니므로 스위치를 붙일 아이템이 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "스위치는 장비와 장신구에만 추가할 수 있으며, 이것은 {0}입니다.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "기록할 스위치가 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "\"{0}\"과(와) \"{1}\"이(가) 모두 부위 {2}을(를) 차지합니다. 한쪽이 부위 전체를 가져가므로 별도의 스위치로 만들 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "모드의 모델을 편집하고 Penumbra 옵션 그룹을 추가합니다. 원본 모델은 보관되므로 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "완료했습니다. 스위치 {0}개가 이제 이 모드 자체의 Penumbra 설정 \"{1}\"에 표시됩니다.",
     "description": ""
   },
   "Service.NoPenumbraDir": {
@@ -1141,6 +1861,10 @@
   },
   "Tab.Mods": {
     "message": "모드",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "스위치",
     "description": ""
   },
   "Tab.Settings": {

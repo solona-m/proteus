@@ -60,11 +60,12 @@ SOFTWARE.
 
 -------------------------------------------------------------------------------
 
-bc7enc / rgbcx — native BC7/BC5 block encoder (proteus_bcn.dll)
+bc7enc / rgbcx / bc7decomp — native BC7/BC5 block encoder and BC1/3/5/7 block
+decoder (proteus_bcn.dll)
 https://github.com/richgel999/bc7enc
 
 Released to the public domain, or alternatively under the MIT License, at your
-option (per the notices in bc7enc.c / rgbcx.h).
+option (per the notices in bc7enc.c / rgbcx.h / bc7decomp.cpp).
 
 Copyright (c) 2020-2021 Richard Geldreich, Jr.
 

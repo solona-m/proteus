@@ -29,7 +29,15 @@ public class StatusWindow : Window
     private readonly UVRemapService uvRemap;
     private readonly ModCreationService modCreation;
     private readonly OnionImportService onionImport;
+    private readonly ContentImportService contentImport;
+    private readonly LuminisImportService luminisImport;
+    private readonly EyeImportService eyeImport;
+    // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
+    private readonly TextureLoader textureLoader;
     private readonly ModExportService modExport;
+    // Turns a mod's own geometry into on/off switches. Its own class: it works on any installed mod, not
+    // just the sidecar ones this window otherwise lists.
+    private readonly PartsPanel parts;
 
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static Vector4 BindingAccent => ProteusStyle.Binding;
@@ -75,6 +83,9 @@ public class StatusWindow : Window
     /// <summary>Penumbra group → ordinal per mod, memoised: the tab strip needs it every frame to show
     /// the true stacking order, and reading it walks the mod folder.</summary>
     private readonly Dictionary<string, Dictionary<string, int>> _groupOrderCache = new(StringComparer.OrdinalIgnoreCase);
+    // mod|material -> the colour rows that material's index texture actually selects. Cleared with the rest
+    // when the colour window reopens, so a pack whose index option changed is rescanned.
+    private readonly Dictionary<string, ContentIndex> _contentIndexCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Mods for which we've already fired the cold-boot glow-recipe warmup, so it runs at most
     /// once per mod per session. See the trigger in the colour-editor draw.</summary>
@@ -111,6 +122,10 @@ public class StatusWindow : Window
     private string _createMask = "";
     private string _createNormal = "";
     private string _createIndex = "";
+    private bool _createWholeSkin;        // the textures ARE the skin → the normal replaces, never compounds
+    private bool _createWholeSkinLocked;  // user ticked it by hand — stop auto-detecting over their answer
+    private string _createWholeSkinProbedFor = "";   // the diffuse+normal pair the last probe was for
+    private Task<bool>? _createWholeSkinProbe;       // decodes two images, so never on the frame thread
     private bool _createMaterialLocked;   // stop auto-detecting once we have a real body (or the user edits)
     private string _createMaterialAuto = "";  // the value we last auto-filled, to tell a user edit apart
     private long _createDetectNextTick;   // throttle the detect poll while the character isn't drawn yet
@@ -140,6 +155,39 @@ public class StatusWindow : Window
     // Written by the pool task that does the disk work, read (and cleared) by PumpImport on the framework
     // thread. A plain reference assignment is the whole handoff; nothing else touches it.
     private volatile OnionImportService.PreparedImport? _importPrepared;
+
+    // ── Content (.pmp) import state ──
+    // The same three-phase handoff as the Onion import above, kept in its own fields rather than shared:
+    // the two packs describe different things (layers vs geometry) and a half-switched tab that still held
+    // the other kind's preview would offer to import it under the wrong rules.
+    private ContentImportService.ImportPreview? _contentPreview;
+    private volatile ContentImportService.PreparedImport? _contentPrepared;
+
+    // ── Atramentum Luminis (.ttmp2) import state ──
+    // A third set of fields for the same three-phase handoff, and kept apart from the other two for the
+    // reason given above: the packs describe different things and must not be imported under each other's
+    // rules.
+    private LuminisImportService.ImportPreview? _luminisPreview;
+    private volatile LuminisImportService.PreparedImport? _luminisPrepared;
+    // The body material suffix the overlays will target. Seeded from the preview on the frame the pack is
+    // picked, then owned by the user's combo — so re-seeding it per frame would fight their choice.
+    private string _luminisSuffix = "";
+    // Resolved ONCE per pick alongside the preview, like _importMaterials: the first call walks 72 game-data
+    // probes, which is not a per-frame cost.
+    private IReadOnlyList<string>? _luminisMaterials;
+    private bool _luminisMaterialsFromGameData;
+    // A registration Penumbra has accepted but not finished loading. Pumped every frame until it answers;
+    // see TickLuminisImport for why this one import can span frames when the other two cannot.
+    private bool _luminisAwaiting;
+    private LuminisImportService.PreparedImport? _luminisAwaited;
+
+    // ── Eye pack (.zip) import state ──
+    // A fourth set, kept apart from the other three for the reason given above.
+    private EyeImportService.ImportPreview? _eyePreview;
+    private volatile EyeImportService.PreparedImport? _eyePrepared;
+    // A registration Penumbra has accepted but not finished loading; see TickEyeImport.
+    private bool _eyeAwaiting;
+    private EyeImportService.PreparedImport? _eyeAwaited;
 
     // ── Export tab state ──
     // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
@@ -194,7 +242,12 @@ public class StatusWindow : Window
         UVRemapService uvRemap,
         ModCreationService modCreation,
         OnionImportService onionImport,
-        ModExportService modExport)
+        ContentImportService contentImport,
+        LuminisImportService luminisImport,
+        EyeImportService eyeImport,
+        ModExportService modExport,
+        TextureLoader textureLoader,
+        PartsPanel parts)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -209,17 +262,24 @@ public class StatusWindow : Window
         this.uvRemap        = uvRemap;
         this.modCreation    = modCreation;
         this.onionImport    = onionImport;
+        this.contentImport  = contentImport;
+        this.luminisImport  = luminisImport;
+        this.eyeImport      = eyeImport;
+        this.textureLoader  = textureLoader;
         this.modExport      = modExport;
+        this.parts          = parts;
 
         SizeConstraints = new WindowSizeConstraints
         {
             // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
             // doesn't shrink the window (it's AlwaysAutoResize).
             MinimumSize = new System.Numerics.Vector2(520, 80),
-            // 760, not the old 700: the header band adds a fixed ~46px, and at 700 the tallest tab
-            // (Settings) would start clipping into a scrollbar this window has never had.
+            // 774, not the old 700: the header band adds a fixed ~60px, and at 700 the tallest tab
+            // (Settings) would start clipping into a scrollbar this window has never had. Raised by the
+            // 14px the band itself gained when its caption became the capability row, so the margin
+            // Settings was given at 760 survives that change rather than being quietly spent.
             // Unscaled on purpose — Dalamud's window host multiplies these by the global UI scale itself.
-            MaximumSize = new System.Numerics.Vector2(1100, 760),
+            MaximumSize = new System.Numerics.Vector2(1100, 774),
         };
 
         // Free native chrome: the same two destinations as the band's button and the installer's gear,
@@ -302,8 +362,17 @@ public class StatusWindow : Window
         // height is FontSize + FramePadding*2 measured in JUPITER (HeaderTabBar pushes it), which is not
         // what ImGui.GetFrameHeight() reports — that answers for the default font.
         var barTop = ImGui.GetCursorPosY();
+        // ── the bar's id carries a generation suffix, and it is load-bearing ──
+        // An ImGui tab bar remembers each tab's SLOT by id and does not reorder on resubmission (the same
+        // fact the colour panel's stack strip works around by not using a TabBar at all). That state lives
+        // in Dalamud's ImGui context, not in the plugin, so it survives a plugin reload and outlives any
+        // rebuild — moving a tab in this file changes nothing until the game itself restarts.
+        //
+        // So when the ORDER here changes, bump the suffix. A bar id ImGui has never seen has no remembered
+        // slots and lays its tabs out in submission order, which is the order written below. The cost is
+        // that the selected tab resets to the first one, once, for anyone who had the window open.
         using (ProteusStyle.TabAccent())
-        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs"))
+        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs2"))
         {
             if (tabs)
             {
@@ -323,6 +392,9 @@ public class StatusWindow : Window
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
                     if (t) DrawExportTab();
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
+                    if (t) parts.Draw();
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -398,7 +470,12 @@ public class StatusWindow : Window
             barTop + ((barH - btnH) * 0.5f)));
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
+        {
             compositor.TriggerRecomposite("manual");
+            // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
+            // a recomposite alone would leave a mod installed since the window opened out of its picker.
+            parts.Refresh();
+        }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(Strings.Band.RecompositeTip);
 
@@ -406,7 +483,8 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The wordmark, the live status pills, and the Discord link, laid into the band's rect.
+    /// The wordmark, the capability row (<see cref="CapabilityStrip"/>), the live status pills, and the
+    /// Discord link, laid into the band's rect.
     /// <para/>
     /// This absorbs what used to be two separate pieces: a status banner that rendered NOTHING in the
     /// normal case (so the window opened onto a bare tab bar with no identity), and a right-aligned
@@ -421,11 +499,12 @@ public class StatusWindow : Window
         var padY = ProteusStyle.S(5f);
 
         // The Discord button's left edge is resolved FIRST, because everything else in the band is laid
-        // out against it. Both the caption and the download status can outgrow the space available — the
-        // caption because Dalamud's font size is configurable independently of UI scale, the status
-        // because the failure path reports an arbitrary error string — and either one would otherwise run
-        // underneath the right-aligned button, which paints over it. Measured outside the wordmark's font
-        // scope so it matches the font the button is actually drawn in.
+        // out against it. Both the capability row and the download status can outgrow the space available —
+        // the row because Dalamud's font size is configurable independently of UI scale (and because a
+        // translation runs longer than the English), the status because the failure path reports an
+        // arbitrary error string — and either one would otherwise run underneath the right-aligned button,
+        // which paints over it. Measured outside the wordmark's font scope so it matches the font the
+        // button is actually drawn in.
         const string label = "Discord";
         var btnW = ImGui.CalcTextSize(label).X + (ImGui.GetStyle().FramePadding.X * 2);
         var btnH = ImGui.GetFrameHeight();
@@ -438,13 +517,33 @@ public class StatusWindow : Window
 
         var afterMark = ImGui.GetItemRectMax().X;
 
-        // Caption under the wordmark. Deliberately NOT carrying the version: the title bar renders the
-        // same assembly version a few pixels above (see the base() call), and saying it twice in one
-        // corner of the window is noise. Still ellipsized, because Dalamud's font size is configurable
-        // independently of UI scale — a large enough font runs even this under the Discord button.
-        var captionX = min.X + padX;
-        ImGui.SetCursorScreenPos(new Vector2(captionX, ImGui.GetItemRectMax().Y - ProteusStyle.S(2f)));
-        ImGui.TextDisabled(ProteusStyle.Ellipsize(Strings.Band.Caption, btnX - captionX - padX));
+        // ── capability row ───────────────────────────────────────────────────
+        // What used to be a one-phrase caption ("overlay compositor"), which was accurate at launch and
+        // now covers about a quarter of the plugin. Deliberately still NOT carrying the version: the title
+        // bar renders the same assembly version a few pixels above (see the base() call), and saying it
+        // twice in one corner of the window is noise.
+        //
+        // rowY comes from the wordmark's MEASURED bottom rather than a constant, because Dalamud's font
+        // size is configurable independently of UI scale — the same hazard the ellipsis budgets below guard
+        // against, and a hardcoded offset would let a large body font collide with the wordmark.
+        var rowX = min.X + padX;
+        var rowY = ImGui.GetItemRectMax().Y + ProteusStyle.S(2f);
+        var strip = CapabilityStrip.Draw(new Vector2(rowX, rowY), btnX - rowX - padX);
+
+        // Icons alone are not self-explanatory, so the narrow layout owes the user words: the hovered
+        // item's label, or the fallback caption when nothing is hovered. Ellipsized and length-guarded for
+        // the same reasons the pills below are — Ellipsize returns "" when not even the ellipsis fits, and
+        // drawing that would leave a stray gap rather than text.
+        if (strip.Collapsed)
+        {
+            var readoutX = strip.Right + padX;
+            var readout  = ProteusStyle.Ellipsize(strip.Hovered ?? Strings.Band.Caption, btnX - readoutX - padX);
+            if (readout.Length > 0)
+            {
+                ImGui.SetCursorScreenPos(new Vector2(readoutX, rowY));
+                ImGui.TextDisabled(readout);
+            }
+        }
 
         // ── status pills ─────────────────────────────────────────────────────
         // Only when something needs doing. There used to be a green "active" pill here so the band never
@@ -884,8 +983,13 @@ public class StatusWindow : Window
 
         ImGui.SetNextItemWidth(ProteusStyle.S(140f));
         int cacheMb = config.DecodeCacheBudgetMb;
-        if (ImGui.SliderInt(s.TextureCache, ref cacheMb, 512, 4096))
-            config.DecodeCacheBudgetMb = Math.Clamp(cacheMb, 512, 4096);
+        // Logarithmic: the useful range now spans 512 MB to 32 GB, and a linear slider over that puts every
+        // value anyone actually wants inside the first few pixels.
+        if (ImGui.SliderInt(s.TextureCache, ref cacheMb,
+                Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb,
+                "%d MB", ImGuiSliderFlags.Logarithmic))
+            config.DecodeCacheBudgetMb = Math.Clamp(cacheMb,
+                Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             config.Save();
@@ -1060,6 +1164,53 @@ public class StatusWindow : Window
         if (_createSlots == null && _createSlotsFor == _createMaterial && _createMaterial.Length > 0)
             ImGui.TextDisabled(cs.SlotsUnreadable);
 
+        // Auto-detect the answer from the art itself, on the same "fill it in until the user says
+        // otherwise" rule the material target follows. Keyed on everything that decides it, so it runs once
+        // per pick rather than per frame, and off the frame thread because it decodes the picked diffuse
+        // and the material's own. Only for a skin target: on gear or an accessory the question doesn't
+        // arise, and the comparison it rests on would have nothing to compare against.
+        var wholeSkinKey = SlotEnabled("Diffuse") && SlotEnabled("Normal")
+                        && _createDiffuse.Length > 0 && _createNormal.Length > 0
+                        && IsSkinMaterial(_createMaterial)
+            ? _createMaterial + " " + _createDiffuse + " " + _createNormal
+            : "";
+        if (!_createWholeSkinLocked && wholeSkinKey != _createWholeSkinProbedFor)
+        {
+            _createWholeSkinProbedFor = wholeSkinKey;
+            if (wholeSkinKey.Length == 0)
+            {
+                // Nothing to judge — a half-filled pair, or a target this can't apply to. Back to the
+                // default rather than leaving the last pick's verdict standing over different files.
+                _createWholeSkinProbe = null;
+                _createWholeSkin = false;
+            }
+            else
+            {
+                // Captured, not read from the fields inside the lambda: the user can browse again while
+                // this runs, and the result has to belong to the paths it was started for.
+                string m = _createMaterial, d = _createDiffuse, n = _createNormal;
+                _createWholeSkinProbe = Task.Run(() => modCreation.LooksLikeWholeSkin(m, d, n));
+            }
+        }
+        if (_createWholeSkinProbe is { IsCompleted: true } wholeSkinProbe)
+        {
+            _createWholeSkinProbe = null;
+            // A faulted or cancelled probe reads as "not a whole skin" — the same answer as a definite no,
+            // and the safe one: compounding a detail overlay is right, replacing a skin's normal by
+            // accident is not. The service already logged whatever went wrong.
+            if (!_createWholeSkinLocked)
+                _createWholeSkin = wholeSkinProbe.Status == TaskStatus.RanToCompletion && wholeSkinProbe.Result;
+        }
+
+        // Only decides anything for the NORMAL — whether it stacks onto the map already on the material or
+        // overwrites it — but drawn unconditionally rather than gated on a picked normal: this is the tab
+        // someone converts a whole skin mod from, and a control that appears only once the right file is
+        // browsed is a control nobody finds. Harmless with no normal, and the tooltip says what it touches.
+        if (ImGui.Checkbox(cs.WholeSkin, ref _createWholeSkin))
+            _createWholeSkinLocked = true;   // an explicit answer — auto-detect never writes over it again
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.WholeSkinTip);
+
         ImGui.Separator();
 
         // Only ENABLED slots count. The clearing above already empties disabled ones; this keeps the
@@ -1080,11 +1231,20 @@ public class StatusWindow : Window
                     SlotEnabled("Diffuse") ? NullIfEmpty(_createDiffuse) : null,
                     SlotEnabled("Mask")    ? NullIfEmpty(_createMask)    : null,
                     SlotEnabled("Normal")  ? NullIfEmpty(_createNormal)  : null,
-                    SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null);
+                    SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null,
+                    _createWholeSkin);
                 _createStatus = r.Message;
                 _createStatusOk = r.Ok;
                 if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
+                {
                     _createDiffuse = _createMask = _createNormal = _createIndex = "";
+                    // The tick belonged to the textures just consumed, not to the tab. Clearing the lock
+                    // too is the point: a hand-set answer that survived would silently decide the NEXT
+                    // mod, which is the one case the user has no reason to expect.
+                    _createWholeSkin = _createWholeSkinLocked = false;
+                    _createWholeSkinProbedFor = "";
+                    _createWholeSkinProbe = null;
+                }
             }
         if (!valid && ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.CreateDisabledTip);
@@ -1230,6 +1390,10 @@ public class StatusWindow : Window
     /// </param>
     public void TickImport(bool unloading = false)
     {
+        TickContentImport(unloading);
+        TickLuminisImport(unloading);
+        TickEyeImport(unloading);
+
         var done = _importPrepared;
         if (done == null) return;
         _importPrepared = null;
@@ -1257,23 +1421,214 @@ public class StatusWindow : Window
         if (!IsOpen) Show();
     }
 
+    /// <summary>
+    /// The content-pack half of <see cref="TickImport"/>, on the same terms: the disk work runs on the
+    /// pool, and the Penumbra registration has to land back here on the framework thread.
+    /// </summary>
+    private void TickContentImport(bool unloading)
+    {
+        var done = _contentPrepared;
+        if (done == null) return;
+        _contentPrepared = null;
+        _importBusy = false;
+
+        var r = contentImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        if (r.Ok && ReferenceEquals(_contentPreview, done.Preview))
+            _contentPreview = null;
+
+        if (!IsOpen) Show();
+    }
+
+    /// <summary>
+    /// The Atramentum Luminis half of <see cref="TickImport"/>. Unlike the other two this can span several
+    /// frames after the write: Penumbra loads an added mod asynchronously and will not enable one it is
+    /// still reading, so the registration is pumped until it answers. Twenty megabytes of overlay art is
+    /// enough for that to take a moment.
+    /// </summary>
+    private void TickLuminisImport(bool unloading)
+    {
+        if (_luminisAwaiting)
+        {
+            // Nothing to pump into during teardown: there are no more frames, no one to read a status
+            // message, and Pump would open Penumbra and schedule a recomposite into half-disposed services
+            // — the very things `quiet` exists to prevent. The mod is already added, so it isn't orphaned.
+            if (unloading) return;
+
+            // Still loading — try again next frame. The button stays inert meanwhile, because the import
+            // genuinely is not finished.
+            if (luminisImport.Pump() is not { } pumped) return;
+            _luminisAwaiting = false;
+            FinishLuminisImport(pumped, _luminisAwaited);
+            _luminisAwaited = null;
+            return;
+        }
+
+        var done = _luminisPrepared;
+        if (done == null) return;
+        _luminisPrepared = null;
+
+        var r = luminisImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        if (r == null)
+        {
+            // Penumbra has the mod but hasn't finished loading it. Hold the busy flag and keep pumping.
+            _luminisAwaiting = true;
+            _luminisAwaited = done;
+            return;
+        }
+
+        FinishLuminisImport(r.Value, done);
+    }
+
+    private void FinishLuminisImport(
+        LuminisImportService.ImportResult r, LuminisImportService.PreparedImport? done)
+    {
+        _importBusy = false;
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        // Guarded on identity because Browse stays live during an import: if the user has since picked a
+        // different pack, that one is not the one that just finished and must not be thrown away.
+        if (r.Ok && done != null && ReferenceEquals(_luminisPreview, done.Preview))
+        {
+            _luminisPreview = null;
+            _luminisMaterials = null;
+        }
+
+        if (!IsOpen) Show();
+    }
+
+    /// <summary>
+    /// The eye-pack half of <see cref="TickImport"/>. Like the Atramentum Luminis one this can span
+    /// several frames after the write: Penumbra loads an added mod asynchronously and discards a settings
+    /// write that lands while it is still reading, so the registration is pumped until it answers.
+    /// </summary>
+    private void TickEyeImport(bool unloading)
+    {
+        if (_eyeAwaiting)
+        {
+            // Nothing to pump into during teardown — no more frames, nobody to read a message, and Pump
+            // would open Penumbra and schedule a recomposite into half-disposed services.
+            if (unloading) return;
+            if (eyeImport.Pump() is not { } pumped) return;
+            _eyeAwaiting = false;
+            FinishEyeImport(pumped, _eyeAwaited);
+            _eyeAwaited = null;
+            return;
+        }
+
+        var done = _eyePrepared;
+        if (done == null) return;
+        _eyePrepared = null;
+
+        var r = eyeImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        if (r == null)
+        {
+            _eyeAwaiting = true;
+            _eyeAwaited = done;
+            return;
+        }
+
+        FinishEyeImport(r.Value, done);
+    }
+
+    private void FinishEyeImport(EyeImportService.ImportResult r, EyeImportService.PreparedImport? done)
+    {
+        _importBusy = false;
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        if (r.Ok && done != null && ReferenceEquals(_eyePreview, done.Preview))
+            _eyePreview = null;
+
+        if (!IsOpen) Show();
+    }
+
     private void DrawImportTab()
     {
         var ims = Strings.Import;
+        var cms = Strings.Content;
 
-        ImGui.TextWrapped(ims.Intro);
+        // A bullet each, .pmp first: an ordinary Penumbra mod is what most people arrive holding, and an
+        // overlay pack is the specialist case.
+        //
+        // Indent is a left inset for the list and nothing more. It is NOT what hangs the wrapped lines —
+        // ImGui does that by itself, since wrapped text restarts every line at the x it began at, which is
+        // already past the bullet. Removing this call would only move the list back to the window margin.
+        // Two calls rather than a loop over an array: this runs every frame the tab is open, and the pair
+        // cannot be hoisted into a static — Strings.Import is REPLACED on a language change, so a cached
+        // one would go on showing the old language.
+        ImGui.Indent();
+        ImGui.PushTextWrapPos(0);
+        BulletLine(cms.Intro);
+        BulletLine(ims.Intro);
+        BulletLine(Strings.Luminis.Intro);
+        BulletLine(Strings.Eye.Intro);
+        ImGui.PopTextWrapPos();
+        ImGui.Unindent();
         ImGui.Separator();
 
+        // ONE button, for both formats. Which reader a file needs is written on the file, so asking someone
+        // to say it again before they may pick one is a question with no purpose — and the wrong answer used
+        // to be a dead end, since each dialog filtered the other format out of sight entirely.
+        //
+        // The braced suffix is the dialog's own filter syntax, not prose, so it is built here from the
+        // format constants and a translator only ever sees the human half. The label is stripped of the
+        // three characters that syntax is made of before it goes in: a translation carrying a brace or a
+        // comma would corrupt the filter, and with one button that breaks the only route to ANY pack rather
+        // than to one format. None of the eight current translations contain them; the point is that
+        // nothing in the code was making that true.
         if (ImGui.Button(ims.BrowseBtn))
-            // The "{.omp}" suffix is the dialog's own filter syntax, not prose — it is appended here so a
-            // translator only ever sees the human half.
-            _fileDialog.OpenFileDialog(ims.DialogTitle, ims.DialogFilter + "{.omp}", (ok, paths) =>
-            {
-                if (!ok) return;
-                var picked = paths.FirstOrDefault();
-                if (string.IsNullOrEmpty(picked)) return;
-                LoadOnionPack(picked);
-            }, 1);
+            _fileDialog.OpenFileDialog(ims.DialogTitle,
+                FilterLabel(ims.DialogFilter)
+                    + "{" + PenumbraPackage.Extension
+                    + "," + OnionPackage.Extension
+                    + "," + TexToolsPackage.Extension
+                    + "," + EyePackage.Extension + "}",
+                (ok, paths) =>
+                {
+                    if (!ok) return;
+                    var picked = paths.FirstOrDefault();
+                    if (string.IsNullOrEmpty(picked)) return;
+                    RememberImportDir(picked);
+                    LoadPack(picked);
+                    AutoImport();
+                }, 1, LastImportDir());
+        // SameLine inside each branch rather than once above them. The picked file's name goes beside the
+        // button — the content preview prints it first thing, the Onion path prints it just below — but
+        // when nothing has been picked there is no such name, and a SameLine left hanging would drag the
+        // "pick a pack" line up onto the button's row instead.
+        if (_contentPreview != null)
+        {
+            ImGui.SameLine();
+            DrawContentImport(_contentPreview);
+            return;
+        }
+
+        if (_luminisPreview != null)
+        {
+            ImGui.SameLine();
+            DrawLuminisImport(_luminisPreview);
+            return;
+        }
+
+        if (_eyePreview != null)
+        {
+            ImGui.SameLine();
+            DrawEyeImport(_eyePreview);
+            return;
+        }
 
         if (_importPath.Length > 0)
         {
@@ -1356,16 +1711,169 @@ public class StatusWindow : Window
     /// resolve are done HERE, on the one frame the file dialog reports a pick — they're multi-ms, and the
     /// draw runs them at frame rate otherwise.
     /// </summary>
+    /// <summary>
+    /// Read a picked pack with whichever reader its extension calls for.
+    /// <para/>
+    /// Everything that is not an <c>.omp</c> or a <c>.ttmp2</c> goes to the Penumbra reader rather than to
+    /// an "unsupported" arm of its own. That arm would need a string to say something
+    /// <see cref="PenumbraPackage.Read"/> already says better — it rejects a file with no manifest as "Not a
+    /// Penumbra pack", which <see cref="LoadContentPack"/> puts on screen. A file that is none of the three
+    /// gets a true sentence, and the tab gets no message that exists only to be wrong about.
+    /// </summary>
+    private void LoadPack(string path)
+    {
+        if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
+        else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
+        else if (path.EndsWith(EyePackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadEyePack(path);
+        else LoadContentPack(path);
+    }
+
+    /// <summary>
+    /// Import a just-picked pack outright when the preview has nothing to say about it.
+    /// <para/>
+    /// The preview earns a second click when it is telling the user something they might act on — a pack
+    /// that drops pieces, one that needs the sibling mode raised, one carrying warnings of its own. When it
+    /// says none of those, the click is a confirmation of a screen nobody needed to read, and the pack goes
+    /// in either way.
+    /// <para/>
+    /// The condition is written as "everything the preview would have coloured amber is absent", so the two
+    /// stay in step: each clause below is one of the warnings the panel draws. The quiet informational
+    /// lines — the all-off note, the remap note, the material-target list — are NOT clauses, because
+    /// nothing about them is a decision.
+    /// <para/>
+    /// Called from the file dialog's callback, which runs inside <see cref="Draw"/> on the framework thread,
+    /// so it is the same context the Import button itself would be clicked in. Both Start methods only set a
+    /// flag and hand the disk work to the pool, so nothing blocks here either way.
+    /// <para/>
+    /// The preview stays on screen after it fires. The panel it draws is still the truth about what went in,
+    /// and the status line under it reports the result.
+    /// </summary>
+    private void AutoImport()
+    {
+        if (_importBusy || string.IsNullOrWhiteSpace(_importName)) return;
+
+        if (_contentPreview is { } content)
+        {
+            // No piece that came out WRONG — see ImportPreview.FaultyUnits. Not "every piece imported":
+            // that counts the body meshes Proteus drops on purpose, so an outfit pack shipping its own
+            // fitted body would be sent back for a second click on an import the result line calls clean.
+            // This is the same question the result colour asks, and the two must answer alike.
+            if (content.CanImport && content.Warnings.Count == 0 && content.FaultyUnits == 0)
+                StartContentImport(content);
+            return;
+        }
+
+        if (_eyePreview is { } eye)
+        {
+            // Every file recognised, a glow to add, and nothing to warn about. A pack that can only bring
+            // its textures in is still a real import, but "no animation" is the decision the user came
+            // here to make, so it earns the second click.
+            if (eye.AnyImportable && eye.Warnings.Count == 0 && eye.CanGlow
+             && eye.Files.All(f => f.Import) && eyeImport.IrisesFromGameData)
+                StartEyeImport(eye);
+            return;
+        }
+
+        if (_luminisPreview is { } luminis)
+        {
+            // Every texture in, nothing to warn about. The warnings this preview raises are all decisions —
+            // an unrecognised body, no race filter, a mask that covers the whole sheet — so any of them
+            // earns the second click.
+            if (luminis.AnyImportable
+             && luminis.Warnings.Count == 0
+             && luminis.Textures.All(t => t.Import)
+             && (_luminisMaterials is null or { Count: 0 } || _luminisMaterialsFromGameData))
+                StartLuminisImport(luminis);
+            return;
+        }
+
+        if (_importPreview is { } onion
+         && onion.AnyImportable
+         && onion.Warnings.Count == 0
+         && onion.Layers.All(l => l.Import)
+         && !onion.NeedsAllBodies
+         // Only a warning when there IS a material list to be wrong about; an unresolved one prints nothing.
+         && (_importMaterials is null or { Count: 0 } || _importMaterialsFromGameData))
+            StartImport(onion);
+    }
+
+    /// <summary>
+    /// Where the import picker should open — the folder a pack was last taken from, or null for the
+    /// dialog's own default.
+    /// <para/>
+    /// Checked for existence on the way OUT rather than trusted from the config: the folder may have been
+    /// renamed, emptied or unplugged since it was recorded, and handing the dialog a path that no longer
+    /// resolves is worse than handing it nothing.
+    /// </summary>
+    private string? LastImportDir()
+    {
+        var dir = config.LastImportDir;
+        return !string.IsNullOrEmpty(dir) && Directory.Exists(dir) ? dir : null;
+    }
+
+    /// <summary>Record the folder a pack was picked from, so the next import opens there.</summary>
+    private void RememberImportDir(string packPath)
+    {
+        string? dir;
+        try { dir = Path.GetDirectoryName(packPath); }
+        catch { return; }   // a path shape GetDirectoryName rejects is not one worth remembering
+
+        if (string.IsNullOrEmpty(dir)
+         || string.Equals(dir, config.LastImportDir, StringComparison.OrdinalIgnoreCase)) return;
+        config.LastImportDir = dir;
+        config.Save();
+    }
+
+    /// <summary>
+    /// The name an imported pack is offered under: the pack's own, marked as the Proteus copy.
+    /// <para/>
+    /// An import writes a SECOND mod beside the original — the pack stays installable in Penumbra on its
+    /// own terms — so the two sit together in the mod list and need telling apart. It is only a default:
+    /// the name box is right there and the user owns what finally gets written.
+    /// <para/>
+    /// A pack that already says Proteus is left alone rather than made to say it twice; the sample packs
+    /// here are called things like "Neolithe Piercings for Proteus" already.
+    /// </summary>
+    private static string ProteusName(string packName)
+    {
+        var name = (packName ?? string.Empty).Trim();
+        return name.Length == 0 || name.Contains("proteus", StringComparison.OrdinalIgnoreCase)
+            ? name
+            : name + " (Proteus)";
+    }
+
+    /// <summary>One bulleted line of wrapped body text. Honours whatever wrap position is pushed around
+    /// it; the bullet advances the cursor itself, so the text follows on the same row.</summary>
+    private static void BulletLine(string text)
+    {
+        ImGui.Bullet();
+        ImGui.TextUnformatted(text);
+    }
+
+    /// <summary>
+    /// A localized file-dialog label with the filter syntax's own characters removed, so a translation
+    /// cannot corrupt the filter it gets concatenated into. Called on click, not per frame.
+    /// </summary>
+    private static string FilterLabel(string label)
+        => label.IndexOfAny(['{', '}', ',']) < 0
+            ? label
+            : new string([.. label.Where(c => c is not ('{' or '}' or ','))]);
+
     private void LoadOnionPack(string path)
     {
         _importPath = path;
         _importStatus = null;
         _importMaterials = null;
+        // The three kinds of pack are imported under different rules, and a stale preview of another kind
+        // would keep drawing its own panel over this one.
+        _contentPreview = null;
+        _luminisPreview = null;
+        _eyePreview = null;
         try
         {
             var preview = onionImport.Inspect(path);
             _importPreview = preview;
-            _importName = preview.Name;
+            _importName = ProteusName(preview.Name);
             _importAuthor = preview.Author;
             // Best effort: a failure here only costs the "Material targets" list, not the import, which
             // resolves them again for itself.
@@ -1403,6 +1911,1318 @@ public class StatusWindow : Window
                 _importPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message), null, null, 0, 0);
             }
         });
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.pmp</c> into the content preview, or report why it isn't one. Done HERE, on the
+    /// one frame the dialog reports a pick, for the same reason as the Onion path: reading every model in
+    /// the pack is milliseconds, not a per-frame cost.
+    /// </summary>
+    private void LoadContentPack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _luminisPreview = null;
+        _eyePreview = null;
+        _importMaterials = null;
+        try
+        {
+            var preview = ContentImportService.Inspect(path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log));
+            _contentPreview = preview;
+            // No "(Proteus)" on a pack that already IS one: the suffix exists to tell a converted copy from
+            // the pack it was made out of, and nothing is being converted here.
+            _importName = preview.InstallOnly ? preview.Name : ProteusName(preview.Name);
+            _importAuthor = preview.Author;
+        }
+        catch (Exception ex)
+        {
+            _contentPreview = null;
+            _importStatus = string.Format(Strings.Content.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The content-pack preview: what each option ships, and whether Proteus can append it.</summary>
+    private void DrawContentImport(ContentImportService.ImportPreview preview)
+    {
+        var cms = Strings.Content;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(ims.Description);
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
+        }
+
+        ImGui.Separator();
+
+        // A ready-made Proteus mod has no piece list to draw — nothing of its geometry is being taken over.
+        // Said plainly and NOT in the warning colour: copying it in unchanged is a correct outcome, not a
+        // shortfall. See ImportPreview.InstallOnly.
+        if (preview.InstallOnly)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(cms.AlreadyProteus);
+            ImGui.PopTextWrapPos();
+            ImGui.Separator();
+            bool ok = !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+            using (ImRaii.Disabled(!ok))
+                if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                    StartContentImport(preview);
+            DrawImportStatus();
+            return;
+        }
+
+        ImGui.TextUnformatted(string.Format(cms.PieceCountFmt, preview.ImportableUnits, preview.TotalUnits));
+
+        // One row per PIECE, not per file: a pack that ships the same garment for five races ships one
+        // garment, and the race variants are folded into the count in the third column.
+        using (var table = ImRaii.Table("##contentPieces", 5,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var unit in preview.Units)
+                {
+                    var lead = unit.Variants.FirstOrDefault(v => v.Import) ?? unit.Variants[0];
+
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (unit.Import) ImGui.TextUnformatted(unit.Slot.Label);
+                    else ImGui.TextDisabled(unit.Slot.Label);
+
+                    // The vanilla item the pack replaces, which is what the synthesized option is named
+                    // after. Falls back to the set id, so the column is never blank.
+                    ImGui.TableNextColumn();
+                    if (unit.Import) ImGui.TextUnformatted(unit.ItemName ?? unit.Slot.SetTag);
+                    else ImGui.TextDisabled(unit.ItemName ?? unit.Slot.SetTag);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(unit.Slot.SetTag);
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(unit.Variants.Count > 1
+                        ? string.Format(cms.RacesFmt, unit.Variants.Count)
+                        : "");
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(unit.Import
+                        ? string.Format(cms.GeometryFmt, lead.Meshes, lead.Vertices)
+                        : cms.Skipped);
+
+                    ImGui.TableNextColumn();
+                    if (unit.Import)
+                    {
+                        var mtrl = Path.GetFileName(lead.Bindings.Values.First());
+                        ImGui.TextDisabled(lead.Bindings.Count > 1
+                            ? string.Format(cms.MaterialsFmt, lead.Bindings.Count)
+                            : mtrl);
+                    }
+                    // Amber only for a piece that came out WRONG. A body-only model is dropped on purpose —
+                    // the wearer has their own — so it reads as a plain dimmed note. Colouring it, and
+                    // labelling it "unbound material" when nothing is unbound, put an amber row under a
+                    // green result line and made the two look like they disagreed about the same import.
+                    else if (lead.BodyOnly)
+                        ImGui.TextDisabled(cms.BodyOnly);
+                    else
+                        ImGui.TextColored(ImportWarnColour, cms.Unbound);
+
+                    if (lead.Problem != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(cms.ProblemFmt, unit.Label, lead.Problem));
+                }
+        }
+
+        // Said before the button, not after the import: pieces arriving switched off is the single most
+        // surprising thing about this flow, and a character that changes nothing looks like a failure.
+        if (preview.PieceGroupName is { } gate && preview.AnyImportable)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(string.Format(cms.AllOffFmt, gate));
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.CanImport && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartContentImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.CanImport ? ims.NeedName : cms.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    /// <summary>Hand the unpack to the pool; <see cref="TickContentImport"/> registers what comes back.</summary>
+    private void StartContentImport(ContentImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        var (name, author) = (_importName, _importAuthor);
+        Task.Run(() =>
+        {
+            try { _contentPrepared = contentImport.Prepare(preview, name, author); }
+            catch (Exception ex)
+            {
+                _contentPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, 0, 0);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.ttmp2</c> into the Atramentum Luminis preview, or report why it isn't one.
+    /// <para/>
+    /// Costlier than the other two loaders — it DECODES every candidate texture, roughly 90 ms a sheet —
+    /// and paid on this one frame for the reason <see cref="LuminisImportService.Inspect"/> gives: whether
+    /// a modpack is an AL pack at all is a question about its pixels, and it is the question the user
+    /// opened the preview to have answered.
+    /// </summary>
+    private void LoadLuminisPack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _eyePreview = null;
+        _importMaterials = null;
+        _luminisMaterials = null;
+        try
+        {
+            var preview = luminisImport.Inspect(path);
+            _luminisPreview = preview;
+            _importName = ProteusName(preview.Name);
+            _importAuthor = preview.Author;
+            _luminisSuffix = preview.DefaultSuffix ?? "";
+            // Best effort: a failure here only costs the "Material targets" list, not the import, which
+            // resolves them again for itself.
+            try
+            {
+                _luminisMaterials = luminisImport.MaterialsFor(preview, NullIfEmpty(_luminisSuffix));
+                _luminisMaterialsFromGameData = luminisImport.BodiesFromGameData;
+            }
+            catch { /* preview only */ }
+        }
+        catch (Exception ex)
+        {
+            _luminisPreview = null;
+            _importStatus = string.Format(Strings.Luminis.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The Atramentum Luminis preview: which textures carry a glow mask, and where they will
+    /// land.</summary>
+    private void DrawLuminisImport(LuminisImportService.ImportPreview preview)
+    {
+        var ls = Strings.Luminis;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(ims.Description);
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
+        }
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(ls.TextureCountFmt,
+            preview.Textures.Count(t => t.Import), preview.Textures.Count));
+
+        // One row per PICTURE, not per manifest path: an AL pack aliases one texture to a path per race,
+        // and listing six rows for one tattoo would read as six tattoos.
+        using (var table = ImRaii.Table("##luminisTextures", 4,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var t in preview.Textures)
+                {
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(t.Label);
+                    else ImGui.TextDisabled(t.Label);
+                    if (t.Paths.Count > 1 && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(ls.PathsFmt, string.Join("\n", t.Paths)));
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Import ? string.Format(ls.SizeFmt, t.Width, t.Height) : "");
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Paths.Count > 1
+                        ? string.Format(ls.AliasesFmt, t.Paths.Count)
+                        : "");
+
+                    // The glow percentage is the evidence that this is an AL pack rather than an ordinary
+                    // texture mod, so it goes in the table where it is read, not behind a hover.
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(string.Format(ls.GlowFmt, t.GlowFraction));
+                    else ImGui.TextColored(ImportWarnColour, ls.Skipped);
+
+                    if (t.SkipReason != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(ls.SkippedReasonFmt, t.Label, t.SkipReason));
+                }
+        }
+
+        // ── which body ──
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(200);
+        var suffixes = LuminisImportService.BodySuffixes;
+        var current = string.IsNullOrEmpty(_luminisSuffix) ? (preview.DefaultSuffix ?? "") : _luminisSuffix;
+        if (ImGui.BeginCombo(ls.BodyTarget, current))
+        {
+            foreach (var s in suffixes)
+                if (ImGui.Selectable(s, string.Equals(s, current, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _luminisSuffix = s;
+                    // Re-resolved on the CHANGE, not per frame: the catalogue rebuilds a list per call.
+                    try
+                    {
+                        _luminisMaterials = luminisImport.MaterialsFor(preview, s);
+                        _luminisMaterialsFromGameData = luminisImport.BodiesFromGameData;
+                    }
+                    catch { _luminisMaterials = null; }
+                }
+            // A body the combo doesn't list — the wearer is on something exotic — is still the live choice
+            // and has to be selectable, or picking anything else would be a one-way door.
+            if (!suffixes.Contains(current, StringComparer.OrdinalIgnoreCase) && current.Length > 0)
+                if (ImGui.Selectable(current, true)) _luminisSuffix = current;
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ls.BodyTargetTip);
+
+        var lead = preview.Importable.FirstOrDefault();
+        if (lead is { FromWearer: false, Token: { } token })
+            ImGui.TextDisabled(string.Format(ls.BodyFromPackFmt, token));
+
+        DrawLuminisMaterials();
+
+        ImGui.Spacing();
+        using (ImRaii.Disabled(!TextureLoader.NativeEncoderAvailable))
+            ImGui.Checkbox(ims.AsTex, ref _importAsTex);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable ? ims.AsTexTip : ims.AsTexUnavailableTip);
+
+        // Said before the button: the author's body texture is the surprising half of this import. Plain
+        // text, not the warning colour — both of these are true of a CORRECT import, and amber would put a
+        // caution under a green result line and make the two look like they disagreed.
+        if (preview.AnyImportable)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(string.Format(ls.SkinIncludedFmt, LuminisImportService.GroupName));
+            ImGui.Spacing();
+            ImGui.TextUnformatted(ls.NoRaceFilter);
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartLuminisImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : ls.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    /// <summary>The material paths the imported overlays will claim, collapsed by default. The Onion
+    /// counterpart groups by layout; there is only ever one here, so this is the flat list.</summary>
+    private void DrawLuminisMaterials()
+    {
+        var mats = _luminisMaterials;
+        if (mats == null || mats.Count == 0) return;   // unresolved or unreadable — the import still works
+
+        var ims = Strings.Import;
+
+        // Outside the collapsing header, for the same reason as the Onion one: a fallback list is exactly
+        // what the user won't expand to check, and it silently names no male body.
+        if (!_luminisMaterialsFromGameData)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, ims.FallbackBodies);
+            ImGui.PopTextWrapPos();
+        }
+
+        if (!ImGui.CollapsingHeader(string.Format(ims.MaterialTargetsFmt, mats.Count) + "###luminisMats"))
+            return;
+
+        ImGui.TextWrapped(_luminisMaterialsFromGameData ? ims.MaterialsFromGame : ims.MaterialsFallbackNote);
+        foreach (var p in mats)
+        {
+            ImGui.Bullet();
+            ImGui.TextUnformatted(Path.GetFileName(p));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
+        }
+    }
+
+    /// <summary>
+    /// Parse a picked <c>.zip</c> as a loose eye-texture pack, or report why it isn't one.
+    /// <para/>
+    /// Decodes one image — the mask, to measure what it marks as glowing. The other two are copied through
+    /// on the write without ever being looked at, so this stays cheap enough for the picking frame.
+    /// </summary>
+    private void LoadEyePack(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _luminisPreview = null;
+        _importMaterials = null;
+        _luminisMaterials = null;
+        try
+        {
+            var preview = eyeImport.Inspect(path);
+            _eyePreview = preview;
+            _importName = ProteusName(preview.Name);
+            _importAuthor = "";
+        }
+        catch (Exception ex)
+        {
+            _eyePreview = null;
+            _importStatus = string.Format(Strings.Eye.ReadFailedFmt, ex.Message);
+            _importStatusOk = false;
+        }
+    }
+
+    /// <summary>The eye-pack preview: which textures were recognised, and what will glow.</summary>
+    private void DrawEyeImport(EyeImportService.ImportPreview preview)
+    {
+        var es = Strings.Eye;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(es.TextureCountFmt,
+            preview.Files.Count(f => f.Import), preview.Files.Count));
+
+        using (var table = ImRaii.Table("##eyeFiles", 3,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var f in preview.Files)
+                {
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (f.Import) ImGui.TextUnformatted(f.Name);
+                    else ImGui.TextDisabled(f.Name);
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(f.Slot?.ToString() ?? "");
+
+                    ImGui.TableNextColumn();
+                    if (f.Import) ImGui.TextDisabled(Path.GetFileName(f.GamePath ?? ""));
+                    else ImGui.TextColored(ImportWarnColour, es.Skipped);
+
+                    if (f.SkipReason != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(es.SkippedReasonFmt, f.Name, f.SkipReason));
+                }
+        }
+
+        // How much of the mask to cut to. A taste decision that is baked into the written art, so it has
+        // to be made HERE rather than tuned afterwards — the Glow dial can only scale what survived.
+        if (preview.Fractions != null)
+        {
+            ImGui.Spacing();
+            ImGui.SetNextItemWidth(220);
+            // Inert while a write is running — the choice is already snapshotted, so changing it here
+            // would only misreport what is being baked.
+            using var busy = ImRaii.Disabled(_importBusy);
+            if (ImGui.BeginCombo(es.CutoutLabel, CutoutLabel(preview.Cutout, es)))
+            {
+                foreach (var mode in new[] { EyeImportService.EyeCutout.Falloff,
+                                             EyeImportService.EyeCutout.Artwork })
+                    if (ImGui.Selectable(CutoutLabel(mode, es), preview.Cutout == mode))
+                        preview.Cutout = mode;
+                ImGui.EndCombo();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(es.CutoutTip);
+        }
+
+        // What the glow will be, before the button — it is the whole reason this importer exists, and a
+        // pack that can't have one should say so where the decision is made.
+        ImGui.Spacing();
+        ImGui.PushTextWrapPos(0);
+        if (preview.CanGlow)
+            ImGui.TextUnformatted(string.Format(es.GlowFmt, preview.GlowFraction ?? 0f,
+                preview.IrisMaterials.Count, EyeImportService.GroupName));
+        else
+            ImGui.TextUnformatted(es.NoGlow);
+        ImGui.PopTextWrapPos();
+
+        if (!eyeImport.IrisesFromGameData && preview.IrisMaterials.Count > 0)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, es.FallbackIrises);
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartEyeImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : es.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    private static string CutoutLabel(EyeImportService.EyeCutout mode, Localization.EyeStrings es)
+        => mode == EyeImportService.EyeCutout.Artwork ? es.CutoutArtwork : es.CutoutFalloff;
+
+    /// <summary>Hand the decode and write to the pool; <see cref="TickEyeImport"/> registers what comes
+    /// back.</summary>
+    private void StartEyeImport(EyeImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        // Cutout snapshotted with the rest: it is a mutable field on a preview whose combo stays on
+        // screen, and the write reads it on a pool thread.
+        var (name, author, cutout) = (_importName, _importAuthor, preview.Cutout);
+        Task.Run(() =>
+        {
+            try { _eyePrepared = eyeImport.Prepare(preview, name, author, cutout); }
+            catch (Exception ex)
+            {
+                _eyePrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, false, 0, 0);
+            }
+        });
+    }
+
+    /// <summary>Hand the decode and write to the pool; <see cref="TickLuminisImport"/> registers what comes
+    /// back.</summary>
+    private void StartLuminisImport(LuminisImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        var (name, author, asTex, suffix) =
+            (_importName, _importAuthor, _importAsTex, NullIfEmpty(_luminisSuffix));
+        Task.Run(() =>
+        {
+            try { _luminisPrepared = luminisImport.Prepare(preview, name, author, asTex, suffix); }
+            catch (Exception ex)
+            {
+                _luminisPrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, [], 0, 0);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The colour editor for an imported content pack: one tab per selected option, each editing the rows
+    /// stamped into the material that option's meshes are bound to.
+    /// <para/>
+    /// Separate from the overlay editors rather than folded into their tab strip, and the reason is what a
+    /// content option IS. An overlay option owns art Proteus composites, so its panel is built around
+    /// coverage, an index texture and a render mode inferred from the features in use. A content option
+    /// owns none of those: the pack shipped its own mesh, its own textures and its own shader, and the only
+    /// thing left for the user to change is the colour table. Everything else in that panel would be a
+    /// control with nothing behind it.
+    /// <para/>
+    /// Rows that are NOT edited stay exactly as the author wrote them — see
+    /// <c>GearMaterialWriter.PatchColorTable</c>, which writes only the rows it is given.
+    /// </summary>
+    private void DrawContentColorEditor(
+        OverlayEntry entry, bool editingBinding,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
+    {
+        // Resolved HERE rather than through discovery.ResolveActiveContent, which is otherwise the same
+        // walk: that one re-reads the mod's meta.json for its group order, and this runs once a frame for
+        // as long as the panel is open. The selection still comes from Penumbra — one IPC call, exactly as
+        // the option-group editor below does it — and the group order comes off the cache the tab strip
+        // already keeps.
+        var collId = penumbra.GetPlayerCollectionId();
+        var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
+
+        if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var groupOrder))
+        {
+            var modRoot = entry.ModRoot;
+            groupOrder = modRoot != null
+                ? SidecarDiscoveryService.ReadGroupOrder(modRoot)
+                : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _groupOrderCache[entry.ModDirectory] = groupOrder;
+        }
+
+        List<string>? Selection(string group)
+            => settings?.Options
+                .FirstOrDefault(kv => string.Equals(kv.Key, group, StringComparison.OrdinalIgnoreCase))
+                .Value;
+
+        // The synthesized piece group, read exactly as ResolveActiveContent reads it. Without this the panel
+        // and the composite disagree about what is being worn: a pack whose pieces are all switched off
+        // still contributes nothing, but would draw a full colour grid whose glow button targets a material
+        // that was never published.
+        var gateOn = entry.Metadata.PieceGroupName is { Length: > 0 } gateGroup ? Selection(gateGroup) : null;
+
+        // Which options are live. Collapsed into MATERIALS below — see there.
+        var options = new List<(string? Group, string? Option, int Order, int Pieces)>();
+
+        int unconditional = PiecesFor(entry, null, null, gateOn).Count;
+        if (unconditional > 0)
+            options.Add((null, null, int.MaxValue, unconditional));
+
+        foreach (var g in entry.Metadata.ContentGroups ?? [])
+        {
+            var selected = Selection(g.PenumbraGroupName);
+            // A group with nothing selected contributes nothing to the composite either, so it gets no tab.
+            if (selected is not { Count: > 0 }) continue;
+
+            int order = groupOrder.TryGetValue(g.PenumbraGroupName, out var n) ? n : int.MaxValue;
+            foreach (var o in g.Options.Where(o => selected.Any(sel =>
+                         string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
+            {
+                int live = PiecesFor(entry, g.PenumbraGroupName, o.Name, gateOn).Count;
+                if (live > 0) options.Add((g.PenumbraGroupName, o.Name, order, live));
+            }
+        }
+
+        // Said before anything else, and in amber: a pack the composite refused is enabled, selected and
+        // completely correct-looking, so "no active options" below would be answering a question nobody
+        // asked. The reason comes from the shell builder, which records it even on a run that hosts nothing.
+        if (compositor.GetUnwearableContentReason(entry.ModDirectory) is { } unwearable)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, unwearable);
+            ImGui.PopTextWrapPos();
+            return;
+        }
+
+        if (options.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            return;
+        }
+
+        options = options
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Option, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Which of this mod's materials the last composite found backing a DRAWN mesh. A piece's Materials
+        // map is every binding its models declare, which is the larger set: a material bound only to meshes
+        // with no LOD0 vertices — the norm in a pack built by gutting a stock model — is declared and never
+        // drawn. A tab for one of those would save rows that reach nothing and offer a glow button with no
+        // target, which is the same silent-nothing this whole panel exists to stop.
+        //
+        // Drawn, not hosted: a piece that spilled past the host's material budget is on screen and still the
+        // user's to colour. Null means "no information", NOT "nothing is live" — a pack that has not been
+        // composited yet looks identical, and hiding every tab in that state would be worse than showing one
+        // tab too many.
+        var liveMaterials = compositor.GetLiveContentMaterials(entry.ModDirectory);
+
+        // A stamp of what Penumbra currently has selected in this mod. Feeds the index-scan cache key so a
+        // pack whose index texture is itself an option re-reads it the moment that option changes — the
+        // selection can be changed from Penumbra's own window while this panel stays open, which no
+        // window-appearing sweep can see.
+        var selectionStamp = settings == null
+            ? "-"
+            : string.Join(' ', settings.Value.Options
+                .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => kv.Key + "=" + string.Join(',', kv.Value)));
+
+        // Collapse the options into MATERIALS. Pieces binding the same .mtrl are published as one material
+        // and cost one of the host's ten slots between them (see SecondSkinService.ContentUnitKey), so one
+        // grid governs all of them — and the edit fans out to every option it covers, because rows differing
+        // is precisely what would split that one slot back into several.
+        var byMaterial = new List<(string Mtrl, List<string> Names, List<ContentOwner> Owners)>();
+        foreach (var (group, option, _, _) in options)
+        {
+            var live = PiecesFor(entry, group, option, gateOn);
+            foreach (var piece in live)
+                foreach (var (leaf, mtrl) in piece.Materials)
+                {
+                    if (liveMaterials != null && !liveMaterials.Contains(mtrl)) continue;
+
+                    // The pack's OWN checkboxes, for a pack that switches pieces on by model attribute
+                    // rather than by shipping separate models. A material nothing currently reveals belongs
+                    // to a piece the user left unticked: showing it would be nine tabs for two worn
+                    // accessories, none of them saying which is which.
+                    //
+                    // Only gates Penumbra still recognises get a vote. Group and option names are recorded
+                    // at import and are exactly what someone renames when they edit a mod afterwards; a gate
+                    // naming a group that no longer exists cannot be evaluated, and hiding a material on the
+                    // strength of a test that could not run would empty the panel with no way to tell why.
+                    // Unevaluable gates leave the material ungated, which shows the tab under its file name.
+                    var gates = piece.GatesFor(leaf);
+                    List<string>? gateNames = null;
+                    if (gates.Count > 0)
+                    {
+                        var known = gates.Where(g => Selection(g.Group) != null).ToList();
+                        if (known.Count > 0)
+                        {
+                            gateNames = [.. known
+                                .Where(g => Selection(g.Group)!.Any(s =>
+                                    string.Equals(s, g.Option, StringComparison.OrdinalIgnoreCase)))
+                                .Select(g => g.Option)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)];
+                            if (gateNames.Count == 0) continue;
+                        }
+                    }
+
+                    int at = byMaterial.FindIndex(m =>
+                        string.Equals(m.Mtrl, mtrl, StringComparison.OrdinalIgnoreCase));
+                    if (at < 0)
+                    {
+                        byMaterial.Add((mtrl, gateNames ?? [], []));
+                        at = byMaterial.Count - 1;
+                    }
+                    else if (gateNames != null)
+                    {
+                        // Two ticked options sharing one material: name it after both, since the colours
+                        // below reach both of them. Compared name by name — testing whether the JOINED label
+                        // already contained the new one let "Gold Trim" swallow a genuinely separate "Gold".
+                        foreach (var n in gateNames)
+                            if (!byMaterial[at].Names.Contains(n, StringComparer.OrdinalIgnoreCase))
+                                byMaterial[at].Names.Add(n);
+                    }
+
+                    // The pieces carried along are the ones that made this owner a user of THIS material — an
+                    // option binding two materials contributes different pieces to each. They are what the
+                    // caption names, since a piece knows the switch that turned it on and its option may not.
+                    if (!byMaterial[at].Owners.Any(o =>
+                            string.Equals(o.Group, group, StringComparison.OrdinalIgnoreCase)
+                         && string.Equals(o.Option, option, StringComparison.OrdinalIgnoreCase)))
+                        byMaterial[at].Owners.Add(new ContentOwner(group, option,
+                            [.. live.Where(p => p.Materials.Values.Contains(mtrl, StringComparer.OrdinalIgnoreCase))]));
+                }
+        }
+
+        if (byMaterial.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            return;
+        }
+
+        // A pack with one material — the ordinary shape — gets no tab strip at all. A strip of one tab is
+        // furniture around a single grid.
+        if (byMaterial.Count == 1)
+        {
+            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding,
+                selectionStamp, effects);
+            return;
+        }
+
+        using var tabs = ImRaii.TabBar($"##contentTabs_{entry.ModDirectory}");
+        if (!tabs) return;
+
+        foreach (var (mtrl, names, owners) in byMaterial)
+        {
+            // Named after the options that reveal it, falling back to the file name for a material nothing
+            // gates — "mt_c0801e5505_met_a" tells nobody which accessory it is.
+            var label = names.Count > 0 ? string.Join(", ", names) : Path.GetFileNameWithoutExtension(mtrl);
+            using var tab = ImRaii.TabItem($"{label}##content_{mtrl}");
+            if (!tab) continue;
+            DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp, effects);
+        }
+    }
+
+    /// <summary>
+    /// One content material's colour grid, governing every option that shares it.
+    /// <para/>
+    /// The edit fans out to all of them. They share a published material only while their rows AGREE — the
+    /// merge key includes the rows — so writing to one and not the others would quietly spend an extra
+    /// material slot and leave half the pieces the old colour.
+    /// </summary>
+    private void DrawContentMaterial(
+        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding, string selectionStamp,
+        IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
+    {
+        var (leadGroup, leadOption, _) = owners[0];
+
+        // Named by the switch that turned each piece ON, which is not always its option — see ContentLabels.
+        var worn = ContentLabels.For(
+            owners.Select(o => (o.Option, o.Pieces)), Strings.Content.Unconditional);
+        ProteusStyle.DisabledWrapped(string.Format(Strings.Content.SharedByFmt, string.Join(", ", worn)));
+
+        // Which cell the pack's index texture actually samples. Said out loud as well as dimmed, because a
+        // row filter narrows the grid to one row but cannot narrow it to one COLUMN, and picking the wrong
+        // sub-row of the right row fails exactly as silently as picking the wrong row did.
+        //
+        // Every state gets a sentence, and the sentence always matches the grid. Two of these used to share
+        // one branch: a material that could not be opened printed the "no index texture, row 16" line over a
+        // grid with all sixteen rows live, asserting a fact about a file nothing had read and contradicting
+        // itself in the same frame.
+        var idx = ContentIndexFor(entry, mtrl, selectionStamp);
+        switch (idx.State)
+        {
+            case ContentIndexState.NoSampler:
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.NoIndexFmt, DefaultContentRow));
+                break;
+
+            case ContentIndexState.SelectsNothing:
+                ProteusStyle.DisabledWrapped(Strings.Content.IndexEmpty);
+                break;
+
+            case ContentIndexState.Compressed:
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.IndexCompressedFmt,
+                    string.Join(", ", idx.Rows!.OrderBy(r => r)),
+                    idx.SubRow ?? Strings.Content.EitherColumn));
+                break;
+
+            case ContentIndexState.NoColorTable:
+                // Amber, not dimmed: everything below this line is a control with nothing behind it, and
+                // that is worth interrupting for.
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.NoColorTable);
+                ImGui.PopTextWrapPos();
+                break;
+
+            case ContentIndexState.Scanned when idx.Rows is { Count: 1 } && idx.SubRow != null:
+                ProteusStyle.DisabledWrapped(
+                    string.Format(Strings.Content.SamplesFmt, idx.Rows.First(), idx.SubRow));
+                break;
+
+            case ContentIndexState.Scanned:
+                // Several rows, or one row read across both columns. The grid is narrowed just as hard, so
+                // it needs saying just as much — leaving it silent was a screen of greyed rows with the
+                // reason available only to someone who thought to hover one.
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Content.SamplesRowsFmt,
+                    string.Join(", ", idx.Rows!.OrderBy(r => r))));
+                break;
+
+            default:
+                // Said out loud rather than left as an unfiltered grid. Silence here is what makes every row
+                // look live, and colouring one that nothing reads is indistinguishable from the feature
+                // failing. Wrapped: TextColored draws ONE line and lets the window clip it, and this is the
+                // longest string on the panel — see the same trap called out in DrawColorEditor.
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.IndexUnreadable);
+                ImGui.PopTextWrapPos();
+                break;
+        }
+
+        // Where the rows live. Same rule as every other editor here: while a binding is being edited we work
+        // on a COPY and only install it once something actually changes, so merely opening the panel never
+        // creates an override — and the compositor is reading the real one from another thread meanwhile.
+        var stored  = StoredContentRows(entry, leadGroup, leadOption, mtrl);
+        var ovrRows = editingBinding
+            ? designBindings.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
+        var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
+
+        // The glow, on the same copy-while-binding rule as the rows above.
+        var storedGlow = StoredContentGlow(entry, leadGroup, leadOption, mtrl);
+        var ovrGlow = editingBinding
+            ? designBindings.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
+        var glow = (ovrGlow ?? storedGlow).Clone();
+        bool glowing = glow.GlowKey() != null;
+
+        // The glow button targets the published material, which every owner maps to — the same one — so this
+        // is a union of duplicates and comes out as a single entry.
+        var targets = owners
+            .SelectMany(o => compositor.GetShellMaterials(entry.ModDirectory, o.Group, o.Option) ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        bool changed = false;
+        var selKey = entry.ModDirectory + "|" + mtrl;
+        int sel = _rowSelection.GetValueOrDefault(selKey, 0);        // 0 = never chosen; DrawRows lands it
+        ColorTableEditor.DrawRows(selKey, rows, idx.Rows,
+            // A content material is gear-space by construction — it hangs off an accessory. Its shader is
+            // the PACK'S and nothing here infers one, with a single exception: an animated glow rebuilds the
+            // material onto characterscroll, and the grid has to agree — the row emissive is what ARMS the
+            // effect, so it must be reachable, while sphere and metal do nothing on that shader.
+            gear: true,
+            shader: glowing ? RenderModeInference.GlowShader : OverlayDescriptor.DefaultGearShader,
+            targets,
+            skinGlowTargets: null,
+            out _, ref sel, ref changed,
+            // The roughness and metalness in these rows are the PACK author's, grafted through from their
+            // own material — unlike a shell's, which come from a neutral template. Animated glow hides that
+            // block by default; here it must not, or a value that is in the material (the piercings carry
+            // metalness 1.0) has no control at all.
+            authoredPhysical: true,
+            // And the grid shows what the PACK'S material holds for anything the sidecar hasn't overridden,
+            // rather than this editor's neutral defaults — see DrawSubRow.
+            physicalBaseline: idx.Physical);
+        _rowSelection[selKey] = sel;
+
+        // ── animated glow ────────────────────────────────────────────────────
+        // Hidden when there is no colour table: the effect is armed by a row's emissive, so a material with
+        // no rows has no way to switch it on and the picker would be a control with nothing behind it.
+        bool glowChanged = false;
+        if (idx.State != ContentIndexState.NoColorTable)
+        {
+            ImGui.Separator();
+            // Said BEFORE the picker, not after the fact: characterscroll has no base-texture slot, so a
+            // pack that paints its surface loses that painting the moment this is switched on.
+            if (idx.HasDiffuse)
+            {
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour, Strings.Content.GlowDropsDiffuse);
+                ImGui.PopTextWrapPos();
+            }
+            glowChanged = ColorTableEditor.DrawContentGlowFooter(selKey, effects, glow);
+
+            // Picking an effect must be enough to see one, and clearing it must leave nothing behind.
+            //
+            // The row's Glow is what arms the shader — GearMaterialWriter sets the effect-enable field only
+            // on a row that has one — so without arming, a material whose rows are all zero renders exactly
+            // as it did before, with every other part of the setup correct. And without DISARMING, that same
+            // value stays in the rows when the effect goes away: on the pack's own character.shpk it is an
+            // ordinary emissive, so the piece keeps glowing with the animation switched off.
+            if (glowChanged)
+            {
+                var (armRow, armA) = SampledCell(idx, sel);
+                bool wrote = glow.GlowKey() != null
+                    ? ContentGlowRow.Arm(rows, armRow, armA)
+                    : ContentGlowRow.Disarm(rows, armRow, armA);
+                if (wrote) changed = true;
+            }
+
+            // And the standing case, for a cell whose Glow is cleared later — or set on the wrong row.
+            // Names the cell, because "raise Glow somewhere" is exactly the advice that let this go wrong:
+            // the row an older colour edit happened to leave behind is not the row the material reads.
+            if (glow.GlowKey() != null && !SampledCellEmits(rows, idx, sel))
+            {
+                var (needRow, needA) = SampledCell(idx, sel);
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ImportWarnColour,
+                    string.Format(Strings.Content.GlowNeedsEmissiveFmt, needRow, needA ? "A" : "B"));
+                ImGui.PopTextWrapPos();
+            }
+        }
+
+        if (!changed && !glowChanged) return;
+
+        // Written once, against the MATERIAL this tab governs — not fanned out across the options that use
+        // it. Fanning out was what made a pack with one always-on piece share one set of settings between
+        // every tab, and it is no longer needed for the reason it existed: a per-material edit cannot make
+        // two options disagree about a material they share, because there is only one place to disagree.
+        if (!editingBinding)
+        {
+            if (changed) StoreContentRows(entry, mtrl, DesignBindingService.CopyRows(rows));
+            if (glowChanged) StoreContentGlow(entry, mtrl, glow.Clone());
+            discovery.SaveMetadata(entry);
+            InvalidateDefaultsCache(entry);
+            // A content piece is grafted geometry with its own material; it never touches a skin texture,
+            // which is why the fingerprint's whole `content:` block is dropped under skinOnly. So the skin
+            // fingerprint is authoritative here by construction, not just by what happens to be hashed.
+            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+                skinFingerprintAuthoritative: true);
+            return;
+        }
+
+        // A design binding still keys on the option, which is the shape its override was built around. Every
+        // owner gets its own COPY: one list shared between options would serialise identically but ALIAS in
+        // memory, so a later edit to one would silently move the others.
+        foreach (var (group, option, _) in owners)
+        {
+            if (changed)
+                designBindings.SetOverrideRows(
+                    entry.ModDirectory, group, option, DesignBindingService.CopyRows(rows));
+            if (glowChanged)
+                designBindings.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
+                    ?.ApplyScrollFrom(glow);
+        }
+
+        compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+            skinFingerprintAuthoritative: true);   // see above
+    }
+
+    /// <summary>Thin wrappers onto <see cref="ContentGlowRow"/>, which owns the rule — see there for why it
+    /// is not written inline. These only unpack the index scan into the shape it takes.</summary>
+    private static (int Row, bool SubRowA) SampledCell(ContentIndex idx, int selectedRow)
+        => ContentGlowRow.Sampled(idx.Rows, idx.SubRow, selectedRow);
+
+    private static bool SampledCellEmits(List<ColorTableRowPreset> rows, ContentIndex idx, int selectedRow)
+    {
+        var (row, subRowA) = SampledCell(idx, selectedRow);
+        return ContentGlowRow.Emits(rows, row, subRowA);
+    }
+
+    /// <summary>
+    /// The animated glow an option's material carries, as stored in the sidecar — or a fresh empty preset
+    /// when none is set, so the picker has somewhere to put a first choice.
+    /// <para/>
+    /// Deliberately does NOT install that empty preset, on the same rule as <see cref="StoredContentRows"/>:
+    /// drawing a panel must not change the mod.
+    /// </summary>
+    /// <remarks>Keyed by MATERIAL — see <see cref="StoredContentRows"/> for why.</remarks>
+    private static GearSettingsPreset StoredContentGlow(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+        => entry.Metadata.PeekMaterialSettings(materialRel)?.Glow
+        ?? ContentOptionFor(entry, group, option)?.Glow
+        ?? entry.Metadata.ContentGlow
+        ?? new GearSettingsPreset();
+
+    private static void StoreContentGlow(OverlayEntry entry, string materialRel, GearSettingsPreset glow)
+    {
+        // Stored even when it names no effect, and the entry is never dropped. A cleared glow IS a decision:
+        // deleting it instead would fall back through to the older per-option glow, so clearing the effect
+        // would make the pack's previous one reappear on the next composite. A preset with no glow key
+        // publishes the material verbatim, which is what clearing is supposed to mean.
+        entry.Metadata.MaterialSettings(materialRel).Glow = glow;
+    }
+
+    /// <summary>
+    /// How much the panel actually knows about which colour-table cell a content material samples.
+    /// <para/>
+    /// Five states, not a bool, because several of them used to be indistinguishable and the panel said the
+    /// wrong thing about all of them. "The material declares no index texture" and "Proteus could not read
+    /// the material" are opposite facts — the first justifies pinning the grid to one row, the second
+    /// justifies nothing at all — and collapsing them let the caption assert a row it had never looked for
+    /// while the grid underneath it stayed unfiltered, contradicting the sentence above it in the same frame.
+    /// </summary>
+    private enum ContentIndexState
+    {
+        /// <summary>Nothing could be established: the material is missing, unparseable, or its index texture
+        /// could not be found or decoded. Filter nothing and SAY so.</summary>
+        Unknown,
+        /// <summary>The material parsed cleanly and declares no <c>_id</c> sampler.</summary>
+        NoSampler,
+        /// <summary>The material parsed cleanly and carries no colour table at all, so there are no rows to
+        /// select and nothing the grid writes will survive. Its own state: claiming a row here would be as
+        /// baseless as claiming one for a file that was never opened.</summary>
+        NoColorTable,
+        /// <summary>The index texture was read and every texel is fully transparent, so it selects no row at
+        /// all. Read fine — a different fact from Unknown, and a different message.</summary>
+        SelectsNothing,
+        /// <summary>
+        /// Read, and it names a cell — but the texture is stored compressed, so the reading may be a row or
+        /// two out. Filter on it anyway and say the caveat.
+        /// <para/>
+        /// Its red and green are row SELECTORS rather than colour, and a lossy codec can move a value across
+        /// a bucket boundary. Refusing to read one at all was the first attempt and it was too blunt: a flat
+        /// index decodes exactly (one pack's BC7 came back as a clean uniform value on every texel), so that
+        /// threw away a filter that worked. Since the rows it does not name are dimmed and still clickable,
+        /// being wrong here costs a moment rather than access to the row that renders.
+        /// </summary>
+        Compressed,
+        /// <summary>The index texture was read and names rows.</summary>
+        Scanned,
+    }
+
+    /// <summary>
+    /// Which colour-table cell a content material actually samples.
+    /// <para/>
+    /// <paramref name="Rows"/> is 1-based and feeds the grid's availability filter; <paramref name="SubRow"/>
+    /// is "A" or "B" when the index texture is uniform enough to name one. Null Rows = don't filter, which
+    /// is the only honest answer in every state but the two that establish a row set.
+    /// <para/>
+    /// <paramref name="HasDiffuse"/> rides along because the same parse answers it and the panel needs it for
+    /// the glow warning — characterscroll has no base-texture slot, so a pack that paints its surface loses
+    /// that painting when the glow is switched on. Reading the material twice for one bool would be waste.
+    /// </summary>
+    private readonly record struct ContentIndex(
+        HashSet<int>? Rows, string? SubRow, ContentIndexState State, bool HasDiffuse = false,
+        /// <summary>The roughness and metalness the pack's material already holds, per sub-row (0–31), so
+        /// the grid can show those instead of its own neutral defaults. Null when it has no colour table.
+        /// From the same parse as the rest of this.</summary>
+        IReadOnlyList<(float Roughness, float Metalness)>? Physical = null);
+
+    /// <summary>
+    /// The colour-table row a material with NO index texture falls back to.
+    /// <para/>
+    /// The <c>_id</c> sampler is what picks a row per pixel; with none bound there is nothing to pick with
+    /// and the shader takes the last one. Proteus already leans on this elsewhere — a normal-only overlay
+    /// synthesizes its tint from Row 16 for the same reason.
+    /// </summary>
+    private const int DefaultContentRow = 16;
+
+    /// <summary>
+    /// Read a content material's index texture and work out which colour rows it selects, so the grid can
+    /// dim the fifteen that do nothing.
+    /// <para/>
+    /// This is not cosmetic. Without it every row renders as live, and colouring the wrong one looks exactly
+    /// like the feature being broken: the piece does not change, and the glow highlight — which drives the
+    /// same row — does nothing either. A pack whose index points at row 1 is easy to spend an afternoon on.
+    /// <para/>
+    /// Cached per material path: this runs once a frame while the panel is open, and it costs a Penumbra
+    /// resolve plus a texture decode. The cache key carries <paramref name="selectionStamp"/> — the mod's
+    /// live Penumbra selection — because a pack whose index texture IS an option reads a different file the
+    /// moment that selection changes, and Penumbra's own window can change it while this panel is open.
+    /// </summary>
+    private ContentIndex ContentIndexFor(OverlayEntry entry, string mtrlRel, string selectionStamp)
+    {
+        var prefix = entry.ModDirectory + "|" + mtrlRel + "|";
+        var cacheKey = prefix + selectionStamp;
+        if (_contentIndexCache.TryGetValue(cacheKey, out var hit)) return hit;
+
+        // A miss means this material's answer under the OLD selection is now dead weight, so drop it before
+        // adding the new one — one entry per material rather than one per selection ever tried.
+        //
+        // The stamp stays the whole mod's selection, deliberately. Narrowing it to the options that can
+        // redirect THIS material's index would need the material parsed to know which texture it names,
+        // which is the work being cached; and a stale row filter is worse than a re-decode, because it dims
+        // the row that actually renders. So the cost of a checkbox is still one decode per material shown —
+        // what this stops is those decodes' results piling up, one set per combination, until the window
+        // happens to reappear.
+        foreach (var stale in _contentIndexCache.Keys
+                     .Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+            _contentIndexCache.Remove(stale);
+
+        var result = new ContentIndex(null, null, ContentIndexState.Unknown);
+        try
+        {
+            var modRoot = entry.ModRoot;
+            if (modRoot == null)
+                Plugin.Log.Warning("[Proteus] content: no mod folder for {0}, so {1}'s index is unknown",
+                    entry.ModDirectory, mtrlRel);
+            else
+            {
+                var mtrlPath = Path.Combine(modRoot, mtrlRel.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(mtrlPath))
+                    // Logged, not swallowed: this is the case that used to print "ships no index texture,
+                    // takes row 16" about a file nothing had opened.
+                    Plugin.Log.Warning("[Proteus] content: {0} names material {1}, which is not in the mod "
+                                     + "folder — its colour rows cannot be narrowed", entry.ModDirectory, mtrlRel);
+                else
+                {
+                    // The material names its index by GAME path, so Penumbra has to say which file that is
+                    // right now — the pack may well be redirecting it from one of its own options.
+                    var mtrlBytes = File.ReadAllBytes(mtrlPath);
+                    var slots = TextureLoader.ParseMtrlBytes(mtrlBytes);
+                    if (!slots.Parsed)
+                        // The parser is fail-open, so "no index" and "could not walk this file" arrive as the
+                        // same null. Only Parsed separates them, and getting it wrong is expensive: a wrongly
+                        // claimed row filter DISABLES the fifteen others, putting the working row out of reach.
+                        Plugin.Log.Warning("[Proteus] content: could not read material {0} of {1} — its colour "
+                                         + "rows cannot be narrowed", mtrlRel, entry.ModDirectory);
+                    else if (!slots.HasColorTable)
+                        // No rows exist, so no row can be claimed — and PatchColorTable will discard
+                        // whatever the grid writes. Said, not filtered.
+                        result = new ContentIndex(null, null, ContentIndexState.NoColorTable);
+                    else if (string.IsNullOrEmpty(slots.Index))
+                        result = new ContentIndex([DefaultContentRow], "A", ContentIndexState.NoSampler);
+                    else
+                    {
+                        var disk = ResolveContentTexture(entry, modRoot, slots.Index);
+                        if (disk != null && textureLoader.LoadTexAsRgba(disk) is { } tex)
+                        {
+                            result = ScanContentIndex(tex.rgba);
+                            // A compressed index still gets read and still narrows the grid — refusing to
+                            // read one at all threw away a perfectly good answer, since a flat index decodes
+                            // exactly. It is only flagged, because the values are row SELECTORS and a lossy
+                            // codec can move one across a bucket boundary. The rows it doesn't name are
+                            // dimmed rather than disabled, so being wrong here costs a moment, not access.
+                            if (result.State == ContentIndexState.Scanned
+                                && TextureLoader.IsUncompressed(disk) == false)
+                                result = result with { State = ContentIndexState.Compressed };
+                        }
+                        else
+                            Plugin.Log.Warning("[Proteus] content: {0} names index texture {1}, which could not "
+                                             + "be resolved or decoded", entry.ModDirectory, slots.Index);
+                    }
+
+                    // From the SAME parse — see ContentIndex.HasDiffuse. Recorded even on the branches that
+                    // learned nothing about the index, because the glow warning is a separate question and a
+                    // material whose index is unreadable can still have a base texture to lose. The physical
+                    // values ride along for the same reason: the grid needs them whatever the index said.
+                    if (slots.Parsed)
+                        result = result with
+                        {
+                            HasDiffuse = !string.IsNullOrEmpty(slots.Diffuse),
+                            Physical = GearMaterialWriter.ReadPhysical(mtrlBytes),
+                        };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning("[Proteus] could not read the index texture for {0}: {1}", mtrlRel, ex.Message);
+        }
+
+        _contentIndexCache[cacheKey] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// The file behind a texture a content material names, as a disk path.
+    /// <para/>
+    /// The answer must come from INSIDE the pack. A content material is the pack's own and its textures are
+    /// the pack's own, so a resolution landing anywhere else is answering a different question — and it
+    /// answered one here: this pack asks for <c>chara/neolithe/neolithe_piercings_index.tex</c>, a namespace
+    /// its author invented, and the live resolve came back with something whose red channel read as row 16
+    /// while the pack's actual file selects row 1. The grid then dimmed every row but 16, so the one row the
+    /// material reads could not be edited at all.
+    /// <para/>
+    /// Penumbra is still asked first, because it is the only thing that knows which of the pack's options is
+    /// selected — a pack whose index texture IS an option (a colour picker) ships several under one name and
+    /// only the live one is right. Its answer is simply required to be a file within this mod's folder.
+    /// <para/>
+    /// Otherwise: the pack's own folder, matched on file name. Ambiguous for the colour-picker case, but a
+    /// filter derived from a sibling beats none — without one every row reads as live and colouring the
+    /// wrong one looks exactly like a broken feature.
+    /// </summary>
+    private string? ResolveContentTexture(OverlayEntry entry, string modRoot, string gamePath)
+    {
+        var viaPenumbra = penumbra.ResolvePlayer(gamePath);
+        // ResolvePlayer echoes the request back when nothing redirects it, which is not a file.
+        if (viaPenumbra != null
+            && !string.Equals(viaPenumbra, gamePath, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(viaPenumbra))
+        {
+            if (IsUnder(modRoot, viaPenumbra)) return viaPenumbra;
+            Plugin.Log.Debug("[Proteus] content: ignoring \"{0}\" for {1} — outside {2}, so it is not this "
+                           + "pack's own texture", viaPenumbra, gamePath, entry.ModDirectory);
+        }
+
+        try
+        {
+            var leaf = Path.GetFileName(gamePath.Replace('\\', '/'));
+            if (leaf.Length == 0) return null;
+            var hit = Directory.EnumerateFiles(modRoot, leaf, SearchOption.AllDirectories).FirstOrDefault();
+            Plugin.Log.Debug("[Proteus] content: {0} -> {1}", gamePath, hit ?? "(not in the mod folder)");
+            return hit;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Debug("[Proteus] no file for {0} under {1}: {2}", gamePath, entry.ModDirectory, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="root"/>. Compared through
+    /// <see cref="Path.GetRelativePath"/> so <c>..</c> and mixed separators cannot smuggle a path out.</summary>
+    private static bool IsUnder(string root, string path)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(Path.GetFullPath(root), Path.GetFullPath(path));
+            return !Path.IsPathRooted(rel)
+                && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && rel != "..";
+        }
+        catch { return false; }
+    }
+
+    /// <summary>The scan as the panel needs it — a texture whose texels are all fully transparent selects
+    /// nothing, so it filters nothing rather than narrowing the grid to an empty set. That is its OWN state:
+    /// the texture was read perfectly, and reporting it as unreadable would send the user looking for a
+    /// problem in the wrong file.</summary>
+    private static ContentIndex ScanContentIndex(byte[] rgba)
+    {
+        var scan = ContentIndexTexture.Read(rgba);
+        return scan.Rows.Count == 0
+            ? new ContentIndex(null, null, ContentIndexState.SelectsNothing)
+            : new ContentIndex(scan.Rows, scan.SubRow, ContentIndexState.Scanned);
+    }
+
+    /// <summary>
+    /// One option's stake in a shared content material: which option it is, so an edit can be written back
+    /// to it, and which of its pieces are drawn with that material, so the panel can say what it governs.
+    /// <para/>
+    /// <paramref name="Option"/> is null for a piece belonging to no option of the pack's own — those are
+    /// gated through the synthesized piece group instead, and the piece carries that gate.
+    /// </summary>
+    private readonly record struct ContentOwner(
+        string? Group, string? Option, IReadOnlyList<ContentPiece> Pieces);
+
+    /// <summary>
+    /// The sidecar pieces behind one live option — or the unconditional ones when it has no option — with
+    /// anything the piece group is holding switched off removed.
+    /// <para/>
+    /// The gate filter is not optional decoration: it is the same rule
+    /// <see cref="SidecarDiscoveryService.ResolveActiveContent"/> applies, and the panel exists to show what
+    /// is actually being worn. Skipping it would offer a colour grid for a piece the composite is not
+    /// publishing, with a glow button pointing at a material that does not exist.
+    /// </summary>
+    private static IReadOnlyList<ContentPiece> PiecesFor(
+        OverlayEntry entry, string? group, string? option, IReadOnlyList<string>? gateOn)
+    {
+        var pieces = group == null || option == null
+            ? entry.Metadata.Content ?? []
+            : ContentOptionFor(entry, group, option)?.Pieces ?? [];
+        return [.. pieces.Where(p => SidecarDiscoveryService.PieceIsOn(p, gateOn))];
+    }
+
+    /// <summary>
+    /// The rows an option's material is stamped with, as stored in the sidecar — or a fresh empty list when
+    /// the author wrote none, so the editor has somewhere to put a first edit.
+    /// <para/>
+    /// Deliberately does NOT install that empty list. Drawing a panel must not change the mod: the list is
+    /// only written back by <see cref="StoreContentRows"/>, and only once something actually changed.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by MATERIAL, because that is what one of these tabs governs. The per-option values are still
+    /// read as a fallback so packs edited before this keep their colours, but nothing writes there any more:
+    /// a pack holding nine accessories in one always-on model has ONE option and nine materials, so
+    /// per-option storage made every tab read and write the same settings — a glow set on the ear rings and
+    /// the shin laces were already glowing.
+    /// </remarks>
+    private static List<ColorTableRowPreset> StoredContentRows(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+        => entry.Metadata.PeekMaterialSettings(materialRel)?.ColorTableRows
+        ?? ContentOptionFor(entry, group, option)?.ColorTableRows
+        ?? entry.Metadata.ColorTableRows
+        ?? [];
+
+    private static void StoreContentRows(OverlayEntry entry, string materialRel, List<ColorTableRowPreset> rows)
+        => entry.Metadata.MaterialSettings(materialRel).ColorTableRows = rows;
+
+    /// <summary>The sidecar's content option for a (group, option) pair, or null for an unconditional piece
+    /// — or for a name pair the sidecar no longer carries.</summary>
+    private static ContentOption? ContentOptionFor(OverlayEntry entry, string? group, string? option)
+    {
+        if (group == null || option == null) return null;
+        return entry.Metadata.ContentGroups?
+            .FirstOrDefault(g => string.Equals(g.PenumbraGroupName, group, StringComparison.OrdinalIgnoreCase))?
+            .Options.FirstOrDefault(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>One row per pack layer: what it is, and — dimmed — why it won't be imported.</summary>
@@ -1844,7 +3664,10 @@ public class StatusWindow : Window
                     compositor.TriggerRecomposite("penumbra-enable");
                 }
 
-                // Mod name (dimmed when disabled)
+                // Mod name, dimmed when disabled and for no other reason. An applied design binding used to
+                // dim it too, for a mod the binding never captured — but that mod was ON, and a row greyed
+                // out for a state the user never chose reads as "broken" rather than as "not in this
+                // design". Enabled mods composite now, so enabled is the only thing this colour says.
                 ImGui.TableNextColumn();
                 using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
                 {
@@ -2111,8 +3934,18 @@ public class StatusWindow : Window
 
         // Clear per-entry index cache on popup open so option switches are reflected.
         if (ImGui.IsWindowAppearing())
+        {
             foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
                 _indexRowCache.Remove(k);
+            // Same reason, and it needs its own sweep: a content material's scan is keyed by mod directory,
+            // material and selection rather than by sidecar path. The selection is IN the key, so a live
+            // option change already re-reads without this — what this catches is the pack's own files
+            // changing underneath an unchanged selection (a re-import, or an author editing in place).
+            foreach (var k in _contentIndexCache.Keys
+                         .Where(k => k.StartsWith(entry.ModDirectory + "|", StringComparison.OrdinalIgnoreCase))
+                         .ToList())
+                _contentIndexCache.Remove(k);
+        }
 
         // Which body's UV this mod's art is painted in — needed to know where its UV islands are, so the
         // index scan can ignore the dilated bleed outside them.
@@ -2120,6 +3953,25 @@ public class StatusWindow : Window
 
         // Scroll maps a gear overlay can pick from: the mod's own Effects/ folder, then the user's.
         var effects = discovery.ResolveAvailableEffects(entry, discovery.EffectsLibraryPath());
+
+        // ── content packs: the pack's OWN material, one tab per selected option ────
+        // Drawn first and separately from the overlay paths below, because a content option has no overlay
+        // descriptor at all — no art, no coverage, no index texture of ours. Its colours go into the
+        // material the PACK ships, so the only control that means anything is the colour grid itself.
+        if (entry.Metadata is { HasContent: true })
+        {
+            DrawContentColorEditor(entry, editingBinding, effects);
+            // A pack may ship geometry AND overlays; only a pure content pack is finished here.
+            if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
+            {
+                ImGui.Separator();
+                if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##content_{entry.ModDirectory}",
+                        ImGuiTreeNodeFlags.NoTreePushOnOpen))
+                    DrawBodiesAdvanced(entry);
+                return;
+            }
+            ImGui.Separator();
+        }
 
         // ── simple-mod path (top-level Overlays, no OptionGroups) ────────────
         if (entry.Metadata.OptionGroups is not { Count: > 0 })
@@ -2167,7 +4019,7 @@ public class StatusWindow : Window
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
 
             bool changedSimple = false;
-            int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 1);
+            int selSimple = _rowSelection.GetValueOrDefault(entry.ModDirectory, 0);
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
                 compositor.GetShellMaterials(entry.ModDirectory, null, null),
                 compositor.GetSkinGlowTargets(entry.ModDirectory, null, null),
@@ -2178,10 +4030,12 @@ public class StatusWindow : Window
             ImGui.Separator();
             bool resetSimple = false;
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
-                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple,
+                entry.ModDirectory, entry.ModDirectory, simpleOverlays, gearOvrSimple, effects,
+                out var footerEditSimple,
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
                 resetDisabledReason: ResetBlockedReason(entry),
-                drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
+                drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                editingBinding: editingBinding);
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -2214,7 +4068,10 @@ public class StatusWindow : Window
                 if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
-                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+                // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
+                // that DOES move a skin texel still shows up in the skin fingerprint and rebuilds.
+                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+                    skinFingerprintAuthoritative: true);
             }
             return;
         }
@@ -2228,13 +4085,27 @@ public class StatusWindow : Window
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
-            List<string>? selected = null;
-            settings?.Options.TryGetValue(group.PenumbraGroupName, out selected);
+            // Matched case-insensitively, like SidecarDiscoveryService.ResolveActiveOverlays: the dictionary
+            // comes from Penumbra's IPC and we don't control its comparer, and a missed key here would read
+            // as "nothing selected".
+            List<string>? selected = settings.HasValue
+                ? settings.Value.Options
+                    .FirstOrDefault(kv => string.Equals(kv.Key, group.PenumbraGroupName, StringComparison.OrdinalIgnoreCase))
+                    .Value
+                : null;
 
-            IEnumerable<OverlayOption> active = (selected is { Count: > 0 })
-                ? group.Options.Where(o => selected.Any(s =>
-                      string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)))
-                : [group.Options[0]];
+            // A group with NOTHING selected contributes nothing — the composite path (ResolveActiveOverlays)
+            // skips it outright, so falling back to Options[0] here put a tab and a colorset on screen for an
+            // option whose texture is never painted. Only when Penumbra can't be asked at all (no collection,
+            // IPC down) do we preview the group's first option, so the editor isn't blank while it's away.
+            IEnumerable<OverlayOption> active;
+            if (selected is { Count: > 0 })
+                active = group.Options.Where(o => selected.Any(s =>
+                    string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)));
+            else if (settings.HasValue)
+                continue;
+            else
+                active = [group.Options[0]];
 
             // Display (and thus stack) order within the group follows the user's saved order, top-first.
             // Stable, so options the user hasn't reordered keep their natural order.
@@ -2271,8 +4142,7 @@ public class StatusWindow : Window
         // order while the composite ranked them by Penumbra group number, so the "leftmost = on top"
         // label could be a lie whenever two groups were active.
         {
-            var modRoot = Path.GetDirectoryName(
-                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var modRoot = entry.ModRoot;
             if (!_groupOrderCache.TryGetValue(entry.ModDirectory, out var gOrder))
             {
                 gOrder = modRoot != null
@@ -2496,7 +4366,7 @@ public class StatusWindow : Window
                 ? DesignBindingService.CopyRows(storedMaskRows ?? baseMaskRows)
                 : baseMaskRows;
             var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
-            int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 1);
+            int maskSel   = _rowSelection.GetValueOrDefault(maskScope, 0);
             bool maskChanged = false;
 
             // When the mod has any gear layer, the mask is FORCED to a top Cloth shell (it stacks over gear),
@@ -2570,9 +4440,15 @@ public class StatusWindow : Window
             {
                 // Same footer as the overlay tabs: the "Rendering as" badge + Advanced force-mode radios +
                 // glow-effect picker. No per-option reset (the mask has no defaults cache) → onReset null.
-                maskFooterChanged = ColorTableEditor.DrawGlowFooter(maskScope, [maskDesc], maskGearOvr, effects,
+                maskFooterChanged = ColorTableEditor.DrawGlowFooter(
+                    maskScope, entry.ModDirectory, [maskDesc], maskGearOvr, effects,
                     out var maskFooterEdit, onReset: null,
-                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
+                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                    // Nothing reads MaskDescriptor.SkinToneMask — the mask paints into the diffuse in its
+                    // own pass, and a promoted mask gets a shell descriptor built from scratch — so the
+                    // slider would be a control that saves and does nothing.
+                    skinTintApplies: false,
+                    editingBinding: editingBinding);
                 maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
                     maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
                 ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
@@ -2596,7 +4472,10 @@ public class StatusWindow : Window
                     InvalidateDefaultsCache(entry);
                 }
                 if (maskFooterChanged || maskModeChanged) compositor.TriggerRecomposite("mask-mode-change");
-                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs);
+                // Rows only: hashed at BuildCompositeFingerprint's `maskrow:` block, so the skin-reuse gate
+                // can be trusted with this one and a mask that lives on a shell costs no skin re-blend.
+                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs,
+                    skinFingerprintAuthoritative: true);
             }
             return;
         }
@@ -2655,7 +4534,7 @@ public class StatusWindow : Window
         }
 
         bool changed = false;
-        int sel = _rowSelection.GetValueOrDefault(scope, 1);
+        int sel = _rowSelection.GetValueOrDefault(scope, 0);
 
         var skinGlowTargets = compositor.GetSkinGlowTargets(entry.ModDirectory, groupName, activeOpt.Name);
         var shellMaterials  = compositor.GetShellMaterials(entry.ModDirectory, groupName, activeOpt.Name);
@@ -2691,12 +4570,14 @@ public class StatusWindow : Window
         // Glow effect + Advanced live at the very bottom, below the rows.
         ImGui.Separator();
         bool resetOpt = false;
-        bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
+        bool footerChanged = ColorTableEditor.DrawGlowFooter(
+            scope, entry.ModDirectory, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             promotedToGear: promotedToGear,
-            noShellReason: noShellReason);
+            noShellReason: noShellReason,
+            editingBinding: editingBinding);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).
@@ -2728,7 +4609,9 @@ public class StatusWindow : Window
             if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
-            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs);
+            // Rows only — see the simple-mod path above.
+            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+                skinFingerprintAuthoritative: true);
         }
     }
 
@@ -2776,8 +4659,10 @@ public class StatusWindow : Window
     /// <summary>
     /// After the header + rows are drawn, point Layer/Shader at the mode the features imply — a sphere map
     /// or metal ⇒ Cloth, a glow effect ⇒ Animated glow, nothing special ⇒ Skin — unless the user pinned it
-    /// in Advanced (<see cref="OverlayDescriptor.ManualShaderLock"/>). Writes the override when a design
-    /// binding is being edited, else the descriptors. Returns true when the mode actually changed.
+    /// in Advanced (<see cref="OverlayDescriptor.ManualShaderLock"/>). The one thing that outranks the pin is
+    /// a selected glow effect, which forces Animated glow and releases the pin — see the comment below for
+    /// why a pinned Cloth over an effect renders nothing at all. Writes the override when a design binding is
+    /// being edited, else the descriptors. Returns true when the mode actually changed.
     /// </summary>
     private static bool ReconcileMode(IReadOnlyList<OverlayDescriptor> overlays, GearSettingsPreset? ovr,
         List<ColorTableRowPreset> rows, FeatureEdit edited, bool canShell = true)
@@ -2787,10 +4672,44 @@ public class StatusWindow : Window
         if (edited == FeatureEdit.Neutral) return false;
         if (overlays.Count == 0) return false;
         bool locked = ovr != null ? (ovr.ManualShaderLock ?? false) : overlays.Any(d => d.ManualShaderLock);
-        if (locked) return false;
 
         var cur  = RenderModeInference.ModeOf(ovr?.Layer ?? overlays[0].Layer,
                                               ovr != null ? ovr.Shader : overlays[0].Shader);
+
+        // A chosen glow effect OUTRANKS the pin, and releases it.
+        //
+        // characterscroll.shpk is the only shader that emits: GearMaterialWriter.PatchColorTable arms the
+        // effect-enable field (23) — the master switch, without which nothing renders however right the rest
+        // is — solely under `isScroll`. So a pin holding Cloth (or Skin) over a selected effect does not
+        // render a subdued glow, it renders NONE, while the editor keeps the Glow slider and the effect
+        // thumbnail live and looking applied. That is the "I set Glow and the mask stays dark" report.
+        //
+        // Picking an effect is an unambiguous request to glow, so it wins. The pin is CLEARED rather than
+        // carried onto Glow: the effect is now what decides the mode, and a pin left behind would strand the
+        // option on characterscroll with no scroll map the moment the effect is cleared again.
+        //
+        // Narrow on purpose. THIS EDIT must be the effect pick — FeatureEdit.Glow, which only the effect
+        // picker raises (ColorTableEditor's DrawEffectPicker branch). Testing merely that a scroll IS
+        // assigned was wrong and destructive: "pinned Cloth with an effect still assigned" is a deliberate
+        // state (pick an effect, then force Cloth in Advanced — ApplyMode never clears Scroll), and any
+        // later Cloth edit on such an overlay — a sphere-map nudge, which reports FeatureEdit.Cloth —
+        // would flip it to Glow, whereupon the caller's ApplyGlowTransition rewrites EVERY row to 150%
+        // white and SaveMetadata persists it, with no undo.
+        //
+        // The Glow SLIDER deliberately reports FeatureEdit.Cloth outside Glow mode, so it doesn't trip
+        // this — correct, since raising Glow without choosing an effect still cannot make anything emit.
+        //
+        // A pin with no effect selected also still holds, so Advanced's force-mode radios keep working,
+        // and a pin that ALREADY reads as Glow is left alone.
+        if (locked)
+        {
+            if (edited != FeatureEdit.Glow || !canShell || cur == RenderMode.Glow
+                || !RenderModeInference.HasGlow(overlays, ovr))
+                return false;
+            ColorTableEditor.ApplyMode(overlays, ovr, RenderMode.Glow);
+            ColorTableEditor.SetManualShaderLock(overlays, ovr, false);
+            return true;
+        }
 
         // Leaving Animated glow (the effect was just cleared): drop the Glow those rows carry BEFORE
         // inferring. ApplyGlowTransition zeroes it, but only after this runs — and since Glow now counts
@@ -2833,7 +4752,8 @@ public class StatusWindow : Window
     /// mode didn't cross the Glow boundary — so swapping one effect for another keeps the user's tuning.</summary>
     private static void ApplyGlowTransition(List<ColorTableRowPreset> rows, RenderMode before, RenderMode after)
     {
-        if (before != RenderMode.Glow && after == RenderMode.Glow) SetRowsEmissive(rows, 1.5f, "#FFFFFF");
+        if (before != RenderMode.Glow && after == RenderMode.Glow)
+            SetRowsEmissive(rows, RenderModeInference.GlowEmissive, RenderModeInference.GlowEmissiveColour);
         else if (before == RenderMode.Glow && after != RenderMode.Glow) SetRowsEmissive(rows, 0f);
     }
 

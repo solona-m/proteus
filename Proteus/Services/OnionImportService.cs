@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -434,7 +433,10 @@ public sealed class OnionImportService
             if (layouts.Count > 1 && preview.DefaultLayout != null)
             {
                 var sel = penumbra.SetModOption(collId.Value, dirName, LayoutGroupName, [preview.DefaultLayout]);
-                if (sel != PenumbraApiEc.Success)
+                // NothingChanged counts as success: the group is written with this layout already selected,
+                // so a collection seeing the mod for the first time is ALREADY in the asked-for state and
+                // Penumbra says so. Reading that as a failure sends the user to fix a correct selection.
+                if (sel is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
                 {
                     selectionFailed = true;
                     log.Warning("[Proteus] imported {0}: selecting {1}/{2} -> {3}",
@@ -559,11 +561,7 @@ public sealed class OnionImportService
             metadata.Overlays = byLayout[0].Overlays;
         }
 
-        var metaJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        });
+        var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
         // AtomicWrite, not File.WriteAllText: this descriptor is the one file here nothing can rebuild —
         // material paths, body type, shader, colour rows — and the import goes straight on to unpacking
         // textures, so the window where a truncated copy could be left behind is a busy one.

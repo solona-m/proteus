@@ -15,6 +15,15 @@ public sealed class GearColorRow
     public (float R, float G, float B)? Specular { get; init; }
 
     /// <summary>
+    /// The Glow dial as the user set it, before it was multiplied into <see cref="Emissive"/>.
+    /// <para/>
+    /// Kept separately because characterscroll needs the NUMBER, not the colour it produced: there the dial
+    /// is the scrolling effect's strength and the emissive is only a gate, so the composed colour cannot
+    /// stand in for it. Null on a row whose glow was never set.
+    /// </summary>
+    public float? EmissiveStrength { get; init; }
+
+    /// <summary>
     /// Slice of the shared array chara/common/texture/sphere_d_array.tex. Needs no material texture.
     /// Both this and <see cref="SphereMapMask"/> must be set — an index with a zero mask does nothing.
     /// </summary>
@@ -303,41 +312,152 @@ public static class GearMaterialWriter
             }
         }
 
-        if (rows is { Count: > 0 })
+        return PatchColorTable(r, rows, linearizeDiffuse, isScroll);
+    }
+
+    /// <summary>
+    /// Overwrite colour table rows in an EXISTING material, in place and nothing else — no texture table,
+    /// no string block, no shader section. <paramref name="rows"/> is keyed by 0-based row; absent rows and
+    /// null fields keep whatever the material already holds.
+    /// <para/>
+    /// This is how an imported content pack's own .mtrl is coloured: it already names its own textures and
+    /// shader, and rebuilding it through <see cref="Build"/> would demand a template with a matching texture
+    /// count and throw away everything the author set. It is also the row writer <see cref="Build"/> itself
+    /// uses, so shells and content packs can never drift apart on what a row means.
+    /// <para/>
+    /// The colour table's position is read from the material's OWN header, which is why this works on any
+    /// material rather than only on a freshly built one. No-ops (returning the input unchanged) when the
+    /// material declares no colour set, or when its data set is too small to hold a Dawntrail 32×64 table —
+    /// a legacy 16-row material would otherwise be shredded by rows written at Dawntrail offsets.
+    /// </summary>
+    /// <summary>
+    /// Copy <paramref name="src"/>'s whole 32×64 colour table into <paramref name="dst"/>, each table
+    /// located from its OWN header — the same computation <see cref="PatchColorTable"/> does, which is why
+    /// this works between two materials of different shaders and different texture counts.
+    /// <para/>
+    /// This is what lets an imported content pack keep its look when Proteus rebuilds its material onto
+    /// <c>characterscroll.shpk</c> for an animated glow. <see cref="Build"/> clones a VANILLA template, so
+    /// without this a glowing piercing would silently take e6257's colour table: the author's silver, its
+    /// metalness and its roughness gone, and e6257's own non-zero emissives inherited in their place.
+    /// <para/>
+    /// Grafted AFTER Build deliberately, so the author's tile alpha survives too — Build zeroes it because
+    /// a second skin is skin and the weave shows, and a content piece is not skin.
+    /// <para/>
+    /// Returns the input unchanged when either material lacks a Dawntrail table, on the same reasoning as
+    /// <see cref="PatchColorTable"/>: a legacy 16-row layout read at these offsets is shredded, not copied.
+    /// </summary>
+    /// <summary>
+    /// The roughness and metalness already in a material's colour table, one entry per sub-row (0–31), or
+    /// null when it carries no Dawntrail table.
+    /// <para/>
+    /// For the editor, so a panel over an imported pack's OWN material shows the values that material
+    /// actually holds. Its grid otherwise falls back to 0 and 0.5 for anything the sidecar has not
+    /// overridden — honest for a shell, whose material Proteus builds from a neutral template, and a lie
+    /// for a content pack: the piercings arrive at metalness 1.0 while the panel reads 0, so the surface
+    /// renders metallic and the control that should fix it looks like it already is.
+    /// </summary>
+    public static IReadOnlyList<(float Roughness, float Metalness)>? ReadPhysical(byte[] mtrl)
+    {
+        int at = ColorTableStart(mtrl);
+        if (at < 0) return null;
+
+        var rows = new (float, float)[RowCount];
+        for (int i = 0; i < RowCount; i++)
         {
-            int csStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
-            foreach (var (row, def) in rows)
+            int b = at + i * RowBytes;
+            rows[i] = ((float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(mtrl, b + HRoughness * 2)),
+                       (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(mtrl, b + HMetalness * 2)));
+        }
+        return rows;
+    }
+
+    public static byte[] CopyColorTable(byte[] dst, byte[] src)
+    {
+        int dstAt = ColorTableStart(dst), srcAt = ColorTableStart(src);
+        if (dstAt < 0 || srcAt < 0) return dst;
+
+        var r = (byte[])dst.Clone();
+        Buffer.BlockCopy(src, srcAt, r, dstAt, RowCount * RowBytes);
+        return r;
+    }
+
+    /// <summary>
+    /// Byte offset of a material's Dawntrail colour table, or -1 when it has none the writer may touch.
+    /// <para/>
+    /// The offset is read from the material's own header rather than assumed, which is the whole reason the
+    /// row writer works on a pack's authored material as well as on a freshly built one.
+    /// </summary>
+    /// <summary>
+    /// Byte offset of the colour table, or -1 when this material has none that can be written.
+    /// <para/>
+    /// Internal rather than private because the colour PANEL has to ask the same question, and asking it a
+    /// second way was a bug: it tested the DECLARED data-set size out of the header while this tests the
+    /// offset against the actual buffer. A material whose header promises a full table but whose file is
+    /// short passed there and fails here, so the grid drew live, took edits, and
+    /// <see cref="PatchColorTable"/> returned the material untouched with nothing on screen saying why.
+    /// </summary>
+    internal static int ColorTableStart(byte[] mtrl)
+    {
+        if (mtrl.Length < 16) return -1;
+        byte texCount = mtrl[12], uvCount = mtrl[13], colorSetCount = mtrl[14], addDataSize = mtrl[15];
+        if (colorSetCount == 0) return -1;
+
+        ushort strTableSize = BitConverter.ToUInt16(mtrl, 8);
+        int at = 16 + texCount * 4 + uvCount * 4 + colorSetCount * 4 + strTableSize + addDataSize;
+        return at < 0 || at + RowCount * RowBytes > mtrl.Length ? -1 : at;
+    }
+
+    public static byte[] PatchColorTable(
+        byte[] mtrl, IReadOnlyDictionary<int, GearColorRow>? rows,
+        bool linearizeDiffuse = false, bool isScroll = false)
+    {
+        if (rows is not { Count: > 0 }) return mtrl;
+
+        int csStart = ColorTableStart(mtrl);
+        if (csStart < 0) return mtrl;
+
+        var r = (byte[])mtrl.Clone();
+        foreach (var (row, def) in rows)
+        {
+            if (row < 0 || row >= RowCount) continue;
+            int b = csStart + row * RowBytes;
+            void WH(int half, float v) => BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)v)).CopyTo(r, b + half * 2);
+
+            if (def.Diffuse is { } d)
             {
-                if (row < 0 || row >= RowCount) continue;
-                int b = csStart + row * RowBytes;
-                void WH(int half, float v) => BitConverter.GetBytes(BitConverter.HalfToUInt16Bits((Half)v)).CopyTo(r, b + half * 2);
+                float dr = linearizeDiffuse ? SrgbToLinear(d.R) : d.R;
+                float dg = linearizeDiffuse ? SrgbToLinear(d.G) : d.G;
+                float db = linearizeDiffuse ? SrgbToLinear(d.B) : d.B;
+                WH(HDiffuse, dr); WH(HDiffuse + 1, dg); WH(HDiffuse + 2, db);
+            }
+            if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
+            if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
+            if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
+            if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
+            if (def.Roughness is { } ro) WH(HRoughness, ro);
+            if (def.Metalness is { } me) WH(HMetalness, me);
 
-                if (def.Diffuse is { } d)
-                {
-                    float dr = linearizeDiffuse ? SrgbToLinear(d.R) : d.R;
-                    float dg = linearizeDiffuse ? SrgbToLinear(d.G) : d.G;
-                    float db = linearizeDiffuse ? SrgbToLinear(d.B) : d.B;
-                    WH(HDiffuse, dr); WH(HDiffuse + 1, dg); WH(HDiffuse + 2, db);
-                }
-                if (def.Emissive is { } e) { WH(HEmissive, e.R); WH(HEmissive + 1, e.G); WH(HEmissive + 2, e.B); }
-                if (def.Specular is { } sp) { WH(HSpecular, sp.R); WH(HSpecular + 1, sp.G); WH(HSpecular + 2, sp.B); }
-                if (def.SphereMapIndex is { } si) WH(HSphereIndex, si);
-                if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
-                if (def.Roughness is { } ro) WH(HRoughness, ro);
-                if (def.Metalness is { } me) WH(HMetalness, me);
-
-                // Arm the scrolling effect on rows that actually glow. Field 23 is the master switch —
-                // without it nothing renders — and sphere-map opacity doubles as the effect's visibility.
-                // SphereIntensity is a Cloth concept that has no meaning on a glow row, so only a POSITIVE
-                // value overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
-                if (isScroll && def.Emissive is { } em && (em.R > 0 || em.G > 0 || em.B > 0))
-                {
-                    WH(HEffectEnable, 1f);
-                    WH(HSphereMask, def.SphereMapMask is { } vis && vis > 0f ? vis : 1f);
-                }
+            // ── the scrolling effect ─────────────────────────────────────────
+            // Arm it on rows that actually glow. Field 23 is the master switch — without it nothing renders
+            // however right the rest is — and sphere-map opacity doubles as the effect's visibility.
+            // SphereIntensity is a Cloth concept with no meaning on a glow row, so only a POSITIVE value
+            // overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
+            //
+            // The row EMISSIVE is left exactly as written above, because on this shader it is what the
+            // effect's brightness scales with. That was measured, not assumed, and the wrong guess cost two
+            // rounds: pinning the emissive to a small gate and sending the dial to field 21 instead left the
+            // effect barely visible with visibility already at 1.0, which is what proves field 21 is not the
+            // brightness. A dial at full does not add white either — a saturated orange scroll map simply
+            // blows out to white at that intensity, so the fix for "it looks white" is a lower dial.
+            //
+            // The DIAL is the condition rather than the composed colour: a glow whose colour is genuinely
+            // black is still a glow the user asked for, and the two differ once a colour is picked.
+            if (isScroll && def.EmissiveStrength is { } strength && strength > 0f)
+            {
+                WH(HEffectEnable, 1f);
+                WH(HSphereMask, def.SphereMapMask is { } vis && vis > 0f ? vis : 1f);
             }
         }
-
         return r;
     }
 }

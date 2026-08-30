@@ -14,8 +14,11 @@ namespace Proteus.Gui;
 /// </summary>
 internal static class BrandHeader
 {
-    /// <summary>Unscaled band height. Tall enough for the Jupiter wordmark plus a caption under it.</summary>
-    private const float Height = 46f;
+    /// <summary>
+    /// Unscaled band height. Tall enough for the Jupiter wordmark plus the capability row under it — 46
+    /// before that row existed, when the second line was a one-phrase caption set in the body font.
+    /// </summary>
+    private const float Height = 60f;
 
     /// <summary>
     /// The band art, cropped offline from the middle of the square logo where the yellow→red sweep is

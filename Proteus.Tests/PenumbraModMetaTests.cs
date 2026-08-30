@@ -194,6 +194,45 @@ public class PenumbraModMetaTests
         Assert.Null(PenumbraModMeta.TryReadDefaultData(tmp.Path));
     }
 
+    // Penumbra writes non-ASCII names as themselves (it serializes with Newtonsoft); System.Text.Json's
+    // default encoder escapes them. Since Proteus REWRITES Penumbra's own files, the default would turn a
+    // mod's 正常 into "正常" in its manifest — valid JSON, unreadable to its author. These
+    // assert on the raw text on purpose: JsonDocument decodes both forms identically, so parsing the
+    // result back could never catch a regression here.
+
+    [Fact]
+    public void NewMetaJson_writes_non_ascii_names_as_themselves()
+    {
+        var json = PenumbraModMeta.NewMetaJson("彩绘比基尼", "ttrrffxiv", "Ярко");
+        Assert.Contains("\"Name\": \"彩绘比基尼\"", json);
+        Assert.Contains("Ярко", json);
+        Assert.DoesNotContain("\\u", json);
+    }
+
+    [Fact]
+    public void WriteSingleSelectGroup_writes_non_ascii_names_as_themselves_in_both_formats()
+    {
+        foreach (var fileVersion in new[] { 3, 4 })
+        {
+            using var tmp = new TempDir();
+            File.WriteAllText(tmp.File("meta.json"),
+                $$"""{"FileVersion":{{fileVersion}},"Name":"彩绘比基尼"}""");
+
+            PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Style", ["正常", "光沢"], 0);
+
+            // v4 splices into meta.json; v3 leaves it alone and drops a group_NNN_ file beside it.
+            var written = File.ReadAllText(fileVersion >= 4
+                ? tmp.File("meta.json")
+                : Directory.EnumerateFiles(tmp.Path, "group_*.json").Single());
+            Assert.Contains("正常", written);
+            Assert.DoesNotContain("\\u", written);
+
+            // The v4 rewrite copies untouched fields through as JsonElements, which are re-escaped by the
+            // WRITER's encoder — so the mod's own name is only safe if that writer was configured too.
+            if (fileVersion >= 4) Assert.Contains("彩绘比基尼", File.ReadAllText(tmp.File("meta.json")));
+        }
+    }
+
     [Fact]
     public void AtomicWrite_leaves_no_temp_files_behind()
     {
@@ -397,5 +436,173 @@ public class PenumbraModMetaTests
         using var tmp = new TempDir();
         PenumbraModMeta.CleanLegacyFiles(tmp.Path);   // must not throw on a mod with no Proteus/ subdir
         Assert.Empty(Directory.EnumerateFiles(tmp.Path));
+    }
+
+    // ── PublishesGameContent ────────────────────────────────────────────────
+    //
+    // A design binding switches unbound overlay mods off in Penumbra. It must not do that to a mod that
+    // also ships its own content, or the author's gear goes off with the overlays and stays off across a
+    // reboot. These pin which side of that line each folder shape falls on.
+
+    [Fact]
+    public void PublishesGameContent_is_false_for_an_overlay_only_v4_pack()
+    {
+        using var tmp = new TempDir();
+        // The self-swap several overlay packs carry so Penumbra doesn't see an empty mod: it redirects
+        // nothing, so it must not read as content.
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Pack",
+             "DefaultData":{"Files":{},"FileSwaps":{"chara/a.mtrl":"chara/a.mtrl"},"Manipulations":[]},
+             "Groups":[{"Type":"Multi","Name":"Patterns","Options":[{"Name":"Lace"},{"Name":"Dots"}]}]}
+            """);
+
+        Assert.False(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_files_in_a_v4_group_option()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Dress",
+             "Groups":[{"Type":"Multi","Name":"Items","Options":[
+                {"Name":"Dress","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"items/top.mdl"}}]}]}
+            """);
+
+        Assert.True(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_manipulations_and_real_swaps_and_imc_groups()
+    {
+        using var manips = new TempDir();
+        File.WriteAllText(manips.File("meta.json"),
+            """{"FileVersion":4,"DefaultData":{"Manipulations":[{"Type":"Eqdp"}]}}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(manips.Path));
+
+        using var swap = new TempDir();
+        File.WriteAllText(swap.File("meta.json"),
+            """{"FileVersion":4,"DefaultData":{"FileSwaps":{"chara/a.mtrl":"chara/b.mtrl"}}}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(swap.Path));
+
+        // An IMC group edits the game by existing — its options carry an attribute mask, not files.
+        using var imc = new TempDir();
+        File.WriteAllText(imc.File("meta.json"),
+            """{"FileVersion":4,"Groups":[{"Type":"Imc","Name":"Parts","Options":[{"Name":"A"}]}]}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(imc.Path));
+    }
+
+    [Fact]
+    public void ReadAllRedirects_finds_files_in_default_data_and_every_group_option()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Dress",
+             "DefaultData":{"Files":{"chara/equipment/e6238/model/c0201e6238_dwn.mdl":"base/dwn.mdl"}},
+             "Groups":[{"Type":"Multi","Name":"Items","Options":[
+                {"Name":"Long","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"long/top.mdl"}},
+                {"Name":"Short","Files":{"chara/equipment/e6238/model/c0201e6238_top.mdl":"short/top.mdl"}}]}]}
+            """);
+
+        var found = PenumbraModMeta.ReadAllRedirects(tmp.Path);
+
+        Assert.Equal(3, found.Count);
+        Assert.Contains(found, r => r.File == "base/dwn.mdl" && r.Source == "");
+        Assert.Contains(found, r => r.File == "long/top.mdl" && r.Source == "Items / Long");
+        // Two options claiming ONE game path is the normal shape of a mod with variants, and an edit that
+        // has to reach the geometry has to reach both files — so neither may be deduplicated away.
+        Assert.Equal(2, found.Count(r => r.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// Declaration order is preserved, and the Toggles tab depends on it: once a model row is labelled by
+    /// the option that supplies it, the author's order IS the meaningful one — sizes do not sort
+    /// alphabetically into size order.
+    /// </summary>
+    [Fact]
+    public void ReadAllRedirects_keeps_the_manifest_order()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Trousers",
+             "Groups":[{"Type":"Single","Name":"Pant Size","Options":[
+                {"Name":"Small","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"s/dwn.mdl"}},
+                {"Name":"Medium","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"m/dwn.mdl"}},
+                {"Name":"Large","Files":{"chara/equipment/e0488/model/c0201e0488_dwn.mdl":"l/dwn.mdl"}}]}]}
+            """);
+
+        Assert.Equal(
+            ["Pant Size / Small", "Pant Size / Medium", "Pant Size / Large"],
+            PenumbraModMeta.ReadAllRedirects(tmp.Path).Select(r => r.Source));
+    }
+
+    [Fact]
+    public void ReadAllRedirects_reads_the_v3_layout_and_Combining_containers()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Pack"}""");
+        File.WriteAllText(tmp.File("default_mod.json"),
+            """{"Files":{"chara/equipment/e0043/model/c0201e0043_top.mdl":"base/top.mdl"}}""");
+        File.WriteAllText(tmp.File("group_001_sizes.json"), """
+            {"Name":"Sizes","Type":"Combining","Options":[{"Name":"Large"}],
+             "Containers":[{},{"Files":{"chara/equipment/e0043/model/c0201e0043_dwn.mdl":"large/dwn.mdl"}}]}
+            """);
+
+        var found = PenumbraModMeta.ReadAllRedirects(tmp.Path);
+
+        Assert.Contains(found, r => r.File == "base/top.mdl" && r.Source == "");
+        Assert.Contains(found, r => r.File == "large/dwn.mdl" && r.Source == "Sizes / #2");
+    }
+
+    [Fact]
+    public void ReadAllRedirects_on_an_unreadable_mod_is_empty_not_a_throw()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), "{ this is not json");
+        Assert.Empty(PenumbraModMeta.ReadAllRedirects(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_sees_a_Combining_groups_containers()
+    {
+        using var tmp = new TempDir();
+        // A Combining group's options are bare flag labels; every redirect lives in Containers, one per
+        // combination. Reading only Options would call a physics/body pack an empty overlay pack.
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Physics",
+             "Groups":[{"Type":"Combining","Name":"Sizes",
+                "Options":[{"Name":"Large"}],
+                "Containers":[{},{"Files":{"chara/human/c0201/skeleton/base/b0001/phy_c0201b0001.phyb":"large/phy.phyb"}}]}]}
+            """);
+
+        Assert.True(PenumbraModMeta.PublishesGameContent(tmp.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_reads_the_v3_layout_too()
+    {
+        using var bare = new TempDir();
+        File.WriteAllText(bare.File("meta.json"), """{"FileVersion":3,"Name":"Pack"}""");
+        File.WriteAllText(bare.File("default_mod.json"), """{"Files":{},"Manipulations":[]}""");
+        File.WriteAllText(bare.File("group_001_patterns.json"),
+            """{"Name":"Patterns","Type":"Multi","Options":[{"Name":"Lace","Files":{}}]}""");
+        Assert.False(PenumbraModMeta.PublishesGameContent(bare.Path));
+
+        // Same folder, one group option that actually redirects something.
+        File.WriteAllText(bare.File("group_002_items.json"),
+            """{"Name":"Items","Type":"Multi","Options":[{"Name":"Dress","Files":{"chara/a.mdl":"a.mdl"}}]}""");
+        Assert.True(PenumbraModMeta.PublishesGameContent(bare.Path));
+    }
+
+    [Fact]
+    public void PublishesGameContent_says_content_when_the_manifest_cannot_be_read()
+    {
+        // A false is what justifies disabling the mod, so an unreadable folder must never produce one.
+        using var missing = new TempDir();
+        Assert.True(PenumbraModMeta.PublishesGameContent(missing.Path));
+
+        using var corrupt = new TempDir();
+        File.WriteAllText(corrupt.File("meta.json"), "{ not json");
+        Assert.True(PenumbraModMeta.PublishesGameContent(corrupt.Path));
     }
 }

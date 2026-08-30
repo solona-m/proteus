@@ -1,6 +1,22 @@
 {
+  "Band.Cap.Bind": {
+    "message": "Alles an ein Design binden",
+    "description": ""
+  },
+  "Band.Cap.Overlay": {
+    "message": "Alles überlagern & umfärben",
+    "description": ""
+  },
+  "Band.Cap.Toggle": {
+    "message": "Alles abschaltbar",
+    "description": ""
+  },
+  "Band.Cap.Wear": {
+    "message": "Tragen ohne Ausrüstungsplatz",
+    "description": ""
+  },
   "Band.Caption": {
-    "message": "Overlay-Compositor",
+    "message": "überlagern · schmücken · schalten · binden",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -99,9 +115,17 @@
     "message": "Hält den aktuellen Proteus-Zustand (Aktivierung / Priorität / Optionen / Farben)\nin dieser Bindung fest. Manuelle Änderungen bleiben nur erhalten, wenn du hier klickst.",
     "description": ""
   },
+  "Chat.ContentUnplaced.Fmt": {
+    "message": "[Proteus] {0} Mesh-Teil(e) aus deinen Mods konnten nicht platziert werden — deinen Accessoires fehlen Materialplätze. Leg einen weiteren Ring / ein Armband / eine Halskette an oder schalte eine Ebene ab.",
+    "description": ""
+  },
   "Chat.GlowPromoted.Fmt": {
     "message": "[Proteus] „{0}“ setzt Leuchten auf einer Hautebene. Haut kann nicht mehr leuchten, daher wird diese Option jetzt als Stoffebene dargestellt — sie braucht ein freies Accessoire und ihre Oberfläche sieht etwas anders aus.",
     "description": ""
+  },
+  "Chat.MirrorRepo": {
+    "message": "[Proteus] Du hast über die alte Plugin-Repository-URL installiert. Wenn du sie unter /xlplugins > Experimental auf https://dl.solona.info/repo.json umstellst, werden Updates schneller und GitHub wird entlastet. Deine Installation funktioniert so oder so weiter. Dieser Hinweis erscheint noch einige Male und hört dann auf.",
+    "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
   },
   "Chat.NoShellSurface.Fmt": {
     "message": "[Proteus] „{0}“ setzt Leuchten auf einem Overlay, für das Proteus keine Ebene bauen kann. Leuchten braucht eine Ebene über dem Mesh, und das geht nur auf deiner eigenen Haut — Körper, Gesicht, Haar, Schweif oder Ohren — nicht auf Ausrüstung, Accessoires oder Waffen.",
@@ -232,7 +256,7 @@
     "description": ""
   },
   "Colors.GlowAmount.Tip": {
-    "message": "Unter characterscroll ist das ein kleines GATE, nicht die Helligkeit:\n0 = gar kein Leuchten; ein großer Wert wäscht die Farbe der Scroll-Map aus.\nDie originalen animierten Materialien nutzen ~0,025.",
+    "message": "Wie hell diese Zeile leuchtet. 0 schaltet sie aus.\nBei einem animierten Leuchten ist das die Helligkeit des Effekts; ein hoher Wert\nüberstrahlt eine farbige Scroll-Textur zu Weiß. Rund 25 % sind ein guter Start.",
     "description": ""
   },
   "Colors.GlowColour.Label": {
@@ -407,6 +431,18 @@
     "message": "Sphere-Map",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "Tönung {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "Hautton-Unterdrückung",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "Wie stark sich diese Option dem Hautton des Trägers widersetzt.\n1,00 behält die gestaltete Farbe auf jedem Hautton — richtig für Stoff, der die Haut bedeckt.\n0,00 lässt den Hautton durch — richtig für ein Tattoo, ein Decal oder eine Körpertextur, die selbst Haut IST.\nDer globale Regler in den Einstellungen multipliziert dies, 0,00 hier gewinnt also immer.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "Glanzlicht",
     "description": ""
@@ -455,6 +491,14 @@
     "message": "Nach oben",
     "description": ""
   },
+  "Colors.WholeSkin.Label": {
+    "message": "Dieses Overlay ist die gesamte Haut",
+    "description": ""
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "Schalte dies für eine umgewandelte Haut-Mod ein — Textur, die die Haut IST, nicht etwas darauf.\nEs bewegt zwei Einstellungen gemeinsam, und die wirken nur als Paar.\nDie Normal Map ERSETZT die bereits im Material vorhandene, statt darauf addiert zu werden. Aus\nist richtig für einen Riemen oder ein Tattoo, das die Poren darunter behalten soll; bei einer\nHaut ist die Map darunter dieselbe Haut, also landet jede Pore doppelt und der Körper wirkt\nflach gegenüber dem unberührten Gesicht, mit einer harten Linie an der Halsnaht.\nUnd die Hautton-Unterdrückung fällt auf 0.00, damit der Hautton der Trägerin durchkommt — sie\nist dafür da, Stoff nicht umfärben zu lassen, was für Haut verkehrt ist. Ausschalten stellt\nbeides wieder her. Den Regler kannst du danach weiterhin von Hand setzen.",
+    "description": ""
+  },
   "Command.Help": {
     "message": "Blendet das Proteus-Statusfenster ein oder aus. \"/proteus config\" öffnet es bei den Einstellungen.",
     "description": ""
@@ -469,6 +513,198 @@
   },
   "Common.None": {
     "message": "(keine)",
+    "description": ""
+  },
+  "Content.AllOff.Fmt": {
+    "message": "Teile kommen AUSGESCHALTET an. Häkchen nach dem Import unter \"{0}\" in Penumbra setzen — vorher wird nichts getragen.",
+    "description": ""
+  },
+  "Content.BodyOnly": {
+    "message": "eigener Körper des Trägers",
+    "description": ""
+  },
+  "Content.EitherColumn": {
+    "message": "A und B",
+    "description": ""
+  },
+  "Content.Geometry.Fmt": {
+    "message": "{0} Mesh, {1} Vertices",
+    "description": ""
+  },
+  "Content.GlowDropsDiffuse": {
+    "message": "Dieses Pack bemalt seine Oberfläche mit einer Textur. Ein animiertes Leuchten lässt das Material auf einem Shader laufen, der dafür keinen Platz hat — solange es an ist, übernehmen die Farben oben. Das Entfernen des Effekts holt die Textur zurück.",
+    "description": ""
+  },
+  "Content.GlowEffectMissing.Fmt": {
+    "message": "Der Effekt „{0}“ liegt weder im Effects-Ordner dieses Mods noch in deiner Bibliothek, das Teil wird also ohne ihn dargestellt. Wähle einen anderen oder lege die Datei zurück.",
+    "description": ""
+  },
+  "Content.GlowNeedsEmissive.Fmt": {
+    "message": "In Zeile {0}{1} — der einzigen Zelle, die dieses Material liest — steht Glow auf null, also bleibt der Effekt aus. Erhöhe Glow dort, um ihn einzuschalten und seine Stärke festzulegen. Glow in jeder anderen Zeile bewirkt nichts.",
+    "description": ""
+  },
+  "Content.IndexCompressed.Fmt": {
+    "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — diese Textur ist jedoch komprimiert, es können also ein bis zwei Zeilen daneben sein. Die ausgegrauten Zeilen bleiben anklickbar: wirkt eine Farbe nicht, probiere eine daneben.",
+    "description": ""
+  },
+  "Content.IndexEmpty": {
+    "message": "Die Index-Textur dieses Materials ist völlig transparent und wählt daher gar keine Farbzeile aus. Unten sind alle Zeilen bearbeitbar, das Teil nimmt seine Farben aber allein aus den Texturen.",
+    "description": ""
+  },
+  "Content.IndexUnreadable": {
+    "message": "Dieses Material nennt eine Index-Textur, die Proteus nicht lesen konnte, also lässt sich nicht sagen, welche Zeilen wirken. Unten sind alle Zeilen bearbeitbar, sichtbar werden aber nur die, die der Index auswählt.",
+    "description": ""
+  },
+  "Content.Intro": {
+    "message": "Importiere eine gewöhnliche Mod (.pmp). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
+    "description": ""
+  },
+  "Content.Materials.Fmt": {
+    "message": "{0} Materialien",
+    "description": ""
+  },
+  "Content.NoColorTable": {
+    "message": "Dieses Material hat gar keine Farbtabelle, also auch keine Zeilen zum Bearbeiten — nichts, was du unten änderst, erreicht das Teil. Seine Farben kommen allein aus den Texturen.",
+    "description": ""
+  },
+  "Content.NoIndex.Fmt": {
+    "message": "Dieses Material bringt keine Index-Textur mit, es nimmt also für alles Zeile {0}.",
+    "description": ""
+  },
+  "Content.NoRaceFit.Fmt": {
+    "message": "Das nächstgelegene Modell dieses Packs ist für {0} gebaut — weder deine eigene Rasse ({1}) noch die gemeinsame Form, die das Spiel für alle skaliert. Proteus zeigt es lieber gar nicht als in falscher Größe.",
+    "description": ""
+  },
+  "Content.NotForYourRace.Fmt": {
+    "message": "Die Modelle dieses Packs sind für {0} gebaut, du bist {1}. Für eine Rasse gefertigte Ausrüstung hat eine andere Form, unverändert getragen säße sie also falsch — Proteus lässt sie lieber weg.",
+    "description": ""
+  },
+  "Content.NothingUsable": {
+    "message": "Keine Option in diesem Paket liefert ein Mesh, das Proteus anhängen kann.",
+    "description": ""
+  },
+  "Content.PieceCount.Fmt": {
+    "message": "Teile: {0} von {1}",
+    "description": ""
+  },
+  "Content.Problem.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Content.Races.Fmt": {
+    "message": "{0} Rassen",
+    "description": ""
+  },
+  "Content.ReadFailed.Fmt": {
+    "message": "Dieses Paket konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Content.Samples.Fmt": {
+    "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — die übrigen Zeilen sind ausgegraut, weil nichts sie abtastet, und die andere Spalte dieser Zeile zu bearbeiten bewirkt ebenfalls nichts.",
+    "description": ""
+  },
+  "Content.SamplesRows.Fmt": {
+    "message": "Seine Index-Textur liest die Zeilen {0} — die übrigen sind ausgegraut, weil nichts sie abtastet.",
+    "description": ""
+  },
+  "Content.SharedBy.Fmt": {
+    "message": "Geteilt von: {0}. Diese Teile werden mit einem Material gezeichnet, diese Farben erreichen also alle — und Zeilen, die du nicht anfasst, bleiben genau so, wie der Autor sie geschrieben hat.",
+    "description": ""
+  },
+  "Content.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Content.AlreadyProteus": {
+    "message": "Dieses Paket ist bereits ein Proteus-Mod. Es wird genau so installiert, wie sein Autor es gebaut hat — nichts wird umgewandelt, und seine eigenen Optionen bleiben in Penumbra.",
+    "description": ""
+  },
+  "Content.Unbound": {
+    "message": "Material nicht zugeordnet",
+    "description": ""
+  },
+  "Content.Unconditional": {
+    "message": "immer an",
+    "description": ""
+  },
+  "ContentImport.Fail.BadName": {
+    "message": "Dieser Mod-Name enthält keine verwendbaren Zeichen — nutze Buchstaben oder Ziffern.",
+    "description": ""
+  },
+  "ContentImport.Fail.Exists.Fmt": {
+    "message": "Ein Mod-Ordner namens \"{0}\" existiert bereits.",
+    "description": ""
+  },
+  "ContentImport.Fail.Gone.Fmt": {
+    "message": "Das Paket ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.NoModDir": {
+    "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "ContentImport.Fail.NothingUsable": {
+    "message": "Aus diesem Paket kann nichts importiert werden.",
+    "description": ""
+  },
+  "ContentImport.Fail.Reserved": {
+    "message": "\"Proteus\" ist reserviert — wähle einen anderen Mod-Namen.",
+    "description": ""
+  },
+  "ContentImport.Fail.Write.Fmt": {
+    "message": "Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "ContentImport.Problem.BodyOnly.Fmt": {
+    "message": "jede Mesh darin ist der eigene Körper des Trägers ({0}) — es gibt nichts hinzuzufügen.",
+    "description": ""
+  },
+  "ContentImport.Problem.NoGeometry": {
+    "message": "keine Geometrie — jedes Mesh darin ist leer",
+    "description": ""
+  },
+  "ContentImport.Problem.NoMeshes": {
+    "message": "es zeichnet keine Meshes, es gibt also nichts hinzuzufügen.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unbound.Fmt": {
+    "message": "sein Mesh nennt {0}, was dieses Paket nicht mitliefert. Weise das Mesh einem der paketeigenen Materialien zu und exportiere neu.",
+    "description": ""
+  },
+  "ContentImport.Problem.Unreadable.Fmt": {
+    "message": "kein lesbares Modell ({0})",
+    "description": ""
+  },
+  "ContentImport.Result.Installed.Fmt": {
+    "message": "„{0}“ installiert. Es war bereits ein Proteus-Mod und ist daher genau so hineingekommen, wie sein Autor es gebaut hat — aktiviert und in Penumbra geöffnet, wo seine Optionen gewählt werden.",
+    "description": ""
+  },
+  "ContentImport.Result.Ok.Fmt": {
+    "message": "\"{0}\" importiert — Teile: {1}{2}. Aktiviert und in Penumbra geöffnet. Die Optionen wählst du in Penumbra, und jede ausgewählte wird gleichzeitig getragen.",
+    "description": ""
+  },
+  "ContentImport.Result.Pieces.Fmt": {
+    "message": "\"{0}\" importiert — Teile: {1}{2}. Sie kommen AUSGESCHALTET an: setze die Häkchen unter \"{3}\" in Penumbra, das jetzt auf diesem Mod offen ist.",
+    "description": ""
+  },
+  "ContentImport.Result.SkippedTail.Fmt": {
+    "message": " (übersprungen: {0})",
+    "description": ""
+  },
+  "ContentImport.Warn.GroupType.Fmt": {
+    "message": "Gruppe \"{0}\" ist eine {1}-Gruppe, die Proteus nicht platzieren kann — ihre Optionen bleiben unangetastet.",
+    "description": ""
+  },
+  "ContentImport.Warn.NoModels": {
+    "message": "Keine Option in diesem Paket leitet ein Modell um, es gibt also keine Geometrie zum Anhängen. Installiere es stattdessen in Penumbra.",
+    "description": ""
+  },
+  "ContentImport.Warn.RaceOnly.Fmt": {
+    "message": "Die Modelle dieses Packs sind für {0} gebaut. Proteus skaliert Geometrie nicht zwischen Rassen, seine Teile erscheinen also nur auf einem Charakter dieser Rasse.",
+    "description": ""
+  },
+  "ContentImport.Warn.SelfDriven": {
+    "message": "Dieses Paket schaltet seine Teile selbst ein und aus, daher fügt Proteus keine eigenen Kontrollkästchen hinzu — nutze die des Pakets. Jedes Teil, das es nicht schaltet, wird getragen, solange die Mod aktiv ist.",
     "description": ""
   },
   "Create.Author.Label": {
@@ -599,6 +835,14 @@
     "message": "Dieses Material konnte nicht gelesen werden — es werden alle Slots angeboten.",
     "description": ""
   },
+  "Create.WholeSkin.Label": {
+    "message": "Diese Texturen sind die gesamte Haut",
+    "description": ""
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nDreierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nDie Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut. Und \"Körper\" wird auf\n\"Alle Körper\" gesetzt, damit die Haut auch einen Vanilla-Körper erreicht.",
+    "description": ""
+  },
   "Export.Dialog.Filter": {
     "message": "Penumbra-Modpaket",
     "description": ""
@@ -661,6 +905,58 @@
   },
   "Export.Phase.Writing": {
     "message": "Exportiere…",
+    "description": ""
+  },
+  "Eye.Cutout.Artwork": {
+    "message": "Nur die Grafik",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Grafik samt Verlauf",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "Leuchtform",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "Wie viel vom Leuchtkanal der Maske zur leuchtenden Form wird. Die meisten Pakete markieren die Grafik hell und lassen sie ringsum auslaufen; behältst du diesen Verlauf, leuchtet es sanft über die Grafik hinaus, lässt du ihn weg, bleibt das Leuchten auf der Form selbst.\nWird beim Import fest eingebacken — wähle jetzt; danach kann der Glow-Regler nur noch skalieren, was übrig ist.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus konnte die Gesichtsliste des Spiels nicht lesen, daher zielt das Leuchten nur auf ein bekanntes Gesichterpaar. Öffne das Paket im Spiel erneut, um alle Rassen zu erfassen.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "Die Maske markiert {0:P1} der Textur als leuchtend, und genau diese Form bekommt die Animation — auf {1} Iris-Material(ien), sodass sie dir über Rassen und Gesichter folgt. Abschaltbar unter „{2}“ in Penumbra.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "Importiere ein Augen-Texturpaket (.zip mit losen Bildern). Die Augen kommen normal hinein, und die von der Maske markierte Form bekommt ein animiertes Leuchten, das du umfärben und dimmen kannst.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "Es wird kein animiertes Leuchten hinzugefügt — siehe unten. Die Augentexturen werden trotzdem importiert und funktionieren normal.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "Nichts in diesem Archiv sieht nach einer Augentextur aus.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "Dieses Archiv konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Texturen: {0} von {1}",
     "description": ""
   },
   "Footer.LastComposite.Fmt": {
@@ -732,11 +1028,99 @@
     "description": ""
   },
   "Import.Dialog.Filter": {
-    "message": "Onion-Paket",
+    "message": "Mod-Paket",
     "description": ""
   },
   "Import.Dialog.Title": {
-    "message": "Ein Onion-Paket auswählen",
+    "message": "Paket auswählen",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Importiert aus dem Augen-Texturpaket „{0}“.",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "Dieser Modname enthält keine verwendbaren Zeichen — nutze Buchstaben oder Zahlen.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "Ein Modordner namens „{0}“ existiert bereits.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "Das Archiv ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbras Modverzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "Keine Textur dieses Archivs war lesbar, es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "Aus diesem Archiv kann nichts importiert werden.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "„Proteus“ ist reserviert — wähle einen anderen Modnamen.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "Der Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Animiertes Leuchten",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}, aber ohne animiertes Leuchten. Siehe die Gründe oben; die Augen selbst sind drin und funktionieren.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}. Penumbra hat den Mod noch nicht eingeschaltet; hake ihn in Penumbras Modliste an.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}, mit animiertem Leuchten auf der von der Maske markierten Form. Feinjustierung unter Colors, oder abschalten unter „{2}“ in Penumbra.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "eine andere Datei in diesem Archiv ist bereits die {0}-Textur.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "die Namen in diesem Archiv weisen es nicht als Augenpaket aus, und Proteus richtet lose Texturen nicht auf Verdacht auf deine Iris.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "sein Name endet nicht auf eine Texturart, die Proteus kennt (base, mask oder norm).",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Dein Charakter ist nicht gezeichnet, daher wird das Leuchten für Gesicht {0} zugeschnitten. Trägst du ein anderes Gesicht, importiere das Paket im Spiel erneut.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "Die Maskentextur konnte nicht dekodiert werden, daher weiß Proteus nicht, was leuchten soll. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "Der Rotkanal der Maske ist leer, in diesem Paket ist also nichts als leuchtend markiert. Aus diesem Kanal liest das Spiel den Limbalring, und dorthin legt ein Leuchtaugen-Mod seine Form. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus konnte die Gesichtsliste des Spiels nicht lesen und hat daher kein Iris-Material für das Leuchten. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "Dieses Paket enthält keine Maskentextur, es gibt also keine Form, die die Animation füllen könnte. Die Augentexturen werden trotzdem importiert; nur das Leuchten entfällt.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "Aus diesem Archiv kann nichts importiert werden — siehe die Gründe oben.",
     "description": ""
   },
   "Import.Failed.Fmt": {
@@ -752,7 +1136,7 @@
     "description": ""
   },
   "Import.Intro": {
-    "message": "Importiere ein Onion-Overlay-Paket (.omp). Proteus liest die Ebenen des Pakets und schreibt einen neuen Penumbra-Mod mit einer Proteus-Beidatei — die Originaldatei wird nicht verändert.",
+    "message": "Importiere ein Onion-Overlay-Paket (.omp). Trage seine Ebenen als Proteus-Overlays, die du umfärben und neu stapeln kannst.",
     "description": ""
   },
   "Import.Layer.Imported.Fmt": {
@@ -781,6 +1165,110 @@
   },
   "Import.Layouts.Fmt": {
     "message": "Das Paket hat {0} UV-Layouts, daher bekommt der Mod in Penumbra eine Einzelauswahl-Gruppe „{1}“ ({2}). Es wird immer nur eines komponiert.",
+    "description": ""
+  },
+  "Import.Luminis.Description.Fmt": {
+    "message": "Importiert aus dem Atramentum-Luminis-Paket „{0}“.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.BadName": {
+    "message": "Dieser Modname enthält keine verwendbaren Zeichen — nutze Buchstaben oder Zahlen.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Exists.Fmt": {
+    "message": "Ein Modordner namens „{0}“ existiert bereits.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Gone.Fmt": {
+    "message": "Das Paket ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoModDir": {
+    "message": "Penumbras Modverzeichnis ist nicht verfügbar.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NoneWritten": {
+    "message": "Keine der Texturen dieses Pakets war im zweiten Durchgang lesbar, es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.NothingUsable": {
+    "message": "Aus diesem Paket kann nichts importiert werden.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Reserved": {
+    "message": "„Proteus“ ist reserviert — wähle einen anderen Modnamen.",
+    "description": ""
+  },
+  "Import.Luminis.Fail.Write.Fmt": {
+    "message": "Der Mod konnte nicht geschrieben werden: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Option.Glow": {
+    "message": "Leuchtendes Tattoo",
+    "description": ""
+  },
+  "Import.Luminis.Option.GlowOf.Fmt": {
+    "message": "{0} — Leuchten",
+    "description": ""
+  },
+  "Import.Luminis.Option.Skin": {
+    "message": "Haut des Autors",
+    "description": ""
+  },
+  "Import.Luminis.Option.SkinOf.Fmt": {
+    "message": "{0} — Haut des Autors",
+    "description": ""
+  },
+  "Import.Luminis.Result.NoSelection.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}{2}, aber Proteus konnte es nicht für dich einschalten. Hake es unter „{3}“ in Penumbra an, sonst wird nichts gezeichnet.",
+    "description": ""
+  },
+  "Import.Luminis.Result.Ok.Fmt": {
+    "message": "„{0}“ importiert — Texturen: {1}{2}. Das Leuchten und die eigene Körpertextur des Autors sind beide an; hake die Körpertextur unter „{3}“ in Penumbra ab, wenn du nur das Leuchten willst.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.GamePath.Fmt": {
+    "message": "„{0}“ ist ein echter Spielpfad, also ist dies ein gewöhnlicher TexTools-Mod und kein Atramentum-Luminis-Paket. Installiere ihn stattdessen in Penumbra.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Missing": {
+    "message": "die Datenablage des Modpakets enthält sie nicht.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NoGlow": {
+    "message": "ihr Alphakanal ist flach, sie trägt also kein Leuchten. Atramentum Luminis legt das Leuchten dorthin, und eine Textur ohne eines ist eine gewöhnliche Haut statt eines leuchtenden Tattoos.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotATexture": {
+    "message": "es ist keine Textur — Atramentum Luminis führt nur solche.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.NotTextureData.Fmt": {
+    "message": "es ist ein Modell oder Material (SqPack-Typ {0}), keine Textur.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Undecodable": {
+    "message": "ihre Pixel konnten nicht dekodiert werden.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.UnknownBody.Fmt": {
+    "message": "Proteus kennt den Körper „{0}“ nicht und kann deinen Charakter erst fragen, wenn er geladen ist. Logge dich ein und öffne dieses Paket erneut.",
+    "description": ""
+  },
+  "Import.Luminis.Skip.Unreadable.Fmt": {
+    "message": "sie konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Import.Luminis.Warn.FromWearer.Fmt": {
+    "message": "Proteus kennt das Körper-Layout dieses Pakets nicht und malt die Grafik daher unverändert auf den Körper, den du trägst ({0}), ohne Umrechnung. Wurde das Paket für einen anderen Körper gemalt, sieht es falsch aus — ändere unten das Körperziel, wenn du es besser weißt.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.MostlyGlow.Fmt": {
+    "message": "„{0}“ leuchtet auf {1:P0} des Körpers. Das ist zulässig, bedeutet aber meist, dass die Textur gar keinen echten Alphakanal hat — prüfe das Ergebnis, bevor du damit rausgehst.",
+    "description": ""
+  },
+  "Import.Luminis.Warn.NothingImportable": {
+    "message": "Aus diesem Paket kann nichts importiert werden — siehe die Gründe oben.",
     "description": ""
   },
   "Import.Materials.Fallback": {
@@ -812,7 +1300,7 @@
     "description": ""
   },
   "Import.NoPack": {
-    "message": "Wähle eine .omp-Datei, um zu sehen, was sie enthält.",
+    "message": "Wähle ein Paket, um seinen Inhalt zu sehen.",
     "description": ""
   },
   "Import.NothingUsable": {
@@ -857,6 +1345,66 @@
   },
   "Import.Website.Tip": {
     "message": "Wird auf die Penumbra-Seite des Mods übernommen.",
+    "description": ""
+  },
+  "Luminis.Aliases.Fmt": {
+    "message": "{0} Pfade",
+    "description": ""
+  },
+  "Luminis.BodyFromPack.Fmt": {
+    "message": "Das Paket gibt an, für {0} gemalt zu sein — Proteus rechnet es auf den Körper um, den du trägst.",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Label": {
+    "message": "Körper",
+    "description": ""
+  },
+  "Luminis.BodyTarget.Tip": {
+    "message": "Auf welches Körpermaterial die Grafik gemalt wird. Proteus wählt es aus dem Paket, wenn es den Körper erkennt, und sonst aus dem, den du trägst — ändere es, wenn du weißt, dass das Paket für einen anderen gemacht wurde.",
+    "description": ""
+  },
+  "Luminis.Glow.Fmt": {
+    "message": "{0:P1} leuchtet",
+    "description": ""
+  },
+  "Luminis.Intro": {
+    "message": "Importiere ein Atramentum-Luminis-Leuchttattoo (.ttmp2). Sein Leuchten wird zu einem Proteus-Overlay, das du umfärben und dimmen kannst — ganz ohne Shader-Mod.",
+    "description": ""
+  },
+  "Luminis.NoRaceFilter": {
+    "message": "Proteus hat keinen Rassen- oder Geschlechtsfilter: Dies bemalt jeden Charakter, der einen Körper mit demselben Material trägt. Schalte den Mod in Penumbra für Charaktere ab, für die er nicht gemalt wurde.",
+    "description": ""
+  },
+  "Luminis.NothingUsable": {
+    "message": "Keine Textur in diesem Modpaket trägt eine Atramentum-Luminis-Leuchtmaske.",
+    "description": ""
+  },
+  "Luminis.Paths.Fmt": {
+    "message": "Einmal importiert, für:\n{0}",
+    "description": ""
+  },
+  "Luminis.ReadFailed.Fmt": {
+    "message": "Dieses Modpaket konnte nicht gelesen werden: {0}",
+    "description": ""
+  },
+  "Luminis.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "Beide Hälften werden eingeschaltet: das Leuchten und darunter die eigene Körpertextur des Autors, unter „{0}“ in Penumbra. Die Körpertextur enthält die nicht leuchtenden Teile des Tattoos und behält deinen eigenen Hautton statt dem des Autors — hake sie dort ab, wenn du nur das Leuchten willst.",
+    "description": ""
+  },
+  "Luminis.Skipped": {
+    "message": "übersprungen",
+    "description": ""
+  },
+  "Luminis.SkippedReason.Fmt": {
+    "message": "{0}\nÜbersprungen: {1}",
+    "description": ""
+  },
+  "Luminis.TextureCount.Fmt": {
+    "message": "Texturen: {0} von {1}",
     "description": ""
   },
   "Mods.Ao.Off": {
@@ -909,6 +1457,178 @@
   },
   "Mods.PluginDisabled": {
     "message": "Proteus ist deaktiviert — aktiviere es in den Einstellungen.",
+    "description": ""
+  },
+  "Parts.Add.Btn": {
+    "message": "Schalter aus den markierten Teilen erstellen",
+    "description": ""
+  },
+  "Parts.AlreadyGated.Tip": {
+    "message": "Die Autorin bzw. der Autor des Mods hat dieses Teil bereits hinter einen eigenen Schalter gelegt, daher kann es keinen weiteren aufnehmen.",
+    "description": ""
+  },
+  "Parts.Budget.Fmt": {
+    "message": "Noch {0} von 10 Schaltern für dieses Modell frei",
+    "description": ""
+  },
+  "Parts.Click.Tip": {
+    "message": "Klicke auf ein Stück des Modells, um es ein- oder auszuschalten. Ziehen dreht es, Umschalt+Ziehen verschiebt es, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Existing.Header": {
+    "message": "Von Proteus bereits hinzugefügt",
+    "description": ""
+  },
+  "Parts.HidePieces.Fmt": {
+    "message": "{0} Stücke ▴",
+    "description": ""
+  },
+  "Parts.Intro": {
+    "message": "Wähle Geometrie aus dem Modell eines Mods aus und gib ihr einen Ein/Aus-Schalter. Der Schalter wird als gewöhnliche Penumbra-Option in den Mod selbst geschrieben und funktioniert daher auch bei abgeschaltetem Proteus.",
+    "description": ""
+  },
+  "Parts.Mod": {
+    "message": "Mod",
+    "description": ""
+  },
+  "Parts.Model": {
+    "message": "Modell",
+    "description": ""
+  },
+  "Parts.NeedName": {
+    "message": "Gib dem Schalter zuerst einen Namen.",
+    "description": ""
+  },
+  "Parts.NeedParts": {
+    "message": "Markiere die Teile, die dieser Schalter ausblenden soll.",
+    "description": ""
+  },
+  "Parts.NoBudget": {
+    "message": "Für dieses Modell sind keine Schalterplätze mehr frei. Das Spiel gibt jedem Gegenstand zehn, und hier sind bereits alle vergeben.",
+    "description": ""
+  },
+  "Parts.NoModels": {
+    "message": "Dieser Mod veröffentlicht keine Modelle, es gibt also keine Geometrie zum Aufteilen.",
+    "description": ""
+  },
+  "Parts.NotWrittenYet": {
+    "message": "Es wurde noch nichts in den Mod geschrieben.",
+    "description": ""
+  },
+  "Parts.Pending.Fmt": {
+    "message": "{0} — {1}",
+    "description": ""
+  },
+  "Parts.Pending.Header": {
+    "message": "Zu schreibende Schalter",
+    "description": ""
+  },
+  "Parts.PickMod": {
+    "message": "Mod auswählen",
+    "description": ""
+  },
+  "Parts.PickModel": {
+    "message": "Modell auswählen",
+    "description": ""
+  },
+  "Parts.Remove.Btn": {
+    "message": "Entfernen",
+    "description": ""
+  },
+  "Parts.Revert.Btn": {
+    "message": "Rückgängig – Originalmodelle wiederherstellen",
+    "description": ""
+  },
+  "Parts.Revert.Failed.Fmt": {
+    "message": "Die Modelle wurden wiederhergestellt, aber die Optionsgruppe ließ sich nicht entfernen: {0}",
+    "description": ""
+  },
+  "Parts.Revert.Nothing": {
+    "message": "Dieser Mod hat keine von Proteus hinzugefügten Schalter.",
+    "description": ""
+  },
+  "Parts.Reverted.Fmt": {
+    "message": "Rückgängig gemacht. {0} Modelldatei(en) wiederhergestellt und die Optionsgruppe entfernt.",
+    "description": ""
+  },
+  "Parts.Row.Fmt": {
+    "message": "{0} · {1:N0} Tris",
+    "description": ""
+  },
+  "Parts.Selected.Fmt": {
+    "message": "{0} Teil(e) markiert",
+    "description": ""
+  },
+  "Parts.Shattered.Fmt": {
+    "message": "Teil {0} zerfällt in {1} einzelne Stücke – mehr, als sich auflisten lassen. Klicke ins Modell, um eines auszuwählen, oder schalte das ganze Teil.",
+    "description": ""
+  },
+  "Parts.ShowPieces.Fmt": {
+    "message": "{0} Stücke ▾",
+    "description": ""
+  },
+  "Parts.Skipped.Fmt": {
+    "message": "{0} weitere Modelldatei(en) dieses Gegenstands blieben unangetastet, weil ihre Teile anders angeordnet sind und dieselbe Änderung dort die falsche Geometrie träfe.",
+    "description": ""
+  },
+  "Parts.ToggleName": {
+    "message": "Name",
+    "description": ""
+  },
+  "Parts.Unreadable": {
+    "message": "Dieses Modell konnte nicht gelesen werden. Es wurde nichts geändert.",
+    "description": ""
+  },
+  "Parts.Write.Btn": {
+    "message": "Schalter in den Mod schreiben",
+    "description": ""
+  },
+  "Parts.Write.DuplicateName.Fmt": {
+    "message": "Dieser Gegenstand hat bereits einen Schalter namens „{0}“. Gib dem neuen einen anderen Namen.",
+    "description": ""
+  },
+  "Parts.Write.EditFailed.Fmt": {
+    "message": "{0} konnte nicht bearbeitet werden: {1}. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Parts.Write.Failed.Fmt": {
+    "message": "Schreiben fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "Parts.Write.NoFiles": {
+    "message": "Keine der Modelldateien dieses Gegenstands ließ sich bearbeiten.",
+    "description": ""
+  },
+  "Parts.Write.NoImc": {
+    "message": "Der IMC-Eintrag dieses Gegenstands konnte nicht gelesen werden, und ihn zu raten würde ändern, welches Material der Gegenstand lädt. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "Parts.Write.NoRoom.Fmt": {
+    "message": "Dieses Modell hat noch {0} Schalterplatz/-plätze frei, angefragt wurden {1}.",
+    "description": ""
+  },
+  "Parts.Write.NotAnItem.Fmt": {
+    "message": "{0} ist kein Charaktermodell-Pfad, es gibt also keinen Gegenstand für einen Schalter.",
+    "description": ""
+  },
+  "Parts.Write.NotGear.Fmt": {
+    "message": "Schalter lassen sich nur zu Ausrüstung und Accessoires hinzufügen, und dies ist {0}.",
+    "description": ""
+  },
+  "Parts.Write.Nothing": {
+    "message": "Keine Schalter zu schreiben.",
+    "description": ""
+  },
+  "Parts.Write.Overlap.Fmt": {
+    "message": "„{0}“ und „{1}“ beanspruchen beide Teil {2}. Einer von beiden nimmt das ganze Teil, daher können es keine getrennten Schalter sein.",
+    "description": ""
+  },
+  "Parts.Write.Tip": {
+    "message": "Bearbeitet das Modell des Mods und fügt ihm eine Penumbra-Optionsgruppe hinzu. Das Originalmodell bleibt erhalten, die Änderung ist also umkehrbar.",
+    "description": ""
+  },
+  "Parts.Written.Fmt": {
+    "message": "Fertig. {0} Schalter stehen jetzt in den Penumbra-Einstellungen dieses Mods unter „{1}“.",
     "description": ""
   },
   "Service.NoPenumbraDir": {
@@ -1141,6 +1861,10 @@
   },
   "Tab.Mods": {
     "message": "Mods",
+    "description": ""
+  },
+  "Tab.Parts": {
+    "message": "Schalter",
     "description": ""
   },
   "Tab.Settings": {
