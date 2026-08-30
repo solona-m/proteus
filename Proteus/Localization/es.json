@@ -491,6 +491,14 @@
     "message": "Hacia arriba",
     "description": ""
   },
+  "Colors.WholeSkin.Label": {
+    "message": "Esta superposición es la piel completa",
+    "description": ""
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "Actívalo para un mod de piel convertido: arte que ES la piel, no algo puesto encima.\nMueve dos ajustes a la vez, y solo funcionan como pareja.\nEl normal SUSTITUYE al que ya tiene el material en vez de sumarse a él. Desactivado es lo\ncorrecto para una correa o un tatuaje, que deben conservar los poros de debajo; en una piel\nel mapa de debajo es esa misma piel, así que sumar aplica cada poro dos veces y el cuerpo se\nve plano frente a una cara intacta, con una línea dura en la costura del cuello.\nY la supresión del tono de piel baja a 0.00, para que se vea el tono de quien lo lleva: está\npara evitar que la tela se retiña, lo cual es al revés para la piel. Al desactivarlo se\nrestauran ambos. Después puedes ajustar el deslizador a mano.",
+    "description": ""
+  },
   "Command.Help": {
     "message": "Muestra u oculta la ventana de estado del compositor Proteus. «/proteus config» la abre en Ajustes.",
     "description": ""
@@ -825,6 +833,14 @@
   },
   "Create.SlotsUnreadable": {
     "message": "No se pudo leer este material: se ofrecen todas las ranuras.",
+    "description": ""
+  },
+  "Create.WholeSkin.Label": {
+    "message": "Estas texturas son la piel completa",
+    "description": ""
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "Márcalo cuando estés convirtiendo un mod de piel completa, no pintando algo sobre la piel.\nProteus lo marca por ti cuando las texturas lo parecen; tu propia respuesta siempre manda.\nDe ahí se siguen tres cosas. El normal SUSTITUYE al que ya tiene el material en vez de sumarse\na él: si no, se aplica sobre el mismo mapa que hay debajo, cada poro y pliegue cuenta dos veces,\ny el cuerpo se ve plano frente a la cara, con una línea dura en la costura del cuello.\nSe desactiva la supresión del tono de piel, para que el tono de quien lo lleva se vea: está para\nevitar que la tela se retiña, y esta textura ES la piel. Y \"Cuerpos\" pasa a \"Todos los cuerpos\",\npara que la piel llegue también a un cuerpo vanilla.",
     "description": ""
   },
   "Export.Dialog.Filter": {

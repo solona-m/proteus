@@ -4799,7 +4799,15 @@ public class CompositorService : IDisposable
                     // ── Phase B: normal composite ─────────────────────────────
                     if (normalOv != null && baseN is { Length: > 0 })
                     {
-                        CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
+                        // Replace mode is a plain alpha-over, which is exactly what a whole-skin overlay
+                        // wants: at full coverage the base is gone rather than added to (CompoundNormal
+                        // would apply the same slopes twice — see NormalMode.Replace), and RGB includes the
+                        // blue channel, so the author's skin-colour influence survives instead of being
+                        // silently inherited from whatever body mod happens to sit underneath.
+                        if (desc.NormalMode == NormalMode.Replace)
+                            AlphaComposite(baseN, normalOv, wN, hN, CovAt(wN, hN));
+                        else
+                            CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
                         normalBlended = true; normalContributors++;
                     }
 

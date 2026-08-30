@@ -233,6 +233,35 @@ public class CompositorMathTests
         Assert.Equal(original, dst);
     }
 
+    /// <summary>
+    /// The whole-skin defect, pinned at the arithmetic. A converted skin mod's normal is composited over a
+    /// base that is already that same map — either the mod's own textures or the body mod it was derived
+    /// from — so compounding applies every slope twice. Measured in game on one such mod: mean deviation
+    /// from flat went 5.95 → 11.83 (R) and 4.73 → 9.39 (G), which is what this reproduces at one texel.
+    /// <see cref="NormalMode.Replace"/> is the way out, and it composites through AlphaComposite.
+    /// </summary>
+    [Fact]
+    public void CompoundNormal_OverItself_DoublesTheDeviationFromFlat()
+    {
+        // A texel tilted +32 in X and −20 in Y away from flat (128,128).
+        byte[] skin = [160, 108, 250, 255];
+
+        byte[] compounded = (byte[])skin.Clone();
+        CompositorService.CompoundNormal(compounded, skin, 1, 1);
+        Assert.Equal(192, compounded[0]);   // 128 + 32 + 32
+        Assert.Equal(88,  compounded[1]);   // 128 − 20 − 20
+
+        // Replace mode hands back the map the author painted, exactly.
+        byte[] replaced = [200, 60, 180, 255];
+        CompositorService.AlphaComposite(replaced, skin, 1, 1);
+        Assert.Equal(skin[0], replaced[0]);
+        Assert.Equal(skin[1], replaced[1]);
+        // And the BLUE channel comes across too — skin.shpk reads it as skin-colour influence, and
+        // CompoundNormal never writes it, so a whole-skin normal's blue was silently inherited from
+        // whatever body mod happened to sit underneath.
+        Assert.Equal(skin[2], replaced[2]);
+    }
+
     [Fact]
     public void CompoundNormal_WithMask_MaskZeroBlocksComposite()
     {

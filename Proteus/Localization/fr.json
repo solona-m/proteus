@@ -491,6 +491,14 @@
     "message": "Vers le haut",
     "description": ""
   },
+  "Colors.WholeSkin.Label": {
+    "message": "Ce calque est la peau entière",
+    "description": ""
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "Activez ceci pour un mod de peau converti — une texture qui EST la peau, pas posée dessus.\nCela déplace deux réglages ensemble, et ils ne fonctionnent qu'en paire.\nLa normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y ajouter. Désactivé\nconvient à une sangle ou un tatouage, qui doivent conserver les pores en dessous ; pour une\npeau, la carte en dessous est cette même peau, donc l'addition applique chaque pore deux fois\net le corps paraît plat face à un visage intact, avec une ligne nette à la couture du cou.\nEt la suppression de teinte de peau tombe à 0.00, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, ce qui est l'inverse pour la peau. Désactiver\nrestaure les deux. Vous pouvez toujours régler le curseur à la main ensuite.",
+    "description": ""
+  },
   "Command.Help": {
     "message": "Affiche ou masque la fenêtre d'état du compositeur Proteus. « /proteus config » l'ouvre sur les paramètres.",
     "description": ""
@@ -825,6 +833,14 @@
   },
   "Create.SlotsUnreadable": {
     "message": "Impossible de lire ce matériau — tous les emplacements sont proposés.",
+    "description": ""
+  },
+  "Create.WholeSkin.Label": {
+    "message": "Ces textures sont la peau entière",
+    "description": ""
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nTrois conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nLa suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau. Et « Corps » passe\nà « Tous les corps », pour que la peau atteigne aussi un corps vanilla.",
     "description": ""
   },
   "Export.Dialog.Filter": {

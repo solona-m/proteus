@@ -491,6 +491,14 @@
     "message": "Nach oben",
     "description": ""
   },
+  "Colors.WholeSkin.Label": {
+    "message": "Dieses Overlay ist die gesamte Haut",
+    "description": ""
+  },
+  "Colors.WholeSkin.Tip": {
+    "message": "Schalte dies für eine umgewandelte Haut-Mod ein — Textur, die die Haut IST, nicht etwas darauf.\nEs bewegt zwei Einstellungen gemeinsam, und die wirken nur als Paar.\nDie Normal Map ERSETZT die bereits im Material vorhandene, statt darauf addiert zu werden. Aus\nist richtig für einen Riemen oder ein Tattoo, das die Poren darunter behalten soll; bei einer\nHaut ist die Map darunter dieselbe Haut, also landet jede Pore doppelt und der Körper wirkt\nflach gegenüber dem unberührten Gesicht, mit einer harten Linie an der Halsnaht.\nUnd die Hautton-Unterdrückung fällt auf 0.00, damit der Hautton der Trägerin durchkommt — sie\nist dafür da, Stoff nicht umfärben zu lassen, was für Haut verkehrt ist. Ausschalten stellt\nbeides wieder her. Den Regler kannst du danach weiterhin von Hand setzen.",
+    "description": ""
+  },
   "Command.Help": {
     "message": "Blendet das Proteus-Statusfenster ein oder aus. \"/proteus config\" öffnet es bei den Einstellungen.",
     "description": ""
@@ -825,6 +833,14 @@
   },
   "Create.SlotsUnreadable": {
     "message": "Dieses Material konnte nicht gelesen werden — es werden alle Slots angeboten.",
+    "description": ""
+  },
+  "Create.WholeSkin.Label": {
+    "message": "Diese Texturen sind die gesamte Haut",
+    "description": ""
+  },
+  "Create.WholeSkin.Tip": {
+    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nDreierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nDie Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut. Und \"Körper\" wird auf\n\"Alle Körper\" gesetzt, damit die Haut auch einen Vanilla-Körper erreicht.",
     "description": ""
   },
   "Export.Dialog.Filter": {

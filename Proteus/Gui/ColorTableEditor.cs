@@ -92,7 +92,17 @@ public static class ColorTableEditor
         // descriptor that copies only the shader and scroll fields. Worse than inert, in fact — the mask
         // descriptor IS serialized into the composite fingerprint, so a drag would fire a recomposite
         // that produced byte-identical output.
-        bool skinTintApplies = true)
+        bool skinTintApplies = true,
+        // True while a design binding is driving this mod, in which case the caller previews edits into the
+        // binding and does NOT write metadata.json — so any control here whose value has nowhere to go but
+        // the sidecar has to be hidden, or it saves nothing and says nothing.
+        //
+        // Passed in rather than inferred from `ovr != null`, which looks equivalent and is not: `ovr` comes
+        // from GetEditableGearOverride, which returns null whenever the binding's GEAR dictionary has no
+        // entry for this mod, while `editingBinding` tests its COLOUR dictionary. A binding that has never
+        // recorded gear settings — the ordinary case — has a live colour override and a null gear override
+        // at the same time, so the inference is false exactly when it matters.
+        bool editingBinding = false)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -241,6 +251,36 @@ public static class ColorTableEditor
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(cs.SkinTintTip);
+            }
+
+            // "This overlay IS the skin" — the editor's counterpart to the Create tab's tick, and the same
+            // single declaration, so it moves the same two settings together. Splitting them was a trap:
+            // the normal stopped doubling while suppression carried on fading the blue channel it had just
+            // written, which is the original pale-body symptom back at half strength, fixable only by
+            // noticing the slider below and dragging it to zero as well. It moves in view, which is the
+            // feedback that keeps this honest.
+            //
+            // NormalMode is structural — which map ends up on the material — so it has no
+            // GearSettingsPreset field and no binding override; `editingBinding` hides the control rather
+            // than letting it write somewhere that is never saved. Skin mode and a normal to blend are both
+            // required for it to mean anything.
+            if (showSkinTint && !editingBinding && overlays.Any(d => d.Normal != null))
+            {
+                bool wholeSkin = first.NormalMode == NormalMode.Replace;
+                if (ImGui.Checkbox($"{cs.WholeSkin}##normalmode_{idScope}", ref wholeSkin))
+                {
+                    foreach (var d in overlays)
+                        d.NormalMode = wholeSkin ? NormalMode.Replace : NormalMode.Compound;
+                    // Suppression keeps FABRIC at its authored colour on any wearer, which is backwards for
+                    // art that is the skin. Untick restores the default (1 ⇒ stored as omitted) rather than
+                    // leaving the zero behind, so the switch is its own inverse.
+                    SetSkinMask(wholeSkin ? 0f : 1f);
+                    // Like skin tint, deliberately not a FeatureEdit: which way a normal blends says
+                    // nothing about whether this belongs on skin or on a shell.
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.WholeSkinTip);
             }
 
             // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
