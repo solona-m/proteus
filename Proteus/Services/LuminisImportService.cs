@@ -548,7 +548,16 @@ public sealed class LuminisImportService
     /// </summary>
     public sealed record PreparedImport(
         bool Ok, string Message, string? DirName, ImportPreview? Preview,
-        IReadOnlyList<string> GlowOptions, int Imported, int Skipped);
+        IReadOnlyList<string> DefaultOptions, int Imported, int Skipped);
+
+    /// <summary>
+    /// What <see cref="WriteMod"/> put on disk. <paramref name="Glow"/> is every glow option it wrote, in
+    /// group order — one per texture that survived the write pass, which is what the imported count is
+    /// counted from. <paramref name="DefaultOn"/> is the subset of the whole group that a fresh install
+    /// wears, which <see cref="Finish"/> has to assert separately because the group's DefaultSettings only
+    /// reach a collection that has never seen this mod.
+    /// </summary>
+    internal sealed record WrittenOptions(List<string> Glow, List<string> DefaultOn);
 
     /// <summary>
     /// Validate and write the mod to disk. Safe to run off the framework thread; nothing is left behind
@@ -595,11 +604,11 @@ public sealed class LuminisImportService
 
         var materials = MaterialsFor(preview, suffixOverride);
 
-        List<string> glowOptions;
+        WrittenOptions written;
         try
         {
-            glowOptions = WriteMod(root, modName, author, preview, materials, suffixOverride,
-                                   asTex ? textureLoader : null, textureLoader.LoadTexBytesAsRgba, log);
+            written = WriteMod(root, modName, author, preview, materials, suffixOverride,
+                               asTex ? textureLoader : null, textureLoader.LoadTexBytesAsRgba, log);
         }
         catch (Exception ex)
         {
@@ -613,21 +622,21 @@ public sealed class LuminisImportService
         // decoded during Inspect and failed on the write pass is dropped there, and reporting the preview's
         // number would have counted it anyway — including in the case where EVERY one failed, which
         // reported a clean success over an empty option group.
-        int imported = glowOptions.Count;
+        int imported = written.Glow.Count;
         if (imported == 0)
         {
             try { Directory.Delete(root, true); } catch { /* best effort */ }
             return Fail(Loc.Localize("Import.Luminis.Fail.NoneWritten",
                 "None of this pack's textures could be read on the second pass, so nothing was written."));
         }
-        return new(true, "", dirName, preview, glowOptions, imported, preview.Textures.Count - imported);
+        return new(true, "", dirName, preview, written.DefaultOn, imported,
+                   preview.Textures.Count - imported);
     }
 
     /// <summary>
     /// Write the mod files under <paramref name="root"/>: the overlay images, the scroll maps, the Proteus
     /// sidecar, Penumbra's manifest and the option group. Pure filesystem work, no IPC, so it can be
-    /// exercised offline against a temp directory. Returns the names of the glow options it wrote, in
-    /// group order.
+    /// exercised offline against a temp directory.
     /// </summary>
     /// <param name="encodeTo">Non-null to write BC7 <c>.tex</c> instead of PNG.</param>
     /// <param name="decode">
@@ -635,7 +644,7 @@ public sealed class LuminisImportService
     /// the loader itself, for the same reason <see cref="BuildPreview"/> takes one: it is the only part of
     /// this that needs a live game, and passing it in is what lets the whole write be exercised offline.
     /// </param>
-    internal static List<string> WriteMod(
+    internal static WrittenOptions WriteMod(
         string root, string modName, string author,
         ImportPreview preview, IReadOnlyList<string> materials, string? suffixOverride,
         TextureLoader? encodeTo,
@@ -674,8 +683,13 @@ public sealed class LuminisImportService
         var payloads = TexToolsPackage.ReadPayloads(
             preview.SourcePath, importable.ToDictionary(t => t.Offset, t => t.Size));
 
-        // Skin options first, so the author's body paints UNDER the glow. Only ordering within the group
-        // decides that, and ResolveActiveOverlays walks the options in the order they are declared.
+        // Skin options first, so the author's body paints under the glow's art in the diffuse.
+        //
+        // Declaration order is PAINT order, not stack rank — a distinction worth keeping straight, because
+        // stack rank is what decides gear promotion. Rank comes from Configuration.ModStackIndexOf /
+        // StackIndexOf, both of which answer int.MaxValue until the user drags a tab, so on a fresh import
+        // every option ties and the order here is all that separates them: ResolveActiveOverlays walks the
+        // options as declared and the compositor's sort is stable.
         var skinOptions = new List<OverlayOption>();
         var glowOptions = new List<OverlayOption>();
 
@@ -793,6 +807,28 @@ public sealed class LuminisImportService
             for (int i = 3; i < skin.Length; i += 4) skin[i] = 255;
 
             var skinDescriptor = Base("overlays/" + Materialize(skin, w, h, overlaysDir, plan.Stem + "_skin", encodeTo));
+
+            // This overlay IS skin, which is the one case the compositor's two skin-layer defaults are
+            // both wrong for.
+            //
+            // SkinToneMask 0 switches off the skin-colour-influence suppression. skin.shpk multiplies the
+            // wearer's tone onto the diffuse through the normal's blue channel, and Proteus fades that
+            // channel out under an opaque overlay so a white stocking stays white on dark skin — scaled by
+            // coverage × the overlay's luminance. Every one of those terms is maxed here: full-sheet alpha
+            // 255, a bright body texture, and an unset mask that coalesces to 1. The wearer's tone was
+            // therefore deleted across the WHOLE body and the pack's pale skin rendered literally, so a
+            // dark- or blue-skinned character came out white. Zero is the documented value for art that
+            // should take the skin's colour instead of covering it, and it beats the user's global slider,
+            // which is right: this is not a preference, it is what the surface is.
+            skinDescriptor.SkinToneMask = 0f;
+
+            // Pinned so it can never be promoted to a gear shell. A skin overlay ranked above its own
+            // mod's lowest gear overlay is auto-promoted to character.shpk — which has no skin-tone term
+            // at all, and where SkinToneMask has no consumer, so the fix above would not reach it. The two
+            // options tie on a fresh import and the comparison is strict, so it does not fire today; it
+            // fires the moment anyone reorders this mod's stack tabs. The author's skin is skin.
+            skinDescriptor.ManualShaderLock = true;
+
             skinOptions.Add(new OverlayOption
             {
                 Name = SkinOptionName(plan, qualified),
@@ -839,13 +875,28 @@ public sealed class LuminisImportService
             swaps: new Dictionary<string, string>
                 { [ModCreationService.DummySwapPath] = ModCreationService.DummySwapPath });
 
-        // Every skin option off, the FIRST glow on. The skin options come first, so the glow's bit is its
-        // index past them.
-        ulong defaults = glowOptions.Count > 0 ? 1UL << skinOptions.Count : 0UL;
+        // A fresh install arrives wearing the first pair: the glow, and the author's own body texture under
+        // it. They are two halves of one piece of artwork — the tattoo's unlit parts live in the body
+        // texture, so the glow alone is the drawing with its outline missing. Now that the body takes the
+        // wearer's own skin tone (SkinToneMask above) there is no longer a reason to hold it back.
+        // The skin options come first in `options`, so the glow's bit is its index past them.
+        var defaultOn = new List<string>();
+        ulong defaults = 0;
+        if (skinOptions.Count > 0)
+        {
+            defaultOn.Add(skinOptions[0].Name);
+            defaults |= 1UL;
+        }
+        if (glowOptions.Count > 0)
+        {
+            defaultOn.Add(glowOptions[0].Name);
+            defaults |= 1UL << skinOptions.Count;
+        }
+
         PenumbraModMeta.WriteMultiSelectGroup(
             root, 0, GroupName, [.. options.Select(o => o.Name)], defaults);
 
-        return [.. glowOptions.Select(o => o.Name)];
+        return new([.. glowOptions.Select(o => o.Name)], defaultOn);
     }
 
     /// <summary>Write one RGBA buffer into the sidecar and return its file name.</summary>
@@ -983,8 +1034,8 @@ public sealed class LuminisImportService
     }
 
     /// <summary>
-    /// Tick the glow, open Penumbra and report. <paramref name="reachedPenumbra"/> is false when the mod
-    /// could not be enabled at all, which makes the selection moot and the result a warning.
+    /// Tick the default options, open Penumbra and report. <paramref name="reachedPenumbra"/> is false
+    /// when the mod could not be enabled at all, which makes the selection moot and the result a warning.
     /// </summary>
     private ImportResult Finish(bool reachedPenumbra)
     {
@@ -997,28 +1048,31 @@ public sealed class LuminisImportService
         bool selectionFailed = !reachedPenumbra;
 
         var collId = penumbra.GetPlayerCollectionId();
-        if (reachedPenumbra && collId.HasValue && prepared.GlowOptions.Count > 0)
+        var wanted = prepared.DefaultOptions;
+        if (reachedPenumbra && collId.HasValue && wanted.Count > 0)
         {
             // The group's DefaultSettings only reaches a collection that has never seen this mod, and a
             // re-import into one that has is exactly the case it does not cover. Asserting the selection is
-            // what makes the glow live there too.
-            var first = prepared.GlowOptions[0];
-            penumbra.SetModOption(collId.Value, dirName, GroupName, [first]);
+            // what makes the default pair live there too. Both names in one call: this is a multi-select
+            // group, and asking for one option at a time would clear the other on the second call.
+            penumbra.SetModOption(collId.Value, dirName, GroupName, wanted);
 
             // Read back, like the enable above, and for the same reason — and because the return code is
             // ambiguous anyway: NothingChanged is the COMMON answer here, since Penumbra applies the
-            // group's DefaultSettings when it loads the mod and the option is already what we are asking
+            // group's DefaultSettings when it loads the mod and the options are already what we are asking
             // for. Treating that as a failure told the user to go and tick a box that was ticked in front
             // of them. What the collection actually holds settles it either way.
             var live = penumbra.GetModSettings(collId.Value, dirName);
-            bool ticked = live is { } s
-                       && s.Options.TryGetValue(GroupName, out var selected)
-                       && selected.Contains(first, StringComparer.OrdinalIgnoreCase);
-            if (!ticked)
+            var selected = live is { } s && s.Options.TryGetValue(GroupName, out var sel)
+                ? sel : (IReadOnlyList<string>)[];
+            var missing = wanted
+                .Where(w => !selected.Contains(w, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (missing.Count > 0)
             {
                 selectionFailed = true;
-                log.Warning("[Proteus] imported {0}: {1}/{2} is still not selected after asking",
-                    dirName, GroupName, first);
+                log.Warning("[Proteus] imported {0}: {1}/[{2}] is still not selected after asking",
+                    dirName, GroupName, string.Join(", ", missing));
             }
         }
 
@@ -1037,13 +1091,13 @@ public sealed class LuminisImportService
 
         if (selectionFailed)
             return new(true, true, string.Format(Loc.Localize("Import.Luminis.Result.NoSelection.Fmt",
-                "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch the glow on for you. "
+                "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. "
               + "Tick it under \"{3}\" in Penumbra, or nothing will paint."),
                 dirName, prepared.Imported, tail, GroupName));
 
         return new(true, false, string.Format(Loc.Localize("Import.Luminis.Result.Ok.Fmt",
-            "Imported \"{0}\" — textures: {1}{2}. The glow is on; the author's own skin is available "
-          + "under \"{3}\" in Penumbra and starts off."),
+            "Imported \"{0}\" — textures: {1}{2}. The glow and the author's own body texture are both on; "
+          + "untick the body under \"{3}\" in Penumbra if you want the glow by itself."),
             dirName, prepared.Imported, tail, GroupName));
     }
 }

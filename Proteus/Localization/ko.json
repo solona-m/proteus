@@ -1192,11 +1192,11 @@
     "description": ""
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 다만 Proteus가 빛을 켜지 못했습니다. Penumbra의 “{3}”에서 직접 체크하세요. 그렇지 않으면 아무것도 그려지지 않습니다.",
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 다만 Proteus가 켜지 못했습니다. Penumbra의 “{3}”에서 직접 체크하세요. 그렇지 않으면 아무것도 그려지지 않습니다.",
     "description": ""
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 빛은 켜져 있으며, 제작자의 피부 텍스처는 Penumbra의 “{3}”에서 쓸 수 있고 처음엔 꺼져 있습니다.",
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 빛과 제작자의 몸 텍스처가 모두 켜져 있습니다. 빛만 원한다면 Penumbra의 “{3}”에서 몸 텍스처를 체크 해제하세요.",
     "description": ""
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": ""
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "빛은 켜집니다. 제작자 본인의 몸 텍스처도 Penumbra의 “{0}” 아래로 함께 들어오지만 꺼진 채로 시작합니다. 이것은 당신의 피부색을 제작자의 것으로 바꾸므로, 빛나지 않는 문신 부분이 필요할 때만 켜세요.",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "두 가지가 모두 켜집니다. 빛과, 그 아래에 깔리는 제작자 본인의 몸 텍스처로, 둘 다 Penumbra의 “{0}”에 있습니다. 몸 텍스처에는 빛나지 않는 문신 부분이 담겨 있고, 피부색은 제작자의 것이 아니라 당신의 것이 유지됩니다. 빛만 원한다면 거기서 체크를 해제하세요.",
     "description": ""
   },
   "Luminis.Skipped": {

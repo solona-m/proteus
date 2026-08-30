@@ -1192,11 +1192,11 @@
     "description": ""
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "« {0} » importé — textures : {1}{2}, mais Proteus n’a pas pu activer la lueur pour vous. Cochez-la sous « {3} » dans Penumbra, sinon rien ne sera peint.",
+    "message": "« {0} » importé — textures : {1}{2}, mais Proteus n’a pas pu l’activer pour vous. Cochez-le sous « {3} » dans Penumbra, sinon rien ne sera peint.",
     "description": ""
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "« {0} » importé — textures : {1}{2}. La lueur est activée ; la peau de l’auteur est disponible sous « {3} » dans Penumbra et démarre désactivée.",
+    "message": "« {0} » importé — textures : {1}{2}. La lueur et la texture de corps de l’auteur sont toutes deux activées ; décochez la texture de corps sous « {3} » dans Penumbra si vous ne voulez que la lueur.",
     "description": ""
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": ""
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "La lueur est activée. La texture de corps de l’auteur est également importée, sous « {0} » dans Penumbra, et démarre DÉSACTIVÉE — elle remplace votre teint par le sien : elle est là si vous voulez les parties non lumineuses du tatouage, et ignorable sinon.",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "Les deux moitiés sont activées : la lueur, et en dessous la texture de corps de l’auteur, sous « {0} » dans Penumbra. La texture de corps porte les parties non lumineuses du tatouage et conserve votre propre teint plutôt que celui de l’auteur — décochez-la si vous ne voulez que la lueur.",
     "description": ""
   },
   "Luminis.Skipped": {

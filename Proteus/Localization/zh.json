@@ -1192,11 +1192,11 @@
     "description": ""
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "已导入“{0}” — 贴图：{1}{2}，但 Proteus 未能为你开启发光。请在 Penumbra 的“{3}”中勾选，否则不会绘制任何内容。",
+    "message": "已导入“{0}” — 贴图：{1}{2}，但 Proteus 未能为你开启。请在 Penumbra 的“{3}”中勾选，否则不会绘制任何内容。",
     "description": ""
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "已导入“{0}” — 贴图：{1}{2}。发光已开启；作者的肤色贴图位于 Penumbra 的“{3}”中，默认关闭。",
+    "message": "已导入“{0}” — 贴图：{1}{2}。发光和作者的身体贴图都已开启；如果只想要发光，请在 Penumbra 的“{3}”中取消勾选身体贴图。",
     "description": ""
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": ""
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "发光会开启。作者自己的身体贴图也会一并导入，位于 Penumbra 的“{0}”中，且默认关闭 — 它会用作者的肤色替掉你的，所以只有在你需要纹身中不发光的部分时才需要它。",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "两部分都会开启：发光，以及它下面作者自己的身体贴图，都位于 Penumbra 的“{0}”中。身体贴图包含纹身中不发光的部分，并且保留你自己的肤色而不是作者的 — 如果只想要发光，在那里取消勾选即可。",
     "description": ""
   },
   "Luminis.Skipped": {

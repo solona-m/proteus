@@ -1192,11 +1192,11 @@
     "description": ""
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "«{0}» importado — texturas: {1}{2}, pero Proteus no pudo activar el brillo por ti. Márcalo en «{3}» dentro de Penumbra o no se pintará nada.",
+    "message": "«{0}» importado — texturas: {1}{2}, pero Proteus no pudo activarlo por ti. Márcalo en «{3}» dentro de Penumbra o no se pintará nada.",
     "description": ""
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "«{0}» importado — texturas: {1}{2}. El brillo está activo; la piel del autor está disponible en «{3}» dentro de Penumbra y empieza desactivada.",
+    "message": "«{0}» importado — texturas: {1}{2}. El brillo y la textura corporal del autor están ambos activos; desmarca la textura corporal en «{3}» dentro de Penumbra si solo quieres el brillo.",
     "description": ""
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": ""
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "El brillo se activa. La textura corporal del propio autor también entra, bajo «{0}» en Penumbra, y empieza DESACTIVADA: sustituye tu tono de piel por el suyo, así que está ahí si quieres las partes del tatuaje que no brillan, y se puede ignorar si no.",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "Se activan las dos mitades: el brillo y, debajo, la textura corporal del propio autor, en «{0}» dentro de Penumbra. La textura corporal lleva las partes del tatuaje que no brillan y conserva tu propio tono de piel en lugar del del autor: desmárcala ahí si solo quieres el brillo.",
     "description": ""
   },
   "Luminis.Skipped": {

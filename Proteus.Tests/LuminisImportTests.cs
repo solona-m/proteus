@@ -225,12 +225,19 @@ public class LuminisImportTests
     private static ProteusMetadata WriteAndRead(
         SyntheticTtmp pack, TempDir dir, out List<string> glowOptions, string? suffixOverride = null,
         string? wearer = BiboBody)
+        => WriteAndRead(pack, dir, out glowOptions, out _, suffixOverride, wearer);
+
+    private static ProteusMetadata WriteAndRead(
+        SyntheticTtmp pack, TempDir dir, out List<string> glowOptions, out List<string> defaultOn,
+        string? suffixOverride = null, string? wearer = BiboBody)
     {
         var preview = Preview(pack, wearer);
-        glowOptions = LuminisImportService.WriteMod(
+        var written = LuminisImportService.WriteMod(
             dir.Path, "Synthwave", "Dame Douleur", preview,
             ["chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl"],
             suffixOverride, encodeTo: null, decode: Decode);
+        glowOptions = written.Glow;
+        defaultOn = written.DefaultOn;
 
         var json = File.ReadAllText(Path.Combine(dir.Path, "Proteus", "metadata.json"));
         return JsonSerializer.Deserialize<ProteusMetadata>(json, ProteusJson.MetadataRead)!;
@@ -260,6 +267,52 @@ public class LuminisImportTests
         var glow = group.Options[1];
         Assert.Contains("skin", skin.Name, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(glowOptions, new[] { glow.Name });
+    }
+
+    /// <summary>
+    /// The author's-skin option is a whole BODY, not a decal, and both skin-layer defaults are wrong for it.
+    /// <para/>
+    /// An unset <c>SkinToneMask</c> coalesces to 1, which is maximum masking: the compositor fades
+    /// skin.shpk's skin-colour-influence channel out under the overlay, scaled by coverage × luminance.
+    /// This art is opaque across the whole sheet and bright, so the wearer's tone was deleted over the
+    /// entire body and the pack's pale skin rendered literally — a dark- or blue-skinned character came
+    /// out white. And an unpinned skin overlay can be auto-promoted to a gear shell, which has no
+    /// skin-tone term at all and where the mask is never read, so it would defeat the first fix entirely.
+    /// </summary>
+    [Fact]
+    public void TheAuthorsSkinTakesTheWearersToneAndStaysSkin()
+    {
+        using var pack = SyntheticTtmp.Wizard("Synthwave", "Tests", Tex("chara/bibo/highlander_d.tex"));
+        using var dir = new TempDir();
+
+        var metadata = WriteAndRead(pack, dir, out _);
+        var skin = Assert.Single(metadata.OptionGroups![0].Options[0].Overlays);
+
+        Assert.Equal(0f, skin.SkinToneMask);
+        Assert.True(skin.ManualShaderLock);
+        Assert.Equal(OverlayLayer.Skin, skin.Layer);
+
+        // The pin has to actually hold, not merely be set: this is the condition that would otherwise
+        // move it onto character.shpk the moment anyone reorders the mod's stack tabs.
+        Assert.False(RenderModeInference.ShouldPromoteToGear(
+            skin.Layer, skin.ManualShaderLock, rows: null, aboveGear: true, canShell: true));
+        Assert.True(RenderModeInference.ShouldPromoteToGear(
+            skin.Layer, pinned: false, rows: null, aboveGear: true, canShell: true));
+    }
+
+    /// <summary>The glow rides its own gear shell, which never reaches the skin-tone path — claiming a
+    /// mask there would imply it did.</summary>
+    [Fact]
+    public void TheGlowOptionClaimsNoSkinToneMask()
+    {
+        using var pack = SyntheticTtmp.Wizard("Synthwave", "Tests", Tex("chara/bibo/highlander_d.tex"));
+        using var dir = new TempDir();
+
+        var metadata = WriteAndRead(pack, dir, out _);
+        var glow = Assert.Single(metadata.OptionGroups![0].Options[1].Overlays);
+
+        Assert.Null(glow.SkinToneMask);
+        Assert.Equal(OverlayLayer.Gear, glow.Layer);
     }
 
     [Fact]
@@ -401,26 +454,33 @@ public class LuminisImportTests
         Assert.All(glowOptions, n => Assert.Contains("—", n));
     }
 
-    /// <summary>Skin options off, the FIRST glow option on. They come after every skin option, so the bit
-    /// is its index past them.</summary>
+    /// <summary>
+    /// The FIRST pair on and the rest off — the first skin option and the first glow option, which are two
+    /// halves of one drawing. The glow options come after every skin option, so the glow's bit is its index
+    /// past them, and DefaultOn has to name exactly the same two: Penumbra's DefaultSettings only reaches a
+    /// collection that has never seen this mod, and Finish asserts DefaultOn for the ones that have.
+    /// </summary>
     [Fact]
-    public void TheGroupArrivesWithOnlyTheFirstGlowTicked()
+    public void TheGroupArrivesWithTheFirstPairTicked()
     {
         using var pack = SyntheticTtmp.Wizard("Many", "Tests",
             Tex("chara/bibo/highlander_d.tex", SyntheticTtmp.TextureSlice(16, 16, 2)),
             Tex("chara/bibo/viera_d.tex", SyntheticTtmp.TextureSlice(8, 8, 2)));
         using var dir = new TempDir();
 
-        WriteAndRead(pack, dir, out _);
+        var metadata = WriteAndRead(pack, dir, out _, out var defaultOn);
 
         var group = JsonDocument.Parse(File.ReadAllText(
             Directory.EnumerateFiles(dir.Path, "group_*.json").Single())).RootElement;
 
         Assert.Equal("Multi", group.GetProperty("Type").GetString());
         Assert.Equal(LuminisImportService.GroupName, group.GetProperty("Name").GetString());
-        // Two skins then two glows: bit 2 is the first glow.
+        // Two skins then two glows: bit 0 is the first skin, bit 2 the first glow.
         Assert.Equal(4, group.GetProperty("Options").GetArrayLength());
-        Assert.Equal(4, group.GetProperty("DefaultSettings").GetInt64());
+        Assert.Equal(0b0101, group.GetProperty("DefaultSettings").GetInt64());
+
+        var names = metadata.OptionGroups![0].Options.Select(o => o.Name).ToList();
+        Assert.Equal([names[0], names[2]], defaultOn);
     }
 
     /// <summary>

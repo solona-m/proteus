@@ -2176,14 +2176,14 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable ? ims.AsTexTip : ims.AsTexUnavailableTip);
 
-        // Said before the button: the author's skin is the surprising half of this import. Plain text, not
-        // the warning colour — both of these are true of a CORRECT import, and amber would put a caution
-        // under a green result line and make the two look like they disagreed.
+        // Said before the button: the author's body texture is the surprising half of this import. Plain
+        // text, not the warning colour — both of these are true of a CORRECT import, and amber would put a
+        // caution under a green result line and make the two look like they disagreed.
         if (preview.AnyImportable)
         {
             ImGui.Spacing();
             ImGui.PushTextWrapPos(0);
-            ImGui.TextUnformatted(string.Format(ls.SkinOffFmt, LuminisImportService.GroupName));
+            ImGui.TextUnformatted(string.Format(ls.SkinIncludedFmt, LuminisImportService.GroupName));
             ImGui.Spacing();
             ImGui.TextUnformatted(ls.NoRaceFilter);
             ImGui.PopTextWrapPos();
