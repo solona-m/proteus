@@ -2723,8 +2723,86 @@ public static class SecondSkinWriter
                     if (bodySolid == null)
                     {
                         bodySolid = CollectSkinTriangles(sourceModels, dropIslands: false);
-                        bodySolid.AddRange(CollectSkinTriangles(sourceModels, skinOnly: false,
-                                                                dropIslands: false, nonSkin: true));
+
+                        // ONLY THE NON-SKIN THAT HUGS THE SKIN. This set exists for toenails, which a
+                        // body may carry on their own mesh and a shoe routinely brings with it — but
+                        // "not skin" is also every strap and sole of that shoe, and a sandal strap
+                        // crossing the toes is SUPPOSED to sit outside the stocking. Handing the whole
+                        // lot to the clearance pass had it inflating the shell to clear the footwear:
+                        // 667 vertices lifted, every one pinned at the 3 mm ceiling, against 124 at
+                        // 0.65 mm on the same body barefoot.
+                        //
+                        // A nail lies on the flesh; a strap stands off it. That is the whole test, and
+                        // it needs no material names, so it holds for any shoe anyone models.
+                        var skinNear = new HashSet<(int, int, int)>();
+                        foreach (var t in bodySolid)
+                            foreach (var q in new[] { t.A, t.B, t.C })
+                                skinNear.Add(((int)MathF.Floor(q.X / NailHugsSkin),
+                                              (int)MathF.Floor(q.Y / NailHugsSkin),
+                                              (int)MathF.Floor(q.Z / NailHugsSkin)));
+                        bool HugsSkin(Vec3 q)
+                        {
+                            int cx = (int)MathF.Floor(q.X / NailHugsSkin);
+                            int cy = (int)MathF.Floor(q.Y / NailHugsSkin);
+                            int cz = (int)MathF.Floor(q.Z / NailHugsSkin);
+                            for (int dx = -1; dx <= 1; dx++)
+                            for (int dy = -1; dy <= 1; dy++)
+                            for (int dz = -1; dz <= 1; dz++)
+                                if (skinNear.Contains((cx + dx, cy + dy, cz + dz))) return true;
+                            return false;
+                        }
+
+                        // ...AND ONLY IF IT IS NAIL-SIZED. Proximity alone is not enough: a shoe's inner
+                        // surfaces lie against the foot as closely as a nail does, so the first cut of
+                        // this kept 18589 of its triangles and the pass went on lifting the shell around
+                        // the footwear exactly as before. What separates them is that a toenail is a
+                        // small island of a few hundred triangles and a shoe is one piece of tens of
+                        // thousands. Grouped by shared position, since these arrive as a triangle soup.
+                        var nonSkin = CollectSkinTriangles(sourceModels, skinOnly: false,
+                                                           dropIslands: false, nonSkin: true);
+                        var owner = new Dictionary<(int, int, int), int>();
+                        var parent = new List<int>();
+                        int Find(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+                        void Union(int a, int b)
+                        { int ra = Find(a), rb = Find(b); if (ra != rb) parent[ra] = rb; }
+                        int NodeAt(Vec3 q)
+                        {
+                            var k = QuantPos(q.X, q.Y, q.Z);
+                            if (owner.TryGetValue(k, out int got)) return got;
+                            owner[k] = parent.Count;
+                            parent.Add(parent.Count);
+                            return parent.Count - 1;
+                        }
+                        var triNode = new int[nonSkin.Count];
+                        for (int i = 0; i < nonSkin.Count; i++)
+                        {
+                            var t = nonSkin[i];
+                            int na = NodeAt(t.A), nb = NodeAt(t.B), nc = NodeAt(t.C);
+                            Union(na, nb); Union(nb, nc);
+                            triNode[i] = na;
+                        }
+                        var islandSize = new Dictionary<int, int>();
+                        for (int i = 0; i < nonSkin.Count; i++)
+                        {
+                            int r = Find(triNode[i]);
+                            islandSize[r] = islandSize.GetValueOrDefault(r) + 1;
+                        }
+
+                        int keptNonSkin = 0, dropped = 0;
+                        for (int i = 0; i < nonSkin.Count; i++)
+                        {
+                            var t = nonSkin[i];
+                            var ctr = new Vec3((t.A.X + t.B.X + t.C.X) / 3f,
+                                               (t.A.Y + t.B.Y + t.C.Y) / 3f,
+                                               (t.A.Z + t.B.Z + t.C.Z) / 3f);
+                            if (islandSize[Find(triNode[i])] <= NailIslandMaxTris && HugsSkin(ctr))
+                            { bodySolid.Add(t); keptNonSkin++; }
+                            else dropped++;
+                        }
+                        if (dropped > 0)
+                            diag?.Invoke($"authored cap: clearance sees {keptNonSkin} non-skin triangle(s) "
+                                       + $"small enough and close enough to be a toenail, and ignores "
+                                       + $"{dropped} (a shoe is meant to be outside the shell)");
                     }
                     if (bodySolid.Count > 0 && capAllVerts.Count > 0 && nEl2 is { } ne10)
                     {
@@ -4641,6 +4719,19 @@ public static class SecondSkinWriter
     /// be at the mercy of any one of them; this is enough that the fit describes the neighbourhood.
     /// </summary>
     private const int CapFitMinAnchors = 8;
+
+    /// <summary>
+    /// Relaxation sweeps used to solve the cap's shape-preserving fit. Enough that the solution has
+    /// settled at this mesh size; zero disables it and takes the raw landings.
+    /// </summary>
+    private const int CapShapePasses = 48;
+
+    /// <summary>
+    /// How hard a landing pulls, against the cap's own curvature. Low, because the landing is the noisy
+    /// term and the curvature is the trustworthy one: at 1 the two weigh the same and the noise comes
+    /// straight through, and near zero the cap keeps its shape but drifts off the foot.
+    /// </summary>
+    private const float CapShapeFollow = 0.20f;
 
     /// <summary>Polar-decomposition iterations in <see cref="BestRotation"/>. It converges quadratically;
     /// this is well past the point where the step stops changing anything.</summary>
@@ -7443,6 +7534,122 @@ public static class SecondSkinWriter
                 }
             }
 
+            // KEEP THE CAP'S OWN SHAPE, FOLLOW THE BODY ONLY IN THE LARGE.
+            //
+            // Every vertex above is reconstructed on its own, from its own baked atlas coordinate. On the
+            // body the binding was measured against that is exact. On a foot wearing heels it is a
+            // thousand independent estimates of where a point should go, and neighbours disagree by a
+            // little: measured, the shell came out five times rougher than the same cap barefoot (p90
+            // 0.00172 against 0.00033), with the clearance pass and the relax each accounting for about a
+            // tenth of it - the crunch is in the placement itself.
+            //
+            // This is Laplacian surface editing (Sorkine et al., 2004). A vertex is described not by
+            // where it is but by where it sits RELATIVE to its neighbours - its differential coordinate -
+            // and that is what carries "round" and "smooth". So hold the cap's authored differential
+            // coordinates and treat the landings as a soft constraint, rather than taking the landings as
+            // the answer:
+            //
+            //     x_i  <-  ( sum_j x_j  +  deg_i * delta_i  +  w * p_i ) / (deg_i + w)
+            //
+            // solved by relaxation instead of a sparse least-squares, which needs no linear algebra
+            // library and converges in a few dozen sweeps at this size. A deformation that is a pure
+            // offset reproduces exactly, because delta is unchanged by translation; disagreement between
+            // neighbours is what the sum averages away.
+            //
+            // Two things are deliberately NOT smoothed. The cap's own boundary is pinned hard, because it
+            // has to meet the shell where the weld expects it. And a vertex that never landed is left
+            // entirely to its neighbours (w = 0), which is a better answer than the ring-fill this
+            // replaces: it takes the authored shape with it instead of averaging positions.
+            if (capMdl != null && CapShapePasses > 0)
+            {
+                try
+                {
+                    var shapeSrc = Parse(capMdl);
+                    ReadCapVertices(shapeSrc, mesh, out var authored, out _);
+                    var shapeTri = CapTriangles(shapeSrc, mesh, (ushort)vc);
+                    if (authored.Length >= vc && shapeTri.Count >= 3)
+                    {
+                        var nb = new List<int>[vc];
+                        var edge = new Dictionary<(int, int), int>();
+                        for (int t = 0; t + 2 < shapeTri.Count; t += 3)
+                            for (int k = 0; k < 3; k++)
+                            {
+                                int a = shapeTri[t + k], b = shapeTri[t + (k + 1) % 3];
+                                if (a >= vc || b >= vc) continue;
+                                (nb[a] ??= []).Add(b);
+                                (nb[b] ??= []).Add(a);
+                                var e = (Math.Min(a, b), Math.Max(a, b));
+                                edge[e] = edge.GetValueOrDefault(e) + 1;
+                            }
+                        // The cap's open boundary: the rim that welds to the shell.
+                        var onRim = new bool[vc];
+                        foreach (var (e, n) in edge)
+                            if (n == 1) { onRim[e.Item1] = true; onRim[e.Item2] = true; }
+
+                        // The authored differential coordinate - what "round" actually means here.
+                        var delta = new Vec3[vc];
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (nb[i] is not { Count: > 0 }) continue;
+                            Vec3 sum = default;
+                            foreach (int j in nb[i]) sum = new Vec3(sum.X + authored[j].X,
+                                                                    sum.Y + authored[j].Y,
+                                                                    sum.Z + authored[j].Z);
+                            float inv = 1f / nb[i].Count;
+                            delta[i] = new Vec3(authored[i].X - sum.X * inv,
+                                                authored[i].Y - sum.Y * inv,
+                                                authored[i].Z - sum.Z * inv);
+                        }
+
+                        var cur = (Vec3[])pos.Clone();
+                        var nxt = new Vec3[vc];
+                        for (int pass = 0; pass < CapShapePasses; pass++)
+                        {
+                            Array.Copy(cur, nxt, vc);
+                            for (int i = 0; i < vc; i++)
+                            {
+                                if (nb[i] is not { Count: > 0 }) continue;
+                                if (onRim[i]) continue;                  // pinned to meet the shell
+                                Vec3 sum = default;
+                                foreach (int j in nb[i])
+                                    sum = new Vec3(sum.X + cur[j].X, sum.Y + cur[j].Y, sum.Z + cur[j].Z);
+                                int deg = nb[i].Count;
+                                float w = found[i] ? CapShapeFollow : 0f;
+                                nxt[i] = new Vec3(
+                                    (sum.X + deg * delta[i].X + w * pos[i].X) / (deg + w),
+                                    (sum.Y + deg * delta[i].Y + w * pos[i].Y) / (deg + w),
+                                    (sum.Z + deg * delta[i].Z + w * pos[i].Z) / (deg + w));
+                            }
+                            (cur, nxt) = (nxt, cur);
+                        }
+
+                        int shaped = 0;
+                        float worst = 0f, tot = 0f;
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (nb[i] is not { Count: > 0 } || onRim[i]) continue;
+                            float d = Dist(cur[i], pos[i]);
+                            if (d <= 1e-7f) continue;
+                            pos[i] = cur[i];
+                            tot += d; worst = MathF.Max(worst, d); shaped++;
+                        }
+                        if (shaped > 0)
+                        {
+                            diag?.Invoke($"cap bind: reshaped {shaped} vertices to hold the cap's own "
+                                       + $"curvature while following the body (mean {tot / shaped:F5}, "
+                                       + $"furthest {worst:F5}, {CapShapePasses} passes at w={CapShapeFollow})");
+                            // Everything now has a position, from its neighbours if not from a landing.
+                            for (int i = 0; i < vc; i++)
+                                if (!found[i] && nb[i] is { Count: > 0 }) { found[i] = true; missed--; }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    diag?.Invoke($"cap bind: could not hold the cap's shape ({ex.Message})");
+                }
+            }
+
             outp.Add(new CapPlacement
             {
                 Mesh = mesh, Pos = pos, Nrm = nrm, Uv = uvs, W = wts,
@@ -7570,9 +7777,16 @@ public static class SecondSkinWriter
 
     /// <summary>
     /// How close two caps' placement rates must be before the tie falls through to how evenly each sits
-    /// off the skin. Wide enough that a percent either way does not decide which cap a foot gets.
+    /// off the skin.
+    /// <para/>
+    /// It was 0.02, and on a heeled Neolithe foot that handed the body the wrong cap: the Neolithe cap
+    /// left 3% of its vertices unplaced against the Bibo cap's 0%, which beat the tolerance, so the
+    /// comparison stopped there and never reached the fit — where Neolithe measured 0.00198 against
+    /// Bibo's 0.00306. A few unplaced vertices are not a bad fit; they are filled from their neighbours
+    /// a line later, and the hard limit on a cap being usable at all is <see cref="CapBindMaxUnplaced"/>
+    /// at 15%. This only has to be wide enough that a handful of stragglers cannot outvote the shape.
     /// </summary>
-    private const float CapPlaceRateTie = 0.02f;
+    private const float CapPlaceRateTie = 0.05f;
 
     /// <summary>
     /// How far a placed cap vertex may look for the skin when measuring its standoff. Past this it did
@@ -7614,6 +7828,13 @@ public static class SecondSkinWriter
     /// it, so a few end up level with the skin or just under it — and skin a hair proud of a shell reads
     /// in game as a bright patch of bare foot. Well under the push, so this only rescues the strays.
     /// </summary>
+    /// <summary>
+    /// How close to the skin a non-skin triangle must sit before the clearance pass treats it as part of
+    /// the body. A toenail lies on the flesh; a sandal strap stands well off it, and the shell is meant
+    /// to pass under the strap rather than balloon around it.
+    /// </summary>
+    private const float NailHugsSkin = 0.003f;
+
     private const float MinSkinClearance = 0.0006f;
 
     /// <summary>Most a vertex may be lifted to reach that clearance. Past this it is not a straggler and
