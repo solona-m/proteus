@@ -15,6 +15,19 @@ public enum ShellSurfaceKind
     /// skin that body mods route through <c>chara/equipment/</c> slots.</summary>
     Body,
     Face,
+
+    /// <summary>
+    /// The eyes. Lives in the face's own folder and is cut from a face model like <see cref="Face"/> is,
+    /// but is a surface of its OWN because the two must never share one.
+    /// <para/>
+    /// A face model draws several meshes — <c>_fac</c> beside <c>_iri</c> and <c>_etc</c> — each with its
+    /// own material and its own UV layout. Surfaces are resolved once per key and every layer on a key
+    /// shares one source model and one mesh filter, so folding the iris into Face meant a character
+    /// wearing both a face overlay and an eye overlay got a single shell: one overlay's art on the other's
+    /// geometry, at the other's UVs, with nothing saying so.
+    /// </summary>
+    Iris,
+
     Hair,
     Tail,
     /// <summary>Viera ears (<c>obj/zear</c>).</summary>
@@ -55,6 +68,17 @@ public readonly record struct ShellSurfaceKey(ShellSurfaceKind Kind, string Id)
     /// </summary>
     public bool RequiresNativeHost => Kind != ShellSurfaceKind.Body;
 
+    /// <summary>
+    /// How far off the source surface a shell on this one sits, as a multiple of
+    /// <c>SecondSkinWriter.BaseOffset</c>.
+    /// <para/>
+    /// That offset is an empirical millimetre tuned against a torso, where it is invisible. An eye is a few
+    /// millimetres across, so the same push is a large fraction of the iris radius — enough to stand the
+    /// shell off the cornea or through the eyelid. Everything else keeps the tuned value; only the surface
+    /// whose scale is an order of magnitude smaller asks for less.
+    /// </summary>
+    public float PushScale => Kind == ShellSurfaceKind.Iris ? 0.1f : 1f;
+
     public override string ToString() => Id.Length == 0 ? Kind.ToString() : $"{Kind}:{Id}";
 }
 
@@ -72,6 +96,12 @@ public static class ShellSurface
     // chara/human/c1401/obj/face/f0001/material/mt_c1401f0001_fac_a.mtrl -> ("face", "f0001")
     private static readonly Regex HumanPartRe = new(
         @"/obj/(face|hair|tail|zear)/([a-z]\d+)/",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // …/material/mt_c0201f0001_iri_a.mtrl — the eye material inside a face folder. Anchored on the file
+    // name so a folder that merely contains "iri" cannot trip it.
+    private static readonly Regex IrisRe = new(
+        @"/mt_[^/]*_iri[_.][^/]*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
@@ -98,7 +128,10 @@ public static class ShellSurface
             if (!m.Success) return null;
             var kind = m.Groups[1].Value.ToLowerInvariant() switch
             {
-                "face" => ShellSurfaceKind.Face,
+                // The eyes ship inside the face folder but are their own surface — see ShellSurfaceKind.Iris.
+                // Matched on the material's own name, which is the model's declared target and cannot drift
+                // the way a folder convention might.
+                "face" => IrisRe.IsMatch(mtrlGamePath) ? ShellSurfaceKind.Iris : ShellSurfaceKind.Face,
                 "hair" => ShellSurfaceKind.Hair,
                 "tail" => ShellSurfaceKind.Tail,
                 _      => ShellSurfaceKind.Ear,
@@ -143,6 +176,7 @@ public static class ShellSurface
     {
         ShellSurfaceKind.Body   => "Body",
         ShellSurfaceKind.Face   => "Face",
+        ShellSurfaceKind.Iris   => "Iris",
         ShellSurfaceKind.Hair   => "Hair",
         ShellSurfaceKind.Tail   => "Tail",
         ShellSurfaceKind.Native => "Native",

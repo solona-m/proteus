@@ -33,6 +33,14 @@ public sealed class SecondSkinLayer
     /// of ten.
     /// </summary>
     public IReadOnlyList<ContentGeometry> Geometry { get; init; } = [];
+
+    /// <summary>
+    /// Multiplies how far this layer is pushed off the surface it was cut from. 1 keeps the tuned offset.
+    /// <para/>
+    /// Set from <c>ShellSurfaceKey.PushScale</c>, which exists because <see cref="BaseOffset"/> is a
+    /// millimetre measured against a torso and a surface an order of magnitude smaller needs less of it.
+    /// </summary>
+    public float PushScale { get; init; } = 1f;
 }
 
 /// <summary>
@@ -922,7 +930,9 @@ public static class SecondSkinWriter
         for (ushort layer = 0; layer < layers.Count; layer++)
         {
             var def = layers[layer];
-            float push = BaseOffset + LayerSeparation * layer;
+            // Scaled per surface: the separation between stacked shells is scaled with the base offset so
+            // a small surface's layers stay proportionally apart rather than collapsing onto each other.
+            float push = (BaseOffset + LayerSeparation * layer) * def.PushScale;
             ushort matIndex = (ushort)(baseMatCount + layer);
 
             // An imported content layer brings its own geometry, so it is copied exactly as the host is —

@@ -879,6 +879,58 @@
     "message": "Exportando…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "Solo la ilustración",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Ilustración y su degradado",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "Forma del brillo",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "Cuánto del canal de brillo de la máscara se recorta como forma luminosa. La mayoría de los paquetes marcan la ilustración con fuerza y la funden alrededor; conservar ese degradado hace que brille suavemente más allá de la ilustración, y quitarlo confina el brillo a la forma en sí.\nSe fija al importar, así que elige ahora: después el control Glow solo puede escalar lo que quede.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus no pudo leer la lista de caras del juego, así que el brillo solo apuntará a un par de caras conocidas. Vuelve a abrir el paquete estando en el juego para incluir todas las razas.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "La máscara marca el {0:P1} de la textura como brillante, y esa forma recibe la animación: en {1} material(es) de iris, así que te sigue entre razas y caras. Se desactiva en «{2}» dentro de Penumbra.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "Importa un paquete de texturas de ojos (.zip de imágenes sueltas). Los ojos entran con normalidad, y la forma que marca su máscara recibe un brillo animado que puedes recolorear y atenuar.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "No se añadirá ningún brillo animado: consulta abajo. Las texturas de ojos se importan igualmente y funcionan con normalidad.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "Nada en este archivo parece una textura de ojos.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "No se pudo leer ese archivo: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "omitido",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nOmitido: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Texturas: {0} de {1}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "Última composición: {0}   texturas modificadas: {1}   mods: {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "Seleccionar un paquete",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Importado del paquete de texturas de ojos «{0}».",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "Ese nombre de mod no tiene caracteres utilizables: usa letras o números.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "Ya existe una carpeta de mod llamada «{0}».",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "El archivo ya no está ahí: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "El directorio de mods de Penumbra no está disponible.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "No se pudo leer ninguna textura de este archivo, así que no se escribió nada.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "No se puede importar nada de este archivo.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "«Proteus» está reservado: elige otro nombre de mod.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "No se pudo escribir el mod: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Brillo animado",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "«{0}» importado — texturas: {1}, pero sin brillo animado. Consulta los motivos de arriba; los ojos en sí están puestos y funcionan.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "«{0}» importado — texturas: {1}. Penumbra aún no lo ha activado; márcalo en su lista de mods.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "«{0}» importado — texturas: {1}, con brillo animado en la forma que marca la máscara. Ajústalo en Colors, o desactívalo en «{2}» dentro de Penumbra.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "otro archivo de este paquete ya es la textura {0}.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "los nombres de este archivo no lo identifican como un paquete de ojos, y Proteus no apunta texturas sueltas a tus iris por conjetura.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "su nombre no termina en un tipo de textura que Proteus conozca (base, mask o norm).",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Tu personaje no está dibujado, así que el brillo se recorta para la cara {0}. Si llevas otra cara, vuelve a importar el paquete estando en el juego.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "No se pudo decodificar la textura de máscara, así que Proteus no sabe qué debe brillar. Las texturas de ojos se importan igualmente; solo se omite el brillo.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "El canal rojo de la máscara está vacío, así que nada en este paquete está marcado como brillante. De ese canal lee el juego el anillo limbal, y ahí pone su forma un mod de ojos brillantes. Las texturas de ojos se importan igualmente; solo se omite el brillo.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus no pudo leer la lista de caras del juego, así que no tiene ningún material de iris donde poner el brillo. Las texturas de ojos se importan igualmente; solo se omite el brillo.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "Este paquete no trae textura de máscara, así que no hay forma que la animación pueda rellenar. Las texturas de ojos se importan igualmente; solo se omite el brillo.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "No se puede importar nada de este archivo: consulta los motivos de arriba.",
     "description": ""
   },
   "Import.Failed.Fmt": {

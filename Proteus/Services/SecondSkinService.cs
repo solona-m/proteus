@@ -1403,6 +1403,9 @@ public sealed class SecondSkinService
         static string? PartFolder(ShellSurfaceKind kind) => kind switch
         {
             ShellSurfaceKind.Face => "face",
+            // The eyes live in the face's folder and are cut from a face model. Only the SURFACE is
+            // separate — see ShellSurfaceKind.Iris — so the search is the same one.
+            ShellSurfaceKind.Iris => "face",
             ShellSurfaceKind.Hair => "hair",
             ShellSurfaceKind.Tail => "tail",
             ShellSurfaceKind.Ear  => "zear",
@@ -2131,6 +2134,11 @@ public sealed class SecondSkinService
                 : (null, null);
         }
 
+        /// <summary>How far this layer's surface wants its shell pushed off the skin — see
+        /// <see cref="ShellSurfaceKey.PushScale"/>. Resolved the same way as the UV pair above.</summary>
+        float PushFor(int layerIdx)
+            => surfaces[layerSurface[layerIdx] >= 0 ? layerSurface[layerIdx] : 0].Key.PushScale;
+
         byte[]?[] alphaByLayer = new byte[gearOverlays.Count][];
         var reliefContribs = new List<(string ModDir, int LayerIdx, byte[] Normal)>();
         for (int i = 0; i < gearOverlays.Count; i++)
@@ -2247,6 +2255,7 @@ public sealed class SecondSkinService
                 Coverage = coverage,
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
+                PushScale = PushFor(i),
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;

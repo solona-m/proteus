@@ -879,6 +879,58 @@
     "message": "Export en cours…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "Motif seul",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "Motif et son dégradé",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "Forme de la lueur",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "Quelle part du canal de lueur du masque devient la forme lumineuse. La plupart des packs marquent le motif vivement et le font disparaître autour ; garder ce dégradé fait luire doucement au-delà du motif, le retirer confine la lueur au motif lui-même.\nFigé à l’import : choisissez maintenant, ensuite le curseur Glow ne peut que mettre à l’échelle ce qui reste.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus n’a pas pu lire la liste des visages du jeu ; la lueur ne visera donc qu’une paire de visages connus. Rouvrez ce pack en jeu pour couvrir toutes les races.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "Le masque marque {0:P1} de la texture comme lumineuse, et c’est cette forme qui reçoit l’animation — sur {1} matériau(x) d’iris, donc elle vous suit d’une race et d’un visage à l’autre. Désactivable sous « {2} » dans Penumbra.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "Importez un pack de textures d’yeux (.zip d’images en vrac). Les yeux s’installent normalement, et la forme marquée par leur masque reçoit une lueur animée que vous pouvez recolorer et atténuer.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "Aucune lueur animée ne sera ajoutée — voir ci-dessous. Les textures d’yeux sont tout de même importées et fonctionnent normalement.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "Rien dans cette archive ne ressemble à une texture d’yeux.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "Impossible de lire cette archive : {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "ignoré",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\nIgnoré : {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "Textures : {0} sur {1}",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "Dernière composition : {0}   textures modifiées : {1}   mods : {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "Sélectionner un pack",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "Importé depuis le pack de textures d’yeux « {0} ».",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "Ce nom de mod ne contient aucun caractère utilisable — utilisez des lettres ou des chiffres.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "Un dossier de mod nommé « {0} » existe déjà.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "L’archive n’est plus là : {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Le dossier de mods de Penumbra n’est pas disponible.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "Aucune texture de cette archive n’a pu être lue ; rien n’a été écrit.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "Rien dans cette archive ne peut être importé.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "« Proteus » est réservé — choisissez un autre nom de mod.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "Échec de l’écriture du mod : {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "Lueur animée",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "« {0} » importé — textures : {1}, mais sans lueur animée. Voir les raisons ci-dessus ; les yeux eux-mêmes sont en place et fonctionnent.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "« {0} » importé — textures : {1}. Penumbra ne l’a pas encore activé ; cochez-le dans sa liste de mods.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "« {0} » importé — textures : {1}, avec une lueur animée sur la forme marquée par le masque. Réglez-la dans Colors, ou désactivez-la sous « {2} » dans Penumbra.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "un autre fichier de cette archive est déjà la texture {0}.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "les noms de cette archive ne l’identifient pas comme un pack d’yeux, et Proteus ne dirige pas des textures en vrac vers vos iris au jugé.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "son nom ne se termine pas par un type de texture connu de Proteus (base, mask ou norm).",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "Votre personnage n’est pas affiché : la lueur est donc découpée pour le visage {0}. Si vous portez un autre visage, réimportez ce pack une fois en jeu.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "La texture de masque n’a pas pu être décodée, donc Proteus ignore ce qui doit briller. Les textures d’yeux sont tout de même importées ; seule la lueur est omise.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "Le canal rouge du masque est vide : rien dans ce pack n’est marqué comme lumineux. C’est de ce canal que le jeu lit l’anneau limbique, et c’est là qu’un mod d’yeux lumineux place sa forme. Les textures d’yeux sont tout de même importées ; seule la lueur est omise.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus n’a pas pu lire la liste des visages du jeu et n’a donc aucun matériau d’iris où poser la lueur. Les textures d’yeux sont tout de même importées ; seule la lueur est omise.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "Ce pack ne contient pas de texture de masque, il n’y a donc aucune forme à remplir par l’animation. Les textures d’yeux sont tout de même importées ; seule la lueur est omise.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "Rien dans cette archive ne peut être importé — voir les raisons ci-dessus.",
     "description": ""
   },
   "Import.Failed.Fmt": {

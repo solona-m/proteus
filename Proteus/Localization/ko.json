@@ -879,6 +879,58 @@
     "message": "내보내는 중…",
     "description": ""
   },
+  "Eye.Cutout.Artwork": {
+    "message": "그림만",
+    "description": ""
+  },
+  "Eye.Cutout.Falloff": {
+    "message": "그림과 그 번짐",
+    "description": ""
+  },
+  "Eye.Cutout.Label": {
+    "message": "발광 모양",
+    "description": ""
+  },
+  "Eye.Cutout.Tip": {
+    "message": "마스크의 발광 채널 중 어디까지를 발광 모양으로 잘라낼지입니다. 대부분의 팩은 그림을 밝게 그리고 그 주위를 서서히 흐리게 처리합니다. 그 번짐을 남기면 그림 바깥까지 은은하게 빛나고, 제거하면 그림 자체에만 발광이 머뭅니다.\n가져올 때 확정되므로 지금 고르세요. 이후에는 Glow 다이얼로 남은 부분의 세기만 조절할 수 있습니다.",
+    "description": ""
+  },
+  "Eye.FallbackIrises": {
+    "message": "Proteus가 게임의 얼굴 목록을 읽지 못해, 빛은 알려진 두 얼굴에만 적용됩니다. 모든 종족에 적용하려면 게임에 접속한 뒤 이 팩을 다시 열어 주세요.",
+    "description": ""
+  },
+  "Eye.Glow.Fmt": {
+    "message": "마스크가 텍스처의 {0:P1}을(를) 발광 영역으로 지정하며, 그 모양에 애니메이션이 적용됩니다. 홍채 머티리얼 {1}개가 대상이라 종족과 얼굴을 바꿔도 따라옵니다. Penumbra의 “{2}”에서 끌 수 있습니다.",
+    "description": ""
+  },
+  "Eye.Intro": {
+    "message": "눈 텍스처 팩(이미지가 그대로 담긴 .zip)을 가져옵니다. 눈은 그대로 적용되고, 마스크가 지정한 모양에는 색과 세기를 조절할 수 있는 애니메이션 발광이 들어갑니다.",
+    "description": ""
+  },
+  "Eye.NoGlow": {
+    "message": "애니메이션 발광은 추가되지 않습니다(아래 사유 참고). 눈 텍스처는 그대로 가져와지며 정상 작동합니다.",
+    "description": ""
+  },
+  "Eye.NothingUsable": {
+    "message": "이 아카이브에는 눈 텍스처로 보이는 파일이 없습니다.",
+    "description": ""
+  },
+  "Eye.ReadFailed.Fmt": {
+    "message": "이 아카이브를 읽지 못했습니다: {0}",
+    "description": ""
+  },
+  "Eye.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Eye.SkippedReason.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Eye.TextureCount.Fmt": {
+    "message": "텍스처: {1}개 중 {0}개",
+    "description": ""
+  },
   "Footer.LastComposite.Fmt": {
     "message": "마지막 합성: {0}   적용된 텍스처: {1}   모드: {2}",
     "description": ""
@@ -953,6 +1005,94 @@
   },
   "Import.Dialog.Title": {
     "message": "팩 선택",
+    "description": ""
+  },
+  "Import.Eye.Description.Fmt": {
+    "message": "눈 텍스처 팩 “{0}”에서 가져왔습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.BadName": {
+    "message": "사용할 수 있는 문자가 없는 모드 이름입니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Exists.Fmt": {
+    "message": "“{0}” 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Gone.Fmt": {
+    "message": "아카이브를 찾을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoModDir": {
+    "message": "Penumbra의 모드 폴더를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NoneWritten": {
+    "message": "이 아카이브의 텍스처를 하나도 읽지 못해 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.NothingUsable": {
+    "message": "이 아카이브에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Reserved": {
+    "message": "“Proteus”는 예약된 이름입니다. 다른 모드 이름을 고르세요.",
+    "description": ""
+  },
+  "Import.Eye.Fail.Write.Fmt": {
+    "message": "모드를 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Import.Eye.Option.Glow": {
+    "message": "애니메이션 발광",
+    "description": ""
+  },
+  "Import.Eye.Result.NoGlow.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. 다만 애니메이션 발광은 없습니다. 사유는 위를 참고하세요. 눈 자체는 정상 적용되었습니다.",
+    "description": ""
+  },
+  "Import.Eye.Result.NotEnabled.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. Penumbra가 아직 켜지 않았습니다. 모드 목록에서 직접 체크하세요.",
+    "description": ""
+  },
+  "Import.Eye.Result.Ok.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}. 마스크가 지정한 모양에 애니메이션 발광이 적용되었습니다. Colors에서 조정하거나 Penumbra의 “{2}”에서 끄세요.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Duplicate.Fmt": {
+    "message": "이 아카이브의 다른 파일이 이미 {0} 텍스처입니다.",
+    "description": ""
+  },
+  "Import.Eye.Skip.NotEyes": {
+    "message": "이 아카이브의 파일 이름만으로는 눈 팩인지 알 수 없습니다. Proteus는 추측으로 홍채에 텍스처를 적용하지 않습니다.",
+    "description": ""
+  },
+  "Import.Eye.Skip.Unknown": {
+    "message": "파일 이름이 Proteus가 아는 텍스처 종류(base, mask, norm)로 끝나지 않습니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.FaceGuessed.Fmt": {
+    "message": "캐릭터가 그려지지 않아 발광을 얼굴 {0} 기준으로 잘라냅니다. 다른 얼굴을 쓰고 있다면 게임에 접속한 뒤 다시 가져오세요.",
+    "description": ""
+  },
+  "Import.Eye.Warn.MaskUnreadable": {
+    "message": "마스크 텍스처를 디코딩하지 못해 무엇이 빛나야 할지 알 수 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoGlowRegion": {
+    "message": "마스크의 빨강 채널이 비어 있어 이 팩에는 발광으로 표시된 부분이 없습니다. 게임은 그 채널에서 림발링을 읽으며, 빛나는 눈 모드도 그곳에 모양을 넣습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoIrisMaterials": {
+    "message": "Proteus가 게임의 얼굴 목록을 읽지 못해 발광을 올릴 홍채 머티리얼이 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NoMask": {
+    "message": "이 팩에는 마스크 텍스처가 없어 애니메이션이 채울 모양이 없습니다. 눈 텍스처는 그대로 가져오고 발광만 빠집니다.",
+    "description": ""
+  },
+  "Import.Eye.Warn.NothingImportable": {
+    "message": "이 아카이브에서 가져올 수 있는 것이 없습니다 — 위의 이유를 확인하세요.",
     "description": ""
   },
   "Import.Failed.Fmt": {

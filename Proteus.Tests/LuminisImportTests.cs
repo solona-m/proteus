@@ -423,6 +423,41 @@ public class LuminisImportTests
         Assert.Equal(4, group.GetProperty("DefaultSettings").GetInt64());
     }
 
+    /// <summary>
+    /// A pack mixing body tokens keeps each texture's OWN UV space when the user hasn't retargeted.
+    /// <para/>
+    /// The Import tab seeds its body combo from the resolved default and hands that back on every import,
+    /// so "an override was supplied" never meant "the user aimed this somewhere". Testing the override
+    /// against each plan's own suffix made the gen3 plan — which differs from the seeded bibo default —
+    /// read as retargeted, and its art was declared to already be in bibo space: the remap that would have
+    /// made it fit was skipped, silently, on exactly the case the guard existed for.
+    /// </summary>
+    [Fact]
+    public void AMixedBodyPackKeepsEachTexturesOwnUvSpace()
+    {
+        using var pack = SyntheticTtmp.Wizard("Mixed bodies", "Tests",
+            Tex("chara/bibo/highlander_d.tex", SyntheticTtmp.TextureSlice(16, 16, 2)),
+            Tex("chara/gen3/highlander_d.tex", SyntheticTtmp.TextureSlice(8, 8, 2)));
+        using var dir = new TempDir();
+
+        var preview = Preview(pack);
+        Assert.Equal(["bibo", "gen3"], preview.Importable.Select(p => p.BodyType));
+
+        // What the tab passes when nobody touches the combo: the default it seeded.
+        LuminisImportService.WriteMod(
+            dir.Path, "Mixed", "Tests", preview, ["chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl"],
+            suffixOverride: preview.DefaultSuffix, encodeTo: null, decode: Decode);
+
+        var metadata = JsonSerializer.Deserialize<ProteusMetadata>(
+            File.ReadAllText(Path.Combine(dir.Path, "Proteus", "metadata.json")), ProteusJson.MetadataRead)!;
+        var glows = metadata.OptionGroups![0].Options
+            .Where(o => o.ColorTableRows != null)
+            .Select(o => o.Overlays[0].SourceBodyType)
+            .ToList();
+
+        Assert.Equal(["bibo", "gen3"], glows);
+    }
+
     [Fact]
     public void AimsAtTheOverriddenBodyWithoutRemappingTheArt()
     {
