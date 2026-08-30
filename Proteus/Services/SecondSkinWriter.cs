@@ -727,6 +727,9 @@ public static class SecondSkinWriter
         byte[]? capBytes = null;
         Dictionary<int, CapPlacement>? capPlaced = null;
         string? capDeclined = null, capUsed = null;
+        // How far the chosen cap already stands off this body, measured at selection. The push below is
+        // driven from it, so a cap authored thick and a cap authored thin both land at the same height.
+        float capStandoff = 0f;
         if (authoredCaps is { Count: > 0 })
         {
             // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
@@ -759,11 +762,12 @@ public static class SecondSkinWriter
                 if (probe is not { Count: > 0 }) continue;
                 int tot = probe.Sum(p => p.Considered), miss = probe.Sum(p => p.Missed);
                 float rate = tot > 0 ? (float)miss / tot : 1f;
-                float spread = CapStandoffSpread(probe, fitSurface ??= BindSurface(sourceModels));
+                float spread = CapStandoffSpread(probe, fitSurface ??= BindSurface(sourceModels),
+                                                 out float standoff);
                 if (authoredCaps.Count > 1)
                     diag?.Invoke($"authored cap: '{cand.Name}' places all but {rate * 100:F0}% on this body, "
                                + $"this body has {cover * 100:F0}% of the {want.Count} bone(s) it was bound "
-                               + $"to, and it sits off the skin within {spread:F5}");
+                               + $"to, and it sits a median {standoff:F5} off the skin, within {spread:F5}");
 
                 // Bone coverage decides; the placement score only separates caps the body can equally
                 // carry. A cap missing bones is not a worse fit, it is the wrong body.
@@ -784,7 +788,8 @@ public static class SecondSkinWriter
                 else if (rate < bestRate - CapPlaceRateTie) better = true;
                 else if (rate > bestRate + CapPlaceRateTie) better = false;
                 else better = spread < bestSpread;
-                if (better) { bestCover = cover; bestRate = rate; bestSpread = spread; best = cand; }
+                if (better)
+                { bestCover = cover; bestRate = rate; bestSpread = spread; capStandoff = standoff; best = cand; }
             }
 
             if (best is { } chosen && bestRate <= CapBindMaxUnplaced)
@@ -2055,6 +2060,11 @@ public static class SecondSkinWriter
                     {
                         int reused = 0, added = 0, capTriCount = 0;
                         var capVerts = new List<Vec3>();
+                        // The cap's INTERIOR, as vertex indices in the merged mesh. Reused vertices are
+                        // shared with the shell at the join and are deliberately left out: the weld set
+                        // their normals so the two sides shade as one surface, and that is the one place
+                        // the cap's own shading should not win.
+                        var capInterior = new List<ushort>();
                         // Where the shell already has a vertex. The cap reuses these rather than emitting
                         // its own copy — that is the whole point: at the rim there is one vertex, not two.
                         var atPos = new Dictionary<(int, int, int), ushort>();
@@ -2167,6 +2177,7 @@ public static class SecondSkinWriter
                                         WriteSkinNamed(outStreams, outStrides, we9, ie9, nv2, gpl.SrcW[cs2],
                                                        shellSlot, shellTbl, boneIndex);
                                     map[c] = nv2; have[c] = true; added++; capVerts.Add(fp);
+                                    capInterior.Add(nv2);
                                 }
                                 if (!ok) continue;
                                 newTris.Add(map[c0]); newTris.Add(map[c1]); newTris.Add(map[c2]);
@@ -2208,6 +2219,88 @@ public static class SecondSkinWriter
                             diag?.Invoke($"authored cap: stitched the merged rim - {stitched} vertex/vertices "
                                        + $"inserted and {StitchShared} split point(s) reused a vertex the mesh "
                                        + $"already had, so the two runs share edges ({rimPts2.Count} positions)");
+
+                            // THE CAP KEEPS ITS OWN SHADING. Each grafted vertex was given the normal of
+                            // the BODY at the point its binding landed on — the surface it was projected
+                            // onto, not the surface it is. The positions are the authored cap to within
+                            // 0.4 mm at p90, but the normals leaned like the toes underneath: 860 of 1829
+                            // vertices off by more than 10 degrees, 339 by more than 30. A smooth surface
+                            // shaded that way reads as a wrinkled one, which is exactly how it looked in
+                            // game while every measurement of its SHAPE came back clean.
+                            //
+                            // Recomputed from the merged mesh rather than copied from the authored cap,
+                            // because the cap is placed by its binding and on a body it was not modelled
+                            // against that placement bends it — an authored normal would then describe a
+                            // shape that is no longer there. Taken from the geometry that actually got
+                            // emitted, this is right on every body.
+                            //
+                            // Interior only. A vertex shared with the shell at the join keeps the normal
+                            // the weld gave it, so the two sides still shade as one surface; and since a
+                            // vertex just inside the rim averages in the shell's faces too, the two meet
+                            // without a crease rather than at a hard line.
+                            if (gN is { } ne11 && capInterior.Count > 0)
+                            {
+                                var acc = new Dictionary<ushort, Vec3>();
+                                // A plain array: the local function below reads it, and a ref local
+                                // cannot be captured.
+                                var tp = new float[4];
+                                Vec3 PosOf(ushort v)
+                                {
+                                    ReadTyped(outStreams[pw2.Stream], v * outStrides[pw2.Stream] + pw2.Offset,
+                                              pw2.Type, tp);
+                                    return new Vec3(tp[0], tp[1], tp[2]);
+                                }
+                                var want = new HashSet<ushort>(capInterior);
+                                foreach (var sub in keptPerSub)
+                                    for (int t = 0; t + 2 < sub.Length; t += 3)
+                                    {
+                                        ushort a5 = sub[t], b5 = sub[t + 1], c5 = sub[t + 2];
+                                        if (!want.Contains(a5) && !want.Contains(b5) && !want.Contains(c5))
+                                            continue;
+                                        Vec3 pa = PosOf(a5), pb = PosOf(b5), pc = PosOf(c5);
+                                        // Unnormalised, so a big triangle counts for more than a sliver.
+                                        var fn = new Vec3(
+                                            (pb.Y - pa.Y) * (pc.Z - pa.Z) - (pb.Z - pa.Z) * (pc.Y - pa.Y),
+                                            (pb.Z - pa.Z) * (pc.X - pa.X) - (pb.X - pa.X) * (pc.Z - pa.Z),
+                                            (pb.X - pa.X) * (pc.Y - pa.Y) - (pb.Y - pa.Y) * (pc.X - pa.X));
+                                        foreach (var v in new[] { a5, b5, c5 })
+                                        {
+                                            if (!want.Contains(v)) continue;
+                                            var had = acc.GetValueOrDefault(v);
+                                            acc[v] = new Vec3(had.X + fn.X, had.Y + fn.Y, had.Z + fn.Z);
+                                        }
+                                    }
+
+                                int reshaded = 0;
+                                float worstTurn = 0f;
+                                Span<float> tn = stackalloc float[4];
+                                foreach (var (v, sum) in acc)
+                                {
+                                    var nn = NormalizeOr(sum, default);
+                                    if (nn is { X: 0, Y: 0, Z: 0 }) continue;
+                                    ReadTyped(outStreams[ne11.Stream], v * outStrides[ne11.Stream] + ne11.Offset,
+                                              ne11.Type, tn);
+                                    float ox = tn[0], oy = tn[1], oz = tn[2];
+                                    if (ne11.Type == 8) { ox = ox * 2 - 1; oy = oy * 2 - 1; oz = oz * 2 - 1; }
+                                    var was = NormalizeOr(new Vec3(ox, oy, oz), nn);
+                                    // Keep the emitted winding's sense: the merged mesh is assembled from
+                                    // several sources and a flipped face here would invert the shading.
+                                    if (nn.X * was.X + nn.Y * was.Y + nn.Z * was.Z < 0)
+                                        nn = new Vec3(-nn.X, -nn.Y, -nn.Z);
+                                    WriteNormal(outStreams[ne11.Stream],
+                                                v * outStrides[ne11.Stream] + ne11.Offset, ne11.Type,
+                                                nn.X, nn.Y, nn.Z);
+                                    worstTurn = MathF.Max(worstTurn,
+                                        MathF.Acos(Math.Clamp(nn.X * was.X + nn.Y * was.Y + nn.Z * was.Z,
+                                                              -1f, 1f)) * 180f / MathF.PI);
+                                    reshaded++;
+                                }
+                                if (reshaded > 0)
+                                    diag?.Invoke($"authored cap: re-shaded {reshaded} interior vertices from "
+                                               + $"the cap's own surface instead of the body it was projected "
+                                               + $"onto (furthest turn {worstTurn:F1} degrees); the rim keeps "
+                                               + "the weld's normals so the join still shades as one surface");
+                            }
 
                         }
                     }
@@ -2942,7 +3035,25 @@ public static class SecondSkinWriter
             //
             // The ridge is real and still wants fixing. The measurement to drive it is the cap's OWN
             // clearance over the body it is being placed on, not a constant.
-            float capPush = push;
+            // THE CAP IS PUSHED TO THE SHELL'S HEIGHT, NOT BY THE SHELL'S PUSH.
+            //
+            // It used to take the full push like everything else, and that is wrong for the same reason
+            // in both directions: the cap is not a copy of the skin sitting on the skin, it is a modelled
+            // object already standing off it by whatever its author chose. Measured on this body the
+            // Neolithe cap sits 1.58 mm out and the Bibo one 1.82 mm, so adding another millimetre put
+            // the cap at 2.6 mm against a shell at 1.0 — visibly lifted off the toes, with a ridge that
+            // size everywhere the two meet.
+            //
+            // Subtracting a CONSTANT was tried once and broke the weld on both bodies, which is what the
+            // note here used to say: BaseOffset is not what any particular cap was authored at, so taking
+            // it off moves each cap by a different amount relative to the rim it has to meet. The fix the
+            // note asked for is this one — the cap's OWN clearance over the body it is being placed on,
+            // measured at selection, so whatever height it was drawn at it arrives level with the shell.
+            //
+            // Clamped at zero: a cap authored below the shell's height is left where it is rather than
+            // pulled into the skin, since the ramp behind the lip can lift the shell down to meet it but
+            // nothing can rescue geometry that has been pushed inside the body.
+            float capPush = capStandoff > 0f ? MathF.Max(0f, push - capStandoff) : push;
 
             // A declined cap takes its cut with it, so the toes keep the shell they already had.
             if (capDeclined != null && def.ToeCap != null)
@@ -6877,8 +6988,10 @@ public static class SecondSkinWriter
     /// Percentiles rather than the extremes, because a handful of vertices at the rim of any cap sit
     /// oddly on any body and should not decide which cap a whole foot gets.
     /// </summary>
-    private static float CapStandoffSpread(IReadOnlyList<CapPlacement> placed, List<SkinTri> skin)
+    private static float CapStandoffSpread(IReadOnlyList<CapPlacement> placed, List<SkinTri> skin,
+                                           out float median)
     {
+        median = 0f;
         if (skin.Count == 0) return float.MaxValue;
         var d = new List<float>();
         foreach (var pl in placed)
@@ -6890,6 +7003,7 @@ public static class SecondSkinWriter
             }
         if (d.Count < 8) return float.MaxValue;
         d.Sort();
+        median = d[d.Count / 2];
         return d[(int)(d.Count * 0.90f)] - d[(int)(d.Count * 0.10f)];
     }
 
