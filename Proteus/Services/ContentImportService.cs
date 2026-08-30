@@ -140,7 +140,17 @@ public sealed class ContentImportService
         /// stands. The top of <see cref="Inspect"/> has the reason converting it a second time can be
         /// actively wrong.
         /// </summary>
-        ProteusMetadata? AuthoredSidecar = null)
+        ProteusMetadata? AuthoredSidecar = null,
+        /// <summary>
+        /// Default-data model redirects an option group replaces, as <c>RedirectKey</c> pairs.
+        /// <para/>
+        /// These never became units — Penumbra would never have loaded them, since an option outranks the
+        /// default for one game path — so the <c>taken</c> set <see cref="WriteMod"/> derives from the units
+        /// does not cover them. They still have to be stripped: the option's own redirect IS stripped
+        /// (Proteus took that model over), which would otherwise promote the shadowed default to winner and
+        /// republish the very geometry Proteus is now appending itself.
+        /// </summary>
+        IReadOnlySet<string>? ShadowedRedirects = null)
     {
         public string Name => Pack.Name;
         public string Author => Pack.Author;
@@ -298,6 +308,66 @@ public sealed class ContentImportService
             list.Add(PlanPiece(gamePath, entry, bytes, materialsByLeaf, log) with { RaceCode = slot.RaceCode });
         }
 
+        // ── default-data copies a SINGLE group replaces ──────────────────────────
+        //
+        // Penumbra resolves one file per game path and an option's redirect outranks the default, so a
+        // default-data model a Single group overrides is one the game never loaded. Taking it as a piece of
+        // its own put the same garment on the character twice — the default copy AND the size the user
+        // picked — which read as nothing worse than faint z-fighting, and left the piece checkbox governing
+        // the default copy with no visible effect.
+        //
+        // SINGLE only. A Multi group's option can be off — and after an import always IS, since
+        // ClearMultiSelectDefaults empties every one of them — so for those the default really is the copy
+        // that renders, and dropping it would take the base garment away until the user found the pack's own
+        // box. That is the opposite failure and a worse one.
+        var singleGroups = pack.Groups
+            .Where(g => string.Equals(g.Type, "Single", StringComparison.OrdinalIgnoreCase))
+            .Select(g => g.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Per game path: how many Single-group variants claim it, and how many of those Proteus can actually
+        // place. Both halves matter — see the all-or-nothing rule below.
+        var claims = new Dictionary<string, (int Total, int Importing)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in unitOrder)
+        {
+            if (key.Item1 is not { } g || !singleGroups.Contains(g)) continue;
+            foreach (var v in byUnit[key])
+            {
+                var path = PenumbraPackage.Normalize(v.GamePath);
+                var c = claims.TryGetValue(path, out var prev) ? prev : default;
+                claims[path] = (c.Total + 1, c.Importing + (v.Import ? 1 : 0));
+            }
+        }
+
+        // Replaced only when EVERY option claiming the path imports. One refused option means the user can
+        // select a size Proteus cannot place, and with the default already dropped that selection would wear
+        // nothing at all. Keeping the default there costs the duplicate this exists to remove — but showing a
+        // garment twice is a far better failure than showing it not at all, so the doubt resolves that way.
+        var shadowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in unitOrder)
+        {
+            if (key.Item1 != null) continue;                 // unconditional units only
+            var list = byUnit[key];
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                var v = list[i];
+                if (claims.TryGetValue(PenumbraPackage.Normalize(v.GamePath), out var c)
+                    && c.Total > 0 && c.Importing == c.Total)
+                {
+                    // Recorded so WriteMod can strip it too. It is no longer a variant of any unit, so the
+                    // `taken` set built from the units would not cover it — and an unstripped default
+                    // redirect would republish the very model the option handed to Proteus.
+                    shadowed.Add(RedirectKey(v.GamePath, v.Entry));
+                    log?.Debug("[Proteus] content import: {0} is replaced by an option — "
+                             + "dropping the default copy", v.GamePath);
+                    list.RemoveAt(i);
+                }
+            }
+        }
+        // A unit every one of whose races was replaced is not a garment of its own any more. Left in, it
+        // would offer a checkbox that can never put anything on anyone.
+        unitOrder.RemoveAll(k => k.Item1 == null && byUnit[k].Count == 0);
+
         // How many distinct garments each of the author's options ships. One means their own option already
         // selects it and we add nothing; more means the option bundles an outfit, and its pieces are gated
         // by SLOT — the identity that stays stable as the user switches between that group's options, where
@@ -313,6 +383,44 @@ public sealed class ContentImportService
             .SelectMany(o => o.Attributes)
             .ToHashSet(StringComparer.Ordinal);
 
+        // "Nothing else selects it" is the whole reason an unconditional model gets a switch of ours —
+        // so it stops being true the moment the pack's own checkboxes reach into that model. They do
+        // when its attributes are ones those options toggle, and then our switch is pure friction: a
+        // box to tick before any of the pack's own boxes mean anything, which also equips everything
+        // at once the moment it is ticked.
+        bool PackControls((string?, string?, string, string) key) => byUnit[key].Any(v =>
+            v.MaterialAttributes is { } byMat
+            && byMat.Values.Any(names => names.Any(packToggles.Contains)));
+
+        string GateLabel((string?, string?, string, string) key)
+            => ContentSlot.Label(slotOf[key],
+                itemName?.Invoke(slotOf[key].Category, ContentSlot.SetIdOf(key.Item4) ?? -1));
+
+        // The gate a garment already has from its UNCONDITIONAL copy, keyed on the garment — slot and set,
+        // the identity a size group's options all share.
+        //
+        // A pack that ships a garment in default data AND overrides it per size ships ONE garment, and one
+        // checkbox has to govern it however the size is chosen. Gating only the unconditional copy (which is
+        // all this used to do) left the size copy ungated, and a Single group always has an option selected —
+        // so the garment was worn whatever the checkbox said, and the checkbox did nothing. The shadowing
+        // above removes the duplicate geometry; this is what makes the switch mean something.
+        //
+        // Slot and set joined by NUL and compared case-insensitively, the way RedirectKey pairs its own two
+        // halves — NUL because it cannot occur in either, so no pair can be spelled two ways.
+        //
+        // The case-insensitivity is belt and braces, NOT a live fix: ContentSlot.Parse already lowercases
+        // both halves it produces (the set tag is a lowercased kind letter plus four digits, and a label is
+        // either a constant from its own table or a lowercased suffix), so today the two spellings cannot
+        // arise. It is written this way because a MISS here is silent and its symptom is the bug this whole
+        // block exists to fix — the size copy quietly ungated — which is too costly an outcome to rest on a
+        // normalisation another file happens to perform. The set beside it is keyed the same way.
+        static string GarmentKey(string slotLabel, string setTag) => slotLabel + '\0' + setTag;
+
+        var garmentGate = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in unitOrder)
+            if (key.Item1 == null && !PackControls(key))
+                garmentGate.TryAdd(GarmentKey(key.Item3, key.Item4), GateLabel(key));
+
         var units = new List<PieceUnit>();
         bool selfDriven = false;   // at least one model the pack's own checkboxes already drive
         foreach (var key in unitOrder)
@@ -321,17 +429,12 @@ public sealed class ContentImportService
             var slot = slotOf[key];
             var name = itemName?.Invoke(slot.Category, ContentSlot.SetIdOf(setTag) ?? -1);
 
-            // "Nothing else selects it" is the whole reason an unconditional model gets a switch of ours —
-            // so it stops being true the moment the pack's own checkboxes reach into that model. They do
-            // when its attributes are ones those options toggle, and then our switch is pure friction: a
-            // box to tick before any of the pack's own boxes mean anything, which also equips everything
-            // at once the moment it is ticked.
-            bool packControls = byUnit[key].Any(v =>
-                v.MaterialAttributes is { } byMat
-                && byMat.Values.Any(names => names.Any(packToggles.Contains)));
+            bool packControls = PackControls(key);
 
             string? gate =
                 group == null                         ? (packControls ? null : ContentSlot.Label(slot, name))
+                // Shares the garment with an unconditional copy: one checkbox, already named, governs both.
+                : garmentGate.TryGetValue(GarmentKey(key.Item3, setTag), out var shared) ? shared
                 : unitsPerOption[(group, option)] > 1 ? slot.Label   // one slot of a bundle
                 : null;                                             // its own option selects it
 
@@ -381,7 +484,7 @@ public sealed class ContentImportService
                 "This pack switches its own pieces on and off, so Proteus adds no checkboxes of its own — "
               + "use the pack's. Any piece it does not switch is worn whenever the mod is enabled."));
 
-        return new ImportPreview(pmpPath, pack, units, gateGroup, warnings);
+        return new ImportPreview(pmpPath, pack, units, gateGroup, warnings, ShadowedRedirects: shadowed);
     }
 
     /// <summary>
@@ -636,6 +739,9 @@ public sealed class ContentImportService
             .Where(u => u.Import)
             .SelectMany(u => u.Variants.Where(v => v.Import).Select(v => RedirectKey(v.GamePath, v.Entry)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // …plus the default-data copies an option replaces, which are not units at all. See
+        // ImportPreview.ShadowedRedirects for why leaving one behind resurrects the geometry.
+        if (preview.ShadowedRedirects is { } shadowed) taken.UnionWith(shadowed);
         StripModelRedirects(root, preview.Pack, taken, log);
 
         // The name the user chose goes into the copied manifest too, not just the sidecar and the folder.

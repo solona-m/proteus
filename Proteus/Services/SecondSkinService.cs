@@ -1576,9 +1576,16 @@ public sealed class SecondSkinService
         var estPending = new List<((string Mod, string? Group, string? Option) Owner, string Slot, int Entry)>();
 
         var unwearable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        void Unwearable(string modDir, string reason)
+        // Held rather than logged on the spot, and emitted below once it is known whether the pack got
+        // ANYTHING through. A refused piece is only news when it is the whole story: a pack that ships a
+        // garment in default data and overrides one race of it per size legitimately refuses the
+        // unconditional copy on exactly the character wearing that garment through a size option, and
+        // logging inline meant a healthy mod filed a race warning on every composite.
+        var refusals = new List<(string ModDir, string Group, string Option, string Reason)>();
+        void Unwearable(string modDir, string reason, string? group, string? option)
         {
             if (!unwearable.ContainsKey(modDir)) unwearable[modDir] = reason;
+            refusals.Add((modDir, group ?? "", option ?? "", reason));
         }
 
         // A mod's live Penumbra selection, fetched once per mod per composite. Only the IMC hide-toggles
@@ -1637,9 +1644,7 @@ public sealed class SecondSkinService
                 // else nothing, and this is the message that has to explain an enabled pack showing nothing.
                 var reason = string.Format(Strings.Content.NotForYourRaceFmt,
                     ModelRace.DescribeAll(piece.ModelCodes), ModelRace.Describe(ownCode));
-                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
-                Unwearable(cEntry.ModDirectory, reason);
+                Unwearable(cEntry.ModDirectory, reason, rc.OptionGroup, rc.Option);
                 continue;
             }
             var modelRel = v.Path;
@@ -1651,9 +1656,7 @@ public sealed class SecondSkinService
             {
                 var reason = string.Format(Strings.Content.NoRaceFitFmt,
                     ModelRace.Describe(v.Code), ModelRace.Describe(ownCode));
-                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}",
-                    cEntry.ModDirectory, rc.OptionGroup ?? "", rc.Option ?? "", reason);
-                Unwearable(cEntry.ModDirectory, reason);
+                Unwearable(cEntry.ModDirectory, reason, rc.OptionGroup, rc.Option);
                 continue;
             }
 
@@ -1848,6 +1851,33 @@ public sealed class SecondSkinService
                      && string.Equals(o.Content.Option, rc.Option, StringComparison.OrdinalIgnoreCase)))
                     unit.Owners.Add((cEntry, rc));
             }
+        }
+
+        // A mod that got SOMETHING through is not unwearable, whatever else it dropped. The field means "why
+        // NONE of that pack's pieces can be worn" and the panel treats it that way — it paints the mod amber
+        // and returns before the colour grid — so one refused piece must not speak for the pack.
+        //
+        // It bites on an ordinary pack now: one that ships a garment in default data and overrides one race
+        // of it per size leaves the unconditional copy with no model for exactly the race its size options
+        // cover (the importer drops the shadowed path), so that piece is legitimately refused on the very
+        // character wearing the garment through the size option.
+        var wore = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var unit in contentUnits)
+        {
+            if (unit.Geometries.Count == 0) continue;
+            foreach (var (owner, _) in unit.Owners) wore.Add(owner.ModDirectory);
+        }
+        foreach (var mod in wore) unwearable.Remove(mod);
+
+        // The held refusals, now that "did the pack get anything through" has an answer. Same predicate as
+        // the panel's, so the log and the panel cannot disagree about whether a mod is in trouble.
+        foreach (var (modDir, group, option, reason) in refusals)
+        {
+            if (wore.Contains(modDir))
+                log.Debug("[Proteus] content: {0} \"{1}/{2}\" — {3} (other pieces of it are worn)",
+                    modDir, group, option, reason);
+            else
+                log.Warning("[Proteus] content: {0} \"{1}/{2}\" — {3}", modDir, group, option, reason);
         }
 
         // Published the moment the loop that fills it ends, and NOT later. Sitting it beside the host
