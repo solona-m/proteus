@@ -144,12 +144,13 @@ type, so there is no category segment for the client and the worker to disagree 
 | `/effects-v1/hello.kitty.png` | `releases/download/effects-v1/…` |
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
+| `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
 | `/mirror.md` | this file |
 
 ### Documents render for browsers, stay raw for tools
 
-The four document paths negotiate on `Accept`:
+Every document path negotiates on `Accept`:
 
 - `Accept: text/html` (any browser) → a rendered, styled HTML page
 - anything else (`curl`, scripts, `*/*`) → the markdown source, byte for byte
@@ -166,11 +167,39 @@ Two details that are easy to get wrong if this is ever refactored:
   than two cache entries and two upstream fetches. A malformed escape falls through to a 404 instead
   of throwing.
 
-Relative links in the rendered output are rewritten: a link to a document this mirror serves stays
-here, anything else goes to `github.com/solona-m/proteus/blob/main/…`, so a doc added upstream later
-degrades to a working link rather than a 404.
+Relative links in the rendered output are rewritten. They are written for a **checkout**, so they are
+first resolved against the document's own path in the repo — `../README.md` means something different
+in `docs/README.ja.md` than it does at the root — and only then looked up. A link to a document this
+mirror serves stays here; anything else goes to `github.com/solona-m/proteus/blob/main/…`, so a doc
+added upstream later degrades to a working link rather than a 404.
 
-Rendering uses `marked`, which does **not** sanitise — raw HTML in the source passes through. Every
+### The README also negotiates on language
+
+The project README ships in the same eight languages as the plugin's UI. `/` and `/README.md` pick
+one from the browser's `Accept-Language`, matching on the primary subtag (`zh-TW` → `zh`) and falling
+back to English for anything unshipped. Nothing else in the mirror negotiates on language.
+
+- **Only the rendered variant negotiates.** `curl https://dl.YOURDOMAIN.com/README.md` still returns
+  the English source, byte for byte, whatever locale the machine is in. A script that wanted German
+  would have to ask for it by name.
+- **`/ja/README.md` (and `/ja/`, and `/ja`) is pinned.** Per-language paths ignore `Accept-Language` entirely, so
+  a link someone shares shows the recipient what the sharer saw. The language switcher on the page
+  links to these, including `/en/README.md` — a reader who clicks "English" from a German browser must
+  not be bounced straight back into German.
+- **The language is part of the cache key too** (`?view=html&lang=de`), for the same reason the HTML
+  variant is: `Vary: Accept-Language` is set for downstream caches, and ignored here.
+- English stays on the un-suffixed key rather than being redirected to the `/en/` entry — the bytes
+  are identical, and one cache entry for the common case beats two.
+
+The switcher is generated, not written: each README carries a plain `<!--i18n-->…<!--/i18n-->` block
+of links so GitHub and a clone show one too, and the renderer strips that block and puts its own row
+in the same place. `LANGS` in [`src/render.js`](src/render.js) is the single list — add a language
+there and to `docs/`, and the paths, the switcher and the negotiation all follow.
+`ReadmeTranslationTests` in `Proteus.Tests` fails the build if a translation is missing or has drifted
+structurally from the English source.
+
+Rendering uses `marked`, which does **not** sanitise — raw HTML in the source passes through. The only
+raw HTML in these documents is the `<!--i18n-->` markers, which are stripped before parsing. Every
 document here comes from `solona-m/proteus`, which anyone who could inject into already has commit
 access to the plugin, so this is a trust argument rather than a safety one. Do not point the renderer
 at markdown from anywhere else without adding a sanitiser.

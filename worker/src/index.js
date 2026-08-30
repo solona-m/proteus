@@ -15,7 +15,7 @@
  */
 
 import README from './readme.generated.js';
-import { renderMarkdown } from './render.js';
+import { renderMarkdown, LANGS, docPathFor, mirrorPathFor } from './render.js';
 
 const OWNER = 'solona-m';
 const REPO = 'proteus';
@@ -68,6 +68,15 @@ const YEAR = 31536000;
 const ORIGIN_EPOCH = '2';
 
 /**
+ * A document's raw URL in this repo, built from its path in a CHECKOUT.
+ *
+ * Encoded here rather than at each call site so the paths in the table below can stay readable and
+ * match what render.js resolves links to — "For Creators.md", not "For%20Creators.md".
+ */
+const rawUrl = (repoPath) =>
+  `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${encodeURI(repoPath)}`;
+
+/**
  * Exact paths proxied to a fixed upstream. Deliberately a lookup of whole pathnames rather than a
  * pattern: these point at raw.githubusercontent.com, a second origin host, and the safety of the
  * route table above rests on the path never being able to name an arbitrary upstream. A literal map
@@ -98,31 +107,95 @@ const STATIC_PROXIES = {
   // Proxied rather than inlined so it tracks the repo without a redeploy; it is documentation whose
   // whole value is being current, unlike the mirror's own notes, which must describe the deployment
   // actually serving them.
+  //
+  // `negotiate` is what makes `/` answer a German browser in German — see pickLanguage. It applies to
+  // the RENDERED variant only; the markdown source stays English here, and a reader or a script that
+  // wants a specific language asks for `/de/README.md`, which never negotiates.
   '/README.md': {
-    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/README.md',
+    origin: rawUrl('README.md'),
     type: 'text/markdown; charset=utf-8',
     ttl: 900,
     markdown: true,
+    lang: 'en',
+    docPath: 'README.md',
+    negotiate: true,
   },
   // The two documents the README links to. Mirrored so those links resolve to rendered pages here
   // rather than bouncing the reader back to GitHub halfway through the install instructions.
+  //
+  // No `lang`: these two are English-only, and a switcher on them would promise translations that do
+  // not exist. A reader following a link out of a translated README lands on English and can see that
+  // for themselves.
   '/TROUBLESHOOTING.md': {
-    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md',
+    origin: rawUrl('TROUBLESHOOTING.md'),
     type: 'text/markdown; charset=utf-8',
     ttl: 900,
     markdown: true,
+    docPath: 'TROUBLESHOOTING.md',
   },
   // Stored DECODED, because the lookup decodes the path — a browser sends "For%20Creators.md".
   '/For Creators.md': {
-    origin: 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md',
+    origin: rawUrl('For Creators.md'),
     type: 'text/markdown; charset=utf-8',
     ttl: 900,
     markdown: true,
+    docPath: 'For Creators.md',
   },
+
+  // One pinned path per shipped language, `/ja/README.md` and friends, including `/en/README.md`.
+  // These are the paths the switcher links to and the ones every translated README's own links
+  // resolve to. They are PINNED: whatever the browser's Accept-Language says, the path decides, so a
+  // link someone shares shows the reader what the sharer saw.
+  ...Object.fromEntries(LANGS.map(({ code }) => [mirrorPathFor(code), {
+    origin: rawUrl(docPathFor(code)),
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+    lang: code,
+    docPath: docPathFor(code),
+  }])),
 };
 
-/** Alias paths — same entry, different name. Keeps `/` meaning "tell me about Proteus". */
-const STATIC_ALIASES = { '/': '/README.md' };
+/**
+ * Alias paths — same entry, different name. Keeps `/` meaning "tell me about Proteus", and gives each
+ * language the short `/ja` and `/ja/` forms as well as `/ja/README.md`.
+ *
+ * BOTH slash forms, deliberately. `/ja` is what a person types, what survives being pasted into
+ * Discord, and what is left after someone trims the address bar — and a bare 404 there reads as "that
+ * language does not exist" rather than "you missed a character". They are aliases rather than a
+ * redirect so the short form costs no extra round trip and shares one cache entry.
+ */
+const STATIC_ALIASES = {
+  '/': '/README.md',
+  ...Object.fromEntries(LANGS.flatMap(({ code }) =>
+    [[`/${code}`, mirrorPathFor(code)], [`/${code}/`, mirrorPathFor(code)]])),
+};
+
+/**
+ * Picks a shipped language out of an Accept-Language header, or null for "no opinion we can honour".
+ *
+ * Matches on the PRIMARY SUBTAG only: `zh-TW`, `zh-Hans-CN` and plain `zh` all land on `zh`, because
+ * one Chinese translation is what exists and answering a Taiwanese reader in Simplified beats
+ * answering them in English. `q=0` means "explicitly not this one" and is dropped rather than ranked.
+ *
+ * Ties keep header order, which is the order the reader put their languages in.
+ */
+export function pickLanguage(header) {
+  if (!header) return null;
+
+  const ranked = header.split(',')
+    .map((part, i) => {
+      const [tag, ...params] = part.trim().split(';');
+      const q = params.map((p) => /^\s*q\s*=\s*([0-9.]+)\s*$/i.exec(p)).find(Boolean);
+      return { code: tag.trim().toLowerCase().split('-')[0], q: q ? Number(q[1]) : 1, i };
+    })
+    .filter((e) => e.code && Number.isFinite(e.q) && e.q > 0)
+    .sort((a, b) => (b.q - a.q) || (a.i - b.i));
+
+  // `*` means "anything"; there is nothing to prefer, so fall through to the default.
+  const hit = ranked.find((e) => LANGS.some((l) => l.code === e.code));
+  return hit ? hit.code : null;
+}
 
 export default {
   async fetch(request, _env, ctx) {
@@ -142,7 +215,11 @@ export default {
     // below exist to contain. The PROJECT readme is a different document, served from `/` via
     // STATIC_PROXIES.
     if (url.pathname === '/mirror.md') {
-      const body = wantsHtml ? renderMarkdown(README, 'Proteus asset mirror') : README;
+      // docPath is where this file lives in the REPO — worker/README.md — so its relative links
+      // ("wrangler.toml", "../Proteus/Services/ProteusAssets.cs") resolve the way a checkout would.
+      const body = wantsHtml
+        ? renderMarkdown(README, 'Proteus asset mirror', { docPath: 'worker/README.md' })
+        : README;
       return new Response(request.method === 'HEAD' ? null : body, {
         status: 200,
         headers: {
@@ -167,19 +244,34 @@ export default {
       const cache = caches.default;
       const renderHtml = wantsHtml && stat.markdown === true;
 
+      // Language negotiation, for the rendered variant of `/` and `/README.md` only. A reader who
+      // typed nothing and expressed a preference only through their browser gets that preference;
+      // everything a URL states explicitly — `/de/README.md`, or the markdown source — is left alone,
+      // so nothing that consumes these paths programmatically changes.
+      //
+      // English is left on the un-suffixed key rather than redirected to the `/en/` entry: the bytes
+      // are identical, and one cache entry for the overwhelmingly common case beats two.
+      const picked = renderHtml && stat.negotiate === true
+        ? pickLanguage(request.headers.get('accept-language'))
+        : null;
+      const entry = picked && picked !== 'en' ? (STATIC_PROXIES[mirrorPathFor(picked)] ?? stat) : stat;
+      const variant = entry === stat ? '' : `&lang=${entry.lang}`;
+
       // The variant is part of the KEY, not just a Vary header. Cloudflare's Cache API keys on URL
       // alone and ignores Vary, so one key for both variants would serve whichever arrived first to
-      // everyone after — HTML to curl, or raw markdown to every browser, at random.
+      // everyone after — HTML to curl, raw markdown to every browser, or one reader's language to
+      // all the others, at random.
       const key = new Request(
-        `${url.origin}${encodeURI(statPath)}${renderHtml ? '?view=html' : ''}`, { method: 'GET' });
+        `${url.origin}${encodeURI(statPath)}${renderHtml ? '?view=html' : ''}${variant}`,
+        { method: 'GET' });
 
       let hit = await cache.match(key);
       if (!hit) {
-        const upstream = await fetch(stat.origin, {
+        const upstream = await fetch(entry.origin, {
           redirect: 'follow',
           cf: {
             cacheEverything: true,
-            cacheTtlByStatus: { '200-299': stat.ttl, '300-399': 0, '400-499': 0, '500-599': 0 },
+            cacheTtlByStatus: { '200-299': entry.ttl, '300-399': 0, '400-499': 0, '500-599': 0 },
           },
         });
         if (!upstream.ok) {
@@ -191,14 +283,26 @@ export default {
 
         // Rendered once per TTL and cached, rather than per request: marked on a 400-line document is
         // cheap but not free, and the free plan allows 10 ms of CPU per request.
-        const body = renderHtml ? renderMarkdown(await upstream.text()) : upstream.body;
+        const body = renderHtml
+          ? renderMarkdown(await upstream.text(), 'Proteus',
+            { lang: entry.lang ?? null, docPath: entry.docPath })
+          : upstream.body;
 
         hit = new Response(body, {
           status: 200,
           headers: {
-            'content-type': renderHtml ? 'text/html; charset=utf-8' : stat.type,
-            'cache-control': `public, max-age=${stat.ttl}`,
-            vary: 'Accept',
+            'content-type': renderHtml ? 'text/html; charset=utf-8' : entry.type,
+            'cache-control': `public, max-age=${entry.ttl}`,
+            // Advertised for downstream caches that do honour Vary, even though Cloudflare's own
+            // Cache API does not — which is why the variant is in the key above as well.
+            //
+            // `&& renderHtml`, because that is the condition negotiation itself is gated on: the raw
+            // markdown of /README.md is English whatever the reader's locale, and claiming otherwise
+            // would make every shared cache downstream store one identical copy per distinct
+            // Accept-Language string it sees — effectively per user.
+            vary: stat.negotiate === true && renderHtml ? 'Accept, Accept-Language' : 'Accept',
+            // Only on the documents that have a language. repo.json and icon.png do not.
+            ...(entry.lang ? { 'content-language': entry.lang } : {}),
           },
         });
         ctx.waitUntil(cache.put(key, hit.clone()));
