@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 452;
+    public const int BuildNumber = 571;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -51,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SidecarDiscoveryService discovery;
     private readonly UVRemapService uvRemap;
     private readonly UVMapDownloadService uvMapDl;
+    private readonly DefaultEffectsDownloadService effectsDl;
     private readonly CompositorService compositor;
     private volatile bool _disposed;
     private readonly DesignBindingService designBindings;
@@ -59,6 +60,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
+    private readonly Gui.PartViewport partViewport;
+    private readonly Gui.PartsPanel partsPanel;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -87,16 +90,28 @@ public sealed class Plugin : IDalamudPlugin
         {
             DecodeCacheBudgetBytes = Math.Max(256, config.DecodeCacheBudgetMb) * 1024L * 1024,
         };
+        // Neither the UV maps nor the starter effects live next to the DLL any more. Dalamud installs
+        // each plugin version into its own folder, so anything stored there is re-downloaded on every
+        // update — which for the 128 MB maps meant ~48k downloads against ~1.4k installs, and is what
+        // got the release assets throttled. ConfigDirectory survives updates; the assembly directory is
+        // passed along only so an older install's copies can be reclaimed instead of re-fetched.
+        var dataDir     = pluginInterface.ConfigDirectory.FullName;
+        var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
+
+        effectsDl = new DefaultEffectsDownloadService(log, dataDir, assemblyDir);
         discovery = new SidecarDiscoveryService(penumbra, log)
         {
-            AssemblyDir = pluginInterface.AssemblyLocation.DirectoryName,
+            DefaultEffectsDir = effectsDl.EffectsDir,
+            AssemblyDir       = assemblyDir,
         };
-        // Fill the global effects library with the bundled starter set (skips names already there).
-        // Safe to call before Penumbra is up — it no-ops until the mod directory is resolvable, and
-        // OnPenumbraReady calls it again once it is.
+        // Fill the global effects library with the starter set (skips names already there). Safe to call
+        // before Penumbra is up — it no-ops until the mod directory is resolvable, and OnPenumbraReady
+        // calls it again once it is. Called once more after each starter effect lands, so a library that
+        // is still downloading fills in rather than appearing empty.
         discovery.SeedDefaultEffects();
-        uvRemap = new UVRemapService(log, pluginInterface.AssemblyLocation.DirectoryName!);
-        uvMapDl = new UVMapDownloadService(log, pluginInterface.AssemblyLocation.DirectoryName!);
+        effectsDl.EnsureAsync(onProgress: () => { if (!_disposed) discovery.SeedDefaultEffects(); });
+        uvRemap = new UVRemapService(log, dataDir);
+        uvMapDl = new UVMapDownloadService(log, dataDir, assemblyDir);
         compositor = new CompositorService(penumbra, glamourer, discovery, textureLoader, config, log, uvRemap);
 
         if (!uvMapDl.MapsPresent())
@@ -108,7 +123,11 @@ public sealed class Plugin : IDalamudPlugin
             });
         }
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
-        designWatcher = new GlamourerDesignWatcher(designBindings, config.GlamourerDesignDirOverride ?? glamourer.DesignsDirectory, log);
+        // Told to the bridge rather than only to the watcher: GetDesign's on-disk fallback reads from the
+        // same folder, and the two pointing at different places would break the fallback for precisely the
+        // users who set an override.
+        glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
+        designWatcher = new GlamourerDesignWatcher(designBindings, glamourer.EffectiveDesignsDirectory, log);
         ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, log);
 
         // Sphere-map thumbnails for the colour table editor.
@@ -147,9 +166,24 @@ public sealed class Plugin : IDalamudPlugin
         var bodyCatalog = new BodyMaterialCatalog(DataManager.FileExists);
         var onionImport = new OnionImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, config, log);
+        var contentImport = new ContentImportService(penumbra, compositor, log);
+        // Atramentum Luminis .ttmp2 glow-tattoo packs: the same three-phase import, over a format whose
+        // textures live in one SqPack blob rather than as archive entries.
+        var luminisImport = new LuminisImportService(
+            penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
+        // Loose eye-texture zips. Its own catalogue because faces are not shared between races the way
+        // bodies are, so the body probe can never answer for an iris.
+        var irisCatalog = new IrisMaterialCatalog(DataManager.FileExists);
+        var eyeImport = new EyeImportService(penumbra, compositor, textureLoader, irisCatalog, log);
         var modExport = new ModExportService(penumbra, log);
+
+        // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
+        partViewport = new Gui.PartViewport(TextureProvider, log);
+        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
+
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
-            modCreation, onionImport, modExport);
+            modCreation, onionImport, contentImport, luminisImport, eyeImport, modExport, textureLoader,
+            partsPanel);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
@@ -187,6 +221,59 @@ public sealed class Plugin : IDalamudPlugin
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
         ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
+
+        SuggestMirrorRepo(pluginInterface);
+    }
+
+    /// <summary>How many times <see cref="SuggestMirrorRepo"/> may speak before it gives up.</summary>
+    private const int MirrorNoticeLimit = 3;
+
+    /// <summary>The plugin repo URL this notice asks people to move away from.</summary>
+    private const string LegacyRepoHost = "raw.githubusercontent.com/solona-m/plugins";
+
+    /// <summary>
+    /// Nudges anyone still installed from the raw.githubusercontent.com manifest towards the mirrored
+    /// one, at most <see cref="MirrorNoticeLimit"/> times ever.
+    /// <para/>
+    /// Dalamud re-fetches the plugin manifest on every client launch and every list refresh, per user,
+    /// forever — far more requests than the plugin's own downloads, which happen once per install. Since
+    /// GitHub throttles on request count rather than bytes, that manifest is the single largest remaining
+    /// source of throttling, and it is the one thing this side cannot fix alone: the repo URL lives in
+    /// each user's own Dalamud config.
+    /// <para/>
+    /// Matched POSITIVELY against the legacy host, so anything unexpected stays silent. A dev-loaded
+    /// plugin has no source repository, and someone already on the mirror must never see this.
+    /// </summary>
+    private void SuggestMirrorRepo(IDalamudPluginInterface pluginInterface)
+    {
+        var source = pluginInterface.SourceRepository;
+
+        // Logged unconditionally, and before the early-outs: a dev-loaded plugin has no source
+        // repository, so this notice cannot be triggered on the machine that writes it. Without the
+        // value in the log there is no way to tell "correctly silent" from "quietly broken".
+        Log.Information("[Proteus] SourceRepository={0} (mirror notice shown {1}/{2})",
+                        string.IsNullOrEmpty(source) ? "<none, dev install>" : source,
+                        config.MirrorNoticeShown, MirrorNoticeLimit);
+
+        if (config.MirrorNoticeShown >= MirrorNoticeLimit) return;
+        if (string.IsNullOrEmpty(source) ||
+            !source.Contains(LegacyRepoHost, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        config.MirrorNoticeShown++;
+        config.Save();
+
+        // No count of remaining reminders: it would need a {0} that reads "1 more reminders" at the end,
+        // and plural agreement is a real cost across eight machine-translated locales for a line nobody
+        // needs. Saying it stops on its own carries the same reassurance with no arguments at all.
+        ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
+            .AddUiForeground(
+                Loc.Localize("Chat.MirrorRepo",
+                    "[Proteus] You installed from the old plugin repo URL. Switching it to " +
+                    "https://dl.solona.info/repo.json under /xlplugins > Experimental makes updates " +
+                    "faster and takes load off GitHub. Your install keeps working either way. " +
+                    "This reminder shows a few times, then stops."), 45)
+            .Build());
     }
 
     private void DrawUi()
@@ -269,11 +356,14 @@ public sealed class Plugin : IDalamudPlugin
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
+
+        partViewport.Dispose();
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
         designBindings.Dispose();
         uvMapDl.Dispose();
+        effectsDl.Dispose();
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();

@@ -30,7 +30,20 @@ public enum ConnectorMeshMode
 [Serializable]
 public class BodyModCacheEntry
 {
+    /// <summary>Ships files under a skin surface tree (body/face/hair/tail/zear) — the wide verdict
+    /// that drives cache invalidation.</summary>
     public bool IsBodyMod { get; set; }
+
+    /// <summary>Provides at least one game path the composite actually reads as a base — the narrow
+    /// verdict that gates a recomposite. Computed against the base set named by
+    /// <see cref="BaseKeysHash"/>.</summary>
+    public bool AffectsComposite { get; set; }
+
+    /// <summary>Content hash of the composite base set <see cref="AffectsComposite"/> was computed
+    /// against; a mismatch retires that verdict (the fingerprint alone cannot catch it, because the
+    /// mod is unchanged and it is OUR inputs that moved).</summary>
+    public int BaseKeysHash { get; set; }
+
     public long Fingerprint { get; set; }
 }
 
@@ -43,11 +56,21 @@ public class Configuration : IPluginConfiguration
     /// brand-new config is stamped current and so never runs a migration written for settings it was
     /// never saved with.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public int Version { get; set; } = CurrentVersion;
 
     public bool PluginEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How many times the "you are on the old plugin repo URL" notice has been shown. Capped at
+    /// <see cref="MirrorNoticeLimit"/> — a hint worth giving is not worth nagging about, and someone
+    /// who has ignored it three times has decided.
+    /// <para/>
+    /// Persisted rather than counted per-session so it survives restarts; a per-session counter would
+    /// show it forever to anyone who never changes the URL, which is exactly who it would annoy most.
+    /// </summary>
+    public int MirrorNoticeShown { get; set; }
 
     public bool DisableAutoRedraw { get; set; } = false;
 
@@ -94,6 +117,15 @@ public class Configuration : IPluginConfiguration
     // sync plugins would pick the composite up. Removed after measuring that they already do — see the
     // note above CompositorService's decode-cache fields. A stale value left in an existing config.json
     // is ignored; the deserializer drops properties it doesn't know.
+
+    /// <summary>
+    /// The folder the Import tab's file picker opens in — wherever a pack was last picked from.
+    /// <para/>
+    /// Persisted rather than kept for the session because packs come from one download folder and importing
+    /// several is the normal case, so restarting the game should not send the picker back to the top of the
+    /// drive. Empty, or a folder since deleted, simply opens the dialog's own default.
+    /// </summary>
+    public string LastImportDir { get; set; } = string.Empty;
 
     public int ManagedModPriority { get; set; } = 900;
 
@@ -240,8 +272,33 @@ public class Configuration : IPluginConfiguration
     /// same order every run, which is the worst case for LRU — at 1 GB against an 18-file (~1.2 GB) outfit
     /// every file missed on every composite, costing 1420 ms of a 3244 ms run. Raise it if the phases log
     /// still shows misses on a repeat composite; lower it if the game starts paging.
+    /// <para/>
+    /// The default is derived from the machine (see <see cref="DefaultDecodeCacheBudgetMb"/>) rather than
+    /// fixed, because the old fixed 2048 was smaller than the compositor's own prefetch window on any
+    /// serious outfit: a measured run evicted 54 entries while holding 32, so completed prefetch decodes
+    /// were being thrown away and re-paid on the critical path.
     /// </summary>
-    public int DecodeCacheBudgetMb { get; set; } = 2048;
+    public int DecodeCacheBudgetMb { get; set; } = DefaultDecodeCacheBudgetMb();
+
+    /// <summary>Hard bounds on the budget, shared by the settings slider and the migration.</summary>
+    public const int MinDecodeCacheBudgetMb = 512;
+    public const int MaxDecodeCacheBudgetMb = 32768;
+
+    /// <summary>
+    /// A budget sized to the machine: an eighth of physical RAM, clamped to [2 GB, 16 GB].
+    /// <para/>
+    /// An eighth leaves the game and everything else the overwhelming majority, while still clearing the
+    /// working set of a heavy outfit on any modern box (16 GB → 2 GB, unchanged from the old fixed default;
+    /// 96 GB → 12 GB, comfortably resident). <c>TotalAvailableMemoryBytes</c> rather than a P/Invoke because
+    /// it needs no interop and respects a container or job-object limit if one is ever imposed; it can read
+    /// 0 on an unexpected runtime, which falls back to the old default rather than to nothing.
+    /// </summary>
+    public static int DefaultDecodeCacheBudgetMb()
+    {
+        long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        if (ram <= 0) return 2048;
+        return (int)Math.Clamp(ram / 8 / (1024 * 1024), 2048, 16384);
+    }
 
     /// <summary>LEGACY, read-only now: mods the user had explicitly switched AO off for under the old
     /// "on unless opted out" rule. Still consulted by <see cref="AmbientOcclusionEnabledFor"/> so an
@@ -284,6 +341,17 @@ public class Configuration : IPluginConfiguration
     /// this and only re-fetches once something actually invalidates it (a body mod change, or a
     /// real redraw).</summary>
     public List<string>? CachedActiveMaterialPaths { get; set; } = null;
+
+    /// <summary>Game paths the last composite read as bases. Persisted so the "does this mod feed our
+    /// composite?" test — the one that stops an unrelated hair/face/iris mod from forcing a full
+    /// recomposite — is answerable from the first mod-settings event of a session, rather than failing
+    /// open until the first composite of that session has run.</summary>
+    public List<string>? CachedCompositeBaseKeys { get; set; } = null;
+
+    /// <summary>Shape of the composite the set above describes — a hash of the material paths it
+    /// targets. Persisted alongside it so a path retired when overlays change stays retired across a
+    /// restart, instead of the restored set being treated as belonging to whatever shape runs next.</summary>
+    public int CachedCompositeBaseSignature { get; set; }
 
     /// <summary>Game model paths the second skin last APPENDED into — the player's own necklace/ring,
     /// whose model we read back as the base for the merge. Persisted because the managed mod's manifest
@@ -385,6 +453,18 @@ public class Configuration : IPluginConfiguration
         // texture's content tag (CompositorService's encSalt), so the names change and the next
         // composite rebakes uncompressed rather than re-approving the old compressed files.
         if (Version < 2) EnableCompression = false;
+
+        // v2 -> v3: the decode-cache budget is machine-sized now. The old fixed 2048 MB holds 32 4K
+        // textures, which is smaller than the compositor's own prefetch window — a measured run evicted 54
+        // entries while holding 32, so completed prefetch decodes were thrown away and re-paid on the
+        // critical path. Changing the property default reaches only NEW configs, hence this step.
+        //
+        // Conditioned on the value still being the OLD DEFAULT, not on Math.Max: anything else is a number
+        // the user chose with the slider, and both directions are meaningful. Someone who lowered it did so
+        // because the game was paging; someone who raised it to the old 4096 ceiling still gets to keep
+        // that. Only an untouched setting is ours to move.
+        if (Version < 3 && DecodeCacheBudgetMb == 2048)
+            DecodeCacheBudgetMb = DefaultDecodeCacheBudgetMb();
 
         Version = CurrentVersion;
     }

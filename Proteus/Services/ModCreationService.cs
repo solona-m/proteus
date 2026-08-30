@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -159,13 +158,140 @@ public sealed class ModCreationService
         return textureLoader.ResolveMtrlTexturesRaw(penumbra.ResolvePlayer(materialGamePath), materialGamePath);
     }
 
+    /// <summary>Alpha at or above this reads as opaque. Not 255: a whole-skin base exported through a lossy
+    /// step lands a few counts short — the mod this was measured against bottoms out at 251 — and demanding
+    /// the maximum would call it sheer.</summary>
+    private const byte OpaqueAlpha = 250;
+
+    /// <summary>How much of the image must be opaque to count as full coverage. Not 1.0, so a stray
+    /// feathered pixel at a UV island's edge can't veto the whole verdict.</summary>
+    private const float FullCoverageFraction = 0.99f;
+
+    /// <summary>
+    /// Side length the probe samples at. The loader point-samples down to this, so a sparse overlay's holes
+    /// stay holes rather than averaging away, and the decode is cached separately from the full-resolution
+    /// one the compositor will want later.
+    /// </summary>
+    private const int CoverageProbeSize = 256;
+
+    /// <summary>
+    /// Mean per-channel difference, 0–255, below which the picked art is judged to BE the material's skin
+    /// rather than something painted onto it.
+    /// <para/>
+    /// Calibrated by running the rule over 238 skin overlays: six real bibo skins scored 0.98–21.34 against
+    /// a seventh, and the nearest thing on the other side — a full-coverage tartan bodysuit — scored 34.42.
+    /// This sits between them with about six counts of room either way. Everything else was further off
+    /// (patterned stockings 36–69, a flat velvet mitt 110), and exactly one overlay in that library trips
+    /// the whole rule: the converted skin this was written for, at 4.58.
+    /// <para/>
+    /// Deliberately compared WITHOUT removing each image's mean. Mean-centring is the obvious way to make
+    /// this tolerant of a skin tone far from the base's, and it backfires: it drops a solid-colour fabric
+    /// to 6.65 — better than most real skins — because a flat field resembles anything once its level is
+    /// taken away. Raw difference keeps colour in the comparison, which is what tells fabric from flesh.
+    /// </summary>
+    /// <remarks>internal so the test asserts against THIS number rather than a copy of it — a duplicated
+    /// literal would keep passing while the shipped threshold moved out from under it.</remarks>
+    internal const float SkinLikenessMad = 28f;
+
+    /// <summary>
+    /// Whether the picked textures look like a whole skin rather than something painted onto skin — the
+    /// Create tab's default for <see cref="OverlayDescriptor.NormalMode"/>. Decodes two images, so call it
+    /// off the frame thread.
+    /// <para/>
+    /// Three conditions, and the third is the one that does the work:
+    /// <list type="number">
+    /// <item>Both a colour map and a normal. The flag only decides how a normal blends, and a converted
+    /// skin always brings its base with it.</item>
+    /// <item>The colour map is opaque throughout. A skin has no holes; a tattoo or a decal is mostly
+    /// hole.</item>
+    /// <item>It resembles the diffuse already on the target material.</item>
+    /// </list>
+    /// Coverage alone is not enough, which is worth stating because it is the obvious test and it fails
+    /// quietly: a garment overlay's art is routinely opaque across the WHOLE map, its shape coming from the
+    /// mod's Masks group rather than from its own alpha. Measured on real mods, a pair of mitts and a set
+    /// of stockings are both alpha 255 end to end. Only the comparison against the material's own skin
+    /// separates them.
+    /// </summary>
+    public bool LooksLikeWholeSkin(string materialTarget, string? diffuseSrc, string? normalSrc)
+    {
+        if (string.IsNullOrWhiteSpace(diffuseSrc) || string.IsNullOrWhiteSpace(normalSrc)) return false;
+        try
+        {
+            const int texels = CoverageProbeSize * CoverageProbeSize;
+
+            var overlay = textureLoader.LoadPngAsRgba(diffuseSrc!, CoverageProbeSize, CoverageProbeSize);
+            if (!IsFullCoverage(overlay, texels)) return false;
+
+            // The material's CURRENT diffuse — through the same resolve the slot rows use, so a hand-typed
+            // path for a body the player isn't wearing simply doesn't resolve and the answer stays "no".
+            var slot = ResolveMaterialSlots(materialTarget).Diffuse;
+            if (slot == null) return false;
+            var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(slot), slot);
+            if (loaded is not { } b || b.rgba.Length == 0) return false;
+
+            var skin = b.width == CoverageProbeSize && b.height == CoverageProbeSize
+                ? b.rgba
+                : textureLoader.ScaleRgba(b.rgba, b.width, b.height, CoverageProbeSize, CoverageProbeSize);
+
+            return MeanAbsDifference(overlay, skin, texels) <= SkinLikenessMad;
+        }
+        catch (Exception ex)
+        {
+            // Runs on a thread-pool thread, where an escaping exception is a silent wrong answer — and the
+            // wrong answer here is "not a whole skin", which is also the safe default. Say so in the log.
+            log.Warning(ex, "[Proteus] whole-skin probe failed for {0} — assuming it isn't one", diffuseSrc);
+            return false;
+        }
+    }
+
+    /// <summary>The coverage verdict on a decoded RGBA buffer. Split from the load so it can be exercised
+    /// offline: a null or short buffer is a failed decode, which reads as "not full coverage".</summary>
+    internal static bool IsFullCoverage(byte[]? rgba, int texels)
+    {
+        if (rgba == null || texels <= 0 || rgba.Length < texels * 4) return false;
+
+        int opaque = 0;
+        for (int i = 3; i < texels * 4; i += 4)
+            if (rgba[i] >= OpaqueAlpha) opaque++;
+        return opaque >= texels * FullCoverageFraction;
+    }
+
+    /// <summary>
+    /// Mean absolute per-channel RGB difference between two same-sized RGBA buffers, alpha ignored.
+    /// <see cref="float.MaxValue"/> when either is missing or short — "as unlike as possible", so a failed
+    /// decode can never read as a match. Split from the loads so it can be exercised offline.
+    /// </summary>
+    internal static float MeanAbsDifference(byte[]? a, byte[]? b, int texels)
+    {
+        if (a == null || b == null || texels <= 0 || a.Length < texels * 4 || b.Length < texels * 4)
+            return float.MaxValue;
+
+        long sum = 0;
+        for (int i = 0; i < texels * 4; i += 4)
+        {
+            sum += Math.Abs(a[i]     - b[i]);
+            sum += Math.Abs(a[i + 1] - b[i + 1]);
+            sum += Math.Abs(a[i + 2] - b[i + 2]);
+        }
+        return (float)sum / (texels * 3);
+    }
+
     /// <summary>
     /// Create the mod on disk, register it with Penumbra, and open the Penumbra UI to it. Returns a
     /// user-facing result; nothing is written when validation fails.
     /// </summary>
+    /// <param name="wholeSkin">
+    /// The textures ARE the skin, not something painted onto it. Three consequences: the normal replaces the
+    /// one already on the material instead of stacking onto it (see <see cref="NormalMode.Replace"/>);
+    /// skin-tint suppression is off, so the wearer's tone reaches the art the way it reaches their face; and
+    /// the mod's sibling mode is raised to <see cref="SiblingSynthesisMode.AllBodies"/> so the bake reaches
+    /// a vanilla body too. The first two are sidecar fields written by <see cref="WriteMod"/>; the third is
+    /// plugin config, keyed by mod directory, so it is set here once the directory name is settled.
+    /// </param>
     public CreateResult Create(
         string modName, string author, string materialTarget,
-        string? diffuseSrc, string? maskSrc, string? normalSrc, string? indexSrc)
+        string? diffuseSrc, string? maskSrc, string? normalSrc, string? indexSrc,
+        bool wholeSkin = false)
     {
         modName = (modName ?? "").Trim();
         author = (author ?? "").Trim();
@@ -212,7 +338,7 @@ public sealed class ModCreationService
 
         try
         {
-            WriteMod(root, modName, author, materialTarget, diffuseSrc, maskSrc, normalSrc, indexSrc);
+            WriteMod(root, modName, author, materialTarget, diffuseSrc, maskSrc, normalSrc, indexSrc, wholeSkin);
         }
         catch (Exception ex)
         {
@@ -231,6 +357,20 @@ public sealed class ModCreationService
             try { Directory.Delete(root, true); } catch { /* best effort */ }
             return new(false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
+        }
+
+        // A whole skin has to reach every body the wearer might be on, and sibling synthesis defaults to
+        // bibo+gen3 deliberately — baking every mod onto every vanilla body loaded nearby is expensive, so
+        // vanilla (gen2) is opt-in per mod. That default is right for a tattoo and wrong for a skin, which
+        // would otherwise be silently inert on a vanilla body. Raise it for THIS mod only, and log it: the
+        // control lives in another panel (Advanced → Bodies), so a silent write there is a setting the user
+        // finds already moved with nothing to say why. Same reasoning and shape as OnionImportService.
+        if (wholeSkin)
+        {
+            config.SiblingSynthesis[dirName] = SiblingSynthesisMode.AllBodies;
+            config.Save();
+            log.Information("[Proteus] created {0} as a whole skin — set its sibling mode to AllBodies so "
+                          + "the bake reaches vanilla (gen2) as well as bibo and gen3", dirName);
         }
 
         // Enable it in the player's collection so it takes effect immediately, then recomposite so Proteus
@@ -256,7 +396,8 @@ public sealed class ModCreationService
     /// </summary>
     internal static void WriteMod(
         string root, string modName, string author, string materialTarget,
-        string? diffuseSrc, string? maskSrc, string? normalSrc, string? indexSrc)
+        string? diffuseSrc, string? maskSrc, string? normalSrc, string? indexSrc,
+        bool wholeSkin = false)
     {
         var overlaysDir = Path.Combine(root, "Proteus", "overlays");
         Directory.CreateDirectory(overlaysDir);
@@ -280,6 +421,12 @@ public sealed class ModCreationService
             Mask = Copy("mask", maskSrc),
             Normal = Copy("normal", normalSrc),
             Index = Copy("index", indexSrc),
+            NormalMode = wholeSkin ? NormalMode.Replace : NormalMode.Compound,
+            // Skin-tint suppression exists to keep FABRIC at its authored colour on any wearer. Art that is
+            // itself the skin wants the opposite — the wearer's tone multiplied onto it, the way the face's
+            // own material already does — so a whole skin ships with it off. Left null otherwise, which is
+            // the documented "full masking" default and keeps the line out of an ordinary sidecar.
+            SkinToneMask = wholeSkin ? 0f : null,
         };
         var metadata = new ProteusMetadata
         {
@@ -289,12 +436,7 @@ public sealed class ModCreationService
             Overlays = [descriptor],
         };
 
-        // Same options as SidecarDiscoveryService.SaveMetadata — skip null optional fields for clean json.
-        var metaJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        });
+        var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
         // AtomicWrite for the same reason as the manifest below, and with more at stake: meta.json is
         // regenerable boilerplate, whereas this descriptor is the authored overlay itself. A zero-filled
         // one leaves a mod that loads in Penumbra and does nothing in Proteus.
