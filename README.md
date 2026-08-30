@@ -81,7 +81,7 @@ A pack that ships the same artwork in several UV layouts (bibo, gen3, vanilla) b
 
 Atramentum Luminis packs hide their glow in a texture's alpha channel, and without that shader mod installed they render nothing at all. Proteus reads the glow out and rebuilds it as an ordinary overlay: the panels the artist marked become a second skin, and the artwork itself drives an animated-glow material, so the neon keeps its own colours per pixel. The **Glow** dial in Colors then does what you'd expect, and you can bind the whole thing to a design like any other overlay.
 
-- The pack's own body texture comes in too, as a separate **Author's skin** option that arrives switched **off** — it replaces your skin tone with theirs, so it's there if you want the parts of a tattoo that don't glow, and ignorable if you don't.
+- The pack's own body texture comes in too, as a separate **Author's skin** option, and it's on by default — it carries the parts of a tattoo that don't glow, and it keeps your own skin tone rather than the author's. Untick it in Penumbra if you only want the glow.
 - Proteus recognises bibo and gen3 outright. For any other body it paints onto the one you're wearing without resizing, and says so; the **Body** picker overrides it if the pack was made for something else.
 - There's no race or sex filter, so the mod paints any character on a body with the same material. Turn it off in Penumbra for characters it wasn't painted for.
 - Eye glow isn't imported today, but message if you're interested.

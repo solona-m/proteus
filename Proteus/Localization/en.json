@@ -1192,11 +1192,11 @@
     "description": "Name of the Penumbra option that adds one picture's underlying body texture, when the pack ships several. {0} is the texture's own name. Shown in Penumbra's option list, so keep it short."
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch the glow on for you. Tick it under \"{3}\" in Penumbra, or nothing will paint.",
+    "message": "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. Tick it under \"{3}\" in Penumbra, or nothing will paint.",
     "description": "Amber result line: the mod imported but Penumbra refused the option selection, so nothing renders until the user ticks it. {0} mod folder name, {1} texture count, {2} the optional \"(skipped: n)\" tail, {3} the Penumbra group name. \"Penumbra\" is a plugin name."
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "Imported \"{0}\" — textures: {1}{2}. The glow is on; the author's own skin is available under \"{3}\" in Penumbra and starts off.",
+    "message": "Imported \"{0}\" — textures: {1}{2}. The glow and the author's own body texture are both on; untick the body under \"{3}\" in Penumbra if you want the glow by itself.",
     "description": "Green result line after a successful import. {0} mod folder name, {1} texture count, {2} the optional \"(skipped: n)\" tail, {3} the Penumbra group name. \"Penumbra\" is a plugin name."
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": "Table column in the Import tab: a texture's pixel dimensions. {0} width, {1} height. The separator is a multiplication sign, not the letter x."
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "The glow goes on. The author's own body texture comes in too, under \"{0}\" in Penumbra, and starts OFF — it replaces your skin tone with theirs, so it is there if you want the parts of the tattoo that don't glow and ignorable if you don't.",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "Both halves go on: the glow, and the author's own body texture beneath it, under \"{0}\" in Penumbra. The body texture carries the parts of the tattoo that don't glow, and it keeps your own skin tone rather than the author's — untick it there if you only want the glow.",
     "description": "Plain (not amber) note before the Import button, saying what the import will do. {0} is the name of the option group added in Penumbra. \"Penumbra\" is a plugin name."
   },
   "Luminis.Skipped": {

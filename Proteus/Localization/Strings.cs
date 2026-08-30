@@ -651,12 +651,14 @@ public sealed class LuminisStrings
 
     public readonly string PathsFmt = Loc.Localize("Luminis.Paths.Fmt", "Imported once, for:\n{0}");
 
-    /// <summary>Said before the button. The author's skin is the surprising half of this import — it is a
-    /// whole body texture, not a tattoo — so what it is and that it starts off are both stated up front.</summary>
-    public readonly string SkinOffFmt = Loc.Localize("Luminis.SkinOff.Fmt",
-        "The glow goes on. The author's own body texture comes in too, under \"{0}\" in Penumbra, and starts "
-      + "OFF — it replaces your skin tone with theirs, so it is there if you want the parts of the tattoo "
-      + "that don't glow and ignorable if you don't.");
+    /// <summary>Said before the button. The author's body texture is the surprising half of this import —
+    /// it is a whole body texture, not a tattoo — so what it is, and that it comes on, are stated up
+    /// front. The key was renamed when the option stopped starting off, so that a lagging translation
+    /// falls back to English rather than telling the user the opposite of what happens.</summary>
+    public readonly string SkinIncludedFmt = Loc.Localize("Luminis.SkinIncluded.Fmt",
+        "Both halves go on: the glow, and the author's own body texture beneath it, under \"{0}\" in "
+      + "Penumbra. The body texture carries the parts of the tattoo that don't glow, and it keeps your own "
+      + "skin tone rather than the author's — untick it there if you only want the glow.");
 
     public readonly string BodyTarget = Loc.Localize("Luminis.BodyTarget.Label", "Body") + "###luminisBody";
 

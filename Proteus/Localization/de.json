@@ -1192,11 +1192,11 @@
     "description": ""
   },
   "Import.Luminis.Result.NoSelection.Fmt": {
-    "message": "„{0}“ importiert — Texturen: {1}{2}, aber Proteus konnte das Leuchten nicht für dich einschalten. Hake es unter „{3}“ in Penumbra an, sonst wird nichts gezeichnet.",
+    "message": "„{0}“ importiert — Texturen: {1}{2}, aber Proteus konnte es nicht für dich einschalten. Hake es unter „{3}“ in Penumbra an, sonst wird nichts gezeichnet.",
     "description": ""
   },
   "Import.Luminis.Result.Ok.Fmt": {
-    "message": "„{0}“ importiert — Texturen: {1}{2}. Das Leuchten ist an; die eigene Haut des Autors liegt unter „{3}“ in Penumbra bereit und beginnt ausgeschaltet.",
+    "message": "„{0}“ importiert — Texturen: {1}{2}. Das Leuchten und die eigene Körpertextur des Autors sind beide an; hake die Körpertextur unter „{3}“ in Penumbra ab, wenn du nur das Leuchten willst.",
     "description": ""
   },
   "Import.Luminis.Skip.GamePath.Fmt": {
@@ -1363,8 +1363,8 @@
     "message": "{0}×{1}",
     "description": ""
   },
-  "Luminis.SkinOff.Fmt": {
-    "message": "Das Leuchten wird eingeschaltet. Die eigene Körpertextur des Autors kommt ebenfalls mit, unter „{0}“ in Penumbra, und beginnt AUSGESCHALTET — sie ersetzt deinen Hautton durch seinen, ist also da, wenn du die nicht leuchtenden Teile des Tattoos willst, und ignorierbar, wenn nicht.",
+  "Luminis.SkinIncluded.Fmt": {
+    "message": "Beide Hälften werden eingeschaltet: das Leuchten und darunter die eigene Körpertextur des Autors, unter „{0}“ in Penumbra. Die Körpertextur enthält die nicht leuchtenden Teile des Tattoos und behält deinen eigenen Hautton statt dem des Autors — hake sie dort ab, wenn du nur das Leuchten willst.",
     "description": ""
   },
   "Luminis.Skipped": {
