@@ -54,6 +54,19 @@ Never translate: **Proteus**, **Penumbra**, **Glamourer**, **Onion**, **Skindent
 Column headers in the Mods and Bindings tables are drawn in **fixed-width columns** — their
 `description` gives the budget. Abbreviate rather than overflow.
 
+## The project README is translated too
+
+The same eight languages, at [`docs/README.<lang>.md`](../../docs) (English is the repo root's
+`README.md`). They are not part of the plugin build — the asset mirror serves them, picking one from
+the reader's `Accept-Language` for `/` and pinning it for `/ja/README.md` — but they are the same job
+and the same terminology, so translate them from the strings above rather than inventing new wording
+for a tab or a setting. `worker/README.md` describes the serving side.
+
+`ReadmeTranslationTests` holds them to the English structure: same headings in the same order, same
+tables with the same number of rows, the language switcher listing all eight, and every command, URL
+and file extension left verbatim. Adding a section to the English README without the translations
+following fails the build, which is the point.
+
 ## Adding a string in code
 
 ```csharp

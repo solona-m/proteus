@@ -8,7 +8,7 @@
  *
  * Run with `npm test` from worker/. No network, no wrangler, no account needed.
  */
-import worker from '../src/index.js';
+import worker, { pickLanguage } from '../src/index.js';
 
 let fetched = [];
 let fetchOpts = [];
@@ -215,7 +215,8 @@ console.log('markdown rendering + content negotiation:');
 {
   const HTML = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
   const MD = '# Proteus\n\nSee [Troubleshooting](TROUBLESHOOTING.md) and [Creators](For%20Creators.md).\n' +
-             'Also [elsewhere](docs/other.md) and [ext](https://example.com/x).\n\n' +
+             'Also [elsewhere](docs/other.md) and [ext](https://example.com/x).\n' +
+             'And [queried](docs/other.md?plain=1#L3).\n\n' +
              '| Column | What |\n|---|---|\n| On | Enables it. |\n';
 
   const mdHandler = () => new Response(MD, {
@@ -237,7 +238,9 @@ console.log('markdown rendering + content negotiation:');
     const { res, body } = await get('/', HTML);
     const ok = res.status === 200
       && res.headers.get('content-type')?.startsWith('text/html')
-      && res.headers.get('vary') === 'Accept'
+      // The front door negotiates on language as well, so it varies on both. Cloudflare's own Cache
+      // API ignores Vary — this header is for downstream caches; the key is what protects us here.
+      && res.headers.get('vary') === 'Accept, Accept-Language'
       && body.includes('<h1')
       && body.includes('<table')          // the README is mostly tables; GFM must be on
       && body.includes('<title>Proteus</title>');   // title from the first heading
@@ -281,6 +284,10 @@ console.log('markdown rendering + content negotiation:');
       ['mirrored, encoded space', 'href="/For%20Creators.md"'],
       ['unmirrored -> GitHub', 'href="https://github.com/solona-m/proteus/blob/main/docs/other.md"'],
       ['absolute untouched', 'href="https://example.com/x"'],
+      // Everything after the path travels with it. Rewriting only the pathname would quietly turn
+      // ?plain=1 into a different page than the one the link was written for.
+      ['query and hash preserved',
+        'href="https://github.com/solona-m/proteus/blob/main/docs/other.md?plain=1#L3"'],
     ];
     for (const [label, needle] of checks) {
       if (body.includes(needle)) { pass++; console.log(`  ok   link ${label}`); }
@@ -325,6 +332,189 @@ console.log('markdown rendering + content negotiation:');
     const ok = res.headers.get('content-type')?.startsWith('text/html') && body.includes('<h1');
     if (ok) { pass++; console.log('  ok   /mirror.md renders for a browser'); }
     else { fail++; console.log(`  FAIL /mirror.md: ${res.headers.get('content-type')}`); }
+  }
+
+  // Restore the shared stub for the suites below.
+  globalThis.fetch = async (url, opts) => {
+    fetched.push(url);
+    fetchOpts.push(opts ?? {});
+    if (url.includes('missing')) return new Response('nope', { status: 404 });
+    return new Response('BODY', {
+      status: 200,
+      headers: { 'content-type': 'application/octet-stream', 'content-length': '4', etag: '"abc"' },
+    });
+  };
+  store.clear();
+}
+
+console.log('language negotiation:');
+{
+  const HTML = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
+  const RAW = 'https://raw.githubusercontent.com/solona-m/proteus/main/';
+
+  // Each stand-in document names its own language in the body, so a test can tell which one came
+  // back. The nav block is the real thing: it must be STRIPPED and replaced by the generated
+  // switcher, and its relative links — written for a checkout — must resolve to this host.
+  const doc = (code, nav, tail = '') =>
+    `# Proteus\n\n<!--i18n-->\n${nav}\n<!--/i18n-->\n\nBODY-${code}\n${tail}`;
+  const ROOT = doc('en', '**English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md)');
+  const DE = doc('de', '[English](../README.md) · [日本語](README.ja.md) · **Deutsch**',
+    '\nSiehe [Fehlerbehebung](../TROUBLESHOOTING.md) und [Ersteller](../For%20Creators.md).\n');
+
+  globalThis.fetch = async (url) => {
+    fetched.push(url);
+    const body = url === `${RAW}README.md` ? ROOT
+      : url === `${RAW}docs/README.de.md` ? DE
+        : url.startsWith(`${RAW}docs/README.`) ? doc(url.slice(-5, -3), 'x')
+          : 'MISSING';
+    return new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    });
+  };
+
+  async function get(path, headers) {
+    fetched = [];
+    const res = await worker.fetch(
+      new Request('https://dl.example.com' + path, { headers }), {}, ctx);
+    return { res, body: await res.text() };
+  }
+
+  const t = (name, ok, detail = '') => {
+    if (ok) { pass++; console.log(`  ok   ${name}`); }
+    else { fail++; console.log(`  FAIL ${name}${detail ? ': ' + detail : ''}`); }
+  };
+
+  // The header alone decides, on the rendered variant of `/`. This is the whole feature.
+  for (const [header, want] of [
+    ['de-DE,de;q=0.9,en;q=0.8', 'de'],
+    ['zh-TW,zh-Hans;q=0.9', 'zh'],              // one Chinese translation; primary subtag wins
+    ['en;q=0.2,de;q=0.9', 'de'],                // q-order, not header order
+    ['it-IT,it;q=0.9', 'en'],                   // unshipped -> the English default
+    ['*', 'en'],
+  ]) {
+    store.clear();
+    const { res, body } = await get('/', { ...HTML, 'Accept-Language': header });
+    t(`Accept-Language "${header}" -> ${want}`,
+      body.includes(`BODY-${want}`) && body.includes(`<html lang="${want}">`)
+      && res.headers.get('content-language') === want,
+      `body ${/BODY-\w+/.exec(body)?.[0]}, lang ${/<html lang="(\w+)"/.exec(body)?.[1]}`);
+  }
+
+  // No preference at all still works.
+  store.clear();
+  {
+    const { body } = await get('/', HTML);
+    t('no Accept-Language -> English', body.includes('BODY-en'));
+  }
+
+  // Negotiation is for BROWSERS. curl and scripts asked for the source and still get the English
+  // source, byte for byte — the existing contract, unchanged.
+  store.clear();
+  {
+    const { res, body } = await get('/README.md', { Accept: '*/*', 'Accept-Language': 'de' });
+    t('raw markdown ignores Accept-Language',
+      body === ROOT && res.headers.get('content-type')?.startsWith('text/markdown'),
+      `identical=${body === ROOT}`);
+
+    // ...and says so. Claiming to vary on a header it ignores makes every shared cache downstream
+    // keep one identical copy per distinct Accept-Language string it sees.
+    t('raw markdown does not claim to vary on language',
+      res.headers.get('vary') === 'Accept', `vary=${res.headers.get('vary')}`);
+  }
+
+  // The rendered variant of the same path does vary, and must still say so.
+  store.clear();
+  {
+    const { res } = await get('/README.md', HTML);
+    t('rendered README varies on language',
+      res.headers.get('vary') === 'Accept, Accept-Language', `vary=${res.headers.get('vary')}`);
+  }
+
+  // A pinned path does not negotiate, so it does not vary either.
+  store.clear();
+  {
+    const { res } = await get('/de/README.md', HTML);
+    t('pinned language paths do not vary on language',
+      res.headers.get('vary') === 'Accept', `vary=${res.headers.get('vary')}`);
+  }
+
+  // A per-language path means exactly what it says, whatever the browser prefers — otherwise a
+  // shared link would show the recipient something other than what the sharer saw.
+  store.clear();
+  {
+    const { body } = await get('/de/README.md', { ...HTML, 'Accept-Language': 'ja' });
+    t('/de/README.md is pinned against Accept-Language', body.includes('BODY-de'),
+      `${/BODY-\w+/.exec(body)?.[0]}`);
+  }
+
+  // Same document, shorter names. `/de` without the trailing slash is what a person actually types
+  // and what survives being pasted around; a 404 there reads as "that language does not exist".
+  for (const short of ['/de/', '/de']) {
+    store.clear();
+    await get('/de/README.md', HTML);
+    const { res, body } = await get(short, HTML);
+    t(`${short} reuses the /de/README.md cache entry`,
+      res.status === 200 && fetched.length === 0 && body.includes('BODY-de'),
+      `status ${res.status}, refetched ${fetched[0] ?? '(none)'}`);
+  }
+
+  // THE bug the language part of the cache key exists to prevent: Cloudflare's Cache API ignores
+  // Vary, so one key for every language would serve whoever arrived first to everybody after.
+  store.clear();
+  await get('/', { ...HTML, 'Accept-Language': 'de' });
+  {
+    const { body } = await get('/', { ...HTML, 'Accept-Language': 'ja' });
+    t('languages occupy separate cache entries', body.includes('BODY-ja'),
+      `got ${/BODY-\w+/.exec(body)?.[0]}`);
+  }
+
+  // The switcher: one entry per shipped language, the current one marked, and the markdown nav it
+  // replaces gone — two rows of the same eight languages would be worse than none.
+  store.clear();
+  {
+    const { body } = await get('/de/README.md', HTML);
+    t('switcher is rendered', body.includes('<nav class="langs"'));
+    t('switcher links to pinned paths', body.includes('href="/ja/README.md"')
+      && body.includes('href="/en/README.md"'));
+    t('current language is marked, not linked',
+      /<span aria-current="page" lang="de">Deutsch<\/span>/.test(body)
+      && !body.includes('href="/de/README.md"'));
+    t('one entry per shipped language', (body.match(/hreflang="/g) ?? []).length === 7);
+    t('markdown nav is stripped', !body.includes('<!--i18n')
+      && (body.match(/日本語/g) ?? []).length === 1,
+      `${(body.match(/日本語/g) ?? []).length} copies of the Japanese entry`);
+  }
+
+  // Links in a translated document are written relative to docs/, so they only land anywhere real if
+  // they are resolved against the document's own path first.
+  store.clear();
+  {
+    const { body } = await get('/de/README.md', HTML);
+    for (const [label, needle] of [
+      ['../TROUBLESHOOTING.md -> /TROUBLESHOOTING.md', 'href="/TROUBLESHOOTING.md"'],
+      ['../For%20Creators.md -> /For%20Creators.md', 'href="/For%20Creators.md"'],
+    ]) t(`link ${label}`, body.includes(needle));
+  }
+
+  // A document with no translations gets no switcher: it would promise pages that do not exist.
+  store.clear();
+  {
+    const { body } = await get('/TROUBLESHOOTING.md', HTML);
+    t('untranslated documents render without a switcher', !body.includes('<nav class="langs"'));
+  }
+
+  // The parser itself, at the edges.
+  for (const [header, want] of [
+    ['fr-CA', 'fr'],
+    ['de;q=0', null],              // q=0 is "explicitly not this one"
+    ['*', null],
+    ['it', null],
+    ['', null],
+    [null, null],
+  ]) {
+    t(`pickLanguage(${JSON.stringify(header)}) -> ${want}`, pickLanguage(header) === want,
+      `got ${pickLanguage(header)}`);
   }
 
   // Restore the shared stub for the suites below.
