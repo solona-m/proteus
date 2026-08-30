@@ -1147,6 +1147,15 @@ public class GearSettingsPreset
     [JsonPropertyName("ManualShaderLock")]
     public bool? ManualShaderLock { get; set; }
 
+    /// <summary>
+    /// The overlay's skin-tint suppression, 0–1, or null for the default (full). Not a gear setting at
+    /// all — it only means anything on the skin layer — but it rides here because this is the type a
+    /// design binding snapshots per option, and the alternative was a fourth parallel override
+    /// dictionary carrying one float.
+    /// </summary>
+    [JsonPropertyName("SkinToneMask")]
+    public float? SkinToneMask { get; set; }
+
     /// <summary>Snapshot an overlay's gear settings.</summary>
     public static GearSettingsPreset From(OverlayDescriptor d) => new()
     {
@@ -1158,6 +1167,10 @@ public class GearSettingsPreset
         ScrollTilingX = d.ScrollTilingX,
         ScrollTilingY = d.ScrollTilingY,
         ManualShaderLock = d.ManualShaderLock,
+        // Seeding matters here beyond mere completeness: GetEditableGearOverride builds a new per-option
+        // preset with From(seed), so omitting this would silently reset an author's 0 to full suppression
+        // the moment someone opened the Colors panel with a design binding active.
+        SkinToneMask = d.SkinToneMask,
     };
 
     /// <summary>An independent copy. A design-binding edit works on a copy of what the sidecar holds, so
@@ -1172,6 +1185,7 @@ public class GearSettingsPreset
         ScrollTilingX = ScrollTilingX,
         ScrollTilingY = ScrollTilingY,
         ManualShaderLock = ManualShaderLock,
+        SkinToneMask = SkinToneMask,
     };
 
     /// <summary>
@@ -1232,6 +1246,22 @@ public class GearSettingsPreset
         d.ScrollTilingX = ScrollTilingX;
         d.ScrollTilingY = ScrollTilingY;
         d.ManualShaderLock = ManualShaderLock ?? false;
+        // Conditional, unlike Shader and Scroll above: null here means "this binding has nothing to say
+        // about skin tint", not "set it to the default".
+        //
+        // The distinction exists because this field was added to a type that was ALREADY persisted, and
+        // design_bindings.json has no migration — Version is written and never read. Every binding saved
+        // before it existed deserializes with null, so an unconditional write would silently clobber an
+        // author's SkinToneMask = 0 back to full suppression on upgrade: the imported-skin mod would pale
+        // again for exactly those users who had bound it to a design. Nor does anything repair it —
+        // GetEditableGearOverride only re-seeds from the descriptor when the option is ABSENT from the
+        // override, and a stale binding already has an entry.
+        //
+        // Skipping null is only safe because the editor never stores null in a binding override: see
+        // ColorTableEditor.DrawGlowFooter's SetSkinMask, which coalesces 1 → omitted on the descriptors
+        // but writes an explicit 1 into an override, precisely so "the user chose full suppression here"
+        // stays distinguishable from "this binding predates the field".
+        if (SkinToneMask is { } skinTone) d.SkinToneMask = skinTone;
     }
 }
 

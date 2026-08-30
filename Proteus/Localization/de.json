@@ -431,6 +431,18 @@
     "message": "Sphere-Map",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "Tönung {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "Hautton-Unterdrückung",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "Wie stark sich diese Option dem Hautton des Trägers widersetzt.\n1,00 behält die gestaltete Farbe auf jedem Hautton — richtig für Stoff, der die Haut bedeckt.\n0,00 lässt den Hautton durch — richtig für ein Tattoo, ein Decal oder eine Körpertextur, die selbst Haut IST.\nDer globale Regler in den Einstellungen multipliziert dies, 0,00 hier gewinnt also immer.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "Glanzlicht",
     "description": ""

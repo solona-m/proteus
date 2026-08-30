@@ -63,7 +63,7 @@ YourMod/
 | `Mask` | No | Path to your mask/specular overlay PNG. |
 | `Index` | No | Path to your index texture PNG. Enables per-region coloring. See below. |
 | `GenerateDiffuse` | No | Only affects **normal-only** overlays (a `Normal` with no `Diffuse`). Defaults to `true`. Set `false` to apply the normal (and any mask) **without** synthesizing a diffuse tint on the skin. Ignored when a `Diffuse` is present. See [Normal-only overlays](#normal-only-overlays). |
-| `SkinToneMask` | No | `0`–`1`. How strongly to keep the character's skin tone out of this overlay (so an opaque overlay looks the same on any skin tone). Omitted = full masking (the default). Set `0` to let skin tone show through fully — use for tattoos/decals that should take the skin's color. See [Skin-tone masking](#skin-tone-masking). |
+| `SkinToneMask` | No | `0`–`1`. How strongly to keep the character's skin tone out of this overlay (so an opaque overlay looks the same on any skin tone). Omitted = full masking (the default). Set `0` to let skin tone show through fully — use for tattoos/decals that should take the skin's color. Editable in Colors → Advanced. See [Skin-tone masking](#skin-tone-masking). |
 
 All paths are relative to the `Proteus/` folder. Subfolders and spaces in names are fine.
 
@@ -127,6 +127,10 @@ Most overlays want this and need no setting. Use `SkinToneMask` when an overlay 
 ```
 
 `0` lets skin tone through fully; `1` (or omitting it) is full masking; values between blend. Users also have a global "Skin-tint suppression" slider in `/proteus` that scales this — your `SkinToneMask: 0` always wins (the skin tone is never masked for that overlay).
+
+You don't have to write it by hand. **Colors → Advanced** has a per-option "Skin-tint suppression" slider that edits this same field: it writes back to `metadata.json` (so it's how you author the value in the first place), and it's captured by Glamourer design bindings, so a design can carry a different value than the mod ships with. The slider appears only on options rendering as **Skin** — a cloth or glow shell is on its own material and never reads it. Setting it to exactly `1` removes the key rather than writing `"SkinToneMask": 1`, so an untouched sidecar stays clean.
+
+One thing worth knowing before you set `0` on a **diffuse-only** overlay: skin-tone masking is the only reason Proteus rewrites the normal map for such an overlay, so turning it off means the mod stops publishing a normal texture at all. That's the intended behavior (it's also what the global slider at `0` does), but it means `0` is slightly more than a color tweak. Overlays that ship their own `Normal` are unaffected.
 
 ### Index Textures
 

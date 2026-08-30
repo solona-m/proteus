@@ -431,6 +431,18 @@
     "message": "Sphere map",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "teinte {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "Atténuation de la teinte de peau",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "À quel point cette option résiste au teint de peau du porteur.\n1,00 conserve la couleur d'origine sur n'importe quel teint — adapté au tissu qui couvre la peau.\n0,00 laisse passer le teint — adapté à un tatouage, un décalque ou une texture de corps qui EST de la peau.\nLe curseur global dans les Réglages multiplie cette valeur : 0,00 ici l'emporte toujours.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "Spéculaire",
     "description": ""

@@ -565,6 +565,73 @@ public class DesignBindingTests
         Assert.Same(contentTop, contentOnly.ResolveContent(null, null));
     }
 
+    // ── SkinToneMask through the gear snapshot ─────────────────────────────────
+
+    /// <summary>
+    /// SkinToneMask has to survive From → Clone → ApplyTo, because that is the whole route a design
+    /// binding takes: CaptureGear snapshots with From, the store round-trips, and ApplyTo puts it back on
+    /// a descriptor clone the compositor then reads.
+    /// <para/>
+    /// From is the one that bites if forgotten. GetEditableGearOverride seeds a brand-new per-option
+    /// preset with From(seed) the first time a panel is opened under an active binding — so a From that
+    /// dropped this would silently reset an author's 0 to full suppression just for looking at the tab.
+    /// </summary>
+    [Fact]
+    public void GearSettingsPreset_CarriesSkinToneMask_ThroughFromCloneAndApply()
+    {
+        var authored = new OverlayDescriptor { Diffuse = "skin.png", SkinToneMask = 0f };
+
+        var snap = GearSettingsPreset.From(authored);
+        Assert.Equal(0f, snap.SkinToneMask);
+
+        var copy = snap.Clone();
+        Assert.Equal(0f, copy.SkinToneMask);
+        copy.SkinToneMask = 0.25f;
+        Assert.Equal(0f, snap.SkinToneMask);          // the clone is independent
+
+        var target = new OverlayDescriptor { Diffuse = "skin.png" };
+        copy.ApplyTo(target);
+        Assert.Equal(0.25f, target.SkinToneMask);
+
+        // Unset stays unset rather than coalescing to 1 on the way through.
+        Assert.Null(GearSettingsPreset.From(new OverlayDescriptor()).SkinToneMask);
+    }
+
+    /// <summary>
+    /// A binding that says nothing about skin tint must leave the mod's own value alone.
+    /// <para/>
+    /// This is the upgrade path, and it is the whole reason ApplyTo treats this field differently from
+    /// Shader and Scroll. SkinToneMask was added to a type that was already being persisted, and
+    /// design_bindings.json has no migration — Version is written and never read — so every binding saved
+    /// before it existed loads with null. An unconditional write would push that null onto the descriptor
+    /// and undo an author's SkinToneMask = 0, paling imported skins again for exactly the users who had
+    /// bound the mod to a design.
+    /// </summary>
+    [Fact]
+    public void ApplyTo_WithNoSkinToneMask_LeavesTheAuthorsValueAlone()
+    {
+        var target = new OverlayDescriptor { Diffuse = "skin.png", SkinToneMask = 0f };
+        new GearSettingsPreset().ApplyTo(target);
+        Assert.Equal(0f, target.SkinToneMask);
+    }
+
+    /// <summary>
+    /// The other half of that bargain: an explicit value still overrides the author, including an
+    /// explicit 1. The editor never stores null in an override for exactly this reason — dragging a
+    /// binding's slider to full suppression has to be distinguishable from the binding being silent, or
+    /// the author's 0 would quietly win back.
+    /// </summary>
+    [Fact]
+    public void ApplyTo_WithAnExplicitSkinToneMask_OverridesTheAuthorsValue()
+    {
+        var target = new OverlayDescriptor { Diffuse = "skin.png", SkinToneMask = 0f };
+        new GearSettingsPreset { SkinToneMask = 1f }.ApplyTo(target);
+        Assert.Equal(1f, target.SkinToneMask);
+
+        new GearSettingsPreset { SkinToneMask = 0.25f }.ApplyTo(target);
+        Assert.Equal(0.25f, target.SkinToneMask);
+    }
+
     // ── PickMostRecent ─────────────────────────────────────────────────────────
 
     [Fact]

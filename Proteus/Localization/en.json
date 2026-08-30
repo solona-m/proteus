@@ -431,6 +431,18 @@
     "message": "Sphere map",
     "description": "Appears in the colour-table editor window."
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "tint {0:F2}",
+    "description": "Shown beside the \"Rendering as\" badge when an option's skin-tint suppression is not the default, so it stays visible while the Advanced section is collapsed. {0} is the value 0.00–1.00 — keep the :F2 format specifier exactly as written. Keep it very short."
+  },
+  "Colors.SkinTint.Label": {
+    "message": "Skin-tint suppression",
+    "description": "Control label in the Colors editor's Advanced section. The same setting as the Settings-tab slider, scoped to one overlay option — keep the wording identical to \"Settings.Skin.SkinTint.Label\"."
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "How strongly this option resists the wearer's skin tone.\n1.00 keeps the authored colour on any skin tone — right for fabric that covers the skin.\n0.00 lets the skin tone through — right for a tattoo, a decal, or a body texture that IS skin.\nThe global slider in Settings multiplies this, so 0.00 here always wins.",
+    "description": "Tooltip for the per-option skin-tint slider. Four lines: what it does, what 1.00 means, what 0.00 means, and that the global Settings slider multiplies it. Use your locale's decimal separator in the prose."
+  },
   "Colors.Specular.Label": {
     "message": "Specular",
     "description": "Control label. Appears in the colour-table editor window."
