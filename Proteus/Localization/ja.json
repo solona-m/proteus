@@ -431,6 +431,18 @@
     "message": "スフィアマップ",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "肌色 {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "肌色の抑制",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "このオプションが装着者の肌色にどれだけ抗うか。\n1.00 はどの肌色でも制作者の色を保ちます — 肌を覆う布に適しています。\n0.00 は肌色を通します — タトゥー、デカール、あるいは肌そのものである身体テクスチャに適しています。\n設定タブのグローバルスライダーがこれに乗算されるため、ここでの 0.00 は常に優先されます。",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "スペキュラ",
     "description": ""

@@ -3970,7 +3970,8 @@ public class StatusWindow : Window
             ImGui.Separator();
             bool resetSimple = false;
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
-                entry.ModDirectory, simpleOverlays, gearOvrSimple, effects, out var footerEditSimple,
+                entry.ModDirectory, entry.ModDirectory, simpleOverlays, gearOvrSimple, effects,
+                out var footerEditSimple,
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
                 resetDisabledReason: ResetBlockedReason(entry),
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
@@ -4378,9 +4379,14 @@ public class StatusWindow : Window
             {
                 // Same footer as the overlay tabs: the "Rendering as" badge + Advanced force-mode radios +
                 // glow-effect picker. No per-option reset (the mask has no defaults cache) → onReset null.
-                maskFooterChanged = ColorTableEditor.DrawGlowFooter(maskScope, [maskDesc], maskGearOvr, effects,
+                maskFooterChanged = ColorTableEditor.DrawGlowFooter(
+                    maskScope, entry.ModDirectory, [maskDesc], maskGearOvr, effects,
                     out var maskFooterEdit, onReset: null,
-                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry));
+                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                    // Nothing reads MaskDescriptor.SkinToneMask — the mask paints into the diffuse in its
+                    // own pass, and a promoted mask gets a shell descriptor built from scratch — so the
+                    // slider would be a control that saves and does nothing.
+                    skinTintApplies: false);
                 maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
                     maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
                 ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
@@ -4502,7 +4508,8 @@ public class StatusWindow : Window
         // Glow effect + Advanced live at the very bottom, below the rows.
         ImGui.Separator();
         bool resetOpt = false;
-        bool footerChanged = ColorTableEditor.DrawGlowFooter(scope, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
+        bool footerChanged = ColorTableEditor.DrawGlowFooter(
+            scope, entry.ModDirectory, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),

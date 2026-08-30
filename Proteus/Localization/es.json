@@ -431,6 +431,18 @@
     "message": "Sphere map",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "tono {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "Atenuación del tono de piel",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "Cuánto resiste esta opción el tono de piel de quien la lleva.\n1,00 conserva el color original sobre cualquier tono de piel: adecuado para tela que cubre la piel.\n0,00 deja pasar el tono de piel: adecuado para un tatuaje, una calcomanía o una textura corporal que ES piel.\nEl deslizador global en Ajustes multiplica esto, así que 0,00 aquí siempre gana.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "Especular",
     "description": ""

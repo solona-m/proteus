@@ -431,6 +431,18 @@
     "message": "스피어 맵",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "피부색 {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "피부색 억제",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "이 옵션이 착용자의 피부색에 얼마나 저항하는지.\n1.00은 어떤 피부색에서도 제작자의 색을 유지합니다 — 피부를 덮는 천에 적합합니다.\n0.00은 피부색이 비칠 수 있게 합니다 — 문신, 데칼, 또는 그 자체가 피부인 몸 텍스처에 적합합니다.\n설정 탭의 전역 슬라이더가 여기에 곱해지므로, 여기서의 0.00은 항상 우선합니다.",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "스페큘러",
     "description": ""

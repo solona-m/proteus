@@ -918,6 +918,20 @@ public sealed class ColorsStrings
     public readonly string SphereMap   = Loc.Localize("Colors.Section.SphereMap", "Sphere map");
     public readonly string SphereIndex = Loc.Localize("Colors.Sphere.Index.Label", "Index");
     public readonly string Intensity   = Loc.Localize("Colors.Sphere.Intensity.Label", "Intensity");
+
+    /// <summary>Deliberately the same wording as the global Settings slider: this is the same knob at a
+    /// narrower scope, and calling it something else would read as a second, unrelated control.</summary>
+    public readonly string SkinTint = Loc.Localize("Colors.SkinTint.Label", "Skin-tint suppression");
+
+    public readonly string SkinTintTip = Loc.Localize("Colors.SkinTint.Tip",
+        "How strongly this option resists the wearer's skin tone.\n"
+      + "1.00 keeps the authored colour on any skin tone — right for fabric that covers the skin.\n"
+      + "0.00 lets the skin tone through — right for a tattoo, a decal, or a body texture that IS skin.\n"
+      + "The global slider in Settings multiplies this, so 0.00 here always wins.");
+
+    /// <summary>Shown beside the "Rendering as" badge while Advanced is collapsed, so a tab that has been
+    /// turned down doesn't look untouched. Only drawn when the value isn't the default.</summary>
+    public readonly string SkinTintBadgeFmt = Loc.Localize("Colors.SkinTint.Badge.Fmt", "tint {0:F2}");
 }
 
 /// <summary>The colour window's own chrome — the panel StatusWindow draws around ColorTableEditor.</summary>

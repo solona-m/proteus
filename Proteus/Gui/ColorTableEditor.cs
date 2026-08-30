@@ -24,6 +24,11 @@ namespace Proteus.Gui;
 /// </summary>
 public static class ColorTableEditor
 {
+    /// <summary>How close to 1.0 counts as "the default" for skin-tint suppression. Shared by the store
+    /// decision and the collapsed-state readout so the two can never disagree about which values are
+    /// worth showing.</summary>
+    private const float SkinTintEpsilon = 0.0005f;
+
     private static readonly string[] GearShaders = ["character.shpk", "characterscroll.shpk"];
 
     /// <summary>What an unset glow colour looks like in the swatch, made explicit when the user raises Glow
@@ -56,8 +61,15 @@ public static class ColorTableEditor
     /// every caller save option metadata (or install a design-binding override) for a change that has
     /// nothing to do with either.
     /// </param>
+    /// <param name="advancedScope">
+    /// ImGui id for the Advanced disclosure alone, so its open/closed state can be shared where
+    /// <paramref name="idScope"/> is not. Callers pass the mod: the state being remembered is "show me
+    /// the advanced controls", not "…on this one tab", and keying it per option collapsed the section
+    /// every time the user clicked to a neighbouring tab to compare.
+    /// </param>
     public static bool DrawGlowFooter(
         string idScope,
+        string advancedScope,
         IReadOnlyList<OverlayDescriptor> overlays,
         GearSettingsPreset? ovr,
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects,
@@ -72,7 +84,15 @@ public static class ColorTableEditor
         // weapon rather than the character's own skin, and only skin (body, face, hair, tail, ears) has
         // geometry a shell can be cut from. Disables the controls that would move it there, and its text is
         // shown beneath the picker: a DISABLED item never reports hover, so a tooltip could not carry it.
-        string? noShellReason = null)
+        string? noShellReason = null,
+        // False where the descriptors being edited are not ones the skin-tint pass ever reads, so the
+        // slider would save a value and change nothing. The Masks tab is the case: a plain-Skin mask has
+        // no entry in the compositor's maskDescByMod at all (MaskDescriptorFor returns null for it) and
+        // paints into the diffuse in its own pass, while a promoted mask gets a freshly built shell
+        // descriptor that copies only the shader and scroll fields. Worse than inert, in fact — the mask
+        // descriptor IS serialized into the composite fingerprint, so a drag would fire a recomposite
+        // that produced byte-identical output.
+        bool skinTintApplies = true)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -86,6 +106,7 @@ public static class ColorTableEditor
         float? curTileX  = ovr != null ? ovr.ScrollTilingX : first.ScrollTilingX;
         float? curTileY  = ovr != null ? ovr.ScrollTilingY : first.ScrollTilingY;
         bool curLock = ovr != null ? (ovr.ManualShaderLock ?? false) : first.ManualShaderLock;
+        float? curSkinMask = ovr != null ? ovr.SkinToneMask : first.SkinToneMask;
         var mode = RenderModeInference.ModeOf(ovr?.Layer ?? first.Layer, ovr != null ? ovr.Shader : first.Shader);
         if (promotedToGear && mode == RenderMode.Skin) mode = RenderMode.Cloth;   // stacked above gear → renders as a shell
 
@@ -93,6 +114,18 @@ public static class ColorTableEditor
         void SetSpeed(float x, float y) { if (ovr != null) { ovr.ScrollSpeedX = x; ovr.ScrollSpeedY = y; } else foreach (var d in overlays) { d.ScrollSpeedX = x; d.ScrollSpeedY = y; } }
         void SetTile(float x, float y)  { if (ovr != null) { ovr.ScrollTilingX = x; ovr.ScrollTilingY = y; } else foreach (var d in overlays) { d.ScrollTilingX = x; d.ScrollTilingY = y; } }
         void SetLock(bool v)            => SetManualShaderLock(overlays, ovr, v);
+        // Asymmetric on purpose, and GearSettingsPreset.ApplyTo depends on it. On the DESCRIPTORS, exactly
+        // 1 is the default, so it is stored as omitted — that keeps sidecars free of no-op
+        // "SkinToneMask": 1 lines and keeps the documented "omitted = full masking" true. In a design
+        // OVERRIDE, null is reserved to mean "this binding predates the field, defer to the mod", so a
+        // user who drags to 1.00 must write an explicit 1.00 or their choice would read as silence and
+        // the author's value would win instead.
+        void SetSkinMask(float v)
+        {
+            if (ovr != null) { ovr.SkinToneMask = v; return; }
+            float? stored = Math.Abs(v - 1f) < SkinTintEpsilon ? null : v;
+            foreach (var d in overlays) d.SkinToneMask = stored;
+        }
 
         // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
         using (ImRaii.Disabled(noShellReason != null))
@@ -143,7 +176,7 @@ public static class ColorTableEditor
         }
 
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
-        bool advOpen = ImGui.TreeNodeEx($"{cs.Advanced}##{idScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
+        bool advOpen = ImGui.TreeNodeEx($"{cs.Advanced}##{advancedScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
 
         ImGui.SameLine(0f, 24f);
         DrawRenderingAsBadge(mode);
@@ -155,6 +188,18 @@ public static class ColorTableEditor
         {
             ImGui.SameLine();
             if (ImGui.SmallButton($"{cs.BackToAuto}##{idScope}")) { SetLock(false); changed = true; }
+        }
+
+        // A non-default skin tint, readable while Advanced is shut — same reason Pinned/Auto is printed
+        // here. Without it a tab whose suppression is switched off looks identical to an untouched one,
+        // and the whole point of moving this off the global slider is that it now varies per option.
+        bool showSkinTint = skinTintApplies && mode == RenderMode.Skin;
+        if (showSkinTint && curSkinMask is { } shownMask && Math.Abs(shownMask - 1f) > SkinTintEpsilon)
+        {
+            ImGui.SameLine();
+            ImGui.TextDisabled(string.Format(cs.SkinTintBadgeFmt, shownMask));
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.SkinTintTip);
         }
 
         if (advOpen)
@@ -178,6 +223,25 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(cs.ForceModeTip);
+
+            // Skin-tint suppression, per option. Drawn only in Skin mode, the way scroll speed/tiling are
+            // drawn only in Glow: the compositor's suppression pass never runs for a Cloth or Glow overlay
+            // (those go down the shell path), so the control would be inert there. `mode` already accounts
+            // for promotedToGear, so an auto-promoted overlay hides it too.
+            if (showSkinTint)
+            {
+                float tint = curSkinMask ?? 1f;
+                ImGui.SetNextItemWidth(90);
+                if (ImGui.DragFloat($"{cs.SkinTint}##skintint_{idScope}", ref tint, 0.01f, 0f, 1f, "%.2f"))
+                {
+                    SetSkinMask(Math.Clamp(tint, 0f, 1f));
+                    // Deliberately does NOT set `edited`: this is not a Skin/Cloth/Glow signal, and
+                    // feeding it to ReconcileMode would let a tint nudge re-infer the render mode.
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.SkinTintTip);
+            }
 
             // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
             // everything above this line is per-option and everything below it is not.

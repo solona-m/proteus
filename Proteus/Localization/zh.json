@@ -431,6 +431,18 @@
     "message": "球面贴图",
     "description": ""
   },
+  "Colors.SkinTint.Badge.Fmt": {
+    "message": "肤色 {0:F2}",
+    "description": ""
+  },
+  "Colors.SkinTint.Label": {
+    "message": "肤色抑制",
+    "description": ""
+  },
+  "Colors.SkinTint.Tip": {
+    "message": "此选项对穿戴者肤色的抵抗程度。\n1.00 在任何肤色上都保留作者设定的颜色 — 适合覆盖皮肤的布料。\n0.00 让肤色透出 — 适合纹身、贴花，或本身就是皮肤的身体贴图。\n设置中的全局滑块会与此相乘，因此这里的 0.00 始终优先。",
+    "description": ""
+  },
   "Colors.Specular.Label": {
     "message": "高光",
     "description": ""
