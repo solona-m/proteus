@@ -56,7 +56,7 @@ public class Configuration : IPluginConfiguration
     /// brand-new config is stamped current and so never runs a migration written for settings it was
     /// never saved with.
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -72,18 +72,30 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public int MirrorNoticeShown { get; set; }
 
-    public bool DisableAutoRedraw { get; set; } = false;
+    /// <summary>
+    /// Let Proteus act on its own initiative. On (default) is the normal plugin: an ambient event —
+    /// zoning, a redraw, an equipment change, Glamourer re-asserting temporary settings — recomposites
+    /// if it needs to, and Proteus reloads the character so the result is visible.
+    /// <para/>
+    /// Off makes Proteus almost entirely reactive: no composite and no reload happens unless the user asks
+    /// for one. Every editor interaction still recomposites and republishes (those are forced — see
+    /// CompositorService.TriggerRecomposite), you just won't SEE the change until something redraws you:
+    /// zoning, changing gear, or Penumbra's Redraw button. Nothing is lost while it is off, because the
+    /// previous composite's output stays published — the character keeps wearing it.
+    /// <para/>
+    /// "Almost": an equipment change while a gear shell is hosted still recomposites, because that one
+    /// leaves an ACTION of ours wrong rather than just a look stale — see TriggerRecomposite's
+    /// autoRedrawExempt. The reload stays suppressed even there.
+    /// </summary>
+    public bool AutoRedraw { get; set; } = true;
 
     /// <summary>
-    /// Let a composite triggered by an ambient event — zoning, a redraw, Glamourer re-asserting temporary
-    /// settings — return early when its inputs are identical to the composite already published. On by
-    /// default: those triggers fire several times per zone and re-run a multi-second pipeline to produce
-    /// byte-identical output, which is what "my mods disappear when I zone" was.
-    ///
-    /// Anything the user or a plugin explicitly asks for is never skipped, regardless of this setting.
-    /// Turn it off only to rule the gate out when diagnosing a change that isn't taking effect.
+    /// Legacy storage for the inverted form of <see cref="AutoRedraw"/>. Read ONCE, by the v3 -> v4
+    /// migration, and never again — every consumer uses <see cref="AutoRedraw"/>. It stays a serialized
+    /// property so a config written by an older build still carries the user's choice into that
+    /// migration; deleting it would silently reset everyone who had the old setting on.
     /// </summary>
-    public bool SkipUnchangedComposites { get; set; } = true;
+    public bool DisableAutoRedraw { get; set; } = false;
 
     /// <summary>
     /// Block-compress the baked output textures. Cuts each to ~1 byte/pixel (a 4K RGBA 64 MB → 16 MB) on
@@ -465,6 +477,15 @@ public class Configuration : IPluginConfiguration
         // that. Only an untouched setting is ours to move.
         if (Version < 3 && DecodeCacheBudgetMb == 2048)
             DecodeCacheBudgetMb = DefaultDecodeCacheBudgetMb();
+
+        // v3 -> v4: the setting is stated positively now ("Auto redraw" on by default) instead of as the
+        // opt-out "Disable auto redraw". Carry the old choice across rather than letting everyone fall to
+        // the new property's default: someone who had the opt-out ticked asked us not to touch their
+        // character, and silently undoing that is the one outcome they would notice immediately.
+        //
+        // Unconditional, not guarded on the old value being non-default: BOTH states are meaningful here,
+        // and false -> true is exactly what a config that never touched the setting should get anyway.
+        if (Version < 4) AutoRedraw = !DisableAutoRedraw;
 
         Version = CurrentVersion;
     }

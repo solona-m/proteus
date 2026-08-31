@@ -275,23 +275,21 @@ public sealed class SettingsStrings
         "Turning this off clears Proteus' output, redraws you without it,\n" +
         "and disables the managed \"Proteus\" mod in Penumbra.");
 
-    public readonly string DisableAutoRedraw =
-        Loc.Localize("Settings.General.DisableAutoRedraw.Label", "Disable auto redraw") + "###disableAutoRedraw";
+    public readonly string AutoRedraw =
+        Loc.Localize("Settings.General.AutoRedraw.Label", "Auto redraw") + "###autoRedraw";
 
-    public readonly string DisableAutoRedrawTip = Loc.Localize("Settings.General.DisableAutoRedraw.Tip",
-        "Stop Proteus reloading your character on its own. It still composites, but you\n" +
-        "won't see the result until something else redraws you - zoning, changing\n" +
-        "gear, or Penumbra's Redraw button.\n\n" +
-        "Only covers redraws Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads\n" +
-        "you whenever any mod's settings change, independently of this.");
-
-    public readonly string SkipUnchanged =
-        Loc.Localize("Settings.General.SkipUnchanged.Label", "Skip unchanged recomposites") + "###skipUnchanged";
-
-    public readonly string SkipUnchangedTip = Loc.Localize("Settings.General.SkipUnchanged.Tip",
-        "Let a recomposite triggered by zoning or a redraw stop early when nothing that\n" +
-        "affects the output has changed. Anything you change yourself always recomposites.\n" +
-        "Turn off only to rule this out when an edit isn't taking effect.");
+    public readonly string AutoRedrawTip = Loc.Localize("Settings.General.AutoRedraw.Tip",
+        "Let Proteus keep up with the world on its own - recompositing after zoning, gear\n" +
+        "changes and redraws, then reloading your character so you can see the result.\n\n" +
+        "Turn it off to make Proteus mostly manual: it won't composite or reload you until\n" +
+        "you change something yourself. Your current look stays on either way, and edits\n" +
+        "you make still apply - you just won't see them until something redraws you:\n" +
+        "zoning, changing gear, or Penumbra's Redraw button.\n\n" +
+        "One exception while it's off: if you're wearing a gear layer, changing gear still\n" +
+        "recomposites, so the item hosting that layer doesn't get stranded on something\n" +
+        "you took off. You still won't be redrawn for it.\n\n" +
+        "Only covers what Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads you\n" +
+        "whenever any mod's settings change, independently of this.");
 
     public readonly string AutoRaise =
         Loc.Localize("Settings.General.AutoRaise.Label", "Auto-raise mod priority") + "###autoRaise";
