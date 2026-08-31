@@ -338,6 +338,22 @@ public class OverlayDescriptor
     public string? SourceBodyType { get; set; }
 
     /// <summary>
+    /// Whether this overlay's art differs between the character's two sides — a tattoo on one arm, a scar on
+    /// one cheek. Null = never measured; measured lazily and remembered rather than recomputed per composite.
+    /// <para/>
+    /// It decides whether the overlay can survive a MIRRORED body. bibo and gen3 give each side its own half
+    /// of the sheet; vanilla (gen2) gives both sides the same texels, so porting to it folds the sheet in
+    /// half — harmless for symmetric art, and for asymmetric art it discards one side and mirrors the other
+    /// onto the whole body. Set here, such an overlay is rendered through an un-mirrored second-skin shell
+    /// instead, which keeps both sides. Symmetric art stays on the cheap skin path.
+    /// <para/>
+    /// Authors can set it by hand to overrule the measurement, which is why it is persisted with the mod
+    /// rather than kept in the plugin's own cache.
+    /// </summary>
+    [JsonPropertyName("AsymmetricArt")]
+    public bool? AsymmetricArt { get; set; }
+
+    /// <summary>
     /// Transient (never serialized): this is the synthesized top gear shell for a mod's active masks,
     /// coloured by <see cref="ProteusMetadata.MaskColorTableRows"/>. Its coverage/_id/relief come from the
     /// mod's masks (not from Diffuse/Normal/Index), and SecondSkinService skips the ordinary mask merge for
@@ -345,6 +361,21 @@ public class OverlayDescriptor
     /// </summary>
     [JsonIgnore]
     public bool IsMaskShell { get; set; }
+
+    /// <summary>
+    /// Transient (never serialized): this overlay was authored as SKIN and auto-promoted to a gear shell —
+    /// for sitting above gear, for a colorset feature skin.shpk can't render, or for asymmetric art on a
+    /// mirrored body. Set by the compositor's promotion, never by an author.
+    /// <para/>
+    /// It decides what an EMPTY colour table means. A shell with no row presets normally inherits the
+    /// vanilla template's table, which is right for an overlay someone deliberately made cloth — that
+    /// template belongs to the look being worn. It is wrong here: nobody chose gear, nobody chose colours,
+    /// and on the skin layer this art would have rendered at its authored colour. Inheriting e0041's table
+    /// instead multiplies it by a random vanilla top's palette — pink, olive and brown rows included — so a
+    /// promoted overlay takes the neutral-white baseline and renders as painted.
+    /// </summary>
+    [JsonIgnore]
+    public bool PromotedFromSkin { get; set; }
 }
 
 /// <summary>Maps one Penumbra option group to per-option overlay sets.</summary>

@@ -755,6 +755,14 @@
     "message": "MODの書き込みに失敗しました: {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "この顔テクスチャは左右に分かれている",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "顔テクスチャを2つの半分として描いた場合にのみチェックしてください。キャラクターの右側を画像の右半分に、左側を左半分に描いたものです。\n通常の顔テクスチャは両方の頬に同じピクセルを使うため、片側だけの模様は存在できません。分割されたものはProteusが顔レイヤーとして描画します。\n通常の顔テクスチャではオフのままにしてください。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "基本的なProteusオーバーレイMODを作成します。テクスチャを1つ以上選ぶと、Proteusが新しいPenumbra MODを書き出して開くので、有効化して調整できます。",
     "description": ""

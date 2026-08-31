@@ -755,6 +755,14 @@
     "message": "No se pudo escribir el mod: {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "Esta textura de cara está dividida izquierda/derecha",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Marca esto solo para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella: Proteus renderiza una dividida a través de una capa de cara.\nDéjalo desmarcado para cualquier textura de cara normal.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Crea un mod de superposición de Proteus básico. Elige al menos una textura; Proteus escribe un nuevo mod de Penumbra y lo abre para que puedas activarlo y ajustarlo.",
     "description": ""

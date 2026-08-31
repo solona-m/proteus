@@ -755,6 +755,14 @@
     "message": "Échec de l'écriture du mod : {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "Cette texture de visage est séparée gauche/droite",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Cochez ceci uniquement pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister — Proteus affiche une texture séparée via un calque de visage.\nLaissez ceci décoché pour toute texture de visage normale.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Créez un mod de calque Proteus simple. Choisissez au moins une texture ; Proteus écrit un nouveau mod Penumbra et l'ouvre pour que vous puissiez l'activer et l'ajuster.",
     "description": ""

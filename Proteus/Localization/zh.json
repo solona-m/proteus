@@ -755,6 +755,14 @@
     "message": "写入模组失败：{0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "这张脸部贴图按左右分成两半",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "仅当脸部贴图是按两半绘制时才勾选：角色的右侧画在图像的右半边，左侧画在左半边。\n普通脸部贴图让两侧脸颊使用相同的像素，因此只在一侧的标记无法存在——分成两半的贴图由 Proteus 通过脸部图层渲染。\n对任何普通脸部贴图请保持关闭。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "创建一个基础的 Proteus 叠加模组。至少选择一张贴图；Proteus 会写入一个新的 Penumbra 模组并将其打开，便于你启用和调整。",
     "description": ""

@@ -3662,6 +3662,47 @@ public class CompositorService : IDisposable
             // across layers (a skin group can outrank a gear group), so it needs the full picture.
             var allOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
 
+            var activeMtrl = _activeMtrlSnapshot;
+            // Declared out here so the sibling-synthesis pass below can tell "this body type isn't loaded
+            // at all" from "the type is loaded, but not the material this sibling would target" — the two
+            // read identically in the logs otherwise, and the distinction is the whole answer when a
+            // vanilla sibling silently stops being synthesized.
+            //
+            // Filled HERE, ahead of the entry loop, rather than beside that pass: the promotion below has to
+            // know whether the body being worn is the mirrored one before it can decide whether an overlay
+            // needs an un-mirrored shell.
+            var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (activeMtrl != null)
+                foreach (var m in activeMtrl)
+                {
+                    var bt = UVRemapService.InferBodyType(m);
+                    if (bt != null) activeBodyTypes.Add(bt);
+                }
+
+            // Some surface on this character is a MIRRORED body: one sheet for both sides, so asymmetric art
+            // painted into it is folded in half (see OverlayDescriptor.AsymmetricArt). Often that surface is
+            // the skin bundled INTO a garment rather than the body mod the wearer thinks of as theirs.
+            bool wearingMirroredBody = HasMirroredBodySurface(activeBodyTypes);
+
+            // Mods whose descriptors gained a measured AsymmetricArt this run. Written back after the
+            // composite rather than inside it — see the flush below.
+            var measured = new List<OverlayEntry>();
+
+            // Mods with an overlay that needs an un-mirrored shell. Those are the ones allowed past the gen2
+            // opt-in below — the character is wearing vanilla, so the shell isn't being synthesized onto some
+            // other body, it is the only way that mod's art can render at all.
+            var unmirrorMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Mods already told "your art is asymmetric but nothing is folding it", so the line is logged
+            // once per mod rather than once per overlay.
+            var asymmetricNotWorn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Shared with the editor so the two can't disagree about what was composited — see the static
+            // NeedsUnmirroredShell. The hoisted `wearingMirroredBody` is passed rather than re-read, so every
+            // overlay in this run is judged against one reading of the worn body.
+            bool NeedsUnmirroredShell(OverlayDescriptor d)
+                => CompositorService.NeedsUnmirroredShell(d, wearingMirroredBody);
+
             foreach (var entry in entries)
             {
                 if (entry.Metadata.HasContent)
@@ -3684,6 +3725,14 @@ public class CompositorService : IDisposable
                 }
 
                 var overlays = discovery.ResolveActiveOverlays(entry);
+
+                // Measure left/right asymmetry once per overlay, before the binding overrides below hand us
+                // clones — writing it on the live descriptor is what lets it be saved with the mod. Only
+                // asked when it matters: art already measured keeps its answer (including one an author set
+                // by hand), and art whose own space is mirrored has no two sides to compare.
+                foreach (var o in overlays)
+                    if (o.Descriptor.AsymmetricArt == null && MeasureAsymmetry(entry, o.Descriptor))
+                        measured.Add(entry);
 
                 // A restored design binding overrides metadata colors in-memory (metadata.json is
                 // never written). Replace each overlay's rows with the binding's, falling back to
@@ -3738,6 +3787,32 @@ public class CompositorService : IDisposable
                     // stops it: the shell builder is not material-aware, so a face overlay reaching it built
                     // a BODY shell and pasted the face art across the whole character.
                     bool canShell = CanRenderAsShell(overlay.Descriptor);
+                    bool unmirrors = NeedsUnmirroredShell(overlay.Descriptor);
+                    // Asymmetric art that is NOT being un-mirrored, said out loud. Without this the feature
+                    // simply does nothing and the log offers no reason at all — the shell lines report the
+                    // body they cut, never the body the character is wearing, and the two differ exactly
+                    // when this matters. Once per mod: the decision is the mod's, not the overlay's.
+                    if (!unmirrors && overlay.Descriptor.AsymmetricArt == true
+                        && !wearingMirroredBody && asymmetricNotWorn.Add(entry.ModDirectory))
+                        log.Information("[Proteus] {0}: art is asymmetric, but the body being worn is {1} — "
+                                      + "nothing folds it, so it paints normally. Un-mirroring is only for a "
+                                      + "character actually wearing vanilla/gen2 (and only then is vanilla the "
+                                      + "single active body type)",
+                            entry.ModDirectory,
+                            activeBodyTypes.Count == 0
+                                ? "not known yet"
+                                : string.Join("+", activeBodyTypes.OrderBy(x => x, StringComparer.Ordinal)));
+                    if (unmirrors)
+                    {
+                        if (canShell) unmirrorMods.Add(entry.ModDirectory);
+                        else
+                            // The fallback is the fold: the vanilla crop keeps the +X side and mirrors it.
+                            // Nothing renders blank, but half the art is gone and the log is the only place
+                            // that says so.
+                            log.Information("[Proteus] {0}: asymmetric art on a vanilla body, but no shell can "
+                                          + "be cut for the surface it paints — it falls back to the mirrored "
+                                          + "half-sheet and one side of the art is lost", entry.ModDirectory);
+                    }
                     if (!canShell && overlay.Descriptor.Layer == OverlayLayer.Gear)
                     {
                         var demoted = CloneDescriptor(overlay.Descriptor);
@@ -3751,10 +3826,19 @@ public class CompositorService : IDisposable
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
-                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell))
+                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
+                            unmirrors))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
+                        // Set AFTER the clone on purpose — CloneDescriptor round-trips through JSON and this
+                        // is [JsonIgnore], so it would not survive being set on the original.
+                        promoted.PromotedFromSkin = true;
+
+                        // Which shader it lands on — through the SAME predicate the editor asks, so the two
+                        // cannot disagree about what was composited (see RenderModeInference.PromotedShader).
+                        promoted.Shader = RenderModeInference.PromotedShader(promoted, overlay.ColorTableRows);
+
                         ov = overlay with { Descriptor = promoted };
 
                         // Only when GLOW is what moved it: an overlay already promoted for sitting above
@@ -3780,6 +3864,26 @@ public class CompositorService : IDisposable
                 }
             }
 
+            // Persist any asymmetry we just measured, so it is measured once for a mod and not once per
+            // session — and so it travels with the mod if it is exported or shared.
+            //
+            // This is the one thing the compositor writes into a mod folder, and it is deliberate: the value
+            // is a property of the ART, not of the character, the settings or the composite, so it cannot go
+            // stale the way a body type or a colour override would. It is also idempotent — the field is only
+            // null once — and there is no watcher on metadata.json to make this loop. SaveMetadata snapshots
+            // the mod's original file first, which still captures the author's values because it runs before
+            // the serialize; and it is done here rather than inside the per-material work below so it never
+            // runs on a parallel worker.
+            foreach (var entry in measured.Distinct())
+            {
+                try { discovery.SaveMetadata(entry); }
+                catch (Exception ex)
+                {
+                    // In-memory value stands for this session, so the composite is unaffected either way.
+                    log.Warning(ex, "[Proteus] Failed to record measured art asymmetry for {0}", entry.ModDirectory);
+                }
+            }
+
             // Drop materials the player doesn't currently have loaded.
             // Equipment/accessory materials: filtered by exact path (authoritative).
             // Body-type materials: the snapshot is captured before a body-type switch takes effect,
@@ -3790,20 +3894,9 @@ public class CompositorService : IDisposable
             //     (the type is active for a different race/body code, not this one).
             //   - If a body material's type is NOT in the snapshot at all → keep (mid-switch: the
             //     new body type hasn't appeared yet; post-redraw check will clean up if needed).
-            var activeMtrl = _activeMtrlSnapshot;
-            // Declared out here so the sibling-synthesis pass below can tell "this body type isn't loaded
-            // at all" from "the type is loaded, but not the material this sibling would target" — the two
-            // read identically in the logs otherwise, and the distinction is the whole answer when a
-            // vanilla sibling silently stops being synthesized.
-            var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // activeMtrl / activeBodyTypes are built ahead of the entry loop above, because the gear
+            // promotion there needs to know which body is being worn.
             {
-                if (activeMtrl != null)
-                    foreach (var m in activeMtrl)
-                    {
-                        var bt = UVRemapService.InferBodyType(m);
-                        if (bt != null) activeBodyTypes.Add(bt);
-                    }
-
                 _lastCompositedBodyType = activeBodyTypes.Count > 0
                     ? string.Join(",", activeBodyTypes.OrderBy(x => x))
                     : null;
@@ -6208,10 +6301,15 @@ public class CompositorService : IDisposable
                         // post-settle read swaps _bodyShapeSnapshot mid-build.
                         var bodyShapes = _bodyShapeSnapshot;
 
-                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
+                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling —
+                        // EXCEPT for a mod whose art has to be un-mirrored. That opt-in asks "may Proteus
+                        // paint this onto a body besides the one you have on"; here vanilla IS the body being
+                        // worn, and the shell is not an extra rendering of the art but the only one that can
+                        // show both of its sides.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
-                            modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
+                            modDir => unmirrorMods.Contains(modDir)
+                                   || config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
@@ -8876,6 +8974,184 @@ public class CompositorService : IDisposable
     internal static bool IsBodyUvMaterial(string mtrlGamePath)
         => UVRemapService.InferBodyType(mtrlGamePath) != null
         || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The UV space an overlay's art was painted for: its declared <see cref="OverlayDescriptor.SourceBodyType"/>,
+    /// else inferred from the materials it targets (a mod listing only <c>*_bibo.mtrl</c> is bibo art).
+    /// Null for art that names no body layout, which is then assumed to be in the destination's space already.
+    /// </summary>
+    internal static string? SrcBodyTypeOf(OverlayDescriptor d)
+    {
+        if (d.SourceBodyType != null) return d.SourceBodyType;
+        if (d.MaterialGamePaths.Any(p => p.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)))
+            return "bibo";
+        if (d.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3")) return "gen3";
+        return null;
+    }
+
+    /// <summary>
+    /// Whether ANY vanilla/gen2 body surface is on the character — a mirrored layout, where one sheet
+    /// describes both sides and asymmetric art painted into it is folded in half.
+    /// <para/>
+    /// Presence, NOT exclusivity. This was first written as "gen2 and nothing else", on the reasoning that a
+    /// wardrobe holding gen2 beside an asymmetric body has somewhere un-mirrored for the art to land. That
+    /// is wrong, and it is wrong in the ordinary case rather than an exotic one: a character's skin is not
+    /// one surface. GEAR SHIPS ITS OWN SKIN — a garment model carries the body it exposes, and plenty of
+    /// them carry it as vanilla geometry pointing at <c>mt_c0201b0001_a.mtrl</c>. So a Bibo+ wearer in such
+    /// a top has a bibo body AND a gen2 torso at once, and the art on that torso really is folded. Having a
+    /// bibo surface elsewhere on the same character rescues nothing.
+    /// <para/>
+    /// <see cref="UVRemapService.InferBodyType"/> only answers gen2 for a material under <c>/obj/body/</c>,
+    /// so a hit here always means a real body surface rather than a same-suffixed equipment material.
+    /// </summary>
+    /// <remarks>
+    /// Takes the concrete <see cref="HashSet{T}"/> deliberately: both callers build theirs with an
+    /// OrdinalIgnoreCase comparer, and widening the parameter would send <c>Contains</c> to the LINQ
+    /// extension, whose case sensitivity depends on an implementation detail of the argument.
+    /// </remarks>
+    internal static bool HasMirroredBodySurface(HashSet<string> activeBodyTypes)
+        => activeBodyTypes.Contains("gen2");
+
+    /// <summary>
+    /// Whether this overlay can only keep BOTH of its sides on a shell — the third reason
+    /// <see cref="RenderModeInference.ShouldPromoteToGear"/> promotes a Skin overlay.
+    /// <para/>
+    /// Asymmetric art painted into a mirrored body is folded in half — one side discarded, the other
+    /// mirrored onto the whole body — and the skin layer has no way out of that, because it paints into the
+    /// body's own material and the body's own UVs. A shell can: it carries its own geometry, so its vertices
+    /// can be sent to both halves of the art's sheet (SecondSkinService's un-mirroring).
+    /// <para/>
+    /// Split from the composite's own <paramref name="wearingMirroredBody"/> so the EDITOR can ask the same
+    /// question (see the instance overload) without re-deriving it. The compositor passes the value it
+    /// hoisted once for the run; re-reading the live snapshot mid-run could answer two overlays differently.
+    /// </summary>
+    internal static bool NeedsUnmirroredShell(OverlayDescriptor d, bool wearingMirroredBody)
+    {
+        if (d.AsymmetricArt != true) return false;
+        // The art has to have two sides to spread: art authored in a mirrored space itself has only one,
+        // whatever the measurement said.
+        var src = d.SourceBodyType ?? SrcBodyTypeOf(d);
+        if (src == null || UVRemapService.DoubledSpaceOf(src) != null) return false;
+
+        // A doubled FACE sheet needs the shell unconditionally. The vanilla face layout is mirrored on every
+        // character — there is no second face to be wearing — so unlike the body there is no "is the worn one
+        // the mirrored one" question to ask, and activeBodyTypes never names a face anyway.
+        if (string.Equals(src, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase)) return true;
+
+        return wearingMirroredBody;
+    }
+
+    /// <summary>
+    /// <see cref="NeedsUnmirroredShell(OverlayDescriptor, bool)"/> against the CURRENTLY worn body, for the
+    /// editor — which has no composite run to inherit a hoisted answer from.
+    /// <para/>
+    /// Unlike <see cref="CanRenderAsShell"/> this one is deliberately live-state-dependent: whether the art
+    /// gets folded genuinely depends on which body is on the character right now, and an overlay that would
+    /// be promoted on vanilla is not promoted on bibo. The editor must follow that, or it shows Skin for
+    /// something the compositor rendered as a shell.
+    /// </summary>
+    public bool NeedsUnmirroredShell(OverlayDescriptor d)
+    {
+        var snapshot = _activeMtrlSnapshot;
+        if (snapshot == null) return false;   // nothing known about the worn body — keep today's behaviour
+        var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in snapshot)
+        {
+            var bt = UVRemapService.InferBodyType(m);
+            if (bt != null) types.Add(bt);
+        }
+        return NeedsUnmirroredShell(d, HasMirroredBodySurface(types));
+    }
+
+    /// <summary>
+    /// Resolution the asymmetry measurement runs at. Far below the art's own, on purpose: the question is
+    /// whether the two sides carry DIFFERENT art, and a mark small enough to vanish at this size is small
+    /// enough that folding it away costs nothing.
+    /// </summary>
+    private const int AsymmetryProbeSize = 1024;
+
+    /// <summary>
+    /// Measure whether this overlay's art differs between the character's two sides and record it on the
+    /// descriptor. Returns true when a value was written, so the caller can save the mod.
+    /// <para/>
+    /// Only asked of art in an asymmetric space. gen2 art has one sheet for both sides by construction, so
+    /// the question has no answer there and the field is left null rather than written false — a null costs
+    /// one string comparison per composite to re-reject, and writing into a mod that can never need the
+    /// answer would be noise in someone else's folder.
+    /// <para/>
+    /// Measured on the diffuse when there is one, since that is what carries a tattoo; a normal- or mask-only
+    /// overlay is measured on whichever it has, because its shape lives there instead.
+    /// </summary>
+    private bool MeasureAsymmetry(OverlayEntry entry, OverlayDescriptor d)
+    {
+        var rel = d.Diffuse ?? d.Normal ?? d.Mask;
+        if (rel == null) return false;
+
+        var verdict = MeasureArtAsymmetry(Path.Combine(entry.SidecarRoot, rel), SrcBodyTypeOf(d), entry.ModDirectory);
+        if (verdict == null) return false;
+        d.AsymmetricArt = verdict;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the art at <paramref name="absolutePath"/> differs between the character's two sides, or null
+    /// when the question doesn't apply or couldn't be answered — which is what
+    /// <see cref="OverlayDescriptor.AsymmetricArt"/> stores as "never scanned".
+    /// <para/>
+    /// Public so the IMPORTERS and the Create tab can record the answer at the moment they write a mod,
+    /// rather than leaving it for the first composite. Deliberately routed through the compositor's own
+    /// <see cref="UVRemapService"/> instance rather than a fresh one: the detector restricts itself to texels
+    /// inside a UV island, and that mask comes from a loaded transfer map. A service with no map loaded would
+    /// let the bleed art tools dilate around every island vote, which reads as asymmetry on art that is
+    /// symmetric everywhere the game actually samples.
+    /// </summary>
+    /// <param name="space">The UV space the art was painted for — <see cref="SrcBodyTypeOf"/> for a
+    /// descriptor. Null or gen2 answers null: gen2 is the mirrored layout itself, so its one sheet describes
+    /// both sides by construction and there is nothing to compare.</param>
+    /// <param name="label">Mod name or path, for the log line only.</param>
+    public bool? MeasureArtAsymmetry(string absolutePath, string? space, string? label = null)
+    {
+        if (space == null || string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
+        try
+        {
+            var png = textureLoader.LoadPngAsRgba(absolutePath, AsymmetryProbeSize, AsymmetryProbeSize);
+            if (png == null) return null;
+            return LogAsymmetry(uvRemap.IsArtAsymmetric(png, AsymmetryProbeSize, AsymmetryProbeSize, space),
+                                space, label ?? absolutePath);
+        }
+        catch (Exception ex)
+        {
+            // Null, not false: unmeasured means "behave as before", which is the safe answer.
+            log.Warning(ex, "[Proteus] Failed to measure art asymmetry for {0}", label ?? absolutePath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="MeasureArtAsymmetry(string, string?, string?)"/> for a caller that already holds the
+    /// decoded pixels — the Luminis importer decodes every layer on its way in, so re-reading them off disk
+    /// would be pure waste.
+    /// </summary>
+    public bool? MeasureArtAsymmetry(byte[] rgba, int w, int h, string? space, string? label = null)
+    {
+        if (space == null || string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
+        try { return LogAsymmetry(uvRemap.IsArtAsymmetric(rgba, w, h, space), space, label ?? "art"); }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] Failed to measure art asymmetry for {0}", label ?? "art");
+            return null;
+        }
+    }
+
+    private bool LogAsymmetry(bool asymmetric, string space, string label)
+    {
+        log.Information("[Proteus] {0}: art in {1} space reads as {2} — {3}", label, space,
+            asymmetric ? "ASYMMETRIC" : "symmetric",
+            asymmetric
+                ? "it needs an un-mirrored shell to keep both sides on a vanilla body"
+                : "a vanilla body can fold it in half losing nothing");
+        return asymmetric;
+    }
 
     /// <summary>
     /// Whether a shell can be cut for this overlay at all — the precondition on the auto-promotion in

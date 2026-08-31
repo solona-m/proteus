@@ -122,6 +122,48 @@ public class ModCreationTests
     }
 
     /// <summary>
+    /// The measured left/right asymmetry reaches the sidecar, so a mod created here carries it before it is
+    /// ever composited or exported.
+    /// <para/>
+    /// The null case is the load-bearing one: the field must be OMITTED, not written as false. Absent means
+    /// "never scanned" — the compositor measures on a null and an author can override it — whereas a written
+    /// false is an assertion that the art was checked and is symmetric. The offline callers here pass
+    /// nothing, which is exactly the case that must stay silent.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void WriteMod_records_measured_asymmetry_and_omits_an_unmeasured_one(bool? measured, bool present)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "proteus_create_" + Path.GetRandomFileName());
+        var diffuse = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".png");
+        File.WriteAllBytes(diffuse, new byte[] { 1, 2, 3, 4 });
+
+        try
+        {
+            ModCreationService.WriteMod(
+                root, "Asym", "Artist",
+                "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null,
+                asymmetricArt: measured);
+
+            var path = Path.Combine(root, "Proteus", "metadata.json");
+            Assert.Equal(present, File.ReadAllText(path).Contains("AsymmetricArt"));
+
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(path),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            Assert.Equal(measured, Assert.Single(meta!.Overlays!).AsymmetricArt);
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { File.Delete(diffuse); } catch { }
+        }
+    }
+
+    /// <summary>
     /// The Create tab's auto-detect, first gate. Measured against the real art: a converted skin's base
     /// bottoms out at alpha 251, while a detail overlay ("Boney Diffuse" — collarbones and ribs) peaks at
     /// 117 over a mean of 6. This only rules sparse art OUT; garment art is routinely opaque end to end and

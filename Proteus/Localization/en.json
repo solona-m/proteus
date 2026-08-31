@@ -755,6 +755,14 @@
     "message": "Failed to write the mod: {0}",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Create.FaceSplit.Label": {
+    "message": "This face texture is split left/right",
+    "description": "Checkbox in the Create tab, shown only when the target material is a face. Keep the \"###createFaceSplit\" suffix out of the translation - it is not part of this string."
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
+    "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Create.Intro": {
     "message": "Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a new Penumbra mod and opens it so you can enable and tweak it.",
     "description": "Appears in the Create tab."

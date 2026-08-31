@@ -131,6 +131,9 @@ public class StatusWindow : Window
     private long _createDetectNextTick;   // throttle the detect poll while the character isn't drawn yet
     private string? _createStatus;        // last create result message
     private bool _createStatusOk;
+    // The picked face texture is a doubled sheet (two sides of the head in the two halves). Author-declared,
+    // never probed — see the checkbox for why nothing in the image can tell the two layouts apart.
+    private bool _createFaceSplit;
 
     // ── Import tab state ──
     // The parsed pack, held across frames from Browse until Import. Null = nothing picked yet.
@@ -1209,6 +1212,22 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.WholeSkinTip);
 
+        // Face targets only, and never auto-detected: the two halves of an ORDINARY face texture are two
+        // regions of one face, not two sides of a head, so nothing in the image distinguishes the layouts.
+        // Only the author knows, which is why this is a plain tick with no probe behind it.
+        if (IsFaceMaterial(_createMaterial))
+        {
+            ImGui.Checkbox(cs.FaceSplit, ref _createFaceSplit);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.FaceSplitTip);
+        }
+        else if (_createFaceSplit)
+        {
+            // The target moved off a face; the tick described the old one and would otherwise declare a
+            // body overlay to be in a face layout.
+            _createFaceSplit = false;
+        }
+
         ImGui.Separator();
 
         // Only ENABLED slots count. The clearing above already empties disabled ones; this keeps the
@@ -1230,7 +1249,8 @@ public class StatusWindow : Window
                     SlotEnabled("Mask")    ? NullIfEmpty(_createMask)    : null,
                     SlotEnabled("Normal")  ? NullIfEmpty(_createNormal)  : null,
                     SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null,
-                    _createWholeSkin);
+                    _createWholeSkin,
+                    _createFaceSplit && IsFaceMaterial(_createMaterial));
                 _createStatus = r.Message;
                 _createStatusOk = r.Ok;
                 if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
@@ -1242,6 +1262,11 @@ public class StatusWindow : Window
                     _createWholeSkin = _createWholeSkinLocked = false;
                     _createWholeSkinProbedFor = "";
                     _createWholeSkinProbe = null;
+                    // Same rule, and it matters more here: nothing probes this one, and moving between two
+                    // FACE materials never trips the target-changed reset — so a tick left standing would
+                    // declare the next mod's ordinary face texture to be split, and un-mirror its two halves
+                    // onto the two sides of the head.
+                    _createFaceSplit = false;
                 }
             }
         if (!valid && ImGui.IsItemHovered())
@@ -3527,6 +3552,11 @@ public class StatusWindow : Window
         && (p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)
          || p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The face specifically — the only surface with a split-left/right art layout to offer.</summary>
+    private static bool IsFaceMaterial(string p)
+        => p.StartsWith("chara/human/", StringComparison.OrdinalIgnoreCase)
+        && p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Short "what is this" tag for a material path, the picker's left column. Path-derived only —
     /// no game data, so it's free to call while drawing.</summary>
     private static string SlotHint(string p)
@@ -4520,9 +4550,19 @@ public class StatusWindow : Window
             bool pinned = gearOvrOpt?.ManualShaderLock
                 ?? activeOpt.Overlays.FirstOrDefault()?.ManualShaderLock ?? false;
             bool aboveGear = activeOptions.Skip(selIdx + 1).Any(x => x.Option.Overlays.Any(d => d.Layer == OverlayLayer.Gear));
-            if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell))
+            // The third promotion reason: asymmetric art on the mirrored (vanilla) body, which the skin layer
+            // would fold in half. Asked through the compositor so the two share one answer — unlike the
+            // others this one depends on which body is worn right now, so the editor cannot derive it.
+            bool needsUnmirrored = activeOpt.Overlays.Any(compositor.NeedsUnmirroredShell);
+            if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
+                                                        needsUnmirrored))
             {
-                gear = true; shader = OverlayDescriptor.DefaultGearShader; promotedToGear = true;
+                // The shader comes from the shared predicate too, not a hardcoded character.shpk: a promoted
+                // whole-skin overlay actually renders on skin.shpk, and showing it as cloth here offered the
+                // sphere/metal/glow controls that shader cannot honour (it has no row selector at all).
+                gear = true; promotedToGear = true;
+                shader = RenderModeInference.PromotedShader(
+                    activeOpt.Overlays.FirstOrDefault() ?? new OverlayDescriptor(), editRows);
             }
         }
         // A stored Gear layer on a surface no shell can cover renders as skin (the compositor demotes it),
