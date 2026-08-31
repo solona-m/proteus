@@ -84,7 +84,7 @@ public class CompositorService : IDisposable
     /// a composite, that blackout would re-arm after every restore, which is exactly when the player is
     /// most likely to be flipping gearsets. Consuming a single expected echo costs the same protection
     /// and nothing else. <paramref name="withinMs"/> only bounds how long we keep waiting for an echo
-    /// that may never arrive (a redraw suppressed by DisableAutoRedraw, say).
+    /// that may never arrive (a redraw suppressed by auto redraw being off, say).
     /// <para/>
     /// Deliberately NOT armed by the in-place reload: that path reloads textures through
     /// FlagSlotForUpdate and never touches the game's gearset load, so it produces no Gearset to discount.
@@ -980,9 +980,10 @@ public class CompositorService : IDisposable
         // One of our overlay mods, recorded as disabled. LastDiscovered carries the enabled flag from
         // DiscoverAll, so this is answerable even for a mod that has been off since before Proteus loaded —
         // the whole point, since nothing would have generated an event for such a mod all session.
-        var entry = LastDiscovered.FindIndex(e =>
+        var discovered = LastDiscovered;   // one read: the list is replaced wholesale by other threads
+        var idx = discovered.FindIndex(e =>
             string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
-        if (entry >= 0) return !LastDiscovered[entry].Enabled;
+        if (idx >= 0) return !discovered[idx].Enabled;
 
         // Last time we looked at it, it was off. Set by OnModSettingChanged, which removes the entry again
         // the moment the mod reads enabled, so membership here means "last observed disabled".
@@ -1388,7 +1389,13 @@ public class CompositorService : IDisposable
         }
 
         if (equipChanged && config.PluginEnabled)
-            TriggerRecomposite("equipment-change", force: false);
+            // Exempt from the manual-mode gate while a shell is standing: the reconcile above just put the
+            // carriers back from _lastShellCarrierSlots, and this is the only thing that recomputes which
+            // item should be carrying them. Skipping it with auto redraw off would pin the carrier to the
+            // gear the player just changed out of. No exemption when nothing is hosted — then there is no
+            // injection to keep correct and the change really is just a look.
+            TriggerRecomposite("equipment-change", force: false,
+                autoRedrawExempt: _secondSkinActive);
 
         if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
             TriggerRecomposite("glamourer-customization", force: false);
@@ -1860,7 +1867,11 @@ public class CompositorService : IDisposable
                 // that no longer exists.
                 RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);
                 if (restoreAccessory) _needFullRedraw = true;
-                ReloadAndRedraw();   // character reverts to un-composited
+                // userRequested: unticking Enabled promises "clears Proteus' output, redraws you without
+                // it". The output is already withdrawn by the time we get here, so a suppressed redraw
+                // does not leave the old look — it leaves the character rendering textures nothing points
+                // at any more, with no way to tell the plugin actually switched off.
+                ReloadAndRedraw(userRequested: true);   // character reverts to un-composited
                 _secondSkinActive = false;
                 ClearShellLocators();   // the shell is off the character; nothing left for them to describe
 
@@ -1986,10 +1997,45 @@ public class CompositorService : IDisposable
     /// `mtrl:`/`content:`/`maskrow:` blocks. It is NOT a licence to skip: reuse still requires the skin
     /// fingerprint to match, so an edit that genuinely moves a skin texel rebuilds regardless.
     /// </param>
+    /// <param name="autoRedrawExempt">
+    /// This ambient trigger runs even with auto redraw off. For the case where skipping does not merely
+    /// leave the look stale but leaves an ACTION of ours wrong — see the equipment-change call site, where
+    /// a hosted shell means we are injecting carrier items into the player's gear off a host decision the
+    /// change just invalidated. It exempts the trigger from the manual-mode gate ONLY; the composite it
+    /// starts still reaches RefreshPlayerTextures, which stays gated, so the promise the setting makes —
+    /// we do not reload your character — is kept either way.
+    /// </param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
-        bool skinFingerprintAuthoritative = false)
+        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
+
+        // Auto redraw off means Proteus does nothing on its OWN initiative — not just that it withholds
+        // the reload at the end. An ambient trigger is the whole of that initiative, so it stops here,
+        // before the debounce timer and before any work is scheduled.
+        //
+        // `force` is exactly the right test, and the only one that already exists: it is set by every path
+        // the user drove (the Refresh button, every editor interaction, a mod's settings changing) and
+        // clear on every path the world drove (zoning, redraws, equipment changes, collection switches,
+        // Glamourer re-asserting temporary settings). Which is the distinction the setting is naming.
+        //
+        // Dropping these outright — rather than compositing and withholding the redraw — is safe because
+        // an ambient trigger's output is not owed to anyone yet: the previous composite stays published,
+        // so the character keeps wearing it, and turning the setting back on forces a catch-up composite
+        // (see StatusWindow's auto-redraw-enabled). The cost of being wrong is a stale look until the
+        // user acts, which is what they asked for.
+        //
+        // …with one exception, which is what autoRedrawExempt names: a stale LOOK is what the user signed
+        // up for, a stale ACTION is not. The shell's carrier items are equipped with ApplyFlag.Once, so the
+        // redraw hook re-asserts them from the remembered host decision after every redraw. Drop the
+        // equipment change that would recompute that decision and we keep forcing a carrier chosen for gear
+        // the player has since taken off, indefinitely, with no way for them to shake it loose.
+        if (!force && !config.AutoRedraw && !autoRedrawExempt)
+        {
+            log.Debug("[Proteus] Recomposite skipped ({0}) — auto redraw is off.", reason);
+            return;
+        }
+
         Highlighter?.Clear();
 
         // A forced composite that gets cancelled by an ambient one must not be lost. Without this latch the
@@ -2103,16 +2149,16 @@ public class CompositorService : IDisposable
                 // the settled state. SchedulePostRedrawBodyTypeCheck stays as a backstop for a load
                 // slower than this window.
                 //
-                // Skipped under DisableAutoRedraw. This is a REDRAW, and until this check existed it was
+                // Skipped when auto redraw is off. This is a REDRAW, and until this check existed it was
                 // the one redraw the setting did not cover: the flag was only ever read on the two
                 // post-publish paths (ReloadAndRedraw, ReloadAndRedrawWhenReady), so a settings change on
                 // any mod that marked the snapshot dirty reloaded the character here regardless of it.
-                // Users who turn the setting on are asking us never to reload their character on our own
+                // Users who turn auto redraw off are asking us never to reload their character on our own
                 // initiative, and they accept the consequence this branch exists to avoid: a body mod's
                 // new materials aren't live yet, so this composite reads the pre-change snapshot and a
                 // later one corrects it. The settle poll goes with it — with no reload to wait on it can
                 // only stall the composite ~3s for a body-type change that will never arrive.
-                if (wasDirty && fresh != null && !config.DisableAutoRedraw
+                if (wasDirty && fresh != null && config.AutoRedraw
                     && string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase))
                 {
                     var beforeKey = _lastCompositedBodyType;
@@ -3549,7 +3595,16 @@ public class CompositorService : IDisposable
                 ReconcileInvisibleGlasses(gearWanted: false, shellBuilt: false, hostedOnFacewear: false);
                 ReconcileEmperorRing(gearWanted: false, shellBuilt: false, carrierSlots: []);
 
-                ReloadAndRedraw();
+                // userRequested, for the same reason SetEnabled(false) passes it: this branch has already
+                // published an EMPTY manifest, so a suppressed redraw does not preserve the old look — it
+                // strands the character rendering textures no redirect points at any more. Withdrawing
+                // output and refusing to redraw is the one combination that has no honest reading.
+                //
+                // Only ever changes behaviour with auto redraw off, and there this branch is reachable
+                // solely from a forced composite (ambient ones never run), i.e. from the user switching the
+                // last overlay mod off. So the flag never overrides the setting on a run the user didn't ask
+                // for.
+                ReloadAndRedraw(userRequested: true);
                 LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
                 ResultChanged?.Invoke();
                 return;
@@ -4160,7 +4215,7 @@ public class CompositorService : IDisposable
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
                 maskShellMods, baseKeys, contentLayers, skinOnly: true);
 
-            if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
+            if (!force && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
             {
                 // Still reconcile the carriers. They are ApplyFlag.Once, so whatever redraw led here may
@@ -4203,7 +4258,7 @@ public class CompositorService : IDisposable
             var lastSkin = _lastSkinPublish;
             bool skinReused =
                 (!force || skinFingerprintAuthoritative)
-                && config.SkipUnchangedComposites && Volatile.Read(ref _skinForcePending) == 0
+                && Volatile.Read(ref _skinForcePending) == 0
                 && _lastCompositeFingerprint != null
                 && lastSkin != null && skinFingerprint == lastSkin.Fingerprint
                 && lastSkin.Redirects.Count > 0
@@ -6993,7 +7048,7 @@ public class CompositorService : IDisposable
     ///
     /// ANCHORED ON THE EXPECTED TARGET, which is what makes the answer trustworthy. This runs straight after
     /// <c>ReloadModDirectory</c>, which Penumbra processes asynchronously, and the caller does not reliably
-    /// wait first: under DisableAutoRedraw nothing waits at all, and WaitForManifestLive returns immediately
+    /// wait first: with auto redraw off nothing waits at all, and WaitForManifestLive returns immediately
     /// whenever no redirect changed. Sampling until the answer merely STOPS MOVING is not enough — a reload
     /// still sitting in Penumbra's queue gives a perfectly stable PRE-reload answer, so "settled" and "never
     /// started" read identically, and a newly published path would be reported as lost to the very mod it was
@@ -7666,7 +7721,7 @@ public class CompositorService : IDisposable
     /// Two independent reasons, both of which outlive any improvement to the readiness probe:
     ///
     /// The reload is ASYNCHRONOUS. <see cref="WaitForManifestLive"/> does confirm the new manifest landed
-    /// (measured at 16-32 ms in practice), but it is skipped entirely under DisableAutoRedraw and can hit
+    /// (measured at 16-32 ms in practice), but it is skipped entirely when auto redraw is off and can hit
     /// its timeout, so "confirmed" is not something every path can rely on.
     ///
     /// And composites OVERLAP. Cancellation is cooperative and its last check sits far above the writes,
@@ -7720,7 +7775,7 @@ public class CompositorService : IDisposable
     /// give. It keeps anything named by ANY of the last <see cref="PublishHistoryDepth"/> manifests, so it
     /// does not matter which one Penumbra is currently serving — deleting right after publishing meant
     /// racing an asynchronous reload whose readiness poll times out routinely and is skipped entirely
-    /// under DisableAutoRedraw. And it stands down while another composite is in flight, because that
+    /// when auto redraw is off. And it stands down while another composite is in flight, because that
     /// composite has already passed its last cancellation check and will write files and publish them:
     /// deleting its output mid-run would hand it a manifest full of dangling redirects.
     ///
@@ -7771,15 +7826,17 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void ReloadAndRedraw(bool redraw = true)
+    /// <param name="userRequested">See <see cref="RefreshPlayerTextures"/> — the redraw IS the action, so
+    /// auto redraw does not gate it.</param>
+    private void ReloadAndRedraw(bool redraw = true, bool userRequested = false)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (redraw && !config.DisableAutoRedraw)
+        if (redraw && (config.AutoRedraw || userRequested))
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
-            RefreshPlayerTextures();
+            RefreshPlayerTextures(userRequested);
         }
     }
 
@@ -7841,21 +7898,26 @@ public class CompositorService : IDisposable
         });
     }
 
-    private void RefreshPlayerTextures()
+    /// <param name="userRequested">
+    /// This reload IS the thing the user asked for, so auto redraw does not gate it. Set only where the
+    /// redraw is the whole point of the action rather than a way to show its result — switching Proteus
+    /// off, whose entire promise is "clears Proteus' output, redraws you without it". Leaving that one
+    /// gated meant the output was withdrawn and the character kept rendering it, so the plugin looked
+    /// stuck on with the checkbox unticked. Same reasoning that already exempts RestoreChangedAccessory,
+    /// which reaches penumbra.RedrawPlayer directly rather than coming through here.
+    /// </param>
+    private void RefreshPlayerTextures(bool userRequested = false)
     {
         // The chokepoint every self-initiated character reload goes through — in-place reload and full
-        // redraw alike — so DisableAutoRedraw is enforced HERE as well as at the call sites. Enforcing it
+        // redraw alike — so the auto-redraw check is enforced HERE as well as at the call sites. Enforcing it
         // only at the call sites is what let it be missed: the two post-publish paths checked it and the
         // composite preamble's reload did not, so the setting silently meant "no redraw AFTER a publish"
         // rather than "no redraw". Those call sites still check it too, because skipping the redraw is not
         // the whole of what they need to skip (the preamble also has a ~3s settle poll that only makes
         // sense if a reload actually happened).
-        //
-        // Deliberately does NOT cover RestoreChangedAccessory: that is the user pressing a button whose
-        // entire purpose is a redraw, so it calls penumbra.RedrawPlayer directly.
-        if (config.DisableAutoRedraw)
+        if (!config.AutoRedraw && !userRequested)
         {
-            log.Debug("[Proteus] Player reload skipped — DisableAutoRedraw is set.");
+            log.Debug("[Proteus] Player reload skipped — auto redraw is off.");
             return;
         }
 
@@ -7922,7 +7984,7 @@ public class CompositorService : IDisposable
     /// <returns>
     /// Whether the published manifest was OBSERVED to be live — a probe resolving to the file we just wrote,
     /// or a withdrawn path confirmed gone. False means unproven, not disproven: nothing changed so there was
-    /// nothing to probe, the wait timed out, or DisableAutoRedraw skipped it. <see cref="VerifyRedirectsLive"/>
+    /// nothing to probe, the wait timed out, or auto redraw was off. <see cref="VerifyRedirectsLive"/>
     /// needs the distinction, because "no path resolves to us" means we are outranked everywhere if the
     /// manifest is known live, and means nothing at all if it isn't.
     /// </returns>
@@ -7931,7 +7993,7 @@ public class CompositorService : IDisposable
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (config.DisableAutoRedraw) return false;
+        if (!config.AutoRedraw) return false;
 
         bool live = WaitForManifestLive(redirects, previous);
 

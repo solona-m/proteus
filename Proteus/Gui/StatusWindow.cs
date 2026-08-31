@@ -738,24 +738,20 @@ public class StatusWindow : Window
     {
         var s = Strings.Settings;
 
-        var disableRedraw = config.DisableAutoRedraw;
-        if (ImGui.Checkbox(s.DisableAutoRedraw, ref disableRedraw))
+        var autoRedraw = config.AutoRedraw;
+        if (ImGui.Checkbox(s.AutoRedraw, ref autoRedraw))
         {
-            config.DisableAutoRedraw = disableRedraw;
+            config.AutoRedraw = autoRedraw;
             config.Save();
+            // Turning it back ON catches up: while it was off every ambient trigger was dropped, so the
+            // published output can be arbitrarily far behind the world (a collection switch, a body-mod
+            // change, a zone). Forced, because the config knobs are deliberately outside the composite
+            // fingerprint — an ambient trigger here would hit the unchanged-inputs gate and do nothing.
+            // Turning it OFF stays silent: the point of it is that we stop touching the character.
+            if (autoRedraw) compositor.TriggerRecomposite("auto-redraw-enabled");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(s.DisableAutoRedrawTip);
-
-        var skipUnchanged = config.SkipUnchangedComposites;
-        if (ImGui.Checkbox(s.SkipUnchanged, ref skipUnchanged))
-        {
-            config.SkipUnchangedComposites = skipUnchanged;
-            config.Save();
-            compositor.TriggerRecomposite("skip-gate-toggle");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(s.SkipUnchangedTip);
+            ImGui.SetTooltip(s.AutoRedrawTip);
 
         var autoRaise = config.AutoRaiseModPriority;
         if (ImGui.Checkbox(s.AutoRaise, ref autoRaise))
@@ -2863,7 +2859,7 @@ public class StatusWindow : Window
             // A content piece is grafted geometry with its own material; it never touches a skin texture,
             // which is why the fingerprint's whole `content:` block is dropped under skinOnly. So the skin
             // fingerprint is authoritative here by construction, not just by what happens to be hashed.
-            compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+            RecompositeForOverlay(entry, "content-colors-change", ColorEditDebounceMs,
                 skinFingerprintAuthoritative: true);
             return;
         }
@@ -2881,7 +2877,7 @@ public class StatusWindow : Window
                     ?.ApplyScrollFrom(glow);
         }
 
-        compositor.TriggerRecomposite("content-colors-change", ColorEditDebounceMs,
+        RecompositeForOverlay(entry, "content-colors-change", ColorEditDebounceMs,
             skinFingerprintAuthoritative: true);   // see above
     }
 
@@ -3691,7 +3687,7 @@ public class StatusWindow : Window
                     if (collId.HasValue)
                         penumbra.SetModPriority(collId.Value, entry.ModDirectory, pri);
                     // Live edit only (see enable toggle above); folded into the binding via the button.
-                    compositor.TriggerRecomposite("penumbra-priority");
+                    RecompositeForOverlay(entry, "penumbra-priority");
                 }
 
                 // Colors button. Opens a real window (not a popup) so it survives clicking away —
@@ -3732,7 +3728,7 @@ public class StatusWindow : Window
                         // it — leaving it would let it contradict the selection the user just made.
                         config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
                         config.Save();
-                        compositor.TriggerRecomposite("ambient-occlusion-mod");
+                        RecompositeForOverlay(entry, "ambient-occlusion-mod");
                     }
                     ImGui.EndCombo();
                 }
@@ -4069,10 +4065,10 @@ public class StatusWindow : Window
                     entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
                 if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
-                if (footerChangedSimple || modeChangedSimple) compositor.TriggerRecomposite("mode-change");
+                if (footerChangedSimple || modeChangedSimple) RecompositeForOverlay(entry, "mode-change");
                 // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
                 // that DOES move a skin texel still shows up in the skin fingerprint and rebuilds.
-                else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+                else RecompositeForOverlay(entry, "colors-change", ColorEditDebounceMs,
                     skinFingerprintAuthoritative: true);
             }
             return;
@@ -4262,7 +4258,7 @@ public class StatusWindow : Window
                 // config is left untouched. Falls back to the global config when no binding is active.
                 if (!(editingBinding && designBindings.SetEditableStackOrder(entry.ModDirectory, topFirst)))
                     config.SetModStackOrder(entry.ModDirectory, topFirst);
-                compositor.TriggerRecomposite("stack-reorder");
+                RecompositeForOverlay(entry, "stack-reorder");
             }
 
             // ── ◀ ▶ arrows: restack the selected overlay (drag alternative) ──
@@ -4417,7 +4413,8 @@ public class StatusWindow : Window
             bool maskLocatorMissing = maskAsGear
                 ? maskShellMaterials == null || maskShellMaterials.Count == 0
                 : maskGlowTargets == null || maskGlowTargets.Count == 0;
-            if (config.PluginEnabled && maskLocatorMissing
+            // entry.Enabled ahead of the one-shot — see the overlay warmup below.
+            if (config.PluginEnabled && entry.Enabled && maskLocatorMissing
                 && _glowWarmedMods.Add($"{entry.ModDirectory}\0masks\0{(maskAsGear ? 'g' : 's')}"))
                 compositor.TriggerRecomposite("mask-glow-warmup");
 
@@ -4473,10 +4470,10 @@ public class StatusWindow : Window
                     discovery.SaveMetadata(entry);
                     InvalidateDefaultsCache(entry);
                 }
-                if (maskFooterChanged || maskModeChanged) compositor.TriggerRecomposite("mask-mode-change");
+                if (maskFooterChanged || maskModeChanged) RecompositeForOverlay(entry, "mask-mode-change");
                 // Rows only: hashed at BuildCompositeFingerprint's `maskrow:` block, so the skin-reuse gate
                 // can be trusted with this one and a mask that lives on a shell costs no skin re-blend.
-                else compositor.TriggerRecomposite("mask-colors-change", ColorEditDebounceMs,
+                else RecompositeForOverlay(entry, "mask-colors-change", ColorEditDebounceMs,
                     skinFingerprintAuthoritative: true);
             }
             return;
@@ -4559,7 +4556,10 @@ public class StatusWindow : Window
         // locator data it needs (skin-glow targets vs the shell's materials), and the freshly-needed one
         // hasn't been built yet. A per-mod guard would have spent its single warmup on the old layer and
         // never fire for the new one, leaving the Glow button missing after the switch.
-        if (config.PluginEnabled && activeOpt.Overlays.Count > 0 && locatorDataMissing
+        // entry.Enabled ahead of the one-shot, not after: a disabled mod's composite would produce no
+        // locator data anyway, and consuming the warmup here would spend it on a run that never happens —
+        // leaving the Glow button missing for the whole session. See RecompositeForOverlay.
+        if (config.PluginEnabled && entry.Enabled && activeOpt.Overlays.Count > 0 && locatorDataMissing
             && _glowWarmedMods.Add($"{entry.ModDirectory}\0{groupName}\0{activeOpt.Name}\0{(gear ? 'g' : 's')}"))
             compositor.TriggerRecomposite("glow-warmup");
 
@@ -4610,9 +4610,9 @@ public class StatusWindow : Window
                 activeOpt.ColorTableRows = editRows;
             if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
-            if (footerChanged || modeChanged) compositor.TriggerRecomposite("mode-change");
+            if (footerChanged || modeChanged) RecompositeForOverlay(entry, "mode-change");
             // Rows only — see the simple-mod path above.
-            else compositor.TriggerRecomposite("colors-change", ColorEditDebounceMs,
+            else RecompositeForOverlay(entry, "colors-change", ColorEditDebounceMs,
                 skinFingerprintAuthoritative: true);
         }
     }
@@ -4643,7 +4643,7 @@ public class StatusWindow : Window
                 {
                     config.SiblingSynthesis[entry.ModDirectory] = opt;
                     config.Save();
-                    compositor.TriggerRecomposite("sibling-mode");
+                    RecompositeForOverlay(entry, "sibling-mode");
                 }
             }
             ImGui.EndCombo();
@@ -4910,6 +4910,28 @@ public class StatusWindow : Window
     private readonly Dictionary<string, bool> _hasDefaultsCache = new(StringComparer.OrdinalIgnoreCase);
 
     private void InvalidateDefaultsCache(OverlayEntry entry) => _hasDefaultsCache.Remove(entry.SidecarRoot);
+
+    /// <summary>
+    /// Recomposite because something changed on THIS overlay mod — but only if the mod is switched on.
+    /// <para/>
+    /// A disabled mod paints nothing, so editing its colours or its masks, restacking its options, changing
+    /// its priority, its AO choice or its sibling mode cannot move a pixel of the character; a 5-7s rebuild
+    /// and a redraw for it is pure waste. The edit is still saved by the caller, and enabling the mod fires
+    /// its own composite that picks it up. Every entry-scoped trigger in this window goes through here —
+    /// the two glow warmups reach the same rule inline, since they must not spend their one-shot on a
+    /// composite that will not run. This is the same rule <c>CompositorService.OnModSettingChanged</c> applies to
+    /// Penumbra's own setting events — both entry points into "the user changed something on a mod that is
+    /// off" have to agree, or the one that doesn't becomes the reason the rebuild still happens.
+    /// <para/>
+    /// Deliberately NOT used for the enable toggle: that one is the transition itself.
+    /// </summary>
+    private void RecompositeForOverlay(OverlayEntry entry, string reason, int delayMs = 200,
+                                       bool skinFingerprintAuthoritative = false)
+    {
+        if (!entry.Enabled) return;
+        compositor.TriggerRecomposite(reason, delayMs,
+            skinFingerprintAuthoritative: skinFingerprintAuthoritative);
+    }
 
     /// <summary>Why "Reset to defaults" can't run right now, or null when it can.</summary>
     private string? ResetBlockedReason(OverlayEntry entry)
