@@ -691,6 +691,9 @@ public sealed class SecondSkinService
     /// body type, in which case the art is assumed to already be in the body's space.
     /// </summary>
     /// <summary>The UV space of a body model, read from its own skin material's suffix, or null.</summary>
+    /// <summary>The mirrored vanilla layout, compared the way every other body-type string in here is.</summary>
+    private static bool IsGen2(string? uv) => string.Equals(uv, "gen2", StringComparison.OrdinalIgnoreCase);
+
     private static string? SkinBodyType(byte[] model)
     {
         try
@@ -792,6 +795,31 @@ public sealed class SecondSkinService
             }
             var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
             return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
+        }
+
+        // gen2 -> an asymmetric space: the inverse of the crop above. Reached whenever a gen2-native layer
+        // sits on a shell whose sheet is bibo/gen3 — which is ordinary now that a shell prefers the
+        // asymmetric space wherever its parts disagree, not only on an un-mirrored one. Vanilla art
+        // describes BOTH sides with one layout, so it has to be spread over both halves of the destination
+        // to mean the same thing there.
+        //
+        // Without this it would fall through to uvRemap.Remap, which has no gen2_to_* map and answers a
+        // missing map by returning the art untouched — sampled at bibo coordinates it would land on the
+        // wrong part of the body entirely.
+        if (UVRemapService.DoubledSpaceOf(srcType) is { } srcDoubled)
+        {
+            // Landing in the doubled space itself (gen2 -> bibo, face -> facelr) needs NO transfer map — the
+            // expansion is the whole conversion — so it runs straight at the requested size. 4096 below is
+            // there only because a transfer map is indexed at that resolution; going via it here allocated a
+            // 64 MB intermediate and resampled twice to produce a 2048² result. One pass is also the better
+            // of the two: the detour scaled the art up and back down again.
+            if (string.Equals(dstType, srcDoubled, StringComparison.OrdinalIgnoreCase))
+                return UVRemapService.ExpandMirrored(png, w, h, w, h);
+
+            var expanded = UVRemapService.ExpandMirrored(png, w, h, 4096, 4096);
+            var moved = uvRemap.Remap(expanded, 4096, 4096, srcDoubled, dstType);
+            if (ReferenceEquals(moved, expanded)) return png;   // no transfer map — leave it alone
+            return UVRemapService.ResizeBilinear(moved, 4096, 4096, w, h);
         }
 
         // Transfer maps operate at 4096x4096; our textures are smaller, so remap at full res then resize.
@@ -1200,7 +1228,6 @@ public sealed class SecondSkinService
             enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(bodyGamePath), out partShapes);
 
             bodies.Add((bytes, partShapes, bodyGamePath, partType));
-            modelType ??= partType;
         }
 
         // ── whole-body fallback ──────────────────────────────────────────────
@@ -1312,12 +1339,159 @@ public sealed class SecondSkinService
             return null;
         }
 
+        // ── the shell's UV space, chosen from the parts actually kept ─────────────────────────
+        // NOT simply the first part's. The shell takes one space and converts every other part's vertices
+        // into it, and those conversions are not equally lossy: gen2 IS bibo's right half, so gen2 -> bibo
+        // is a plain affine that places every vertex, while bibo -> gen2 has nowhere to put bibo's LEFT half
+        // and reports those vertices unmapped (UvConverter's u < 0.5 guard) — they keep their authored UVs
+        // and sample whatever art happens to lie there.
+        //
+        // So an asymmetric space wins over gen2 whenever both are present. This is not a preference, it is
+        // the difference between converting a part and discarding half of it. Slot order made it bite: gear
+        // ships its own skin, so a top whose exposed torso is vanilla geometry is the FIRST part collected,
+        // and one 529-vertex gen2 part sent three bibo parts (13k vertices, 6.6k of them unmappable) through
+        // the fold. Among asymmetric spaces the first still wins — transfer maps carry both directions.
+        modelType = bodies.Select(b => b.Uv).FirstOrDefault(u => u != null && !IsGen2(u))
+                 ?? bodies.Select(b => b.Uv).FirstOrDefault(u => u != null);
+
         if (modelType != null && !string.Equals(modelType, bodyType, StringComparison.OrdinalIgnoreCase))
         {
             log.Information("[Proteus] second skin: body UV is {0} per the model's material (was {1})",
                 modelType, bodyType ?? "unknown");
             bodyType = modelType;
         }
+
+        // ── un-mirroring a vanilla body ───────────────────────────────────────────────────────
+        // gen2 is a MIRRORED layout: both sides of the body sample the same texels, and porting art into it
+        // means cropping the source sheet in half (RemapPathCore). For symmetric art that loses nothing. For
+        // art that differs side to side it is fatal — one side is discarded and the other is painted onto the
+        // whole body — and no amount of care on the art side can fix it, because the destination has nowhere
+        // to put a second side.
+        //
+        // So don't port the art down: pull the SHELL up. Target the art's own space and send the two sides of
+        // the vanilla geometry to the two halves of that sheet (UvConverter's unmirror). The art is then used
+        // at full resolution exactly as authored, and the vanilla body wears both of its sides.
+        //
+        // Only for art measured asymmetric (OverlayDescriptor.AsymmetricArt) — an un-mirrored shell costs a
+        // whole extra mesh set, and symmetric art gets nothing for it.
+        //
+        // Keyed on whether the shell holds ANY gen2 part, not on the shell's overall bodyType. Those come
+        // apart constantly, because a shell is cut per SLOT from whatever mod owns each one and gear ships
+        // its own skin: a Bibo+ wearer in a top whose bundled torso is vanilla geometry gets a shell whose
+        // bodyType resolves to bibo (the majority of its parts) while one part is still mirrored and still
+        // folds the art. Testing bodyType meant that mixed shell — the common real wardrobe — never
+        // un-mirrored at all. Everything downstream is already per-part (the mirrored count below, and
+        // UnmirrorSides at the SourceSpec), so only this gate had to widen.
+        string? unmirrorInto = null;
+        if (bodies.Any(b => IsGen2(b.Uv)))
+        {
+            foreach (var (_, ov) in gearOverlays)
+            {
+                var d = ov.Descriptor;
+                if (d.AsymmetricArt != true) continue;
+                // Body surface only HERE: these are the body sheet's halves, and `bodies` holds body parts.
+                // A face's doubled sheet is un-mirrored by ResolveHumanSurface against its own geometry.
+                if (!d.IsMaskShell && d.MaterialGamePaths.Count > 0
+                    && !ShellSurface.KeysFor(d.MaterialGamePaths).Any(k => k.IsBody)) continue;
+                var src = d.SourceBodyType ?? InferOverlayBodyType(d);
+                if (src == null || UVRemapService.DoubledSpaceOf(src) != null) continue;
+                // A face sheet is not a body space; it can never be what a body shell targets.
+                if (string.Equals(src, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase)) continue;
+                unmirrorInto = src;
+                break;
+            }
+        }
+
+        // Ask the geometry, not the body-type table — per PART, because a shell mixes them. A mod is free to
+        // ship a body it calls vanilla and unwrap it however it likes, and un-mirroring one that is already
+        // un-mirrored would tear it in half.
+        // Each part's LOD0 skin, decoded AT MOST ONCE. Two passes want it — the un-mirror check here and the
+        // connector bands below — and it is the most expensive read in this method, so neither pass gets to
+        // repeat it and neither pays for it when it isn't asked for.
+        var partGeom = new (float[] Pos, float[] Uv)?[bodies.Count];
+        var geomRead = new bool[bodies.Count];
+        (float[] Pos, float[] Uv)? Geometry(int i)
+        {
+            if (!geomRead[i])
+            {
+                geomRead[i] = true;
+                if (SecondSkinWriter.TryReadLod0Geometry(bodies[i].Bytes, out var gp, out var gu, out _))
+                    partGeom[i] = (gp, gu);
+            }
+            return partGeom[i];
+        }
+
+        var unmirrorPart = new bool[bodies.Count];
+        if (unmirrorInto != null)
+        {
+            int gen2Parts = 0, notMirrored = 0, unreadable = 0, straddling = 0;
+            for (int i = 0; i < bodies.Count; i++)
+            {
+                if (!IsGen2(bodies[i].Uv)) continue;
+                gen2Parts++;
+                if (Geometry(i) is not { } g) { unreadable++; continue; }
+                var (mp, mu) = g;
+                if (!SurfaceMirror.LooksMirrored(mp, mu)) { notMirrored++; continue; }
+
+                // A mesh whose UV strays outside one integer cell is REPORTED, not refused. The writer shifts
+                // a mesh by the floor of its minimum u, so vertices in another cell are left past 1 and the
+                // affine sends them off the sheet, where the sampler wraps them to arbitrary art.
+                //
+                // That is not an un-mirroring problem though — it breaks the ordinary gen2 -> bibo conversion
+                // in exactly the same way, and refusing to un-mirror changes nothing about those vertices
+                // while abandoning every vertex that IS placeable. Gear-bundled skin is the main case this
+                // feature exists for and it routinely has a few strays: Rinoa's exposed torso is 493 vertices
+                // in [0,1) and 36 in [1,2). Vetoing the part over those 36 lost the other 493.
+                // Counted against the part's MOST COMMON integer cell, not its lowest. The writer shifts each
+                // mesh by the floor of that mesh's own minimum u, while this sees every kept mesh of the part
+                // concatenated — so measuring from the global minimum reports an entire second mesh as strays
+                // whenever a part's meshes sit in different cells, which is a legitimate layout the shift
+                // handles correctly. The modal cell is what "main" means, and for a single-mesh part (the
+                // usual case, and the one this was written for) the two agree exactly.
+                var cellCounts = new Dictionary<int, int>();
+                float uLo = float.MaxValue, uHi = float.MinValue;
+                for (int k = 0; k < mu.Length; k += 2)
+                {
+                    if (mu[k] < uLo) uLo = mu[k];
+                    if (mu[k] > uHi) uHi = mu[k];
+                    int cell = (int)MathF.Floor(mu[k]);
+                    cellCounts[cell] = (cellCounts.TryGetValue(cell, out var had) ? had : 0) + 1;
+                }
+                int mainCell = 0, mainCount = -1;
+                foreach (var (cell, count) in cellCounts)
+                    if (count > mainCount) { mainCell = cell; mainCount = count; }
+                int outside = mu.Length / 2 - Math.Max(mainCount, 0);
+                if (outside > 0)
+                {
+                    straddling++;
+                    log.Information("[Proteus] second skin: {0} has {1} of {2} vertices outside its main UV "
+                                  + "cell [{3}..{4}) (u {5:F2}..{6:F2}) — those sample through the sampler's "
+                                  + "wrap, with or without un-mirroring; the rest un-mirror normally",
+                        bodies[i].Path, outside, mu.Length / 2, mainCell, mainCell + 1, uLo, uHi);
+                }
+                unmirrorPart[i] = true;
+            }
+
+            int usable = unmirrorPart.Count(x => x);
+            if (usable == 0)
+            {
+                log.Information("[Proteus] second skin: asymmetric {0} art over {1} gen2 part(s), but none is "
+                              + "un-mirrorable ({2} read as un-mirrored, {3} had no readable geometry) — "
+                              + "leaving the shell in {4}",
+                    unmirrorInto, gen2Parts, notMirrored, unreadable, bodyType ?? "unknown");
+                unmirrorInto = null;
+            }
+            else
+            {
+                log.Information("[Proteus] second skin: asymmetric {0} art over {1} of {2} gen2 part(s) ({3} total, "
+                              + "{4} with UV strays) — cutting the shell in {0} space (was {5}) and un-mirroring "
+                              + "those parts' vertices",
+                    unmirrorInto, usable, gen2Parts, bodies.Count, straddling, bodyType ?? "unknown");
+                bodyType = unmirrorInto;
+            }
+        }
+        bool unmirror = unmirrorInto != null;
+        if (!unmirror) Array.Clear(unmirrorPart);
 
         // ── one shell, one UV space ───────────────────────────────────────────────────────────
         // The shell is ONE mesh set painted by ONE art set, and that art is remapped into `bodyType`
@@ -1333,10 +1507,10 @@ public sealed class SecondSkinService
         //
         // Also repairs the coverage trim for free — it tests each triangle's UV footprint against the
         // art, so with the UVs corrected the divergent part stops being trimmed against the wrong region.
-        var uvConverters = new List<Func<float, float, (float U, float V)?>?>(bodies.Count);
+        var uvConverters = new List<UVRemapService.UvConversion?>(bodies.Count);
         foreach (var b in bodies)
         {
-            var conv = uvRemap.UvConverter(b.Uv, bodyType);
+            var conv = uvRemap.UvConverter(b.Uv, bodyType, unmirror);
             uvConverters.Add(conv);
             if (b.Uv == null || string.Equals(b.Uv, bodyType, StringComparison.OrdinalIgnoreCase)) continue;
             string partUv = b.Uv, shellUv = bodyType ?? "unknown";
@@ -1400,6 +1574,35 @@ public sealed class SecondSkinService
         // configured connector heuristic. Those were three arrays index-aligned with `bodies` by convention;
         // see SecondSkinWriter.SourceSpec for why they are one thing now.
         bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
+
+        // The vertical extent of each part's skin, so the connector heuristic can ask whether a seam ring is
+        // actually redundant instead of assuming it. A ring at the top of the hands is covered by the legs
+        // above it; the neck ring on a garment's bundled torso has nothing above it and is real skin.
+        //
+        // Only when the heuristic is actually going to run. This is a full LOD0 decode per part, and with the
+        // setting off nothing would ever read the answer — so the sources get a NULL band list, which is what
+        // tells the writer to keep its shape-only judgement rather than "nothing covers anything".
+        var partBands = new (float Lo, float Hi)?[bodies.Count];
+        if (skipConnectors)
+            for (int i = 0; i < bodies.Count; i++)
+            {
+                if (Geometry(i) is not { } g) continue;
+                float lo = float.MaxValue, hi = float.MinValue;
+                for (int k = 1; k < g.Pos.Length; k += 3)
+                {
+                    if (g.Pos[k] < lo) lo = g.Pos[k];
+                    if (g.Pos[k] > hi) hi = g.Pos[k];
+                }
+                if (lo <= hi) partBands[i] = (lo, hi);
+            }
+        List<(float Lo, float Hi)>? BandsExcept(int self)
+        {
+            if (!skipConnectors) return null;
+            var others = new List<(float Lo, float Hi)>(bodies.Count);
+            for (int k = 0; k < partBands.Length; k++)
+                if (k != self && partBands[k] is { } b) others.Add(b);
+            return others;
+        }
         var bodySurface = new ResolvedSurface(
             new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty),
             bodies.Select((b, i) => new SecondSkinWriter.SourceSpec(
@@ -1407,7 +1610,12 @@ public sealed class SecondSkinService
                 KeepMaterial: null,
                 EnabledShapes: b.Shapes,
                 UvConv: i < uvConverters.Count ? uvConverters[i] : null,
-                DropConnectors: skipConnectors)).ToList(),
+                DropConnectors: skipConnectors,
+                // Decided per part above: a gen2 part whose UV genuinely reads as mirrored AND fits one
+                // integer cell. A part already in the shell's asymmetric space converts (or doesn't) exactly
+                // as before, and must not pay for the side pass or have its UVs moved.
+                UnmirrorSides: i < unmirrorPart.Length && unmirrorPart[i],
+                OtherPartBands: BandsExcept(i))).ToList(),
             bodies.Select(b => b.Path).ToList(),
             cutCode,
             bodyType);
@@ -1431,6 +1639,20 @@ public sealed class SecondSkinService
                           + "cut; split it into one overlay per surface to get the rest",
                     ov.OptionGroup ?? "", ov.Option ?? "", keys.Count, string.Join(", ", keys), keys[0]);
             return keys[0];
+        }
+
+        // The UV space each surface's ASYMMETRIC art declares. A human-part surface has no body type to infer
+        // one from, so this is the only way it can tell an ordinary face texture — authored in the mirrored
+        // vanilla layout, where a one-sided mark cannot exist — from a doubled sheet that has room for both
+        // sides. First declaration wins, matching how one surface takes one art space.
+        var keySurfaceArt = new Dictionary<ShellSurfaceKey, string>();
+        foreach (var (_, ovArt) in gearOverlays)
+        {
+            if (ovArt.Descriptor.AsymmetricArt != true) continue;
+            var declared = ovArt.Descriptor.SourceBodyType ?? InferOverlayBodyType(ovArt.Descriptor);
+            if (declared == null) continue;
+            var artKey = SurfaceKeyOf(ovArt);
+            if (!keySurfaceArt.ContainsKey(artKey)) keySurfaceArt[artKey] = declared;
         }
 
         // The .mdl folder a human part's models live under, matching ShellSurfaceKind — or null for a kind
@@ -1510,9 +1732,11 @@ public sealed class SecondSkinService
             }
 
             var keep = SecondSkinWriter.KeepByLeaf(targetLeaves);
+            // Decoded ONCE. The log line below and the mirror test further down both want it, and a face is
+            // the largest source a shell reads — reading it twice was pure duplication.
+            bool haveGeom = SecondSkinWriter.TryReadLod0Geometry(pickBytes, out var hPos, out var hUv, out var hTri, keep);
             var shape = "(no matching geometry)";
-            if (SecondSkinWriter.TryReadLod0Geometry(pickBytes, out var hPos, out _, out var hTri, keep)
-                && hPos.Length >= 3)
+            if (haveGeom && hPos.Length >= 3)
                 shape = $"{hPos.Length / 3}v/{hTri.Length / 3}t";
 
             HashSet<string>? partShapes = null;
@@ -1532,17 +1756,64 @@ public sealed class SecondSkinService
                 return null;
             }
 
+            // ── un-mirroring a face ───────────────────────────────────────────────────────────
+            // The vanilla face layout is MIRRORED: both cheeks sample the same texels (89.4% of mirror-partner
+            // vertices share a UV on c0201f0001_fac), so a one-sided mark cannot be expressed in it at all —
+            // paint a texel and it IS both sides. Art declaring the DOUBLED face sheet has somewhere to put
+            // the second side, and the shell's two halves are sent to that sheet's two halves by exactly the
+            // affine gen2 -> bibo uses.
+            //
+            // Asked of the geometry, like the body path: a face model is free to be unwrapped un-mirrored,
+            // and splitting one that already gives each side its own texels would tear it in half.
+            var faceSplit = keySurfaceArt.TryGetValue(key, out var artSpace)
+                         && string.Equals(artSpace, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase);
+            UVRemapService.UvConversion? faceConv = null;
+            if (faceSplit)
+            {
+                // The two ways this can decline are reported SEPARATELY. They call for opposite responses —
+                // a model whose UV genuinely isn't mirrored needs no doubled sheet, while one that could not
+                // be read is a fault — and collapsing them into "does not read as mirrored" blames the UV
+                // layout for a decode failure.
+                if (!haveGeom)
+                {
+                    faceSplit = false;
+                    log.Warning("[Proteus] second skin: {0} art declares {1}, but no geometry could be read "
+                              + "from {2} to check it against — leaving it as authored",
+                        key, UVRemapService.FaceSplitSpace, pick);
+                }
+                else if (!SurfaceMirror.LooksMirrored(hPos, hUv))
+                {
+                    faceSplit = false;
+                    log.Information("[Proteus] second skin: {0} art declares {1}, but this model's UV already "
+                                  + "gives each side its own texels — leaving it as authored",
+                        key, UVRemapService.FaceSplitSpace);
+                }
+                else
+                {
+                    faceConv = uvRemap.UvConverter(UVRemapService.FaceSpace, UVRemapService.FaceSplitSpace,
+                                                   unmirror: true);
+                    log.Information("[Proteus] second skin: asymmetric {0} art on a mirrored {1} — un-mirroring "
+                                  + "its vertices into the two halves of the sheet",
+                        UVRemapService.FaceSplitSpace, key);
+                }
+            }
+
             return new ResolvedSurface(
                 key,
                 [new SecondSkinWriter.SourceSpec(
                     pickBytes,
                     KeepMaterial: keep,
                     EnabledShapes: partShapes,
-                    UvConv: null,             // native: a face's art is authored in the face's own layout
-                    DropConnectors: false)],  // the connector heuristic is body-tuned; it eats real geometry here
+                    // Null for ordinary face art, which is authored in the face's own layout. Non-null only
+                    // for a doubled sheet, where the geometry — not the art — is what moves.
+                    UvConv: faceConv,
+                    DropConnectors: false,    // the connector heuristic is body-tuned; it eats real geometry here
+                    UnmirrorSides: faceConv != null)],
                 [pick],
                 hCut,
-                null);                        // no remappable UV space — there are no transfer maps for a face
+                // The art's own space when it is a doubled sheet, so RemapPathCore leaves it alone (source and
+                // destination agree). Otherwise no remappable space — there are no transfer maps for a face.
+                faceSplit ? UVRemapService.FaceSplitSpace : null);
         }
 
         // Group the layers by surface, resolving each non-body surface once. A layer whose surface cannot be
@@ -2216,9 +2487,25 @@ public sealed class SecondSkinService
         (string? Src, string? Dst) UvFor(int layerIdx, OverlayDescriptor d)
         {
             var s = surfaces[layerSurface[layerIdx] >= 0 ? layerSurface[layerIdx] : 0];
-            return s.Key.IsBody
-                ? (d.SourceBodyType ?? InferOverlayBodyType(d), s.UvSpace)
-                : (null, null);
+            if (s.Key.IsBody) return (d.SourceBodyType ?? InferOverlayBodyType(d), s.UvSpace);
+
+            // The one human-part exception, and it is narrow. A face shell cut into the DOUBLED sheet has
+            // geometry reading two halves, so art authored in the ordinary face layout has to be spread
+            // across both — otherwise it lands on one side of the head and the other side samples the wrong
+            // half of it. Art that already declares the doubled sheet passes through untouched (source and
+            // destination agree), which is what leaves it as painted.
+            //
+            // Only FACE spaces are honoured. The null above exists because a stray SourceBodyType in a mod's
+            // metadata would otherwise run a bibo->gen3 BODY remap across face art, and defaulting anything
+            // unrecognised to the face layout keeps that impossible.
+            if (string.Equals(s.UvSpace, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase))
+            {
+                bool declaredFace =
+                    string.Equals(d.SourceBodyType, UVRemapService.FaceSpace, StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(d.SourceBodyType, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase);
+                return (declaredFace ? d.SourceBodyType : UVRemapService.FaceSpace, s.UvSpace);
+            }
+            return (null, null);
         }
 
         /// <summary>How far this layer's surface wants its shell pushed off the skin — see
@@ -2308,12 +2595,39 @@ public sealed class SecondSkinService
                         && string.Equals(c.ModDir, entry.ModDirectory, StringComparison.OrdinalIgnoreCase))
                     .Select(c => c.Normal).ToList();
 
-            var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs);
-            if (texPaths == null) continue;
+            // Loaded BEFORE the textures, because a slot the overlay doesn't supply inherits the template's
+            // own path — see the mask fallback in WriteTextures.
+            //
+            // The skin template follows the SURFACE and the wearer's race. A body material carries the
+            // skin-type shader key (Hrothgar's differs from every other body's); a FACE is skin.shpk too but
+            // a different material again — no shader keys at all, a different alpha threshold and its own
+            // mask — so cloning the body onto face geometry lights it down the wrong path. Falls back to the
+            // Midlander body for anything that ships no such material, which beats dropping the layer.
+            var faceId = layerSurf.Key.Kind == ShellSurfaceKind.Face ? layerSurf.Key.Id : null;
+            // Most specific first, and a FACE never falls back to a body: the Midlander face at the same id
+            // is still the right kind of material (no shader keys, its own alpha threshold and mask), while
+            // the body is the mismatch this whole chain exists to avoid. The body template is only the last
+            // resort for a body surface.
+            var candidates = new List<string> { GearMaterialWriter.TemplateFor(shader, layerSurf.CutCode, faceId) };
+            if (faceId != null) candidates.Add(GearMaterialWriter.SkinTemplate(null, faceId));
+            candidates.Add(GearMaterialWriter.TemplateFor(shader));
 
-            var template = textureLoader.LoadRawMtrl(null, GearMaterialWriter.TemplateFor(shader));
+            byte[]? template = null;
+            foreach (var cand in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                template = textureLoader.LoadRawMtrl(null, cand);
+                if (template == null) continue;
+                if (!string.Equals(cand, candidates[0], StringComparison.OrdinalIgnoreCase))
+                    log.Information("[Proteus] second skin: no {0} template at {1} — using {2}",
+                        shader, candidates[0], cand);
+                break;
+            }
             if (template == null) { log.Error("[Proteus] second skin: missing template material for {0}", shader); continue; }
+
+            var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
+                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs,
+                GearMaterialWriter.TextureNames(template));
+            if (texPaths == null) continue;
 
             var scroll = new ScrollSettings(
                 ov.Descriptor.ScrollSpeedX ?? ScrollSettings.Default.SpeedX,
@@ -2325,7 +2639,13 @@ public sealed class SecondSkinService
             // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
             // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
             // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, neutralWhenEmpty: isMaskShell), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            // An overlay AUTO-PROMOTED from Skin takes the neutral baseline too, for the same reason a mask
+            // shell does: nobody chose gear and nobody chose colours, so there is no "look being worn" whose
+            // template table should show through. Inheriting it multiplies the author's art by a vanilla
+            // top's palette — e0041 ships pink, olive and brown rows — which renders a skin overlay as dark
+            // patches wherever the _id happens to select one of them.
+            bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
@@ -2998,6 +3318,12 @@ public sealed class SecondSkinService
     /// failure. The overlay's alpha is written into the NORMAL's BLUE channel — that is what gates
     /// transparency for gear, and therefore what lets stacked shells composite instead of occlude.
     /// </summary>
+    /// <summary>
+    /// The shared skin mask every vanilla body material points at. Used verbatim (not rewritten) when a skin
+    /// shell's overlay ships no mask of its own, so the shell is lit like the skin it is copying.
+    /// </summary>
+    private const string VanillaSkinMask = "chara/common/texture/skin_mask.tex";
+
     /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
     /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
     private static byte[] Solid(byte r, byte g, byte b, byte a)
@@ -3012,7 +3338,10 @@ public sealed class SecondSkinService
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
         ref bool texturesChanged, bool mergeMasks = true,
-        IReadOnlyList<byte[]>? siblingReliefs = null)   // each: a normal RGBA with coverage in its alpha lane
+        IReadOnlyList<byte[]>? siblingReliefs = null,   // each: a normal RGBA with coverage in its alpha lane
+        // The template's own texture paths, in slot order. A slot the overlay doesn't supply and cannot be
+        // sensibly fabricated inherits the one the surface it is copying actually wears.
+        IReadOnlyList<string>? templateTextures = null)
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -3190,7 +3519,14 @@ public sealed class SecondSkinService
         // This is the whole trick: a Proteus overlay is gated by opacity, and on the gear layer that
         // opacity has to be translated into the normal map's BLUE channel or the shell renders solid.
         // (It also needs the material's transparency flag on — see GearMaterialWriter.)
+        //
+        // NOT on a skin shell. There blue is skin-colour INFLUENCE — the channel that makes the wearer's
+        // tone reach the art, which is the only reason to be on that shader at all (see TemplateFor). The
+        // two uses of blue are mutually exclusive, so a skin shell keeps the overlay's authored value and
+        // takes its coverage from the triangle trim instead: hard edges, and the wearer's tone.
+        bool skinShell = string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
         var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+        if (!skinShell)
         {
             var nrm = norm; var al = alpha;
             CompositorService.ParallelPixels(0, TexSize * TexSize, 1, (from, to) =>
@@ -3205,7 +3541,13 @@ public sealed class SecondSkinService
             ["norm"] = norm,
             // A fabricated mask must be WHITE, not mid-grey. The gear shaders read occlusion/gloss out
             // of it, so a 50% grey mask halves the lighting everywhere and a white surface renders grey.
-            ["mask"] = mask ?? Solid(255, 255, 255, 255),
+            // A fabricated mask must be WHITE on a GEAR shader — see above. A SKIN shell wants the mask the
+            // surface it copies actually wears: skin.shpk reads its own occlusion/roughness/subsurface lanes
+            // out of this texture, and white there is not "neutral", it is every one of those dialled to
+            // maximum — which renders the skin flat and glossy. Substituted below by naming the TEMPLATE's
+            // own path rather than writing a file, so a body shell inherits the shared skin mask and a face
+            // shell inherits that face's, without either being hardcoded here.
+            ["mask"] = mask ?? (skinShell ? null! : Solid(255, 255, 255, 255)),
             // No index texture → select Row 16 sub-row A everywhere, matching the SKIN layer's fallback
             // (it applies row16A as a flat tint when desc.Index == null). red 255 → row pair 16, green 255
             // → sub-row A. Defaulting to black (row 1) instead picked up the template's default row — which
@@ -3219,8 +3561,23 @@ public sealed class SecondSkinService
         var order = GearMaterialWriter.TextureOrder(shader);
         var paths = new List<string>(order.Count);
         bool compress = config.EnableCompression;
-        foreach (var slot in order)
+        for (int slotIdx = 0; slotIdx < order.Count; slotIdx++)
         {
+            var slot = order[slotIdx];
+            // A slot we have no art for and no sensible fabrication: name the TEMPLATE's own texture and
+            // write nothing. The material is free to reference any game path, and an unredirected one
+            // resolves to vanilla — so the shell wears exactly what the surface it copies wears. Falls back
+            // to the shared body skin mask only if the template named nothing there.
+            if (slots[slot] == null)
+            {
+                var inherited = templateTextures != null && slotIdx < templateTextures.Count
+                             && !string.IsNullOrWhiteSpace(templateTextures[slotIdx])
+                    ? templateTextures[slotIdx]
+                    : VanillaSkinMask;
+                paths.Add(inherited);
+                continue;
+            }
+
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
 
@@ -3619,7 +3976,7 @@ public sealed class SecondSkinService
     /// sub-row of a pair that set only the other — and that row must not paint something the author never
     /// chose, exactly as the skin layer defaults its rows to white. (16 pairs = 32 sub-rows.)
     /// </summary>
-    private static Dictionary<int, GearColorRow> NeutralRows()
+    internal static Dictionary<int, GearColorRow> NeutralRows()
     {
         var rows = new Dictionary<int, GearColorRow>();
         for (int r = 0; r < 32; r++)

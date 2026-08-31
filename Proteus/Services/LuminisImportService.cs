@@ -608,7 +608,8 @@ public sealed class LuminisImportService
         try
         {
             written = WriteMod(root, modName, author, preview, materials, suffixOverride,
-                               asTex ? textureLoader : null, textureLoader.LoadTexBytesAsRgba, log);
+                               asTex ? textureLoader : null, textureLoader.LoadTexBytesAsRgba, log,
+                               (rgba, w, h, space) => compositor.MeasureArtAsymmetry(rgba, w, h, space, modName));
         }
         catch (Exception ex)
         {
@@ -644,12 +645,19 @@ public sealed class LuminisImportService
     /// the loader itself, for the same reason <see cref="BuildPreview"/> takes one: it is the only part of
     /// this that needs a live game, and passing it in is what lets the whole write be exercised offline.
     /// </param>
+    /// <param name="measureAsymmetry">
+    /// (rgba, width, height, UV space) → does this art differ left from right, or null for "not measured".
+    /// A delegate for the same reason <paramref name="decode"/> is one: the measurement needs the
+    /// compositor's loaded transfer maps to know which texels lie inside a UV island, and the offline tests
+    /// pass null and keep today's behaviour — the first composite fills the field in.
+    /// </param>
     internal static WrittenOptions WriteMod(
         string root, string modName, string author,
         ImportPreview preview, IReadOnlyList<string> materials, string? suffixOverride,
         TextureLoader? encodeTo,
         Func<byte[], string, (byte[] Rgba, int Width, int Height)?> decode,
-        IPluginLog? log = null)
+        IPluginLog? log = null,
+        Func<byte[], int, int, string?, bool?>? measureAsymmetry = null)
     {
         var overlaysDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "overlays");
         var effectsDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir,
@@ -713,10 +721,18 @@ public sealed class LuminisImportService
                 ? UVRemapService.InferBodyType(materials.FirstOrDefault() ?? "") ?? plan.BodyType ?? ""
                 : plan.BodyType ?? "";
 
+            // Measured here, on the pixels already decoded above, so the answer travels with the mod from the
+            // moment it is written instead of waiting for the first composite to fill it in. Null when the
+            // question doesn't apply (gen2 art has one sheet for both sides) — which is what "never scanned"
+            // is stored as, so nothing is asserted that wasn't measured.
+            var asymmetric = measureAsymmetry?.Invoke(
+                rgba, w, h, string.IsNullOrEmpty(bodyType) ? null : bodyType);
+
             OverlayDescriptor Base(string diffuse) => new()
             {
                 Layer = OverlayLayer.Skin,
                 SourceBodyType = string.IsNullOrEmpty(bodyType) ? null : bodyType,
+                AsymmetricArt = asymmetric,
                 MaterialGamePaths = [.. materials],
                 Diffuse = diffuse,
             };

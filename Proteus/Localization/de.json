@@ -755,6 +755,14 @@
     "message": "Der Mod konnte nicht geschrieben werden: {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "Diese Gesichtstextur ist links/rechts geteilt",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Aktiviere dies nur für eine Gesichtstextur, die als ZWEI HÄLFTEN gemalt ist: die rechte Seite des Charakters in der rechten Bildhälfte, die linke Seite in der linken Hälfte.\nEine gewöhnliche Gesichtstextur gibt beiden Wangen dieselben Pixel, daher kann ein Mal auf nur einer Seite darin nicht existieren — Proteus rendert eine geteilte Textur stattdessen über eine Gesichtsebene.\nLass dies bei jeder normalen Gesichtstextur aus.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Erstelle einen einfachen Proteus-Overlay-Mod. Wähle mindestens eine Textur; Proteus schreibt einen neuen Penumbra-Mod und öffnet ihn, damit du ihn aktivieren und anpassen kannst.",
     "description": ""
