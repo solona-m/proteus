@@ -159,6 +159,10 @@
     "message": "[Proteus] {0} der von Proteus veröffentlichten Dateien erreichen das Spiel nicht — sie führen ins Leere, was meist bedeutet, dass der Mod „Proteus“ in deiner aktuellen Penumbra-Sammlung deaktiviert ist. Prüfe, ob er dort aktiviert ist.",
     "description": ""
   },
+  "Chat.CarrierClaimed.Fmt": {
+    "message": "[Proteus] \"{0}\" legt ein eigenes Modell auf ein Accessoire der Reihe „Des Kaisers neue Kleider“ ({1}), deshalb hat Proteus diesen Platz unangetastet gelassen, statt ihn zu ersetzen. Gib einen anderen Ring- oder Armreif-Platz frei, wenn Proteus einen zum Aufbauen haben soll.",
+    "description": ""
+  },
   "Chat.UnhostedLayers.Fmt": {
     "message": "[Proteus] Einige Ebenen auf deinem Bereich {1} konnten nicht platziert werden (Ebenen: {0}). Sie dürfen nicht rassenverformt sein und brauchen daher einen Slot, den Proteus vollständig ersetzen kann: mache einen Ringslot (beliebige Hand) oder deinen Brillenslot frei, dann erscheinen sie.",
     "description": ""

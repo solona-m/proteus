@@ -159,6 +159,10 @@
     "message": "[Proteus] Proteus 发布的文件中有 {0} 个没有到达游戏——它们完全解析不到任何内容，通常意味着“Proteus”模组在你当前的 Penumbra 合集中被禁用了。请检查它是否已在那里启用。",
     "description": ""
   },
+  "Chat.CarrierClaimed.Fmt": {
+    "message": "[Proteus]“{0}”在皇帝的新装饰品（{1}）上放置了自己的模型，因此 Proteus 保留了该栏位而没有替换它。如果希望 Proteus 有可用的栏位，请空出另一个戒指或手镯栏位。",
+    "description": ""
+  },
   "Chat.UnhostedLayers.Fmt": {
     "message": "[Proteus] 你的 {1} 上有部分层无法放置（层数：{0}）。它们不能进行种族形变，因此需要一个 Proteus 可以整体替换的栏位：空出一个戒指栏位（左右手皆可）或脸部装饰栏位，它们就会显示。",
     "description": ""

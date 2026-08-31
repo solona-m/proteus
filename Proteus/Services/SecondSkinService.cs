@@ -618,6 +618,52 @@ public sealed class SecondSkinService
     // while being a different thing to report. Null = nothing currently unhosted.
     private string? _lastUnhostedSurfaces;
 
+    /// <summary>Carrier slots last reported as belonging to another mod, joined, so the notice prints once
+    /// per changed situation. Null = none currently claimed.</summary>
+    private string? _lastClaimedCarriers;
+
+    /// <summary>
+    /// Say — once, and in chat — that a mod is sitting on an Emperor's New accessory Proteus would otherwise
+    /// have used, and that Proteus left it alone. Worth a chat line for the same reason a lost redirect is:
+    /// the alternative outcome is the user's piercings quietly vanishing with nothing on screen to connect
+    /// it to Proteus, and the fix (free a different ring or bracelet slot) is not one anybody guesses.
+    /// </summary>
+    private void NotifyCarriersClaimed(IReadOnlyList<(HostAccessory Host, string By)> claimed)
+    {
+        // The mod FOLDER, not the file inside it — "[ninka] - basic ver. 1 (miqote)" is what the user sees
+        // in Penumbra, and the path to a texture three directories down is not.
+        string Owner(string disk)
+        {
+            var root = penumbra.GetModDirectory();
+            try
+            {
+                if (root != null)
+                {
+                    var rel = Path.GetRelativePath(root, disk);
+                    if (!rel.StartsWith("..", StringComparison.Ordinal))
+                        return rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+                }
+            }
+            catch { /* fall through to the file name */ }
+            return Path.GetFileName(disk);
+        }
+
+        var owners = claimed.Select(c => Owner(c.By)).Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var slots  = claimed.Select(c => c.Host.Slot).Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        var key = string.Join("|", owners) + "#" + string.Join("|", slots);
+        if (string.Equals(_lastClaimedCarriers, key, StringComparison.Ordinal)) return;
+        _lastClaimedCarriers = key;
+
+        var msg = string.Format(Loc.Localize("Chat.CarrierClaimed.Fmt",
+            "[Proteus] \"{0}\" puts its own model on an Emperor's New accessory ({1}), so Proteus left that "
+          + "slot alone rather than replacing it. Free a different ring or bracelet slot if you want Proteus "
+          + "to have one to build on."), string.Join("\", \"", owners), string.Join(", ", slots));
+        _ = Plugin.Framework.RunOnFrameworkThread(
+            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+    }
+
     private static ulong Hash(byte[] data)
     {
         ulong h = 14695981039346656037;   // FNV-1a
@@ -1914,8 +1960,19 @@ public sealed class SecondSkinService
         // Chosen against the BODY's cut space. With one surface that is simply the shell's space; with more
         // than one, the body is the surface that has to be able to spill across several hosts, and the
         // others are carrier-only anyway (ShellSurfaceKey.RequiresNativeHost).
-        var hosts = ChooseHosts(bodySurface.CutCode, equipCode, equippedAccessories, metModels, invisibleGlassesSet, outputRoot,
-            emperorRingVariant, invisibleGlassesVariant);
+        // The packs whose geometry this build is placing. A carrier slot is left alone when another mod's
+        // model is on it — but these are not "another mod": their meshes are about to become the shell, and
+        // an import can legitimately leave a .mdl redirect behind (StripModelRedirects spares the options it
+        // REFUSED, so their pieces keep working under Penumbra). Without this, such a pack vetoes the very
+        // carrier its own content needs, the layers that need a native host are dropped as unhosted, and
+        // nothing on screen says why.
+        var hostedPackRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (cEntry, _) in contentLayers ?? [])
+            if (cEntry.ModRoot is { Length: > 0 } r) hostedPackRoots.Add(r);
+
+        var hosts = ChooseHosts(bodySurface.CutCode, equipCode, drawnRaceCode ?? charCode,
+            equippedAccessories, metModels, invisibleGlassesSet, outputRoot, hostedPackRoots,
+            emperorRingVariant, invisibleGlassesVariant, out var claimedCarriers);
 
         // Which surface each host carries. A host is one model at one path with one EQDP entry, so it can
         // only ever serve layers whose surfaces agree on a race code — hence an index per host rather than a
@@ -2554,6 +2611,16 @@ public sealed class SecondSkinService
                 placed + overBudget, totalCapacity, overBudget);
         }
         else _lastOverBudgetLayers = -1;
+
+        // Only NOW can a carrier slot left to another mod be called a problem. ChooseHosts offers every free
+        // slot as spill capacity, so it tests the necklace as readily as the ring, and on a look that fits in
+        // one host the other three were never going to carry anything — announcing them would tell the user
+        // to free a slot to fix something that is not broken. The two counters above are the whole test: if
+        // nothing overflowed and nothing went unhosted, the shell got everywhere it wanted to be.
+        if (claimedCarriers.Count > 0 && (overBudget > 0 || unhostedLayers.Count > 0))
+            NotifyCarriersClaimed(claimedCarriers);
+        else
+            _lastClaimedCarriers = null;   // re-arm: the same mod mattering later is news again
 
         // Build one shell model per host that got layers; fold each into the single Result.
         bool modelChangedAny = false;
@@ -3350,10 +3417,18 @@ public sealed class SecondSkinService
     /// <summary>
     /// The file this pack's own selection supplies for a material, or null when its options say nothing.
     /// <para/>
-    /// Candidates arrive best-path-first (see <see cref="ContentPiece.MaterialOptions"/>); within a path the
-    /// first whose option is actually ticked wins, and a source from the pack's default data always counts
-    /// as ticked. So a print group hands over the selected print, and a leaf nobody switches falls through
-    /// to the default copy.
+    /// The LAST selected group wins, not the first — that is Penumbra's rule, and getting it backwards is
+    /// what made an imported piercing pack invisible. Its "base install" group ships one neutral normal at
+    /// every piece's texture path, and the per-piece toggle groups after it (eyebrow / dermal / nose ring /
+    /// lip ring) swap in the real one. Base install is a single-select group, so it is ALWAYS ticked and was
+    /// always found first: every piece got the neutral normal, whose coverage gate is empty, and four
+    /// piercings loaded on the character and drew nothing. Penumbra, publishing the same pack itself, hands
+    /// the later group's file over — which is why raising that mod above Proteus "fixed" it, and why the
+    /// same report arrived twice from different users.
+    /// <para/>
+    /// A source from the pack's DEFAULT data (no group) always counts as ticked, but ranks below every
+    /// group: default data is what a mod publishes before any option is considered, so an option that names
+    /// the same path is an override of it, whichever order they happen to be recorded in.
     /// <para/>
     /// Null rather than a guess when a group is entirely unselected — the caller has two more answers to
     /// try, and inventing one here would take precedence over both.
@@ -3362,16 +3437,22 @@ public sealed class SecondSkinService
         string modRoot, IReadOnlyList<ContentMaterialSource> sources,
         IReadOnlyDictionary<string, List<string>>? selected)
     {
-        foreach (var s in sources)
+        // BACKWARDS, so the last selected group is found first and the scan can stop there. Walking forwards
+        // and keeping the last match would stat every source in the list on every call — and this runs per
+        // material, per layer, per composite, against packs that put nine files behind one leaf.
+        string? fromDefault = null;  // the pack's default data, used only when no group supplies the path
+
+        for (int i = sources.Count - 1; i >= 0; i--)
         {
+            var s = sources[i];
             if (s.File.Length == 0) continue;
-            if (s.Group != null)
-            {
-                if (selected == null
-                    || !selected.TryGetValue(s.Group, out var on)
-                    || !on.Any(x => string.Equals(x, s.Option, StringComparison.OrdinalIgnoreCase)))
-                    continue;
-            }
+            bool grouped = s.Group != null;
+            if (grouped
+             && (selected == null
+              || !selected.TryGetValue(s.Group!, out var on)
+              || !on.Any(x => string.Equals(x, s.Option, StringComparison.OrdinalIgnoreCase))))
+                continue;
+
             // Constrained to the mod's own folder, like ContentMaterialFile — and here the check is doing
             // more than restating "this pack's file". A source File is a manifest VALUE, and those are only
             // ever slash-normalised (PenumbraPackage.ReadFiles); the traversal rejection guards zip ENTRY
@@ -3379,9 +3460,13 @@ public sealed class SecondSkinService
             // rooted second argument, gets it back verbatim, and — through SelectedTextureFiles — has that
             // file copied into the mod Proteus publishes.
             var disk = Path.Combine(modRoot, s.File.Replace('/', Path.DirectorySeparatorChar));
-            if (IsUnder(modRoot, disk) && File.Exists(disk)) return disk;
+            if (!IsUnder(modRoot, disk) || !File.Exists(disk)) continue;
+
+            if (grouped) return disk;   // the last selected group, reached first — nothing earlier can beat it
+            fromDefault ??= disk;       // any default will do; two of them cannot disagree about one path
         }
-        return null;
+
+        return fromDefault;
     }
 
     /// <summary>
@@ -3674,10 +3759,12 @@ public sealed class SecondSkinService
     /// <paramref name="equipCode"/> is the code the character's EQUIPMENT loads at, used only to predict
     /// where our not-yet-loaded injected glasses will appear.
     /// </summary>
-    private List<HostAccessory> ChooseHosts(string cutCode, string equipCode,
+    private List<HostAccessory> ChooseHosts(string cutCode, string equipCode, string wearerCode,
         IReadOnlyDictionary<string, string>? equipped,
         IReadOnlyList<string>? metModels, int? invisibleGlassesSet, string outputRoot,
-        int? emperorRingVariant, int? invisibleGlassesVariant)
+        IReadOnlySet<string> hostedPackRoots,
+        int? emperorRingVariant, int? invisibleGlassesVariant,
+        out List<(HostAccessory Host, string By)> claimedCarriersOut)
     {
         log.Information("[Proteus] host: choosing from equipped accessories [{0}], head/glasses [{1}]",
             equipped == null ? "(null)" : string.Join(", ", equipped.Select(kv => $"{kv.Key}={kv.Value}")),
@@ -3913,24 +4000,81 @@ public sealed class SecondSkinService
                 : id;
         }
 
+        // Whichever mod already provides an invisible carrier's model, if one does. The Emperor's New pieces
+        // have NO model of their own — that is the whole point of them — so anything that answers here is a
+        // mod that has put geometry on this slot on purpose, and taking the slot would replace it.
+        //
+        // Every code the game could ask under: the shell's cut space, the character's equipment space, and
+        // the wearer's own race, which is the one such packs are usually authored in (this pack is c0801 on
+        // a Miqo'te whose gear is all c0201, so testing the first two alone would have missed it).
+        //
+        // A PLAIN resolve, deliberately not the upstream resolver the host loader uses. The question here is
+        // only "does someone else provide this path", and ResolveUpstream answers a richer one at a cost:
+        // it memoises what it finds into the compositor's upstream map — for carrier paths that are not
+        // append hosts and have no business being in it — and warns, at Warning level, every time a path we
+        // publish resolves to our own file, which for a carrier is the normal case. Two of those per
+        // composite buried the copy of that warning that means something.
+        // Deduped once, not per slot: on most characters cutCode and equipCode are the same string, so this
+        // is two codes rather than three, and the whole check costs one resolve per code per FREE carrier
+        // slot — slots holding the player's own jewellery never reach it.
+        var carrierCodes = new[] { cutCode, equipCode, wearerCode }
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        string? CarrierClaimedBy(string slot, int setId)
+        {
+            foreach (var code in carrierCodes)
+            {
+                var gamePath = $"chara/accessory/a{setId:D4}/model/c{code}a{setId:D4}_{slot}.mdl";
+                var disk = penumbra.ResolvePlayer(gamePath);
+                if (disk == null
+                 || string.Equals(disk, gamePath, StringComparison.OrdinalIgnoreCase)   // nothing provides it
+                 || IsInsideOutputRoot(disk, outputRoot)                                // our own last publish
+                 || hostedPackRoots.Any(r => IsUnder(r, disk)))   // a pack we are placing — see the caller
+                    continue;
+                return disk;
+            }
+            return null;
+        }
+
         int freeCarriers = 0;
+        // Carrier slots someone else's mod has claimed. Held back rather than dropped: if nothing else can
+        // host, a shell that renders still beats protecting a mod, and step 5 takes them.
+        var claimedCarriers = new List<(HostAccessory Host, string By)>();
         foreach (var (slot, eqdpSlot, _) in InvisibleRing.CarrierSlots)
         {
             var worn = equipped != null && equipped.TryGetValue(slot, out var wp) ? wp : null;
             // Ours counts as free: it is the piece we equipped for exactly this on an earlier composite.
             if (worn != null && ParseSetId(worn, 'a') != EmperorSetId) continue;
             if (carrierFor(slot) is not { } id) continue;
-            hosts.Add(new HostAccessory(id.ModelSet, slot, eqdpSlot, null, 0, "accessory", 'a',
-                KnownVariant: id.Variant));
+
+            var host = new HostAccessory(id.ModelSet, slot, eqdpSlot, null, 0, "accessory", 'a',
+                KnownVariant: id.Variant);
+
+            // Someone's mod lives here. Wearing an Emperor's New piece to carry a mod — piercings, jewellery,
+            // nails — is a whole modding idiom, and this carrier REPLACES the model at that path and then
+            // outranks them on priority, so taking it silently deletes what they equipped it for.
+            if (CarrierClaimedBy(slot, id.ModelSet) is { } owner)
+            {
+                claimedCarriers.Add((host, owner));
+                log.Information("[Proteus] host: a{0:D4}/{1} carries another mod's model ({2}) — leaving it "
+                              + "alone so that mod keeps showing", id.ModelSet, slot, owner);
+                continue;
+            }
+
+            hosts.Add(host);
             freeCarriers++;
         }
         if (freeCarriers == 0)
         {
-            // Two very different causes, so say which. "Every slot is occupied" sends the reader to their
-            // equipment; "no invisible piece exists" sends them to the resolver's own line — and blaming
-            // their jewellery when they are wearing none would be flatly wrong.
+            // THREE causes now, and each sends the reader somewhere different. "Every slot is occupied"
+            // sends them to their equipment; "no invisible piece exists" to the resolver's own line; and a
+            // slot left alone because another mod's model lives on it is neither — saying "you are wearing
+            // your own jewellery" there would send them to look at an empty finger.
             bool anyPieceExists = InvisibleRing.CarrierSlots.Any(c => carrierFor(c.Slot) != null);
-            log.Information(anyPieceExists
+            log.Information(claimedCarriers.Count > 0
+                ? $"[Proteus] host: no free carrier slot — {claimedCarriers.Count} was/were left to another "
+                + "mod (see the lines above) and the rest hold the player's own pieces"
+                : anyPieceExists
                 ? "[Proteus] host: every accessory slot holds the player's own piece — no free slot for an "
                 + "invisible carrier"
                 : "[Proteus] host: no invisible carrier item could be resolved for any accessory slot — see "
@@ -3946,6 +4090,28 @@ public sealed class SecondSkinService
             WarnForeignAppendHost(fallback.Slot, fallback.Prefix, fallback.SetId, fallback.ModelPath!);
             hosts.Add(fallback);
         }
+
+        // 5. Nothing else at all: take the claimed carriers after all. Protecting another mod's ring is the
+        //    right default, but not at the price of the user's whole second skin — and the notice above has
+        //    already told them which mod is involved and how to give Proteus a slot of its own.
+        if (hosts.Count == 0 && claimedCarriers.Count > 0)
+        {
+            foreach (var (host, by) in claimedCarriers)
+            {
+                log.Warning("[Proteus] host: taking a{0:D4}/{1} even though \"{2}\" provides its model — "
+                          + "nothing else can host the shell, so that mod's piece will not render",
+                    host.SetId, host.Slot, by);
+                hosts.Add(host);
+            }
+            claimedCarriers.Clear();   // taken after all, so there is nothing to tell the user we spared
+        }
+
+        // Handed back rather than announced here, and announced by the caller only if the shell actually ran
+        // short of somewhere to go. EVERY free carrier slot is offered as spill capacity, so a look needing
+        // one host still tests all four — and telling someone their necklace was left alone, when nothing
+        // was ever going to be put on it, is noise dressed up as a problem. The per-slot line above stays
+        // unconditional: it is a log, and it is the answer to "why did Proteus not use that slot".
+        claimedCarriersOut = claimedCarriers;
 
         if (hosts.Count == 0)
             log.Warning("[Proteus] host: nothing can host the shell — no free facewear or ring slot, and no "
