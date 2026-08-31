@@ -18,9 +18,10 @@ namespace Proteus.Gui;
 /// </summary>
 /// <remarks>
 /// Everything here goes through the DRAW LIST, never through ImGui's layout. The status window is
-/// AlwaysAutoResize, so an item submitted at this width would feed straight back into the window's fit —
-/// which is the same trap <see cref="BrandHeader"/> documents at length and the reason the band contributes
-/// zero width.
+/// AlwaysAutoResize on every tab but Toggles, so an item submitted at this width would feed straight back
+/// into the window's fit — which is the same trap <see cref="BrandHeader"/> documents at length and the
+/// reason the band contributes zero width. This strip rides the band, so it draws on every tab and keeps the
+/// rule regardless of which mode the window is in.
 /// </remarks>
 internal static class CapabilityStrip
 {
