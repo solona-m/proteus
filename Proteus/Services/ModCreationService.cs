@@ -345,19 +345,10 @@ public sealed class ModCreationService
         // descriptor's own space comes from the material it targets, since the Create tab records no
         // SourceBodyType of its own. Same slot priority the compositor uses: a tattoo lives in the diffuse,
         // and a normal/mask-only overlay carries its shape in whichever it has.
-        // A split face sheet states its own space; anything else infers one from the material it targets.
-        var space = faceSplit
-            ? UVRemapService.FaceSplitSpace
-            : CompositorService.SrcBodyTypeOf(new OverlayDescriptor { MaterialGamePaths = [materialTarget] });
-        var artSrc = diffuseSrc ?? normalSrc ?? maskSrc;
-        var asymmetricArt = string.IsNullOrWhiteSpace(artSrc)
-            ? null
-            : compositor.MeasureArtAsymmetry(artSrc, space, modName);
-
         try
         {
             WriteMod(root, modName, author, materialTarget, diffuseSrc, maskSrc, normalSrc, indexSrc, wholeSkin,
-                     asymmetricArt, faceSplit);
+                     faceSplit);
         }
         catch (Exception ex)
         {
@@ -413,11 +404,6 @@ public sealed class ModCreationService
     /// (metadata.json), and Penumbra's meta.json/default_mod.json. Pure filesystem work, no IPC — split
     /// out so it can be exercised offline against a temp directory.
     /// </summary>
-    /// <param name="asymmetricArt">
-    /// Whether the art differs left from right, measured by the caller (which has the compositor's loaded
-    /// transfer maps; see CompositorService.MeasureArtAsymmetry). Null means "never scanned" and is what the
-    /// offline tests pass — the first composite then measures it, exactly as before.
-    /// </param>
     /// <param name="faceSplit">
     /// The picked face texture is a DOUBLED sheet — the two sides of the head in the two halves of the image
     /// — so the overlay declares that layout and gets un-mirrored onto a face shell. Meaningless on any
@@ -426,7 +412,7 @@ public sealed class ModCreationService
     internal static void WriteMod(
         string root, string modName, string author, string materialTarget,
         string? diffuseSrc, string? maskSrc, string? normalSrc, string? indexSrc,
-        bool wholeSkin = false, bool? asymmetricArt = null, bool faceSplit = false)
+        bool wholeSkin = false, bool faceSplit = false)
     {
         var overlaysDir = Path.Combine(root, "Proteus", "overlays");
         Directory.CreateDirectory(overlaysDir);
@@ -451,8 +437,6 @@ public sealed class ModCreationService
             Normal = Copy("normal", normalSrc),
             Index = Copy("index", indexSrc),
             NormalMode = wholeSkin ? NormalMode.Replace : NormalMode.Compound,
-            // Recorded at creation so the mod carries it before it is ever composited or exported.
-            AsymmetricArt = asymmetricArt,
             // A face texture painted as two halves declares the doubled face layout, which is the only way
             // side-specific face art can exist: the vanilla one gives both cheeks the same texels. Left null
             // otherwise — an ordinary face texture IS in the vanilla layout, and saying so would send its two

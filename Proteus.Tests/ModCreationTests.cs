@@ -122,19 +122,16 @@ public class ModCreationTests
     }
 
     /// <summary>
-    /// The measured left/right asymmetry reaches the sidecar, so a mod created here carries it before it is
-    /// ever composited or exported.
+    /// A new mod NEVER claims its art is one-sided. That has to be the author's statement, and nothing here
+    /// can stand in for it: a real skin texture is never symmetric — freckles, moles — so a measurement says
+    /// "asymmetric" about ordinary skin and moves it onto a shell, where it loses the wearer's tone and
+    /// renders grey and glossy. Proteus used to probe the art and write the answer here, and that is exactly
+    /// what it did to every skin mod on the machine.
     /// <para/>
-    /// The null case is the load-bearing one: the field must be OMITTED, not written as false. Absent means
-    /// "never scanned" — the compositor measures on a null and an author can override it — whereas a written
-    /// false is an assertion that the art was checked and is symmetric. The offline callers here pass
-    /// nothing, which is exactly the case that must stay silent.
+    /// The field must be OMITTED, not written false, so the sidecar carries no claim either way.
     /// </summary>
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    public void WriteMod_records_measured_asymmetry_and_omits_an_unmeasured_one(bool? measured, bool present)
+    [Fact]
+    public void WriteMod_never_declares_the_art_one_sided()
     {
         var root = Path.Combine(Path.GetTempPath(), "proteus_create_" + Path.GetRandomFileName());
         var diffuse = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".png");
@@ -145,16 +142,15 @@ public class ModCreationTests
             ModCreationService.WriteMod(
                 root, "Asym", "Artist",
                 "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
-                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null,
-                asymmetricArt: measured);
+                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null);
 
             var path = Path.Combine(root, "Proteus", "metadata.json");
-            Assert.Equal(present, File.ReadAllText(path).Contains("AsymmetricArt"));
+            Assert.DoesNotContain("AsymmetricArt", File.ReadAllText(path));
 
             var meta = JsonSerializer.Deserialize<ProteusMetadata>(
                 File.ReadAllText(path),
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            Assert.Equal(measured, Assert.Single(meta!.Overlays!).AsymmetricArt);
+            Assert.Null(Assert.Single(meta!.Overlays!).AsymmetricArt);
         }
         finally
         {
