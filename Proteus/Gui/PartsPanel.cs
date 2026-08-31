@@ -88,10 +88,19 @@ public sealed class PartsPanel
         this.log = log;
     }
 
+    /// <summary>
+    /// Height of everything drawn BELOW the model row, measured on the previous frame — see <see cref="Draw"/>.
+    /// Zero until the first frame has been drawn, which is the signal to use the fixed height instead.
+    /// </summary>
+    private float tailHeight;
+
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
 
-    public void Draw()
+    /// <param name="fillHeight">Whether the model row may take all the height that is left. True only while
+    /// the window is user-resizable, which it is only on this tab — see the remarks on the computation.</param>
+    /// <param name="reserveBelow">Height the window itself still needs under the tab content (its footer).</param>
+    public void Draw(bool fillHeight, float reserveBelow)
     {
         var ps = Strings.Parts;
 
@@ -117,9 +126,30 @@ public sealed class PartsPanel
         if (parts == null) return;
 
         ImGui.Separator();
-        DrawParts();
+
+        // ── why the fill branch is safe, and only here ──
+        // It reads back a height the layout itself produces, which is the shape of a feedback loop. It is
+        // stable ONLY because this branch runs while the window is NOT auto-resizing: avail.Y is then a
+        // function of the size the user dragged to and nothing else, so a taller row cannot make a taller
+        // window. Under AlwaysAutoResize — every other tab, and this one for the frame either side of a tab
+        // switch — the same expression grows without bound until it hits MaximumSize, which is why the fixed
+        // height has to remain the path for every non-fill frame rather than being replaced by it.
+        //
+        // The tail is measured rather than predicted: DrawStaging's height depends on how many toggles are
+        // pending and on how the warnings wrap. A frame late is fine — adding a pending row leaves the model
+        // one row too tall for a single frame, and nothing else reads it.
+        float height = ProteusStyle.S(360f);
+        if (fillHeight && tailHeight > 0f)
+            height = MathF.Max(
+                ImGui.GetContentRegionAvail().Y - tailHeight - reserveBelow - ProteusStyle.S(4f),
+                ProteusStyle.S(200f));
+
+        DrawParts(height);
+
+        var tailTop = ImGui.GetCursorPosY();
         ImGui.Separator();
         DrawStaging();
+        tailHeight = ImGui.GetCursorPosY() - tailTop;
     }
 
     // ── pickers ─────────────────────────────────────────────────────────────
@@ -321,7 +351,7 @@ public sealed class PartsPanel
     /// is entirely hidden behind another, say what material a part draws with, or say that the author has
     /// already put one behind a switch of their own.
     /// </summary>
-    private void DrawParts()
+    private void DrawParts(float height)
     {
         var ps = Strings.Parts;
         var model = parts!;
@@ -329,8 +359,16 @@ public sealed class PartsPanel
         viewport.Show(ViewportKey, model);
         viewport.Selected = ticked;
 
-        float height = ProteusStyle.S(360f);
-        if (viewport.Draw(model, height) is { } clicked) Toggle(clicked);
+        // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
+        // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
+        // width the moment a scrollbar appears — and that closes a loop: scrollbar appears, row shortens,
+        // content fits, scrollbar goes, row grows, scrollbar appears. A per-frame flicker exactly at the size
+        // where the content just barely fits. Capping only the image leaves the row's height a function of
+        // avail.Y alone; a wide-and-short model is simply letterboxed shorter than the list beside it, which
+        // reads fine because SameLine tops them out together.
+        float width = MathF.Min(height * PartViewport.DefaultAspect,
+                                ImGui.GetContentRegionAvail().X * 0.55f);
+        if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
 
         // The model gives every sign that a click will work — the part lights up, the cursor becomes a hand
         // — and then quietly absorbs it when the author already gates that geometry. The list says so with a
@@ -340,17 +378,34 @@ public sealed class PartsPanel
             ImGui.SetTooltip(ps.AlreadyGatedTip);
 
         ImGui.SameLine();
-        using (var group = ImRaii.Child("##partList", new Vector2(0, height)))
+
+        // A horizontal scrollbar, because the width is no longer the window's to choose. A row is a checkbox
+        // with the part's label, its material's filename, a triangle count and sometimes an expander; the
+        // window used to simply widen (up to its maximum) until the longest one fitted. Dragged narrow it
+        // cannot, and a child clips silently — a scrollbar at least admits there is more to read.
+        float listWidth = ImGui.GetContentRegionAvail().X;
+        using (var group = ImRaii.Child("##partList", new Vector2(listWidth, height), false,
+                                        ImGuiWindowFlags.HorizontalScrollbar))
         {
             if (group)
             {
-                ImGui.PushTextWrapPos(0);
+                // Wrapped at the child's OWN visible width, not at PushTextWrapPos(0). Inside a horizontally
+                // scrolling window, wrap-pos 0 means "the content edge", which includes last frame's widest
+                // row — so the text would stop wrapping, become the widest row itself, and ratchet the scroll
+                // range wider every frame. An explicit position is immune to what the rows do.
+                // Floored, because a NEGATIVE wrap position means "do not wrap" to ImGui — the one value that
+                // would quietly reinstate the ratchet this is here to prevent.
+                float wrapAt = MathF.Max(
+                    listWidth - ImGui.GetStyle().WindowPadding.X * 2f - ImGui.GetStyle().ScrollbarSize,
+                    ProteusStyle.S(80f));
+
+                ImGui.PushTextWrapPos(wrapAt);
                 ImGui.TextDisabled(ps.ClickTip);
                 ImGui.PopTextWrapPos();
 
                 foreach (var (label, count) in model.ShatteredSubmeshes)
                 {
-                    ImGui.PushTextWrapPos(0);
+                    ImGui.PushTextWrapPos(wrapAt);
                     ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
                     ImGui.PopTextWrapPos();
                 }

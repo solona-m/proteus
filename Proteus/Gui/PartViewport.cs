@@ -28,7 +28,37 @@ namespace Proteus.Gui;
 /// </summary>
 public sealed class PartViewport : IDisposable
 {
-    private const int Width = 460, Height = 560;
+    /// <summary>
+    /// The shape the viewport had when it was a fixed size, and still the shape it starts at. Public because
+    /// the panel sizes the image from it: it wants the model's own proportions, not whatever the buffer has
+    /// been resized to this frame — deriving the width from the CURRENT buffer would feed the last resize
+    /// back into the next one.
+    /// </summary>
+    public const float DefaultAspect = (float)DefaultWidth / DefaultHeight;
+
+    private const int DefaultWidth = 460, DefaultHeight = 560;
+
+    /// <summary>
+    /// Ceiling on the render buffer, as an AREA rather than a per-axis limit.
+    /// <para/>
+    /// Rasterising is O(pixels) and runs on the UI thread, so the cap is a time budget, not a memory one:
+    /// 900k pixels is ~3.5x the old 460x560, which on a 60,000-triangle hair model is the difference between
+    /// a re-render you do not notice and one you do. It still allows ~850x1050. Above it the viewport
+    /// upscales, which is exactly what it did at every size before it could resize at all.
+    /// </summary>
+    private const int MaxPixels = 900_000;
+
+    /// <summary>Buffer granularity. Snapping UP means the image is always downsampled, never blurred up.</summary>
+    private const int Snap = 64;
+
+    /// <summary>
+    /// How much larger than the image the buffer is rendered. NOT 1.0, and the number is not arbitrary: the
+    /// old fixed 560px buffer was drawn into a 360px box, so the picture has always been downsampled by
+    /// about this much, and that downsample is the only antialiasing this rasteriser has. Rendering at
+    /// exactly the display size would make an enlarged viewport visibly rougher than the small one it
+    /// replaced — a resize that made the model look worse.
+    /// </summary>
+    private const float Supersample = 1.5f;
 
     /// <summary>Nothing was drawn at this pixel.</summary>
     private const int Empty = -1;
@@ -36,12 +66,18 @@ public sealed class PartViewport : IDisposable
     private readonly ITextureProvider textures;
     private readonly IPluginLog log;
 
+    /// <summary>
+    /// Resolution of the render buffers. A field rather than a constant so a window the user has enlarged
+    /// gets a viewport rendered at its real size instead of a 460x560 image stretched over it.
+    /// </summary>
+    private int bufW = DefaultWidth, bufH = DefaultHeight;
+
     // Per pixel: which pickable part is in front, and how lit its surface is. Split so a change of selection
     // recolours without touching geometry — the camera is what makes a re-render necessary, not the colours.
-    private readonly int[] id = new int[Width * Height];
-    private readonly byte[] shade = new byte[Width * Height];
-    private readonly float[] depth = new float[Width * Height];
-    private readonly byte[] rgba = new byte[Width * Height * 4];
+    private int[] id = [];
+    private byte[] shade = [];
+    private float[] depth = [];
+    private byte[] rgba = [];
 
     private IDalamudTextureWrap? wrap;
 
@@ -77,6 +113,15 @@ public sealed class PartViewport : IDisposable
     {
         this.textures = textures;
         this.log = log;
+        Allocate();
+    }
+
+    private void Allocate()
+    {
+        id = new int[bufW * bufH];
+        shade = new byte[bufW * bufH];
+        depth = new float[bufW * bufH];
+        rgba = new byte[bufW * bufH * 4];
     }
 
     /// <summary>Parts the user has ticked, by label — drawn in the accent colour.</summary>
@@ -135,19 +180,73 @@ public sealed class PartViewport : IDisposable
     }
 
     /// <summary>
-    /// Draw the viewport. Returns the part label the user clicked, or null.
+    /// Match the render buffer to the rectangle the image is about to be drawn into, so an enlarged window
+    /// gets a viewport rendered at its real size rather than an upscale.
+    /// <para/>
+    /// Quantised AND deferred, because a reallocation is not free: it throws away the buffers and forces a
+    /// full re-rasterise, which runs on the UI thread and allocates three vertex-sized arrays of its own.
+    /// Deferring past any held mouse button means a window-edge drag costs nothing at all — the existing
+    /// buffer keeps being stretched into the new rect, which is what <c>AddImage</c> did before this
+    /// existed — and the snap then stops the small settling changes (a scrollbar appearing, a pixel of
+    /// rounding) from re-rendering at all. Not keyed on the drag itself: the size can also change from a UI
+    /// scale change or a restored window size, and those must converge too.
+    /// </summary>
+    private void RequestResolution(Vector2 box)
+    {
+        var (w, h) = Quantise(box);
+        if (w == bufW && h == bufH) return;
+        if (ImGui.IsAnyMouseDown()) return;
+
+        bufW = w; bufH = h;
+        Allocate();
+        geometryDirty = coloursDirty = true;
+    }
+
+    /// <summary>
+    /// The buffer size for a given draw rectangle: supersampled, snapped up to <see cref="Snap"/>, and held
+    /// to roughly <see cref="MaxPixels"/>. Pure, so it can be tested without an ImGui context.
+    /// </summary>
+    internal static (int W, int H) Quantise(Vector2 box)
+    {
+        float w = MathF.Max(box.X, 1f) * Supersample;
+        float h = MathF.Max(box.Y, 1f) * Supersample;
+
+        // Over budget: scale both axes by the same factor, computed in one step rather than stepped down in
+        // a loop. The aspect is what makes the picture right, and it is also what the projection is built
+        // from — shrinking one axis alone would stretch the model.
+        float over = w * h / MaxPixels;
+        if (over > 1f)
+        {
+            float s = 1f / MathF.Sqrt(over);
+            w *= s; h *= s;
+        }
+
+        // Snapping up can put the result a few percent back over MaxPixels. That is fine: it is a budget for
+        // how long a re-render may take, not a limit anything depends on.
+        return (Up(w), Up(h));
+
+        static int Up(float v)
+            => Math.Clamp(((int)MathF.Ceiling(v) + Snap - 1) / Snap * Snap, Snap * 2, 2048);
+    }
+
+    /// <summary>
+    /// Draw the viewport into <paramref name="box"/>. Returns the part label the user clicked, or null.
     /// <para/>
     /// A click is a press and release without movement: the same button orbits, and treating a drag as a
     /// click would select whatever the camera happened to stop over.
     /// </summary>
-    public string? Draw(ModelParts model, float height)
+    public string? Draw(ModelParts model, Vector2 box)
     {
         if (renderedKey == null) return null;
+
+        // Before the dirty checks, so a reallocation is rasterised and uploaded in this same call rather
+        // than leaving a frame with empty buffers behind it.
+        RequestResolution(box);
 
         if (geometryDirty) { Rasterize(model); geometryDirty = false; coloursDirty = true; }
         if (coloursDirty) { Recolourize(); coloursDirty = false; Upload(); }
 
-        var size = new Vector2(height * Width / Height, height);
+        var size = box;
         if (wrap == null) { ImGui.Dummy(size); return null; }
 
         var origin = ImGui.GetCursorScreenPos();
@@ -165,9 +264,9 @@ public sealed class PartViewport : IDisposable
         PointerOverModel = ImGui.IsItemHovered();
         if (PointerOverModel)
         {
-            var at = (ImGui.GetMousePos() - origin) / size * new Vector2(Width, Height);
+            var at = (ImGui.GetMousePos() - origin) / size * new Vector2(bufW, bufH);
             int px = (int)at.X, py = (int)at.Y;
-            var under = px >= 0 && py >= 0 && px < Width && py < Height ? id[py * Width + px] : Empty;
+            var under = px >= 0 && py >= 0 && px < bufW && py < bufH ? id[py * bufW + px] : Empty;
 
             var label = under >= 0 && under < pickable.Count ? pickable[under].Label : null;
             if (label != Hovered) { Hovered = label; coloursDirty = true; }
@@ -246,7 +345,7 @@ public sealed class PartViewport : IDisposable
 
         var view = Matrix4x4.CreateLookAt(eye, centre, Vector3.UnitY);
         var proj = Matrix4x4.CreatePerspectiveFieldOfView(
-            0.7f, (float)Width / Height, MathF.Max(radius * 0.01f, 1e-4f), dist + radius * 4f);
+            0.7f, (float)bufW / bufH, MathF.Max(radius * 0.01f, 1e-4f), dist + radius * 4f);
         var vp = view * proj;
 
         // Screen-space positions, plus a w to reject anything behind the eye. Done for the whole vertex
@@ -263,8 +362,8 @@ public sealed class PartViewport : IDisposable
             if (clip.W <= 1e-6f) continue;
             var ndc = new Vector3(clip.X, clip.Y, clip.Z) / clip.W;
             screen[i] = new Vector3(
-                (ndc.X + pan.X + 1f) * 0.5f * Width,
-                (1f - (ndc.Y + pan.Y)) * 0.5f * Height,
+                (ndc.X + pan.X + 1f) * 0.5f * bufW,
+                (1f - (ndc.Y + pan.Y)) * 0.5f * bufH,
                 ndc.Z);
             valid[i] = true;
         }
@@ -280,11 +379,11 @@ public sealed class PartViewport : IDisposable
         // is dominated by fill, and it buys the difference between a viewport that turns smoothly on a
         // 60,000-triangle hair model and one that does not.
         int bands = Math.Clamp(Environment.ProcessorCount, 1, 16);
-        int rows = (Height + bands - 1) / bands;
+        int rows = (bufH + bands - 1) / bands;
 
         System.Threading.Tasks.Parallel.For(0, bands, band =>
         {
-            int yLo = band * rows, yHi = Math.Min(yLo + rows, Height) - 1;
+            int yLo = band * rows, yHi = Math.Min(yLo + rows, bufH) - 1;
             if (yLo > yHi) return;
 
             for (int part = 0; part < pickable.Count; part++)
@@ -315,7 +414,7 @@ public sealed class PartViewport : IDisposable
         float inv = 1f / area;
 
         int x0 = Math.Max((int)MathF.Floor(MathF.Min(a.X, MathF.Min(b.X, c.X))), 0);
-        int x1 = Math.Min((int)MathF.Ceiling(MathF.Max(a.X, MathF.Max(b.X, c.X))), Width - 1);
+        int x1 = Math.Min((int)MathF.Ceiling(MathF.Max(a.X, MathF.Max(b.X, c.X))), bufW - 1);
         int y0 = Math.Max((int)MathF.Floor(MathF.Min(a.Y, MathF.Min(b.Y, c.Y))), yLo);
         int y1 = Math.Min((int)MathF.Ceiling(MathF.Max(a.Y, MathF.Max(b.Y, c.Y))), yHi);
         if (x1 < x0 || y1 < y0) return;
@@ -332,7 +431,7 @@ public sealed class PartViewport : IDisposable
             // Barycentrics here are (w1, w2, w0) against (a, b, c) — the edge opposite a vertex carries that
             // vertex's weight.
             float z = a.Z * w1 + b.Z * w2 + c.Z * w0;
-            int at = y * Width + x;
+            int at = y * bufW + x;
             if (z >= depth[at]) continue;
 
             depth[at] = z;
@@ -389,7 +488,7 @@ public sealed class PartViewport : IDisposable
         try
         {
             wrap?.Dispose();
-            wrap = textures.CreateFromRaw(RawImageSpecification.Rgba32(Width, Height), rgba);
+            wrap = textures.CreateFromRaw(RawImageSpecification.Rgba32(bufW, bufH), rgba);
         }
         catch (Exception ex)
         {

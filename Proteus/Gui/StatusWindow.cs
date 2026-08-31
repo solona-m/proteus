@@ -62,6 +62,25 @@ public class StatusWindow : Window
     // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
     private bool _forceSettingsTab;
 
+    // ── the Toggles tab's resizable mode ────────────────────────────────────────────────────────────────
+    // Which tab drew last frame. It cannot be anything but last frame's: a tab's selection is only known
+    // once BeginTabItem has run, which is inside Draw, which is after Begin has already read Flags. So the
+    // mode is applied one frame late — a single frame of auto-fit on the way in, which reads as a window
+    // opening at a remembered size rather than as a glitch.
+    private bool _togglesTabActive;
+    // What PreDraw actually did last frame, which is what tells an ENTRY apart from a frame already in the
+    // mode. Driven off this rather than off a tab click because ImGui remembers the selected tab in its ini:
+    // the very first frame after a game restart is an entry too, with no click anywhere.
+    private bool _resizableActive;
+    private bool _restoreSize;
+    // Live window size in the resizable mode, UNSCALED — the host multiplies Size by the global scale, so a
+    // scaled value stored here would compound the scale on every restore.
+    private Vector2 _togglesSize;
+    private bool _sizeDirty;
+    private long _sizeChangedAt;
+    // Height DrawLastResult took last frame, so the Toggles tab knows how much to leave under itself.
+    private float _footerReserve;
+
     // Key: absolute index-texture path → 1-based row numbers that appear in it.
     // Cleared per-entry on each popup open so option switches are reflected.
     private readonly Dictionary<string, HashSet<int>> _indexRowCache = new();
@@ -269,18 +288,7 @@ public class StatusWindow : Window
         this.modExport      = modExport;
         this.parts          = parts;
 
-        SizeConstraints = new WindowSizeConstraints
-        {
-            // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
-            // doesn't shrink the window (it's AlwaysAutoResize).
-            MinimumSize = new System.Numerics.Vector2(520, 80),
-            // 774, not the old 700: the header band adds a fixed ~60px, and at 700 the tallest tab
-            // (Settings) would start clipping into a scrollbar this window has never had. Raised by the
-            // 14px the band itself gained when its caption became the capability row, so the margin
-            // Settings was given at 760 survives that change rather than being quietly spent.
-            // Unscaled on purpose — Dalamud's window host multiplies these by the global UI scale itself.
-            MaximumSize = new System.Numerics.Vector2(1100, 774),
-        };
+        SizeConstraints = AutoFitConstraints;
 
         // Free native chrome: the same two destinations as the band's button and the installer's gear,
         // reachable without the window having to give up any content space.
@@ -303,6 +311,131 @@ public class StatusWindow : Window
             Click = _ => OpenToSettings(),
         });
     }
+
+    /// <summary>
+    /// What the window is on every tab but Toggles: it fits itself to its content and has no resize grip.
+    /// </summary>
+    /// <remarks>
+    /// Unscaled on purpose — Dalamud's window host multiplies these by the global UI scale itself.
+    /// </remarks>
+    private static readonly WindowSizeConstraints AutoFitConstraints = new()
+    {
+        // Wide enough for the mod table, so switching to the sparser Bindings/Settings tabs
+        // doesn't shrink the window (it's AlwaysAutoResize).
+        MinimumSize = new Vector2(520, 80),
+        // 774, not the old 700: the header band adds a fixed ~60px, and at 700 the tallest tab
+        // (Settings) would start clipping into a scrollbar this window has never had. Raised by the
+        // 14px the band itself gained when its caption became the capability row, so the margin
+        // Settings was given at 760 survives that change rather than being quietly spent.
+        MaximumSize = new Vector2(1100, 774),
+    };
+
+    /// <summary>
+    /// What the window is on the Toggles tab, which is the one tab worth resizing: it is a model you click
+    /// parts on beside a list of them, and both are better bigger.
+    /// </summary>
+    /// <remarks>
+    /// 560 wide rather than the 520 above because this tab spends 55% of its width on the model — at 520 the
+    /// list beside it is left with about 200px, which is not a list anyone can read. It stays ≥ 520 so
+    /// <see cref="BrandHeader"/>'s width floor, which is fed from <see cref="AutoFitConstraints"/>'s minimum,
+    /// means the same thing in both modes. 560 tall is the tab summed at its own minimum row height, so the
+    /// vertical scrollbar is a genuine edge case rather than the normal state.
+    /// <para/>
+    /// A finite maximum rather than <c>float.MaxValue</c>: the host multiplies it by the global scale, and
+    /// an infinity is harder to reason about later than a number no monitor reaches.
+    /// </remarks>
+    private static readonly WindowSizeConstraints ResizableConstraints = new()
+    {
+        MinimumSize = new Vector2(560, 560),
+        MaximumSize = new Vector2(4000, 3000),
+    };
+
+    /// <summary>
+    /// Pick the window's mode for this frame: auto-fitting everywhere, resizable on the Toggles tab.
+    /// </summary>
+    /// <remarks>
+    /// This is the hook that can do it. Dalamud's window host runs <c>PreDraw</c>, then applies
+    /// <see cref="Window.Size"/> / <see cref="Window.SizeConstraints"/>, then reads <see cref="Window.Flags"/>
+    /// and calls <c>Begin</c> — so all three land in the same frame from here.
+    /// <para/>
+    /// <see cref="Window.Flags"/> is assigned in BOTH branches every frame, not cleared once on the way in:
+    /// it is a plain property, and clearing the bit only on the transition would mean auto-fit never came
+    /// back. <see cref="Window.Size"/> is released here rather than at the end of <see cref="Draw"/> because
+    /// Draw does not run on a collapsed window — releasing it there would leave a window collapsed on the
+    /// Toggles tab pinned to <c>ImGuiCond.Always</c> forever, unresizable.
+    /// <para/>
+    /// One thing this cannot beat: Dalamud's own title-bar "pin" ORs in <c>NoResize</c>, so a pinned window
+    /// has no grip here either. That is the pin working, not this failing.
+    /// </remarks>
+    public override void PreDraw()
+    {
+        FlushPendingSize();
+
+        if (_togglesTabActive)
+        {
+            if (!_resizableActive) _restoreSize = true;
+            _resizableActive = true;
+
+            Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = ResizableConstraints;
+
+            if (_restoreSize)
+            {
+                _restoreSize = false;
+                _togglesSize = ClampToResizable(
+                    new Vector2(config.TogglesWindowWidth, config.TogglesWindowHeight));
+                Size = _togglesSize;
+                SizeCondition = ImGuiCond.Always;
+            }
+            else
+            {
+                // Released, so the grip actually moves the edge instead of being overwritten each frame.
+                Size = null;
+            }
+        }
+        else
+        {
+            _resizableActive = false;
+            Flags |= ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = AutoFitConstraints;
+            Size = null;
+        }
+    }
+
+    private static Vector2 ClampToResizable(Vector2 size)
+    {
+        var min = ResizableConstraints.MinimumSize;
+        var max = ResizableConstraints.MaximumSize;
+        // Not just a clamp: a config from before this setting existed, or one written at a different global
+        // scale, can hold something the constraints would silently correct anyway — do it where it is visible.
+        return new Vector2(
+            float.IsFinite(size.X) ? Math.Clamp(size.X, min.X, max.X) : min.X,
+            float.IsFinite(size.Y) ? Math.Clamp(size.Y, min.Y, max.Y) : min.Y);
+    }
+
+    /// <summary>
+    /// Write the dragged size to the config, once the drag is over.
+    /// <para/>
+    /// Debounced, and deliberately not through <c>DebounceGate</c>. <see cref="Configuration.Save"/> is a
+    /// synchronous serialize of the WHOLE config — <c>KnownBodyMods</c> alone is an entry per installed mod —
+    /// so calling it per frame of a drag would stutter the game, and calling it off a worker thread would
+    /// serialize those dictionaries while a composite is still mutating them. One write per drag, on the UI
+    /// thread. Public because the plugin's own teardown calls it: a resize in the last moments before an
+    /// unload is still a resize the user made.
+    /// </summary>
+    public void FlushPendingSize()
+    {
+        if (!_sizeDirty) return;
+        if (ImGui.IsAnyMouseDown()) return;                     // the grip may still be held
+        if (Environment.TickCount64 - _sizeChangedAt < 400) return;
+
+        _sizeDirty = false;
+        config.TogglesWindowWidth  = _togglesSize.X;
+        config.TogglesWindowHeight = _togglesSize.Y;
+        config.Save();
+    }
+
+    public override void OnClose() => FlushPendingSize();
 
     /// <summary>Open the window with the Settings tab selected (the plugin-installer gear icon).</summary>
     public void OpenToSettings()
@@ -332,6 +465,25 @@ public class StatusWindow : Window
         // release it or the user could never collapse the window again.
         Collapsed = null;
 
+        // Which tab is selected is answered below, by the tab that draws. Clearing it first means a frame in
+        // which no tab draws at all — an empty tab bar, a tab removed by a future edit — falls back to
+        // auto-fit rather than leaving the window stuck resizable with nothing in it.
+        _togglesTabActive = false;
+
+        // The dragged size, read back where ImGui has already applied this frame's grip movement. Stored
+        // unscaled, since PreDraw hands it back to a host that scales it. The threshold is only there to
+        // keep sub-pixel jitter from marking the config dirty forever.
+        if (_resizableActive)
+        {
+            var live = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
+            if (MathF.Abs(live.X - _togglesSize.X) > 0.5f || MathF.Abs(live.Y - _togglesSize.Y) > 0.5f)
+            {
+                _togglesSize   = live;
+                _sizeDirty     = true;
+                _sizeChangedAt = Environment.TickCount64;
+            }
+        }
+
         // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
         // padding as coverage — drop them and let this frame recompute the rows accurately.
         if (_islandMapArrived)
@@ -348,7 +500,9 @@ public class StatusWindow : Window
         // Identity + status, outside the tabs so it is visible from any of them (the reason the old status
         // banner sat here too). The band paints itself and reports its rect; content is laid into that rect
         // afterwards, and only its HEIGHT is reserved in the layout.
-        var band = BrandHeader.Draw(minWindowWidth: SizeConstraints!.Value.MinimumSize.X * ImGuiHelpers.GlobalScale);
+        // AutoFitConstraints, not the live SizeConstraints: the floor is what the band lays itself out
+        // against, and it must not move when the Toggles tab swaps in a wider minimum.
+        var band = BrandHeader.Draw(minWindowWidth: AutoFitConstraints.MinimumSize.X * ImGuiHelpers.GlobalScale);
         DrawBandContent(band.Min, band.Max);
         BrandHeader.Reserve(band.Min);
         ImGui.Spacing();
@@ -394,7 +548,12 @@ public class StatusWindow : Window
                     if (t) DrawExportTab();
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
-                    if (t) parts.Draw();
+                    if (t)
+                    {
+                        // The one tab that asks for a resizable window; PreDraw grants it next frame.
+                        _togglesTabActive = true;
+                        parts.Draw(fillHeight: _resizableActive, reserveBelow: _footerReserve);
+                    }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
@@ -405,7 +564,12 @@ public class StatusWindow : Window
             }
         }
 
+        // Measured, not guessed, so the Toggles tab knows how much of the window is still spoken for below
+        // it. It over-reads by one ItemSpacing.Y, which is the safe direction: the tab leaves a few pixels
+        // spare rather than pushing the footer into a scrollbar.
+        var footerTop = ImGui.GetCursorPosY();
         DrawLastResult();
+        _footerReserve = ImGui.GetCursorPosY() - footerTop;
 
         DrawColorWindow();
 
@@ -452,9 +616,11 @@ public class StatusWindow : Window
     /// between BeginTabBar and the first BeginTabItem is legal; the bar's deferred layout runs inside that
     /// first item and does not read our cursor.
     /// <para/>
-    /// Right-aligned against <c>GetContentRegionMax</c> rather than a measured window width. The window is
-    /// AlwaysAutoResize, so an item that ends exactly at the current content edge keeps the required width
-    /// where it already was — no feedback loop of the kind BrandHeader documents.
+    /// Right-aligned against <c>GetContentRegionMax</c> rather than a measured window width. On the
+    /// auto-fitting tabs that is what avoids a feedback loop of the kind BrandHeader documents: an item that
+    /// ends exactly at the current content edge keeps the required width where it already was. On the
+    /// Toggles tab, where the window is resizable, the same call is simply the true content edge (already
+    /// net of any scrollbar), so the button is right-aligned in the ordinary sense. It answers both.
     /// </remarks>
     /// <param name="barTop">Cursor Y from before <c>BeginTabBar</c> — see the call site for why
     /// <c>GetFrameHeight</c> cannot stand in for the bar's real height.</param>

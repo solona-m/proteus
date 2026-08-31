@@ -267,6 +267,19 @@ public class Configuration : IPluginConfiguration
     public string? GlamourerDesignDirOverride { get; set; } = null;
 
     /// <summary>
+    /// Size the user dragged the window to on the Toggles tab, which is the only tab that is resizable —
+    /// every other one is AlwaysAutoResize and has no size of its own to remember.
+    /// <para/>
+    /// UNSCALED, like <c>StatusWindow.SizeConstraints</c>: Dalamud's window host multiplies both by the
+    /// global UI scale itself, so storing a scaled size would compound the scale on every restore. Clamped
+    /// to the resizable constraints on read, since the scale (or the constraints) can change between runs.
+    /// </summary>
+    public float TogglesWindowWidth { get; set; } = 900f;
+
+    /// <inheritdoc cref="TogglesWindowWidth"/>
+    public float TogglesWindowHeight { get; set; } = 700f;
+
+    /// <summary>
     /// Directory the last <c>.pmp</c> export was saved to, so the save dialog reopens where the user left
     /// it. Null (or a path that no longer exists) falls back to the desktop.
     /// </summary>

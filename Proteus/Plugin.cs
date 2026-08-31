@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 581;
+    public const int BuildNumber = 582;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -318,6 +318,10 @@ public sealed class Plugin : IDalamudPlugin
         // keeps it to the registration: no window, and above all no recomposite, which would still pass
         // CompositorService's disposal guard (that runs further down) and wake into a torn-down plugin.
         try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }
+
+        // Same idea, much smaller: a window resize inside the save debounce is still a resize the user made,
+        // and an unload is the one thing that frame will never come back from.
+        try { statusWindow.FlushPendingSize(); } catch { /* tearing down — never block the unload */ }
 
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;
