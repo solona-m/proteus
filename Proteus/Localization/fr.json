@@ -1711,8 +1711,12 @@
     "message": "Quand un autre mod est confirmé comme écrasant une texture de peau dans laquelle\nProteus compose — un pack de tatouages ou de peau livrant sa propre copie de la\ntexture du corps —, élève automatiquement la priorité Penumbra de Proteus au-dessus\net le signale dans le chat.\n\nCet écrasement est autrement invisible : les calques s'appliquent à moitié (le relief\npasse, la couleur non) et chaque ligne du journal se lit encore comme une réussite.\n\nNe désactivez ceci que si vous voulez délibérément qu'un autre mod l'emporte sur un\nchemin composé par Proteus. Proteus n'agit jamais sur une supposition — uniquement\nsur un écrasement confirmé.",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Désactiver le redessin automatique",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Redessin automatique",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Laisse Proteus suivre le monde tout seul : recomposition après un changement de\nzone, un changement d'équipement ou un redessin, puis rechargement de ton\npersonnage pour que tu voies le résultat.\n\nDésactive-le pour rendre Proteus essentiellement manuel : il ne composera plus et\nne te rechargera plus tant que tu ne changeras pas quelque chose toi-même. Ton\napparence actuelle reste en place dans les deux cas, et tes modifications\ns'appliquent toujours - tu ne les verras simplement qu'au prochain redessin :\nchangement de zone, changement d'équipement, ou le bouton Redraw de Penumbra.\n\nUne exception quand c'est désactivé : si tu portes une couche d'équipement, un\nchangement d'équipement recompose quand même, pour que l'objet qui héberge cette\ncouche ne reste pas coincé sur quelque chose que tu as retiré. Tu ne seras pas\nredessiné pour autant.\n\nNe couvre que ce que Proteus déclenche. L'option \"Auto-Reload Gear\" de Glamourer\nte recharge dès que les réglages d'un mod changent, indépendamment de ceci.",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1737,14 +1741,6 @@
   },
   "Settings.General.InPlaceReload.Tip": {
     "message": "Actualise les textures via le rechargement d'équipement sur place de Glamourer plutôt\nqu'un redessin complet, évitant le clignotement de disparition/réapparition. Bascule\nautomatiquement sur un redessin complet quand Glamourer ne peut pas le traiter.",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Ignorer les recompositions inchangées",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Permet à une recomposition déclenchée par un changement de zone ou un redessin de\ns'arrêter tôt quand rien qui affecte le résultat n'a changé. Ce que vous modifiez\nvous-même est toujours recomposé. Ne désactivez ceci que pour écarter cette piste\nquand une modification ne prend pas effet.",
     "description": ""
   },
   "Settings.Hosting.InvisibleGlasses.Label": {

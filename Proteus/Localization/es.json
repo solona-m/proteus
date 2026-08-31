@@ -1711,8 +1711,12 @@
     "message": "Cuando se confirma que otro mod está sobrescribiendo una textura de piel en la que\nProteus compone — un pack de tatuajes o de piel que incluye su propia copia de la\ntextura del cuerpo —, sube automáticamente la prioridad de Penumbra de Proteus por\nencima y lo indica en el chat.\n\nEsa sobrescritura es invisible de otro modo: las superposiciones se aplican a medias\n(el relieve llega, el color no) y cada línea del registro sigue leyéndose como un éxito.\n\nDesactiva esto solo si quieres deliberadamente que otro mod gane una ruta que Proteus\ncompone. Proteus nunca actúa por suposición, solo ante una sobrescritura confirmada.",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Desactivar redibujado automático",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Redibujado automático",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Deja que Proteus siga el ritmo del mundo por su cuenta: recompone tras cambiar de\nzona, cambiar de equipo y tras un redibujado, y luego recarga tu personaje para\nque veas el resultado.\n\nDesactívalo para que Proteus sea casi manual: no compondrá ni te recargará hasta\nque cambies algo tú mismo. Tu aspecto actual se mantiene en cualquier caso, y tus\nediciones siguen aplicándose - solo que no las verás hasta que algo te redibuje:\ncambiar de zona, cambiar de equipo o el botón Redraw de Penumbra.\n\nUna excepción mientras está desactivado: si llevas una capa de equipo, cambiar de\nequipo recompone igualmente, para que la pieza que aloja esa capa no se quede\ncolgada de algo que te has quitado. Aun así, no se te redibujará por ello.\n\nSolo cubre lo que inicia Proteus. La opción \"Auto-Reload Gear\" de Glamourer te\nrecarga cada vez que cambian los ajustes de cualquier mod, al margen de esto.",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1737,14 +1741,6 @@
   },
   "Settings.General.InPlaceReload.Tip": {
     "message": "Actualiza las texturas mediante la recarga de equipo in situ de Glamourer en lugar de\nun redibujado completo, evitando el parpadeo de desaparición/reaparición. Recurre\nautomáticamente a un redibujado completo cuando Glamourer no puede atenderlo.",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Omitir recomposiciones sin cambios",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Permite que una recomposición provocada por un cambio de zona o un redibujado se\ndetenga pronto cuando nada que afecte al resultado haya cambiado. Lo que cambies tú\nsiempre se recompone. Desactívalo solo para descartar esta causa cuando una edición\nno surte efecto.",
     "description": ""
   },
   "Settings.Hosting.InvisibleGlasses.Label": {

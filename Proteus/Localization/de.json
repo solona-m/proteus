@@ -1711,8 +1711,12 @@
     "message": "Wenn nachweislich ein anderer Mod eine Hauttextur überschreibt, in die Proteus\nhineinkomponiert — etwa ein Tattoo- oder Hautpaket mit eigener Kopie der Körpertextur —,\nhebe die Penumbra-Priorität von Proteus automatisch darüber an und sage es im Chat.\n\nDiese Überschreibung ist sonst unsichtbar: Overlays wirken nur halb (die Unebenheiten\nkommen an, die Farbe nicht) und jede Logzeile liest sich weiterhin wie ein Erfolg.\n\nSchalte dies nur aus, wenn ein anderer Mod einen von Proteus komponierten Pfad\nabsichtlich gewinnen soll. Proteus handelt nie auf Verdacht — nur bei einer\nbestätigten Überschreibung.",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Automatisches Neuzeichnen deaktivieren",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Automatisches Neuzeichnen",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Lässt Proteus von selbst mit der Welt Schritt halten: neu zusammensetzen nach\nZonenwechsel, Ausrüstungswechsel und Neuzeichnen, dann deinen Charakter neu\nladen, damit du das Ergebnis siehst.\n\nSchalte es aus, um Proteus weitgehend manuell zu machen: Es setzt nichts zusammen\nund lädt dich nicht neu, bis du selbst etwas änderst. Dein aktuelles Aussehen\nbleibt so oder so erhalten, und deine Änderungen greifen weiterhin - du siehst\nsie nur erst, wenn dich etwas neu zeichnet: Zonenwechsel, Ausrüstungswechsel\noder Penumbras Redraw-Schaltfläche.\n\nEine Ausnahme, solange es aus ist: Trägst du eine Ausrüstungsebene, wird bei\neinem Ausrüstungswechsel trotzdem neu zusammengesetzt, damit das Item, das diese\nEbene trägt, nicht an etwas hängen bleibt, das du ausgezogen hast. Neu gezeichnet\nwirst du dafür trotzdem nicht.\n\nGilt nur für das, was Proteus selbst auslöst. Glamourers \"Auto-Reload Gear\" lädt\ndich neu, sobald sich die Einstellungen irgendeines Mods ändern - unabhängig hiervon.",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1737,14 +1741,6 @@
   },
   "Settings.General.InPlaceReload.Tip": {
     "message": "Aktualisiert Texturen über Glamourers Ausrüstungs-Neuladen an Ort und Stelle statt\nüber ein vollständiges Neuzeichnen und vermeidet so das Flackern beim Ent- und\nWiedererscheinen. Fällt automatisch auf ein vollständiges Neuzeichnen zurück, wenn\nGlamourer es nicht bedienen kann.",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Unveränderte Neukompositionen überspringen",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Lässt eine durch Zonenwechsel oder Neuzeichnen ausgelöste Neukomposition früh abbrechen,\nwenn sich nichts geändert hat, was die Ausgabe betrifft. Was du selbst änderst, wird\nimmer neu komponiert. Schalte dies nur aus, um es als Ursache auszuschließen, wenn eine\nÄnderung nicht wirkt.",
     "description": ""
   },
   "Settings.Hosting.InvisibleGlasses.Label": {

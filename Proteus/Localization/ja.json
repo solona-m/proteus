@@ -1711,8 +1711,12 @@
     "message": "Proteusが合成先としている肌テクスチャを他のMODが上書きしていると確認された場合\n——ボディテクスチャの独自コピーを同梱したタトゥーMODや肌MODなど——\nProteusのPenumbra優先度を自動でその上に引き上げ、チャットで知らせます。\n\nこの上書きは通常まったく見えません。オーバーレイは中途半端に適用され\n（凹凸は乗るのに色は乗らない）、ログはどの行も成功として記録されます。\n\n他のMODにProteusの合成対象パスをあえて優先させたい場合のみオフにしてください。\nProteusは推測では動作せず、上書きが確認された場合にのみ動作します。",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "自動再描画を無効にする",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "自動再描画",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Proteusが自動で世界の変化に追従します。エリア移動・装備変更・再描画のあとに合成し\n直し、続けてキャラクターを再読み込みして、結果が見えるようにします。\n\nオフにするとProteusはほぼ手動になります。自分で何かを変更するまで、合成も再読み\n込みも行いません。どちらの場合も現在の見た目はそのまま残り、加えた編集も適用され\n続けます。ただし、何かがあなたを再描画するまでは目に見えません。エリア移動、装備\n変更、またはPenumbraのRedrawボタンです。\n\nオフのあいだの唯一の例外です。装備レイヤーを着用している場合、装備を変更すると合\n成だけは行われます。そのレイヤーを載せているアイテムが、脱いだものに取り残されな\nいようにするためです。それでも再描画は行われません。\n\n対象はProteusが開始するものだけです。GlamourerのAuto-Reload Gearは、どのMODであれ\n設定が変わるたびにあなたを再読み込みし、この設定とは無関係に動作します。",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1737,14 +1741,6 @@
   },
   "Settings.General.InPlaceReload.Tip": {
     "message": "完全な再描画ではなくGlamourerの装備その場再読み込みでテクスチャを更新し、\n消えて出現する際のちらつきを避けます。Glamourerが処理できない場合は\n自動的に完全な再描画に切り替わります。",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "変更のない再合成をスキップ",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "エリア移動や再描画によって起きた再合成を、出力に影響する変更が何もない場合は\n早期に打ち切ります。自分で変更した内容は常に再合成されます。\n編集が反映されない原因を切り分けるときのみオフにしてください。",
     "description": ""
   },
   "Settings.Hosting.InvisibleGlasses.Label": {
