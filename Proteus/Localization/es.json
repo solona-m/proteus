@@ -159,6 +159,10 @@
     "message": "[Proteus] {0} de los archivos que publica Proteus no llegan al juego: no se resuelven a nada, lo que suele significar que el mod «Proteus» está desactivado en tu colección de Penumbra actual. Comprueba que esté activado allí.",
     "description": ""
   },
+  "Chat.CarrierClaimed.Fmt": {
+    "message": "[Proteus] \"{0}\" coloca su propio modelo en un accesorio del Emperador ({1}), así que Proteus dejó esa ranura intacta en lugar de reemplazarla. Libera otra ranura de anillo o brazalete si quieres que Proteus disponga de una.",
+    "description": ""
+  },
   "Chat.UnhostedLayers.Fmt": {
     "message": "[Proteus] No se han podido colocar algunas capas de tu {1} (capas: {0}). No pueden deformarse por raza, así que necesitan una ranura que Proteus pueda sustituir por completo: libera una ranura de anillo (cualquier mano) o la de las gafas y aparecerán.",
     "description": ""

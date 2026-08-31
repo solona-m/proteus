@@ -212,6 +212,18 @@ public class CompositorService : IDisposable
     private volatile ShellDrawnProbe? _shellDrawnCheck;
 
     /// <summary>
+    /// The material set the drawn check last reported as ON the character, joined. The check runs on every
+    /// composite — every gear change and every zone — and the list runs to ten paths of seventy characters,
+    /// so the paths are printed only when the SET changes; the count alone answers "is it drawn?" the rest
+    /// of the time. Null after a failure or a rebuild, so the next success prints in full: a transition is
+    /// exactly when someone is reading the log.
+    /// <para/>
+    /// Read and written only from the drawn check's own task, which supersedes rather than overlaps (see the
+    /// reference check on <see cref="_shellDrawnCheck"/>). A torn read would cost one duplicate line.
+    /// </summary>
+    private string? _lastDrawnMaterials;
+
+    /// <summary>
     /// Drop all three shell locators together, for the tear-down paths that never reach the gear phase
     /// where they are normally published: the plugin being disabled, and the composite's own "no enabled
     /// mods" early return. They describe a shell on the character, so leaving them standing after the shell
@@ -225,6 +237,8 @@ public class CompositorService : IDisposable
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
+        // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
+        _lastDrawnMaterials = null;
     }
 
     // Per skin-overlay "glow" recipe (which composited-diffuse pixels map to each colour-table row),
@@ -7683,8 +7697,23 @@ public class CompositorService : IDisposable
                     missing = expected.Materials.Where(p => !materials.Contains(p)).ToList();
                     if (missing.Count == 0)
                     {
-                        log.Debug("[Proteus] second skin is drawn: all {0} shell material(s) are on the character",
-                            expected.Materials.Count);
+                        // INFORMATION, not Debug. This is the one line that separates "the shell is on the
+                        // character and something about the RENDER is wrong" from "it never loaded", and the
+                        // file log a user sends is INF+ — so at Debug the answer was never in the evidence,
+                        // and three rounds of diagnosis were spent inferring it.
+                        //
+                        // The PATHS only when they change, though: this runs per composite, and repeating ten
+                        // of them on every zone would bury the line it is meant to make findable.
+                        var drawn = string.Join(", ", expected.Materials);
+                        if (string.Equals(_lastDrawnMaterials, drawn, StringComparison.Ordinal))
+                            log.Information("[Proteus] second skin is drawn: all {0} shell material(s) are on "
+                                          + "the character", expected.Materials.Count);
+                        else
+                        {
+                            _lastDrawnMaterials = drawn;
+                            log.Information("[Proteus] second skin is drawn: all {0} shell material(s) are on "
+                                          + "the character [{1}]", expected.Materials.Count, drawn);
+                        }
                         return;
                     }
                     hostMaterials = materials;
@@ -7692,7 +7721,7 @@ public class CompositorService : IDisposable
 
                 if (!hostEverDrawn)
                 {
-                    log.Debug("[Proteus] second skin drawn check inconclusive — the host accessory was not back "
+                    log.Information("[Proteus] second skin drawn check inconclusive — the host accessory was not back "
                             + "in the draw object within the sampling window, so whether our mesh loaded is "
                             + "unknown (not a failure)");
                     return;
@@ -7708,7 +7737,7 @@ public class CompositorService : IDisposable
                     - Math.Max(_lastRingInjectTick, _lastGlassesInjectTick));
                 if (sinceCarrier >= 0 && sinceCarrier < RingInjectCooldownMs)
                 {
-                    log.Debug("[Proteus] second skin drawn check deferred — a carrier was equipped {0}ms ago "
+                    log.Information("[Proteus] second skin drawn check deferred — a carrier was equipped {0}ms ago "
                             + "and is still loading; the next composite re-checks", sinceCarrier);
                     return;
                 }
@@ -7729,6 +7758,9 @@ public class CompositorService : IDisposable
                         StringComparison.OrdinalIgnoreCase)))
                     .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
                     .ToList();
+
+                // A failure makes the next success a transition, so print its paths in full when it comes.
+                _lastDrawnMaterials = null;
 
                 log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
                           + "shell material(s) never appeared on the character: {2}. The host accessory it "
