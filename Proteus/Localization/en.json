@@ -1711,9 +1711,13 @@
     "message": "When another mod is confirmed to be overriding a skin texture Proteus composites\ninto — a tattoo or skin pack shipping its own copy of the body texture — raise\nProteus' Penumbra priority above it automatically, and say so in chat.\n\nThat override is otherwise invisible: overlays half-apply (the bumps land, the\ncolour doesn't) and every log line still reads as a success.\n\nTurn off only if you deliberately want another mod to win a path Proteus\ncomposites. Proteus never acts on a guess — only on a confirmed override.",
     "description": "Tooltip and (?) marker. Three paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Disable auto redraw",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Auto redraw",
     "description": "Checkbox in Settings > General."
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Let Proteus keep up with the world on its own - recompositing after zoning, gear\nchanges and redraws, then reloading your character so you can see the result.\n\nTurn it off to make Proteus mostly manual: it won't composite or reload you until\nyou change something yourself. Your current look stays on either way, and edits\nyou make still apply - you just won't see them until something redraws you:\nzoning, changing gear, or Penumbra's Redraw button.\n\nOne exception while it's off: if you're wearing a gear layer, changing gear still\nrecomposites, so the item hosting that layer doesn't get stranded on something\nyou took off. You still won't be redrawn for it.\n\nOnly covers what Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads you\nwhenever any mod's settings change, independently of this.",
+    "description": "Tooltip and (?) marker. Four paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.General.Enabled.Label": {
     "message": "Enabled",
@@ -1738,14 +1742,6 @@
   "Settings.General.InPlaceReload.Tip": {
     "message": "Refresh textures via Glamourer's in-place equipment reload instead of a full\nredraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\nautomatically when Glamourer can't service it.",
     "description": "Tooltip. \"Glamourer\" is another plugin's name - never translate it. Contains deliberate line breaks - keep the same number, moving them where your language needs."
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Skip unchanged recomposites",
-    "description": "Checkbox in Settings > General."
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Let a recomposite triggered by zoning or a redraw stop early when nothing that\naffects the output has changed. Anything you change yourself always recomposites.\nTurn off only to rule this out when an edit isn't taking effect.",
-    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "Host on invisible glasses (keep rings free)",

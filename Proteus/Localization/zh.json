@@ -1711,8 +1711,12 @@
     "message": "当确认有其他模组覆盖了 Proteus 正在合成的皮肤贴图时——例如自带一份身体贴图的\n纹身包或皮肤包——自动将 Proteus 的 Penumbra 优先级提升到其之上，并在聊天中说明。\n\n这种覆盖平时完全看不出来：叠加层只生效一半（凹凸出现了，颜色没有），\n而且每一行日志读起来都像是成功。\n\n只有当你确实希望其他模组在 Proteus 合成的路径上取胜时才关闭此项。\nProteus 从不凭猜测行动，只在确认发生覆盖时才会处理。",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "禁用自动重绘",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "自动重绘",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "让 Proteus 自行跟上世界的变化：在切换区域、更换装备和重绘之后重新合成，然后重新\n加载你的角色，让你能看到结果。\n\n关闭后 Proteus 基本变为手动：在你自己改动之前，它不会合成，也不会重新加载你。无论\n开或关，你当前的外观都会保留，你所做的编辑也依然生效——只是要等到有什么把你重绘之\n后才看得到：切换区域、更换装备，或 Penumbra 的 Redraw 按钮。\n\n关闭时有一个例外：如果你正穿着装备层，更换装备仍会重新合成，以免承载该层的物品被\n遗留在你已经脱下的东西上。即便如此，也仍然不会为此重绘你。\n\n只涵盖由 Proteus 发起的操作。Glamourer 的 \"Auto-Reload Gear\" 会在任何模组的设置发生\n变化时重新加载你，与此选项无关。",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1737,14 +1741,6 @@
   },
   "Settings.General.InPlaceReload.Tip": {
     "message": "通过 Glamourer 的原地装备重载来刷新贴图，而不是完整重绘，从而避免\n消失/重现的闪烁。当 Glamourer 无法处理时会自动回退到完整重绘。",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "跳过无变化的重新合成",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "当没有任何影响输出的内容发生变化时，允许由切换区域或重绘触发的重新合成\n提前结束。你自己所做的更改始终会重新合成。只有在某项修改没有生效、\n需要排除此因素时才关闭。",
     "description": ""
   },
   "Settings.Hosting.InvisibleGlasses.Label": {
