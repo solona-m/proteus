@@ -2325,7 +2325,7 @@ public sealed class SecondSkinService
             // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
             // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
             // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, neutralWhenEmpty: isMaskShell), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
@@ -3050,6 +3050,12 @@ public sealed class SecondSkinService
         // _id is merged bottom-first (assets are highest-priority-first, so reverse) — each mask overwrites
         // the _id where it is present, so the TOP mask wins on overlap. The RELIEF is folded in afterwards by
         // the shared CombineMaskReliefs (top-first claim), the SAME combine the skin body normal uses.
+        // A mask shell brings no _id of its own, so the first merge below has to invent the buffer the masks
+        // paint into. Every texel no mask claims keeps that invented value — and it is a REAL row selector,
+        // indistinguishable from one the author placed. `idAuthored` records which texels a mask actually
+        // wrote so the row-selector repair further down can tell the two apart; it stays null when the shell
+        // brought real _id art, where every texel is authored by definition.
+        bool[]? idAuthored = null;
         var mergeTopFirst = mergeMasks
             ? discovery.ResolveActiveMaskAssets(entry)
             : new List<(string MaskPath, string? NormalPath, string? IndexPath)>();
@@ -3060,8 +3066,20 @@ public sealed class SecondSkinService
             var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
             if (maskPng == null || maskIdx == null) continue;
             // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
-            index = index != null ? (byte[])index.Clone() : Solid(0, 0, 0, 255);
-            var idxBuf = index; var mp = maskPng; var mi = maskIdx;
+            if (index != null)
+            {
+                index = (byte[])index.Clone();
+            }
+            else
+            {
+                // Row 16 sub-row A (red 255 → pair 16, green 255 → A), matching the no-index fallback in the
+                // slot table below and the skin layer's flat-tint fallback. This used to be Solid(0,0,0,255),
+                // i.e. row 1 sub-row B — a pair most colorsets never configure, and whose B half is white
+                // when only A was authored, which painted the unclaimed band white.
+                index = Solid(255, 255, 0, 255);
+                idAuthored = new bool[TexSize * TexSize];
+            }
+            var idxBuf = index; var mp = maskPng; var mi = maskIdx; var claimed = idAuthored;
             // Per texel, reading and writing only its own index, so partitioning is byte-identical.
             CompositorService.ParallelPixels(0, idxBuf.Length, 4, (from, to) =>
             {
@@ -3070,6 +3088,7 @@ public sealed class SecondSkinService
                     if (mp[i + 3] < 128) continue;    // only where the mask is actually present
                     idxBuf[i]     = mi[i];            // red   → row pair
                     idxBuf[i + 1] = mi[i + 1];        // green → sub-row
+                    if (claimed != null) claimed[i >> 2] = true;
                 }
             });
         }
@@ -3123,7 +3142,8 @@ public sealed class SecondSkinService
             // LoadPngAsRgba hands back a shared cached array; the mask merge above clones only when it
             // actually merged, so clone here too rather than writing through to the cache.
             shaderIndex = (byte[])index.Clone();
-            CompositorService.SnapIndexRowsToDefined(shaderIndex, TexSize, TexSize, rows.Select(p => p.Row).ToList());
+            CompositorService.SnapIndexRowsToDefined(shaderIndex, TexSize, TexSize,
+                rows.Select(p => p.Row).ToList(), authored: idAuthored);
         }
 
         // ── per-row opacity ──────────────────────────────────────────────────
@@ -3155,13 +3175,20 @@ public sealed class SecondSkinService
                 // with it the output's content hash, which renames and re-uploads the texture.
                 if (hasPreset[preset.Row]) continue;
                 hasPreset[preset.Row] = true;
-                opAByPair[preset.Row] = preset.SubRowA?.Opacity ?? 0;
-                opBByPair[preset.Row] = preset.SubRowB?.Opacity ?? 0;
+                // Mirrored on a mask shell exactly as BuildRows mirrors the colour, or the two halves of one
+                // preset disagree about what "unset" means: the row would render the authored COLOUR on both
+                // sub-rows while applying the authored OPACITY on only one, so a green-0 texel came out at
+                // full coverage in a colour the author had asked to be 40% transparent.
+                var subA = preset.SubRowA ?? (d.IsMaskShell ? preset.SubRowB : null);
+                var subB = preset.SubRowB ?? (d.IsMaskShell ? preset.SubRowA : null);
+                opAByPair[preset.Row] = subA?.Opacity ?? 0;
+                opBByPair[preset.Row] = subB?.Opacity ?? 0;
             }
 
             var src = alpha;
             var dst = (byte[])alpha.Clone();
             var idx = index;
+            var opAuthored = idAuthored;
             // Per texel, no carried state, so partitioning cannot change a byte.
             CompositorService.ParallelPixels(0, src.Length, 1, (from, to) =>
             {
@@ -3169,6 +3196,13 @@ public sealed class SecondSkinService
                 {
                     float a = src[i] / 255f;
                     if (a <= 0f) continue;
+                    // A texel no mask ever wrote carries the SYNTHESIZED row selector, not a chosen one, so
+                    // it must not pick up that row's opacity. This pass deliberately reads the unrepaired
+                    // index (see the repair above), which is precisely where those texels are still visible:
+                    // the seed names row 16, the row nearly every colorset configures, so without this an
+                    // Opacity on row 16 would push the whole antialiased mask fringe toward opaque and
+                    // visibly fatten every mask edge.
+                    if (opAuthored != null && !opAuthored[i]) continue;
 
                     int pair = idx[i * 4] / 17 + 1;                     // red → 1-based row pair
                     if (pair < 1 || pair >= PairCount) continue;
@@ -3615,9 +3649,13 @@ public sealed class SecondSkinService
 
     /// <summary>
     /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
-    /// colour. The index texture can select ANY pair — one the colorset never defined, or the undefined
-    /// sub-row of a pair that set only the other — and that row must not paint something the author never
-    /// chose, exactly as the skin layer defaults its rows to white. (16 pairs = 32 sub-rows.)
+    /// colour. The index texture can select ANY pair, including one the colorset never defined, and that
+    /// row must not paint something the author never chose. (16 pairs = 32 sub-rows.)
+    /// <para/>
+    /// White is the baseline for a pair the author never listed AT ALL. On a MASK shell it is not the right
+    /// answer for the unset half of a pair they did list — see <see cref="BuildRows"/>, which mirrors there.
+    /// The difference is what white MEANS: over an ordinary shell's own art (and on the skin layer) it is a
+    /// (1,1,1) multiply, i.e. no tint; over a mask shell's white base it is paint.
     /// </summary>
     private static Dictionary<int, GearColorRow> NeutralRows()
     {
@@ -3628,32 +3666,53 @@ public sealed class SecondSkinService
     }
 
     /// <summary>Map the metadata's 1-based row/sub-row presets onto 0-based color table rows.</summary>
-    /// <param name="neutralWhenEmpty">
-    /// With no presets, return the all-white baseline instead of null. Null means "keep the gear template's
-    /// own colour table", which is right for an ordinary shell — its template belongs to the look being
-    /// worn — and wrong for a MASK shell, which has no look of its own. A mask shell is a WHITE base plus
-    /// whatever the colorset says (see the Build call), so white rows are its blank canvas: it starts
+    /// <param name="isMaskShell">
+    /// This table belongs to a MASK shell, which changes two things.
+    /// <para/>
+    /// With no presets it returns the all-white baseline instead of null. Null means "keep the gear
+    /// template's own colour table", which is right for an ordinary shell — its template belongs to the look
+    /// being worn — and wrong for a mask shell, which has no look of its own. A mask shell is a WHITE base
+    /// plus whatever the colorset says (see the Build call), so white rows are its blank canvas: it starts
     /// uncoloured and the Masks colorset dyes it from there. Inheriting the template's table instead would
-    /// start it at some arbitrary dark colour the author never picked. Only the mask-shell caller passes true.
+    /// start it at some arbitrary dark colour the author never picked.
+    /// <para/>
+    /// It also mirrors a half-authored row pair — see the loop. Both follow from the same fact: on a mask
+    /// shell the colorset IS the colour, so a white row paints white. Everywhere else white is a neutral
+    /// multiply over art that already carries the colour, and neither behaviour would be right.
     /// </param>
-    private static Dictionary<int, GearColorRow>? BuildRows(List<ColorTableRowPreset>? presets,
-                                                            bool neutralWhenEmpty = false)
+    internal static Dictionary<int, GearColorRow>? BuildRows(List<ColorTableRowPreset>? presets,
+                                                             bool isMaskShell = false)
     {
-        if (presets == null || presets.Count == 0) return neutralWhenEmpty ? NeutralRows() : null;
+        if (presets == null || presets.Count == 0) return isMaskShell ? NeutralRows() : null;
         var rows = NeutralRows();
 
         foreach (var p in presets)
         {
             if (p.Row is < 1 or > 16) continue;
-            Add((p.Row - 1) * 2, p.SubRowA);
-            Add((p.Row - 1) * 2 + 1, p.SubRowB);
+            // On a MASK shell, a pair the author touched at all is theirs, so the half they left unset
+            // MIRRORS the half they set rather than staying at NeutralRows' white. The shader lerps B→A by
+            // the index's green, so a half-authored pair otherwise paints white everywhere green isn't
+            // pinned to the authored side — and a mask shell's base is white, so that is literal white
+            // paint. It read as a thin white fringe tracing every mask edge.
+            //
+            // NOT done for an ordinary shell. There the base texture carries the colour and the colorset is
+            // expected to be neutral (the same asymmetry drives linearizeDiffuse at the Build call), so
+            // white is a no-op multiply and mirroring would newly TINT the art at every green < 255 texel —
+            // and newly light it, since the mirror carries Emissive across too. Pairs the author never
+            // listed fall through to white on both.
+            Add((p.Row - 1) * 2, p.SubRowA ?? (isMaskShell ? p.SubRowB : null));
+            Add((p.Row - 1) * 2 + 1, p.SubRowB ?? (isMaskShell ? p.SubRowA : null));
         }
         return rows;
 
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
-            if (sub == null) return;   // leaves the neutral-white row from the init above
-            rows[rowIndex] = RowFrom(sub);
+            if (sub == null) return;   // neither sub-row set — leaves the neutral-white row from the init above
+            // Assigning REPLACES the neutral entry, so a preset that exists but carries no colour would hand
+            // the row a null diffuse — and PatchColorTable skips null fields, leaving the vanilla template's
+            // (often dark) colour, the exact thing NeutralRows exists to prevent. The editor materialises a
+            // blank preset the moment any non-colour field is touched, so this is reachable from the UI.
+            rows[rowIndex] = RowFrom(sub, diffuseWhenUnset: (1f, 1f, 1f));
         }
     }
 
@@ -3682,7 +3741,14 @@ public sealed class SecondSkinService
 
     /// <summary>One sub-row preset as the material writer's row. Shared by both row builders so a shell and
     /// a content material can never disagree about what a preset means.</summary>
-    private static GearColorRow RowFrom(ColorTableSubRowPreset sub)
+    /// <param name="diffuseWhenUnset">Diffuse for a preset that carries no colour. A SHELL passes neutral
+    /// white, because its row replaces the NeutralRows baseline outright and a null field would let the
+    /// vanilla template's colour through. A CONTENT material passes null: leaving the field unwritten is
+    /// exactly right there, since the author's own diffuse must survive anything the user did not set.
+    /// Deliberately applied AFTER the emissive colour resolves, so a glow with no colour anywhere still
+    /// stays dark rather than inheriting this white.</param>
+    private static GearColorRow RowFrom(ColorTableSubRowPreset sub,
+                                        (float R, float G, float B)? diffuseWhenUnset = null)
     {
         var rgb = ParseHex(sub.Diffuse);
         // Glow colour is INDEPENDENT of the diffuse (a scrolling material wants a near-black diffuse
@@ -3697,7 +3763,7 @@ public sealed class SecondSkinService
         var emis = ParseHex(sub.EmissiveColor) ?? rgb;
         return new GearColorRow
         {
-            Diffuse = rgb,
+            Diffuse = rgb ?? diffuseWhenUnset,
             Specular = ParseHex(sub.Specular),
             // Always write emissive — a template's own emissive must be CLEARED, not inherited.
             // Vanilla characterscroll rows carry a warm non-zero emissive that renders as a flat
