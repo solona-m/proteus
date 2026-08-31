@@ -1137,6 +1137,57 @@ public class ContentImportTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>
+    /// A LATER group overrides an earlier one that names the same path, which is Penumbra's rule and was
+    /// once inverted here. The shape is a real pack's: an always-on "base install" single-select ships one
+    /// neutral texture at every piece's path, and per-piece toggle groups after it swap in the piece's own.
+    /// Taking the first ticked source handed every piece the neutral one — which for a normal map is an
+    /// empty coverage gate, so four piercings loaded onto the character and drew nothing at all.
+    /// </summary>
+    [Fact]
+    public void A_later_group_overrides_an_always_on_one_naming_the_same_path()
+    {
+        var dir = TempDir();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "common"));
+            foreach (var f in new[] { "base.tex", "both.tex", "left.tex" })
+                File.WriteAllBytes(Path.Combine(dir, "common", f), new byte[16]);
+
+            // Recorded in the pack's own group order: base install first, the toggle group after it.
+            List<ContentMaterialSource> sources =
+            [
+                new() { Group = "base install", Option = "install", File = "common/base.tex" },
+                new() { Group = "eyebrow",      Option = "both",    File = "common/both.tex" },
+                new() { Group = "eyebrow",      Option = "left",    File = "common/left.tex" },
+            ];
+
+            string Pick(Dictionary<string, List<string>> on)
+                => Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, sources, on) ?? "");
+
+            var install = new List<string> { "install" };
+
+            // Base install is ALWAYS ticked (a single-select group has no "off"), so this is the case that
+            // regressed: the toggle group is what the user actually chose and it has to win.
+            Assert.Equal("both.tex", Pick(new() { ["base install"] = install, ["eyebrow"] = ["both"] }));
+            Assert.Equal("left.tex", Pick(new() { ["base install"] = install, ["eyebrow"] = ["left"] }));
+
+            // Toggle group off: base install is the answer, exactly as before.
+            Assert.Equal("base.tex", Pick(new() { ["base install"] = install }));
+
+            // Default data (no group) ranks below every group, wherever it is recorded — an option naming
+            // the same path is an override of it.
+            List<ContentMaterialSource> withDefault =
+            [
+                new() { Group = "eyebrow", Option = "both", File = "common/both.tex" },
+                new() { File = "common/base.tex" },
+            ];
+            Assert.Equal("both.tex", Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, withDefault,
+                new Dictionary<string, List<string>> { ["eyebrow"] = ["both"] }) ?? ""));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     /// <summary>A material that will not parse ranks last instead of throwing — the ordering is a hint, and
     /// the pack still publishes something.</summary>
     [Fact]
