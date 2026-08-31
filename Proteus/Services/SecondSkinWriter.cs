@@ -4733,6 +4733,12 @@ public static class SecondSkinWriter
     /// </summary>
     private const float CapShapeFollow = 0.20f;
 
+    /// <summary>How much further off the skin the shape fit may leave a vertex than its landing was.</summary>
+    private const float CapShapeLiftAllow = 0.0004f;
+
+    /// <summary>Halvings used to walk a lifting move back toward its landing before giving up on it.</summary>
+    private const int CapShapeBackoffSteps = 6;
+
     /// <summary>Polar-decomposition iterations in <see cref="BestRotation"/>. It converges quadratically;
     /// this is well past the point where the step stops changing anything.</summary>
     private const int CapFitPolarSteps = 24;
@@ -7630,6 +7636,31 @@ public static class SecondSkinWriter
                             if (nb[i] is not { Count: > 0 } || onRim[i]) continue;
                             float d = Dist(cur[i], pos[i]);
                             if (d <= 1e-7f) continue;
+                            // IT MAY SMOOTH, BUT IT MAY NOT LIFT OFF THE FOOT. Holding the cap's
+                            // curvature means pulling toward a shape the landings do not quite agree
+                            // with, and where the body falls away - the outside of the pinky toe is
+                            // exactly such a place - that pull takes the surface off the skin: measured,
+                            // 28 vertices standing more than 5 mm proud against 6 without the fit, which
+                            // is the shard that shows there.
+                            //
+                            // Bounding the DISTANCE MOVED does not fix it; those moves are already small
+                            // (a 3 mm bound left 24 of the 28). The constraint has to be on the thing
+                            // that is wrong, so the move is walked back until the vertex sits no further
+                            // from the skin than its landing did.
+                            if (NearestOnSkin(pos[i], tris, CapStandoffReach, out var hadAt))
+                            {
+                                float had = Dist(pos[i], hadAt);
+                                for (int back = 0; back < CapShapeBackoffSteps; back++)
+                                {
+                                    if (!NearestOnSkin(cur[i], tris, CapStandoffReach, out var nowAt)
+                                        || Dist(cur[i], nowAt) <= had + CapShapeLiftAllow) break;
+                                    cur[i] = new Vec3((cur[i].X + pos[i].X) * 0.5f,
+                                                      (cur[i].Y + pos[i].Y) * 0.5f,
+                                                      (cur[i].Z + pos[i].Z) * 0.5f);
+                                }
+                                d = Dist(cur[i], pos[i]);
+                                if (d <= 1e-7f) continue;
+                            }
                             pos[i] = cur[i];
                             tot += d; worst = MathF.Max(worst, d); shaped++;
                         }
@@ -7779,14 +7810,15 @@ public static class SecondSkinWriter
     /// How close two caps' placement rates must be before the tie falls through to how evenly each sits
     /// off the skin.
     /// <para/>
-    /// It was 0.02, and on a heeled Neolithe foot that handed the body the wrong cap: the Neolithe cap
-    /// left 3% of its vertices unplaced against the Bibo cap's 0%, which beat the tolerance, so the
-    /// comparison stopped there and never reached the fit — where Neolithe measured 0.00198 against
-    /// Bibo's 0.00306. A few unplaced vertices are not a bad fit; they are filled from their neighbours
-    /// a line later, and the hard limit on a cap being usable at all is <see cref="CapBindMaxUnplaced"/>
-    /// at 15%. This only has to be wide enough that a handful of stragglers cannot outvote the shape.
+    /// Deliberately TIGHT. It was widened to 0.05 once, on the reading that a heeled foot was getting the
+    /// wrong cap — the Neolithe cap leaves 3% unplaced there against the Bibo cap's 0%, so the comparison
+    /// stopped at the rate and never reached the fit, where Neolithe scores better. That reading came from
+    /// a stale dump: with heels on the foot mesh belongs to the SHOE and carries the body material's name
+    /// whichever body is worn, so "this looks like a Neolithe foot" was never something the materials
+    /// could say. On a Bibo body the Bibo cap is the right answer, and the placement rate is what
+    /// identifies it where the fit score cannot.
     /// </summary>
-    private const float CapPlaceRateTie = 0.05f;
+    private const float CapPlaceRateTie = 0.02f;
 
     /// <summary>
     /// How far a placed cap vertex may look for the skin when measuring its standoff. Past this it did
