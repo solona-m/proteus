@@ -278,6 +278,13 @@ public sealed class SettingsStrings
     public readonly string DisableAutoRedraw =
         Loc.Localize("Settings.General.DisableAutoRedraw.Label", "Disable auto redraw") + "###disableAutoRedraw";
 
+    public readonly string DisableAutoRedrawTip = Loc.Localize("Settings.General.DisableAutoRedraw.Tip",
+        "Stop Proteus reloading your character on its own. It still composites, but you\n" +
+        "won't see the result until something else redraws you - zoning, changing\n" +
+        "gear, or Penumbra's Redraw button.\n\n" +
+        "Only covers redraws Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads\n" +
+        "you whenever any mod's settings change, independently of this.");
+
     public readonly string SkipUnchanged =
         Loc.Localize("Settings.General.SkipUnchanged.Label", "Skip unchanged recomposites") + "###skipUnchanged";
 
