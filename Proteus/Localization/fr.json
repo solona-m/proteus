@@ -159,6 +159,10 @@
     "message": "[Proteus] {0} des fichiers publiés par Proteus n'atteignent pas le jeu — ils ne se résolvent vers rien du tout, ce qui signifie généralement que le mod « Proteus » est désactivé dans votre collection Penumbra actuelle. Vérifiez qu'il y est bien activé.",
     "description": ""
   },
+  "Chat.CarrierClaimed.Fmt": {
+    "message": "[Proteus] « {0} » place son propre modèle sur un accessoire des Habits neufs de l'empereur ({1}) ; Proteus a donc laissé cet emplacement tel quel au lieu de le remplacer. Libérez un autre emplacement de bague ou de bracelet si vous voulez que Proteus en ait un pour travailler.",
+    "description": ""
+  },
   "Chat.UnhostedLayers.Fmt": {
     "message": "[Proteus] Certaines couches sur votre {1} n'ont pas pu être placées (couches : {0}). Elles ne doivent pas être déformées par la race, il leur faut donc un emplacement que Proteus puisse remplacer entièrement : libérez un emplacement de bague (n'importe quelle main) ou celui des lunettes et elles apparaîtront.",
     "description": ""
