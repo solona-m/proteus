@@ -55,12 +55,24 @@ jobs:
           $env:Changelog = ((git tag -l --format='%(contents)' $tag) -join "`n").Trim()
           dotnet build Proteus/Proteus.csproj -c Release
 
+      # The tag name does not set the version — Directory.Build.props stamps it as
+      # yyMM.<git rev-list --count HEAD>, and the manifest read here is the only source of truth.
+      # The tag is therefore free to disagree, and v2608.325.0.0 did: it sat twelve commits past
+      # v2608.324.0.0 after a branch merge, so it shipped 2608.336.0.0 under a name claiming 325.
+      # Nothing broke — the plugins repo reads the manifest too, so users got the right build from
+      # a misleadingly named tag — but hand-incrementing drifts further from the real count every
+      # time it happens. Fail here, before the release exists, rather than let a wrong name stick.
       - name: Read version
         id: version
         shell: pwsh
         run: |
           $manifest = Get-Content "Proteus\bin\Release\win-x64\Proteus.json" | ConvertFrom-Json
-          "version=$($manifest.AssemblyVersion)" | Out-File -Append $env:GITHUB_OUTPUT
+          $version = $manifest.AssemblyVersion
+          $tag = "${{ github.ref_name }}"
+          if ($tag -ne "v$version") {
+            throw "$tag does not match the built version $version. Delete the tag and re-tag with: git tag -a v$version -F notes.md"
+          }
+          "version=$version" | Out-File -Append $env:GITHUB_OUTPUT
 
       # Ship the package the Dalamud SDK already built, NOT a re-zip of the whole build output.
       # Zipping bin\Release\win-x64\* swallowed this very file, so every release carried a second,
