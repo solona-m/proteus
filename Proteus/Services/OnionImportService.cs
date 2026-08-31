@@ -354,8 +354,7 @@ public sealed class OnionImportService
 
         try
         {
-            WriteMod(root, modName, author, preview, materials, asTex ? textureLoader : null,
-                (path, space) => compositor.MeasureArtAsymmetry(path, space, modName));
+            WriteMod(root, modName, author, preview, materials, asTex ? textureLoader : null);
         }
         catch (Exception ex)
         {
@@ -490,18 +489,11 @@ public sealed class OnionImportService
     /// Non-null to write BC7 <c>.tex</c> instead of PNG. Null keeps the pack's own images, which is the
     /// default and the only path that can copy a full-opacity layer byte-for-byte.
     /// </param>
-    /// <param name="measureAsymmetry">
-    /// (absolute image path, UV space) → does this art differ left from right, or null for "not measured".
-    /// A DELEGATE rather than the service itself so this method stays pure filesystem work: the measurement
-    /// needs the compositor's loaded transfer maps (see CompositorService.MeasureArtAsymmetry), and the
-    /// offline tests pass null and get today's behaviour — the first composite fills the field in.
-    /// </param>
     internal static void WriteMod(
         string root, string modName, string author,
         ImportPreview preview,
         IReadOnlyDictionary<string, IReadOnlyList<string>> materials,
-        TextureLoader? texLoader,
-        Func<string, string?, bool?>? measureAsymmetry = null)
+        TextureLoader? texLoader)
     {
         var overlaysDir = Path.Combine(root, "Proteus", "overlays");
         Directory.CreateDirectory(overlaysDir);
@@ -518,11 +510,6 @@ public sealed class OnionImportService
             {
                 Layer = OverlayLayer.Skin,
                 SourceBodyType = layer.BodyType,
-                // Recorded now so it travels with the mod even if this pack is exported before it is ever
-                // worn. Null (not measured) whenever the question doesn't apply — a gen2 layer's one sheet
-                // already describes both sides — which is exactly what leaving the field out means.
-                AsymmetricArt = measureAsymmetry?.Invoke(
-                    Path.Combine(overlaysDir, Path.GetFileName(rel)), layer.BodyType),
                 MaterialGamePaths = materials.TryGetValue(layer.LayoutToken, out var mats)
                     ? [.. mats]
                     : [],

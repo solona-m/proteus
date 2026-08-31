@@ -283,6 +283,27 @@ public static class ColorTableEditor
                     ImGui.SetTooltip(cs.WholeSkinTip);
             }
 
+            // One-sided art. DECLARED, because nothing can measure it: a real skin texture is never
+            // symmetric — freckles, moles — so probing the art called ordinary skin asymmetric and moved it
+            // onto a shell, where it lost the wearer's tone. Only the author knows whether a difference
+            // between the two sides is the point or just detail.
+            //
+            // Shown on the skin layer only. On a shell the art is already rendered through its own geometry
+            // and nothing folds it, so the tick would decide nothing.
+            if (showSkinTint && !editingBinding)
+            {
+                bool oneSided = first.AsymmetricArt == true;
+                if (ImGui.Checkbox($"{cs.OneSided}##asymmetric_{idScope}", ref oneSided))
+                {
+                    // Cleared to null rather than false, so an untick leaves the sidecar as it was before
+                    // anyone touched this — the documented "absent = symmetric" default.
+                    foreach (var d in overlays) d.AsymmetricArt = oneSided ? true : null;
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.OneSidedTip);
+            }
+
             // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
             // everything above this line is per-option and everything below it is not.
             if (drawExtraAdvanced != null)

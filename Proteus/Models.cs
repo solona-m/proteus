@@ -338,17 +338,20 @@ public class OverlayDescriptor
     public string? SourceBodyType { get; set; }
 
     /// <summary>
-    /// Whether this overlay's art differs between the character's two sides — a tattoo on one arm, a scar on
-    /// one cheek. Null = never measured; measured lazily and remembered rather than recomputed per composite.
+    /// The author's statement that this art is deliberately ONE-SIDED — a tattoo on one arm, a scar on one
+    /// cheek — and must not be folded. Null or false = treat it as symmetric, which is the default.
     /// <para/>
-    /// It decides whether the overlay can survive a MIRRORED body. bibo and gen3 give each side its own half
-    /// of the sheet; vanilla (gen2) gives both sides the same texels, so porting to it folds the sheet in
-    /// half — harmless for symmetric art, and for asymmetric art it discards one side and mirrors the other
-    /// onto the whole body. Set here, such an overlay is rendered through an un-mirrored second-skin shell
-    /// instead, which keeps both sides. Symmetric art stays on the cheap skin path.
+    /// It decides whether the overlay can survive a MIRRORED surface. bibo and gen3 give each side its own
+    /// half of the sheet; vanilla (gen2) and the vanilla face give both sides the same texels, so porting to
+    /// them folds the sheet in half — harmless for symmetric art, and for one-sided art it discards a side
+    /// and mirrors the other across. Set here, the overlay renders through an un-mirrored second-skin shell
+    /// that keeps both sides. Everything else stays on the cheap skin path.
     /// <para/>
-    /// Authors can set it by hand to overrule the measurement, which is why it is persisted with the mod
-    /// rather than kept in the plugin's own cache.
+    /// DECLARED, never measured. Proteus used to probe the art and write the answer here, and no threshold
+    /// could make that work: a real skin texture is never symmetric — freckles, moles, a beauty mark — so
+    /// ordinary skins measured "asymmetric" and were moved onto shells, where they lost the wearer's tone
+    /// and rendered grey and glossy. A deliberate one-sided design and incidental skin detail differ in
+    /// degree, not in kind, so only the author can separate them.
     /// </summary>
     [JsonPropertyName("AsymmetricArt")]
     public bool? AsymmetricArt { get; set; }

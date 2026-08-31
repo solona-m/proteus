@@ -3684,10 +3684,6 @@ public class CompositorService : IDisposable
             // the skin bundled INTO a garment rather than the body mod the wearer thinks of as theirs.
             bool wearingMirroredBody = HasMirroredBodySurface(activeBodyTypes);
 
-            // Mods whose descriptors gained a measured AsymmetricArt this run. Written back after the
-            // composite rather than inside it — see the flush below.
-            var measured = new List<OverlayEntry>();
-
             // Mods with an overlay that needs an un-mirrored shell. Those are the ones allowed past the gen2
             // opt-in below — the character is wearing vanilla, so the shell isn't being synthesized onto some
             // other body, it is the only way that mod's art can render at all.
@@ -3726,13 +3722,13 @@ public class CompositorService : IDisposable
 
                 var overlays = discovery.ResolveActiveOverlays(entry);
 
-                // Measure left/right asymmetry once per overlay, before the binding overrides below hand us
-                // clones — writing it on the live descriptor is what lets it be saved with the mod. Only
-                // asked when it matters: art already measured keeps its answer (including one an author set
-                // by hand), and art whose own space is mirrored has no two sides to compare.
-                foreach (var o in overlays)
-                    if (o.Descriptor.AsymmetricArt == null && MeasureAsymmetry(entry, o.Descriptor))
-                        measured.Add(entry);
+                // Asymmetry is DECLARED, never measured here. It used to be probed on a null and written back
+                // to the mod, and that was wrong in a way no threshold could fix: a real skin texture is
+                // never symmetric — freckles, moles, a beauty mark — so the measurement said "asymmetric"
+                // about ordinary skin and moved it onto a shell, where it lost the wearer's tone and
+                // rendered grey and glossy. A deliberate one-sided design and incidental skin detail differ
+                // in degree, not in kind, so only the author can tell them apart. See
+                // OverlayDescriptor.AsymmetricArt and the tick in the colour panel.
 
                 // A restored design binding overrides metadata colors in-memory (metadata.json is
                 // never written). Replace each overlay's rows with the binding's, falling back to
@@ -3861,26 +3857,6 @@ public class CompositorService : IDisposable
                             byMaterial[mtrlPath] = list = new();
                         list.Add((entry, ov));
                     }
-                }
-            }
-
-            // Persist any asymmetry we just measured, so it is measured once for a mod and not once per
-            // session — and so it travels with the mod if it is exported or shared.
-            //
-            // This is the one thing the compositor writes into a mod folder, and it is deliberate: the value
-            // is a property of the ART, not of the character, the settings or the composite, so it cannot go
-            // stale the way a body type or a colour override would. It is also idempotent — the field is only
-            // null once — and there is no watcher on metadata.json to make this loop. SaveMetadata snapshots
-            // the mod's original file first, which still captures the author's values because it runs before
-            // the serialize; and it is done here rather than inside the per-material work below so it never
-            // runs on a parallel worker.
-            foreach (var entry in measured.Distinct())
-            {
-                try { discovery.SaveMetadata(entry); }
-                catch (Exception ex)
-                {
-                    // In-memory value stands for this session, so the composite is unaffected either way.
-                    log.Warning(ex, "[Proteus] Failed to record measured art asymmetry for {0}", entry.ModDirectory);
                 }
             }
 
@@ -9061,96 +9037,6 @@ public class CompositorService : IDisposable
             if (bt != null) types.Add(bt);
         }
         return NeedsUnmirroredShell(d, HasMirroredBodySurface(types));
-    }
-
-    /// <summary>
-    /// Resolution the asymmetry measurement runs at. Far below the art's own, on purpose: the question is
-    /// whether the two sides carry DIFFERENT art, and a mark small enough to vanish at this size is small
-    /// enough that folding it away costs nothing.
-    /// </summary>
-    private const int AsymmetryProbeSize = 1024;
-
-    /// <summary>
-    /// Measure whether this overlay's art differs between the character's two sides and record it on the
-    /// descriptor. Returns true when a value was written, so the caller can save the mod.
-    /// <para/>
-    /// Only asked of art in an asymmetric space. gen2 art has one sheet for both sides by construction, so
-    /// the question has no answer there and the field is left null rather than written false — a null costs
-    /// one string comparison per composite to re-reject, and writing into a mod that can never need the
-    /// answer would be noise in someone else's folder.
-    /// <para/>
-    /// Measured on the diffuse when there is one, since that is what carries a tattoo; a normal- or mask-only
-    /// overlay is measured on whichever it has, because its shape lives there instead.
-    /// </summary>
-    private bool MeasureAsymmetry(OverlayEntry entry, OverlayDescriptor d)
-    {
-        var rel = d.Diffuse ?? d.Normal ?? d.Mask;
-        if (rel == null) return false;
-
-        var verdict = MeasureArtAsymmetry(Path.Combine(entry.SidecarRoot, rel), SrcBodyTypeOf(d), entry.ModDirectory);
-        if (verdict == null) return false;
-        d.AsymmetricArt = verdict;
-        return true;
-    }
-
-    /// <summary>
-    /// Whether the art at <paramref name="absolutePath"/> differs between the character's two sides, or null
-    /// when the question doesn't apply or couldn't be answered — which is what
-    /// <see cref="OverlayDescriptor.AsymmetricArt"/> stores as "never scanned".
-    /// <para/>
-    /// Public so the IMPORTERS and the Create tab can record the answer at the moment they write a mod,
-    /// rather than leaving it for the first composite. Deliberately routed through the compositor's own
-    /// <see cref="UVRemapService"/> instance rather than a fresh one: the detector restricts itself to texels
-    /// inside a UV island, and that mask comes from a loaded transfer map. A service with no map loaded would
-    /// let the bleed art tools dilate around every island vote, which reads as asymmetry on art that is
-    /// symmetric everywhere the game actually samples.
-    /// </summary>
-    /// <param name="space">The UV space the art was painted for — <see cref="SrcBodyTypeOf"/> for a
-    /// descriptor. Null or gen2 answers null: gen2 is the mirrored layout itself, so its one sheet describes
-    /// both sides by construction and there is nothing to compare.</param>
-    /// <param name="label">Mod name or path, for the log line only.</param>
-    public bool? MeasureArtAsymmetry(string absolutePath, string? space, string? label = null)
-    {
-        if (space == null || string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
-        try
-        {
-            var png = textureLoader.LoadPngAsRgba(absolutePath, AsymmetryProbeSize, AsymmetryProbeSize);
-            if (png == null) return null;
-            return LogAsymmetry(uvRemap.IsArtAsymmetric(png, AsymmetryProbeSize, AsymmetryProbeSize, space),
-                                space, label ?? absolutePath);
-        }
-        catch (Exception ex)
-        {
-            // Null, not false: unmeasured means "behave as before", which is the safe answer.
-            log.Warning(ex, "[Proteus] Failed to measure art asymmetry for {0}", label ?? absolutePath);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// <see cref="MeasureArtAsymmetry(string, string?, string?)"/> for a caller that already holds the
-    /// decoded pixels — the Luminis importer decodes every layer on its way in, so re-reading them off disk
-    /// would be pure waste.
-    /// </summary>
-    public bool? MeasureArtAsymmetry(byte[] rgba, int w, int h, string? space, string? label = null)
-    {
-        if (space == null || string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
-        try { return LogAsymmetry(uvRemap.IsArtAsymmetric(rgba, w, h, space), space, label ?? "art"); }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "[Proteus] Failed to measure art asymmetry for {0}", label ?? "art");
-            return null;
-        }
-    }
-
-    private bool LogAsymmetry(bool asymmetric, string space, string label)
-    {
-        log.Information("[Proteus] {0}: art in {1} space reads as {2} — {3}", label, space,
-            asymmetric ? "ASYMMETRIC" : "symmetric",
-            asymmetric
-                ? "it needs an un-mirrored shell to keep both sides on a vanilla body"
-                : "a vanilla body can fold it in half losing nothing");
-        return asymmetric;
     }
 
     /// <summary>
