@@ -2687,11 +2687,16 @@ public class CompositorService : IDisposable
                 // a multi-second composite, by which point the window had always lapsed.
                 ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject));
 
-            if (MetSnapshotKnown && !AnyMetWorn()
-                && sinceInject > GlassesInjectCooldownMs
-                && SetGlassesOnFramework(g.ItemId))
+            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject > GlassesInjectCooldownMs)
             {
+                // Charge the cooldown on the ATTEMPT, not the success. A slot locked by another plugin
+                // refuses every equip, and stamping only on success left the window permanently open:
+                // the redraw hook and ScheduleCarrierRetry then re-tried on every single redraw.
+                var equipped = SetGlassesOnFramework(g.ItemId);
                 _lastGlassesInjectTick = Environment.TickCount64;
+                if (!equipped)
+                    return;
+
                 _injectedGlasses = true;
                 if (alreadyHosted)
                 {
@@ -2846,9 +2851,12 @@ public class CompositorService : IDisposable
             return;
         }
 
-        if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+        // Charge the cooldown on the ATTEMPT, not the success — see the glasses. A slot another plugin has
+        // locked refuses every equip, and stamping only on success left the window permanently open.
+        var equipped = SetAccessoryOnFramework(r.ItemId, ringSlot);
+        _lastRingInjectTick = Environment.TickCount64;
+        if (equipped)
         {
-            _lastRingInjectTick = Environment.TickCount64;
             MarkCarrierInjected(ringSlot);
             // No follow-up recomposite: the shell is ALREADY published at the path this piece loads, so the
             // equip's own redraw lands on the finished shell (the glasses path needs one only when it
