@@ -73,11 +73,16 @@ public class StatusWindow : Window
     // the very first frame after a game restart is an entry too, with no click anywhere.
     private bool _resizableActive;
     private bool _restoreSize;
+    private bool _restoreAutoFit;
     // Live window size in the resizable mode, UNSCALED — the host multiplies Size by the global scale, so a
     // scaled value stored here would compound the scale on every restore.
     private Vector2 _togglesSize;
     private bool _sizeDirty;
     private long _sizeChangedAt;
+    // The size the AUTO-FITTING tabs last settled at, unscaled — handed back on the way out of the Toggles
+    // tab. Null until an auto-fitting tab has drawn once, which a config opening straight onto Toggles can
+    // put off indefinitely.
+    private Vector2? _autoFitSize;
     // Height DrawLastResult took last frame, so the Toggles tab knows how much to leave under itself.
     private float _footerReserve;
 
@@ -366,6 +371,17 @@ public class StatusWindow : Window
     /// <para/>
     /// One thing this cannot beat: Dalamud's own title-bar "pin" ORs in <c>NoResize</c>, so a pinned window
     /// has no grip here either. That is the pin working, not this failing.
+    /// <para/>
+    /// LEAVING the tab needs an explicit size for a reason that is not symmetric with entering it. An
+    /// auto-fitting window measures the content it drew, and roughly twenty <c>PushTextWrapPos(0)</c> calls
+    /// across the other tabs wrap at the CONTENT EDGE — so a wrapped paragraph is exactly as wide as the
+    /// window already is, and the measured width equals the current width at any width. That is a fixed
+    /// point the window can climb but never fall from. It is a different thing from the width floor in
+    /// <see cref="AutoFitConstraints"/>, which decides how narrow the window may START; this decides that it
+    /// never comes back down. Harmless while nothing could widen the window past its own fit;
+    /// now the Toggles tab can, and every other tab would keep the dragged width (up to MaximumSize) for the
+    /// rest of the session. Handing back the size the auto-fitting tabs last settled at re-measures the
+    /// wrapping against that width instead, which lands exactly where they were before.
     /// </remarks>
     public override void PreDraw()
     {
@@ -395,10 +411,36 @@ public class StatusWindow : Window
         }
         else
         {
+            // Leaving the tab, which needs a size of its own even though what we are going back to fits
+            // itself — see the remarks on the ratchet.
+            if (_resizableActive) _restoreAutoFit = true;
             _resizableActive = false;
+
             Flags |= ImGuiWindowFlags.AlwaysAutoResize;
             SizeConstraints = AutoFitConstraints;
-            Size = null;
+
+            if (_restoreAutoFit)
+            {
+                _restoreAutoFit = false;
+                // Width is the axis that ratchets, so it is the one being put back. The fallback resets it
+                // to the floor, which costs one narrow frame and is still better than staying stuck at
+                // whatever the user dragged to.
+                var fit = _autoFitSize ?? new Vector2(AutoFitConstraints.MinimumSize.X, _togglesSize.Y);
+
+                // The height is pinned to whichever is TALLER, and that is not cosmetic. The remembered fit
+                // belongs to the tab we left from, which may be sparser than the one we are landing on — and
+                // a pinned frame too short for its content raises a vertical scrollbar, whose width comes off
+                // the wrap edge. The paragraphs would then measure a scrollbar narrower, and since the fixed
+                // point below never climbs back down, the window would keep those pixels for good and lose
+                // another set on the next round trip. Too tall costs one frame that auto-fit immediately
+                // corrects; too short is permanent. The constraints clamp this back to MaximumSize anyway.
+                Size = new Vector2(fit.X, MathF.Max(fit.Y, _togglesSize.Y));
+                SizeCondition = ImGuiCond.Always;
+            }
+            else
+            {
+                Size = null;
+            }
         }
     }
 
@@ -504,6 +546,13 @@ public class StatusWindow : Window
                 _sizeDirty     = true;
                 _sizeChangedAt = Environment.TickCount64;
             }
+        }
+        else
+        {
+            // What the auto-fitting tabs settled at, so leaving the Toggles tab can put it back. Read every
+            // frame rather than once on the way in: the fit legitimately moves as content changes, and the
+            // value wanted is the last one, not the one from whenever the user first opened Toggles.
+            _autoFitSize = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
         }
 
         // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
