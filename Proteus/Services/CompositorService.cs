@@ -9437,7 +9437,8 @@ public class CompositorService : IDisposable
     /// <list type="bullet">
     /// <item>Texels already naming a configured row — including the whole blend band between two adjacent
     /// configured rows (with 15 and 16 set, every value from 239 to 254 already reads as row 15), so
-    /// boundaries between real rows keep their current appearance.</item>
+    /// boundaries between real rows keep their current appearance. The <paramref name="authored"/> flags are
+    /// the one exception, and only for texels nobody ever wrote.</item>
     /// <item>GREEN, the A/B sub-row weight. That one is a genuine continuous blend.</item>
     /// <item>Coverage/alpha. Edges stay antialiased — only the row they name is corrected.</item>
     /// </list>
@@ -9456,10 +9457,30 @@ public class CompositorService : IDisposable
     /// band (1–2 texels) PLUS however far the separate transparency gate can bleed past the edge — a BC7
     /// block is 4 texels, and mip sampling widens that — so the budget is deliberately larger than the band
     /// alone. Past this the row is left unmapped; more only costs time.</param>
+    /// <param name="authored">Optional per-texel flag: false marks a texel whose row selector was never
+    /// written by anyone, so it is repaired even when the value sitting there happens to name a configured
+    /// row. Needed because a SYNTHESIZED index background is a real selector — a mask shell has no _id of
+    /// its own, so <see cref="SecondSkinService"/> invents one and the masks paint over only part of it, and
+    /// the numeric test alone cannot tell "the author put this row here" from "nothing was written here".
+    /// Getting that wrong left the unclaimed band un-repaired the moment a colorset happened to configure
+    /// the seeded row. Null ⇒ every texel counts as authored (the case for a shell with real _id art).</param>
     internal static void SnapIndexRowsToDefined(byte[] index, int w, int h,
-        IReadOnlyCollection<int> definedRows, int dilate = 8)
+        IReadOnlyCollection<int> definedRows, int dilate = 8, bool[]? authored = null)
     {
         if (index.Length < w * h * 4 || definedRows.Count == 0 || w <= 0 || h <= 0) return;
+        if (authored != null && authored.Length < w * h)
+        {
+            // Ignore it rather than throw — this runs mid-composite and a half-applied repair is worse than
+            // none. But say so: silently dropping it turns a caller bug into "the fringe came back", which
+            // reads as a shader or art problem and is traced back here only by accident.
+            //
+            // Null-conditional because this is a pure static helper: the tests call it with no Dalamud
+            // behind them, and so would anything that ran before the plugin's services are injected.
+            Plugin.Log?.Error("[Proteus] SnapIndexRowsToDefined: authored flags cover {0} texels, need {1} — "
+                + "ignoring them, so unwritten texels naming a configured row will NOT be repaired",
+                authored.Length, w * h);
+            authored = null;
+        }
 
         var isDefined = new bool[17];
         foreach (var r in definedRows)
@@ -9468,42 +9489,90 @@ public class CompositorService : IDisposable
         int n = w * h;
         var valid = new bool[n];
         ParallelPixels(0, n, 1, (from, to) =>
-        { for (int p = from; p < to; p++) valid[p] = isDefined[index[p * 4] / 17 + 1]; });
+        { for (int p = from; p < to; p++) valid[p] = (authored?[p] ?? true) && isDefined[index[p * 4] / 17 + 1]; });
 
-        // One scratch buffer reused by every pass rather than a fresh clone per pass: `valid` is w×h bytes
-        // (4 MB on a 2048² map), and cloning it each pass churned ~16 MB per texture per composite — on a
-        // path that reruns for every shell on every colour edit.
-        var snapshotValid = new bool[n];
+        // Only an INVALID texel with a VALID neighbour can ever be filled, so the passes walk that frontier
+        // instead of rescanning the map. The old full-image scan per pass was nearly free while the invalid
+        // region was a thin antialiased edge band: it found nothing on the first pass and broke out. Once
+        // `authored` started marking a mask shell's whole unwritten background invalid there is real work
+        // every pass, and the full dilate budget of whole-map scans measured 103 ms against 16 ms for the
+        // early-exit case, on a 2048² map, on a path that reruns for every shell on every colour edit.
+        //
+        // The frontier is a boundary, so it is thousands of texels where the map is millions. Its worst
+        // case — an `authored` pattern shredded fine enough that the boundary IS most of the map — is no
+        // worse than the whole-map scan this replaces.
+        var queued = new bool[n];   // already on a frontier. Never cleared: once a texel fills it is valid
+                                    // for good, and the !valid test below is what keeps it from returning.
 
-        // Spread valid rows outward one texel per pass. Each pass reads the PREVIOUS pass's validity
-        // snapshot, so the result doesn't depend on which texel a worker reaches first.
-        for (int it = 0; it < dilate; it++)
+        // Row-major, matching the old scan order, so the frontier is walked in the same sequence and the
+        // "first valid neighbour wins" tie-breaks land identically.
+        var rowSeeds = new List<int>?[h];
+        Parallel.For(0, h, y =>
         {
-            Array.Copy(valid, snapshotValid, n);
-            int filled = 0;
-            Parallel.For(0, h, () => 0, (y, _, local) =>
+            List<int>? seeds = null;
+            int row = y * w;
+            for (int x = 0; x < w; x++)
             {
-                int row = y * w;
-                for (int x = 0; x < w; x++)
-                {
-                    int p = row + x;
-                    if (snapshotValid[p]) continue;
-                    // 4-neighbourhood; first valid neighbour wins. Diagonals add nothing here — the band is
-                    // contiguous, so an extra pass reaches anything a diagonal would.
-                    int src = -1;
-                    if (x > 0     && snapshotValid[p - 1]) src = p - 1;
-                    else if (x < w - 1 && snapshotValid[p + 1]) src = p + 1;
-                    else if (y > 0     && snapshotValid[p - w]) src = p - w;
-                    else if (y < h - 1 && snapshotValid[p + w]) src = p + w;
-                    if (src < 0) continue;
-                    index[p * 4]     = index[src * 4];       // row selector
-                    index[p * 4 + 1] = index[src * 4 + 1];   // and its sub-row weight, so the pair stays coherent
-                    valid[p] = true;
-                    local++;
-                }
-                return local;
-            }, local => Interlocked.Add(ref filled, local));
-            if (filled == 0) break;   // nothing left adjacent to a valid row
+                int p = row + x;
+                if (valid[p]) continue;
+                if ((x > 0 && valid[p - 1]) || (x < w - 1 && valid[p + 1])
+                 || (y > 0 && valid[p - w]) || (y < h - 1 && valid[p + w]))
+                    (seeds ??= new List<int>()).Add(p);
+            }
+            rowSeeds[y] = seeds;
+        });
+        var frontier = new List<int>();
+        foreach (var seeds in rowSeeds)
+        {
+            if (seeds == null) continue;
+            foreach (var p in seeds) { frontier.Add(p); queued[p] = true; }
+        }
+
+        // Spread valid rows outward one texel per pass.
+        var filled = new List<int>();
+        for (int it = 0; it < dilate && frontier.Count > 0; it++)
+        {
+            filled.Clear();
+            // `valid` is not written until the whole frontier has been resolved — that deferral is what the
+            // old snapshot buffer bought, so a texel's source can't be something this same pass just filled.
+            // No snapshot of `index` is needed for the same reason the old code needed none: every frontier
+            // texel is invalid, so none of them is another's source, and nothing is read and written at once.
+            foreach (var p in frontier)
+            {
+                int x = p % w, y = p / w;
+                // 4-neighbourhood; first valid neighbour wins. Diagonals add nothing here — the band is
+                // contiguous, so an extra pass reaches anything a diagonal would.
+                int src = -1;
+                if (x > 0     && valid[p - 1]) src = p - 1;
+                else if (x < w - 1 && valid[p + 1]) src = p + 1;
+                else if (y > 0     && valid[p - w]) src = p - w;
+                else if (y < h - 1 && valid[p + w]) src = p + w;
+                if (src < 0) continue;   // can't happen for a real frontier entry; cheap to not depend on it
+                index[p * 4]     = index[src * 4];       // row selector
+                index[p * 4 + 1] = index[src * 4 + 1];   // and its sub-row weight, so the pair stays coherent
+                filled.Add(p);
+            }
+            foreach (var p in filled) valid[p] = true;
+
+            // Anything still invalid that touches a texel this pass filled. It cannot be adjacent to an
+            // OLDER valid texel — that would have put it on this frontier, and every frontier entry fills.
+            var next = new List<int>();
+            foreach (var p in filled)
+            {
+                int x = p % w, y = p / w;
+                if (x > 0)     Consider(p - 1);
+                if (x < w - 1) Consider(p + 1);
+                if (y > 0)     Consider(p - w);
+                if (y < h - 1) Consider(p + w);
+            }
+            frontier = next;
+
+            void Consider(int q)
+            {
+                if (valid[q] || queued[q]) return;
+                queued[q] = true;
+                next.Add(q);
+            }
         }
     }
 

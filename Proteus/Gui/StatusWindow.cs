@@ -4421,7 +4421,12 @@ public class StatusWindow : Window
             ColorTableEditor.DrawRows(maskScope, maskRows, usedRows, maskAsGear, maskShader,
                 maskShellMaterials,
                 maskGlowTargets,
-                out var maskRowEdit, ref maskSel, ref maskChanged);
+                out var maskRowEdit, ref maskSel, ref maskChanged,
+                // A mask on the GEAR layer becomes a mask shell, and there a half-authored row pair renders
+                // with its unset half mirrored (SecondSkinService.BuildRows) — so the swatches have to show
+                // it that way. A mask still on skin is painted into the diffuse, where an unset sub-row is a
+                // neutral multiply and mirroring would misreport it.
+                mirrorUnsetSubRows: maskAsGear);
             _rowSelection[maskScope] = maskSel;
 
             ImGui.Separator();

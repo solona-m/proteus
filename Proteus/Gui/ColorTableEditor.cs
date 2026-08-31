@@ -536,7 +536,12 @@ public static class ColorTableEditor
         ref int selectedRow,
         ref bool changed,
         bool authoredPhysical = false,
-        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline = null)
+        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline = null,
+        // The Masks tab. There a half-authored row pair renders with its unset half MIRRORED from the set
+        // one (SecondSkinService.BuildRows), because a mask shell's colour is the colorset over a white
+        // base. Display has to follow, or the picker and the model show different colours. False everywhere
+        // else, where an unset sub-row really is neutral and showing it as its partner would be a lie.
+        bool mirrorUnsetSubRows = false)
     {
         edited = FeatureEdit.Neutral;
 
@@ -593,7 +598,7 @@ public static class ColorTableEditor
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(cs.RowUnusedTip);
 
-            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used);
+            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used, mirrorUnsetSubRows);
         }
 
         ImGui.Separator();
@@ -635,11 +640,11 @@ public static class ColorTableEditor
 
             ImGui.TableNextColumn();
             DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets,
-                authoredPhysical, physicalBaseline, ref edited, ref changed);
+                authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows);
 
             ImGui.TableNextColumn();
             DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets,
-                authoredPhysical, physicalBaseline, ref edited, ref changed);
+                authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows);
 
             ImGui.EndTable();
         }
@@ -700,7 +705,8 @@ public static class ColorTableEditor
     /// intensity, i.e. what actually lands in the colour table, so a row with no glow reads as black.
     /// </summary>
     private static void DrawRowSwatches(
-        List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used)
+        List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used,
+        bool mirrorUnsetSubRows = false)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var draw = ImGui.GetWindowDrawList();
@@ -726,13 +732,18 @@ public static class ColorTableEditor
             _ => HexToVec3(s?.EmissiveColor ?? s?.Diffuse) * (s?.Emissive ?? 0f),
         });
 
+        // Same mirror the detail panels and the renderer use, so the two halves of this swatch can't show
+        // something the big A/B panels below contradict.
+        var subA = preset?.SubRowA ?? (mirrorUnsetSubRows ? preset?.SubRowB : null);
+        var subB = preset?.SubRowB ?? (mirrorUnsetSubRows ? preset?.SubRowA : null);
+
         for (int c = 0; c < 3; c++)
         {
             float cx0 = x0 + c * colW, cx1 = cx0 + colW - 1f;
             foreach (var (sub, ry0, ry1) in new[]
                      {
-                         (preset?.SubRowA, y0, midY),
-                         (preset?.SubRowB, midY, y1),
+                         (subA, y0, midY),
+                         (subB, midY, y1),
                      })
             {
                 var v = Swatch(sub, c);
@@ -750,14 +761,21 @@ public static class ColorTableEditor
         IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
         bool authoredPhysical,
         IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline,
-        ref FeatureEdit edited, ref bool changed)
+        ref FeatureEdit edited, ref bool changed,
+        bool mirrorUnsetSubRows = false)
     {
         bool gear     = mode != RenderMode.Skin;
         bool material = mode == RenderMode.Cloth;   // sphere / metal / roughness live here
         const float DimAlpha = 0.5f;                // dimmed-but-clickable: a feature the mode ignores
 
         var preset = rows.FirstOrDefault(r => r.Row == row);
-        var sub = isA ? preset?.SubRowA : preset?.SubRowB;
+        // DISPLAY falls back to the other sub-row where that is what RENDERS — the Masks tab, whose shell
+        // mirrors a half-authored pair (SecondSkinService.BuildRows). Showing this panel's defaults there
+        // would put the picker and the model on different colours. Off elsewhere, where an unset sub-row
+        // really is neutral. Only the read is mirrored — Edit() below still materialises a fresh preset, so
+        // merely LOOKING at an unset half never turns it into an authored one.
+        var sub = (isA ? preset?.SubRowA : preset?.SubRowB)
+               ?? (mirrorUnsetSubRows ? (isA ? preset?.SubRowB : preset?.SubRowA) : null);
 
         ColorTableSubRowPreset Edit()
         {
