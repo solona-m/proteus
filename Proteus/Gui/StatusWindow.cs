@@ -308,7 +308,9 @@ public class StatusWindow : Window
     public void OpenToSettings()
     {
         _forceSettingsTab = true;
-        Show();
+        // Force-expand: "take me to Settings" is useless if the window comes back collapsed, and
+        // _forceSettingsTab would sit unconsumed anyway — Draw() never runs while collapsed.
+        Show(forceExpand: true);
     }
 
     /// <summary>
@@ -316,13 +318,33 @@ public class StatusWindow : Window
     /// <see cref="Draw"/>, and an already-open one sits behind whatever the user clicked from (the plugin
     /// installer), so setting <see cref="Window.IsOpen"/> alone reads as "the button did nothing".
     /// </summary>
-    public void Show()
+    /// <param name="forceExpand">
+    /// Un-collapse the window even when reopening it from closed. For requests whose whole point is
+    /// something the user must be able to READ — the Settings tab, an import result. A plain open
+    /// leaves a deliberate collapse alone.
+    /// </param>
+    public void Show(bool forceExpand = false)
     {
+        var wasOpen = IsOpen;
         IsOpen = true;
-        // One-shot un-collapse: Collapsed is re-applied every frame while it has a value, so leaving it
-        // set would make the title bar permanently un-collapsible. Draw() clears it once it has landed.
-        Collapsed = false;
-        CollapsedCondition = ImGuiCond.Always;
+
+        // Only force the collapse state when the request would otherwise be invisible: an explicit
+        // "show me X", or a window that was ALREADY open and so may be sitting collapsed behind the
+        // plugin installer. Reopening from closed leaves Collapsed null, and THAT is what lets ImGui
+        // restore the state it remembers for ###ProteusStatus — the point of the stable window id.
+        if (forceExpand || wasOpen)
+        {
+            // One-shot un-collapse: Collapsed is re-applied every frame while it has a value, so leaving
+            // it set would make the title bar permanently un-collapsible. Draw() clears it once landed.
+            Collapsed = false;
+            CollapsedCondition = ImGuiCond.Always;
+        }
+        else
+        {
+            // Release any forcing left over from an earlier Show() whose Draw() never got to clear it.
+            Collapsed = null;
+        }
+
         BringToFront();   // after IsOpen — Dalamud ignores the request on a closed window
     }
 
@@ -1416,7 +1438,7 @@ public class StatusWindow : Window
 
         // The result is worth nothing if it lands on a window the user closed. Show it — they asked for
         // this, and Penumbra is opening at the same moment anyway.
-        if (!IsOpen) Show();
+        if (!IsOpen) Show(forceExpand: true);
     }
 
     /// <summary>
@@ -1440,7 +1462,7 @@ public class StatusWindow : Window
         if (r.Ok && ReferenceEquals(_contentPreview, done.Preview))
             _contentPreview = null;
 
-        if (!IsOpen) Show();
+        if (!IsOpen) Show(forceExpand: true);
     }
 
     /// <summary>
@@ -1501,7 +1523,7 @@ public class StatusWindow : Window
             _luminisMaterials = null;
         }
 
-        if (!IsOpen) Show();
+        if (!IsOpen) Show(forceExpand: true);
     }
 
     /// <summary>
@@ -1550,7 +1572,7 @@ public class StatusWindow : Window
         if (r.Ok && done != null && ReferenceEquals(_eyePreview, done.Preview))
             _eyePreview = null;
 
-        if (!IsOpen) Show();
+        if (!IsOpen) Show(forceExpand: true);
     }
 
     private void DrawImportTab()
