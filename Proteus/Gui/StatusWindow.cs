@@ -744,6 +744,8 @@ public class StatusWindow : Window
             config.DisableAutoRedraw = disableRedraw;
             config.Save();
         }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.DisableAutoRedrawTip);
 
         var skipUnchanged = config.SkipUnchangedComposites;
         if (ImGui.Checkbox(s.SkipUnchanged, ref skipUnchanged))
