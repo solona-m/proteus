@@ -76,6 +76,9 @@ public static class RenderModeInference
     /// left underneath it to paint into.</item>
     /// <item>Its rows use a feature skin.shpk can't render — sphere, metal, specular, or glow. Glow is
     /// why authored metadata gets promoted: skin no longer emits, so a declared glow would just go dark.</item>
+    /// <item><paramref name="needsUnmirroredShell"/> — its art differs left from right and the body being
+    /// worn is mirrored, so painting it into the skin would fold it in half. Only a shell has geometry of
+    /// its own to send the two sides to two halves of the sheet.</item>
     /// </list>
     /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
     /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
@@ -93,11 +96,34 @@ public static class RenderModeInference
     /// it narrowed to its present meaning once the other surfaces could be cut.
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
-        IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true)
+        IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
+        bool needsUnmirroredShell = false)
         => layer == OverlayLayer.Skin
         && !pinned
         && canShell
-        && (aboveGear || HasCloth(rows ?? []));
+        && (aboveGear || needsUnmirroredShell || HasCloth(rows ?? []));
+
+    /// <summary>
+    /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same
+    /// reason: the compositor and the editor must not disagree about what was composited.
+    /// <para/>
+    /// An overlay auto-promoted from Skin stays on <c>skin.shpk</c> where it can. It was authored as skin and
+    /// only moved because the skin layer had nowhere to put it; on character.shpk it loses the wearer's tone
+    /// entirely, because the tone reaches art through the normal map's blue channel and a gear shell spends
+    /// blue on its per-pixel alpha gate. A skin shell keeps blue, so the art is lit and tinted as skin.
+    /// <para/>
+    /// Only when nothing needs the gear colour table. skin.shpk declares no <c>g_SamplerIndex</c>, so its
+    /// table cannot be addressed per texel — row presets, per-row opacity, and sphere/metal/specular/glow all
+    /// require character.shpk. An overlay whose shader the author PINNED keeps their choice.
+    /// </summary>
+    public static string PromotedShader(OverlayDescriptor d, IEnumerable<ColorTableRowPreset>? rows)
+        => d.Shader == null
+        && !d.IsMaskShell
+        && d.Scroll == null
+        && rows?.Any() != true
+        && !HasCloth(rows ?? [])
+            ? OverlayDescriptor.SkinShader
+            : d.Shader ?? OverlayDescriptor.DefaultGearShader;
 
     /// <summary>An animated-glow effect (scroll map) is selected.</summary>
     public static bool HasGlow(IEnumerable<OverlayDescriptor> overlays, GearSettingsPreset? ovr)
