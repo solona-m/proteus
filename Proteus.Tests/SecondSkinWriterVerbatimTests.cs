@@ -753,6 +753,32 @@ public class SecondSkinWriterVerbatimTests
         Validate(trimmedBytes);
     }
 
+    [Fact]
+    public void Connector_ring_threshold_is_relative_to_its_own_mesh()
+    {
+        // The regression guard for the neck. Neolithe's torso holds ONE skin mesh (13150 triangles, the
+        // undies/piercings meshes are not skin and never reach the shell) split into five submeshes:
+        //
+        //   sub 0  atr_nek     250 tris   neck connector ring
+        //   sub 1             10280 tris  the torso itself
+        //   sub 2  atr_ude    1660 tris   elbow
+        //   sub 3  atr_hij     840 tris   wrist skin
+        //   sub 4  atr_hij     120 tris   wrist connector ring   (also the last submesh)
+        //
+        // The old flat "under 200 triangles" cutoff took sub 4 and left the 250-triangle NECK ring in, so
+        // it kept doubling up. Relative to its own mesh the neck ring is 1.9%, the same order as the two
+        // that were already caught, and the three real skin parts are 6.4% and up. So the shell must end
+        // up with exactly subs 1, 2 and 3.
+        if (!File.Exists(NeoTop)) return;
+
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        var bytes = SecondSkinWriter.Build(new[] { File.ReadAllBytes(NeoTop) }, layers, null, true, out var trimmed);
+
+        Assert.Equal(3, trimmed.Submeshes);
+        Assert.Equal(10280 + 1660 + 840, trimmed.TrianglesOut);
+        Validate(bytes);
+    }
+
     /// <summary>
     /// Every submesh bone map entry must name a bone that exists in the merged model's union bone list.
     /// <para/>

@@ -762,10 +762,20 @@ public static class SecondSkinWriter
                 var keep = new List<ushort>();
 
                 // Drop redundant connector geometry on these bodies (Neolithe): the thin seam RINGS at the
-                // joints (wrist/ankle/…, ~100-120 tris — real skin parts are 800+), plus the mesh's LAST
-                // submesh (a duplicate variant, e.g. the second calf). Kept empty ⇒ contributes nothing;
-                // never applied to a single-submesh mesh (that IS the whole part).
-                if (dropConnectors && srcSubCount > 1 && (sc / 3 < 200 || su == srcSubCount - 1))
+                // joints (wrist/ankle/…), plus the mesh's LAST submesh (a duplicate variant, e.g. the second
+                // calf). Kept empty ⇒ contributes nothing; never applied to a single-submesh mesh (that IS
+                // the whole part).
+                //
+                // "Thin" is measured against the ring's OWN mesh rather than against a flat 200. The flat
+                // number was fitted to two rings and missed a third: on Neolithe's torso the ankle (104 tris)
+                // and wrist (120) rings fall under it but the NECK ring is 250, so it survived and doubled up
+                // on anything sheer that reached the collarbone. As a fraction of its 13150-triangle mesh the
+                // neck ring is 1.9% — the same order as the other two (0.9%, 0.7%) and nowhere near the real
+                // skin parts that must survive (elbow 12.6%, wrist skin 6.4%, shin 18%). The flat 200 stays
+                // as a FLOOR so small meshes keep their old behaviour exactly.
+                int meshTris = (int)(U32(mo + 4) / 3);
+                int ringMax = Math.Max(200, meshTris / 20);
+                if (dropConnectors && srcSubCount > 1 && (sc / 3 < ringMax || su == srcSubCount - 1))
                 {
                     keptPerSub.Add(keep.ToArray());
                     continue;

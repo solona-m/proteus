@@ -188,9 +188,10 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// Skip a body's redundant connector rings when building the second-skin shell. Some bodies
-    /// (Neolithe) reinforce each joint (wrist/ankle/…) with a small extra submesh that overlaps an
+    /// (Neolithe) reinforce each joint (wrist/ankle/neck/…) with a small extra submesh that overlaps an
     /// already-complete main body; on a semi-transparent gear shell that overlap doubles the alpha and
-    /// shows as a more-opaque seam. The connector is the mesh's last submesh, so we drop that one only.
+    /// shows as a more-opaque seam. Dropped by triangle count relative to the ring's own mesh, plus the
+    /// mesh's last submesh, which is a duplicate variant.
     /// Off by default — on most bodies the last submesh is real skin.
     /// </summary>
     public ConnectorMeshMode HideConnectorMeshes { get; set; } = ConnectorMeshMode.Off;
