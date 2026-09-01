@@ -817,9 +817,16 @@ public static class SecondSkinWriter
                 uint so = U32(ss), sc = U32(ss + 4);
                 var keep = new List<ushort>();
 
-                // Drop redundant connector geometry: the thin seam RINGS at the joints (wrist/ankle/…), plus
-                // the mesh's LAST submesh (a duplicate variant, e.g. the second calf). Kept empty ⇒
-                // contributes nothing; never applied to a single-submesh mesh (that IS the whole part).
+                // Drop redundant connector geometry. TWO shapes of redundancy, and they are redundant
+                // against DIFFERENT things — which is the whole reason they are tested separately here:
+                //
+                //  · a thin seam RING at a joint (wrist/ankle/…), redundant because the NEIGHBOURING PART
+                //    draws the same stretch of body;
+                //  · the mesh's LAST submesh, a duplicate variant (Neolithe's second calf), redundant
+                //    because a SIBLING SUBMESH of this same mesh already draws it.
+                //
+                // Kept empty ⇒ contributes nothing; never applied to a single-submesh mesh (that IS the
+                // whole part).
                 //
                 // "Small" is RELATIVE to this mesh's own largest submesh, not the flat "< 200 triangles" this
                 // used to be. That threshold was read off Neolithe, whose real skin parts run 800+ triangles,
@@ -835,9 +842,27 @@ public static class SecondSkinWriter
                 // A NULL band list means the caller told us nothing about the rest of the shell, so there is
                 // no redundancy to test and the old shape-only judgement stands. An EMPTY one is a real
                 // answer — this part is alone, nothing can be covering it, so no ring of it is redundant.
+                //
+                // The duplicate variant does NOT get that same test, and running it against the parts was a
+                // bug with a very visible face: no other part of a shell goes anywhere near the middle of a
+                // shin, so Neolithe's second calf (2184 triangles, y 0.14-0.41) always read as "nothing
+                // covers this", and the shell emitted it INSIDE the calf already there — a doubled sheer
+                // stocking from the ankle to below the knee. It is asked about its siblings instead, which
+                // is what it actually duplicates.
+                //
+                // SIZE is what separates the two, so the branches are exclusive on it rather than merely
+                // ordered. Being last is a weak signal on its own — a source is free to order its seam ring
+                // last, and a ring at a mesh's own top edge is always nested inside that mesh's main
+                // submesh, so a sibling test alone would delete it and hand Rinoa her bare neck straight
+                // back. A duplicate variant is a body region and reads as one: Neolithe's second calf is
+                // half its mesh's largest submesh, where the ankle ring beside it is a fortieth.
+                bool ringLike = sc / 3 < largestSub / 10;
+                bool duplicateVariant = !ringLike && su == srcSubCount - 1;
                 if (dropConnectors && srcSubCount > 1
-                    && (sc / 3 < largestSub / 10 || su == srcSubCount - 1)
-                    && (otherBands == null || CoveredByAnotherPart(src, decl, vbo, bs, so, sc, otherBands)))
+                    && (ringLike
+                        ? otherBands == null || CoveredByAnotherPart(src, decl, vbo, bs, so, sc, otherBands)
+                        : duplicateVariant
+                          && CoveredBySibling(src, decl, vbo, bs, srcSubIdx, srcSubCount, su, hiddenAttrs)))
                 {
                     keptPerSub.Add(keep.ToArray());
                     continue;
@@ -1776,12 +1801,55 @@ public static class SecondSkinWriter
     /// </summary>
     private static bool CoveredByAnotherPart(Source src, VElem[] decl, uint[] vbo, byte[] bs,
         uint so, uint sc, IReadOnlyList<(float Lo, float Hi)> otherBands)
-    {
-        if (otherBands.Count == 0) return false;
+        => otherBands.Count > 0
+        && SubmeshBand(src, decl, vbo, bs, so, sc) is { } band
+        && BandCovered(band, otherBands);
 
+    /// <summary>
+    /// Does another submesh of the SAME mesh already draw the band this one occupies?
+    /// <para/>
+    /// The other half of "redundant", and the one <see cref="CoveredByAnotherPart"/> cannot answer. A body's
+    /// duplicate variant submesh — Neolithe's second calf — is redundant against its own sibling, not against
+    /// a neighbouring part, so asking the parts about it is asking the wrong question: no other part is
+    /// anywhere near the middle of a shin, the test says "not redundant", and the shell emits both copies of
+    /// the calf, one inside the other. That is what a doubled sheer stocking is made of.
+    /// <para/>
+    /// Same Y-only comparison as the part test, for the same reason, and with the same answer when nothing
+    /// can be measured: false, keep the geometry.
+    /// <para/>
+    /// A sibling switched off by one of the pack's own toggles does NOT count, because it is not going to be
+    /// drawn: the emit loop empties those a few lines below this one's caller, so counting them would drop
+    /// the variant on the strength of a submesh that ends up contributing nothing and leave the band bare.
+    /// </summary>
+    private static bool CoveredBySibling(Source src, VElem[] decl, uint[] vbo, byte[] bs,
+        int subBase, int subCount, int self, IReadOnlySet<string>? hiddenAttrs)
+    {
+        var s = src.S;
+        int So(int su) => src.SubmeshStart + (subBase + su) * 16;
+        if (SubmeshBand(src, decl, vbo, bs,
+                BitConverter.ToUInt32(s, So(self)), BitConverter.ToUInt32(s, So(self) + 4)) is not { } band)
+            return false;
+
+        for (int su = 0; su < subCount; su++)
+        {
+            if (su == self) continue;
+            if (hiddenAttrs is { Count: > 0 }
+                && IsHidden(src, BitConverter.ToUInt32(s, So(su) + 8), hiddenAttrs)) continue;
+            if (SubmeshBand(src, decl, vbo, bs,
+                    BitConverter.ToUInt32(s, So(su)), BitConverter.ToUInt32(s, So(su) + 4)) is not { } other)
+                continue;
+            if (BandCovered(band, other)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The vertical extent of one submesh, or null when the positions can't be read.</summary>
+    private static (float Lo, float Hi)? SubmeshBand(Source src, VElem[] decl, uint[] vbo, byte[] bs,
+        uint so, uint sc)
+    {
         VElem? pos = null;
         foreach (var el in decl) if (el.Usage == UsePosition) { pos = el; break; }
-        if (pos is not { } pe || pe.Stream > 2 || bs[pe.Stream] == 0) return false;
+        if (pos is not { } pe || pe.Stream > 2 || bs[pe.Stream] == 0) return null;
 
         var s = src.S;
         float lo = float.MaxValue, hi = float.MinValue;
@@ -1797,13 +1865,24 @@ public static class SecondSkinWriter
             if (tmp[1] < lo) lo = tmp[1];
             if (tmp[1] > hi) hi = tmp[1];
         }
-        if (lo > hi) return false;
+        return lo <= hi ? (lo, hi) : null;
+    }
 
-        // A hair of tolerance: parts are authored to MEET, so their ranges abut rather than overlap, and an
-        // exact containment test would keep every ring that pokes a fraction past its neighbour's edge.
+    /// <summary>Is <paramref name="band"/> contained in <paramref name="cover"/>?
+    /// <para/>
+    /// A hair of tolerance: geometry is authored to MEET, so ranges abut rather than overlap, and an exact
+    /// containment test would keep every ring that pokes a fraction past its neighbour's edge.</summary>
+    private static bool BandCovered((float Lo, float Hi) band, (float Lo, float Hi) cover)
+    {
         const float Slack = 0.01f;
-        foreach (var (bLo, bHi) in otherBands)
-            if (lo >= bLo - Slack && hi <= bHi + Slack) return true;
+        return band.Lo >= cover.Lo - Slack && band.Hi <= cover.Hi + Slack;
+    }
+
+    /// <summary>Is <paramref name="band"/> contained in ANY of <paramref name="covers"/>?</summary>
+    private static bool BandCovered((float Lo, float Hi) band, IReadOnlyList<(float Lo, float Hi)> covers)
+    {
+        foreach (var cover in covers)
+            if (BandCovered(band, cover)) return true;
         return false;
     }
 

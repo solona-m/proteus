@@ -21,6 +21,13 @@ namespace Proteus.Tests;
 /// Neither alone is enough: the elbow is saved by the relative size, but the neck is shape-identical to a
 /// wrist ring — 20 triangles in a thin band at its part's own top edge — and only the coverage test tells
 /// them apart.
+/// <para/>
+/// The heuristic drops a SECOND shape of redundancy, and it is redundant against something else entirely:
+/// a mesh's last submesh is a duplicate variant (Neolithe's second calf), which duplicates a SIBLING
+/// SUBMESH of its own mesh, not a neighbouring part. Testing it against the parts is unanswerable by
+/// construction — no other part of a shell reaches the middle of a shin — so it always read as "keep", and
+/// the shell drew both calves, one inside the other. That is the doubled sheer stocking. The two rules are
+/// therefore asked two different questions.
 /// </summary>
 public class ConnectorRedundancyTests
 {
@@ -78,7 +85,9 @@ public class ConnectorRedundancyTests
     /// <summary>
     /// The neck: identical in shape and size to a seam ring, but nothing else in the shell covers it. It is
     /// the only geometry painting that band, so it stays — and so does the trailing submesh, for the same
-    /// reason.
+    /// reason. The trailing one is ALSO the mesh's last, which is what makes this the guard on the two rules
+    /// staying exclusive: a ring is judged by the parts however it is ordered, and a sibling test applied to
+    /// it would delete it here, since a ring at a mesh's edge is always nested in that mesh's main submesh.
     /// </summary>
     [Fact]
     public void A_small_submesh_nothing_covers_is_kept()
@@ -87,13 +96,55 @@ public class ConnectorRedundancyTests
     }
 
     /// <summary>
-    /// A part alone in the shell has no neighbour, so none of its geometry can be redundant — an empty band
+    /// A part alone in the shell has no neighbour, so none of its RINGS can be redundant — an empty band
     /// list is a real answer, not missing information.
     /// </summary>
     [Fact]
     public void A_lone_part_keeps_everything()
     {
         Assert.Equal(0, Removed(subjectTris: TailTris, []));
+    }
+
+    /// <summary>
+    /// The duplicate variant, in the shape Neolithe's legs actually have it: a last submesh far too big to be
+    /// a seam ring, sitting inside a sibling's band. It goes even though the part is ALONE in the shell —
+    /// what makes it redundant is its own sibling, and no arrangement of other parts has any bearing on it.
+    /// <para/>
+    /// This is the doubled-stocking case. Judging it by the parts is what kept it: on the real body it is
+    /// 2184 triangles from the ankle to below the knee, and nothing else in a shell reaches there.
+    /// </summary>
+    [Fact]
+    public void A_duplicate_variant_a_sibling_covers_is_dropped_even_when_alone()
+    {
+        const int VariantTris = 200;   // half the main submesh — a body region, nowhere near ring-shaped
+        var model = SyntheticModel.Build(
+            ["atr_top"],
+            new SyntheticModel.Mesh(BodyMaterial,
+                new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: MainTris),
+                new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: VariantTris)));
+
+        Assert.Equal(VariantTris,
+            Build(model, drop: false, []).TrianglesOut - Build(model, drop: true, []).TrianglesOut);
+    }
+
+    /// <summary>
+    /// The last submesh is not a duplicate just for being last. Where it is the mesh's MAIN body — nothing
+    /// else in the mesh spans its band — it is the geometry, and dropping it would strip the part.
+    /// </summary>
+    [Fact]
+    public void A_last_submesh_no_sibling_covers_is_kept()
+    {
+        // Sizes reversed: the two small submeshes come first and the 400-triangle body is last, so the only
+        // candidate for the duplicate rule is the one piece nothing else covers.
+        var model = SyntheticModel.Build(
+            ["atr_top"],
+            new SyntheticModel.Mesh(BodyMaterial,
+                new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: TailTris),
+                new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: TailTris),
+                new SyntheticModel.Sub(0, Islands: 1, TrianglesPerIsland: MainTris)));
+
+        Assert.Equal(Build(model, drop: false, Elsewhere).TrianglesOut,
+                     Build(model, drop: true, Elsewhere).TrianglesOut);
     }
 
     /// <summary>
