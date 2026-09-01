@@ -167,6 +167,10 @@
     "message": "[Proteus] Certaines couches sur votre {1} n'ont pas pu être placées (couches : {0}). Elles ne doivent pas être déformées par la race, il leur faut donc un emplacement que Proteus puisse remplacer entièrement : libérez un emplacement de bague (n'importe quelle main) ou celui des lunettes et elles apparaîtront.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Certaines couches sur votre {1} ont été ignorées (couches : {0}) — votre personnage n'affiche pas cette partie, il n'y avait donc rien à y découper. Vérifiez que la Surface définie sur ces calques correspond au visage ou à la partie que vous portez réellement.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "Avancé",
     "description": ""

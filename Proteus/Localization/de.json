@@ -167,6 +167,10 @@
     "message": "[Proteus] Einige Ebenen auf deinem Bereich {1} konnten nicht platziert werden (Ebenen: {0}). Sie dürfen nicht rassenverformt sein und brauchen daher einen Slot, den Proteus vollständig ersetzen kann: mache einen Ringslot (beliebige Hand) oder deinen Brillenslot frei, dann erscheinen sie.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Einige Ebenen auf deinem Bereich {1} wurden übersprungen (Ebenen: {0}) — dein Charakter stellt diesen Teil nicht dar, es gab also nichts, woraus sie geschnitten werden konnten. Prüfe, ob die bei diesen Overlays eingestellte Oberfläche zu dem Gesicht oder Teil passt, das du tatsächlich trägst.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "Erweitert",
     "description": ""

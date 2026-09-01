@@ -167,6 +167,10 @@
     "message": "[Proteus] {1}의 일부 레이어를 배치하지 못했습니다(레이어 수: {0}). 종족 변형을 받을 수 없는 레이어라 Proteus가 통째로 교체할 수 있는 칸이 필요합니다. 반지 칸(어느 손이든)이나 얼굴 장식 칸을 비우면 나타납니다.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] {1}의 일부 레이어를 건너뛰었습니다(레이어 수: {0}). 캐릭터가 해당 부위를 그리고 있지 않아 잘라낼 대상이 없었습니다. 해당 오버레이에 설정된 Surface가 실제로 착용 중인 얼굴 또는 부위와 일치하는지 확인하세요.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "고급",
     "description": ""
