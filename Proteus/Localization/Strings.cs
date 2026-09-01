@@ -435,9 +435,9 @@ public sealed class SettingsStrings
 
     public readonly string ConnectorMeshesTip = Loc.Localize("Settings.Output.ConnectorMeshes.Tip",
         "Skip each body part's connector ring on the gear \"second skin\" — the small extra\n" +
-        "submesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\n" +
-        "that overlaps an already-complete body; on a sheer overlay the overlap doubles up and\n" +
-        "shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
+        "submesh at a joint (wrist/ankle/neck/…). Some bodies (Neolithe) reinforce joints with a\n" +
+        "ring that overlaps an already-complete body; on a sheer overlay the overlap doubles up\n" +
+        "and shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
         "skin, and hiding it would leave gaps.");
 }
 

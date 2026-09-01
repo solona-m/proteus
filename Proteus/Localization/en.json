@@ -1772,7 +1772,7 @@
     "description": "Control label. Appears in the Settings tab."
   },
   "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "Skip each body part's connector ring on the gear \"second skin\" — the small extra\nsubmesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\nthat overlaps an already-complete body; on a sheer overlay the overlap doubles up and\nshows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\nskin, and hiding it would leave gaps.",
+    "message": "Skip each body part's connector ring on the gear \"second skin\" — the small extra\nsubmesh at a joint (wrist/ankle/neck/…). Some bodies (Neolithe) reinforce joints with a\nring that overlaps an already-complete body; on a sheer overlay the overlap doubles up\nand shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\nskin, and hiding it would leave gaps.",
     "description": "\"Neolithe\" is a body mod's name. \"Off\" refers to the dropdown value of this same setting. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.Output.SharpAlpha.Label": {
