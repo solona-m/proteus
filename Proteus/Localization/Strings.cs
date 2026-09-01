@@ -220,6 +220,16 @@ public sealed class CreateStrings
         "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
         "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
 
+    public readonly string FaceSplit = Loc.Localize("Create.FaceSplit.Label",
+        "This face texture is split left/right") + "###createFaceSplit";
+
+    public readonly string FaceSplitTip = Loc.Localize("Create.FaceSplit.Tip",
+        "Tick this only for a face texture painted as TWO HALVES: the character's right side in " +
+        "the right half of the image, their left side in the left half.\n" +
+        "An ordinary face texture gives both cheeks the same pixels, so a mark on one side alone " +
+        "cannot exist in it — Proteus renders a split one through a face layer instead.\n" +
+        "Leave this off for any normal face texture.");
+
     public readonly string NoIndex = Loc.Localize("Create.Slot.NoIndex",
         "This material has no index texture, and it isn't skin or face — nothing here\n" +
         "would read a colour-table row selector.");
@@ -953,6 +963,20 @@ public sealed class ColorsStrings
 
     public readonly string WholeSkin = Loc.Localize("Colors.WholeSkin.Label",
         "This overlay is the whole skin");
+
+    public readonly string OneSided = Loc.Localize("Colors.OneSided.Label",
+        "This art is deliberately one-sided");
+
+    public readonly string OneSidedTip = Loc.Localize("Colors.OneSided.Tip",
+        "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\n"
+      + "one cheek. Leave it off for anything else, including ordinary skin.\n"
+      + "A vanilla body and the vanilla face give both sides the same pixels, so art painted for\n"
+      + "them is folded in half: one side is kept and mirrored across. That is invisible on a\n"
+      + "symmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\n"
+      + "through a layer of its own whose two sides read the two halves of your sheet, so both\n"
+      + "sides survive.\n"
+      + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
+      + "left to right — so only you can say whether a difference is the point or just detail.");
 
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"

@@ -66,12 +66,80 @@ public static class GearMaterialWriter
     ///
     /// characterscroll clones vanilla e6257. Its rows carry a non-zero emissive, but we always write the
     /// emissive explicitly (see Build), so that no longer leaks through as a flat white glow.
+    /// <para/>
+    /// skin.shpk clones a vanilla BODY material, and it is deliberately narrow: it is for a Skin-mode
+    /// overlay auto-promoted to a shell, which should still look like skin. That shader is not a general
+    /// shell target, because it declares only THREE samplers — g_SamplerDiffuse, g_SamplerNormal,
+    /// g_SamplerMask — and no <c>g_SamplerIndex</c>. The <c>_id</c> row selector every other shell is built
+    /// on has nowhere to bind, so the colour table cannot be addressed per texel: no row presets, no
+    /// per-row opacity, no mask rows. An overlay that needs any of those must stay on character.shpk (see
+    /// <see cref="RenderModeInference.IsClothSub"/> and the caller's choice).
+    /// <para/>
+    /// What it buys is the thing character.shpk cannot do at all: the wearer's SKIN TONE. skin.shpk reads
+    /// the normal map's blue channel as skin-colour influence, which is exactly the channel a gear shell
+    /// spends on its per-pixel alpha gate — so the two are mutually exclusive by construction, and a whole
+    /// skin (opaque, tinted) wants the tone while a tattoo (sheer, decal) wants the gate.
+    /// <para/>
+    /// Measured on the shipping materials (mt_c0201b0001_a, c0101, c1401, c1501, f0002_fac) rather than
+    /// assumed: 3 textures in base/norm/mask order, one colour set, and CategorySkinType keyed to Body.
+    /// <c>g_AlphaThreshold</c> is declared on every one of them (the Hrothgar body and the face ship it
+    /// non-zero at 0.5), so it has an alpha path too — but coverage here is triangle-trim, which is what a
+    /// near-opaque whole skin needs anyway.
     /// </summary>
-    public static string TemplateFor(string shaderPackage) => shaderPackage switch
+    /// <param name="charCode">
+    /// The wearer's own race code ("0201", "1501", …), for the skin arm only. Skin is keyed to the REAL race
+    /// — a body material carries a CategorySkinType telling the shader which skin path to take, and Hrothgar
+    /// (c1501) ships a different value from every other body. Cloning c0201's onto a Hrothgar would light the
+    /// shell down the non-fur path while the body beside it takes the other. Null keeps the Midlander
+    /// default, and so does a race whose material can't be loaded — see the caller's fallback.
+    /// </param>
+    /// <param name="faceId">
+    /// The face this shell was cut from ("f0001", …), for the skin arm only. A face is skin.shpk like the
+    /// body but NOT the same material: the body declares <c>CategorySkinType = Body</c> and ships
+    /// <c>g_AlphaThreshold</c> at 0, while a face material declares no shader keys at all and ships the
+    /// threshold at 0.5 — so cloning the body onto face geometry renders it down the body's skin path with
+    /// the wrong cutoff. It also names a different mask. Null means the body.
+    /// </param>
+    public static string TemplateFor(string shaderPackage, string? charCode = null, string? faceId = null)
+        => shaderPackage switch
+        {
+            "characterscroll.shpk" => "chara/equipment/e6257/material/v0001/mt_c0201e6257_top_a.mtrl",
+            "skin.shpk"            => SkinTemplate(charCode, faceId),
+            _                      => "chara/equipment/e0041/material/v0001/mt_c0201e0041_top_a.mtrl",
+        };
+
+    /// <summary>The vanilla skin material for a race code and surface, or the Midlander body when the race
+    /// isn't known. Face materials carry no version folder, unlike the body's.</summary>
+    public static string SkinTemplate(string? charCode, string? faceId = null)
     {
-        "characterscroll.shpk" => "chara/equipment/e6257/material/v0001/mt_c0201e6257_top_a.mtrl",
-        _                      => "chara/equipment/e0041/material/v0001/mt_c0201e0041_top_a.mtrl",
-    };
+        var c = string.IsNullOrWhiteSpace(charCode) ? "0201" : charCode;
+        return string.IsNullOrWhiteSpace(faceId)
+            ? $"chara/human/c{c}/obj/body/b0001/material/v0001/mt_c{c}b0001_a.mtrl"
+            : $"chara/human/c{c}/obj/face/{faceId}/material/mt_c{c}{faceId}_fac_a.mtrl";
+    }
+
+    /// <summary>
+    /// The texture game paths a material names, in slot order. Used to inherit a slot the overlay does not
+    /// supply — a skin shell with no mask of its own wants the one the surface it is copying actually wears,
+    /// which differs between the body (a shared skin mask) and a face (its own).
+    /// </summary>
+    public static IReadOnlyList<string> TextureNames(byte[] m)
+    {
+        var names = new List<string>();
+        if (m.Length < 16) return names;
+        ushort strTableSize = BitConverter.ToUInt16(m, 8);
+        byte texCount = m[12], uvCount = m[13], csCount = m[14];
+        int strStart = 16 + (texCount + uvCount + csCount) * 4;
+        for (int i = 0; i < texCount; i++)
+        {
+            int off = strStart + BitConverter.ToUInt16(m, 16 + i * 4);
+            if (off < 0 || off >= m.Length || off >= strStart + strTableSize) { names.Add(""); continue; }
+            int e = off;
+            while (e < m.Length && m[e] != 0) e++;
+            names.Add(Encoding.ASCII.GetString(m, off, e - off));
+        }
+        return names;
+    }
 
     /// <summary>
     /// Texture slot order the shader's template expects — the sets differ, so this drives the table:
@@ -90,6 +158,8 @@ public static class GearMaterialWriter
     public static IReadOnlyList<string> TextureOrder(string shaderPackage) => shaderPackage switch
     {
         "characterscroll.shpk" => ["norm", "mask", "id", "catc"],
+        // skin.shpk 3: base, norm, mask — no "id", because it declares no g_SamplerIndex (see TemplateFor).
+        "skin.shpk"            => ["base", "norm", "mask"],
         _                      => ["base", "norm", "mask", "id"],
     };
 
@@ -213,6 +283,13 @@ public static class GearMaterialWriter
 
         // characterscroll samples its scroll map with uv1, which only exists if map2 is declared.
         bool isScroll = string.Equals(shpkName, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase);
+        // A SKIN shell keeps the vanilla body material exactly as shipped apart from its texture table.
+        // Every rewrite below is a gear-shader fix and none of them means anything here: the transparency
+        // flag and g_AlphaThreshold drive an alpha gate skin.shpk reads out of a different channel (its blue
+        // is skin-colour influence — the whole reason to use this shader), g_AlphaOffset isn't declared, and
+        // the colour table is the SKIN colorset, not a gear one, so both the tile-weave clear and the row
+        // patch would be writing gear offsets over skin data.
+        bool isSkin = string.Equals(shpkName, "skin.shpk", StringComparison.OrdinalIgnoreCase);
         if (isScroll && uvSets.Count < 2)
             uvSets.Add((SecondUvSet, SecondUvSetFlags));
 
@@ -261,6 +338,10 @@ public static class GearMaterialWriter
 
         // Shader section sits right after the data set. Its layout is
         // { u16 valueListSize, u16 keyCount, u16 constCount, u16 samplerCount, u32 flags }.
+        // Everything from here to the return is gear-shader work. A skin shell wants the vanilla body
+        // material verbatim behind its new textures, so it takes none of it.
+        if (isSkin) return r;
+
         int shaderStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length
                         + addDataSize + dataSetSize;
         if (shaderStart + 12 <= r.Length)

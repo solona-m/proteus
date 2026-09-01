@@ -347,6 +347,14 @@
     "message": "Aucun",
     "description": ""
   },
+  "Colors.OneSided.Label": {
+    "message": "Cette texture est volontairement d'un seul côté",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "Activez ceci pour une texture destinée à n'apparaître que d'UN seul côté : un tatouage sur\nun bras, une cicatrice sur une joue. Laissez-le désactivé pour tout le reste, peau ordinaire\ncomprise.\nUn corps vanilla et le visage vanilla donnent les mêmes pixels aux deux côtés, donc une\ntexture peinte pour eux est pliée en deux : un côté est conservé et reflété. C'est invisible\nsur un motif symétrique et cela ruine un motif d'un seul côté. Avec ceci activé, Proteus rend\nle calque via une couche propre dont les deux côtés lisent les deux moitiés de votre texture.\nCela ne peut pas être détecté à votre place. La vraie peau n'est jamais symétrique — taches\nde rousseur et grains de beauté diffèrent — vous seul savez si un écart est intentionnel.",
+    "description": ""
+  },
   "Colors.Opacity.Label": {
     "message": "Opacité",
     "description": ""
@@ -753,6 +761,14 @@
   },
   "Create.Error.WriteFailed.Fmt": {
     "message": "Échec de l'écriture du mod : {0}",
+    "description": ""
+  },
+  "Create.FaceSplit.Label": {
+    "message": "Cette texture de visage est séparée gauche/droite",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Cochez ceci uniquement pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister — Proteus affiche une texture séparée via un calque de visage.\nLaissez ceci décoché pour toute texture de visage normale.",
     "description": ""
   },
   "Create.Intro": {

@@ -81,6 +81,63 @@ public class UVRemapService
     public readonly PhaseCounter RemapStats = new();
 
     /// <summary>
+    /// Which side of the character a vertex is on, as <see cref="UvConversion"/> receives it:
+    /// <c>+1</c> = the +X side, <c>-1</c> = the -X side, <c>0</c> = not known (a vertex on the midline whose
+    /// triangles disagreed, or a caller that doesn't track sides). Unknown behaves as +1, which is the
+    /// behaviour every caller had before sides existed.
+    /// </summary>
+    public delegate (float U, float V)? UvConversion(float u, float v, int side);
+
+    /// <summary>
+    /// Reflect a U coordinate onto the other half of an asymmetric body sheet.
+    /// <para/>
+    /// MEASURED, not assumed. bibo and gen3 both lay the character's two sides out as mirror images about
+    /// u = 0.5: scoring the bibo island mask (the Valid mask of the shipped gen3_to_bibo transfer map)
+    /// against its own right half gives IoU 0.998 for <c>u -> 1-u</c> and 0.681 for a plain <c>u -> u-0.5</c>
+    /// translate, with the mirror peaking exactly at zero offset. Reading a Bibo+ body model agrees from the
+    /// geometry side: of 3696 mirror-partner vertex pairs, 3478 satisfy <c>u' = 1-u</c> within 0.01 and NONE
+    /// satisfy <c>u' = u</c>. The two halves also hold the same island area to within 0.02%.
+    /// <para/>
+    /// The same measurement fixes which half is which side: on that model every one of the 1950 vertices at
+    /// x &gt; 0 has u &gt; 0.5 and every one of the 1950 at x &lt; 0 has u &lt; 0.5, with no exceptions. So the
+    /// RIGHT half — the half vanilla space is a crop of (see <see cref="CropRightHalf"/>) — is the +X side,
+    /// and no separate side constant is needed: it follows from the crop this file already assumes.
+    /// </summary>
+    public static float MirrorU(float u) => 1f - u;
+
+    /// <summary>
+    /// The vanilla FACE layout. Mirrored in exactly the sense gen2 is: both sides of the face sample the same
+    /// texels. Measured on c0201f0001_fac — 89.4% of mirror-partner vertices share a UV against 1.3% that
+    /// reflect, and both sides show the same u distribution, so the two cheeks read the same pixels.
+    /// </summary>
+    public const string FaceSpace = "face";
+
+    /// <summary>
+    /// A DOUBLED face sheet: the character's two sides in the two halves of one texture, the right half
+    /// holding the +X side exactly as <see cref="FaceSpace"/> lays it out and the left holding its mirror.
+    /// <para/>
+    /// It exists because the vanilla face layout cannot express a one-sided mark at all — paint a texel and
+    /// it IS both cheeks, so the second side's art has nowhere to live. That is the same problem vanilla
+    /// BODIES have, and bibo is the answer there; faces had no equivalent, so this is it. Art declares it
+    /// through <see cref="OverlayDescriptor.SourceBodyType"/>, and the conversion into it is the same affine
+    /// gen2 → bibo uses, because it is the same shape of problem.
+    /// </summary>
+    public const string FaceSplitSpace = "facelr";
+
+    /// <summary>
+    /// The asymmetric space a MIRRORED one is one half of, or null when the space is not mirrored.
+    /// <para/>
+    /// This is the pairing the whole un-mirroring feature turns on: a mirrored layout describes both sides of
+    /// the character with one set of texels, and its partner gives each side its own half. gen2's partner is
+    /// bibo (gen2 IS bibo's right half — see <see cref="CropRightHalf"/>); the face's is the doubled sheet
+    /// above. Both convert by the same affine, which is why they share one code path rather than two.
+    /// </summary>
+    public static string? DoubledSpaceOf(string? space)
+        => string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase) ? "bibo"
+         : string.Equals(space, FaceSpace, StringComparison.OrdinalIgnoreCase) ? FaceSplitSpace
+         : null;
+
+    /// <summary>
     /// A per-VERTEX UV converter — the geometry counterpart of <see cref="Remap"/>, which moves pixels.
     /// Takes a UV authored in <paramref name="from"/> space and answers where that same point on the body
     /// sits in <paramref name="to"/> space, or null for a point the maps have no correspondence for.
@@ -91,18 +148,34 @@ public class UVRemapService
     /// one <see cref="Remap"/> uses to move art INTO S — because a transfer map is indexed by its
     /// destination pixel and stores the source coordinate. gen2 is not a transfer-map space at all: it is
     /// the right half of bibo (see <see cref="CropRightHalf"/>), so it enters and leaves by halving U.
+    /// <para/>
+    /// <paramref name="unmirror"/> is what lets asymmetric art survive a vanilla body. gen2 UV is MIRRORED —
+    /// both sides of the body sample the same texels (measured on the vanilla e0000 parts: of the sampled
+    /// mirror-partner vertex pairs, 89-97% satisfy <c>u' = u</c> and ~0% satisfy <c>u' = 1-u</c>) — so the
+    /// plain affine below sends BOTH sides to bibo's right half, painting the +X side's art onto the whole
+    /// body and discarding everything in the left half. With it set, a -X vertex is sent to the mirrored
+    /// half instead, so the shell reads the sheet the way an asymmetric body would. It only has meaning
+    /// coming OUT of gen2: the destination halves already correspond (bibo's left half maps to gen3's left
+    /// half), so nothing downstream needs to know.
     /// </summary>
-    public Func<float, float, (float U, float V)?>? UvConverter(string? from, string? to)
+    public UvConversion? UvConverter(string? from, string? to, bool unmirror = false)
     {
         if (from == null || to == null) return null;
         if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return null;
 
-        bool fromGen2 = string.Equals(from, "gen2", StringComparison.OrdinalIgnoreCase);
-        bool toGen2   = string.Equals(to,   "gen2", StringComparison.OrdinalIgnoreCase);
-        var srcSpace  = fromGen2 ? "bibo" : from;   // gen2 is already in bibo space after the affine
-        var dstSpace  = toGen2   ? "bibo" : to;
+        // A MIRRORED space (gen2, or the vanilla face) enters and leaves by the affine below, which lands it
+        // in its doubled counterpart — so from the transfer maps' point of view it already IS that space.
+        // Generalised from an explicit gen2 test so faces take the same path: the two differ only in which
+        // doubled space they pair with, never in the arithmetic.
+        var fromDoubled = DoubledSpaceOf(from);
+        var toDoubled   = DoubledSpaceOf(to);
+        bool fromMirrored = fromDoubled != null;
+        bool toMirrored   = toDoubled != null;
+        var srcSpace  = fromDoubled ?? from;
+        var dstSpace  = toDoubled ?? to;
 
-        // Null when both ends land in bibo (gen2↔bibo) — then the affine IS the whole conversion.
+        // Null when both ends land in the same doubled space (gen2↔bibo, face↔facelr) — then the affine IS
+        // the whole conversion.
         TransferMap? map = null;
         if (!string.Equals(srcSpace, dstSpace, StringComparison.OrdinalIgnoreCase))
         {
@@ -114,16 +187,24 @@ public class UVRemapService
         // UvLookupReach rings — so memoize. Keyed on the exact UV, which repeats bit-for-bit across those
         // rebuilds, giving a full hit rate after the first pass. Concurrent because the converter outlives
         // one Build call and composites parallelise elsewhere.
-        var memo = new System.Collections.Concurrent.ConcurrentDictionary<(float U, float V), (float U, float V)?>();
-        return (u, v) => memo.GetOrAdd((u, v), static (key, s) =>
+        //
+        // The SIDE is part of the key. Un-mirroring is precisely a case where one UV has two answers — the
+        // mirrored vanilla sheet gives a vertex and its opposite number the same (u,v) and they must land on
+        // opposite halves — so keying on the UV alone would hand the second one the first one's result and
+        // silently re-fold the body.
+        var memo = new System.Collections.Concurrent.ConcurrentDictionary<(float U, float V, int Side), (float U, float V)?>();
+        return (u, v, side) => memo.GetOrAdd((u, v, unmirror ? side : 0), static (key, s) =>
         {
-            var (u, v) = key;
-            if (s.FromGen2) u = 0.5f + u * 0.5f;
+            var (u, v, side) = key;
+            // A -X vertex reads the other half of the sheet. Unknown (0) takes the +X branch, which is what
+            // every vertex got before sides existed.
+            if (s.FromMirrored) u = s.Unmirror && side < 0 ? MirrorU(0.5f + u * 0.5f) : 0.5f + u * 0.5f;
             if (s.Map != null && !TryLookupUv(s.Map, u, v, out u, out v)) return null;
-            if (s.ToGen2)
+            if (s.ToMirrored)
             {
-                // Vanilla space is only the RIGHT half of bibo; the left half is bibo's own added detail
-                // area and has no vanilla home at all. Without this guard the affine hands such a point a
+                // A mirrored space is only the RIGHT half of its doubled counterpart; the left half is that
+                // sheet's other side and has no mirrored home at all. Without this guard the affine hands
+                // such a point a
                 // NEGATIVE u, which the sampler wraps to the far edge of the sheet — so the triangle spans
                 // the whole texture, survives the coverage trim (its box trips AnyVisible's bail-out) and
                 // renders as a smeared band. Report it unmapped instead: the vertex then keeps its
@@ -132,7 +213,7 @@ public class UVRemapService
                 u = (u - 0.5f) * 2f;
             }
             return (u, v);
-        }, (Map: map, FromGen2: fromGen2, ToGen2: toGen2));
+        }, (Map: map, FromMirrored: fromMirrored, ToMirrored: toMirrored, Unmirror: unmirror));
     }
 
     /// <summary>
@@ -188,6 +269,110 @@ public class UVRemapService
         for (int y = 0; y < srcH; y++)
             Array.Copy(src, (y * srcW + halfW) * 4, dst, y * halfW * 4, halfW * 4);
         return dst;
+    }
+
+    /// <summary>
+    /// Expands a gen2 (vanilla) sheet back over a full asymmetric sheet — the inverse of
+    /// <see cref="CropRightHalf"/>. The art goes into the right half and its mirror into the left, because
+    /// vanilla art describes BOTH sides of the body with one layout, so both halves of the asymmetric sheet
+    /// are entitled to it.
+    /// <para/>
+    /// Needed because a shell can now be in bibo space while its geometry is vanilla. Any other layer on
+    /// that shell whose art is gen2-native has no <c>gen2_to_*</c> transfer map to travel by — and
+    /// <see cref="Remap"/> answers a missing map by handing back its input unchanged, so without this the
+    /// art would be sampled at bibo coordinates as if it were bibo art, which lands it somewhere else on the
+    /// body entirely.
+    /// </summary>
+    public static byte[] ExpandMirrored(byte[] src, int srcW, int srcH, int dstW, int dstH)
+    {
+        var dst = new byte[dstW * dstH * 4];
+        for (int y = 0; y < dstH; y++)
+        {
+            float sy = Math.Clamp((y + 0.5f) / dstH * srcH - 0.5f, 0, srcH - 1);
+            int y1 = (int)sy, y2 = Math.Min(y1 + 1, srcH - 1);
+            float yf = sy - y1;
+            for (int x = 0; x < dstW; x++)
+            {
+                float u = (x + 0.5f) / dstW;
+                // Right half is the vanilla layout as-is; left half is its mirror image.
+                float gu = u >= 0.5f ? (u - 0.5f) * 2f : (0.5f - u) * 2f;
+                float sx = Math.Clamp(gu * srcW - 0.5f, 0, srcW - 1);
+                int x1 = (int)sx, x2 = Math.Min(x1 + 1, srcW - 1);
+                float xf = sx - x1;
+                int o = (y * dstW + x) * 4;
+                for (int c = 0; c < 4; c++)
+                    dst[o + c] = (byte)(src[(y1 * srcW + x1) * 4 + c] * (1 - xf) * (1 - yf)
+                                      + src[(y1 * srcW + x2) * 4 + c] * xf       * (1 - yf)
+                                      + src[(y2 * srcW + x1) * 4 + c] * (1 - xf) * yf
+                                      + src[(y2 * srcW + x2) * 4 + c] * xf       * yf
+                                      + 0.5f);
+            }
+        }
+        return dst;
+    }
+
+    // ── Asymmetry detection ──────────────────────────────────────────────────
+
+    /// <summary>Sampling stride, in source pixels. A mark small enough to slip through this is too small to
+    /// be worth a whole extra shell.</summary>
+    private const int AsymStride = 4;
+    /// <summary>Per-channel difference (of 255) that counts a texel as differing. Above blocky compression
+    /// noise, well below any mark a person would notice was missing.</summary>
+    private const int AsymChannelDelta = 24;
+    /// <summary>Fraction of compared texels that must differ before the sheet counts as asymmetric.</summary>
+    private const float AsymFraction = 0.001f;
+    /// <summary>Floor on the differing count, so a tiny sheet can't trip the fraction on a handful of texels.</summary>
+    private const int AsymMinTexels = 64;
+
+    /// <summary>
+    /// Whether art painted for <paramref name="space"/> actually differs between the character's two sides.
+    /// <para/>
+    /// bibo and gen3 lay the two sides out as mirror images about u = 0.5 (see <see cref="MirrorU"/>), so
+    /// this compares each texel in the right half against its mirror partner in the left. Symmetric art —
+    /// the overwhelming majority, since it is normally painted once and mirrored — matches and gets to keep
+    /// the cheap vanilla path, which folds the sheet in half and loses nothing. Art that genuinely differs
+    /// cannot survive that fold and needs an un-mirrored shell instead.
+    /// <para/>
+    /// Restricted to texels inside a UV island where a mask is available: art tools bleed colour into the
+    /// padding around islands, and that bleed is an artefact of the export rather than anything the game
+    /// samples, so letting it vote would call symmetric art asymmetric.
+    /// <para/>
+    /// RGB is weighted by the pair's alpha so a fully transparent region's leftover colour doesn't count,
+    /// while alpha itself always counts — a one-sided mark on an otherwise transparent sheet differs in
+    /// alpha first.
+    /// </summary>
+    public bool IsArtAsymmetric(byte[] rgba, int w, int h, string? space)
+    {
+        // A MIRRORED space is the one sheet both sides share, so the question is meaningless there — gen2 and
+        // the vanilla face layout alike. A space we can't name gets the conservative answer, which is the
+        // existing behaviour.
+        if (space == null || DoubledSpaceOf(space) != null) return false;
+        if (w < 8 || h < 8 || rgba.Length < w * h * 4) return false;
+
+        var island = IslandMask(space, out int mw, out int mh, loadIfMissing: false);
+        int compared = 0, differing = 0;
+        for (int y = 0; y < h; y += AsymStride)
+        {
+            for (int x = w / 2; x < w; x += AsymStride)
+            {
+                int mx = w - 1 - x;   // the mirror partner, about the sheet's centre
+                if (island != null)
+                {
+                    int ix = x * mw / w, iy = y * mh / h;
+                    if (!island[iy * mw + ix]) continue;
+                }
+                int a = (y * w + x) * 4, b = (y * w + mx) * 4;
+                compared++;
+                int aA = rgba[a + 3], bA = rgba[b + 3];
+                int d = Math.Abs(aA - bA);
+                int cover = Math.Max(aA, bA);
+                for (int c = 0; c < 3; c++)
+                    d = Math.Max(d, Math.Abs(rgba[a + c] - rgba[b + c]) * cover / 255);
+                if (d >= AsymChannelDelta) differing++;
+            }
+        }
+        if (compared == 0) return false;
+        return differing >= AsymMinTexels && differing >= compared * AsymFraction;
     }
 
     // ── Map cache ────────────────────────────────────────────────────────────

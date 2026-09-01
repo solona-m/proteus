@@ -122,6 +122,44 @@ public class ModCreationTests
     }
 
     /// <summary>
+    /// A new mod NEVER claims its art is one-sided. That has to be the author's statement, and nothing here
+    /// can stand in for it: a real skin texture is never symmetric — freckles, moles — so a measurement says
+    /// "asymmetric" about ordinary skin and moves it onto a shell, where it loses the wearer's tone and
+    /// renders grey and glossy. Proteus used to probe the art and write the answer here, and that is exactly
+    /// what it did to every skin mod on the machine.
+    /// <para/>
+    /// The field must be OMITTED, not written false, so the sidecar carries no claim either way.
+    /// </summary>
+    [Fact]
+    public void WriteMod_never_declares_the_art_one_sided()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "proteus_create_" + Path.GetRandomFileName());
+        var diffuse = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".png");
+        File.WriteAllBytes(diffuse, new byte[] { 1, 2, 3, 4 });
+
+        try
+        {
+            ModCreationService.WriteMod(
+                root, "Asym", "Artist",
+                "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null);
+
+            var path = Path.Combine(root, "Proteus", "metadata.json");
+            Assert.DoesNotContain("AsymmetricArt", File.ReadAllText(path));
+
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(path),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            Assert.Null(Assert.Single(meta!.Overlays!).AsymmetricArt);
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { File.Delete(diffuse); } catch { }
+        }
+    }
+
+    /// <summary>
     /// The Create tab's auto-detect, first gate. Measured against the real art: a converted skin's base
     /// bottoms out at alpha 251, while a detail overlay ("Boney Diffuse" — collarbones and ribs) peaks at
     /// 117 over a mean of 6. This only rules sparse art OUT; garment art is routinely opaque end to end and

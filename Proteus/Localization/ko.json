@@ -347,6 +347,14 @@
     "message": "없음",
     "description": ""
   },
+  "Colors.OneSided.Label": {
+    "message": "이 아트는 의도적으로 한쪽만",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "한쪽에만 나타나야 하는 아트(한쪽 팔의 문신, 한쪽 뺨의 흉터)에만 켜세요.\n일반 피부를 포함해 그 밖의 모든 경우에는 꺼 두세요.\n바닐라 몸과 바닐라 얼굴은 양쪽에 같은 픽셀을 주므로, 그에 맞춰 그린 아트는 절반으로\n접힙니다. 한쪽만 남고 반대쪽으로 거울처럼 복사됩니다. 좌우 대칭 디자인에서는 보이지\n않지만 한쪽만의 디자인은 망가집니다.\n이 옵션을 켜면 Proteus가 전용 레이어로 렌더링하며, 그 좌우가 텍스처의 좌우 절반을\n각각 읽으므로 양쪽이 모두 남습니다.\n자동으로는 판별할 수 없습니다. 실제 피부는 결코 대칭이 아니며 주근깨와 점은 좌우가\n다릅니다. 그 차이가 의도인지 아닌지는 제작자만 알 수 있습니다.",
+    "description": ""
+  },
   "Colors.Opacity.Label": {
     "message": "불투명도",
     "description": ""
@@ -753,6 +761,14 @@
   },
   "Create.Error.WriteFailed.Fmt": {
     "message": "모드를 쓰지 못했습니다: {0}",
+    "description": ""
+  },
+  "Create.FaceSplit.Label": {
+    "message": "이 얼굴 텍스처는 좌우로 나뉘어 있음",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "얼굴 텍스처를 두 개의 절반으로 그린 경우에만 선택하세요. 캐릭터의 오른쪽은 이미지의 오른쪽 절반에, 왼쪽은 왼쪽 절반에 그린 것입니다.\n일반 얼굴 텍스처는 양쪽 뺨에 같은 픽셀을 사용하므로 한쪽에만 있는 무늬는 존재할 수 없습니다. 나뉜 텍스처는 Proteus가 얼굴 레이어로 렌더링합니다.\n일반 얼굴 텍스처에서는 꺼 두세요.",
     "description": ""
   },
   "Create.Intro": {

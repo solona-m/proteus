@@ -347,6 +347,14 @@
     "message": "None",
     "description": "Appears in the colour-table editor window."
   },
+  "Colors.OneSided.Label": {
+    "message": "This art is deliberately one-sided",
+    "description": "Checkbox in the colour-table editor's Advanced section."
+  },
+  "Colors.OneSided.Tip": {
+    "message": "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\none cheek. Leave it off for anything else, including ordinary skin.\nA vanilla body and the vanilla face give both sides the same pixels, so art painted for\nthem is folded in half: one side is kept and mirrored across. That is invisible on a\nsymmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\nthrough a layer of its own whose two sides read the two halves of your sheet, so both\nsides survive.\nIt cannot be detected for you. Real skin is never symmetric — freckles and moles differ\nleft to right — so only you can say whether a difference is the point or just detail.",
+    "description": "Tooltip for the checkbox above. \"one-sided\" means appearing on only the left or only the right of the character. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Opacity.Label": {
     "message": "Opacity",
     "description": "Control label. Appears in the colour-table editor window."
@@ -754,6 +762,14 @@
   "Create.Error.WriteFailed.Fmt": {
     "message": "Failed to write the mod: {0}",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Create.FaceSplit.Label": {
+    "message": "This face texture is split left/right",
+    "description": "Checkbox in the Create tab, shown only when the target material is a face. Keep the \"###createFaceSplit\" suffix out of the translation - it is not part of this string."
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
+    "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Create.Intro": {
     "message": "Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a new Penumbra mod and opens it so you can enable and tweak it.",
