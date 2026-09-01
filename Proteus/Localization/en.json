@@ -167,6 +167,10 @@
     "message": "[Proteus] Some layers on your {1} could not be placed (layers: {0}). Those must not be race-deformed, so they need a slot Proteus can replace outright: free a ring slot (either hand) or your facewear slot and they will appear.",
     "description": "NOTE the order: {0} is a count of layers, {1} is a list of body-part names. The English sentence uses {1} before {0}."
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Some layers on your {1} were skipped (layers: {0}) — your character isn't drawing that part, so there was nothing to cut them from. Check the Surface set on those overlays matches the face or part you are actually wearing.",
+    "description": "NOTE the order: {0} is a count of layers, {1} is a list of body-part names. The English sentence uses {1} before {0}."
+  },
   "Colors.Advanced": {
     "message": "Advanced",
     "description": "Appears in the colour-table editor window."

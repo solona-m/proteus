@@ -618,6 +618,16 @@ public sealed class SecondSkinService
     // while being a different thing to report. Null = nothing currently unhosted.
     private string? _lastUnhostedSurfaces;
 
+    /// <summary>Surfaces last reported as not drawn at all, joined, on the same once-per-situation
+    /// discipline as <see cref="_lastUnhostedSurfaces"/>. Separate field because they are separate notices:
+    /// one set changing must not suppress the other. Null = none currently unresolved.
+    /// <para/>
+    /// Only a composite that could actually SEE the character writes here. One landing mid-redraw finds
+    /// every human surface missing and means nothing by it, so it leaves this untouched rather than
+    /// clearing it — otherwise the notice re-arms on every redraw and repeats for a situation that never
+    /// changed.</summary>
+    private string? _lastUnresolvedSurfaces;
+
     /// <summary>Carrier slots last reported as belonging to another mod, joined, so the notice prints once
     /// per changed situation. Null = none currently claimed.</summary>
     private string? _lastClaimedCarriers;
@@ -2310,6 +2320,11 @@ public sealed class SecondSkinService
         // count and the surface names below come from one source: deriving the names from "everything not in
         // work" instead swept up capacity-dropped layers, so a look that overflowed by two body layers
         // reported "Body" as unhostable and told the user to free a ring slot, which would not help.
+        //
+        // ONE meaning only: a carrier-only surface that was OFFERED hosts and none of them could take it.
+        // That is what makes "free a ring or facewear slot" the right remedy, and it is why `droppedLayers`
+        // — surfaces that were never resolved, so no host was ever asked — must not be poured in here. See
+        // the note beside droppedLayers below.
         var unhostedLayers = new List<int>();
 
         // ── Layer → host distribution ──────────────────────────────────────────
@@ -2409,7 +2424,19 @@ public sealed class SecondSkinService
         }
         // Layers whose surface could not be resolved at all (the character isn't drawing that part, or its
         // model names no such material). Already logged in detail by the resolver.
-        unhostedLayers.AddRange(droppedLayers);
+        //
+        // Deliberately NOT folded into unhostedLayers, which is what this used to do. They are two different
+        // failures with two different remedies, and merging them made every consequence wrong at once: the
+        // count, the advice, and the carrier notice gated on it. An Iris overlay dropped because the live
+        // walk saw nothing was reported as "could not be placed — free a ring slot (either hand) or your
+        // facewear slot", on a composite that had three free ring/neck hosts standing idle; and because
+        // NotifyCarriersClaimed only speaks when the shell genuinely ran short, that phantom entry also told
+        // the user a mod on their bracelet slot was in the way of something. Nothing was in the way of
+        // anything — the character simply wasn't drawn yet.
+        //
+        // Split by whether the character is drawing ANYTHING (see the classification below), because that is
+        // the difference between a transient mid-redraw composite and a real mismatch.
+        var unresolvedLayers = new List<int>(droppedLayers);
 
         // ── content units take what the shells left ───────────────────────────
         // After the shells, and out of the same remaining[]/hostClaim[]/diskBudget state, so a character
@@ -2912,6 +2939,55 @@ public sealed class SecondSkinService
                 unhostedLayers.Count, keys);
         }
         else _lastUnhostedSurfaces = null;
+
+        // Layers whose surface was never resolved — a separate failure, and one no slot can fix, so it gets
+        // its own sentence rather than the one above.
+        //
+        // Whether it is worth SAYING at all turns on one thing: is the character drawing anything? A
+        // composite that lands mid-redraw sees an empty live walk, and then every human-part surface is
+        // "missing" for a reason that has nothing to do with the user's setup and will be gone a second
+        // later. Saying so would be a warning about our own timing. Once the character IS drawn, the same
+        // miss is a real mismatch — an overlay pointed at a face she isn't wearing — and worth a word.
+        //
+        // Deduped on the SET, like the block above and for the same reason.
+        if (unresolvedLayers.Count > 0)
+        {
+            var keys = string.Join(", ", unresolvedLayers
+                .Select(i => layerSurfaceName[i])
+                .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+            bool characterDrawn = humanPartModels is { Count: > 0 };
+            if (!characterDrawn)
+            {
+                // Deliberately leaves _lastUnresolvedSurfaces ALONE. An undrawn composite is not evidence
+                // either way, so it must not touch the dedupe — and clearing it here (which this did at
+                // first) re-armed the notice on every redraw. Drawn and undrawn composites interleave
+                // constantly: this log holds 143 of the former against 31 of the latter, so a standing
+                // mismatch would have printed the same sentence again after every redraw, which is the
+                // repeating chat spam this whole change exists to stop. Re-arming belongs where the
+                // situation actually changes — the `else` below, when the surface resolves again.
+                log.Information("[Proteus] second skin: {0} layer(s) on surface(s) [{1}] had nothing to cut "
+                              + "— the character is not drawing any human part yet, so this is a redraw in "
+                              + "progress rather than anything to report",
+                    unresolvedLayers.Count, keys);
+            }
+            else
+            {
+                if (!string.Equals(_lastUnresolvedSurfaces, keys, StringComparison.Ordinal))
+                {
+                    _lastUnresolvedSurfaces = keys;
+                    var msg = string.Format(Loc.Localize("Chat.UnresolvedSurfaces.Fmt",
+                        "[Proteus] Some layers on your {1} were skipped (layers: {0}) — your character isn't "
+                      + "drawing that part, so there was nothing to cut them from. Check the Surface set on "
+                      + "those overlays matches the face or part you are actually wearing."),
+                        unresolvedLayers.Count, keys);
+                    _ = Plugin.Framework.RunOnFrameworkThread(
+                        () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+                }
+                log.Warning("[Proteus] second skin: {0} layer(s) skipped — nothing drawn for surface(s) [{1}]",
+                    unresolvedLayers.Count, keys);
+            }
+        }
+        else _lastUnresolvedSurfaces = null;
 
         // Guidance when even all equipped accessories can't hold the look (deduped by total layer count).
         if (overBudget > 0)

@@ -167,6 +167,10 @@
     "message": "[Proteus] 你的 {1} 上有部分层无法放置（层数：{0}）。它们不能进行种族形变，因此需要一个 Proteus 可以整体替换的栏位：空出一个戒指栏位（左右手皆可）或脸部装饰栏位，它们就会显示。",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] 你的 {1} 上有部分层被跳过（层数：{0}）——你的角色没有在绘制该部位，因此没有可供裁切的来源。请检查这些叠加层设置的 Surface 是否与你实际佩戴的脸部或部位一致。",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "高级",
     "description": ""

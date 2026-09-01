@@ -167,6 +167,10 @@
     "message": "[Proteus] No se han podido colocar algunas capas de tu {1} (capas: {0}). No pueden deformarse por raza, así que necesitan una ranura que Proteus pueda sustituir por completo: libera una ranura de anillo (cualquier mano) o la de las gafas y aparecerán.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Se han omitido algunas capas de tu {1} (capas: {0}): tu personaje no está mostrando esa parte, así que no había nada de donde recortarlas. Comprueba que la Superficie configurada en esas superposiciones coincida con la cara o parte que llevas realmente.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "Avanzado",
     "description": ""
