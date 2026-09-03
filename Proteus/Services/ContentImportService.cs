@@ -290,8 +290,28 @@ public sealed class ContentImportService
         var unitOrder = new List<(string?, string?, string, string)>();
         var slotOf = new Dictionary<(string?, string?, string, string), ContentSlot.Parsed>();
 
+        // Counted rather than logged one by one. A pack that gets this wrong gets it wrong in BULK — STREGA
+        // declares all 109 of its default redirects that way — and 29 identical warning lines say nothing the
+        // first one and a number do not.
+        int notGamePaths = 0;
+        string? firstNotGamePath = null;
+
         foreach (var (group, option, gamePath, entry) in sources)
         {
+            // A redirect the game can never ASK for is not a piece. Packs exported with their option folders
+            // baked into the game path — "Gen 3/Bra, Choker & Gloves/chara/equipment/e6046/model/
+            // c0101e6046_top.mdl" — still end in a name ContentSlot reads perfectly, so they parse as real
+            // garments and arrive as second copies of models the pack ALSO ships correctly inside its groups.
+            // Two copies of one race under one unit is what made STREGA fail to import outright.
+            //
+            // Nothing is lost by dropping them: Penumbra does not resolve them either, so they are dead
+            // entries in the manifest rather than geometry anyone was wearing.
+            if (!IsGamePath(gamePath))
+            {
+                notGamePaths++;
+                firstNotGamePath ??= gamePath;
+                continue;
+            }
             if (ContentSlot.Parse(gamePath) is not { } slot)
             {
                 log?.Warning("[Proteus] content import: {0} is not a character model path — skipping", gamePath);
@@ -307,6 +327,10 @@ public sealed class ContentImportService
             models.TryGetValue(entry, out var bytes);
             list.Add(PlanPiece(gamePath, entry, bytes, materialsByLeaf, log) with { RaceCode = slot.RaceCode });
         }
+
+        if (notGamePaths > 0)
+            log?.Warning("[Proteus] content import: {0} model redirect(s) are not paths the game can "
+                       + "request — skipping, first is \"{1}\"", notGamePaths, firstNotGamePath!);
 
         // ── default-data copies a SINGLE group replaces ──────────────────────────
         //
@@ -1172,14 +1196,30 @@ public sealed class ContentImportService
     }
 
     /// <summary>
+    /// Whether a redirect's game path is one the game could ever ask for.
+    /// <para/>
+    /// A prefix test rather than another parse, because the whole trouble is that a junk path's TAIL parses
+    /// perfectly: an option folder glued onto the front leaves the file name — the only part
+    /// <see cref="ContentSlot.Parse"/> reads — completely intact. Every character model the game loads is
+    /// under <c>chara/</c>, so what is in front of that is the question worth asking.
+    /// </summary>
+    private static bool IsGamePath(string gamePath)
+        => PenumbraPackage.Normalize(gamePath).StartsWith("chara/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// One unit as the sidecar stores it. Its race variants become a <c>Models</c> map rather than separate
-    /// pieces, and their material bindings merge: the leaf names are race-specific
-    /// (<c>mt_c0101…</c> vs <c>mt_c0201…</c>) so they cannot collide, and whichever model the wearer's race
-    /// selects declares only its own.
+    /// pieces, and their material bindings merge: one race's leaf names (<c>mt_c0101…</c> vs
+    /// <c>mt_c0201…</c>) do not collide with another's, and whichever model the wearer's race selects
+    /// declares only its own.
+    /// <para/>
+    /// That holds ACROSS races and not within one. A malformed pack can declare two models for a single race
+    /// — two game paths differing only by a folder, or two groups sharing a name — and then both the model
+    /// map and the bindings have two answers to one question. Everything below is built from
+    /// <c>kept</c>, the first variant of each race, so the two never disagree: a piece that renders one
+    /// variant's geometry against the other's material is a metal ring drawn as skin.
     /// </summary>
     private static ContentPiece PieceOf(PieceUnit unit, PenumbraPackage.Contents pack)
     {
-        var usable = unit.Variants.Where(v => v.Import).ToList();
         var piece = new ContentPiece
         {
             Surface    = ShellSurfaceKind.Body,
@@ -1187,12 +1227,23 @@ public sealed class ContentImportService
             GateOption = unit.GateOption,
         };
 
-        if (usable.Count == 1 && string.IsNullOrEmpty(usable[0].RaceCode))
-            piece.Model = usable[0].Entry;
-        else
-            piece.Models = usable.ToDictionary(v => v.RaceCode, v => v.Entry, StringComparer.OrdinalIgnoreCase);
+        // First declaration of a race wins, and a second is DROPPED rather than fatal. This used to be a
+        // ToDictionary, which turned a pack declaring one model twice into an import that failed outright
+        // with nothing written — a far worse ending than wearing whichever copy came first, since the two are
+        // the same garment. A malformed manifest is the pack's problem to have, not the user's to be stopped
+        // by.
+        var kept = new List<PiecePlan>();
+        var seenRaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var v in unit.Variants)
+            if (v.Import && seenRaces.Add(v.RaceCode))
+                kept.Add(v);
 
-        foreach (var v in usable)
+        if (kept.Count == 1 && string.IsNullOrEmpty(kept[0].RaceCode))
+            piece.Model = kept[0].Entry;
+        else
+            piece.Models = kept.ToDictionary(v => v.RaceCode, v => v.Entry, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var v in kept)
             foreach (var (leaf, entry) in v.Bindings)
                 piece.Materials[leaf] = entry;
 
@@ -1212,6 +1263,14 @@ public sealed class ContentImportService
         var suppliers = new Dictionary<string, List<ContentMaterialSource>>(StringComparer.OrdinalIgnoreCase);
         void Candidate(string gamePath, string entry, string? group, string? option)
         {
+            // Same rule as the models, and it matters MORE here. A prefixed path supplies its leaf with no
+            // group at all, and a source with no group is unconditional — the fallback for a leaf whose
+            // option groups are all unselected, which after an import every Multi group is. So STREGA's 80
+            // junk .mtrl entries would have invented an always-on material choice out of dead redirects, and
+            // SelectedMaterialFile scans backwards, so the one it settled on was the WORST-ranked of them.
+            // The pack ships no default data at all; nothing should behave as though it does.
+            if (!IsGamePath(gamePath)) return;
+
             bool isMtrl = gamePath.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase);
             // Textures are recorded as suppliers but NOT as candidates: they are never ranked, because a
             // material names the one path it wants and there is no variant folder to choose between. What
@@ -1282,7 +1341,7 @@ public sealed class ContentImportService
         // Which of the PACK'S options reveal each material — see ContentPiece.MaterialGates. Worked out
         // here, where the model has just been read, because the panel that needs it draws every frame.
         var gates = new List<ContentMaterialGate>();
-        foreach (var v in usable)
+        foreach (var v in kept)
         {
             if (v.MaterialAttributes is not { Count: > 0 } byMat) continue;
             foreach (var (matName, attrs) in byMat)
