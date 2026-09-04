@@ -200,6 +200,40 @@ internal sealed class SyntheticPack : IDisposable
         return new SyntheticPack(path);
     }
 
+    /// <summary>One entry of a pack's default data: a game path, the archive entry backing it, and whether
+    /// that entry is actually written. A manifest naming a file the archive doesn't hold is a real shape a
+    /// pack arrives in, and the importer has to say so rather than throw.</summary>
+    internal sealed record Redirect(string GamePath, string Entry, bool Present = true);
+
+    /// <summary>
+    /// A pack that ships no geometry at all — the emissive-skin shape. Everything goes in the default data,
+    /// which is where these packs put it: the body materials they rewire, and the art those materials point
+    /// at, on VIRTUAL paths under <c>chara/&lt;body&gt;/</c> that no vanilla shader asks for.
+    /// <para/>
+    /// The entry bytes are a stub. Nothing in the importer looks at a texture's content itself — the decode
+    /// is a delegate on both the preview and the write, exactly so this can run offline.
+    /// </summary>
+    internal static SyntheticPack NoGeometry(string name, string author, params Redirect[] files)
+    {
+        var sb = new StringBuilder();
+        sb.Append("{\"FileVersion\":4,\"Name\":").Append(Quote(name));
+        sb.Append(",\"Author\":").Append(Quote(author));
+        sb.Append(",\"Description\":\"\",\"Version\":\"1.0\",\"Website\":\"\",\"ModTags\":[],");
+        sb.Append("\"DefaultData\":{\"Files\":{");
+        sb.Append(string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry)}")));
+        sb.Append("},\"FileSwaps\":{},\"Manipulations\":[]},\"Groups\":[]}");
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            Write(zip, "meta.json", Encoding.UTF8.GetBytes(sb.ToString()));
+            foreach (var entry in files.Where(f => f.Present).Select(f => f.Entry).Distinct())
+                Write(zip, entry, [0]);
+        }
+        return new SyntheticPack(path);
+    }
+
     private static void Write(ZipArchive zip, string name, byte[] bytes)
     {
         using var st = zip.CreateEntry(name).Open();

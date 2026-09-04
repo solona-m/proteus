@@ -35,6 +35,7 @@ public class StatusWindow : Window
     private readonly OnionImportService onionImport;
     private readonly ContentImportService contentImport;
     private readonly LuminisImportService luminisImport;
+    private readonly EmissiveSkinImportService emissiveImport;
     private readonly EyeImportService eyeImport;
     // Decodes a content pack's own index .tex so the colour grid can say which rows it samples.
     private readonly TextureLoader textureLoader;
@@ -223,6 +224,38 @@ public class StatusWindow : Window
     private bool _eyeAwaiting;
     private EyeImportService.PreparedImport? _eyeAwaited;
 
+    // ── Emissive skin (.pmp) import state ──
+    // A fifth set. This one shares an EXTENSION with the content import rather than merely a tab — both
+    // read .pmp — so which reader a picked file gets is decided in LoadPenumbraPack, and holding the two
+    // previews apart is what stops that decision from being quietly overwritten by a stale panel.
+    private EmissiveSkinImportService.ImportPreview? _emissivePreview;
+    private volatile EmissiveSkinImportService.PreparedImport? _emissivePrepared;
+    // The body material suffix the overlays will target, owned by the user's combo once seeded — see
+    // _luminisSuffix, which this mirrors.
+    private string _emissiveSuffix = "";
+    private IReadOnlyList<string>? _emissiveMaterials;
+    private bool _emissiveMaterialsFromGameData;
+    // A registration Penumbra has accepted but not finished loading; see TickEmissiveImport.
+    private bool _emissiveAwaiting;
+    private EmissiveSkinImportService.PreparedImport? _emissiveAwaited;
+    // A pick whose textures are being read on the pool. The ONLY loader that does not answer on the frame
+    // it was called: an 8192² mask is a measured second of decoding, which is a freeze rather than a hitch.
+    private bool _emissiveLoading;
+    // Which pick the running read belongs to, bumped by LoadPack for every pack of any kind. A result whose
+    // token is stale is a read for a file the user has already replaced, and is dropped rather than drawn
+    // over whatever they picked instead. Framework thread only.
+    private int _emissivePickToken;
+    private volatile EmissiveInspected? _emissiveInspected;
+
+    /// <summary>What the pool read of a picked emissive pack came back with — the preview and the material
+    /// list it resolved, or the message to show instead. <c>Token</c> is the pick it belongs to.</summary>
+    private sealed record EmissiveInspected(
+        int Token,
+        EmissiveSkinImportService.ImportPreview? Preview,
+        IReadOnlyList<string>? Materials,
+        bool MaterialsFromGameData,
+        string? Error);
+
     // ── Export tab state ──
     // Which mod is selected, by DIRECTORY rather than list index: the mod list is rebuilt by discovery and
     // can reorder, and an index would then quietly point at a different mod than the one on screen.
@@ -278,6 +311,7 @@ public class StatusWindow : Window
         OnionImportService onionImport,
         ContentImportService contentImport,
         LuminisImportService luminisImport,
+        EmissiveSkinImportService emissiveImport,
         EyeImportService eyeImport,
         ModExportService modExport,
         TextureLoader textureLoader,
@@ -298,6 +332,7 @@ public class StatusWindow : Window
         this.onionImport    = onionImport;
         this.contentImport  = contentImport;
         this.luminisImport  = luminisImport;
+        this.emissiveImport = emissiveImport;
         this.eyeImport      = eyeImport;
         this.textureLoader  = textureLoader;
         this.modExport      = modExport;
@@ -1782,6 +1817,10 @@ public class StatusWindow : Window
     {
         TickContentImport(unloading);
         TickLuminisImport(unloading);
+        // Before the import half, and skipped during teardown: there is no frame left to draw a preview on
+        // and nobody to read it, and AutoImport would start a write nothing could then register.
+        if (!unloading) TickEmissiveInspect();
+        TickEmissiveImport(unloading);
         TickEyeImport(unloading);
 
         var done = _importPrepared;
@@ -1897,6 +1936,62 @@ public class StatusWindow : Window
     }
 
     /// <summary>
+    /// The emissive-skin half of <see cref="TickImport"/>, on the same terms as the Atramentum Luminis one
+    /// beside it: Penumbra loads an added mod asynchronously and discards a settings write that lands while
+    /// it is still reading, so the registration is pumped until it answers.
+    /// </summary>
+    private void TickEmissiveImport(bool unloading)
+    {
+        if (_emissiveAwaiting)
+        {
+            // Nothing to pump into during teardown — no more frames, nobody to read a message, and Pump
+            // would open Penumbra and schedule a recomposite into half-disposed services.
+            if (unloading) return;
+            if (emissiveImport.Pump() is not { } pumped) return;
+            _emissiveAwaiting = false;
+            FinishEmissiveImport(pumped, _emissiveAwaited);
+            _emissiveAwaited = null;
+            return;
+        }
+
+        var done = _emissivePrepared;
+        if (done == null) return;
+        _emissivePrepared = null;
+
+        var r = emissiveImport.Register(done, quiet: unloading);
+        if (unloading) return;
+
+        if (r == null)
+        {
+            // Penumbra has the mod but hasn't finished loading it. Hold the busy flag and keep pumping.
+            _emissiveAwaiting = true;
+            _emissiveAwaited = done;
+            return;
+        }
+
+        FinishEmissiveImport(r.Value, done);
+    }
+
+    private void FinishEmissiveImport(
+        EmissiveSkinImportService.ImportResult r, EmissiveSkinImportService.PreparedImport? done)
+    {
+        _importBusy = false;
+        _importStatus = r.Message;
+        _importStatusOk = r.Ok;
+        _importStatusWarn = r.Warning;
+
+        // Guarded on identity because Browse stays live during an import: if the user has since picked a
+        // different pack, that one is not the one that just finished and must not be thrown away.
+        if (r.Ok && done != null && ReferenceEquals(_emissivePreview, done.Preview))
+        {
+            _emissivePreview = null;
+            _emissiveMaterials = null;
+        }
+
+        if (!IsOpen) Show(forceExpand: true);
+    }
+
+    /// <summary>
     /// The eye-pack half of <see cref="TickImport"/>. Like the Atramentum Luminis one this can span
     /// several frames after the write: Penumbra loads an added mod asynchronously and discards a settings
     /// write that lands while it is still reading, so the registration is pumped until it answers.
@@ -1964,6 +2059,7 @@ public class StatusWindow : Window
         BulletLine(cms.Intro);
         BulletLine(ims.Intro);
         BulletLine(Strings.Luminis.Intro);
+        BulletLine(Strings.Emissive.Intro);
         BulletLine(Strings.Eye.Intro);
         ImGui.PopTextWrapPos();
         ImGui.Unindent();
@@ -2013,10 +2109,30 @@ public class StatusWindow : Window
             return;
         }
 
+        if (_emissivePreview != null)
+        {
+            ImGui.SameLine();
+            DrawEmissiveImport(_emissivePreview);
+            return;
+        }
+
         if (_eyePreview != null)
         {
             ImGui.SameLine();
             DrawEyeImport(_eyePreview);
+            return;
+        }
+
+        // The one loader that answers on a later frame — see LoadEmissivePack. Without this the tab falls
+        // through to "pick a pack", which is the opposite of what is happening.
+        if (_emissiveLoading)
+        {
+            ImGui.SameLine();
+            ImGui.TextUnformatted(Path.GetFileName(_importPath));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+            ImGui.Spacing();
+            ImGui.TextDisabled(Strings.Emissive.Reading);
+            DrawImportStatus();
             return;
         }
 
@@ -2107,15 +2223,46 @@ public class StatusWindow : Window
     /// Everything that is not an <c>.omp</c> or a <c>.ttmp2</c> goes to the Penumbra reader rather than to
     /// an "unsupported" arm of its own. That arm would need a string to say something
     /// <see cref="PenumbraPackage.Read"/> already says better — it rejects a file with no manifest as "Not a
-    /// Penumbra pack", which <see cref="LoadContentPack"/> puts on screen. A file that is none of the three
+    /// Penumbra pack", which <see cref="LoadPenumbraPack"/> puts on screen. A file that is none of the three
     /// gets a true sentence, and the tab gets no message that exists only to be wrong about.
     /// </summary>
     private void LoadPack(string path)
     {
+        // Every pick supersedes an emissive read still running on the pool, whatever kind of pack it is —
+        // see EmissiveInspected. Both live in the one place a pick arrives rather than in each loader, so a
+        // loader added later cannot forget them: an uncleared flag would hang "reading…" over the panel of
+        // whatever was picked instead, since that branch is tested before the Onion preview's.
+        _emissivePickToken++;
+        _emissiveLoading = false;
+
         if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
         else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
         else if (path.EndsWith(EyePackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadEyePack(path);
-        else LoadContentPack(path);
+        else LoadPenumbraPack(path);
+    }
+
+    /// <summary>
+    /// Choose between the two readers that both take a <c>.pmp</c>, and hand the parsed manifest to whichever
+    /// wins so the pick costs one archive open rather than two.
+    /// <para/>
+    /// The question is settled from the manifest alone — see <see cref="EmissiveSkinImportService.Claims"/>
+    /// — because it is only a choice of reader, and decoding a pack's textures to make it would decode them
+    /// for the reader that then doesn't want them. A pack that ships geometry goes to the content importer
+    /// whatever else it carries; one that ships none, but does ship art on a path the game will never ask
+    /// for, is glow art that Penumbra on its own can do nothing with.
+    /// <para/>
+    /// A read that throws is NOT handled here. It falls through to the content importer, whose own catch
+    /// turns it into the "couldn't read that pack" line the tab has always shown — one message for one
+    /// failure, rather than two arms racing to describe it.
+    /// </summary>
+    private void LoadPenumbraPack(string path)
+    {
+        PenumbraPackage.Contents? pack = null;
+        try { pack = PenumbraPackage.Read(path); }
+        catch (Exception) { /* reported by LoadContentPack, which reads it again and fails the same way */ }
+
+        if (pack != null && EmissiveSkinImportService.Claims(pack)) LoadEmissivePack(path, pack);
+        else LoadContentPack(path, pack);
     }
 
     /// <summary>
@@ -2174,6 +2321,18 @@ public class StatusWindow : Window
              && luminis.Textures.All(t => t.Import)
              && (_luminisMaterials is null or { Count: 0 } || _luminisMaterialsFromGameData))
                 StartLuminisImport(luminis);
+            return;
+        }
+
+        if (_emissivePreview is { } emissive)
+        {
+            // Every texture in, nothing to warn about — the same test as the Atramentum Luminis arm above,
+            // and for the same reason: every warning this preview raises is a decision.
+            if (emissive.AnyImportable
+             && emissive.Warnings.Count == 0
+             && emissive.Textures.All(t => t.Import)
+             && (_emissiveMaterials is null or { Count: 0 } || _emissiveMaterialsFromGameData))
+                StartEmissiveImport(emissive);
             return;
         }
 
@@ -2254,10 +2413,11 @@ public class StatusWindow : Window
         _importPath = path;
         _importStatus = null;
         _importMaterials = null;
-        // The three kinds of pack are imported under different rules, and a stale preview of another kind
-        // would keep drawing its own panel over this one.
+        // The kinds of pack are imported under different rules, and a stale preview of another kind would
+        // keep drawing its own panel over this one.
         _contentPreview = null;
         _luminisPreview = null;
+        _emissivePreview = null;
         _eyePreview = null;
         try
         {
@@ -2308,17 +2468,21 @@ public class StatusWindow : Window
     /// one frame the dialog reports a pick, for the same reason as the Onion path: reading every model in
     /// the pack is milliseconds, not a per-frame cost.
     /// </summary>
-    private void LoadContentPack(string path)
+    /// <param name="pack">The manifest <see cref="LoadPenumbraPack"/> already parsed, or null to read it
+    /// here.</param>
+    private void LoadContentPack(string path, PenumbraPackage.Contents? pack = null)
     {
         _importPath = path;
         _importStatus = null;
         _importPreview = null;    // see LoadOnionPack
         _luminisPreview = null;
+        _emissivePreview = null;
         _eyePreview = null;
         _importMaterials = null;
         try
         {
-            var preview = ContentImportService.Inspect(path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log));
+            var preview = ContentImportService.Inspect(
+                path, Plugin.Log, ItemNames.Lookup(Plugin.DataManager, Plugin.Log), pack);
             _contentPreview = preview;
             // No "(Proteus)" on a pack that already IS one: the suffix exists to tell a converted copy from
             // the pack it was made out of, and nothing is being converted here.
@@ -2495,9 +2659,11 @@ public class StatusWindow : Window
         _importStatus = null;
         _importPreview = null;    // see LoadOnionPack
         _contentPreview = null;
+        _emissivePreview = null;
         _eyePreview = null;
         _importMaterials = null;
         _luminisMaterials = null;
+        _emissiveMaterials = null;
         try
         {
             var preview = luminisImport.Inspect(path);
@@ -2691,6 +2857,292 @@ public class StatusWindow : Window
     }
 
     /// <summary>
+    /// Start reading a picked <c>.pmp</c> into the emissive-skin preview. The only loader that does not
+    /// answer on the frame it was called.
+    /// <para/>
+    /// The reason is measured, not defensive: these masks are authored at the body's own resolution, and
+    /// the 8192² one the pack this was written against ships takes 1.06 seconds to decode. The file
+    /// dialog's callback runs inside <c>Draw</c> on the framework thread, so doing that here stopped the
+    /// game dead for over a second — where the Atramentum Luminis loader beside it, which reads its whole
+    /// pack inline, is paying about 90 ms a sheet for the same kind of work.
+    /// <para/>
+    /// So the pick frame does only what it must: the manifest is already parsed, and the wearer's body has
+    /// to be asked of Penumbra HERE because that is IPC. The decode goes to the pool, and
+    /// <see cref="TickEmissiveInspect"/> puts the preview on screen when it lands — including the
+    /// auto-import the dialog callback would otherwise have run before there was anything to import.
+    /// </summary>
+    /// <param name="pack">The manifest <see cref="LoadPenumbraPack"/> already parsed.</param>
+    private void LoadEmissivePack(string path, PenumbraPackage.Contents pack)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _luminisPreview = null;
+        _emissivePreview = null;
+        _eyePreview = null;
+        _importMaterials = null;
+        _luminisMaterials = null;
+        _emissiveMaterials = null;
+        _emissiveLoading = true;
+
+        // Framework thread only — it asks Penumbra what the character has on. Everything after this point
+        // is Lumina and pixels, which the write pass already does off-thread.
+        var wearer = emissiveImport.DetectWearerBody();
+        var token = _emissivePickToken;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var preview = emissiveImport.Inspect(path, pack, wearer);
+                // Resolved out here beside the preview, as the other loaders do on their own frame: the
+                // catalogue walks 72 game-data probes on its first call, which is not a per-frame cost.
+                // Best effort — a failure costs the "Material targets" list, not the import, which resolves
+                // them again for itself.
+                IReadOnlyList<string>? materials = null;
+                bool fromGameData = false;
+                try
+                {
+                    materials = emissiveImport.MaterialsFor(preview, NullIfEmpty(preview.DefaultSuffix ?? ""));
+                    fromGameData = emissiveImport.BodiesFromGameData;
+                }
+                catch { /* preview only */ }
+
+                _emissiveInspected = new EmissiveInspected(token, preview, materials, fromGameData, null);
+            }
+            catch (Exception ex)
+            {
+                _emissiveInspected = new EmissiveInspected(
+                    token, null, null, false, string.Format(Strings.Emissive.ReadFailedFmt, ex.Message));
+            }
+        });
+    }
+
+    /// <summary>
+    /// Put a finished pool read on screen, on the framework thread. Nothing else may assign
+    /// <c>_emissivePreview</c>: the fields below have to move together or the panel draws one pack's
+    /// textures over another's material list.
+    /// </summary>
+    private void TickEmissiveInspect()
+    {
+        var done = _emissiveInspected;
+        if (done == null) return;
+        _emissiveInspected = null;
+
+        // A read for a file the user has already replaced. Dropped in silence — the pick that superseded it
+        // has its own panel up, and a message about a pack nobody is looking at any more is noise. The
+        // loading flag is NOT cleared here: it belongs to the newer pick, which may still be running.
+        if (done.Token != _emissivePickToken) return;
+
+        _emissiveLoading = false;
+
+        if (done.Error != null)
+        {
+            _importStatus = done.Error;
+            _importStatusOk = false;
+            return;
+        }
+
+        var preview = done.Preview!;
+        _emissivePreview = preview;
+        _emissiveMaterials = done.Materials;
+        _emissiveMaterialsFromGameData = done.MaterialsFromGameData;
+        _importName = ProteusName(preview.Name);
+        _importAuthor = preview.Author;
+        _emissiveSuffix = preview.DefaultSuffix ?? "";
+
+        // The dialog callback ran this the moment the file was picked, when there was still nothing to
+        // import. This is where the decision can actually be made.
+        AutoImport();
+    }
+
+    /// <summary>The emissive-skin preview: which textures carry a glow mask, and where they will land.</summary>
+    private void DrawEmissiveImport(EmissiveSkinImportService.ImportPreview preview)
+    {
+        var es = Strings.Emissive;
+        var ims = Strings.Import;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(_importPath);
+
+        ImGui.Spacing();
+        ImGui.InputText(ims.ModName, ref _importName, 128);
+        ImGui.InputText(ims.Author, ref _importAuthor, 128);
+
+        if (preview.Description != null)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(ims.Description);
+            ImGui.TextWrapped(preview.Description);
+        }
+        if (preview.Website != null)
+        {
+            ImGui.TextDisabled(preview.Website);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ims.WebsiteTip);
+        }
+
+        ImGui.Separator();
+        ImGui.TextUnformatted(string.Format(es.TextureCountFmt,
+            preview.Textures.Count(t => t.Import), preview.Textures.Count));
+
+        // One row per PICTURE, not per manifest path — a pack that aliases one sheet to several paths is
+        // shipping one tattoo, and listing it once per path would read as several.
+        using (var table = ImRaii.Table("##emissiveTextures", 4,
+                   ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+        {
+            if (table)
+                foreach (var t in preview.Textures)
+                {
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(t.Label);
+                    else ImGui.TextDisabled(t.Label);
+                    if (t.Paths.Count > 1 && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(es.PathsFmt, string.Join("\n", t.Paths)));
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Import ? string.Format(es.SizeFmt, t.Width, t.Height) : "");
+
+                    ImGui.TableNextColumn();
+                    ImGui.TextDisabled(t.Paths.Count > 1
+                        ? string.Format(es.AliasesFmt, t.Paths.Count)
+                        : "");
+
+                    // The glow percentage is the evidence that this is glow art rather than an ordinary
+                    // texture, so it goes in the table where it is read, not behind a hover.
+                    ImGui.TableNextColumn();
+                    if (t.Import) ImGui.TextUnformatted(string.Format(es.GlowFmt, t.GlowFraction));
+                    else ImGui.TextColored(ImportWarnColour, es.Skipped);
+
+                    if (t.SkipReason != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(string.Format(es.SkippedReasonFmt, t.Label, t.SkipReason));
+                }
+        }
+
+        // ── which body ──
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(200);
+        var suffixes = LuminisImportService.BodySuffixes;
+        var current = string.IsNullOrEmpty(_emissiveSuffix) ? (preview.DefaultSuffix ?? "") : _emissiveSuffix;
+        if (ImGui.BeginCombo(es.BodyTarget, current))
+        {
+            foreach (var s in suffixes)
+                if (ImGui.Selectable(s, string.Equals(s, current, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _emissiveSuffix = s;
+                    // Re-resolved on the CHANGE, not per frame: the catalogue rebuilds a list per call.
+                    try
+                    {
+                        _emissiveMaterials = emissiveImport.MaterialsFor(preview, s);
+                        _emissiveMaterialsFromGameData = emissiveImport.BodiesFromGameData;
+                    }
+                    catch { _emissiveMaterials = null; }
+                }
+            // A body the combo doesn't list — the wearer is on something exotic — is still the live choice
+            // and has to be selectable, or picking anything else would be a one-way door.
+            if (!suffixes.Contains(current, StringComparer.OrdinalIgnoreCase) && current.Length > 0)
+                if (ImGui.Selectable(current, true)) _emissiveSuffix = current;
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(es.BodyTargetTip);
+
+        var lead = preview.Importable.FirstOrDefault();
+        if (lead is { FromWearer: false, Token: { } token })
+            ImGui.TextDisabled(string.Format(es.BodyFromPackFmt, token));
+
+        DrawEmissiveMaterials();
+
+        ImGui.Spacing();
+        using (ImRaii.Disabled(!TextureLoader.NativeEncoderAvailable))
+            ImGui.Checkbox(ims.AsTex, ref _importAsTex);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(TextureLoader.NativeEncoderAvailable ? ims.AsTexTip : ims.AsTexUnavailableTip);
+
+        // Said before the button, in plain text rather than the warning colour: both of these are true of a
+        // CORRECT import, and amber would put a caution under a green result line.
+        if (preview.AnyImportable)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextUnformatted(es.MaterialsIgnored);
+            ImGui.Spacing();
+            ImGui.TextUnformatted(es.NoRaceFilter);
+            ImGui.PopTextWrapPos();
+        }
+
+        foreach (var w in preview.Warnings)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, w);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Separator();
+
+        bool valid = preview.AnyImportable && !string.IsNullOrWhiteSpace(_importName) && !_importBusy;
+        using (ImRaii.Disabled(!valid))
+            if (ImGui.Button(_importBusy ? ims.ImportBusy : ims.ImportBtn))
+                StartEmissiveImport(preview);
+        if (!valid && !_importBusy && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(preview.AnyImportable ? ims.NeedName : es.NothingUsable);
+
+        DrawImportStatus();
+    }
+
+    /// <summary>The material paths the imported overlays will claim — the Luminis panel's list, over the
+    /// other glow format.</summary>
+    private void DrawEmissiveMaterials()
+    {
+        var mats = _emissiveMaterials;
+        if (mats == null || mats.Count == 0) return;   // unresolved or unreadable — the import still works
+
+        var ims = Strings.Import;
+
+        // Outside the collapsing header: a fallback list is exactly what the user won't expand to check,
+        // and it silently names no male body.
+        if (!_emissiveMaterialsFromGameData)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ImportWarnColour, ims.FallbackBodies);
+            ImGui.PopTextWrapPos();
+        }
+
+        if (!ImGui.CollapsingHeader(string.Format(ims.MaterialTargetsFmt, mats.Count) + "###emissiveMats"))
+            return;
+
+        ImGui.TextWrapped(_emissiveMaterialsFromGameData ? ims.MaterialsFromGame : ims.MaterialsFallbackNote);
+        foreach (var p in mats)
+        {
+            ImGui.Bullet();
+            ImGui.TextUnformatted(Path.GetFileName(p));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(p);
+        }
+    }
+
+    /// <summary>Hand the decode and write to the pool; <see cref="TickEmissiveImport"/> registers what comes
+    /// back.</summary>
+    private void StartEmissiveImport(EmissiveSkinImportService.ImportPreview preview)
+    {
+        _importBusy = true;
+        _importStatus = null;
+        var (name, author, asTex, suffix) =
+            (_importName, _importAuthor, _importAsTex, NullIfEmpty(_emissiveSuffix));
+        Task.Run(() =>
+        {
+            try { _emissivePrepared = emissiveImport.Prepare(preview, name, author, asTex, suffix); }
+            catch (Exception ex)
+            {
+                _emissivePrepared = new(false, string.Format(Strings.Import.ImportFailedFmt, ex.Message),
+                    null, null, [], 0, 0);
+            }
+        });
+    }
+
+    /// <summary>
     /// Parse a picked <c>.zip</c> as a loose eye-texture pack, or report why it isn't one.
     /// <para/>
     /// Decodes one image — the mask, to measure what it marks as glowing. The other two are copied through
@@ -2703,8 +3155,10 @@ public class StatusWindow : Window
         _importPreview = null;    // see LoadOnionPack
         _contentPreview = null;
         _luminisPreview = null;
+        _emissivePreview = null;
         _importMaterials = null;
         _luminisMaterials = null;
+        _emissiveMaterials = null;
         try
         {
             var preview = eyeImport.Inspect(path);

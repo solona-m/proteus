@@ -931,6 +931,70 @@
     "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nTrois conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nLa suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau. Et « Corps » passe\nà « Tous les corps », pour que la peau atteigne aussi un corps vanilla.",
     "description": ""
   },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} chemins",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "Le pack indique avoir été peint pour {0} ; Proteus l’adaptera au corps que vous portez.",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "Corps",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "Sur quel matériau de corps l’image est peinte. Proteus le déduit du pack quand il reconnaît le corps, et de celui que vous portez sinon — changez-le si vous savez que le pack visait un autre corps.",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} brille",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "Importez un pack de peau émissive (.pmp d’art lumineux sans modèles). Sa lueur devient un calque Proteus que vous pouvez recolorer et atténuer, sans aucun mod de shader.",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "Seule l’illustration lumineuse est importée. Les matériaux de corps du pack sont laissés de côté : ils ne fonctionnent qu’avec un shader de peau remplacé, et Proteus peint la lueur sur la peau que vous portez déjà.",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus n’a aucun filtre de race ou de sexe : cela peindra tout personnage portant un corps au même matériau. Désactivez le mod dans Penumbra pour les personnages qui ne sont pas concernés.",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "Aucune texture de ce pack ne porte de masque de lueur.",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "Importé une seule fois, pour :\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "Impossible de lire ce pack : {0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "Lecture des textures de ce pack…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "ignoré",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nIgnoré : {1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "Textures : {0} sur {1}",
+    "description": ""
+  },
   "Export.Dialog.Filter": {
     "message": "Pack de mod Penumbra",
     "description": ""
@@ -1121,6 +1185,90 @@
   },
   "Import.Dialog.Title": {
     "message": "Sélectionner un pack",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "Importé depuis le pack de peau émissive « {0} ».",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "Ce nom de mod ne contient aucun caractère utilisable — utilisez des lettres ou des chiffres.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "Un dossier de mod nommé « {0} » existe déjà.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "Le pack n'est plus là : {0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Le dossier de mods de Penumbra n'est pas disponible.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "Aucune texture de ce pack n’a pu être lue au second passage ; rien n’a été écrit.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "« Proteus » est réservé — choisissez un autre nom de mod.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "Échec de l'écriture du mod : {0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "Tatouage lumineux",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "Tatouage lumineux — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}, mais Proteus n’a pas pu l’activer pour vous. Cochez-le sous « {3} » dans Penumbra, sinon rien ne sera peint.",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}. La lueur est activée et ne nécessite aucun mod de shader. Recolorez-la ou atténuez-la dans Colors, ou désactivez-la sous « {3} » dans Penumbra.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "le manifeste du pack la nomme, mais l’archive ne contient pas « {0} ».",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "son canal alpha est vide : elle ne marque rien comme lumineux. Une carte émissive y place la forme de la lueur, et une carte sans forme n’est pas un tatouage.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "elle ne fait que {0}×{1} : c’est la carte d’effet ou de palette d’un shader, pas une illustration peinte sur un corps.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "ses pixels n’ont pas pu être décodés.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus ne connaît pas le corps « {0} » et ne peut pas demander à votre personnage lequel il porte tant qu’il n’est pas chargé. Connectez-vous et rouvrez ce pack.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus ne connaît pas la disposition corporelle de ce pack : il peindra donc l’image telle quelle sur le corps que vous portez ({0}), sans redimensionnement. Si le pack a été peint pour un autre corps, le rendu sera faux — changez la cible ci-dessous si vous le savez.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "« {0} » brille sur {1:P0} du corps. C’est valide, mais cela signifie généralement que la texture n’a pas de vrai canal alpha — vérifiez le résultat avant de l’utiliser.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "Rien dans ce pack ne peut être importé — voir les raisons ci-dessus.",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {

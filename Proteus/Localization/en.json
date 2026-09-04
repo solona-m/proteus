@@ -931,6 +931,70 @@
     "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nThree things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin. And\n\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.",
     "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). The two quoted names are UI labels - use exactly your translations of Colors.Bodies.Label and Colors.Bodies.All so the tooltip names the control the user sees. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} paths",
+    "description": "Import tab, emissive skin pack: this one picture is named by {0} different paths in the manifest."
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.",
+    "description": "Import tab, emissive skin pack: the pack named the body its art was painted for. {0} is that name, e.g. \"bibo\"."
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "Body",
+    "description": "Import tab, emissive skin pack: label of the combo choosing which body material the art lands on."
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "Which body material the art is painted onto. Proteus picks this from the pack when it recognises the body, and from the one you're wearing when it doesn't — change it if you know the pack was made for a different one.",
+    "description": "Import tab, emissive skin pack: tooltip on the body combo."
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} glows",
+    "description": "Import tab, emissive skin pack: how much of a texture its mask marks as glowing. The evidence that this is glow art rather than an ordinary texture, so keep the percent format."
+  },
+  "Emissive.Intro": {
+    "message": "Import an emissive skin pack (.pmp of glow art with no models). Its glow becomes a Proteus overlay you can recolour and dim, with no shader mod needed.",
+    "description": "Import tab: the fifth intro bullet, for emissive skin packs. Says what you get, not how. \"No shader mod needed\" is the point — these packs are inert without a replaced skin shader."
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "Only the glow art is imported. The pack's own body materials are left behind: they only work with a replaced skin shader, and Proteus paints the glow onto whatever skin you already wear.",
+    "description": "Import tab, emissive skin pack: said before the Import button. The pack's own body-material redirects are deliberately dropped; only the glow art is taken. Plain text, not a warning."
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus has no race or sex filter: this paints any character wearing a body with the same material. Turn the mod off in Penumbra for characters it wasn't painted for.",
+    "description": "Import tab, emissive skin pack: Proteus has no race or sex filter. Plain text, not a warning — it is true of every overlay, not something this pack did."
+  },
+  "Emissive.NothingUsable": {
+    "message": "No texture in this pack carries a glow mask.",
+    "description": "Import tab, emissive skin pack: tooltip on the disabled Import button when the pack carries no glow art."
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "Imported once, for:\n{0}",
+    "description": "Import tab, emissive skin pack: tooltip listing every manifest path that names one picture. {0} is a newline-separated list."
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "Couldn't read that pack: {0}",
+    "description": "Import tab: the picked .pmp could not be read at all. {0} is the reader's own message."
+  },
+  "Emissive.Reading": {
+    "message": "Reading this pack's textures…",
+    "description": "Import tab, emissive skin pack: shown between picking the file and the preview appearing, while the pack's textures are decoded on a background thread."
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": "Import tab, emissive skin pack: a texture's pixel size, width by height."
+  },
+  "Emissive.Skipped": {
+    "message": "skipped",
+    "description": "Import tab, emissive skin pack: table cell for a texture that will not be imported. The reason is in its tooltip."
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nSkipped: {1}",
+    "description": "Import tab, emissive skin pack: tooltip on a skipped texture. {0} is its path, {1} the reason."
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "Textures: {0} of {1}",
+    "description": "Import tab, emissive skin pack: how many of the pack's textures will be imported. {0} is the count taken, {1} the count found."
+  },
   "Export.Dialog.Filter": {
     "message": "Penumbra mod pack",
     "description": "Shown in the save dialog's file-type box. \"Penumbra\" is a plugin name."
@@ -1122,6 +1186,90 @@
   "Import.Dialog.Title": {
     "message": "Select a pack",
     "description": "Title of the file picker. One dialog now offers both pack formats."
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "Imported from the emissive skin pack \"{0}\".",
+    "description": "Emissive skin import: the description written into the imported mod's Penumbra manifest. {0} is the source pack's file name."
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "That mod name has no usable characters — use letters or numbers.",
+    "description": "Emissive skin import: refused because the mod name has no characters a folder name can use."
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "A mod folder named \"{0}\" already exists.",
+    "description": "Emissive skin import: refused because a mod folder of that name already exists. {0} is the name."
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "The pack is no longer there: {0}",
+    "description": "Emissive skin import: refused because the picked file is no longer on disk. {0} is its path."
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Penumbra's mod directory isn't available.",
+    "description": "Emissive skin import: refused because Penumbra's mod directory could not be read."
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "None of this pack's textures could be read on the second pass, so nothing was written.",
+    "description": "Emissive skin import: the write produced nothing, because no texture decoded on the second pass."
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "Nothing in this pack can be imported.",
+    "description": "Emissive skin import: refused because nothing in the pack can be imported."
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "\"Proteus\" is reserved — choose a different mod name.",
+    "description": "Emissive skin import: refused because \"Proteus\" is the managed output mod's own folder."
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "Failed to write the mod: {0}",
+    "description": "Emissive skin import: the write failed. {0} is the exception's message."
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "Glow tattoo",
+    "description": "Emissive skin import: the Penumbra option name when the pack ships one picture."
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "Glow tattoo — {0}",
+    "description": "Emissive skin import: the Penumbra option name when the pack ships one picture per body layout. {0} is the body, e.g. \"bibo\"."
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. Tick it under \"{3}\" in Penumbra, or nothing will paint.",
+    "description": "Emissive skin import: the mod is in but Proteus could not tick its option. {0} is the mod folder, {1} the texture count, {2} an optional \" (skipped: n)\" tail, {3} the Penumbra group name."
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}. The glow is on and needs no shader mod. Recolour or dim it in Colors, or switch it off under \"{3}\" in Penumbra.",
+    "description": "Emissive skin import: success. {0} is the mod folder, {1} the texture count, {2} an optional \" (skipped: n)\" tail, {3} the Penumbra group name. \"Colors\" is a Proteus tab name."
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "the pack's manifest names it but the archive doesn't contain \"{0}\".",
+    "description": "Emissive skin import: skipped because the pack's manifest names a file the archive does not contain. {0} is the missing archive entry."
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "its alpha channel is empty, so it marks nothing as glowing. An emissive map puts the shape of the glow there, and one without a shape is not a tattoo.",
+    "description": "Emissive skin import: skipped because the emissive map's alpha channel marks nothing as glowing."
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "it is only {0}×{1}, which is a shader's effect or palette map rather than art painted on a body.",
+    "description": "Emissive skin import: skipped because the texture is far too small to be body art — it is the shader's effect or palette map. {0} and {1} are its width and height."
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "its pixels couldn't be decoded.",
+    "description": "Emissive skin import: skipped because the texture's pixels could not be decoded."
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus doesn't know the body \"{0}\", and can't ask your character which one they are wearing until they're drawn. Load in and reopen this pack.",
+    "description": "Emissive skin import: skipped because Proteus knows neither the pack's body token nor the one the character is wearing. {0} is the token."
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus doesn't know this pack's body layout, so it will paint the art onto the body you're wearing ({0}) exactly as it is, with no resizing. If the pack was painted for a different body it will look wrong — change the body target below if you know better.",
+    "description": "Emissive skin import: warning that the pack's body layout is unknown, so the art is aimed at the body the character is wearing. {0} is that body's material suffix."
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "\"{0}\" glows across {1:P0} of the body. That is legal, but it usually means the texture has no real alpha channel — check the result before wearing it out.",
+    "description": "Emissive skin import: warning that a texture glows almost everywhere, which usually means it has no real alpha channel. {0} is its path, {1} the fraction — keep the percent format."
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "Nothing in this pack can be imported — see the reasons above.",
+    "description": "Emissive skin import: warning that nothing in the pack can be imported."
   },
   "Import.Eye.Description.Fmt": {
     "message": "Imported from the eye texture pack \"{0}\".",

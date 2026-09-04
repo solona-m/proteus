@@ -931,6 +931,70 @@
     "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は三つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。\n三つめは「ボディ」が「すべてのボディ」に設定され、バニラボディにも適用されるようになることです。",
     "description": ""
   },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} パス",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "このパックは {0} 向けとのことなので、Proteus が着用中のボディに合わせて変換します。",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "ボディ",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "アートをどのボディマテリアルに描くかです。Proteus はボディを認識できればパックから、できなければ着用中のものから選びます。別のボディ向けだと分かっている場合は変更してください。",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} 発光",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "発光スキンパック（モデルを含まない発光アートの .pmp）をインポートします。発光は色や強さを調整できる Proteus オーバーレイになり、シェーダー MOD は不要です。",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "発光アートだけをインポートします。パック自身のボディマテリアルは取り込みません。それらは差し替えたスキンシェーダーがないと機能せず、Proteus は今あなたが着ている肌の上に発光を描くからです。",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus には種族・性別フィルターがありません。同じマテリアルのボディを着ているキャラクターにはすべて適用されます。対象外のキャラクターでは Penumbra で MOD をオフにしてください。",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "このパックには発光マスクを持つテクスチャがありません。",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "次のパス向けに一度だけインポートされます:\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "そのパックを読み込めませんでした：{0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "このパックのテクスチャを読み込んでいます…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nスキップ：{1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "テクスチャ: {1} 中 {0}",
+    "description": ""
+  },
   "Export.Dialog.Filter": {
     "message": "Penumbra MODパック",
     "description": ""
@@ -1121,6 +1185,90 @@
   },
   "Import.Dialog.Title": {
     "message": "パックを選択",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "発光スキンパック「{0}」からインポートしました。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "そのMOD名には使用できる文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "「{0}」という名前のMODフォルダーは既に存在します。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "パックが見つかりません：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "PenumbraのMODディレクトリを利用できません。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "このパックのテクスチャは2回目の読み込みでいずれも読み取れなかったため、何も書き込まれませんでした。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "このパックにはインポートできるものがありません。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "「Proteus」は予約名です。別のMOD名を選んでください。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "MODの書き出しに失敗しました：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "発光タトゥー",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "発光タトゥー — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。ただし Proteus は自動で有効にできませんでした。Penumbra の「{3}」でチェックしないと何も描画されません。",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。発光はオンになっており、シェーダー MOD は不要です。色や強さは Colors で調整でき、Penumbra の「{3}」でオフにできます。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "パックのマニフェストには記載されていますが、書庫に「{0}」が含まれていません。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "アルファチャンネルが空で、発光する箇所が指定されていません。エミッシブマップは発光の形をそこに置くため、形のないものはタトゥーではありません。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "サイズが {0}×{1} しかなく、身体に描かれたアートではなくシェーダーのエフェクトマップやパレットです。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "ピクセルをデコードできませんでした。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus はボディ「{0}」を知らず、キャラクターが読み込まれるまで確認できません。ログインしてからこのパックを開き直してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus はこのパックのボディ UV を把握していないため、現在着用中のボディ（{0}）にそのままリサイズなしで描画します。別のボディ向けに作られている場合は崩れます。分かるなら下で対象ボディを変更してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "「{0}」はボディの {1:P0} が発光します。問題ない場合もありますが、通常はテクスチャに実質的なアルファチャンネルがないことを意味します。使う前に結果を確認してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "このパックからインポートできるものはありません — 上の理由をご確認ください。",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {
