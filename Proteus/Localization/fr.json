@@ -287,6 +287,14 @@
     "message": "{0} : {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "Masquer à la lumière",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Fait suivre à l'opacité de cette ligne sa lueur : là où elle ne brille plus,\nil ne reste que la peau.\nSans cela, une ligne réservée à l'obscurité laisse sa propre couleur — souvent du noir —\nde sorte que le motif apparaît comme une tache sombre en plein jour.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Fait briller le maillage de cette sous-ligne sur votre personnage pour que vous le\nrepériez en jeu. Cliquez à nouveau pour arrêter.",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "Illumine la zone de cette sous-ligne sur la peau de votre personnage pour que vous la\nrepériez en jeu. Cliquez à nouveau pour arrêter. (La première fois demande un instant.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "S'estompe à la lumière",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "À quel point la lumière de la scène retire la lueur de cette ligne.\n0 % brille partout pareil. 100 % est une lueur réservée à l'obscurité : pleine intensité\ndans une pièce non éclairée, rien du tout sous un ciel de midi ou près d'une lampe.\nRéglé par ligne, pour qu'une moitié de tatouage ne brille que dans le noir et l'autre toujours.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "Force un redessin complet pour recharger toute bague ou bracelet que la seconde peau\na remplacé, en rétablissant son modèle d'origine. À utiliser si une coque d'équipement\nreste bloquée sur un accessoire après une désactivation ou un changement.",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "Réagir à la lumière de la scène",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Laisse les lignes marquées « S'estompe à la lumière » faiblir quand la lumière monte.\nDésactivé, chaque lueur brûle partout à sa luminosité d'origine, comme avant.\nRien n'est reconstruit dans les deux cas — cela passe par le matériau en cours.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Niveau de lumière",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 est l'obscurité totale (les lueurs d'obscurité sont au maximum), 1 est le plein jour (elles disparaissent).",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Définir le niveau de lumière à la main",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignore la scène et utilise le curseur à la place.\nLe moyen le plus rapide de voir ce que fait une lueur d'obscurité sans attendre le crépuscule,\net le bon réglage pour le gpose, où c'est votre propre éclairage qui compte.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Lecture {0:0.00} — ciel {1:0.00}, lampes {2:0.00} ({3} sur {4} atteignent)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "Activer la compression",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "Hébergement",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Lueur sensible à la lumière",
     "description": ""
   },
   "Settings.Section.Output": {

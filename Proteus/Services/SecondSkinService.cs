@@ -129,7 +129,11 @@ public sealed class SecondSkinService
         // notice already tells them — and taking its colour grid away would be the same silent nothing in
         // the other direction. Keyed by mod so the editor's per-frame lookup is a dictionary hit rather
         // than a filter over the whole set.
-        Dictionary<string, HashSet<string>> ContentMaterials);
+        Dictionary<string, HashSet<string>> ContentMaterials,
+        // Shell material disk leaf (ss_{letter}.mtrl) → what its rows want from the scene light. Only the
+        // materials that ask for something appear, so a character with no light-sensitive glow publishes an
+        // empty map and the runtime applier's per-frame path stays exactly what it was.
+        Dictionary<string, ShellLightProfile> ShellLight);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell for it is cut from, and the two spaces that geometry
@@ -968,6 +972,9 @@ public sealed class SecondSkinService
         // can hold SEVERAL: a mod/option may carry more than one gear overlay, all baking the same shared
         // colour table, so a row's glow must reach every one of their shell materials.
         var shellMaterials = new Dictionary<(string, string?, string?), List<string>>();
+        // Shell material leaf → its light response, for the runtime applier. Only materials that ask for
+        // something land here (see ShellLightProfile.Any).
+        var shellLight = new Dictionary<string, ShellLightProfile>(StringComparer.OrdinalIgnoreCase);
         // Per mod, the content materials backing a drawn mesh — see Result.ContentMaterials for why the
         // declared set is not good enough, and why this is not the hosted set either.
         var contentMaterials = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -2687,6 +2694,11 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
+            if (BuildLightProfile(ov.ColorTableRows, isMaskShell, layerSurf.Key.Kind,
+                    isScroll: string.Equals(shader, RenderModeInference.GlowShader,
+                                            StringComparison.OrdinalIgnoreCase)) is { } lightProfile)
+                shellLight[$"ss_{diskChar}.mtrl"] = lightProfile;
+
             perHostLayers[hIdx].Add(new SecondSkinLayer
             {
                 MaterialName = "/" + matName,   // the model stores material names with a leading slash
@@ -3233,7 +3245,7 @@ public sealed class SecondSkinService
         if (hostModelPaths.Count == 0) return null;
 
         return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                          hostModelPaths, appendHostModelPaths, contentMaterials);
+                          hostModelPaths, appendHostModelPaths, contentMaterials, shellLight);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');
@@ -4183,6 +4195,54 @@ public sealed class SecondSkinService
         }
         return rows.Count > 0 ? rows : null;
     }
+
+    /// <summary>
+    /// What a shell's rows want from the scene light, or null when they want nothing.
+    /// <para/>
+    /// Deliberately built from the same presets and the same 1-based → 0-based mapping
+    /// <see cref="BuildRows"/> uses, including its mask-shell mirroring: the response has to land on exactly
+    /// the game rows whose emissive it is going to scale, and a row pair that mirrors its glow across must
+    /// mirror the response with it or half of a mask would fade while the other half stayed lit.
+    /// </summary>
+    internal static ShellLightProfile? BuildLightProfile(List<ColorTableRowPreset>? presets, bool isMaskShell,
+                                                        ShellSurfaceKind kind, bool isScroll = false)
+    {
+        if (presets == null || presets.Count == 0) return null;
+
+        var response = new float[ShellLightProfile.RowCount];
+        var hide     = new float[ShellLightProfile.RowCount];
+        foreach (var p in presets)
+        {
+            if (p.Row is < 1 or > 16) continue;
+            Add((p.Row - 1) * 2, p.SubRowA ?? (isMaskShell ? p.SubRowB : null));
+            Add((p.Row - 1) * 2 + 1, p.SubRowB ?? (isMaskShell ? p.SubRowA : null));
+        }
+
+        var profile = new ShellLightProfile(response, hide, ProbeHeightFor(kind), isScroll);
+        return profile.Any ? profile : null;
+
+        void Add(int rowIndex, ColorTableSubRowPreset? sub)
+        {
+            if (sub == null) return;
+            float r = Math.Clamp(sub.LightResponse ?? 0f, 0f, 1f);
+            response[rowIndex] = r;
+            // Hiding at a response of zero would mean "vanish when the light does nothing", which is a
+            // setting that can only ever hide the art or do nothing at all — so a bare Hide with no
+            // response reads as "follow the glow all the way".
+            if (sub.HideInLight) hide[rowIndex] = r > 0f ? r : 1f;
+        }
+    }
+
+    /// <summary>
+    /// Roughly how far up the wearer a surface's art sits, so the light is sampled near it. Estimates of
+    /// body parts, not measurements: the point is only to tell a floor lamp from a ceiling one.
+    /// </summary>
+    private static float ProbeHeightFor(ShellSurfaceKind kind) => kind switch
+    {
+        ShellSurfaceKind.Face or ShellSurfaceKind.Iris or ShellSurfaceKind.Hair or ShellSurfaceKind.Ear => 1.45f,
+        ShellSurfaceKind.Tail => 0.7f,
+        _ => 0.9f,   // the body, and any piece a pack brought its own geometry for
+    };
 
     /// <summary>One sub-row preset as the material writer's row. Shared by both row builders so a shell and
     /// a content material can never disagree about what a preset means.</summary>

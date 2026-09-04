@@ -1010,7 +1010,8 @@ public static class ContentGlowRow
         => s.Diffuse == null && s.EmissiveColor == null && s.Specular == null
         && s.Emissive == 0f && s.Opacity == 0
         && s.SphereMap == null && s.SphereIntensity == null
-        && s.Roughness == null && s.Metalness == null;
+        && s.Roughness == null && s.Metalness == null
+        && s.LightResponse == null && !s.HideInLight;
 }
 
 /// <summary>Maps one Penumbra option group to per-option geometry.</summary>
@@ -1102,6 +1103,38 @@ public class ColorTableSubRowPreset
     /// </summary>
     [JsonPropertyName("Opacity")]
     public int Opacity { get; set; } = 0;
+
+    /// <summary>
+    /// How much of this region's glow the scene's light takes away, 0–1. Zero (the default) is the
+    /// unconditional glow every row had before: it emits the same in a lit street as in a cellar.
+    /// One is fully light-sensitive — the emissive scales by <c>1 − LightResponse × light</c>, so it
+    /// reaches full brightness only in the dark.
+    /// <para/>
+    /// Per SUB-ROW on purpose: this is what lets one half of a tattoo be a dark-only glow while the other
+    /// half is ordinary always-on art, since the index texture sends each half to its own cell. It only
+    /// means anything where <see cref="Emissive"/> is above zero — there is nothing to take away otherwise.
+    /// </summary>
+    [JsonPropertyName("LightResponse")]
+    public float? LightResponse { get; set; }
+
+    /// <summary>
+    /// Whether this region's OPACITY follows its glow, so where the light has taken the glow away there is
+    /// nothing left but skin.
+    /// <para/>
+    /// Fading the emissive alone still leaves the shell's own diffuse behind, and on characterscroll that
+    /// diffuse is the whole unlit surface — usually black, so a dark-only tattoo would read as a black
+    /// silhouette in daylight, which is exactly the thing Atramentum Luminis did not do.
+    /// <para/>
+    /// Per row like <see cref="LightResponse"/>, because the opacity it moves is the shell normal's BLUE
+    /// channel — the same coverage gate row <see cref="Opacity"/> is baked into — and the index texture says
+    /// which texel belongs to which row. So one region can vanish in daylight while the region beside it, on
+    /// the same shell and the same material, keeps glowing and stays solid.
+    /// <para/>
+    /// With no <see cref="LightResponse"/> it follows the glow all the way; with one, it fades only as far
+    /// as the glow does — pulling the surface out from under a glow that is still burning looks like a hole.
+    /// </summary>
+    [JsonPropertyName("HideInLight")]
+    public bool HideInLight { get; set; }
 
     /// <summary>
     /// Gear layer only. Sphere map to reflect on this row — a slice of the game's shared

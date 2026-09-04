@@ -140,6 +140,40 @@ public sealed class LuminisImportService
     private const int GlowRow = 16;
 
     /// <summary>
+    /// How many separately-addressable regions one imported sheet may be split into.
+    /// <para/>
+    /// Atramentum Luminis's mask is flat plateaus — 0 for a full glow, ~128 for a half one — and those
+    /// plateaus are how its authors made one part of a tattoo behave differently from another. Collapsing
+    /// them onto one colour-table cell (which is what a pack with no <c>_id</c> gets) keeps the picture but
+    /// throws that structure away: every region then shares one glow dial, one colour, and one light
+    /// response. Splitting them out is what makes "this half is dark-only, that half is always there"
+    /// reachable on an imported pack at all.
+    /// <para/>
+    /// Eight rather than sixteen: the rows above these stay free for the user, and no real sheet has been
+    /// seen with more than three plateaus.
+    /// </summary>
+    private const int MaxGlowRegions = 8;
+
+    /// <summary>How much of the glowing area a plateau must hold to earn a row of its own. Below this it is
+    /// an antialiased edge or a compression artefact, not a region anyone painted.</summary>
+    private const float MinRegionFraction = 0.02f;
+
+    /// <summary>How far apart two plateaus must be (in the 0–255 mask) to count as different regions.
+    /// Anything closer is the same fill read through lossy compression.</summary>
+    private const int RegionSeparation = 16;
+
+    /// <summary>
+    /// What an imported glow row asks of the scene light: everything. Atramentum Luminis tattoos were
+    /// dark-only — they lit an unlit room and were not there in daylight — so importing one as an
+    /// unconditional glow is not parity, it is a different effect that happens to use the same art. Both
+    /// halves are set: the glow fades, and the surface goes with it, or the tattoo would read as a black
+    /// patch at noon instead of as skin.
+    /// <para/>
+    /// Changed per region in Colors afterwards, which is the point of giving each plateau its own row.
+    /// </summary>
+    private const float GlowLightResponse = 1f;
+
+    /// <summary>
     /// The row emissive: 300%. Measured in game against the artwork, not derived.
     /// <para/>
     /// On characterscroll this is the multiplier the scroll map's brightness scales with. Much higher than
@@ -776,6 +810,45 @@ public sealed class LuminisImportService
             glowDescriptor.ScrollTilingX = 1f;
             glowDescriptor.ScrollTilingY = 1f;
 
+            // One row per plateau, so each region of the tattoo can later be given its own colour, its own
+            // brightness and its own light response. Every row is written IDENTICALLY here on purpose: the
+            // regions differ in what they let the user do, not in how the import looks, and the per-pixel
+            // intensity that actually separates them is already baked into the scroll map above. A sheet
+            // with one plateau (or none the histogram trusts) keeps the old single-row shape and authors no
+            // index at all.
+            var bands = GlowBands(rgba);
+            int rowCount = Math.Max(1, bands.Count);
+            if (bands.Count > 1)
+            {
+                // PNG, not the .tex path Materialize would otherwise take: an index texture is a lookup,
+                // and BC7 is lossy enough to move a texel's red across a row boundary — which is why
+                // SecondSkinService refuses to compress the id slot either.
+                glowDescriptor.Index = "overlays/" + Materialize(
+                    BuildGlowIndex(rgba, bands), w, h, overlaysDir, plan.Stem + "_glow_id", encodeTo: null);
+                log?.Information("[Proteus] luminis import: {0} — {1} glow region(s), rows 1–{1}",
+                    plan.Label, bands.Count);
+            }
+
+            var glowRows = new List<ColorTableRowPreset>();
+            for (int r = 1; r <= rowCount; r++)
+                glowRows.Add(new ColorTableRowPreset
+                {
+                    // With an index the rows start at 1 and count up with the plateaus; without one the
+                    // shell samples the fabricated (255,255,0), which is row 16.
+                    Row = bands.Count > 1 ? r : GlowRow,
+                    SubRowA = new ColorTableSubRowPreset
+                    {
+                        Emissive = GlowGate,
+                        // Neutral: the scroll map is COLOURED, so it carries its own hue and a tinted
+                        // emissive would only push everything toward that tint.
+                        EmissiveColor = RenderModeInference.GlowEmissiveColour,
+                        Diffuse = GlowSurfaceColour,
+                        // Dark-only, which is what these tattoos were: see GlowLightResponse.
+                        LightResponse = GlowLightResponse,
+                        HideInLight = true,
+                    },
+                });
+
             glowOptions.Add(new OverlayOption
             {
                 Name = GlowOptionName(plan, qualified),
@@ -784,21 +857,7 @@ public sealed class LuminisImportService
                 // declares none, so an emissive there would reach the skin option too — and any emissive
                 // makes RenderModeInference.HasCloth true, which would promote the author's plain body
                 // texture to a gear shell as well.
-                ColorTableRows =
-                [
-                    new ColorTableRowPreset
-                    {
-                        Row = GlowRow,
-                        SubRowA = new ColorTableSubRowPreset
-                        {
-                            Emissive = GlowGate,
-                            // Neutral: the scroll map is COLOURED, so it carries its own hue and a tinted
-                            // emissive would only push everything toward that tint.
-                            EmissiveColor = RenderModeInference.GlowEmissiveColour,
-                            Diffuse = GlowSurfaceColour,
-                        },
-                    },
-                ],
+                ColorTableRows = glowRows,
             });
 
             // ── the author's own skin ──
@@ -897,6 +956,84 @@ public sealed class LuminisImportService
             root, 0, GroupName, [.. options.Select(o => o.Name)], defaults);
 
         return new([.. glowOptions.Select(o => o.Name)], defaultOn);
+    }
+
+    /// <summary>
+    /// The distinct glow plateaus in an Atramentum Luminis mask, brightest first.
+    /// <para/>
+    /// A plateau is a spike in the histogram of "how brightly does this pixel glow" (<c>255 − alpha</c>),
+    /// because AL fills a region with one flat value and only ramps at its outline. So: take the most
+    /// populated value, claim everything within <see cref="RegionSeparation"/> of it as the same fill, and
+    /// repeat. A value that holds less than <see cref="MinRegionFraction"/> of the glowing area is an edge
+    /// or an artefact and gets no row of its own — the nearest real plateau absorbs it.
+    /// <para/>
+    /// Brightest first so row 1 is the tattoo's main artwork, which is what someone opening Colors wants to
+    /// find at the top rather than having to hunt for.
+    /// <para/>
+    /// Returns an empty list when nothing glows, and a single entry when the sheet is one flat region —
+    /// the caller keeps its old single-row shape there rather than authoring an index that says nothing.
+    /// </summary>
+    internal static List<int> GlowBands(byte[] rgba, int maxBands = MaxGlowRegions,
+                                        float minFraction = MinRegionFraction)
+    {
+        var counts = new int[256];
+        long total = 0;
+        for (int i = 3; i < rgba.Length; i += 4)
+        {
+            if (rgba[i] >= OpaqueAlpha) continue;   // no glow here at all
+            counts[255 - rgba[i]]++;
+            total++;
+        }
+        if (total == 0) return [];
+
+        var bands = new List<int>();
+        for (int n = 0; n < maxBands; n++)
+        {
+            int best = -1, bestCount = 0;
+            for (int v = 0; v < counts.Length; v++)
+                if (counts[v] > bestCount) { bestCount = counts[v]; best = v; }
+
+            if (best < 0 || bestCount / (float)total < minFraction) break;
+            bands.Add(best);
+            for (int v = Math.Max(0, best - RegionSeparation); v <= Math.Min(255, best + RegionSeparation); v++)
+                counts[v] = 0;
+        }
+
+        bands.Sort((a, b) => b.CompareTo(a));   // brightest first
+        return bands;
+    }
+
+    /// <summary>
+    /// An index texture sending each glowing pixel to the row of the plateau it belongs to.
+    /// <para/>
+    /// Red is the row selector in the convention <see cref="ContentIndexTexture.RowOf"/> decodes —
+    /// <c>(row − 1) × 17</c>, which round-trips exactly for all sixteen rows — and green is 255 for sub-row
+    /// A. Pixels that do not glow are given the first row rather than a "selects nothing" alpha: the shell's
+    /// coverage is already zero there so they render either way, and leaving a hole in the selector only
+    /// gives the row-repair pass something to argue with.
+    /// </summary>
+    internal static byte[] BuildGlowIndex(byte[] rgba, IReadOnlyList<int> bands)
+    {
+        var id = new byte[rgba.Length];
+        for (int i = 0; i < rgba.Length; i += 4)
+        {
+            int lit = 255 - rgba[i + 3];
+            int band = 0;
+            if (rgba[i + 3] < OpaqueAlpha)
+            {
+                int bestGap = int.MaxValue;
+                for (int b = 0; b < bands.Count; b++)
+                {
+                    int gap = Math.Abs(lit - bands[b]);
+                    if (gap < bestGap) { bestGap = gap; band = b; }
+                }
+            }
+            id[i]     = (byte)(band * 17);   // band 0 → row 1, band 1 → row 2, …
+            id[i + 1] = 255;                 // sub-row A
+            id[i + 2] = 0;
+            id[i + 3] = 255;
+        }
+        return id;
     }
 
     /// <summary>Write one RGBA buffer into the sidecar and return its file name.</summary>

@@ -276,6 +276,38 @@ public sealed class SettingsStrings
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
+
+    public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
+
+    public readonly string LightResponseEnabled = Loc.Localize("Settings.LightResponse.Enabled",
+        "React to the scene's light");
+
+    public readonly string LightResponseEnabledTip = Loc.Localize("Settings.LightResponse.Enabled.Tip",
+        "Let rows marked \"Fades in light\" dim as the light on you rises.\n"
+      + "Off, every glow burns at its authored brightness everywhere, the way it did before.\n"
+      + "Nothing is rebuilt either way — this reaches the character through the live material.");
+
+    public readonly string LightResponseManual = Loc.Localize("Settings.LightResponse.Manual",
+        "Set the light level by hand");
+
+    public readonly string LightResponseManualTip = Loc.Localize("Settings.LightResponse.Manual.Tip",
+        "Ignore the scene and use the slider instead.\n"
+      + "The quickest way to see what a dark-only glow does without waiting for dusk,\n"
+      + "and the right setting for gpose, where your own lighting rig is the point.");
+
+    public readonly string LightResponseLevel = Loc.Localize("Settings.LightResponse.Level", "Light level");
+
+    public readonly string LightResponseLevelTip = Loc.Localize("Settings.LightResponse.Level.Tip",
+        "0 is pitch dark (dark-only glows at full brightness), 1 is full daylight (they vanish).");
+
+    public readonly string LightResponseReadoutFmt = Loc.Localize("Settings.LightResponse.Readout.Fmt",
+        "Reading {0:0.00} — sky {1:0.00}, lamps {2:0.00} ({3} of {4} reached)");
+
+    /// <summary>The raw layout flags behind the sky term. Deliberately untranslated jargon on one line:
+    /// it exists to be screenshotted when the reading disagrees with the room.</summary>
+    public readonly string LightResponseSignalsFmt = Loc.Localize("Settings.LightResponse.Signals.Fmt",
+        "outdoor={0}  indoor={1}  envspace={2}  sky={3}");
+
     public readonly string SecDiagnostics = Loc.Localize("Settings.Section.Diagnostics", "Diagnostics");
 
     // ── general ─────────────────────────────────────────────────────────────────────────────────────
@@ -931,6 +963,22 @@ public sealed class ColorsStrings
         "How brightly this row glows. 0 switches it off.\n" +
         "Under an animated glow this is the effect's brightness, and a high value\n" +
         "blows a colourful scroll map out to white. Around 25% is a good start.");
+
+    public readonly string LightResponse = Loc.Localize("Colors.LightResponse.Label", "Fades in light");
+
+    public readonly string LightResponseTip = Loc.Localize("Colors.LightResponse.Tip",
+        "How much the scene's light takes this row's glow away.\n" +
+        "0% glows the same everywhere. 100% is a dark-only glow: full brightness in\n" +
+        "an unlit room, nothing at all under a midday sky or beside a lamp.\n" +
+        "Set per row, so one half of a tattoo can be dark-only and the other always on.");
+
+    public readonly string HideInLight = Loc.Localize("Colors.HideInLight.Label", "Hide in light");
+
+    public readonly string HideInLightTip = Loc.Localize("Colors.HideInLight.Tip",
+        "Let this row's opacity follow its glow, so where it has stopped glowing\n" +
+        "there is nothing left but skin.\n" +
+        "Without this a dark-only row still leaves its own colour behind — usually black —\n" +
+        "so the art reads as a dark patch in daylight instead of vanishing into the skin.");
 
     public readonly string Opacity = Loc.Localize("Colors.Opacity.Label", "Opacity");
 

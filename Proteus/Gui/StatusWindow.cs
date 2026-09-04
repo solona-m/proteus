@@ -20,6 +20,10 @@ namespace Proteus.Gui;
 
 public class StatusWindow : Window
 {
+    /// <summary>How lit the wearer is, for the readout in Settings. Set once at startup; null just hides
+    /// the readout — the light response itself runs without anyone watching it.</summary>
+    public static Proteus.Interop.SceneLightService? SceneLight { get; set; }
+
     private readonly CompositorService compositor;
     private readonly SidecarDiscoveryService discovery;
     private readonly PenumbraBridge penumbra;
@@ -964,6 +968,11 @@ public class StatusWindow : Window
             DrawSkinEffectSliders();
 
         ImGui.Spacing();
+        ProteusStyle.SectionHeader(s.SecLightResponse);
+        using (ProteusStyle.Card())
+            DrawLightResponseSettings();
+
+        ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecHosting);
         using (ProteusStyle.Card())
             DrawHostingSettings();
@@ -1213,6 +1222,67 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.SkindentingTip);
+    }
+
+    /// <summary>
+    /// Light-sensitive glow: the master switch, the hand-pinned level, and a readout of what the probe is
+    /// currently reading.
+    /// <para/>
+    /// None of these recomposite, and that is the point of the whole feature — the light reaches the
+    /// character through the live colour table, so moving this slider changes what is on screen within a
+    /// frame and nothing on disk is rebuilt. The readout is here because "why is my tattoo off in this
+    /// room" otherwise has no answer short of a debugger: it names the two terms behind the one number.
+    /// </summary>
+    private void DrawLightResponseSettings()
+    {
+        var s = Strings.Settings;
+
+        bool enabled = config.LightResponseEnabled;
+        if (ImGui.Checkbox(s.LightResponseEnabled, ref enabled))
+        {
+            config.LightResponseEnabled = enabled;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.LightResponseEnabledTip);
+
+        using var dim = ImRaii.PushStyle(ImGuiStyleVar.Alpha, enabled ? 1f : 0.5f);
+
+        bool manual = config.LightResponseManual;
+        if (ImGui.Checkbox(s.LightResponseManual, ref manual))
+        {
+            config.LightResponseManual = manual;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.LightResponseManualTip);
+
+        if (manual)
+        {
+            ImGui.SetNextItemWidth(ProteusStyle.S(140f));
+            float level = config.LightResponseManualLevel;
+            if (ImGui.SliderFloat(s.LightResponseLevel, ref level, 0f, 1f, "%.2f"))
+                config.LightResponseManualLevel = Math.Clamp(level, 0f, 1f);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(s.LightResponseLevelTip);
+        }
+
+        // Only while the probe is actually running. Switched off it stops evaluating, and the last numbers it
+        // happened to hold would sit here looking current — the same lie the pinned case used to tell.
+        if (enabled && SceneLight is { } probe)
+        {
+            ImGui.TextDisabled(string.Format(s.LightResponseReadoutFmt,
+                probe.Level, probe.HasSky ? probe.SkyTerm : 0f, probe.PlacedTerm,
+                probe.LightsCounted, probe.LightsSeen));
+            // The raw signals behind the sky term. Deciding "is there a sky over me" from the layout is the
+            // part of the estimate most likely to be wrong — outdoor data alone said yes inside a building —
+            // so the three flags sit where they can be read off the screen rather than out of a log.
+            ImGui.TextDisabled(string.Format(s.LightResponseSignalsFmt,
+                probe.Outdoor ? "Y" : "n", probe.Indoor ? "Y" : "n",
+                probe.InEnvSpace ? "Y" : "n", probe.HasSky ? "Y" : "n"));
+        }
     }
 
     private void DrawCacheAndMeshSettings()
@@ -3057,7 +3127,12 @@ public class StatusWindow : Window
             authoredPhysical: true,
             // And the grid shows what the PACK'S material holds for anything the sidecar hasn't overridden,
             // rather than this editor's neutral defaults — see DrawSubRow.
-            physicalBaseline: idx.Physical);
+            physicalBaseline: idx.Physical,
+            // A light response can't reach here. It is applied by re-asserting a shell's colour table onto
+            // the live material every frame, and a content material is the pack's own, published verbatim
+            // and never touched at runtime — so the controls would save a value that does nothing. Shown on
+            // Proteus's own shells only, which is where the compositor publishes a profile for.
+            lightResponseApplies: false);
         _rowSelection[selKey] = sel;
 
         // ── animated glow ────────────────────────────────────────────────────

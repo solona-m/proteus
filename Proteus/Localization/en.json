@@ -287,6 +287,14 @@
     "message": "{0}: {1}",
     "description": "Tab caption when several option groups are active. {0} is the group name, {1} the option name - both come from the mod and are not translated."
   },
+  "Colors.HideInLight.Label": {
+    "message": "Hide in light",
+    "description": "Checkbox label. Appears in the colour-table editor window, under the Glow slider."
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Let this row's opacity follow its glow, so where it has stopped glowing\nthere is nothing left but skin.\nWithout this a dark-only row still leaves its own colour behind — usually black —\nso the art reads as a dark patch in daylight instead of vanishing into the skin.",
+    "description": "Tooltip on the Hide in light checkbox. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Make this sub-row's mesh glow on your character so you can find it\nin-game. Click again to stop.",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
@@ -302,6 +310,14 @@
   "Colors.Highlight.Skin.Tip": {
     "message": "Light up this sub-row's region on your character's skin so you can find\nit in-game. Click again to stop. (Takes a moment to build the first time.)",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.LightResponse.Label": {
+    "message": "Fades in light",
+    "description": "Control label. Appears in the colour-table editor window, under the Glow slider."
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "How much the scene's light takes this row's glow away.\n0% glows the same everywhere. 100% is a dark-only glow: full brightness in\nan unlit room, nothing at all under a midday sky or beside a lamp.\nSet per row, so one half of a tattoo can be dark-only and the other always on.",
+    "description": "Tooltip on the Fades in light slider. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Mask.Forced": {
     "message": "(forced)",
@@ -1779,6 +1795,38 @@
     "message": "Force a full redraw to reload any ring/bracelet the second skin replaced,\nrestoring it to its original model. Use if a gear shell stays stuck on an\naccessory after disabling or swapping.",
     "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "React to the scene's light",
+    "description": "Checkbox label in the Settings tab."
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Let rows marked \"Fades in light\" dim as the light on you rises.\nOff, every glow burns at its authored brightness everywhere, the way it did before.\nNothing is rebuilt either way — this reaches the character through the live material.",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Light level",
+    "description": "Slider label in the Settings tab."
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 is pitch dark (dark-only glows at full brightness), 1 is full daylight (they vanish).",
+    "description": "Tooltip on the light-level slider."
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Set the light level by hand",
+    "description": "Checkbox label in the Settings tab."
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignore the scene and use the slider instead.\nThe quickest way to see what a dark-only glow does without waiting for dusk,\nand the right setting for gpose, where your own lighting rig is the point.",
+    "description": "Tooltip. \"gpose\" is FFXIV's group-pose camera mode. Contains deliberate line breaks - keep the same number."
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Reading {0:0.00} — sky {1:0.00}, lamps {2:0.00} ({3} of {4} reached)",
+    "description": "Diagnostic readout. {0} is the light level 0-1, {1} a count of nearby lights, {2} the sky's contribution, {3} the placed lights' contribution."
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": "Diagnostic flags shown under the light readout. The words outdoor/indoor/envspace/sky are field names - keep them as-is."
+  },
   "Settings.Output.Compression.Label": {
     "message": "Enable Compression",
     "description": "Checkbox in Settings > Output."
@@ -1822,6 +1870,10 @@
   "Settings.Section.Hosting": {
     "message": "Hosting",
     "description": "Section heading in Settings: which equipment slot the second skin rides on."
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Light-sensitive glow",
+    "description": "Section heading in the Settings tab."
   },
   "Settings.Section.Output": {
     "message": "Output",

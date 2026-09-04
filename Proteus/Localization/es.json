@@ -287,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "Ocultar con luz",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Hace que la opacidad de esta fila siga a su brillo: donde deja de brillar,\nno queda más que piel.\nSin esto, una fila solo-oscuridad deja atrás su propio color — normalmente negro —\ny el arte se ve como una mancha oscura a plena luz.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Hace brillar la malla de esta subfila en tu personaje para que la localices\nen el juego. Vuelve a hacer clic para detenerlo.",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "Ilumina la zona de esta subfila en la piel de tu personaje para que la localices\nen el juego. Vuelve a hacer clic para detenerlo. (La primera vez tarda un momento.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "Se desvanece con luz",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "Cuánto le quita al brillo de esta fila la luz de la escena.\n0 % brilla igual en todas partes. 100 % es un brillo solo para la oscuridad: brillo pleno\nen una sala sin luz y nada bajo un cielo de mediodía o junto a una lámpara.\nSe ajusta por fila, así media tatuaje puede ser solo-oscuridad y la otra mitad siempre visible.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "Fuerza un redibujado completo para recargar cualquier anillo o pulsera que la segunda\npiel haya sustituido, devolviéndolo a su modelo original. Úsalo si un caparazón de\nequipo se queda atascado en un accesorio tras desactivarlo o cambiarlo.",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "Reaccionar a la luz de la escena",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Deja que las filas marcadas «Se desvanece con luz» bajen cuando aumenta la luz.\nDesactivado, cada brillo arde con su intensidad original en todas partes, como antes.\nEn ningún caso se reconstruye nada: esto llega al personaje por el material en vivo.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Nivel de luz",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 es oscuridad total (los brillos solo-oscuridad al máximo), 1 es pleno día (desaparecen).",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Fijar el nivel de luz a mano",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignora la escena y usa el deslizador en su lugar.\nLa forma más rápida de ver qué hace un brillo solo-oscuridad sin esperar al anochecer,\ny el ajuste correcto para gpose, donde lo que importa es tu propia iluminación.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Lectura {0:0.00} — cielo {1:0.00}, lámparas {2:0.00} ({3} de {4} llegan)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "Activar compresión",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "Alojamiento",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Brillo sensible a la luz",
     "description": ""
   },
   "Settings.Section.Output": {

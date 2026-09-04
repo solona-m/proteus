@@ -32,6 +32,15 @@ internal static unsafe class ColorTableInterop
     public const int OffDiffuse  = 0;    // halves 0,1,2
     public const int OffEmissive = 16;   // halves 8,9,10
 
+    /// <summary>
+    /// Half 21 — "Sphere Map Opacity" in the colour table, and on characterscroll.shpk the scrolling
+    /// effect's VISIBILITY (see <c>GearMaterialWriter.HEffectEnable</c>'s comment block, which arms a glow
+    /// row by writing this alongside half 23). Scaling it is how an ANIMATED glow is dimmed: on that shader
+    /// the emissive is the map's brightness dial, and taking only that down leaves the pattern visible as a
+    /// flat surface rather than fading it out.
+    /// </summary>
+    public const int OffEffectVisibility = 21 * 2;
+
     /// <summary>One colour-table material located on the character: its file-name leaf, its texture slot
     /// (a <c>Texture**</c> as an address), and a copy of its baseline table (from the material's DataSet).</summary>
     public readonly record struct Located(string Leaf, nint Slot, byte[] Baseline);
@@ -167,6 +176,27 @@ internal static unsafe class ColorTableInterop
         if (old != null)
             old->DecRef();
         return true;
+    }
+
+    /// <summary>
+    /// Multiply <paramref name="count"/> consecutive halves at <paramref name="byteOffset"/> in a row by
+    /// <paramref name="factor"/>, in place.
+    /// <para/>
+    /// Scaling rather than assigning is what keeps the light response from being destructive: the value it
+    /// operates on is the material's own authored one (the applier always starts from a fresh copy of the
+    /// baseline DataSet), so at factor 1 the table is byte-identical to the one the game cooked and there
+    /// is nothing to restore when the light comes back.
+    /// </summary>
+    public static void ScaleHalves(byte[] table, int row, int byteOffset, int count, float factor)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            int o = row * RowBytes + byteOffset + i * 2;
+            if (o + 2 > table.Length) return;
+            var v = (float)BitConverter.Int16BitsToHalf(BitConverter.ToInt16(table, o));
+            BitConverter.TryWriteBytes(table.AsSpan(o),
+                (ushort)BitConverter.HalfToInt16Bits((Half)(v * factor)));
+        }
     }
 
     /// <summary>Write an RGB HalfColor (3 packed halves) at <paramref name="byteOffset"/> in a row.</summary>

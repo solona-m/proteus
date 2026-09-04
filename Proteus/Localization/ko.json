@@ -287,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "밝은 곳에서 숨기기",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "이 행의 불투명도가 발광을 따라가게 합니다. 빛나지 않는 곳에는 피부만 남습니다.\n이 옵션이 없으면 어둠 전용 행도 자기 색(보통 검정)을 남기기 때문에,\n낮에는 피부에 스며들지 않고 어두운 자국처럼 보입니다.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "이 하위 행의 메시를 캐릭터에서 발광시켜 게임 안에서 찾기 쉽게 합니다.\n다시 클릭하면 중지됩니다.",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "이 하위 행의 영역을 캐릭터 피부 위에 밝게 표시해 게임 안에서 찾기 쉽게\n합니다. 다시 클릭하면 중지됩니다. (처음에는 생성에 잠시 걸립니다.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "빛에 따라 흐려짐",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "주변 빛이 이 행의 발광을 얼마나 없애는지 정합니다.\n0%는 어디서나 똑같이 빛납니다. 100%는 어둠 전용 발광으로, 불 꺼진 방에서는 최대 밝기,\n한낮의 하늘 아래나 등불 옆에서는 전혀 보이지 않습니다.\n행마다 설정하므로 문신의 한쪽만 어둠 전용으로 만들 수 있습니다.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "전체 다시 그리기를 강제하여 세컨드 스킨이 대체한 반지나 팔찌를 다시 불러와\n원래 모델로 되돌립니다. 비활성화하거나 교체한 뒤에도 장비 셸이 장신구에\n남아 있을 때 사용하세요.",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "장면의 빛에 반응",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "「빛에 따라 흐려짐」으로 표시된 행이 주변이 밝아질수록 어두워집니다.\n끄면 모든 발광이 예전처럼 어디서나 제작자가 정한 밝기로 빛납니다.\n어느 쪽이든 다시 만들지 않습니다 — 실행 중인 머티리얼을 통해 반영됩니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "밝기",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0은 완전한 어둠(어둠 전용 발광이 최대), 1은 한낮(완전히 사라짐)입니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "빛의 밝기를 직접 지정",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "장면을 무시하고 슬라이더 값을 사용합니다.\n해 질 녘을 기다리지 않고 어둠 전용 발광을 확인하는 가장 빠른 방법이며,\n직접 꾸민 조명이 핵심인 그룹 포즈에도 알맞습니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "측정값 {0:0.00} — 하늘 {1:0.00}, 램프 {2:0.00} ({4}개 중 {3}개 도달)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "압축 사용",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "적재 위치",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "빛에 반응하는 발광",
     "description": ""
   },
   "Settings.Section.Output": {
