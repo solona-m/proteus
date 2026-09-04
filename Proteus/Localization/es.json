@@ -755,6 +755,14 @@
     "message": "Ya existe una carpeta de mod llamada «{0}».",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "No se pudo leer {0} para crear el brillo. Prueba con un PNG.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "Una superposición brillante toma su color del arte, así que necesita una textura difusa.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "El archivo de {0} ya no existe: {1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "Marca esto solo para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella: Proteus renderiza una dividida a través de una capa de cara.\nDéjalo desmarcado para cualquier textura de cara normal.",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "Brillar siempre",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "El tatuaje se ve a plena luz y brilla de día y de noche.\nSuave a propósito: este shader añade UN color plano sobre todo el tatuaje en vez de\nseguir la imagen, así que un valor alto destiñe el arte a plena luz.\nPara más brillo de noche, sube Brillo en Colores y activa «Se desvanece con luz».",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Solo en la oscuridad",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Nada a plena luz, brillante en una sala sin luz: lo que hacían los tatuajes de Atramentum Luminis.\nEl arte se desvanece según sube la luz sobre ti y se lleva su propia superficie consigo,\nasí que en la claridad solo queda piel.\nNecesita «Reaccionar a la luz de la escena» en Ajustes, activado por defecto.",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "Hacer que este arte brille",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Elige primero una textura difusa: el brillo toma su color del arte.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Solo los destinos de piel y cara pueden brillar. Una superposición brillante se dibuja sobre una\nsegunda piel recortada de tu cuerpo, y en un equipo, accesorio o arma no hay nada que recortar.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "Enciende el arte. Su color viene de la propia imagen, píxel a píxel: no hay\nnada más que ajustar.\nLa piel no puede emitir, así que una superposición brillante se dibuja sobre una\nsegunda piel en vez de pintarse en la tuya. Todo lo demás funciona igual, y el\ndeslizador Brillo en Colores lo ajusta después.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Crea un mod de superposición de Proteus básico. Elige al menos una textura; Proteus escribe un nuevo mod de Penumbra y lo abre para que puedas activarlo y ajustarlo.",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "«{0}» creado, activado y abierto en Penumbra.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "«{0}» creado y abierto en Penumbra, pero no se pudo activar: actívalo allí.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "Vuelve a ejecutar la detección de cuerpo y sobrescribe el campo.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "«{0}» creado: esperando a que Penumbra termine de cargarlo…",
     "description": ""
   },
   "Create.Slot.Diffuse": {

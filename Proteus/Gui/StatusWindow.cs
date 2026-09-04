@@ -162,6 +162,9 @@ public class StatusWindow : Window
     // The picked face texture is a doubled sheet (two sides of the head in the two halves). Author-declared,
     // never probed — see the checkbox for why nothing in the image can tell the two layouts apart.
     private bool _createFaceSplit;
+    // Whether the art glows and how. Never probed either: a transparent-background PNG is what an ordinary
+    // tattoo looks like too, so nothing in the image says the author wanted it lit.
+    private GlowStyle _createGlow = GlowStyle.None;
 
     // ── Import tab state ──
     // The parsed pack, held across frames from Browse until Import. Null = nothing picked yet.
@@ -1535,6 +1538,46 @@ public class StatusWindow : Window
             _createFaceSplit = false;
         }
 
+        // ── glow ─────────────────────────────────────────────────────────────
+        // The glow takes its colour from the art, per pixel, so it needs a diffuse; and it renders on a
+        // second skin, which RenderModeInference.ShouldPromoteToGear refuses to cut for a gear, accessory
+        // or weapon target — such an overlay "stays skin and simply doesn't glow". Dimmed rather than
+        // hidden in both cases, matching the texture rows: a control that vanishes teaches nothing.
+        bool glowHasArt   = SlotEnabled("Diffuse") && _createDiffuse.Length > 0;
+        bool glowCanShell = IsSkinMaterial(_createMaterial) || IsFaceMaterial(_createMaterial);
+        bool glowAllowed  = glowHasArt && glowCanShell;
+        if (!glowAllowed) _createGlow = GlowStyle.None;
+
+        using (ImRaii.PushStyle(ImGuiStyleVar.Alpha,
+                   ImGui.GetStyle().Alpha * (glowAllowed ? 1f : 0.5f)))
+        using (ImRaii.Disabled(!glowAllowed))
+        {
+            bool glowing = _createGlow != GlowStyle.None;
+            if (ImGui.Checkbox(cs.Glow, ref glowing))
+                _createGlow = glowing ? GlowStyle.Always : GlowStyle.None;
+        }
+        // ReasonTooltip, not a bare IsItemHovered: a disabled item reports no hover under the default
+        // flags, so the two explanations below — the only reason to dim this rather than hide it — would
+        // have been unreachable at exactly the moment they are wanted.
+        ProteusStyle.ReasonTooltip(!glowHasArt ? cs.GlowNeedsDiffuse
+                                 : !glowCanShell ? cs.GlowNeedsSkin
+                                 : cs.GlowTip);
+
+        if (_createGlow != GlowStyle.None)
+        {
+            ImGui.Indent();
+            if (ImGui.RadioButton(cs.GlowAlways, _createGlow == GlowStyle.Always))
+                _createGlow = GlowStyle.Always;
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.GlowAlwaysTip);
+
+            if (ImGui.RadioButton(cs.GlowDarkOnly, _createGlow == GlowStyle.DarkOnly))
+                _createGlow = GlowStyle.DarkOnly;
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.GlowDarkOnlyTip);
+            ImGui.Unindent();
+        }
+
         ImGui.Separator();
 
         // Only ENABLED slots count. The clearing above already empties disabled ones; this keeps the
@@ -1547,6 +1590,19 @@ public class StatusWindow : Window
             && !string.IsNullOrWhiteSpace(_createMaterial)
             && anyTexture;
 
+        // Penumbra loads a freshly added mod asynchronously, so enabling it is retried across frames — see
+        // ModCreationService.Pump. The button stays inert meanwhile, because the create genuinely is not
+        // finished, and the status line carries the interim message until it answers.
+        if (modCreation.IsAwaiting)
+        {
+            if (modCreation.Pump() is { } pumped)
+            {
+                _createStatus = pumped.Message;
+                _createStatusOk = pumped.Ok;
+            }
+            valid = false;
+        }
+
         using (ImRaii.Disabled(!valid))
             if (ImGui.Button(cs.CreateBtn))
             {
@@ -1557,7 +1613,8 @@ public class StatusWindow : Window
                     SlotEnabled("Normal")  ? NullIfEmpty(_createNormal)  : null,
                     SlotEnabled("Index")   ? NullIfEmpty(_createIndex)   : null,
                     _createWholeSkin,
-                    _createFaceSplit && IsFaceMaterial(_createMaterial));
+                    _createFaceSplit && IsFaceMaterial(_createMaterial),
+                    _createGlow);
                 _createStatus = r.Message;
                 _createStatusOk = r.Ok;
                 if (r.Ok)   // keep name/author/material for a quick second mod; clear the pickers
@@ -1574,10 +1631,13 @@ public class StatusWindow : Window
                     // declare the next mod's ordinary face texture to be split, and un-mirror its two halves
                     // onto the two sides of the head.
                     _createFaceSplit = false;
+                    // Same rule again: the choice belonged to the art just consumed.
+                    _createGlow = GlowStyle.None;
                 }
             }
-        if (!valid && ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.CreateDisabledTip);
+        // Same reason as the glow checkbox above: the button is submitted disabled, so a bare
+        // IsItemHovered never fires and this tooltip had never once been shown to anyone.
+        ProteusStyle.ReasonTooltip(valid ? null : cs.CreateDisabledTip);
 
         if (_createStatus != null)
             ImGui.TextColored(

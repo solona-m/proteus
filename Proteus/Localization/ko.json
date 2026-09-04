@@ -755,6 +755,14 @@
     "message": "\"{0}\"(이)라는 이름의 모드 폴더가 이미 있습니다.",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "발광을 만들기 위해 {0}을(를) 읽지 못했습니다. PNG로 시도해 보세요.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "빛나는 오버레이는 색을 그림에서 가져오므로 디퓨즈 텍스처가 필요합니다.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0} 파일이 더 이상 존재하지 않습니다: {1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "얼굴 텍스처를 두 개의 절반으로 그린 경우에만 선택하세요. 캐릭터의 오른쪽은 이미지의 오른쪽 절반에, 왼쪽은 왼쪽 절반에 그린 것입니다.\n일반 얼굴 텍스처는 양쪽 뺨에 같은 픽셀을 사용하므로 한쪽에만 있는 무늬는 존재할 수 없습니다. 나뉜 텍스처는 Proteus가 얼굴 레이어로 렌더링합니다.\n일반 얼굴 텍스처에서는 꺼 두세요.",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "항상 빛남",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "문신은 낮에도 보이고 밤낮으로 빛납니다.\n일부러 은은하게 두었습니다. 이 셰이더는 그림을 따라가지 않고 문신 전체에 단일한\n색을 더하므로, 값을 높이면 낮에 그림이 하얗게 바랩니다.\n밤에만 더 밝게 하려면 색상에서 발광을 올리고 「빛에 따라 흐려짐」을 설정하세요.",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "어두울 때만",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "낮에는 아무것도 보이지 않고, 불 꺼진 방에서 빛납니다 — Atramentum Luminis 문신과 같습니다.\n주변이 밝아질수록 그림이 사라지며 자신의 표면까지 함께 거두므로,\n밝은 곳에는 피부만 남습니다.\n설정의 「장면의 빛에 반응」이 필요하며 기본값은 켜짐입니다.",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "이 그림을 빛나게 하기",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "먼저 디퓨즈 텍스처를 선택하세요. 발광 색은 그림에서 가져옵니다.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "빛날 수 있는 대상은 피부와 얼굴뿐입니다. 빛나는 오버레이는 몸에서 잘라낸\n세컨드 스킨에 그려지는데, 장비·장신구·무기에는 잘라낼 것이 없습니다.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "그림을 빛나게 합니다. 색은 그림 자체에서 픽셀 단위로 가져오므로\n따로 정할 것이 없습니다.\n피부는 발광할 수 없어서, 빛나는 오버레이는 피부에 그려지는 대신\n세컨드 스킨 위에 렌더링됩니다. 나머지는 모두 같고, 이후 색상 탭의\n발광 다이얼로 조절할 수 있습니다.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "기본적인 Proteus 오버레이 모드를 만듭니다. 텍스처를 하나 이상 선택하면 Proteus가 새 Penumbra 모드를 작성하고 열어 주므로 바로 활성화하고 조정할 수 있습니다.",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "\"{0}\"을(를) 만들고 활성화한 뒤 Penumbra에서 열었습니다.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "「{0}」을(를) 만들고 Penumbra에서 열었지만 켜지 못했습니다. 거기서 활성화해 주세요.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "바디 감지를 다시 실행하고 입력란을 덮어씁니다.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "「{0}」을(를) 만들었습니다 — Penumbra가 불러오기를 마칠 때까지 기다리는 중…",
     "description": ""
   },
   "Create.Slot.Diffuse": {

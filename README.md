@@ -63,6 +63,13 @@ Authors a basic overlay mod without leaving the game. Give it a name, an author,
 
 Texture slots the chosen material can't actually use are greyed out.
 
+Tick **Make this art glow** to turn a plain diffuse — art on a transparent background — into a glowing tattoo, with no hand-written metadata. The glow's colour comes from the picture itself, per pixel, so there's nothing else to set. Two behaviours:
+
+- **Always glow** — the tattoo is there in daylight and glows day and night. Kept gentle on purpose: this shader adds one flat colour across the whole tattoo rather than following the picture, so a strong value bleaches the art in daylight. For a brighter glow at night without that, raise **Glow** in Colors and set **Fades in light**.
+- **Only in the dark** — nothing in daylight, glowing in an unlit room, the way Atramentum Luminis tattoos behaved. The art fades as the light on you rises and takes its own surface with it, so there's skin and nothing else in the bright.
+
+Skin can't emit, so a glowing overlay renders on a second skin rather than being painted into yours — which is why the checkbox is only available on a skin or face target, and only once you've picked a diffuse.
+
 #### Import
 
 Takes a mod pack and converts it to a Proteus mod. Three types are supported:

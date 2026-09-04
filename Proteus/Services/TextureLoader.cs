@@ -965,6 +965,34 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// Load any image the Create tab's picker accepts as RGBA8 at its OWN size — <c>.tex</c> and
+    /// <c>.dds</c> through the same decoders as everything else, everything Stb reads (png, jpg, bmp, tga)
+    /// through Stb.
+    /// <para/>
+    /// Distinct from <see cref="LoadPngAsRgba"/>, which exists to serve a fixed target size and scales to
+    /// reach it. A derived texture written back out beside the source — a glow's scroll map — has to keep
+    /// the source's dimensions, and the caller does not know them in advance. Uncached: this is used once
+    /// per mod creation, not per composite.
+    /// </summary>
+    public (byte[] rgba, int width, int height)? LoadImageAsRgba(string path)
+    {
+        try
+        {
+            if (path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase)) return LoadTexAsRgba(path);
+            if (path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) return LoadDdsAsRgba(path);
+
+            using var stream = File.OpenRead(path);
+            var img = ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+            return img.Data is { Length: > 0 } ? (img.Data, img.Width, img.Height) : null;
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] Failed to load image at its own size: {0}", path);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Load an overlay image from disk as RGBA8, scaled to (targetW × targetH) if needed.
     /// Accepts <c>.png</c> (StbImageSharp), <c>.tex</c> (Lumina) and <c>.dds</c> (parsed here). The
     /// two GPU-texture containers decompress any format — including BC7 — to RGBA via Lumina's

@@ -755,6 +755,14 @@
     "message": "Un dossier de mod nommé « {0} » existe déjà.",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "Impossible de lire {0} pour construire la lueur. Essayez un PNG.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "Une superposition lumineuse prend sa couleur du motif : il lui faut donc une texture diffuse.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "Le fichier {0} n'existe plus : {1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "Cochez ceci uniquement pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister — Proteus affiche une texture séparée via un calque de visage.\nLaissez ceci décoché pour toute texture de visage normale.",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "Toujours briller",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "Le tatouage est visible en plein jour et brille jour et nuit.\nVolontairement discret : ce shader ajoute UNE couleur uniforme sur tout le tatouage au lieu\nde suivre l'image, donc une valeur forte délave le motif en plein jour.\nPour plus de lueur la nuit, montez Lueur dans Couleurs et réglez « S'estompe à la lumière ».",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Seulement dans le noir",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Rien en plein jour, lumineux dans une pièce sans lumière — ce que faisaient les tatouages Atramentum Luminis.\nLe motif s'estompe à mesure que la lumière monte et emporte sa propre surface avec lui,\nde sorte qu'il ne reste que la peau en pleine lumière.\nNécessite « Réagir à la lumière de la scène » dans les Paramètres, activé par défaut.",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "Faire briller ce motif",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Choisissez d'abord une texture diffuse — la lueur prend sa couleur du motif.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Seules les cibles peau et visage peuvent briller. Une superposition lumineuse est dessinée sur\nune seconde peau découpée dans votre corps, et un équipement, un accessoire ou une arme n'offre rien à découper.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "Allume le motif. Sa couleur vient de l'image elle-même, pixel par pixel — il n'y a\nrien d'autre à régler.\nLa peau ne peut pas émettre : une superposition lumineuse est donc rendue sur une\nseconde peau au lieu d'être peinte dans la vôtre. Tout le reste fonctionne pareil,\net le curseur Lueur dans Couleurs l'ajuste ensuite.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Créez un mod de calque Proteus simple. Choisissez au moins une texture ; Proteus écrit un nouveau mod Penumbra et l'ouvre pour que vous puissiez l'activer et l'ajuster.",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "« {0} » créé, activé et ouvert dans Penumbra.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "« {0} » créé et ouvert dans Penumbra, mais impossible de l'activer — activez-le là-bas.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "Relance la détection du corps et écrase le champ.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "« {0} » créé — en attente de la fin du chargement par Penumbra…",
     "description": ""
   },
   "Create.Slot.Diffuse": {

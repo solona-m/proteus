@@ -230,6 +230,39 @@ public sealed class CreateStrings
         "cannot exist in it — Proteus renders a split one through a face layer instead.\n" +
         "Leave this off for any normal face texture.");
 
+    public readonly string Glow = Loc.Localize("Create.Glow.Label",
+        "Make this art glow") + "###createGlow";
+
+    public readonly string GlowTip = Loc.Localize("Create.Glow.Tip",
+        "Light the art up. Its colour comes from the picture itself, per pixel — there is\n" +
+        "nothing else to set.\n" +
+        "Skin can't emit, so a glowing overlay renders on a second skin instead of being\n" +
+        "painted into yours. Everything else about it works the same, and the Glow dial in\n" +
+        "Colors adjusts it afterwards.");
+
+    public readonly string GlowNeedsDiffuse = Loc.Localize("Create.Glow.NeedsDiffuse",
+        "Pick a diffuse texture first — the glow takes its colour from the art.");
+
+    public readonly string GlowNeedsSkin = Loc.Localize("Create.Glow.NeedsSkin",
+        "Only skin and face targets can glow. A glowing overlay is drawn on a second skin cut\n" +
+        "from your body, and there's nothing to cut one from on gear, an accessory or a weapon.");
+
+    public readonly string GlowAlways = Loc.Localize("Create.Glow.Always", "Always glow");
+
+    public readonly string GlowAlwaysTip = Loc.Localize("Create.Glow.Always.Tip",
+        "The tattoo is there in daylight and glows day and night.\n" +
+        "Kept gentle on purpose: this shader adds one flat colour across the whole tattoo\n" +
+        "rather than following the picture, so a strong value bleaches the art in daylight.\n" +
+        "For a brighter glow at night without that, raise Glow in Colors and set \"Fades in light\".");
+
+    public readonly string GlowDarkOnly = Loc.Localize("Create.Glow.DarkOnly", "Only in the dark");
+
+    public readonly string GlowDarkOnlyTip = Loc.Localize("Create.Glow.DarkOnly.Tip",
+        "Nothing in daylight, glowing in an unlit room — what Atramentum Luminis tattoos did.\n" +
+        "The art fades out as the light on you rises, and takes its own surface with it, so\n" +
+        "there's skin and nothing else in the bright.\n" +
+        "Needs \"React to the scene's light\" in Settings, which is on by default.");
+
     public readonly string NoIndex = Loc.Localize("Create.Slot.NoIndex",
         "This material has no index texture, and it isn't skin or face — nothing here\n" +
         "would read a colour-table row selector.");

@@ -755,6 +755,14 @@
     "message": "A mod folder named \"{0}\" already exists.",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "Couldn't read {0} to build the glow. Try a PNG.",
+    "description": "Error when the picked diffuse can't be decoded. {0} is the file name."
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "A glowing overlay takes its colour from the art, so it needs a diffuse texture.",
+    "description": "Error shown when Create is pressed with a glow style but no diffuse texture."
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "The {0} file no longer exists: {1}",
     "description": "{0} is a translated slot name (Diffuse/Mask/Normal/Index), {1} is a file path."
@@ -791,6 +799,38 @@
     "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
     "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Create.Glow.Always": {
+    "message": "Always glow",
+    "description": "Radio button label in the Create tab."
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "The tattoo is there in daylight and glows day and night.\nKept gentle on purpose: this shader adds one flat colour across the whole tattoo\nrather than following the picture, so a strong value bleaches the art in daylight.\nFor a brighter glow at night without that, raise Glow in Colors and set \"Fades in light\".",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number."
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Only in the dark",
+    "description": "Radio button label in the Create tab."
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Nothing in daylight, glowing in an unlit room — what Atramentum Luminis tattoos did.\nThe art fades out as the light on you rises, and takes its own surface with it, so\nthere's skin and nothing else in the bright.\nNeeds \"React to the scene's light\" in Settings, which is on by default.",
+    "description": "Tooltip. \"Atramentum Luminis\" is the name of an older FFXIV shader mod - keep it as-is. Contains deliberate line breaks - keep the same number."
+  },
+  "Create.Glow.Label": {
+    "message": "Make this art glow",
+    "description": "Checkbox label in the Create tab."
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Pick a diffuse texture first — the glow takes its colour from the art.",
+    "description": "Tooltip shown when the glow checkbox is disabled because no diffuse texture is picked."
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Only skin and face targets can glow. A glowing overlay is drawn on a second skin cut\nfrom your body, and there's nothing to cut one from on gear, an accessory or a weapon.",
+    "description": "Tooltip shown when the glow checkbox is disabled because the material target isn't skin or a face. Contains a deliberate line break."
+  },
+  "Create.Glow.Tip": {
+    "message": "Light the art up. Its colour comes from the picture itself, per pixel — there is\nnothing else to set.\nSkin can't emit, so a glowing overlay renders on a second skin instead of being\npainted into yours. Everything else about it works the same, and the Glow dial in\nColors adjusts it afterwards.",
+    "description": "Tooltip on the glow checkbox. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Create.Intro": {
     "message": "Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a new Penumbra mod and opens it so you can enable and tweak it.",
     "description": "Appears in the Create tab."
@@ -810,6 +850,10 @@
   "Create.Ok.Fmt": {
     "message": "Created \"{0}\", enabled it, and opened it in Penumbra.",
     "description": "Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "Created \"{0}\" and opened it in Penumbra, but couldn't switch it on — enable it there.",
+    "description": "Result when the mod was created but Penumbra wouldn't report it as enabled. {0} is the mod name."
   },
   "Create.PickTexture.Title.Fmt": {
     "message": "Select {0} texture",
@@ -834,6 +878,10 @@
   "Create.Redetect.Tip": {
     "message": "Re-run body detection and overwrite the field.",
     "description": "Tooltip. Appears in the Create tab."
+  },
+  "Create.Registering.Fmt": {
+    "message": "Created \"{0}\" — waiting for Penumbra to finish loading it…",
+    "description": "Interim status while Penumbra finishes loading a newly created mod. {0} is the mod name."
   },
   "Create.Slot.Diffuse": {
     "message": "Diffuse",

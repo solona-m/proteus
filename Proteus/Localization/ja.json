@@ -755,6 +755,14 @@
     "message": "「{0}」という名前のMODフォルダはすでに存在します。",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "グローを作るために {0} を読み込めませんでした。PNG をお試しください。",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "光るオーバーレイは色を図案から取るため、ディフューズテクスチャが必要です。",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0}のファイルが見つかりません: {1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "顔テクスチャを2つの半分として描いた場合にのみチェックしてください。キャラクターの右側を画像の右半分に、左側を左半分に描いたものです。\n通常の顔テクスチャは両方の頬に同じピクセルを使うため、片側だけの模様は存在できません。分割されたものはProteusが顔レイヤーとして描画します。\n通常の顔テクスチャではオフのままにしてください。",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "常に光る",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "タトゥーは昼間も見えていて、昼も夜も光ります。\n意図的に控えめです。このシェーダーは絵に沿うのではなくタトゥー全体に単一の色を\n加えるため、値を上げると日中に絵が白飛びします。\n夜だけ明るくしたい場合は「カラー」でグローを上げ、「明るさで薄れる」を設定してください。",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "暗い場所だけ",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "昼間は何も見えず、明かりのない部屋で光ります — Atramentum Luminis のタトゥーと同じです。\n周囲が明るくなるにつれて図案は消えていき、自分の表面も一緒に消すので、\n明るい場所では肌だけが残ります。\n設定の「シーンの明るさに反応する」が必要です（既定でオン）。",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "この図案を光らせる",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "先にディフューズテクスチャを選んでください。グローの色は図案から取られます。",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "光らせられるのは肌と顔のターゲットだけです。光るオーバーレイは体から切り出した\nセカンドスキンに描かれるため、装備・アクセサリ・武器には切り出す元がありません。",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "図案を光らせます。色は絵そのものからピクセル単位で決まるので、\n他に設定するものはありません。\n肌は発光できないため、光るオーバーレイは肌に塗り込まれるのではなく\nセカンドスキン上に描かれます。それ以外は同じで、あとから\n「カラー」のグローで調整できます。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "基本的なProteusオーバーレイMODを作成します。テクスチャを1つ以上選ぶと、Proteusが新しいPenumbra MODを書き出して開くので、有効化して調整できます。",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "「{0}」を作成し、有効化してPenumbraで開きました。",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "「{0}」を作成して Penumbra で開きましたが、有効にできませんでした。Penumbra 側で有効にしてください。",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "ボディ検出をやり直し、フィールドを上書きします。",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "「{0}」を作成しました — Penumbra の読み込み完了を待っています…",
     "description": ""
   },
   "Create.Slot.Diffuse": {
