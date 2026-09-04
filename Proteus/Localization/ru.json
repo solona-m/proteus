@@ -507,6 +507,10 @@
     "message": "Строка {0}B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "Этот столбец ничем не выбирается — индекс рисунка везде указывает на другой, поэтому правки здесь не появятся.",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "Тайлинг",
     "description": ""

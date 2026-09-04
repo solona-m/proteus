@@ -1079,6 +1079,15 @@ public sealed class ColorsStrings
         "Under an animated glow this is the effect's brightness, and a high value\n" +
         "blows a colourful scroll map out to white. Around 25% is a good start.");
 
+    /// <summary>
+    /// Shown at the top of whichever of the two columns the art's index never lands in. Most overlays carry
+    /// no index at all, and the shell then samples the fabricated (255, 255, 0) — row 16, column A — so
+    /// column B is dead on every row and used to be drawn as though it were not.
+    /// </summary>
+    public readonly string SubRowUnused = Loc.Localize("Colors.SubRowUnused",
+        "Nothing samples this column — the art's index picks the other one everywhere, "
+      + "so edits here won't show.");
+
     public readonly string LightResponse = Loc.Localize("Colors.LightResponse.Label", "Fades in light");
 
     public readonly string LightResponseTip = Loc.Localize("Colors.LightResponse.Tip",

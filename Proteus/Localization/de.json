@@ -507,6 +507,10 @@
     "message": "Zeile {0}B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "Diese Spalte wird von nichts abgetastet — der Index der Grafik wählt überall die andere, Änderungen hier zeigen sich also nicht.",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "Kachelung",
     "description": ""

@@ -507,6 +507,10 @@
     "message": "第 {0} 行 B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "没有任何像素采样此列 — 图像的索引在各处都选择另一列，因此在这里的修改不会显示。",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "平铺",
     "description": ""

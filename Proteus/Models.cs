@@ -887,6 +887,22 @@ public static class ContentIndexTexture
     /// </summary>
     public static int RowOf(byte red) => Math.Clamp((red + 8) / 17 + 1, 1, 16);
 
+    /// <summary>
+    /// The row pair a red value names on an overlay's OWN <c>_id</c>, 1–16.
+    /// <para/>
+    /// TRUNCATED, where <see cref="RowOf"/> rounds, and the two must stay apart. They read different files
+    /// for different renderers: this one describes art Proteus wrote, painted by
+    /// <c>CompositorService.ApplyIndexedOverlay</c>, which bins <c>idx[i] / 17</c> — so agreeing with THAT
+    /// is the whole job, and rounding here would put the editor's live row one above the row the compositor
+    /// paints. <see cref="RowOf"/> rounds because the number it reads is a pack author's statement of
+    /// intent rather than something Proteus encoded.
+    /// <para/>
+    /// The disagreement is unreachable for anything Proteus authors: importers write
+    /// <c>(row − 1) × 17</c> exactly, and both readings return every one of those unchanged. Only
+    /// hand-painted or lossily-compressed art falls between them.
+    /// </summary>
+    public static int OverlayRowOf(byte red) => red / 17 + 1;
+
     public static Scan Read(byte[] rgba)
     {
         var rows = new HashSet<int>();
@@ -898,6 +914,66 @@ public static class ContentIndexTexture
             if (rgba[i + 1] > 127) anyA = true; else anyB = true;
         }
         return new Scan(rows, anyA == anyB ? null : anyA ? "A" : "B");
+    }
+
+    /// <summary>
+    /// The same question <see cref="Read"/> answers, asked of an overlay's own <c>_id</c> instead of a
+    /// pack's — under this side's rules, which differ in three ways worth stating together.
+    /// <list type="bullet">
+    /// <item>The row binning is <see cref="OverlayRowOf"/>, not <see cref="RowOf"/>.</item>
+    /// <item>A row must hold a real share of the art before it counts, rather than one texel. Antialiasing
+    /// and an art tool's colour bleed put stray reds all over a sheet, and the editor DIMS what this does
+    /// not name — so a row claimed off a handful of pixels is a row nobody can find, and one missed off a
+    /// legitimate few is a control that looks broken.</item>
+    /// <item>Transparency is not skipped. This path has something better: the UV island mask, which
+    /// excludes the padding bled outside the islands — the thing transparency stands in for over there.
+    /// An <c>_id</c> saved flat-alpha by a tool that treats it as an RGB map would otherwise read as
+    /// selecting nothing at all.</item>
+    /// </list>
+    /// Pure, and out of the drawing code, for the reason this whole class is: the conventions are what get
+    /// got wrong, and a convention nothing can call is a convention nothing can test.
+    /// </summary>
+    /// <param name="island">UV island coverage at its own resolution, sampled nearest-neighbour. Null
+    /// counts every texel.</param>
+    public static Scan ReadOverlay(
+        byte[] rgba, int width, int height, bool[]? island = null, int islandW = 0, int islandH = 0)
+    {
+        var rows = new HashSet<int>();
+        if (width <= 0 || height <= 0 || rgba.Length < (long)width * height * 4) return new(rows, null);
+        if (islandW <= 0 || islandH <= 0) island = null;
+
+        bool anyA = false, anyB = false;
+        var counts = new int[17];
+        int total = 0;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (island != null)
+                {
+                    // The map is its own resolution; sample it nearest-neighbour.
+                    int mx = x * islandW / width, my = y * islandH / height;
+                    int mi = my * islandW + mx;
+                    if (mi >= island.Length || !island[mi]) continue;   // outside the islands
+                }
+
+                int p = (y * width + x) * 4;
+                counts[OverlayRowOf(rgba[p])]++;
+                // Green blends sub-row A at 255 against B at 0.
+                if (rgba[p + 1] > 127) anyA = true; else anyB = true;
+                total++;
+            }
+        }
+
+        if (total == 0) return new(rows, null);
+
+        int threshold = Math.Max(64, total / 1000);   // 0.1% of the island area
+        for (int row = 1; row <= 16; row++)
+            if (counts[row] >= threshold)
+                rows.Add(row);
+
+        // A texture using BOTH columns narrows to neither: that is a gradient, not a mistake.
+        return new(rows, anyA == anyB ? null : anyA ? "A" : "B");
     }
 }
 

@@ -568,9 +568,26 @@ public static class ColorTableEditor
         // material, which is published verbatim and never touched at runtime. Drawing the controls there
         // would offer a setting that saves, reloads, and does nothing — the exact silent no-op this editor
         // hides sphere maps under characterscroll to avoid.
-        bool lightResponseApplies = true)
+        bool lightResponseApplies = true,
+        // The sub-row column the index actually lands in — "A", "B", or null for "both, or nobody knows".
+        // The other column is then dimmed exactly as an unsampled ROW is, and for the same reason: on a
+        // shell with no _id the fabricated index is (255, 255, 0), so column B is dead on every one of the
+        // sixteen rows and the grid used to draw it as live anyway.
+        //
+        // Null is the honest default and stays honest: a gradient index genuinely uses both columns, and a
+        // scan that read nothing knows nothing. Neither is something to narrow away.
+        string? usedSubRow = null)
     {
         edited = FeatureEdit.Neutral;
+
+        // Resolved once rather than per swatch — this runs sixteen times a frame inside the picker.
+        //
+        // Never while mirroring. On a mask shell an unset sub-row renders as its PARTNER's values
+        // (SecondSkinService.BuildRows), so authoring the column the index doesn't sample still reaches the
+        // screen through the one it does — and calling it dead would be flatly false, which is worse than
+        // saying nothing.
+        bool onlyA = !mirrorUnsetSubRows && string.Equals(usedSubRow, "A", StringComparison.Ordinal);
+        bool onlyB = !mirrorUnsetSubRows && string.Equals(usedSubRow, "B", StringComparison.Ordinal);
 
         // The render mode drives which feature controls are LIVE vs dimmed; the features that are set
         // drive the mode back (inference happens in the caller). characterscroll drives its look from the
@@ -625,7 +642,8 @@ public static class ColorTableEditor
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(cs.RowUnusedTip);
 
-            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used, mirrorUnsetSubRows);
+            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used,
+                mirrorUnsetSubRows, onlyA, onlyB);
         }
 
         ImGui.Separator();
@@ -665,12 +683,19 @@ public static class ColorTableEditor
             ImGui.TableHeadersRow();
             ImGui.TableNextRow();
 
+            // Said in the dead column rather than dimmed like its swatch, because ImGui's Alpha style var
+            // REPLACES rather than multiplies: the controls below push their own alpha (the light-response
+            // pair pushes 1f whenever the row emits), so a wrapping push would be undone from the inside and
+            // dim only the half of the panel that happened not to push. A line that says why is also the
+            // thing someone hunting a control that "does nothing" actually needs.
             ImGui.TableNextColumn();
+            if (onlyB) ProteusStyle.DisabledWrapped(cs.SubRowUnused);
             DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets,
                 authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows,
                 lightResponseApplies);
 
             ImGui.TableNextColumn();
+            if (onlyA) ProteusStyle.DisabledWrapped(cs.SubRowUnused);
             DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets,
                 authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows,
                 lightResponseApplies);
@@ -733,9 +758,12 @@ public static class ColorTableEditor
     /// split top = sub-row A, bottom = sub-row B. The glow swatch is the emissive colour scaled by its
     /// intensity, i.e. what actually lands in the colour table, so a row with no glow reads as black.
     /// </summary>
+    /// <param name="onlyA">The index lands in column A everywhere, so the B half of this strip is dead.</param>
+    /// <param name="onlyB">The mirror of that. Both false = either the columns are shared or nothing is
+    /// known, and neither half is dimmed.</param>
     private static void DrawRowSwatches(
         List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used,
-        bool mirrorUnsetSubRows = false)
+        bool mirrorUnsetSubRows = false, bool onlyA = false, bool onlyB = false)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var draw = ImGui.GetWindowDrawList();
@@ -752,9 +780,15 @@ public static class ColorTableEditor
 
         // Rows the index texture never selects are dimmed, so the ones actually in play stand out.
         // ImGui's Disabled only fades the widget itself — these swatches are hand-drawn, so dim them too.
+        //
+        // Per HALF, not per row: the column is a second axis of the same fact. A shell with no _id samples
+        // (255, 255, 0), which is row 16 column A — so on most overlays fifteen rows are dead in full and
+        // the bottom half of the sixteenth is dead as well.
         float dim = used ? 1f : 0.25f;
+        float dimA = onlyB ? 0.25f : 1f;
+        float dimB = onlyA ? 0.25f : 1f;
 
-        Vector3 Swatch(ColorTableSubRowPreset? s, int column) => dim * (column switch
+        Vector3 Swatch(ColorTableSubRowPreset? s, int column, float half) => dim * half * (column switch
         {
             0 => HexToVec3(s?.Diffuse),
             1 => HexToVec3(s?.Specular),
@@ -769,13 +803,13 @@ public static class ColorTableEditor
         for (int c = 0; c < 3; c++)
         {
             float cx0 = x0 + c * colW, cx1 = cx0 + colW - 1f;
-            foreach (var (sub, ry0, ry1) in new[]
+            foreach (var (sub, ry0, ry1, half) in new[]
                      {
-                         (subA, y0, midY),
-                         (subB, midY, y1),
+                         (subA, y0, midY, dimA),
+                         (subB, midY, y1, dimB),
                      })
             {
-                var v = Swatch(sub, c);
+                var v = Swatch(sub, c, half);
                 uint col = ImGui.GetColorU32(new Vector4(v.X, v.Y, v.Z, 1f));
                 draw.AddRectFilled(new Vector2(cx0, ry0), new Vector2(cx1, ry1), col);
 
