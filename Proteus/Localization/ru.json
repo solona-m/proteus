@@ -931,6 +931,70 @@
     "message": "Отметьте, если вы конвертируете мод полной кожи, а не рисуете что-то поверх кожи.\nProteus ставит галочку сам, когда текстуры на неё похожи; ваш собственный выбор всегда важнее.\nОтсюда следуют три вещи. Карта нормалей ЗАМЕНИТ ту, что уже есть на материале, вместо наложения\nна неё: иначе она ложится поверх той же карты снизу, каждая пора и складка накладывается дважды,\nи тело выглядит плоским рядом с лицом, с резкой линией на шве шеи.\nПодавление тона кожи выключается, чтобы тон носителя проступал: оно нужно, чтобы ткань не\nперекрашивалась, а эта текстура И ЕСТЬ кожа. И «Тела» переключается на «Все тела», чтобы кожа\nдоходила и до ванильного тела.",
     "description": ""
   },
+  "Emissive.Aliases.Fmt": {
+    "message": "путей: {0}",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "Пакет указывает, что нарисован для {0}, так что Proteus подгонит его под носимое вами тело.",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "Тело",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "На какой материал тела наносится рисунок. Proteus берёт его из пакета, если узнаёт тело, и из носимого вами — если нет. Измените, если знаете точнее.",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "светится {0:P1}",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "Импорт пакета светящейся кожи (.pmp со светящейся графикой и без моделей). Его свечение становится слоем Proteus, который можно перекрасить и приглушить, без шейдерного мода.",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "Импортируется только светящаяся графика. Собственные материалы тела из пакета не переносятся: они работают лишь с заменённым шейдером кожи, а Proteus наносит свечение на ту кожу, которую вы уже носите.",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "В Proteus нет фильтра по расе или полу: это раскрасит любого персонажа с телом на том же материале. Отключайте мод в Penumbra для тех, кому он не предназначен.",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "Ни одна текстура этого пакета не несёт маску свечения.",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "Импортируется один раз, для:\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "Не удалось прочитать этот пакет: {0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "Чтение текстур этого пакета…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "пропущено",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nПропущено: {1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "Текстур: {0} из {1}",
+    "description": ""
+  },
   "Export.Dialog.Filter": {
     "message": "Пакет мода Penumbra",
     "description": ""
@@ -1121,6 +1185,90 @@
   },
   "Import.Dialog.Title": {
     "message": "Выберите пак",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "Импортировано из пакета светящейся кожи «{0}».",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "В этом названии мода нет пригодных символов — используйте буквы или цифры.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "Папка мода с именем «{0}» уже существует.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "Пакета больше нет: {0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Каталог модов Penumbra недоступен.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "Ни одну текстуру этого пакета не удалось прочитать при повторном проходе, поэтому ничего не записано.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "В этом пакете нечего импортировать.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "«Proteus» — зарезервированное имя, выберите другое название мода.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "Не удалось записать мод: {0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "Светящаяся татуировка",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "Светящаяся татуировка — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}{2}, но Proteus не смог его включить. Отметьте его в «{3}» в Penumbra, иначе ничего не отрисуется.",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "«{0}» импортирован — текстур: {1}{2}. Свечение включено и не требует шейдерного мода. Перекрасьте или приглушите его в Colors либо отключите в «{3}» в Penumbra.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "манифест пакета называет её, но в архиве нет «{0}».",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "её альфа-канал пуст, поэтому ничего не отмечено как светящееся. Карта свечения хранит там форму свечения, а без формы это не татуировка.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "её размер всего {0}×{1} — это карта эффекта или палитра шейдера, а не рисунок на теле.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "не удалось декодировать её пиксели.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus не знает тело «{0}» и не может спросить вашего персонажа, пока тот не загружен. Зайдите в игру и откройте пакет заново.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus не знает развёртку этого пакета, поэтому нанесёт рисунок на носимое вами тело ({0}) как есть, без пересчёта. Если пакет рисовался для другого тела, выйдет неверно — смените целевое тело ниже.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "«{0}» светится на {1:P0} тела. Это допустимо, но обычно означает, что у текстуры нет настоящего альфа-канала — проверьте результат перед использованием.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "Из этого пакета нечего импортировать — см. причины выше.",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {

@@ -213,10 +213,17 @@ public sealed class ContentImportService
     /// Read the pack and work out which of its options carry geometry Proteus can append. Throws
     /// <see cref="InvalidDataException"/> when the file isn't a readable pack.
     /// </summary>
+    /// <param name="contents">
+    /// The already-parsed manifest of <paramref name="pmpPath"/>, when the caller has one. Two readers now
+    /// take a <c>.pmp</c> and the Import tab parses it once to choose between them
+    /// (<see cref="EmissiveSkinImportService.Claims"/>); passing the result back is what keeps a pick to one
+    /// archive open. Null reads it here, which is what every other caller does.
+    /// </param>
     public static ImportPreview Inspect(
-        string pmpPath, IPluginLog? log = null, Func<int, int, string?>? itemName = null)
+        string pmpPath, IPluginLog? log = null, Func<int, int, string?>? itemName = null,
+        PenumbraPackage.Contents? contents = null)
     {
-        var pack = PenumbraPackage.Read(pmpPath);
+        var pack = contents ?? PenumbraPackage.Read(pmpPath);
         var warnings = new List<string>();
 
         // A pack that is ALREADY a Proteus mod is INSTALLED, not converted — copied in exactly as it is,

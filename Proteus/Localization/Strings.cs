@@ -43,6 +43,7 @@ public static class Strings
     public static ImportStrings   Import   { get; private set; } = new();
     public static ContentStrings  Content  { get; private set; } = new();
     public static LuminisStrings  Luminis  { get; private set; } = new();
+    public static EmissiveStrings Emissive { get; private set; } = new();
     public static EyeStrings      Eye      { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
@@ -67,6 +68,7 @@ public static class Strings
         Import   = new ImportStrings();
         Content  = new ContentStrings();
         Luminis  = new LuminisStrings();
+        Emissive = new EmissiveStrings();
         Eye      = new EyeStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
@@ -774,6 +776,86 @@ public sealed class LuminisStrings
 
     public readonly string NothingUsable = Loc.Localize("Luminis.NothingUsable",
         "No texture in this modpack carries an Atramentum Luminis glow mask.");
+}
+
+/// <summary>
+/// The emissive-skin <c>.pmp</c> half of the Import tab — a glowing tattoo built for one of the community
+/// skin shaders.
+/// <para/>
+/// Its own holder rather than shared keys with <see cref="LuminisStrings"/>, even where a sentence is word
+/// for word the same. The two panels describe different formats and their wording will drift as each is
+/// worked on; a shared key would silently carry an edit made for one into the other, which is exactly the
+/// class of change nobody reviews.
+/// </summary>
+public sealed class EmissiveStrings
+{
+    /// <summary>
+    /// The fifth bullet of the Import tab's intro, in the same voice as the others: what you get, not how.
+    /// Says "no shader mod" because needing one is the whole reason these packs are hard to wear — the art
+    /// is inert without a replaced skin.shpk installed alongside it.
+    /// </summary>
+    public readonly string Intro = Loc.Localize("Emissive.Intro",
+        "Import an emissive skin pack (.pmp of glow art with no models). Its glow becomes a Proteus overlay "
+      + "you can recolour and dim, with no shader mod needed.");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Emissive.ReadFailed.Fmt",
+        "Couldn't read that pack: {0}");
+
+    /// <summary>
+    /// Shown between the pick and the preview, which for this one format are different frames. These masks
+    /// are full body sheets — the reference pack's is 8192² and takes a second to decode — so the read runs
+    /// on the pool and the tab has to say what it is waiting for rather than fall through to "pick a pack".
+    /// </summary>
+    public readonly string Reading = Loc.Localize("Emissive.Reading",
+        "Reading this pack's textures…");
+
+    public readonly string TextureCountFmt = Loc.Localize("Emissive.TextureCount.Fmt",
+        "Textures: {0} of {1}");
+
+    /// <summary>How much of the sheet the mask marks out — the number that says whether this really is glow
+    /// art, so it goes in the table rather than in a tooltip.</summary>
+    public readonly string GlowFmt = Loc.Localize("Emissive.Glow.Fmt", "{0:P1} glows");
+
+    public readonly string SizeFmt = Loc.Localize("Emissive.Size.Fmt", "{0}×{1}");
+
+    /// <summary>Several manifest paths over one picture, which some of these packs do.</summary>
+    public readonly string AliasesFmt = Loc.Localize("Emissive.Aliases.Fmt", "{0} paths");
+
+    public readonly string Skipped = Loc.Localize("Emissive.Skipped", "skipped");
+
+    public readonly string SkippedReasonFmt = Loc.Localize("Emissive.SkippedReason.Fmt", "{0}\nSkipped: {1}");
+
+    public readonly string PathsFmt = Loc.Localize("Emissive.Paths.Fmt", "Imported once, for:\n{0}");
+
+    public readonly string BodyTarget = Loc.Localize("Emissive.BodyTarget.Label", "Body") + "###emissiveBody";
+
+    public readonly string BodyTargetTip = Loc.Localize("Emissive.BodyTarget.Tip",
+        "Which body material the art is painted onto. Proteus picks this from the pack when it recognises "
+      + "the body, and from the one you're wearing when it doesn't — change it if you know the pack was "
+      + "made for a different one.");
+
+    public readonly string BodyFromPackFmt = Loc.Localize("Emissive.BodyFromPack.Fmt",
+        "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.");
+
+    /// <summary>
+    /// Said before the button, because it is the surprising half of this import: the pack's own redirects
+    /// are dropped. They are body materials rewired to name an emissive sampler that only a replaced
+    /// skin.shpk has, and republishing them would put the imported mod into a fight with Proteus over the
+    /// very material it composites into. Plain text, not the warning colour — this is true of a CORRECT
+    /// import.
+    /// </summary>
+    public readonly string MaterialsIgnored = Loc.Localize("Emissive.MaterialsIgnored",
+        "Only the glow art is imported. The pack's own body materials are left behind: they only work with "
+      + "a replaced skin shader, and Proteus paints the glow onto whatever skin you already wear.");
+
+    /// <summary>Stated plainly rather than in the warning colour, for the reason
+    /// <see cref="LuminisStrings.NoRaceFilter"/> gives.</summary>
+    public readonly string NoRaceFilter = Loc.Localize("Emissive.NoRaceFilter",
+        "Proteus has no race or sex filter: this paints any character wearing a body with the same "
+      + "material. Turn the mod off in Penumbra for characters it wasn't painted for.");
+
+    public readonly string NothingUsable = Loc.Localize("Emissive.NothingUsable",
+        "No texture in this pack carries a glow mask.");
 }
 
 /// <summary>The loose eye-texture pack (<c>.zip</c>) half of the Import tab.</summary>
