@@ -507,6 +507,10 @@
     "message": "{0}번 행 B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "이 열을 참조하는 픽셀이 없습니다 — 아트의 인덱스가 어디서나 반대쪽 열을 고르므로, 여기서 수정해도 나타나지 않습니다.",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "타일링",
     "description": ""

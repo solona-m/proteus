@@ -680,6 +680,97 @@ public class ContentPieceSelectionTests
     }
 
     /// <summary>
+    /// A 16×16 sheet — 256 texels, so <c>ReadOverlay</c>'s floor is the flat 64 rather than 0.1% — filled
+    /// from a list of (red, green, count) runs in row-major order.
+    private static byte[] Sheet(params (byte R, byte G, int Count)[] runs)
+    {
+        var b = new byte[16 * 16 * 4];
+        int t = 0;
+        foreach (var (r, g, count) in runs)
+            for (int i = 0; i < count; i++, t++)
+            {
+                b[t * 4] = r; b[t * 4 + 1] = g; b[t * 4 + 3] = 255;
+            }
+        return b;
+    }
+
+    /// <summary>
+    /// The two readings of a red channel that Proteus holds at once, pinned against each other on real
+    /// pixels.
+    /// <para/>
+    /// They are allowed to differ, and must: <c>RowOf</c> ROUNDS, for a pack's index where the number states
+    /// its author's intent, while <c>ReadOverlay</c> TRUNCATES, for an overlay's own <c>_id</c>, because
+    /// that is how <c>CompositorService.ApplyIndexedOverlay</c> bins the very same file. Tidying either into
+    /// the other is a one-character edit that this has to catch — the editor DIMS the rows a scan does not
+    /// name, so a binning one row out does not merely mislabel a row, it puts the working one behind a
+    /// dimmed button.
+    /// <para/>
+    /// What keeps the divergence harmless is the round trip below: on a multiple of 17 both readings agree,
+    /// and a multiple of 17 is all any importer writes.
+    /// </summary>
+    [Fact]
+    public void AnOverlayIndexIsBinnedTheWayTheCompositorBinsIt()
+    {
+        // 254 is a value the two part company on. ApplyIndexedOverlay paints row 15 there; RowOf says 16.
+        var edge = ContentIndexTexture.ReadOverlay(Sheet((254, 255, 256)), 16, 16);
+        Assert.Equal([15], edge.Rows.ToArray());
+        Assert.Equal(16, ContentIndexTexture.RowOf(254));   // the other reading, on the same byte
+        Assert.Equal(15, ContentIndexTexture.OverlayRowOf(254));
+
+        // Rounding is what RowOf is FOR, so pin the step either side of its midpoint too.
+        Assert.Equal(1, ContentIndexTexture.RowOf(8));
+        Assert.Equal(2, ContentIndexTexture.RowOf(9));
+
+        // Every row an importer writes round-trips under BOTH readings — through the real scan, not just
+        // the binning function. This is the invariant that makes the divergence unreachable in practice.
+        for (int row = 1; row <= 16; row++)
+        {
+            byte red = (byte)((row - 1) * 17);
+            Assert.Equal([row], ContentIndexTexture.ReadOverlay(Sheet((red, 255, 256)), 16, 16).Rows.ToArray());
+            Assert.Equal(row, ContentIndexTexture.RowOf(red));
+        }
+
+        // Green picks the column; a sheet that uses both narrows to neither, because that is a gradient.
+        Assert.Equal("A", ContentIndexTexture.ReadOverlay(Sheet((0, 255, 256)), 16, 16).SubRow);
+        Assert.Equal("B", ContentIndexTexture.ReadOverlay(Sheet((0, 0, 256)), 16, 16).SubRow);
+        Assert.Null(ContentIndexTexture.ReadOverlay(Sheet((0, 255, 128), (0, 0, 128)), 16, 16).SubRow);
+
+        // A run too small to be art earns no row of its own. Without the floor, one bled texel from an art
+        // tool's padding would light a row up in the picker that nothing renders.
+        var stray = ContentIndexTexture.ReadOverlay(Sheet((0, 255, 200), (255, 255, 56)), 16, 16);
+        Assert.Equal([1], stray.Rows.ToArray());
+
+        // And the island mask is applied, so padding outside the UV islands is not coverage: the top half
+        // of the sheet is row 1, the bottom is row 16, and only the top half is inside an island.
+        var island = new bool[16 * 16];
+        for (int i = 0; i < island.Length / 2; i++) island[i] = true;
+        var masked = ContentIndexTexture.ReadOverlay(
+            Sheet((0, 255, 128), (255, 255, 128)), 16, 16, island, 16, 16);
+        Assert.Equal([1], masked.Rows.ToArray());
+
+        // Nothing readable at all stays UNKNOWN rather than becoming a claim — OverlayRowFilter turns an
+        // empty scan into a null filter, which dims nothing.
+        Assert.Empty(ContentIndexTexture.ReadOverlay([], 16, 16).Rows);
+        Assert.Empty(ContentIndexTexture.ReadOverlay(Sheet((0, 255, 256)), 0, 0).Rows);
+    }
+
+    /// <summary>Writer and reader end to end: the index an importer writes, read back through the reading
+    /// that the shell it is written for actually uses.</summary>
+    [Fact]
+    public void TheIndexAnImporterWritesReadsBackAsTheRowsItMeant()
+    {
+        byte[] intensity = [255, 128, 255, 0];
+        var bands = GlowShell.Bands(intensity);
+        Assert.Equal(2, bands.Count);
+
+        // Column A because GlowShell.Index writes green 255 — the same cell a shell with no index at all
+        // lands on, which is what makes row 16 sub-row A the right default when there is no _id.
+        var back = ContentIndexTexture.Read(GlowShell.Index(intensity, bands));
+        Assert.Equal([1, 2], back.Rows.OrderBy(r => r).ToArray());
+        Assert.Equal("A", back.SubRow);
+    }
+
+    /// <summary>
     /// An animated glow has to be armed on the cell the material SAMPLES, not on whichever row happens to
     /// carry a value.
     /// <para/>

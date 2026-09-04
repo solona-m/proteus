@@ -507,6 +507,10 @@
     "message": "Fila {0}B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "Nada muestrea esta columna: el índice del arte elige la otra en todas partes, así que los cambios aquí no se verán.",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "Repetición",
     "description": ""

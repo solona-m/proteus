@@ -507,6 +507,10 @@
     "message": "行{0}B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "この列は参照されません。アートのインデックスはどこでも反対の列を選ぶため、ここを編集しても反映されません。",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "タイリング",
     "description": ""

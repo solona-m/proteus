@@ -93,7 +93,7 @@ public class StatusWindow : Window
 
     // Key: absolute index-texture path → 1-based row numbers that appear in it.
     // Cleared per-entry on each popup open so option switches are reflected.
-    private readonly Dictionary<string, HashSet<int>> _indexRowCache = new();
+    private readonly Dictionary<string, ContentIndexTexture.Scan> _indexRowCache = new();
     // Key: modDir → selected index into the active-options list (for the dropdown).
     // Which active overlay the colour editor is scoped to, keyed by mod dir → "group\0option". Tracked by
     // identity (not slot index) so the selection follows the option when the stack is reordered.
@@ -3646,7 +3646,11 @@ public class StatusWindow : Window
             // the live material every frame, and a content material is the pack's own, published verbatim
             // and never touched at runtime — so the controls would save a value that does nothing. Shown on
             // Proteus's own shells only, which is where the compositor publishes a profile for.
-            lightResponseApplies: false);
+            lightResponseApplies: false,
+            // The column its index actually lands in, which this editor has always KNOWN and until now could
+            // only mention in prose — SamplesFmt ends "editing the other column of this row will do nothing
+            // either", over two columns drawn identically. Now the dead one is dimmed like a dead row.
+            usedSubRow: idx.SubRow);
         _rowSelection[selKey] = sel;
 
         // ── animated glow ────────────────────────────────────────────────────
@@ -3829,8 +3833,12 @@ public class StatusWindow : Window
     /// The <c>_id</c> sampler is what picks a row per pixel; with none bound there is nothing to pick with
     /// and the shader takes the last one. Proteus already leans on this elsewhere — a normal-only overlay
     /// synthesizes its tint from Row 16 for the same reason.
+    /// <para/>
+    /// The same row a SHELL without an <c>_id</c> lands on, by a different route: there SecondSkinService
+    /// fabricates the index rather than binding none, and picks (255, 255, 0) to hit this row deliberately.
+    /// One constant for both, so the two can't be reasoned about separately and drift.
     /// </summary>
-    private const int DefaultContentRow = 16;
+    private const int DefaultContentRow = GlowShell.Row;
 
     /// <summary>
     /// Read a content material's index texture and work out which colour rows it selects, so the grid can
@@ -4839,6 +4847,7 @@ public class StatusWindow : Window
             var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? metaRows) : metaRows;
 
             var usedRowsSimple = new HashSet<int>();
+            var columnsSimple  = new List<string?>();
             bool hasIdxSimple  = false;
             foreach (var ov in entry.Metadata.Overlays ?? [])
             {
@@ -4846,7 +4855,8 @@ public class StatusWindow : Window
                 var idxPath = Path.Combine(entry.SidecarRoot, ov.Index);
                 if (!_indexRowCache.ContainsKey(idxPath))
                     _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
-                usedRowsSimple.UnionWith(_indexRowCache[idxPath]);
+                usedRowsSimple.UnionWith(_indexRowCache[idxPath].Rows);
+                columnsSimple.Add(_indexRowCache[idxPath].SubRow);
                 hasIdxSimple = true;
             }
             // Active "Masks" options can inject additional rows via their own Index companion —
@@ -4856,10 +4866,12 @@ public class StatusWindow : Window
                 if (asset.IndexPath == null) continue;
                 if (!_indexRowCache.ContainsKey(asset.IndexPath))
                     _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
-                usedRowsSimple.UnionWith(_indexRowCache[asset.IndexPath]);
+                usedRowsSimple.UnionWith(_indexRowCache[asset.IndexPath].Rows);
+                columnsSimple.Add(_indexRowCache[asset.IndexPath].SubRow);
                 hasIdxSimple = true;
             }
-            HashSet<int>? filteredSimple = (hasIdxSimple && usedRowsSimple.Count > 0) ? usedRowsSimple : null;
+            var (filteredSimple, columnSimple) =
+                OverlayRowFilter(hasIdxSimple, usedRowsSimple, AgreedColumn(columnsSimple));
             if (!hasIdxSimple)
                 ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoIndexTexture);
 
@@ -4877,7 +4889,8 @@ public class StatusWindow : Window
             ColorTableEditor.DrawRows(entry.ModDirectory, rows, filteredSimple, gearSimple, shaderSimple,
                 compositor.GetShellMaterials(entry.ModDirectory, null, null),
                 compositor.GetSkinGlowTargets(entry.ModDirectory, null, null),
-                out var rowEditSimple, ref selSimple, ref changedSimple);
+                out var rowEditSimple, ref selSimple, ref changedSimple,
+                usedSubRow: columnSimple);
             _rowSelection[entry.ModDirectory] = selSimple;
 
             // Glow effect + Advanced live at the very bottom, below the rows.
@@ -5167,7 +5180,8 @@ public class StatusWindow : Window
         // combined mask _id, no overlay descriptors, no gear/promotion, no design-binding override.
         bool isMask = string.Equals(groupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal);
 
-        HashSet<int>? usedRows = null;
+        var scannedRows = new HashSet<int>();
+        var scannedColumns = new List<string?>();
         var idxDesc = activeOpt.Overlays.FirstOrDefault(o => o.Index != null);
         if (idxDesc?.Index != null)
         {
@@ -5175,7 +5189,8 @@ public class StatusWindow : Window
             if (!_indexRowCache.ContainsKey(idxPath))
                 _indexRowCache[idxPath] = ScanIndexFile(idxPath, bodyType);
             var scan = _indexRowCache[idxPath];
-            if (scan.Count > 0) usedRows = scan;
+            scannedRows.UnionWith(scan.Rows);
+            scannedColumns.Add(scan.SubRow);
         }
 
         // Active "Masks" options can inject additional rows via their own Index companion
@@ -5188,13 +5203,14 @@ public class StatusWindow : Window
             if (!_indexRowCache.ContainsKey(asset.IndexPath))
                 _indexRowCache[asset.IndexPath] = ScanIndexFile(asset.IndexPath, bodyType);
             var maskScan = _indexRowCache[asset.IndexPath];
-            if (maskScan.Count == 0) continue;
-            usedRows ??= [];
-            usedRows.UnionWith(maskScan);
+            scannedRows.UnionWith(maskScan.Rows);
+            scannedColumns.Add(maskScan.SubRow);
         }
 
         bool hasAnyIndex = idxDesc?.Index != null || maskAssets.Any(a => a.IndexPath != null);
-        if (usedRows == null && !hasAnyIndex)
+        var (usedRows, usedColumn) =
+            OverlayRowFilter(hasAnyIndex, scannedRows, AgreedColumn(scannedColumns));
+        if (!hasAnyIndex)
             ImGui.TextDisabled(Strings.ColorPanel.NoIndexTexture);
 
         // ── Masks tab: one shared colorset for all active masks ───────────────────────────────────────
@@ -5282,7 +5298,8 @@ public class StatusWindow : Window
                 // with its unset half mirrored (SecondSkinService.BuildRows) — so the swatches have to show
                 // it that way. A mask still on skin is painted into the diffuse, where an unset sub-row is a
                 // neutral multiply and mirroring would misreport it.
-                mirrorUnsetSubRows: maskAsGear);
+                mirrorUnsetSubRows: maskAsGear,
+                usedSubRow: usedColumn);
             _rowSelection[maskScope] = maskSel;
 
             ImGui.Separator();
@@ -5437,7 +5454,8 @@ public class StatusWindow : Window
         ColorTableEditor.DrawRows(scope, editRows, usedRows, gear, shader,
             shellMaterials,
             skinGlowTargets,
-            out var rowEdit, ref sel, ref changed);
+            out var rowEdit, ref sel, ref changed,
+            usedSubRow: usedColumn);
         _rowSelection[scope] = sel;
 
         // Glow effect + Advanced live at the very bottom, below the rows.
@@ -5816,14 +5834,70 @@ public class StatusWindow : Window
               "it saves a change here.";
     }
 
-    private HashSet<int> ScanIndexFile(string absolutePath, string? bodyType)
+    /// <summary>
+    /// The colour-table cell an overlay's art can actually reach: the rows to leave live in the picker, and
+    /// the column, or nulls for "no idea, leave everything alone".
+    /// <para/>
+    /// The case this exists for is an overlay with NO index texture, which is most of them — every
+    /// single-plateau Atramentum Luminis import, every emissive-skin import, every tattoo the Create tab
+    /// makes. A shell without an <c>_id</c> samples the index SecondSkinService fabricates, (255, 255, 0),
+    /// which is row pair <see cref="GlowShell.Row"/> sub-row A and nothing else. The panel has always SAID
+    /// so in prose (<c>ColorPanel.NoIndexTexture</c>) while handing the picker a null filter, so all sixteen
+    /// rows drew as live and the cursor opened on row 1 — the one row that provably does nothing. Someone
+    /// looking for the glow controls edited row 1, saw no change, and concluded the feature was missing.
+    /// <para/>
+    /// This is the fix the CONTENT editor already got, and the comment above ContentIndexFor describes the
+    /// same contradiction being found there first. Fabricated at the call site rather than inside
+    /// <c>ColorTableEditor.DrawRows</c>, because null has to keep meaning UNKNOWN: an index that would not
+    /// decode, or a material with no colour table, must dim nothing at all rather than assert a fact about a
+    /// file nothing has read.
+    /// </summary>
+    /// <param name="hasAnyIndex">Whether any overlay or active mask names an index at all.</param>
+    /// <param name="scanned">The union of every scan's rows. Empty means the files were named and read and
+    /// selected nothing — which is not the same as there being none.</param>
+    private static (HashSet<int>? Rows, string? Column) OverlayRowFilter(
+        bool hasAnyIndex, HashSet<int> scanned, string? column)
+        => !hasAnyIndex ? ([GlowShell.Row], ShellDefaultColumn)
+         : scanned.Count > 0 ? (scanned, column)
+         : (null, null);
+
+    /// <summary>The sub-row a shell with no <c>_id</c> lands in: the fabricated index's green is 255, which
+    /// is column A. Spelled the way <see cref="ContentIndexTexture.Scan.SubRow"/> spells it.</summary>
+    private const string ShellDefaultColumn = "A";
+
+    /// <summary>
+    /// One column out of several scans: kept only while every scan that has an opinion agrees on it.
+    /// A scan that read nothing, or one that genuinely uses both columns, reports null and takes the whole
+    /// answer with it — the conservative direction, since the cost of being wrong is a control dimmed for a
+    /// cell that does render.
+    /// </summary>
+    private static string? AgreedColumn(IEnumerable<string?> columns)
     {
-        var used = new HashSet<int>();
+        string? one = null;
+        foreach (var c in columns)
+        {
+            if (c == null) return null;
+            if (one == null) one = c;
+            else if (!string.Equals(one, c, StringComparison.Ordinal)) return null;
+        }
+        return one;
+    }
+
+    /// <summary>
+    /// Which colour-table rows an overlay's own <c>_id</c> art selects, and which column they land in.
+    /// <para/>
+    /// The decode and the island fetch only — the rules live in
+    /// <see cref="ContentIndexTexture.ReadOverlay"/>, which states how they differ from the ones this
+    /// file's content editor reads a PACK's index by, and is where they can be tested. They are worth
+    /// testing: the editor DIMS what this does not name, so a binning one row out no longer merely
+    /// mislabels a row, it puts the working one behind a dimmed button.
+    /// </summary>
+    private ContentIndexTexture.Scan ScanIndexFile(string absolutePath, string? bodyType)
+    {
         try
         {
             using var stream = File.OpenRead(absolutePath);
             var img = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-            int w = img.Width, h = img.Height;
 
             // Mask to UV islands so padding (art tools bleed colour outside the islands) isn't counted as
             // real coverage. The ~4K transfer map must NOT be loaded synchronously here though — that would
@@ -5835,33 +5909,13 @@ public class StatusWindow : Window
             if (islandW == 0 || islandH == 0) island = null;
             if (island == null && bodyType != null) StartIslandMaskWarmup(bodyType);
 
-            var counts = new int[17];
-            int total = 0;
-            for (int y = 0; y < h; y++)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    if (island != null)
-                    {
-                        // The map is its own resolution; sample it nearest-neighbour.
-                        int mx = x * islandW / w, my = y * islandH / h;
-                        int mi = my * islandW + mx;
-                        if (mi >= island.Length || !island[mi]) continue;   // outside the islands
-                    }
-
-                    counts[img.Data[(y * w + x) * 4] / 17 + 1]++;   // red → 1-based row
-                    total++;
-                }
-            }
-
-            if (total == 0) return used;
-
-            int threshold = Math.Max(64, total / 1000);   // 0.1% of the island area
-            for (int row = 1; row <= 16; row++)
-                if (counts[row] >= threshold)
-                    used.Add(row);
+            return ContentIndexTexture.ReadOverlay(img.Data, img.Width, img.Height, island, islandW, islandH);
         }
-        catch { }
-        return used;
+        catch
+        {
+            // Unreadable is UNKNOWN, and an empty scan is how that is spelled: OverlayRowFilter turns it
+            // into a null filter, so nothing is dimmed on the strength of a file nothing could read.
+            return new([], null);
+        }
     }
 }

@@ -507,6 +507,10 @@
     "message": "Ligne {0}B",
     "description": ""
   },
+  "Colors.SubRowUnused": {
+    "message": "Rien n’échantillonne cette colonne — l’index de l’illustration choisit l’autre partout, les modifications faites ici ne se verront donc pas.",
+    "description": ""
+  },
   "Colors.Tiling.Label": {
     "message": "Répétition",
     "description": ""

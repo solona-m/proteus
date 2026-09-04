@@ -507,6 +507,10 @@
     "message": "Row {0}B",
     "description": "Column header of the A/B panel. {0} is the row number; the trailing B identifies the sub-row and should stay B."
   },
+  "Colors.SubRowUnused": {
+    "message": "Nothing samples this column — the art's index picks the other one everywhere, so edits here won't show.",
+    "description": "Colours panel: shown at the top of whichever of the two sub-row columns (A/B) the art never lands in. Most overlays carry no index texture, so column B is dead on every row."
+  },
   "Colors.Tiling.Label": {
     "message": "Tiling",
     "description": "Control label. Appears in the colour-table editor window."
