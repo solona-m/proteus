@@ -287,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "明るい場所では隠す",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "この行の不透明度を発光に追従させます。光らなくなった場所には肌だけが残ります。\nこれがないと、暗所専用の行でも自身の色（多くは黒）が残るため、\n日中は肌に溶け込まず暗いパッチとして見えてしまいます。",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "このサブ行のメッシュをキャラクター上で発光させ、ゲーム内で見つけやすく\nします。もう一度クリックすると停止します。",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "このサブ行の範囲をキャラクターの肌の上で光らせ、ゲーム内で見つけやすく\nします。もう一度クリックで停止。（初回は生成に少し時間がかかります。）",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "明るさで薄れる",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "周囲の明るさがこの行のグローをどれだけ打ち消すか。\n0% はどこでも同じ明るさ。100% は暗所専用のグローで、明かりのない部屋では最大、\n真昼の空の下やランプのそばでは完全に消えます。\n行ごとに設定できるので、タトゥーの半分だけを暗所専用にすることもできます。",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "完全な再描画を強制し、セカンドスキンが置き換えた指輪やブレスレットを\n読み込み直して元のモデルに戻します。無効化や切り替えのあとで装備シェルが\nアクセサリに残ってしまう場合にお使いください。",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "シーンの明るさに反応する",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "「明るさで薄れる」を設定した行を、周囲が明るくなるほど暗くします。\nオフの場合は、これまでどおりどこでも作者が指定した明るさで光ります。\nどちらの場合も再生成は行われません — 実行中のマテリアル経由で反映されます。",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "明るさ",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 は真っ暗（暗所専用グローが最大）、1 は真昼（完全に消えます）。",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "明るさを手動で指定する",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "シーンを無視してスライダーの値を使います。\n夕暮れを待たずに暗所専用グローの見え方を確かめる最短の方法で、\n自分の照明が主役となるグループポーズにも適しています。",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "測定値 {0:0.00} — 空 {1:0.00}、ランプ {2:0.00}（{4} 個中 {3} 個が到達）",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "圧縮を有効にする",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "ホスト先",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "光に反応するグロー",
     "description": ""
   },
   "Settings.Section.Output": {

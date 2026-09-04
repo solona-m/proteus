@@ -287,6 +287,14 @@
     "message": "{0}：{1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "有光时隐藏",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "让这一行的不透明度跟随发光：不再发光的地方就只剩皮肤。\n不启用时，仅在黑暗中发光的行仍会留下自身的颜色（通常是黑色），\n于是图案在白天看起来像一块暗斑。",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "让此子行的网格在角色身上发光，便于你在游戏中找到它。\n再次点击可停止。",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "点亮此子行在角色皮肤上对应的区域，便于你在游戏中找到它。\n再次点击可停止。（首次生成需要片刻。）",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "遇光变淡",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "场景光线会削弱这一行发光的程度。\n0% 表示在哪里都一样亮。100% 是只在黑暗中发光：在没有灯的房间里最亮，\n在正午的天空下或灯旁则完全看不见。\n按行设置，因此纹身的一半可以只在暗处发光，另一半始终可见。",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "强制完整重绘，以重新加载第二层皮肤所替换的任何戒指或手镯，将其还原为\n原始模型。若禁用或切换后装备外壳仍卡在某件饰品上，请使用此功能。",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "对场景光线作出反应",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "让标记为“遇光变淡”的行随着照到你身上的光线增强而变暗。\n关闭时，所有发光都会像以前一样在任何地方保持作者设定的亮度。\n两种情况下都不会重新生成任何文件 —— 这是通过实时材质生效的。",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "光照强度",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 表示漆黑（暗处专用发光最亮），1 表示白昼（它们完全消失）。",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "手动设置光照强度",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "忽略场景，改用滑块的数值。\n这是不用等到黄昏就能看出暗处专用发光效果的最快方式，\n也适合团队姿势模式 —— 那里重要的是你自己布置的灯光。",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "读数 {0:0.00} —— 天空 {1:0.00}，灯光 {2:0.00}（{4} 个中有 {3} 个照到）",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "启用压缩",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "寄载",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "对光线敏感的发光",
     "description": ""
   },
   "Settings.Section.Output": {

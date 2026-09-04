@@ -207,6 +207,23 @@ public class CompositorService : IDisposable
     public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
         => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
 
+    // Shell material leaf → what its rows want from the scene light, from the last shell build. Same
+    // publish contract as _shellMaterials: assembled on the composite thread, swapped in as one reference,
+    // never mutated afterwards — which is what lets the framework thread read it every frame with no lock.
+    private volatile Dictionary<string, ShellLightProfile> _shellLight = new();
+
+    /// <summary>
+    /// The light response of a shell material, or null when it asks for none — which is the overwhelmingly
+    /// common case and therefore the fast path: no light-sensitive glow anywhere means every lookup misses
+    /// and the runtime does exactly what it did before the feature existed.
+    /// </summary>
+    public ShellLightProfile? GetShellLight(string materialLeaf)
+        => _shellLight.TryGetValue(materialLeaf, out var p) ? p : null;
+
+    /// <summary>Whether ANY live shell asks for a light response. Lets the per-frame applier skip its whole
+    /// pass — including the character walk — on a character that has none.</summary>
+    public bool AnyShellLight => _shellLight.Count > 0;
+
     // Mod directory → the content materials of that mod backing a drawn mesh in the last composite, as
     // paths relative to the mod root. Same publish contract as _shellMaterials: assembled on the composite
     // thread, swapped in as one reference, never mutated afterwards.
@@ -303,6 +320,7 @@ public class CompositorService : IDisposable
     {
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
+        _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
         _lastDrawnMaterials = null;
@@ -6066,6 +6084,7 @@ public class CompositorService : IDisposable
             // describe a shell that IS on the character, and the publish below still empties them when no
             // shell built this time.
             Dictionary<(string ModDir, string? Group, string? Option), List<string>>? nextShellMaterials = null;
+            Dictionary<string, ShellLightProfile>? nextShellLight = null;
             Dictionary<string, HashSet<string>>? nextContentMaterials = null;
             ShellDrawnProbe? nextShellDrawnCheck = null;
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
@@ -6393,6 +6412,7 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             nextShellMaterials = shells.ShellMaterials;
                             nextContentMaterials = shells.ContentMaterials;
+                            nextShellLight = shells.ShellLight;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
                             nextShellDrawnCheck = new ShellDrawnProbe(
@@ -6437,6 +6457,7 @@ public class CompositorService : IDisposable
             // ClearShellLocators instead.
             _shellMaterials   = nextShellMaterials ?? new();
             _contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
+            _shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             _shellDrawnCheck  = nextShellDrawnCheck;
 
             // No shell built this composite (no gear, or build failed) but hosts were redirected last time —

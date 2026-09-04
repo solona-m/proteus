@@ -287,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "Im Licht verbergen",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Lässt die Deckkraft dieser Zeile ihrem Leuchten folgen: Wo sie nicht mehr leuchtet,\nbleibt nur noch Haut.\nOhne dies lässt eine reine Dunkelzeile ihre eigene Farbe zurück — meist Schwarz —\nsodass die Kunst bei Tag als dunkler Fleck erscheint, statt in der Haut zu verschwinden.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Lässt das Mesh dieser Unterzeile an deinem Charakter leuchten, damit du es\nim Spiel findest. Nochmal klicken beendet es.",
     "description": ""
@@ -301,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "Hebt den Bereich dieser Unterzeile auf der Haut deines Charakters hervor, damit du\nihn im Spiel findest. Nochmal klicken beendet es. (Baut sich beim ersten Mal kurz auf.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "Verblasst im Licht",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "Wie stark das Licht der Szene das Leuchten dieser Zeile wegnimmt.\n0 % leuchtet überall gleich. 100 % ist ein reines Dunkelleuchten: volle Helligkeit\nim unbeleuchteten Raum, gar nichts unter Mittagshimmel oder neben einer Lampe.\nPro Zeile einstellbar — so kann eine Tattoo-Hälfte nur im Dunkeln leuchten, die andere immer.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -1779,6 +1795,38 @@
     "message": "Erzwingt ein vollständiges Neuzeichnen, um jeden Ring bzw. jedes Armband neu zu laden,\nden die zweite Haut ersetzt hat, und stellt das Originalmodell wieder her. Nutze das,\nwenn eine Gear-Hülle nach dem Deaktivieren oder Wechseln an einem Accessoire hängen bleibt.",
     "description": ""
   },
+  "Settings.LightResponse.Enabled": {
+    "message": "Auf das Licht der Szene reagieren",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Lässt Zeilen mit „Verblasst im Licht“ dunkler werden, je heller es um dich wird.\nAus leuchtet jede Zeile überall mit ihrer authored Helligkeit, wie zuvor.\nSo oder so wird nichts neu gebaut — das erreicht den Charakter über das laufende Material.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Lichtstärke",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 ist stockdunkel (Dunkelleuchten auf voller Helligkeit), 1 ist helles Tageslicht (sie verschwinden).",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Lichtstärke von Hand festlegen",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignoriert die Szene und nutzt stattdessen den Regler.\nDer schnellste Weg zu sehen, was ein reines Dunkelleuchten tut, ohne auf die Dämmerung zu warten,\nund die richtige Wahl für Gpose, wo dein eigenes Licht-Setup zählt.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Messwert {0:0.00} — Himmel {1:0.00}, Lampen {2:0.00} ({3} von {4} erreichen dich)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": ""
+  },
   "Settings.Output.Compression.Label": {
     "message": "Komprimierung aktivieren",
     "description": ""
@@ -1821,6 +1869,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "Hosting",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Lichtempfindliches Leuchten",
     "description": ""
   },
   "Settings.Section.Output": {

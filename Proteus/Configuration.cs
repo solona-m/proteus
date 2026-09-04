@@ -195,6 +195,24 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public ConnectorMeshMode HideConnectorMeshes { get; set; } = ConnectorMeshMode.Off;
 
+    /// <summary>
+    /// Master switch for light-sensitive glow. Off stops the light probe running at all, and every row
+    /// glows at its authored brightness the way it did before the feature existed — so a mod that ships a
+    /// light response still renders, just unconditionally.
+    /// </summary>
+    public bool LightResponseEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Pin the light level by hand instead of reading the scene. This is how a dark-only glow is tested
+    /// without waiting for dusk, and the escape hatch for gpose, where the rig's lighting is the point and
+    /// an estimate of it is not wanted.
+    /// </summary>
+    public bool LightResponseManual { get; set; }
+
+    /// <summary>The pinned level (0 = pitch dark, 1 = full daylight) used while
+    /// <see cref="LightResponseManual"/> is on.</summary>
+    public float LightResponseManualLevel { get; set; } = 0f;
+
     /// <summary>When true, saving a Glamourer design auto-captures the current Proteus state bound to it.</summary>
     public bool DesignBindingEnabled { get; set; } = true;
 
