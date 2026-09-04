@@ -12,6 +12,169 @@ namespace Proteus.Tests;
 /// </summary>
 public class ModCreationTests
 {
+    /// <summary>Run <see cref="ModCreationService.WriteMod"/> against a throwaway directory and hand the
+    /// caller the parsed sidecar. Every glow test needs the same six lines otherwise.</summary>
+    private static void WithMod(GlowStyle glow, byte[]? scroll, int w, int h,
+                                System.Action<string, ProteusMetadata> check, string? artColour = null)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "proteus_create_" + Path.GetRandomFileName());
+        var diffuse = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".png");
+        File.WriteAllBytes(diffuse, new byte[] { 1, 2, 3, 4 });
+
+        try
+        {
+            ModCreationService.WriteMod(
+                root, "Glowy", "Artist",
+                "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null,
+                glow: glow, scrollRgba: scroll, scrollW: w, scrollH: h, artColour: artColour);
+
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            check(root, meta);
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { File.Delete(diffuse); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// "Always glow" carries NO light response, which is what makes its name true. An earlier draft faded
+    /// it to 15% at midday; on character.shpk the emissive is a flat additive tint that a lit scene already
+    /// swamps, so the response bought nothing and contradicted the label. It also keeps this style working
+    /// with the light feature switched off entirely.
+    /// </summary>
+    [Fact]
+    public void WriteMod_always_glow_is_unconditional()
+    {
+        WithMod(GlowStyle.Always, null, 0, 0, (root, meta) =>
+        {
+            var ov = Assert.Single(meta.Overlays!);
+            Assert.Equal(OverlayLayer.Gear, ov.Layer);              // skin cannot emit
+            Assert.Equal("character.shpk", ov.ShaderPackage);       // the shader that takes a base texture
+            Assert.Null(ov.Scroll);
+            Assert.False(Directory.Exists(Path.Combine(root, "Proteus", "Effects")));
+
+            var row = Assert.Single(meta.ColorTableRows!);
+            Assert.Equal(ModCreationService.GlowRow, row.Row);      // the only cell a fabricated index reads
+            Assert.Equal("#FFFFFF", row.SubRowA!.Diffuse);          // don't tint the art
+            Assert.Equal(ModCreationService.AlwaysGlowEmissive, row.SubRowA.Emissive);
+            Assert.Equal("#C86432", row.SubRowA.EmissiveColor);     // the art's own colour, not white
+            Assert.Null(row.SubRowA.LightResponse);
+            Assert.False(row.SubRowA.HideInLight);
+        }, artColour: "#C86432");
+    }
+
+    [Fact]
+    public void WriteMod_dark_only_writes_the_scroll_map_and_hides_in_light()
+    {
+        var scroll = new byte[2 * 2 * 4];
+        WithMod(GlowStyle.DarkOnly, scroll, 2, 2, (root, meta) =>
+        {
+            var ov = Assert.Single(meta.Overlays!);
+            Assert.Equal(OverlayLayer.Gear, ov.Layer);
+            Assert.Equal("characterscroll.shpk", ov.ShaderPackage);
+            // A BARE file name: ResolveEffectPath looks it up in Proteus/Effects and the shared library,
+            // unlike the overlay slots, which are sidecar-relative.
+            Assert.Equal("glow.png", ov.Scroll);
+            Assert.True(File.Exists(Path.Combine(root, "Proteus", "Effects", "glow.png")));
+            // Explicitly zero and one: an unset speed takes the writer's default and slides the tattoo
+            // across the skin it is drawn on.
+            Assert.Equal(0f, ov.ScrollSpeedX);
+            Assert.Equal(1f, ov.ScrollTilingX);
+
+            var row = Assert.Single(meta.ColorTableRows!);
+            Assert.Equal("#000000", row.SubRowA!.Diffuse);   // characterscroll has no base texture
+            Assert.Equal(1f, row.SubRowA.LightResponse);
+            Assert.True(row.SubRowA.HideInLight);
+        });
+    }
+
+    /// <summary>
+    /// The default path must stay exactly what it was: Skin, no shader, no rows. Every glow field is
+    /// opt-in, and a mod created without ticking the box is not allowed to gain one.
+    /// </summary>
+    [Fact]
+    public void WriteMod_without_glow_is_unchanged()
+    {
+        WithMod(GlowStyle.None, null, 0, 0, (root, meta) =>
+        {
+            var ov = Assert.Single(meta.Overlays!);
+            Assert.Equal(OverlayLayer.Skin, ov.Layer);
+            Assert.Null(ov.Shader);
+            Assert.Null(ov.Scroll);
+            Assert.Null(ov.ScrollSpeedX);
+            Assert.Null(meta.ColorTableRows);
+            Assert.False(Directory.Exists(Path.Combine(root, "Proteus", "Effects")));
+        });
+    }
+
+    /// <summary>A dark-only style with no scroll buffer leaves the effect unwritten rather than throwing —
+    /// WriteMod decodes nothing itself, so a caller that couldn't build one must not crash it.</summary>
+    [Fact]
+    public void WriteMod_dark_only_without_a_scroll_map_degrades()
+    {
+        WithMod(GlowStyle.DarkOnly, null, 0, 0, (root, meta) =>
+        {
+            var ov = Assert.Single(meta.Overlays!);
+            Assert.Null(ov.Scroll);
+            Assert.Null(ov.ScrollSpeedX);
+            Assert.False(Directory.Exists(Path.Combine(root, "Proteus", "Effects")));
+        });
+    }
+
+    /// <summary>
+    /// The scroll map IS the light on characterscroll, so it has to be the art's colour scaled by its own
+    /// coverage, on black, and fully opaque — a transparent scroll map renders nothing at all.
+    /// </summary>
+    /// <summary>
+    /// The always-glow emissive is the art's own average, never white. The emissive on character.shpk is
+    /// one flat colour for the whole region, so it cannot follow the picture — but white adds grey to every
+    /// hue at once, which is what bleached a pale watercolour to near-white in game.
+    /// </summary>
+    [Fact]
+    public void AverageArtColour_weights_by_coverage()
+    {
+        // Two opaque texels of one colour, one transparent texel of another. The transparent one is the
+        // background the art sits on and must not pull the answer toward it.
+        var art = new byte[]
+        {
+            200, 100,  50, 255,
+            200, 100,  50, 255,
+              0, 255,   0,   0,
+        };
+
+        Assert.Equal("#C86432", ModCreationService.AverageArtColour(art));
+    }
+
+    [Fact]
+    public void AverageArtColour_is_null_when_nothing_is_covered()
+    {
+        // An all-transparent sheet has no colour to emit in. Unweighted this would average to black and
+        // emit nothing; null lets the caller fall back to white instead.
+        Assert.Null(ModCreationService.AverageArtColour(new byte[] { 200, 100, 50, 0 }));
+    }
+
+    [Fact]
+    public void BuildScrollMap_lays_the_art_on_black_and_makes_it_opaque()
+    {
+        var art = new byte[]
+        {
+            200, 100,  50, 255,   // fully covered — keeps its colour
+            200, 100,  50, 128,   // half covered — half as bright
+            200, 100,  50,   0,   // transparent — contributes nothing
+        };
+
+        var scroll = ModCreationService.BuildScrollMap(art);
+
+        Assert.Equal(new byte[] { 200, 100, 50, 255 }, scroll[0..4]);
+        Assert.Equal(new byte[] { 100,  50, 25, 255 }, scroll[4..8]);
+        Assert.Equal(new byte[] {   0,   0,  0, 255 }, scroll[8..12]);
+    }
+
     [Fact]
     public void WriteMod_produces_a_valid_proteus_sidecar()
     {

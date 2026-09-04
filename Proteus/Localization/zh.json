@@ -755,6 +755,14 @@
     "message": "名为“{0}”的模组文件夹已存在。",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "无法读取 {0} 来生成发光。请改用 PNG。",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "发光叠加层的颜色取自图案，因此需要一张漫反射贴图。",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0} 文件已不存在：{1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "仅当脸部贴图是按两半绘制时才勾选：角色的右侧画在图像的右半边，左侧画在左半边。\n普通脸部贴图让两侧脸颊使用相同的像素，因此只在一侧的标记无法存在——分成两半的贴图由 Proteus 通过脸部图层渲染。\n对任何普通脸部贴图请保持关闭。",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "始终发光",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "纹身在白天可见，昼夜都会发光。\n刻意保持柔和：该着色器会在整个纹身上叠加单一的平涂颜色，而不是跟随图案，\n因此数值过高会让图案在白天泛白。\n若想夜里更亮，请在“颜色”中提高发光并设置“遇光变淡”。",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "仅在黑暗中",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "白天什么都没有，在没有灯的房间里发光 —— 这正是 Atramentum Luminis 纹身的效果。\n随着照到你身上的光线增强，图案会淡去，并把自己的表面一起带走，\n因此明亮处只剩下皮肤。\n需要在设置中启用“对场景光线作出反应”（默认开启）。",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "让这幅图案发光",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "请先选择漫反射贴图 —— 发光的颜色取自图案本身。",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "只有皮肤和面部目标可以发光。发光叠加层绘制在从你身体切出的第二层皮肤上，\n而装备、饰品或武器没有可供切出的部分。",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "让图案发光。颜色逐像素取自图片本身 —— 没有别的需要设置。\n皮肤无法发光，因此发光叠加层会绘制在第二层皮肤上，\n而不是画进你的皮肤里。其他方面完全相同，\n之后可以用“颜色”里的发光滑块调整。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "创建一个基础的 Proteus 叠加模组。至少选择一张贴图；Proteus 会写入一个新的 Penumbra 模组并将其打开，便于你启用和调整。",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "已创建“{0}”，已启用并在 Penumbra 中打开。",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "已创建“{0}”并在 Penumbra 中打开，但未能启用 —— 请在那里手动启用。",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "重新执行身体检测并覆盖该字段。",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "已创建“{0}” —— 正在等待 Penumbra 加载完成…",
     "description": ""
   },
   "Create.Slot.Diffuse": {

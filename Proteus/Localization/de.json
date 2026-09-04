@@ -755,6 +755,14 @@
     "message": "Ein Mod-Ordner namens „{0}“ existiert bereits.",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "{0} konnte für das Leuchten nicht gelesen werden. Versuche ein PNG.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "Ein leuchtendes Overlay nimmt seine Farbe aus der Kunst und braucht daher eine Diffuse-Textur.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "Die Datei für {0} existiert nicht mehr: {1}",
     "description": ""
@@ -791,6 +799,38 @@
     "message": "Aktiviere dies nur für eine Gesichtstextur, die als ZWEI HÄLFTEN gemalt ist: die rechte Seite des Charakters in der rechten Bildhälfte, die linke Seite in der linken Hälfte.\nEine gewöhnliche Gesichtstextur gibt beiden Wangen dieselben Pixel, daher kann ein Mal auf nur einer Seite darin nicht existieren — Proteus rendert eine geteilte Textur stattdessen über eine Gesichtsebene.\nLass dies bei jeder normalen Gesichtstextur aus.",
     "description": ""
   },
+  "Create.Glow.Always": {
+    "message": "Immer leuchten",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "Das Tattoo ist bei Tag zu sehen und leuchtet Tag und Nacht.\nBewusst dezent: Dieser Shader legt EINE flache Farbe über das ganze Tattoo, statt dem\nBild zu folgen — ein hoher Wert bleicht die Kunst bei Tageslicht aus.\nFür mehr Leuchten bei Nacht: Leuchten in Farben erhöhen und „Verblasst im Licht“ setzen.",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Nur im Dunkeln",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Bei Tag nichts, im unbeleuchteten Raum leuchtend — so wie Atramentum-Luminis-Tattoos.\nDie Kunst verblasst, je heller es um dich wird, und nimmt ihre eigene Oberfläche mit,\nsodass im Hellen nur Haut bleibt.\nBraucht „Auf das Licht der Szene reagieren“ in den Einstellungen (standardmäßig an).",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "Diese Kunst leuchten lassen",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Wähle zuerst eine Diffuse-Textur — das Leuchten nimmt seine Farbe aus der Kunst.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Nur Haut- und Gesichtsziele können leuchten. Ein leuchtendes Overlay wird auf einer aus\ndeinem Körper geschnittenen zweiten Haut gezeichnet — Rüstung, Accessoire oder Waffe bieten nichts dafür.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "Lässt die Kunst leuchten. Die Farbe kommt aus dem Bild selbst, pixelweise — mehr\ngibt es nicht einzustellen.\nHaut kann nicht leuchten, also wird ein leuchtendes Overlay auf einer zweiten Haut\ngezeichnet statt in deine hineingemalt. Alles andere bleibt gleich, und der Regler\n„Leuchten“ in Farben passt es danach an.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Erstelle einen einfachen Proteus-Overlay-Mod. Wähle mindestens eine Textur; Proteus schreibt einen neuen Penumbra-Mod und öffnet ihn, damit du ihn aktivieren und anpassen kannst.",
     "description": ""
@@ -809,6 +849,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "„{0}“ erstellt, aktiviert und in Penumbra geöffnet.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "„{0}“ erstellt und in Penumbra geöffnet, konnte es aber nicht einschalten — aktiviere es dort.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -833,6 +877,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "Führt die Körpererkennung erneut aus und überschreibt das Feld.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "„{0}“ erstellt — warte, bis Penumbra es fertig geladen hat …",
     "description": ""
   },
   "Create.Slot.Diffuse": {
