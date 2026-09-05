@@ -568,6 +568,23 @@ public static class SecondSkinWriter
     /// needs is already computed here, and a duplicate walk of a format this fiddly would be a second thing
     /// to get wrong.
     /// </summary>
+    /// <summary>
+    /// <see cref="Parse"/>, memoised on the byte array it was handed.
+    /// <para/>
+    /// A cap model is parsed by the placement, again by the neighbour fill, again by the shape fit and
+    /// again by the round-trip score - four walks of the same 80-135 KB buffer, and selection does that
+    /// for every candidate cap on every composite. The buffers are read-only and long-lived (the caps are
+    /// loaded once at startup), so the parse is worth keeping.
+    /// <para/>
+    /// Keyed by REFERENCE and held weakly: two callers with the same array share a parse, a caller with
+    /// its own copy gets its own, and a model that goes away takes its parse with it rather than pinning
+    /// it for the process lifetime. The factory may run twice under a race; both produce the same thing
+    /// and only one is kept.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Source> ParseCache = new();
+
+    private static Source ParseCached(byte[] mdl) => ParseCache.GetValue(mdl, static m => Parse(m));
+
     internal sealed class Source
     {
         public required byte[] S;
@@ -844,7 +861,7 @@ public static class SecondSkinWriter
             if (best is { } chosen && bestRate <= CapBindMaxUnplaced)
             {
                 capBytes = chosen.Cap;
-                try { capSrc = Parse(chosen.Cap); }
+                try { capSrc = ParseCached(chosen.Cap); }
                 catch (Exception ex) { diag?.Invoke($"authored cap failed to parse, ignoring: {ex.Message}"); }
                 if (capSrc != null && chosen.Bind != null)
                 {
@@ -868,7 +885,7 @@ public static class SecondSkinWriter
                 // stays non-null so BuildVerbatim does not fall back to GENERATING one; that path is long
                 // dead and throws.
                 capBytes = best.Value.Cap;
-                try { capSrc = Parse(best.Value.Cap); } catch { /* declined anyway */ }
+                try { capSrc = ParseCached(best.Value.Cap); } catch { /* declined anyway */ }
                 capDeclined = bestRate is > 0f and < float.MaxValue
                     ? $"{bestRate * 100:F0}% of the toe cap could not be placed on this body"
                     : "no toe cap has been measured against this body";
@@ -7413,7 +7430,7 @@ public static class SecondSkinWriter
     {
         try
         {
-            var src = Parse(capMdl);
+            var src = ParseCached(capMdl);
             double sum = 0; int n = 0;
             foreach (var pl in placed)
             {
@@ -7653,7 +7670,7 @@ public static class SecondSkinWriter
             {
                 try
                 {
-                    var capSrc2 = Parse(capMdl);
+                    var capSrc2 = ParseCached(capMdl);
                     ReadCapVertices(capSrc2, mesh, out var asAuthored, out var authoredNrm);
                     var tri2 = CapTriangles(capSrc2, mesh, (ushort)vc);
                     var near2 = new List<int>[vc];
@@ -7955,7 +7972,7 @@ public static class SecondSkinWriter
             {
                 try
                 {
-                    var shapeSrc = Parse(capMdl);
+                    var shapeSrc = ParseCached(capMdl);
                     ReadCapVertices(shapeSrc, mesh, out var authored, out _);
                     var shapeTri = CapTriangles(shapeSrc, mesh, (ushort)vc);
                     if (authored.Length >= vc && shapeTri.Count >= 3)

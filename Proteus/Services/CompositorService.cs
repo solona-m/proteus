@@ -3690,6 +3690,18 @@ public class CompositorService : IDisposable
             // know whether the body being worn is the mirrored one before it can decide whether an overlay
             // needs an un-mirrored shell.
             var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Is a toe cap selected ANYWHERE in the look? Asked once, across every mod, because a cap
+            // belongs to the foot rather than to the mod that ships the map — the same reasoning that
+            // hands the shell builder every entry rather than only those contributing a shell.
+            //
+            // It has to be known before the promotion below, because a cap is geometry and geometry needs
+            // a shell: with every overlay sitting on the skin layer the composite ran to completion with
+            // no second-skin phase at all, and the cap option silently did nothing.
+            bool toeCapWanted = ToeCapWanted(entries);
+            if (toeCapWanted)
+                log.Debug("[Proteus] toe cap is selected — skin overlays that can be cut into a shell are "
+                        + "promoted to cloth, since the cap has to rebuild geometry the skin layer has none of");
             if (activeMtrl != null)
                 foreach (var m in activeMtrl)
                 {
@@ -3841,7 +3853,7 @@ public class CompositorService : IDisposable
                         NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
-                            unmirrors))
+                            unmirrors, toeCapWanted))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
@@ -9052,6 +9064,31 @@ public class CompositorService : IDisposable
     /// be promoted on vanilla is not promoted on bibo. The editor must follow that, or it shows Skin for
     /// something the compositor rendered as a shell.
     /// </summary>
+    /// <summary>
+    /// Is a toe cap selected anywhere in the look? Public for the same reason as
+    /// <see cref="NeedsUnmirroredShell"/>: the editor asks the same promotion predicate the compositor
+    /// does, and it cannot derive this one - a cap belongs to the FOOT rather than to the overlay being
+    /// edited, so the answer lives in another mod as often as not.
+    /// <para/>
+    /// Enabled mods only, matching the set the composite actually walks: a cap in a mod the user has
+    /// switched off must not promote anything.
+    /// </summary>
+    public bool ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
+    {
+        bool want = allEntries.Any(e => e.Enabled && discovery.ResolveActiveToeCap(e) != null);
+        _toeCapWantedSnapshot = want;
+        return want;
+    }
+
+    /// <summary>
+    /// The last composite's answer, for the editor - which has no entry list to walk and no composite run
+    /// to inherit one from. Follows <see cref="_activeMtrlSnapshot"/>'s pattern: false until a composite
+    /// has run, which is the behaviour there was before any of this existed.
+    /// </summary>
+    public bool ToeCapWanted() => _toeCapWantedSnapshot;
+
+    private volatile bool _toeCapWantedSnapshot;
+
     public bool NeedsUnmirroredShell(OverlayDescriptor d)
     {
         var snapshot = _activeMtrlSnapshot;
