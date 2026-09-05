@@ -774,6 +774,7 @@ public static class SecondSkinWriter
 
             AuthoredCapSet? best = null;
             float bestRate = float.MaxValue, bestCover = -1f, bestSpread = float.MaxValue;
+            float bestTrip = float.MaxValue;
             List<SkinTri>? fitSurface = null;
             foreach (var cand in authoredCaps)
             {
@@ -793,10 +794,12 @@ public static class SecondSkinWriter
                 float rate = tot > 0 ? (float)miss / tot : 1f;
                 float spread = CapStandoffSpread(probe, fitSurface ??= BindSurface(sourceModels),
                                                  out float standoff);
+                float trip = CapRoundTrip(probe, cand.Cap);
                 if (authoredCaps.Count > 1)
                     diag?.Invoke($"authored cap: '{cand.Name}' places all but {rate * 100:F0}% on this body, "
                                + $"this body has {cover * 100:F0}% of the {want.Count} bone(s) it was bound "
-                               + $"to, and it sits a median {standoff:F5} off the skin, within {spread:F5}");
+                               + $"to, sits a median {standoff:F5} off the skin within {spread:F5}, and "
+                               + $"reproduces itself here to {trip:F5}");
 
                 // Bone coverage decides; the placement score only separates caps the body can equally
                 // carry. A cap missing bones is not a worse fit, it is the wrong body.
@@ -811,14 +814,31 @@ public static class SecondSkinWriter
                 // A cap on the body it was modelled for hugs it at the standoff its author gave it. On a
                 // foot shaped differently the same binding lands some of it buried and some of it
                 // floating, and that spread is the thing to compare.
+                // ...AND THEN, WHICH BODY WAS IT BAKED AGAINST? A binding reconstructs its own cap
+                // EXACTLY on the body it was measured on - that is what the version-2 residual is for -
+                // and cannot on any other, because the residual is a correction measured somewhere else.
+                // So the round trip is not a quality score, it is an identity test, and it answers the
+                // question the other three cannot.
+                //
+                // It is the discriminator this needed all along. Bone coverage cannot separate two bodies
+                // that share a skeleton: YAB and Rue are both IVCS, so on a YAB foot both caps cover
+                // 100% of their bones, both place 100% of their vertices, and the fit put Rue ahead by
+                // 0.0002 - handing a YAB body the Rue cap. The round trip separates them by two orders
+                // of magnitude. Bibo and Neolithe share j_asi_* the same way, which is what made the
+                // earlier heeled-foot selection so hard to read.
                 bool better;
                 if (cover > bestCover + CapBoneCoverTie) better = true;
                 else if (cover < bestCover - CapBoneCoverTie) better = false;
                 else if (rate < bestRate - CapPlaceRateTie) better = true;
                 else if (rate > bestRate + CapPlaceRateTie) better = false;
+                else if (trip < bestTrip * CapRoundTripTie) better = true;
+                else if (trip > bestTrip / CapRoundTripTie) better = false;
                 else better = spread < bestSpread;
                 if (better)
-                { bestCover = cover; bestRate = rate; bestSpread = spread; capStandoff = standoff; best = cand; }
+                {
+                    bestCover = cover; bestRate = rate; bestSpread = spread; bestTrip = trip;
+                    capStandoff = standoff; best = cand;
+                }
             }
 
             if (best is { } chosen && bestRate <= CapBindMaxUnplaced)
@@ -7377,6 +7397,44 @@ public static class SecondSkinWriter
     /// that is wanted and a full placement is every cap vertex against every skin triangle.
     /// </param>
     /// <summary>
+    /// How closely a placed cap reproduces the shape it was authored as - the mean distance from each
+    /// placed vertex to the same vertex of the cap's own model.
+    /// <para/>
+    /// On the body a binding was baked against this is very nearly zero, because that is precisely what
+    /// the binding stores. On any other body it cannot be: the offsets and the residual were measured on
+    /// a foot shaped differently, and the reconstruction lands somewhere else. It is therefore an
+    /// identity test rather than a quality one - "was this cap made for the body being worn" - which is
+    /// the question bone coverage cannot answer for two bodies sharing a skeleton.
+    /// <para/>
+    /// float.MaxValue when the cap will not parse or its vertex count does not line up, so a cap that
+    /// cannot be checked never wins on this.
+    /// </summary>
+    private static float CapRoundTrip(IReadOnlyList<CapPlacement> placed, byte[] capMdl)
+    {
+        try
+        {
+            var src = Parse(capMdl);
+            double sum = 0; int n = 0;
+            foreach (var pl in placed)
+            {
+                ReadCapVertices(src, pl.Mesh, out var authored, out _);
+                int c = Math.Min(authored.Length, pl.Pos.Length);
+                for (int i = 0; i < c; i++)
+                {
+                    if (pl.Pos[i] is { X: 0, Y: 0, Z: 0 }) continue;   // never placed; says nothing
+                    sum += Dist(pl.Pos[i], authored[i]);
+                    n++;
+                }
+            }
+            return n == 0 ? float.MaxValue : (float)(sum / n);
+        }
+        catch
+        {
+            return float.MaxValue;
+        }
+    }
+
+    /// <summary>
     /// How unevenly a placed cap sits off the body's skin, as the spread of its standoffs between the
     /// tenth and ninetieth percentile.
     /// <para/>
@@ -7882,6 +7940,13 @@ public static class SecondSkinWriter
             // offset reproduces exactly, because delta is unchanged by translation; disagreement between
             // neighbours is what the sum averages away.
             //
+            // It does NOT leave the reference body untouched, which an earlier note here claimed. Even
+            // where the landings already reproduce the authored cap, 48 sweeps at w=0.2 do not reach the
+            // fixed point: measured on the body a binding was baked against, 860 vertices move by a mean
+            // 0.00007 and up to 0.00132. Small, and it costs the round trip its exact zero - the YAB bake
+            // comes back at mean 0.000046 rather than 0.000000 - but it is not nothing, and anything
+            // relying on placement being exact on the reference body has to allow for it.
+            //
             // Two things are deliberately NOT smoothed. The cap's own boundary is pinned hard, because it
             // has to meet the shell where the weld expects it. And a vertex that never landed is left
             // entirely to its neighbours (w = 0), which is a better answer than the ring-fill this
@@ -8139,6 +8204,14 @@ public static class SecondSkinWriter
     /// identifies it where the fit score cannot.
     /// </summary>
     private const float CapPlaceRateTie = 0.02f;
+
+    /// <summary>
+    /// How much closer one cap's round trip must be than another's to decide between them, as a ratio.
+    /// A cap baked against the body being worn beats a foreign one by orders of magnitude, so this only
+    /// has to be clear of the noise between two caps that are equally native - which cannot happen for
+    /// one body, but two bindings baked against very similar feet come close.
+    /// </summary>
+    private const float CapRoundTripTie = 0.5f;
 
     /// <summary>
     /// How far a placed cap vertex may look for the skin when measuring its standoff. Past this it did

@@ -552,7 +552,10 @@ public class ToeCapDiagTests
                 o.WriteLine($"      ({p.X,8:F4} {p.Y,8:F4} {p.Z,8:F4})  {d:F5}");
         }
 
-        var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", $"toecap.{name}.bind");
+        // Beside the cap it was measured from, not at a fixed absolute path. The old path named the
+        // primary checkout, so running this from a git worktree wrote the binding into a directory that
+        // only exists on the branch - and silently, since nothing here checked.
+        var outPath = Path.Combine(Path.GetDirectoryName(capPath)!, $"toecap.{name}.bind");
         File.WriteAllBytes(outPath, bind);
         o.WriteLine($"wrote {outPath} ({bind.Length} bytes)");
     }
