@@ -3246,8 +3246,8 @@ public class CompositorService : IDisposable
 
     /// <summary>
     /// The item ids of the hosts PROTEUS put on the player, or null for each we did not. Design matching
-    /// blanks these out of the live state so it compares the player's own choices
-    /// (<see cref="DesignBindingService.NeutralizeProteusOwnedState"/>).
+    /// retires these out of the comparison so it judges a design on the player's own choices
+    /// (<see cref="DesignBindingService.StripCarriers"/>).
     /// <para/>
     /// Keyed on what we actually injected, NOT on the feature toggle. The Emperor's New Ring is the
     /// standard invisible-ring glamour and the carrier glasses are an ordinary item — plenty of people
@@ -3264,9 +3264,47 @@ public class CompositorService : IDisposable
     /// DIFFERENT item (the Emperor's New Ring, Bracelets and Necklace share a model set, not a row id), so
     /// one id could not blank them all out of the compared state.</remarks>
     public IReadOnlyList<ulong> InjectedCarrierItemIds
-        => _injectedCarrierSlots
+        => _injectedCarrierSlots.Where(OurCarrierStillWorn)
             .Select(s => InvisibleRing.ResolveFor(Plugin.DataManager, log, s)?.ItemId)
             .Where(id => id != null).Select(id => id!.Value).ToList();
+
+    /// <summary>
+    /// The GLAMOURER slot names ("RFinger", "Wrists", …) we are currently borrowing for a carrier, as
+    /// opposed to the items sitting in them.
+    /// <para/>
+    /// Design matching needs both, and for different reasons. The ITEM ids rescue a design that CAPTURED a
+    /// carrier — saved while we were hosting, so it demands our ring. The SLOT names rescue the reverse: a
+    /// design saved with the player's own jewellery in a slot we have since borrowed. Their choice for that
+    /// slot is unknowable while we hold it, so it cannot decide the match either way — see
+    /// <see cref="DesignBindingService.StripCarriers"/>.
+    /// <para/>
+    /// Config-backed like <see cref="_injectedCarrierSlots"/> itself, so this answers correctly at boot,
+    /// before any composite has run.
+    /// </summary>
+    public IReadOnlyList<string> InjectedCarrierSlots
+        => _injectedCarrierSlots.Where(OurCarrierStillWorn)
+            .Select(s => Array.Find(InvisibleRing.CarrierSlots, c => c.Slot == s).EqdpSlot)
+            .Where(s => s != null).ToList();
+
+    /// <summary>
+    /// Is the carrier we RECORDED equipping in this slot actually on the player still?
+    /// <para/>
+    /// The record alone is not enough, because it is only ever cleared by a sweep that finds our piece
+    /// worn (<see cref="SweepUnusedCarriers"/> skips a slot whose piece is gone, deliberately: clearing
+    /// there would leave a later teardown with no record and strand our ring on the player). So the record
+    /// legitimately outlives the piece — apply a design that puts a real ring on that finger and the slot
+    /// stays claimed for ever, across restarts, since it lives in the config.
+    /// <para/>
+    /// That staleness is harmless for equipping decisions, which re-check the live slot anyway, and NOT
+    /// harmless for design matching: a slot claimed but not held would be retired from every design's
+    /// comparison indefinitely, silently collapsing designs that differ only by that ring. Hence the live
+    /// check here, in the same shape <see cref="RemoveInjectedRing"/> uses — trust the record only while
+    /// the draw-object walk has nothing to say (before the first walk, when a piece we really are wearing
+    /// would otherwise read as absent).
+    /// </summary>
+    private bool OurCarrierStillWorn(string slot)
+        => InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is { } r
+        && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
 
     /// <summary>Does this ring slot hold the Emperor's ring WE equipped?</summary>
     private bool IsOurRingWorn(string slot, int modelSet)

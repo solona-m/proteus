@@ -986,19 +986,12 @@ public class DesignBindingService : IDisposable
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
 
-        // Match against the player's OWN choices: strip anything Proteus equipped for them (the invisible
-        // glasses and the Emperor's ring hosts) or nothing would ever match and every Proteus mod would be
-        // disabled.
-        //
-        // Asked of the compositor, which knows what it actually injected, rather than derived from the
-        // feature toggles. Either way round is a trap: gating on the toggle misses our item during the
-        // window between switching it off and the recomposite pulling it, while blanking the id whenever
-        // the feature is off would erase the player's OWN Emperor's New Ring — a common invisible-ring
-        // glamour — from every comparison. Both mistakes end in a design that matches nothing.
-        state = NeutralizeProteusOwnedState(state,
-            compositor.InjectedGlassesItemId, compositor.InjectedCarrierItemIds);
-
-        var pick = MatchBinding(state);
+        // Judge each design on the player's OWN choices: retire the slots Proteus is borrowing (the
+        // invisible glasses and the accessory carriers) or nothing would ever match and every Proteus mod
+        // would be disabled. The boot restore has always done this; the live path compared designs as
+        // saved, so a design saved while the shell was hosted demanded our carrier ring for ever after.
+        var carriers = LiveCarriers();
+        var pick = MatchBinding(state, carriers);
 
         if (pick == null)
         {
@@ -1011,12 +1004,13 @@ public class DesignBindingService : IDisposable
                 return;
             }
 
-            // No binding matched, so overrides get dropped and gear dyes revert to metadata. A per-candidate
-            // "REJECTED: <first field that differed>" line used to be emitted here for every binding the
-            // player owns; it fired on the ordinary path (most designs are SUPPOSED not to match the state
-            // being applied), so it was many warnings per apply describing correct behaviour. The summary
-            // below is the part that reports something actually went wrong.
+            // No binding matched, so overrides get dropped and gear dyes revert to metadata. The warning
+            // says what it COST; the debug lines below say why, for the handful of candidates that could
+            // plausibly have matched. A "REJECTED: <first field that differed>" line for every binding the
+            // player owns used to be emitted here as a warning, which fired on the ordinary path (most
+            // designs are SUPPOSED not to match the state being applied) — hence both the cap and the level.
             log.Warning("[Proteus] design-binding: NO binding matched the applied state — dropping colour/gear overrides (dyes revert to metadata white).");
+            ReportNoMatch(state, carriers);
             HandleUnboundDesign();
             return;
         }
@@ -1026,42 +1020,126 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// The binding that best matches an already-neutralized player state, or null when none does.
+    /// The binding that best matches the player's live state, or null when none does.
     /// <para/>
     /// For ambiguous matches (variations of the same outfit share a gear set), prefer the most
     /// *specific* match — the design that constrains the most applied fields (e.g. one that also
     /// matches the applied dye beats a gear-only design). Break remaining ties by the most recently
     /// captured binding, which avoids stale older overrides sticking around.
     /// <para/>
-    /// Shared by the live apply path and the boot restore so both resolve a look identically.
+    /// Shared by the live apply path and the boot restore so both resolve a look identically — including
+    /// <paramref name="carriers"/>, which both must pass. The live path skipping it is what left a design
+    /// saved while the shell was hosted unable to match anything ever again.
     /// </summary>
-    /// <param name="stripCarriers">
-    /// When set, each candidate design has the shell's carrier slots removed before it is compared — see
-    /// <see cref="StripCarriers"/>. The caller must have stripped the state with the same ids. Only the
-    /// boot restore passes this; the live path compares designs as saved.
+    /// <param name="carriers">
+    /// What Proteus has on the player, so each candidate design can have those slots retired before it is
+    /// compared — see <see cref="StripCarriers"/> and <see cref="BestMatches"/>.
     /// </param>
-    private Guid? MatchBinding(JObject neutralizedState, (ulong? Glasses, IReadOnlyList<ulong> Accessories)? stripCarriers = null)
+    private Guid? MatchBinding(JObject state, Carriers carriers)
     {
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
 
-        var matches = new List<(Guid id, int specificity)>();
+        var candidates = new List<(Guid Id, JObject Design)>(candidateIds.Length);
         foreach (var id in candidateIds)
-        {
-            var design = GetDesignCached(id);
-            if (design == null) continue;
-            if (stripCarriers is { } c) design = StripCarriers(design, c.Glasses, c.Accessories);
-            if (StateMatches(design, neutralizedState, out var spec))
-                matches.Add((id, spec));
-        }
+            if (GetDesignCached(id) is { } design)
+                candidates.Add((id, design));
 
-        if (matches.Count == 0) return null;
-        if (matches.Count == 1) return matches[0].id;
-
-        var best = matches.Max(m => m.specificity);
-        var top  = matches.Where(m => m.specificity == best).Select(m => m.id).ToList();
+        var top = BestMatches(candidates, state, carriers);
+        if (top.Count == 0) return null;
         if (top.Count == 1) return top[0];
         lock (gate) return PickMostRecent(top, store.Bindings);
+    }
+
+    /// <summary>
+    /// The candidates that match best, as a list because the caller breaks remaining ties on recency.
+    /// Empty when none matched.
+    /// <para/>
+    /// TWO PASSES, and the order is the whole point:
+    /// <list type="number">
+    /// <item>STRICT — retire only the slots a design demonstrably captured FROM us, by carrier item id.
+    /// That rescue cannot distort anything: a design naming our carrier ring is naming an item the player
+    /// never chose, whoever else it is compared against.</item>
+    /// <item>LOOSE — additionally retire every slot we are currently BORROWING, whatever the design names
+    /// there. Necessary for a design saved before we took the slot (their own ring is simply not in the
+    /// live state to compare against), but it drops a real criterion, so two designs differing only by
+    /// that ring stop being distinguishable and the recency tie-break decides between them.</item>
+    /// </list>
+    /// Running loose only when strict finds NOTHING keeps that cost where it belongs. It matters because
+    /// the loser of a bad tie-break is not just a wrong look: <see cref="Restore"/> writes enable /
+    /// priority / options into the Penumbra collection and disables every unbound mod, so picking the
+    /// wrong sibling design leaves edits behind that outlive the apply.
+    /// <para/>
+    /// It also contains the one ownership signal we cannot fully trust. The glasses flag is set by
+    /// ADOPTION — the reconcile claims a pair of our set that it finds already worn — so a player who
+    /// wears the invisible facewear as their own glamour reads as us borrowing the slot. On the strict
+    /// pass that misreading cannot cost them anything, and by the time the loose pass runs there is
+    /// nothing left to lose.
+    /// </summary>
+    internal static List<Guid> BestMatches(
+        IReadOnlyList<(Guid Id, JObject Design)> candidates, JObject state, Carriers carriers)
+    {
+        var top = Pass(carriers.ItemsOnly);
+        // Skip the second pass when it would repeat the first: no borrowed slots means the two are the
+        // same comparison, and re-running it would clone every design again for an identical answer.
+        if (top.Count == 0 && carriers.RetiresSlots)
+            top = Pass(carriers);
+        return top;
+
+        List<Guid> Pass(Carriers c)
+        {
+            var matches = new List<(Guid id, int specificity)>();
+            foreach (var (id, design) in candidates)
+                if (StateMatches(StripCarriers(design, c), state, out var spec))
+                    matches.Add((id, spec));
+
+            if (matches.Count == 0) return [];
+            var best = matches.Max(m => m.specificity);
+            return matches.Where(m => m.specificity == best).Select(m => m.id).ToList();
+        }
+    }
+
+    // How many bindings a failed match explains itself against. The reason is only interesting for designs
+    // that could plausibly have been the one being applied, and every binding the player owns is far too
+    // many lines for something that also fires whenever they apply a design they never bound.
+    private const int NoMatchReportCandidates = 4;
+
+    /// <summary>
+    /// Say, at Debug, why the likeliest candidates were rejected: the design that WAS active (the one whose
+    /// colours just got dropped, and the only one whose failure is definitely a fault) followed by the most
+    /// recently captured bindings. Reaches the same verdict as <see cref="MatchBinding"/> because it runs
+    /// the same comparison, only asking <see cref="StateMatches"/> for the field that differed.
+    /// </summary>
+    private void ReportNoMatch(JObject state, Carriers carriers)
+    {
+        List<Guid> candidates;
+        lock (gate)
+        {
+            candidates = store.Bindings.OrderByDescending(kv => kv.Value.CapturedUtc)
+                              .Select(kv => kv.Key).Take(NoMatchReportCandidates).ToList();
+            if (config.LastActiveDesignId is { } last && store.Bindings.ContainsKey(last))
+            {
+                candidates.Remove(last);
+                candidates.Insert(0, last);
+            }
+        }
+
+        foreach (var id in candidates.Take(NoMatchReportCandidates))
+        {
+            string? name;
+            lock (gate) name = store.Bindings.TryGetValue(id, out var b) ? b.DesignName : null;
+            name ??= id.ToString();
+
+            if (GetDesignCached(id) is not { } design)
+            {
+                log.Debug("[Proteus] design-binding: {0} rejected — gone from Glamourer.", name);
+                continue;
+            }
+
+            string? why = null;
+            StateMatches(StripCarriers(design, carriers), state, out _, r => why ??= r);
+            log.Debug("[Proteus] design-binding: {0} rejected — {1}", name, why ?? "(no reason reported)");
+        }
     }
 
     // ── Boot restore (framework thread) ─────────────────────────────────────────
@@ -1129,24 +1207,13 @@ public class DesignBindingService : IDisposable
     /// resolved, so a state caught mid-transition doesn't decide the answer. True once the window
     /// lapses, at which point this must resolve one way or the other.
     /// </param>
-    private void TryBootRestore(JObject rawState, bool final)
+    private void TryBootRestore(JObject state, bool final)
     {
-        // The design and the state are treated ASYMMETRICALLY, deliberately. StateMatches only ever
-        // reads a state slot the DESIGN carries (both its loops walk the design's properties), so:
-        //
-        //  • the design gets the carrier REMOVED, below, via StripCarriers — a slot it no longer carries
-        //    stops being a criterion at all, which is what rescues a design that captured our facewear;
-        //  • the state gets the carrier ZEROED, here, via NeutralizeProteusOwnedState — REMOVING it
-        //    there would turn a slot the design does carry from "compares equal" into "state has no
-        //    item". That is precisely the mismatch the neutralizer was written to prevent: a design
-        //    saved with an empty right ring stores ItemId 0, so our ring has to look like 0, not like
-        //    an absent slot. It bites whenever the carrier is still equipped at load — a crash, or a
-        //    Dispose removal that has not landed yet.
-        //
-        // Carrier ids come from the game sheets rather than the compositor's injection flags, which are
-        // still false at boot because no composite has run to set them.
+        // Only the DESIGN is touched, never the state: StateMatches reads a state slot only where the
+        // design carries one (both its loops walk the design's properties), so retiring a slot from the
+        // design retires it as a criterion outright — including the case where our carrier is still
+        // equipped at load (a crash, or a Dispose removal that has not landed yet).
         var carriers = BootCarriers();
-        var state    = NeutralizeProteusOwnedState(rawState, carriers.Glasses, carriers.Accessories);
 
         // 1. The design we were on when we unloaded, VERIFIED against the live state.
         if (config.LastActiveDesignId is { } lastId)
@@ -1168,7 +1235,7 @@ public class DesignBindingService : IDisposable
             }
             else
             {
-                design = StripCarriers(design, carriers.Glasses, carriers.Accessories);
+                design = StripCarriers(design, carriers);
                 string? why = null;
                 if (BootIdStillApplies(design, state, r => why ??= r))
                 {
@@ -1217,15 +1284,14 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>Whether the remembered design can still be adopted: it must still exist in Glamourer
-    /// (a deleted one reads as null) and still match the character's neutralized live state.</summary>
-    /// <param name="onMismatch">Reports the first field that differed, for the boot log. This is the
-    /// one place the reason is worth having: everywhere else a non-match is the ordinary outcome, but
-    /// here it is the difference between the player's colours coming back and not.</param>
-    internal static bool BootIdStillApplies(JObject? design, JObject neutralizedState,
+    /// (a deleted one reads as null) and still match the character's live state. The design must already
+    /// have had its carrier slots retired — see <see cref="StripCarriers"/>.</summary>
+    /// <param name="onMismatch">Reports the first field that differed, for the boot log.</param>
+    internal static bool BootIdStillApplies(JObject? design, JObject state,
                                             Action<string>? onMismatch = null)
     {
         if (design == null) return false;
-        return StateMatches(design, neutralizedState, out _, onMismatch);
+        return StateMatches(design, state, out _, onMismatch);
     }
 
     /// <summary>One-shot: unhook the poll and release the boot composite, whatever the outcome. Every
@@ -1268,8 +1334,8 @@ public class DesignBindingService : IDisposable
     // dye/bonus/appearance scores higher than a gear-only design for the same look, so the caller can
     // prefer the most-constrained match. Any mismatch on an applied field rejects the design outright.
     /// <remarks>
-    /// Compares the design against the player's OWN choices, so the caller must first strip anything
-    /// Proteus wrote on their behalf — see <see cref="NeutralizeProteusOwnedState"/>.
+    /// Compares the design against the player's OWN choices, so the caller must first retire whatever
+    /// Proteus put on them — see <see cref="StripCarriers"/>, which the caller applies to the DESIGN.
     /// </remarks>
     internal static bool StateMatches(JObject design, JObject state, out int specificity)
         => StateMatches(design, state, out specificity, null);
@@ -1373,111 +1439,92 @@ public class DesignBindingService : IDisposable
     private static bool IdEquals(JToken? a, JToken? b)
         => a != null && b != null && a.ToObject<ulong>() == b.ToObject<ulong>();
 
-    /// <summary>
-    /// Blank out every part of the player's Glamourer state that PROTEUS wrote, so design matching only
-    /// ever sees the player's own choices. Returns a copy; the input is left alone.
-    ///
-    /// This is the single place that knows what Proteus injects. Without it, anything we equip on the
-    /// player's behalf makes their live state differ from every design that saved that field: no design
-    /// matches, the apply is treated as unbound, and <see cref="HandleUnboundDesign"/> disables every
-    /// Proteus mod. Keep this in step with each new injection rather than teaching the matcher about them
-    /// one at a time — the failure mode is losing the user's whole setup.
-    /// </summary>
-    /// <param name="syntheticGlassesId">
-    /// The Glasses-slot item id of the invisible-glasses host, when that feature has one equipped.
-    /// </param>
-    /// <param name="syntheticRingId">
-    /// The item id of the Emperor's-ring host, when that feature has one equipped in the right ring slot.
-    /// </param>
-    internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId,
-        IReadOnlyList<ulong>? syntheticAccessoryIds = null)
-    {
-        JObject? copy = null;
-
-        if (syntheticGlassesId is { } glasses && state["Bonus"] is JObject bonus)
-        {
-            foreach (var prop in bonus.Properties())
-            {
-                if (prop.Value is not JObject slot) continue;
-                if (slot["BonusId"] is not { } id || id.ToObject<ulong>() != glasses) continue;
-
-                // Ours — present it as an empty slot so a design that saved "no glasses" still matches.
-                copy ??= (JObject)state.DeepClone();
-                if (((JObject?)copy["Bonus"])?[prop.Name] is JObject target)
-                    target["BonusId"] = 0;
-            }
-        }
-
-        // Same for every invisible accessory we equip to host a shell — either hand, the bracelet, the
-        // necklace, since a carrier goes to whichever slots were free. Nothing zero-ish about the ids: a
-        // design that saved an empty ring stores ItemId 0, so that is what "not the player's choice" has to
-        // look like here — otherwise wearing our carrier makes every such design mismatch.
-        //
-        // A LIST of ids, because the pieces share an accessory model set but are separate items; matching on
-        // one id would leave the others looking like deliberate jewellery.
-        if (syntheticAccessoryIds is { Count: > 0 } carriers)
-        {
-            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
-            {
-                if ((copy ?? state)["Equipment"] is not JObject equip
-                    || equip[accessorySlot] is not JObject slot
-                    || slot["ItemId"] is not { } rid || !carriers.Contains(rid.ToObject<ulong>()))
-                    continue;
-                copy ??= (JObject)state.DeepClone();
-                if (((JObject?)copy["Equipment"])?[accessorySlot] is JObject target)
-                    target["ItemId"] = 0;
-            }
-        }
-
-        return copy ?? state;
-    }
-
     // Glamourer packs a bonus item as (type << 48) | row id, so the sheet row we resolve a carrier by
     // lives in the low 48 bits — e.g. Glasses row 1 reads as 562949953421313.
     private const ulong BonusIdRowMask = 0x0000_FFFF_FFFF_FFFF;
 
-    private static readonly string[] RingSlots = ["RFinger", "LFinger"];
+    /// <summary>The Glamourer equipment-slot names a carrier can ride, from the one place that decides
+    /// them — <see cref="InvisibleRing.CarrierSlots"/>. Duplicating the list here is how the neutralizer
+    /// and the stripper drifted apart before.</summary>
+    private static readonly string[] CarrierSlotNames =
+        InvisibleRing.CarrierSlots.Select(c => c.EqdpSlot).Distinct(StringComparer.Ordinal).ToArray();
 
     /// <summary>
-    /// Remove the shell's CARRIER slots — the facewear Proteus equips, and the Emperor's ring it may host
-    /// on — from a DESIGN, so it is not judged on a slot Proteus owns. Returns the input unchanged when
-    /// it carries neither.
-    /// <para/>
-    /// This exists because <see cref="NeutralizeProteusOwnedState"/> can only fix the state, and the
-    /// carrier ends up on the DESIGN too: saving a Glamourer design while the shell is hosted captures
-    /// our injected facewear as part of the look. That design then demands a bonus item the player never
-    /// chose — and by the time the boot restore verifies it, Dispose has already taken the carrier off,
-    /// so the design mismatches on a slot that is entirely our own doing. Observed as
-    /// <c>Bonus/Glasses: BonusId 562949953421313 != state 844424946909184</c>.
-    /// <para/>
-    /// DESIGNS ONLY — never pass a state. StateMatches walks the design's properties and looks the state
-    /// up per design-carried slot, so dropping a slot from the design retires it as a criterion (what we
-    /// want), while dropping one from the state turns a slot the design DOES carry from "compares equal"
-    /// into "state has no item". Use <see cref="NeutralizeProteusOwnedState"/> for the state, which
-    /// zeroes rather than removes — a design saved with an empty right ring stores ItemId 0, so that is
-    /// what our carrier has to look like there.
-    /// <para/>
-    /// The caller identifies the carriers from the Glasses/Ring sheets rather than from the compositor's
-    /// injection flags, which are still false at boot — no composite has run to set them yet. That is
-    /// safe in this direction: the worst case is that a player who genuinely wears the carrier item
-    /// stops having it count toward a match, which loosens specificity rather than fabricating one.
+    /// What Proteus currently has on the player, in the two forms design matching needs.
     /// </summary>
-    internal static JObject StripCarriers(JObject design, ulong? glassesRow, IReadOnlyList<ulong>? accessoryItems)
+    /// <param name="GlassesRow">The Glasses SHEET ROW of the invisible facewear host (not the packed
+    /// BonusId a design stores — <see cref="StripCarriers"/> masks before comparing).</param>
+    /// <param name="AccessoryItems">Item ids of the invisible accessories that can host a shell. A LIST
+    /// because the pieces share a model set but are separate items — the Emperor's New Ring, Bracelets
+    /// and Necklace — so one id could not cover them all.</param>
+    /// <param name="OwnedSlots">Glamourer slot names we are CURRENTLY borrowing. Empty where ownership is
+    /// unknowable (the boot path's glasses), which falls back to id-matching alone.</param>
+    /// <param name="GlassesSlotOwned">Whether the Glasses slot is one we are currently borrowing.</param>
+    internal readonly record struct Carriers(
+        ulong? GlassesRow,
+        IReadOnlyList<ulong>? AccessoryItems,
+        IReadOnlyList<string>? OwnedSlots = null,
+        bool GlassesSlotOwned = false)
+    {
+        /// <summary>Does this retire whole SLOTS, over and above the carrier items themselves? When it
+        /// does not, the strict and loose passes in <see cref="BestMatches"/> are the same comparison.</summary>
+        internal bool RetiresSlots => GlassesSlotOwned || OwnedSlots is { Count: > 0 };
+
+        /// <summary>This, with slot retirement dropped — the strict pass's view, where only a design that
+        /// actually names one of our carrier items gives anything up.</summary>
+        internal Carriers ItemsOnly => new(GlassesRow, AccessoryItems);
+    }
+
+    /// <summary>
+    /// Retire the slots PROTEUS owns from a DESIGN, so it is never judged on a slot it did not really
+    /// choose. Returns the input unchanged when there is nothing to retire.
+    /// <para/>
+    /// Two separate rescues, and a design needs whichever applies:
+    /// <list type="bullet">
+    /// <item>By ITEM — the design CAPTURED a carrier. Saving a Glamourer design while the shell is hosted
+    /// bakes our injected facewear or ring into the look, so the design then demands an item the player
+    /// never picked. Observed as <c>Bonus/Glasses: BonusId 562949953421313 != state 844424946909184</c>
+    /// and as an <c>RFinger</c> holding carrier item 9295.</item>
+    /// <item>By SLOT — the design named the player's OWN jewellery in a slot we have since borrowed. Their
+    /// choice is gone from the live state while we hold the slot, so it cannot be compared to anything.</item>
+    /// </list>
+    /// <para/>
+    /// DESIGNS ONLY — never pass a state. StateMatches walks the design's properties and looks the state up
+    /// per design-carried slot, so dropping a slot from the design retires it as a criterion (what we want),
+    /// while dropping one from the state turns a slot the design DOES carry into "state has no item".
+    /// <para/>
+    /// Retiring is deliberately the WHOLE mechanism. The state used to be doctored in parallel — our
+    /// carrier's ItemId overwritten with 0, on the premise that "a design that saved an empty ring stores
+    /// ItemId 0". It does not: Glamourer writes a per-slot sentinel (4294967155 and neighbours, and
+    /// 844424946909184 for bare Glasses), never 0, so that pass could not make a single design match and
+    /// merely hid the real fix. One mechanism, on one side.
+    /// <para/>
+    /// Retiring a whole SLOT drops a real criterion, so two designs differing only by that ring stop being
+    /// distinguishable. That is why <see cref="BestMatches"/> asks for it only once the strict, item-only
+    /// view has failed outright — see there for what a bad tie-break costs.
+    /// </summary>
+    internal static JObject StripCarriers(JObject design, Carriers carriers)
     {
         List<(string Container, string Slot)>? drop = null;
 
-        if (glassesRow is { } g && design["Bonus"] is JObject bonus)
+        if (design["Bonus"] is JObject bonus)
             foreach (var p in bonus.Properties())
-                if (p.Value is JObject s && s["BonusId"] is { } id
-                    && (id.ToObject<ulong>() & BonusIdRowMask) == g)
+            {
+                var ours = carriers.GlassesRow is { } g && p.Value is JObject s && s["BonusId"] is { } id
+                        && (id.ToObject<ulong>() & BonusIdRowMask) == g;
+                if (ours || (carriers.GlassesSlotOwned && p.Name == "Glasses"))
                     (drop ??= []).Add(("Bonus", p.Name));
+            }
 
-        // Every accessory slot a carrier can ride, not just the fingers — see NeutralizeProteusOwnedState.
-        if (accessoryItems is { Count: > 0 } carriers && design["Equipment"] is JObject equip)
-            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
-                if (equip[accessorySlot] is JObject s && s["ItemId"] is { } iid
-                    && carriers.Contains(iid.ToObject<ulong>()))
+        if (design["Equipment"] is JObject equip)
+            foreach (var accessorySlot in CarrierSlotNames)
+            {
+                if (equip[accessorySlot] is not JObject s) continue;
+                var ours = carriers.AccessoryItems is { Count: > 0 } items && s["ItemId"] is { } iid
+                        && items.Contains(iid.ToObject<ulong>());
+                if (ours || carriers.OwnedSlots?.Contains(accessorySlot, StringComparer.Ordinal) == true)
                     (drop ??= []).Add(("Equipment", accessorySlot));
+            }
 
         if (drop == null) return design;
 
@@ -1487,15 +1534,35 @@ public class DesignBindingService : IDisposable
         return copy;
     }
 
-    /// <summary>The carrier ids to strip at boot, straight from the game sheets.</summary>
-    // Every accessory slot's invisible piece, not just the ring: at boot we cannot know which slots a
-    // carrier was left in, so all of them are neutralized. Harmless for a slot we never used — the id only
-    // matches if that exact item is actually worn.
-    private (ulong? Glasses, IReadOnlyList<ulong> Accessories) BootCarriers()
-        => (InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId,
-            InvisibleRing.CarrierSlots
-                .Select(c => InvisibleRing.ResolveFor(Plugin.DataManager, log, c.Slot)?.ItemId)
-                .Where(id => id != null).Select(id => id!.Value).Distinct().ToList());
+    /// <summary>What Proteus has on the player right now, for the live apply path. Straight from the
+    /// compositor, which knows what it actually injected — deriving it from the feature toggles instead
+    /// misses our item in the window between switching a feature off and the recomposite pulling it, and
+    /// blanking by id whenever a feature is off would erase the player's OWN Emperor's New Ring (a common
+    /// invisible-ring glamour) from every comparison.</summary>
+    private Carriers LiveCarriers()
+    {
+        // Non-null only while WE have a pair on, so it doubles as the ownership flag — with the caveat
+        // that "ours" there includes a pair the reconcile ADOPTED because it found our set already worn.
+        // Someone wearing the invisible facewear as their own glamour therefore reads as us borrowing the
+        // slot; BestMatches is what keeps that from costing them a match.
+        var glasses = compositor.InjectedGlassesItemId;
+        return new Carriers(glasses, compositor.InjectedCarrierItemIds,
+            compositor.InjectedCarrierSlots, GlassesSlotOwned: glasses != null);
+    }
+
+    /// <summary>The carriers to retire at boot.</summary>
+    // The accessory SLOTS are known (ownership is persisted in the config), but the item ids come from the
+    // game sheets: a carrier can be left worn in a slot we did not record, and the glasses flag in
+    // particular is in-memory only, so it is false at boot however things really stand. Harmless in this
+    // direction — an id only retires a slot if that exact item is actually named there, so the worst case
+    // is that a player who genuinely wears the carrier item stops having it count toward a match, which
+    // loosens specificity rather than fabricating one.
+    private Carriers BootCarriers()
+        => new(InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId,
+               InvisibleRing.CarrierSlots
+                   .Select(c => InvisibleRing.ResolveFor(Plugin.DataManager, log, c.Slot)?.ItemId)
+                   .Where(id => id != null).Select(id => id!.Value).Distinct().ToList(),
+               compositor.InjectedCarrierSlots);
 
     // Compare whichever numeric colour fields the design entry carries against the state entry, with
     // a small tolerance to absorb float round-trip noise. A field present on the design but missing

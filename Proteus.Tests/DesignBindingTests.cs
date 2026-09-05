@@ -214,44 +214,38 @@ public class DesignBindingTests
 
     // Proteus's own invisible-glasses host sits in the Glasses slot without the player choosing it. If it
     // were compared like a real bonus item, EVERY design that saved the slot would stop matching, the
-    // apply would be treated as unbound, and HandleUnboundDesign would disable all Proteus mods.
+    // apply would be treated as unbound, and the overrides would be dropped.
     [Fact]
-    public void Neutralize_SyntheticGlassesReadAsEmpty()
+    public void GlassesSlotWeOwn_IsNotCompared()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
-        WithBonus(design, "Glasses", bonusId: 0);          // design saved "no glasses"
+        WithBonus(design, "Glasses", bonusId: NoGlasses);  // design saved "no glasses"
         var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
-        WithBonus(state, "Glasses", bonusId: 1);           // ...but Proteus injected its host
+        WithBonus(state, "Glasses", bonusId: CarrierGlassesPacked); // ...but Proteus injected its host
 
-        Assert.False(Matches(design, state));              // raw state: our host looks like a real choice
-        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
-        Assert.True(Matches(design, clean));
+        Assert.False(Matches(design, state));              // raw: our host looks like a real choice
+        Assert.True(Matches(OurGlasses(design), state));
     }
 
-    // Only OUR item is discounted — glasses the player actually chose still take part in the match.
+    // Wearing our facewear must not discount a design's OWN glasses on the strict pass — the pass that
+    // decides whenever anything matches at all. This is the guard that matters for a player who wears the
+    // invisible pair as their own glamour, whom the reconcile's adoption makes indistinguishable from us.
     [Fact]
-    public void Neutralize_PlayerChosenGlassesStillCompared()
+    public void PlayerChosenGlassesStillComparedOnTheStrictPass()
     {
-        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
-        WithBonus(design, "Glasses", bonusId: 4);
+        var theirs = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(theirs, "Glasses", bonusId: (2UL << 48) | 47);   // a real pair they chose
+        var ours = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        WithBonus(ours, "Glasses", bonusId: CarrierGlassesPacked); // the carrier, captured on save
         var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
-        WithBonus(state, "Glasses", bonusId: 7);           // a different, player-picked pair
+        WithBonus(state, "Glasses", bonusId: CarrierGlassesPacked);
 
-        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
-        Assert.False(Matches(design, clean));
-    }
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var top = DesignBindingService.BestMatches([(a, theirs), (b, ours)], state,
+            new DesignBindingService.Carriers(CarrierGlassesRow, null, GlassesSlotOwned: true));
 
-    // The normalizer must not mutate the caller's state object — the raw state is reused elsewhere.
-    [Fact]
-    public void Neutralize_DoesNotMutateInput()
-    {
-        var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
-        WithBonus(state, "Glasses", bonusId: 1);
-
-        var clean = DesignBindingService.NeutralizeProteusOwnedState(state, syntheticGlassesId: 1);
-
-        Assert.Equal(1ul, ((JObject)state["Bonus"]!["Glasses"]!)["BonusId"]!.ToObject<ulong>());
-        Assert.Equal(0ul, ((JObject)clean["Bonus"]!["Glasses"]!)["BonusId"]!.ToObject<ulong>());
+        Assert.Equal([b], top);   // the design that really names the worn pair, not a tie
     }
 
     // A design that applies the glasses slot but carries no BonusId must still be REJECTED (IdEquals
@@ -695,11 +689,27 @@ public class DesignBindingTests
     // ── StripCarriers ─────────────────────────────────────────────────────────
 
     // Glamourer packs a bonus item as (type << 48) | row id; Glasses is type 2, so carrier row 1 is
-    // 562949953421313 — the value observed in the field.
+    // 562949953421313 — the value observed in the field. Tests use the PACKED form throughout: comparing
+    // raw row ids is exactly the shortcut that let a masking bug live in the state path for a month.
     private const ulong CarrierGlassesRow    = 1;
     private const ulong CarrierGlassesPacked = (2UL << 48) | CarrierGlassesRow;
     // What an empty Glasses slot actually reads as in a live state — the value from the field log.
     private const ulong NoGlasses = 844424946909184;
+    // Proteus's carrier ring, from the field log: "invisible carrier: equipped item #9295 in rir".
+    private const ulong CarrierRing = 9295;
+    // A per-slot "nothing" sentinel, the way Glamourer really writes an empty ring. Never 0 — no design in
+    // a 26-design corpus stores 0, which is what made the old state-zeroing pass unable to match anything.
+    private const ulong NoRing = 4294967155;
+
+    // We are wearing our facewear carrier and nothing else of ours.
+    private static JObject OurGlasses(JObject design)
+        => DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(CarrierGlassesRow, null, GlassesSlotOwned: true));
+
+    // We are borrowing the named accessory slots for carriers.
+    private static JObject OurAccessories(JObject design, params string[] slots)
+        => DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(null, [CarrierRing], slots));
 
     [Fact]
     public void StripCarriers_DesignThatCapturedOurGlasses_MatchesAStateWithoutThem()
@@ -714,7 +724,9 @@ public class DesignBindingTests
 
         Assert.False(Matches(design, state));                        // the bug
 
-        var stripped = DesignBindingService.StripCarriers(design, CarrierGlassesRow, null);
+        // By ID alone — the boot path, which cannot know whether the glasses slot is ours.
+        var stripped = DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(CarrierGlassesRow, null));
         Assert.True(Matches(stripped, state));
     }
 
@@ -726,51 +738,159 @@ public class DesignBindingTests
         var state = State(("Head", 1), ("Body", 2), ("Hands", 3));
         WithBonus(state, "Glasses", NoGlasses);
 
-        var stripped = DesignBindingService.StripCarriers(design, CarrierGlassesRow, null);
+        var stripped = DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(CarrierGlassesRow, null));
         Assert.False(Matches(stripped, state));                      // still a criterion
     }
 
     [Fact]
     public void StripCarriers_RemovesTheCarrierRingFromTheDesign()
     {
-        const ulong ring = 9295;
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
-                            ("RFinger", ring, true));
+                            ("RFinger", CarrierRing, true));
         var state  = State(("Head", 1), ("Body", 2), ("Hands", 3));  // ring already removed
 
         Assert.False(Matches(design, state));
 
-        var stripped = DesignBindingService.StripCarriers(design, null, [ring]);
+        var stripped = DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(null, [CarrierRing]));
         Assert.True(Matches(stripped, state));
     }
 
+    // The reported bug, end to end: a design saved while Proteus was hosting on the right-ring slot
+    // captured carrier item 9295, and every later apply compared that against a live state where the very
+    // same carrier sits — matching by item id is the only thing that reconciles the two.
     [Fact]
-    public void CarrierStillWornAtBoot_StateIsZeroedNotStripped()
+    public void DesignThatCapturedTheCarrierRing_MatchesWhileWeStillWearIt()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", CarrierRing, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        Assert.True(Matches(OurAccessories(design, "RFinger"), worn));
+    }
+
+    // The reverse: the design named the player's OWN ring, saved before Proteus borrowed that slot. Their
+    // choice is not in the live state to compare against any more, so the slot has to stop being a
+    // criterion — matching by item id alone cannot see this one, which is why ownership is passed by SLOT.
+    [Fact]
+    public void DesignWithTheirOwnRing_MatchesWhileWeBorrowThatSlot()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", 6139, true));                // a real ring they chose
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        Assert.False(Matches(design, worn));
+        Assert.True(Matches(OurAccessories(design, "RFinger"), worn));
+    }
+
+    // Only the slots we actually hold are retired: a ring in the other hand still decides the match.
+    [Fact]
+    public void StripCarriers_LeavesAccessorySlotsWeDoNotHold()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", CarrierRing, true), ("LFinger", 6139, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3),
+                           ("RFinger", CarrierRing), ("LFinger", 7777));
+
+        Assert.False(Matches(OurAccessories(design, "RFinger"), worn));
+    }
+
+    [Fact]
+    public void CarrierStillWornAtBoot_TheSlotIsRetiredEntirely()
     {
         // The carrier ring is still equipped at load (a crash, or a Dispose removal that hasn't landed)
-        // and the design saved an EMPTY right ring, which Glamourer stores as ItemId 0 + Apply. The state
-        // must be neutralized by ZEROING our ring, the way the boot restore does it: removing the slot
-        // instead would leave the design carrying RFinger with nothing on the state side to compare, and
-        // the match would fail on a slot that is entirely Proteus's doing.
-        const ulong ring = 9295;
-        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true), ("RFinger", 0, true));
-        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", ring));
+        // and the design saved an EMPTY right ring — which Glamourer writes as a per-slot sentinel, never
+        // as 0. Doctoring the state's ItemId to 0 (what the old boot path did) therefore could not make
+        // this match; retiring the slot from the design is what does.
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", NoRing, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
 
-        Assert.False(Matches(design, worn));                                   // our ring, unneutralized
-
-        var zeroed = DesignBindingService.NeutralizeProteusOwnedState(worn, null, [ring]);
-        Assert.True(Matches(design, zeroed));                                  // what the boot path does
-
-        // Stripping the state instead is the regression this guards: the slot vanishes and the design's
-        // RFinger has nothing to compare against.
-        var strippedState = DesignBindingService.StripCarriers(worn, null, [ring]);
-        Assert.False(Matches(design, strippedState));
+        Assert.False(Matches(design, worn));
+        Assert.True(Matches(OurAccessories(design, "RFinger"), worn));
     }
 
     [Fact]
     public void StripCarriers_NoCarrierPresent_ReturnsTheSameInstance()
     {
         var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
-        Assert.Same(design, DesignBindingService.StripCarriers(design, CarrierGlassesRow, [9295UL]));
+        Assert.Same(design, DesignBindingService.StripCarriers(design,
+            new DesignBindingService.Carriers(CarrierGlassesRow, [CarrierRing], ["RFinger"], true)));
+    }
+
+    // Retiring a slot costs every candidate the same point, so it cannot itself break a tie — which is
+    // precisely why the loose pass must not run while a strict match exists (see below).
+    [Fact]
+    public void RetiringASlotCostsBothCandidatesTheSameSpecificity()
+    {
+        var theirs = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", 6139, true));
+        var ours   = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", CarrierRing, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        Assert.Equal(Specificity(OurAccessories(theirs, "RFinger"), worn),
+                     Specificity(OurAccessories(ours,   "RFinger"), worn));
+    }
+
+    // ── BestMatches: strict before loose ──────────────────────────────────────
+
+    private static DesignBindingService.Carriers HoldingRFinger
+        => new(null, [CarrierRing], ["RFinger"]);
+
+    // The design that actually names the worn ring wins outright. Retiring RFinger from BOTH would have
+    // tied them and handed the decision to recency — and the loser of that tie is not just a wrong look,
+    // since Restore writes enable/priority/options into the Penumbra collection.
+    [Fact]
+    public void BestMatches_StrictMatchWinsBeforeSlotRetirementIsTried()
+    {
+        var ours   = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", CarrierRing, true));
+        var theirs = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", 6139, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        Assert.Equal([a], DesignBindingService.BestMatches([(a, ours), (b, theirs)], worn, HoldingRFinger));
+    }
+
+    // ...but with no strict match to be had, retirement is the rescue: their own ring is simply not in the
+    // live state to compare against while we are borrowing the slot.
+    [Fact]
+    public void BestMatches_SlotRetirementRescuesWhenNothingMatchesStrictly()
+    {
+        var theirs = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true),
+                            ("RFinger", 6139, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        var a = Guid.NewGuid();
+        Assert.Empty(DesignBindingService.BestMatches([(a, theirs)], worn, HoldingRFinger.ItemsOnly));
+        Assert.Equal([a], DesignBindingService.BestMatches([(a, theirs)], worn, HoldingRFinger));
+    }
+
+    // A design that matches nothing either way still matches nothing.
+    [Fact]
+    public void BestMatches_NoCandidateMatches_IsEmpty()
+    {
+        var design = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 9, true));
+        var worn   = State(("Head", 1), ("Body", 2), ("Hands", 3), ("RFinger", CarrierRing));
+
+        Assert.Empty(DesignBindingService.BestMatches([(Guid.NewGuid(), design)], worn, HoldingRFinger));
+    }
+
+    // Ties survive both passes — the caller breaks them on recency, so BestMatches must hand back all of
+    // them rather than pick one itself.
+    [Fact]
+    public void BestMatches_EquallySpecificCandidatesAreAllReturned()
+    {
+        var one = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var two = Design(("Head", 1, true), ("Body", 2, true), ("Hands", 3, true));
+        var worn = State(("Head", 1), ("Body", 2), ("Hands", 3));
+
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        Assert.Equal(2, DesignBindingService.BestMatches([(a, one), (b, two)], worn, HoldingRFinger).Count);
     }
 }
