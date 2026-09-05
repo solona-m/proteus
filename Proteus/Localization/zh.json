@@ -191,6 +191,38 @@
     "message": "基础颜色不变——但“高级”中的“恢复默认值”会重写它们，而“身体”是任何绑定都不会记录的全局设置。",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "相加",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "混合模式",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "正片叠底",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "叠加",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "绘制",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "替换",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "滤色",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "这一行的图像如何与皮肤上已有的内容合成。\n\n“绘制”只是把它盖在上面，也就是以往所有图层的做法。\n选择其它模式会让这一行变成印花：它为同一模组其它图层所绘制的布料上色，\n并被裁剪成布料的形状——所以彩虹印在渔网袜上只会染上丝线，\n网眼仍然是皮肤。\n\n印花只能触及本模组自己的图层，绝不会影响其它模组的服装。\n在裸露的皮肤上它什么也不画，因此单独选中印花不会显示任何东西。\n这是刻意如此：那里根本没有可供印刷的底子。\n\n正片叠底只能变暗，因此在很深色的布料上几乎看不出来——这时请改用滤色。\n这一行的颜色仍会为图像着色，其不透明度就是印花的强度。",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "所有身体",
     "description": ""

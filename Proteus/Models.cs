@@ -208,6 +208,64 @@ public enum NormalMode
     Replace,
 }
 
+/// <summary>
+/// How one colour-table row's art combines with what this mod has already painted on the material.
+/// <para/>
+/// Every mode but <see cref="Paint"/> makes the row a PRINT: it carries no coverage of its own and is
+/// clipped to what its own mod's other layers painted here, so a rainbow on a fishnet colours the threads
+/// and leaves the holes as skin. On bare skin a print paints nothing at all — there is nothing to print
+/// on — which is why selecting one on its own shows nothing.
+/// <para/>
+/// Per SUB-ROW for the same reason <see cref="ColorTableSubRowPreset.LightResponse"/> is: the index
+/// texture sends each region to its own cell, so one part of a print can multiply into the fabric's
+/// shadows while the part beside it screens over its highlights.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RowBlend
+{
+    /// <summary>
+    /// Alpha-over: lay this row's art on top of whatever is beneath, by its own alpha. The default, and
+    /// what every overlay did before blend modes existed — a row left alone composites bit for bit as it
+    /// always has.
+    /// </summary>
+    Paint,
+
+    /// <summary>
+    /// <c>dst · src</c>. Darkens: white is invisible, black is opaque. The mode a printed pattern wants,
+    /// because ink on cloth takes the cloth's own shading with it.
+    /// <para/>
+    /// It can ONLY darken, so a bright print reads as almost nothing on black fabric — that is what
+    /// <see cref="Screen"/> is for.
+    /// </summary>
+    Multiply,
+
+    /// <summary>
+    /// <c>1 − (1−dst)(1−src)</c>. Lightens: black is invisible, white is opaque. The complement of
+    /// <see cref="Multiply"/>, and the mode for a bright print on dark fabric.
+    /// </summary>
+    Screen,
+
+    /// <summary>
+    /// <see cref="Multiply"/> in the fabric's shadows, <see cref="Screen"/> in its highlights, pivoting at
+    /// mid grey. Preserves the fabric's contrast rather than flattening it toward one end, which is what
+    /// makes a print read as dyed INTO the weave instead of laid over it.
+    /// </summary>
+    Overlay,
+
+    /// <summary>
+    /// <c>min(1, dst + src)</c>. Purely additive — the mode for something emitting rather than covering,
+    /// like a sheen or a dusting of glitter. Saturates to white where the fabric is already bright.
+    /// </summary>
+    Add,
+
+    /// <summary>
+    /// Take this row's colour outright, keeping the fabric's shape. The print supplies the colour and the
+    /// fabric supplies the alpha, so the threads come out flat print-coloured and the holes stay skin.
+    /// Loses the fabric's own shading, which is the difference between this and <see cref="Multiply"/>.
+    /// </summary>
+    Replace,
+}
+
 /// <summary>Describes one set of overlay textures targeting one or more materials.</summary>
 public class OverlayDescriptor
 {
@@ -1205,6 +1263,17 @@ public class ColorTableSubRowPreset
     public int Opacity { get; set; } = 0;
 
     /// <summary>
+    /// How this region's art combines with what this mod already painted here. <see cref="RowBlend.Paint"/>
+    /// (the default) is the ordinary alpha-over every row did before this existed; anything else makes the
+    /// region a PRINT, clipped to its own mod's other layers and invisible on bare skin.
+    /// <para/>
+    /// <see cref="Opacity"/> doubles as the print's strength: it scales the coverage this row is composited
+    /// with, and that coverage is one of the two terms the clip is built from.
+    /// </summary>
+    [JsonPropertyName("Blend")]
+    public RowBlend Blend { get; set; } = RowBlend.Paint;
+
+    /// <summary>
     /// How much of this region's glow the scene's light takes away, 0–1. Zero (the default) is the
     /// unconditional glow every row had before: it emits the same in a lit street as in a cellar.
     /// One is fully light-sensitive — the emissive scales by <c>1 − LightResponse × light</c>, so it
@@ -1275,6 +1344,12 @@ public class ColorTableSubRow
     public float DiffuseB { get; set; } = 1f;
     public float Emissive { get; set; } = 0f;
     public int   Opacity  { get; set; } = 0;
+
+    /// <summary>
+    /// How this row composites. Defaults to <see cref="RowBlend.Paint"/> so a default-constructed row — the
+    /// fallback for every index cell an author never configured — keeps the old alpha-over behaviour.
+    /// </summary>
+    public RowBlend Blend { get; set; } = RowBlend.Paint;
 }
 
 /// <summary>Runtime pair of sub-rows A and B for one color table row pair.</summary>

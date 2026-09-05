@@ -191,6 +191,38 @@
     "message": "Couleurs de base inchangées — sauf dans Avancé, où « Rétablir les valeurs par défaut » les réécrit et où « Corps » est un réglage global qu'aucune liaison ne capture.",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "Ajouter",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "Fusion",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiplier",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Incrustation",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "Peindre",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "Remplacer",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "Écran",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "Tous les corps",
     "description": ""

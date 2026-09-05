@@ -191,6 +191,38 @@
     "message": "基本カラーは変更されません。ただし「詳細設定」内では、「既定値に戻す」が基本カラーを書き換え、「ボディ」はどの紐付けも記録しないグローバル設定です。",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "加算",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "合成モード",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "乗算",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "オーバーレイ",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "描画",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "置換",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "スクリーン",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "この行の画像を、すでに肌にあるものとどう合成するかを決めます。\n\n「描画」は上に重ねるだけで、これまでのレイヤーと同じ動作です。\nそれ以外を選ぶとこの行は「プリント」になります。同じMODの他のレイヤーが\n塗った布地を着色し、その形に切り抜かれます。網タイツに虹をかければ、糸だけが\n染まり、網目は肌のまま残ります。\n\nプリントが届くのは同じMOD内のレイヤーだけで、他のMODの衣装には決して触れません。\n素肌の上には何も描かないため、プリントだけを選んでも何も表示されません。\nこれは仕様です。プリントする下地がそこにないからです。\n\n乗算は暗くすることしかできないため、非常に暗い布地ではほとんど見えません。\nその場合はスクリーンを使ってください。この行の色は引き続き画像を着色し、\n不透明度がプリントの強さになります。",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "すべてのボディ",
     "description": ""

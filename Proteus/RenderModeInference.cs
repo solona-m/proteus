@@ -69,6 +69,25 @@ public static class RenderModeInference
         => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
 
     /// <summary>
+    /// Every sub-row the author configured here composites as a print, so the option carries colour and no
+    /// surface at all.
+    /// <para/>
+    /// Derived from the rows rather than taken as a parameter on purpose: <see cref="ShouldPromoteToGear"/>
+    /// already receives them, and the compositor and the editor must never be able to disagree about what
+    /// was composited.
+    /// </summary>
+    public static bool IsPrint(IEnumerable<ColorTableRowPreset> rows)
+    {
+        bool any = false;
+        foreach (var r in rows)
+        {
+            if (r.SubRowA is { } a) { if (a.Blend == RowBlend.Paint) return false; any = true; }
+            if (r.SubRowB is { } b) { if (b.Blend == RowBlend.Paint) return false; any = true; }
+        }
+        return any;
+    }
+
+    /// <summary>
     /// Whether a stored Skin overlay has to be composited as a gear shell instead. Two reasons, both
     /// recomputed every composite so either can revert on its own:
     /// <list type="bullet">
@@ -105,6 +124,12 @@ public static class RenderModeInference
         => layer == OverlayLayer.Skin
         && !pinned
         && canShell
+        // A print is never promoted: it has no coverage of its own to cut a shell from, and a shell would
+        // take it away from the very layers it exists to colour — they are composited into the skin, and it
+        // would no longer be there to reach them. It qualifies on every route otherwise, which is what makes
+        // this load-bearing rather than defensive: toeCapWanted promotes every shellable skin overlay in the
+        // look, so one toe cap would turn an opaque full-body print into a rainbow bodysuit.
+        && !IsPrint(rows ?? [])
         && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []));
 
     /// <summary>

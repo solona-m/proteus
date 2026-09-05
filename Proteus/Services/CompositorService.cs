@@ -4245,6 +4245,13 @@ public class CompositorService : IDisposable
             {
                 var sorted = list
                     .OrderBy(p => p.Entry.Priority)
+                    // A print is not in the stack at all: it does not paint, it recolours what was painted,
+                    // so it has to land after everything it can reach. Below Penumbra priority, so the
+                    // cross-mod rule above still holds; ABOVE the tab strip, because the strip outranks
+                    // GroupOrder and a key underneath it would be undone by anyone who has ever restacked
+                    // their tabs. Dragging a print's tab was never going to mean anything once its whole job
+                    // is to sit on top.
+                    .ThenBy(p => AnyBlendRow(p.Overlay.ColorTableRows) ? 1 : 0)
                     .ThenByDescending(p => ModStackIndexFor(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
                     .ThenByDescending(p => p.Overlay.GroupOrder)
                     .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
@@ -4262,7 +4269,8 @@ public class CompositorService : IDisposable
                         var g = p.Overlay.OptionGroup ?? "";
                         var o = p.Overlay.Option ?? "";
                         var mi = FmtIdx(ModStackIndexFor(p.Entry.ModDirectory, g, o));
-                        return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}]";
+                        var bl = AnyBlendRow(p.Overlay.ColorTableRows) ? ",print" : "";
+                        return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}{bl}]";
                     });
                     log.Debug("[Proteus] skin stack (bottom->top): {0}", string.Join("  ->  ", parts));
                 }
@@ -4397,7 +4405,10 @@ public class CompositorService : IDisposable
                         if (!maskAssetsByMod.TryGetValue(modDir, out var mA) || !mA.Any(a => a.IndexPath != null))
                             continue;
 
-                        var top = modGroup.Last();
+                        // A print is not the surface a mask sits on — it has no coverage of its own, and it
+                        // now always sorts last, so Last() would hand every masked mod its print's rows.
+                        var painters = modGroup.Where(p => !AnyBlendRow(p.Overlay.ColorTableRows)).ToList();
+                        var top = painters.Count > 0 ? painters[^1] : modGroup.Last();
                         // An empty/absent colorset leaves the dictionary empty, which ApplyIndexedOverlay
                         // reads as neutral white rather than skipping the pixel.
                         var inherited = BuildRowDict(top.Overlay.ColorTableRows);
@@ -4722,6 +4733,24 @@ public class CompositorService : IDisposable
                         var img = RemapIfNeeded(LoadPng(dp, w, h), w, h, gSrc, dp);
                         if (img == null) continue;
 
+                        // A print has no silhouette of its own — it borrows the fabric's. Its art is
+                        // typically opaque edge to edge, so tracing it whole would union a full sheet over
+                        // the mod's real outline and flatten the very contact shadows the fabric casts.
+                        // Masked rather than skipped, so an option that prints in one region and paints in
+                        // another still contributes the part that is really there.
+                        // Cheap preset test first: building a row dictionary here would allocate one (plus up
+                        // to sixteen row objects) for every overlay of every mod on every silhouette build,
+                        // and almost none of them print.
+                        if (AnyBlendRow(gOverlay.ColorTableRows))
+                        {
+                            byte[]? gIdx = gd.Index != null
+                                ? LoadIndexMerged(Path.Combine(gEntry.SidecarRoot, gd.Index), w, h,
+                                                  gSrc, gEntry.ModDirectory)
+                                : null;
+                            img = PaintCoverage(img, gIdx, BuildRowDict(gOverlay.ColorTableRows), w, h,
+                                                gd.Index != null);
+                        }
+
                         sil ??= new byte[w * h];
                         var s = sil; var src = img;
                         ParallelPixels(0, w * h, 1, (from, to) =>
@@ -4846,6 +4875,16 @@ public class CompositorService : IDisposable
                 // afterwards (masks are mod-level, not tied to one overlay descriptor).
                 var lastSrcBodyTypeByMod = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
+                // ── What each mod has PAINTED on this material so far ──────────
+                // The clip a print is multiplied through: a print colours its own mod's fabric and nothing
+                // else, so this is per mod and accumulated as the loop runs. Built here rather than derived
+                // from ClaimAt because this is the only definition that is diffuse-only and post-seam-drop —
+                // ClaimAt would count a normal-only relief layer as paint, and would miss the texels the
+                // UV-seam pass drops.
+                //
+                // Safe unlocked for the same reason claimCache is: one of these per material task.
+                var paintedByMod = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
                 // ── Higher-priority group claims ──────────────────────────────
                 // A mod's groups are ranked by Penumbra's own numbering (group_002 beats group_003), and a
                 // higher group wins wherever it is VISIBLE: a lower one is faded by the higher one's alpha.
@@ -4910,6 +4949,18 @@ public class CompositorService : IDisposable
                         int op = r16?.A.Opacity ?? 0;
                         if (op != 0) cov = ScaleOverlayAlpha(cov, op);
                     }
+
+                    // Finally, take the print rows out. This is what ClaimAt goes on to union, so doing it
+                    // here is what stops a print from claiming the territory of the group beneath it — and
+                    // that is not merely tidiness: a print's art is typically opaque across the whole sheet,
+                    // so an unfiltered claim erases any lower group outright.
+                    if (AnyBlendRow(r))
+                    {
+                        byte[]? pIdx = d.Index != null
+                            ? LoadIndexMerged(Path.Combine(e.SidecarRoot, d.Index), tw, th, srcT, e.ModDirectory)
+                            : null;
+                        cov = PaintCoverage(cov, pIdx, r, tw, th, d.Index != null);
+                    }
                     return cov;
                 }
 
@@ -4929,8 +4980,7 @@ public class CompositorService : IDisposable
                         if (cov == null) continue;
 
                         acc ??= new byte[tw * th];
-                        for (int i = 0, a = 3; i < acc.Length && a < cov.Length; i++, a += 4)
-                            acc[i] = (byte)(acc[i] + (255 - acc[i]) * cov[a] / 255);   // alpha-over union
+                        UnionAlphaInto(acc, cov);   // alpha-over union
                     }
                     claimCache[key] = acc;
                     return acc;
@@ -4940,6 +4990,16 @@ public class CompositorService : IDisposable
                 byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int tw, int th)
                 {
                     if (cov == null) return null;
+
+                    // A print is clipped by what its mod PAINTED, which is the exact opposite of this: it
+                    // has to survive where the fabric is, and this fades it away precisely there. Running
+                    // both leaves nothing at all — which is why authoring the weave into a print's alpha
+                    // cannot work, and why this feature had to exist.
+                    //
+                    // Whole-overlay rather than per texel: an overlay that mixes painting and printing rows
+                    // keeps its painting rows unsuppressed too. That is a real if unusual authoring case,
+                    // and erring toward showing the author's art beats erring toward deleting it.
+                    if (AnyBlendRow(o.ColorTableRows)) return cov;
                     var claim = ClaimAt(e.ModDirectory, o.GroupOrder, tw, th);
                     if (claim == null) return cov;
 
@@ -5020,6 +5080,18 @@ public class CompositorService : IDisposable
                     var rows   = BuildRowDict(resolved.ColorTableRows);
                     rows.TryGetValue(15, out var row16);
                     var row16A = row16?.A ?? new ColorTableSubRow();
+
+                    // Does any row here print? Everything below that changes behaviour for a print is gated
+                    // on this, so an overlay that has never heard of blend modes takes exactly the path it
+                    // always took — including keeping its old "composited, therefore publish" bookkeeping
+                    // even where its coverage happens to be empty.
+                    bool hasPrintRows = AnyBlendRow(rows);
+
+                    // Every cell prints, so this overlay contributes colour and nothing else: no relief, no
+                    // shadow, no skin-tone suppression. It has no surface for any of those to be about.
+                    // A strict early-out — an index cell nobody configured paints, so this is rarely true for
+                    // an indexed print, and AnyCoverage below is what actually decides for those.
+                    bool purePrint = AllRowsPrint(rows, desc.Index != null);
 
                     lastSrcBodyTypeByMod[entry.ModDirectory] = srcBodyType;
 
@@ -5219,6 +5291,21 @@ public class CompositorService : IDisposable
                         return cov;
                     }
 
+                    // CovAt with the print rows taken out — the coverage that actually laid down a surface.
+                    // Phase B2 and the ambient-occlusion silhouette read this instead, because a print has no
+                    // surface: it must not bleach the wearer's skin tone out from under the fabric, and must
+                    // not cast a shadow the fabric is already casting.
+                    byte[]? PaintCovAt(int tw, int th)
+                    {
+                        var cov = CovAt(tw, th);
+                        if (cov == null || !AnyBlendRow(rows)) return cov;
+                        byte[]? pIdx = desc.Index != null
+                            ? LoadIndexMerged(Path.Combine(entry.SidecarRoot, desc.Index), tw, th,
+                                              srcBodyType, entry.ModDirectory)
+                            : null;
+                        return PaintCoverage(cov, pIdx, rows, tw, th, desc.Index != null);
+                    }
+
                     // ── UV-seam bleed removal ─────────────────────────────────
                     // ONLY for coverage that was actually cross-UV converted (sibling synthesis /
                     // bibo↔gen3 bake). A native (same-UV) overlay is rendered verbatim and must be
@@ -5260,36 +5347,66 @@ public class CompositorService : IDisposable
                     if (desc.Diffuse != null && diffuseOv != null && baseD is { Length: > 0 })
                     {
                         SnapshotBaseDiffuse();
-                        if (desc.Index != null)
-                        {
-                            var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                            var idD = LoadIndexMerged(idxPath, wD, hD, srcBodyType, entry.ModDirectory);
-                            if (idD != null)
-                            {
-                                ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
 
-                                // Glow recipe: which pixels resolve to each row (red/17 = pair, green≥128 =
-                                // sub-row A), gated by the SAME coverage the composite used (diffuseOv alpha),
-                                // downsampled. One byte/pixel: 0 = no glow, else 0x80 | (A?0x40) | pairIdx.
-                                int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
-                                var gmap = new byte[gw * gh];
-                                for (int my = 0; my < gh; my++)
+                        // The clip a print is multiplied through: everything THIS mod has already painted on
+                        // this material. Null until one of its layers has painted something, which is exactly
+                        // when a print should show nothing.
+                        paintedByMod.TryGetValue(entry.ModDirectory, out var clip);
+                        if (hasPrintRows && clip == null)
+                            log.Debug("[Proteus] {0} ({1}) prints onto {2}, but this mod has painted nothing "
+                                    + "here yet — a print colours its own mod's fabric, and on bare skin "
+                                    + "there is nothing to print on", entry.ModDirectory, optLabel, mtrlGamePath);
+
+                        byte[]? idD = null;
+                        if (desc.Index != null)
+                            idD = LoadIndexMerged(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD,
+                                                  srcBodyType, entry.ModDirectory);
+
+                        // An indexed print whose _id did not load cannot be routed, so PaintCoverage falls
+                        // back to all-paint and the blend modes silently do nothing. Say so once, here,
+                        // rather than leaving the author to wonder why their print stopped printing.
+                        if (hasPrintRows && desc.Index != null && idD == null)
+                            log.Warning("[Proteus] {0} ({1}) declares blend rows and an index, but the index "
+                                      + "did not load for {2} — the rows fall back to painting, so nothing "
+                                      + "prints. Check the _id texture.",
+                                        entry.ModDirectory, optLabel, mtrlGamePath);
+
+                        // What this overlay PAINTS, as opposed to prints — the same buffer when nothing here
+                        // prints, so the ordinary path allocates nothing and the glow gate below is unchanged.
+                        var paintCov = PaintCoverage(diffuseOv, idD, rows, wD, hD, desc.Index != null);
+
+                        if (idD != null)
+                        {
+                            ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD, clip);
+
+                            // Glow recipe: which pixels resolve to each row (red/17 = pair, green≥128 =
+                            // sub-row A), gated by the coverage that actually PAINTED, downsampled. One
+                            // byte/pixel: 0 = no glow, else 0x80 | (A?0x40) | pairIdx. A print gates to
+                            // nothing — it lays down no surface of its own for a glow to come off.
+                            int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
+                            var gmap = new byte[gw * gh];
+                            for (int my = 0; my < gh; my++)
+                            {
+                                int sy = gh == hD ? my : (int)((long)my * hD / gh);
+                                for (int mx = 0; mx < gw; mx++)
                                 {
-                                    int sy = gh == hD ? my : (int)((long)my * hD / gh);
-                                    for (int mx = 0; mx < gw; mx++)
-                                    {
-                                        int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
-                                        int si = (sy * wD + sx) * 4;
-                                        if (diffuseOv[si + 3] == 0) continue;   // outside this overlay's coverage
-                                        gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
-                                    }
+                                    int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
+                                    int si = (sy * wD + sx) * 4;
+                                    if (paintCov[si + 3] == 0) continue;   // outside what this overlay painted
+                                    gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
                                 }
-                                glowMaps.Add((entry.ModDirectory, resolved.OptionGroup, resolved.Option, gmap, gw, gh));
                             }
-                            else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                            glowMaps.Add((entry.ModDirectory, resolved.OptionGroup, resolved.Option, gmap, gw, gh));
                         }
-                        else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                        else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD, clip);
                         diffuseBlended = true; diffuseContributors++;
+
+                        // Hand what this overlay painted to the layers above it. A print contributes nothing,
+                        // so a second print cannot print onto the first — they both reach the fabric instead,
+                        // which is the only reading that does not depend on the order they happen to be in.
+                        if (!paintedByMod.TryGetValue(entry.ModDirectory, out var acc))
+                            paintedByMod[entry.ModDirectory] = acc = new byte[wD * hD];
+                        UnionAlphaInto(acc, paintCov);
                     }
                     else if (desc.Diffuse == null && normalOv != null)
                     {
@@ -5328,18 +5445,26 @@ public class CompositorService : IDisposable
                     */
 
                     // ── Phase B: normal composite ─────────────────────────────
+                    // PaintCovAt, not CovAt. A print recolours a surface it did not lay down, so it has no
+                    // relief of its own to contribute — and Suppress deliberately does not fade a print, so
+                    // CovAt here is now LESS filtered than it used to be: an opaque full-sheet print would
+                    // compound its slopes over the whole body, on top of the fabric's own weave.
                     if (normalOv != null && baseN is { Length: > 0 })
                     {
-                        // Replace mode is a plain alpha-over, which is exactly what a whole-skin overlay
-                        // wants: at full coverage the base is gone rather than added to (CompoundNormal
-                        // would apply the same slopes twice — see NormalMode.Replace), and RGB includes the
-                        // blue channel, so the author's skin-colour influence survives instead of being
-                        // silently inherited from whatever body mod happens to sit underneath.
-                        if (desc.NormalMode == NormalMode.Replace)
-                            AlphaComposite(baseN, normalOv, wN, hN, CovAt(wN, hN));
-                        else
-                            CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
-                        normalBlended = true; normalContributors++;
+                        var nCov = PaintCovAt(wN, hN);
+                        if (!hasPrintRows || AnyCoverage(nCov))
+                        {
+                            // Replace mode is a plain alpha-over, which is exactly what a whole-skin overlay
+                            // wants: at full coverage the base is gone rather than added to (CompoundNormal
+                            // would apply the same slopes twice — see NormalMode.Replace), and RGB includes the
+                            // blue channel, so the author's skin-colour influence survives instead of being
+                            // silently inherited from whatever body mod happens to sit underneath.
+                            if (desc.NormalMode == NormalMode.Replace)
+                                AlphaComposite(baseN, normalOv, wN, hN, nCov);
+                            else
+                                CompoundNormal(baseN, normalOv, wN, hN, nCov);
+                            normalBlended = true; normalContributors++;
+                        }
                     }
 
                     // ── Phase B2: suppress skin-color influence under the overlay ──
@@ -5353,14 +5478,23 @@ public class CompositorService : IDisposable
                     // Strength = the user's global setting × this overlay's optional SkinToneMask
                     // (author override; null = full). 0 disables it entirely (no skin masking, and
                     // no normal rewrite for diffuse-only overlays).
+                    // A pure print is excluded, and that matters more than it looks: this guard asks only
+                    // whether a diffuse was declared, and a print declares one. Its art is typically opaque
+                    // across the whole sheet, so an unfiltered print would suppress skin-colour influence
+                    // over the ENTIRE body and take the wearer's skin tone with it. The fabric beneath has
+                    // already run this pass with its own coverage, which is the coverage that is really there.
                     float skinMask = config.SkinColorSuppression * (desc.SkinToneMask ?? 1f);
-                    if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f)
+                    if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f && !purePrint)
                     {
                         baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
-                            var scMask = CovAt(wN, hN);
-                            if (scMask != null)
+                            // AnyCoverage, not a null check: AllRowsPrint is a strict early-out that an
+                            // indexed print almost never satisfies (an unconfigured index cell paints), so
+                            // for most prints the mask arrives here non-null and entirely zero. Running on
+                            // it changes nothing but still marks the normal dirty and republishes it.
+                            var scMask = PaintCovAt(wN, hN);
+                            if (scMask != null && (!hasPrintRows || AnyCoverage(scMask)))
                             {
                                 // Weight the suppression by the composited overlay colour so dark
                                 // dyes keep skin tone (and stay matte) while bright dyes get fully
@@ -5390,9 +5524,12 @@ public class CompositorService : IDisposable
                         {
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = RemapIfNeeded(LoadPng(maskPathD, wM, hM), wM, hM, srcBodyType, maskPathD);
-                            if (ov != null)
+                            // PaintCovAt for the same reason as Phase B: gloss and specular describe a
+                            // surface, and a print does not have one.
+                            var mCov = ov != null ? PaintCovAt(wM, hM) : null;
+                            if (ov != null && (!hasPrintRows || AnyCoverage(mCov)))
                             {
-                                AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
+                                AlphaComposite(baseM, ov, wM, hM, mCov);
                                 maskBlended = true; maskContributors++;
                             }
                         }
@@ -5771,6 +5908,13 @@ public class CompositorService : IDisposable
                         allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
                             && o.Overlay.Descriptor.Layer == OverlayLayer.Skin
                             && o.Overlay.Descriptor.Diffuse != null
+                            // A print satisfies all three of the above, so without this it would drag a mod
+                            // into AO that would never otherwise have qualified for it. Cheap preset test
+                            // first — this lambda is re-evaluated per mod per sweep, and building a row
+                            // dictionary for every overlay that has never printed is pure waste.
+                            && !(AnyBlendRow(o.Overlay.ColorTableRows)
+                                 && AllRowsPrint(BuildRowDict(o.Overlay.ColorTableRows),
+                                                 o.Overlay.Descriptor.Index != null))
                             && o.Overlay.Descriptor.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase)));
 
                     // Union of the opaque coverage of every garment ABOVE the one being processed: a lower
@@ -8563,19 +8707,99 @@ public class CompositorService : IDisposable
         });
     }
 
-    internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h)
+    /// <summary>
+    /// Alpha-over union of an RGBA buffer's alpha channel into a single-channel accumulator.
+    /// <para/>
+    /// Shared by the higher-group claim and by the paint accumulator a print is clipped through, so the two
+    /// can never drift apart on what "already covered here" means.
+    /// </summary>
+    internal static void UnionAlphaInto(byte[] acc, byte[] rgba)
+    {
+        int n = Math.Min(acc.Length, rgba.Length / 4);
+        ParallelPixels(0, n, 1, (from, to) =>
+        {
+            for (int i = from; i < to; i++)
+                acc[i] = (byte)(acc[i] + (255 - acc[i]) * rgba[i * 4 + 3] / 255);
+        });
+    }
+
+    /// <summary>
+    /// One channel of a blend mode, on 0–1, BEFORE it is clipped to the fabric.
+    /// <para/>
+    /// <see cref="RowBlend.Paint"/> is deliberately not here: it is alpha-over, which is driven by the
+    /// overlay's own coverage rather than by the clip, so the callers apply it directly.
+    /// </summary>
+    internal static float BlendChannel(RowBlend mode, float dst, float src) => mode switch
+    {
+        RowBlend.Multiply => dst * src,
+        RowBlend.Screen   => 1f - (1f - dst) * (1f - src),
+        RowBlend.Overlay  => dst < 0.5f ? 2f * dst * src : 1f - 2f * (1f - dst) * (1f - src),
+        RowBlend.Add      => MathF.Min(1f, dst + src),
+        RowBlend.Replace  => src,
+        _                 => src,
+    };
+
+    /// <summary>
+    /// How strongly a print lands on one texel: its own alpha TIMES how much its mod painted there.
+    /// <para/>
+    /// The product, not the smaller of the two — that is what makes a print fade out along a fishnet's
+    /// antialiased thread edges instead of stopping at a hard line, and what makes it vanish entirely
+    /// where its mod painted nothing.
+    /// </summary>
+    private static float ClipStrength(float ovA, byte[]? painted, int pixel)
+        => painted == null ? 0f : ovA * (painted[pixel] / 255f);
+
+    /// <summary>
+    /// A 0–1 channel back to a byte, ROUNDED rather than truncated.
+    /// <para/>
+    /// The alpha-over path truncates and has to keep truncating, or every mod that shipped before blend
+    /// modes changes. A blend cannot afford to: multiplying by white and screening against black are meant
+    /// to be exactly identity, and truncation turns each of them into a silent one-level darkening
+    /// everywhere the print lands — measured as 120 → 119 on a screen against black.
+    /// </summary>
+    private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
+
+    internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h,
+                                          byte[]? painted = null)
     {
         float cr = row.DiffuseR, cg = row.DiffuseG, cb = row.DiffuseB;
+        var mode = row.Blend;
+
+        // The path every overlay took before blend modes existed, kept bit for bit. Not an optimisation:
+        // it is the guarantee that adding the field changed nothing for the mods that came before it.
+        if (mode == RowBlend.Paint)
+        {
+            ParallelPixels(0, w * h * 4, 4, (from, to) =>
+            {
+                for (int i = from; i < to; i += 4)
+                {
+                    float a = ov[i + 3] / 255f;
+                    if (a <= 0f) continue;
+                    float ia = 1f - a;
+                    baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
+                    baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
+                    baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
+                }
+            });
+            return;
+        }
+
+        // A print with nothing beneath it paints nothing at all — there is nothing to print on. The
+        // length check is the same statement: a clip that does not cover the sheet cannot be trusted to
+        // say what was painted, and guessing would put colour on bare skin.
+        if (painted == null || painted.Length < w * h) return;
+
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
             {
-                float a = ov[i + 3] / 255f;
-                if (a <= 0f) continue;
-                float ia = 1f - a;
-                baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
-                baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
-                baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
+                float m = ClipStrength(ov[i + 3] / 255f, painted, i >> 2);
+                if (m <= 0f) continue;
+                float im = 1f - m;
+                float d0 = baseTex[i] / 255f, d1 = baseTex[i + 1] / 255f, d2 = baseTex[i + 2] / 255f;
+                baseTex[i]     = ToByte(d0 * im + BlendChannel(mode, d0, ov[i]     / 255f * cr) * m);
+                baseTex[i + 1] = ToByte(d1 * im + BlendChannel(mode, d1, ov[i + 1] / 255f * cg) * m);
+                baseTex[i + 2] = ToByte(d2 * im + BlendChannel(mode, d2, ov[i + 2] / 255f * cb) * m);
             }
         });
     }
@@ -8585,7 +8809,7 @@ public class CompositorService : IDisposable
     internal static void ApplyIndexedOverlay(
         byte[] baseTex, byte[] ov, byte[] idx,
         Dictionary<int, ColorTableRowOverride> rows,
-        bool isNormal, int w, int h)
+        bool isNormal, int w, int h, byte[]? painted = null)
     {
         // The row pair is `red / 17`, so there are only ever SIXTEEN distinct answers — resolved once here
         // into flat arrays instead of per texel. The loop below runs w*h times (16.7M at 4K) six times per
@@ -8595,6 +8819,9 @@ public class CompositorService : IDisposable
         const int Pairs = 16;
         float[] aR = new float[Pairs], aG = new float[Pairs], aB = new float[Pairs], aE = new float[Pairs];
         float[] bR = new float[Pairs], bG = new float[Pairs], bB = new float[Pairs], bE = new float[Pairs];
+        var aBl = new RowBlend[Pairs];
+        var bBl = new RowBlend[Pairs];
+        bool anyBlend = false;
         for (int p = 0; p < Pairs; p++)
         {
             // An absent row keeps the default-constructed values, exactly as the old per-pixel
@@ -8602,7 +8829,15 @@ public class CompositorService : IDisposable
             var pair = rows.TryGetValue(p, out var r) ? r : new ColorTableRowOverride();
             aR[p] = pair.A.DiffuseR; aG[p] = pair.A.DiffuseG; aB[p] = pair.A.DiffuseB; aE[p] = pair.A.Emissive;
             bR[p] = pair.B.DiffuseR; bG[p] = pair.B.DiffuseG; bB[p] = pair.B.DiffuseB; bE[p] = pair.B.Emissive;
+            aBl[p] = pair.A.Blend;   bBl[p] = pair.B.Blend;
+            if (aBl[p] != RowBlend.Paint || bBl[p] != RowBlend.Paint) anyBlend = true;
         }
+
+        // Nothing here prints, so run the loop that always ran — bit for bit, since lerping two colours and
+        // then compositing is not float-identical to compositing twice and lerping the results. The normal
+        // path never prints either: it carries emissive, which a blend mode has nothing to say about.
+        bool plain = isNormal || !anyBlend;
+        var clip = painted != null && painted.Length >= w * h ? painted : null;
 
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -8614,24 +8849,62 @@ public class CompositorService : IDisposable
                 int   pairIdx = idx[i]     / 17;        // red → pair 0–15
                 float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
 
-                float dr = bR[pairIdx] + (aR[pairIdx] - bR[pairIdx]) * blendA;
-                float dg = bG[pairIdx] + (aG[pairIdx] - bG[pairIdx]) * blendA;
-                float db = bB[pairIdx] + (aB[pairIdx] - bB[pairIdx]) * blendA;
-                float em = bE[pairIdx] + (aE[pairIdx] - bE[pairIdx]) * blendA;
+                // Also take the original path when THIS pair paints on both sides, even though some other
+                // pair in the table prints. Otherwise adding a blend mode to row 3 would shift row 7's
+                // output by a level, because the print path rounds where this one truncates — a table-wide
+                // change from a per-row edit.
+                if (plain || (aBl[pairIdx] == RowBlend.Paint && bBl[pairIdx] == RowBlend.Paint))
+                {
+                    float dr = bR[pairIdx] + (aR[pairIdx] - bR[pairIdx]) * blendA;
+                    float dg = bG[pairIdx] + (aG[pairIdx] - bG[pairIdx]) * blendA;
+                    float db = bB[pairIdx] + (aB[pairIdx] - bB[pairIdx]) * blendA;
+                    float em = bE[pairIdx] + (aE[pairIdx] - bE[pairIdx]) * blendA;
 
-                if (!isNormal)
-                {
-                    float ia = 1f - ovA;
-                    baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
-                    baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
-                    baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                    if (!isNormal)
+                    {
+                        float ia = 1f - ovA;
+                        baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
+                        baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
+                        baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                    }
+                    else
+                    {
+                        baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
+                    }
+                    continue;
                 }
-                else
+
+                // The two sub-rows may composite by different rules, and a rule cannot be interpolated. So
+                // each sub-row is resolved to the value it would leave in the base ON ITS OWN, and THOSE are
+                // lerped by the same green channel that lerps their colours — no seam where a gradient
+                // crosses from one to the other, which picking the nearer sub-row would leave at green 128.
+                float mBlend = ClipStrength(ovA, clip, i >> 2);
+                for (int c = 0; c < 3; c++)
                 {
-                    baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
+                    float dst = baseTex[i + c] / 255f;
+                    float art = ov[i + c] / 255f;
+                    float ca  = c == 0 ? aR[pairIdx] : c == 1 ? aG[pairIdx] : aB[pairIdx];
+                    float cb  = c == 0 ? bR[pairIdx] : c == 1 ? bG[pairIdx] : bB[pairIdx];
+                    float outA = SubRowResult(aBl[pairIdx], dst, art * ca, ovA, mBlend);
+                    float outB = SubRowResult(bBl[pairIdx], dst, art * cb, ovA, mBlend);
+                    baseTex[i + c] = ToByte(outB + (outA - outB) * blendA);
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// What one sub-row alone would leave in the base at this texel, on 0–1.
+    /// <para/>
+    /// <see cref="RowBlend.Paint"/> composites by the overlay's own alpha, because it brings its own
+    /// colour; every other mode composites by the clip, because it only recolours what is already there.
+    /// That difference is the whole of what a print is, and it is why the two cannot share one strength.
+    /// </summary>
+    private static float SubRowResult(RowBlend mode, float dst, float src, float ovA, float clipped)
+    {
+        if (mode == RowBlend.Paint) return dst * (1f - ovA) + src * ovA;
+        if (clipped <= 0f) return dst;
+        return dst * (1f - clipped) + BlendChannel(mode, dst, src) * clipped;
     }
 
     // Partial-derivative linear add for normal maps: XY (tangent/bitangent) components are decoded
@@ -10029,6 +10302,129 @@ public class CompositorService : IDisposable
     /// </summary>
     private static string MaskFallbackKey(string mtrlGamePath, string modDir) => mtrlGamePath + '\0' + modDir;
 
+    /// <summary>Does any row here composite as a print rather than painting?</summary>
+    internal static bool AnyBlendRow(Dictionary<int, ColorTableRowOverride> rows)
+        => rows.Values.Any(r => r.A.Blend != RowBlend.Paint || r.B.Blend != RowBlend.Paint);
+
+    /// <summary>
+    /// The same question asked of the presets, for the composite sort — which runs long before any row
+    /// dictionary is built.
+    /// </summary>
+    internal static bool AnyBlendRow(List<ColorTableRowPreset>? presets)
+        => presets != null && presets.Any(p => (p.SubRowA?.Blend ?? RowBlend.Paint) != RowBlend.Paint
+                                            || (p.SubRowB?.Blend ?? RowBlend.Paint) != RowBlend.Paint);
+
+    /// <summary>
+    /// Does EVERY cell this overlay can resolve to print? A pure print lays down no surface at all, so the
+    /// phases that describe a surface — relief, ambient occlusion, skin-tone suppression — have nothing to
+    /// describe and are skipped outright rather than run against an all-zero coverage.
+    /// <para/>
+    /// An index cell nobody configured resolves to a default row, and a default row paints, so one
+    /// unconfigured cell is enough to make this false. That is the safe direction: it keeps the surface.
+    /// </summary>
+    internal static bool AllRowsPrint(Dictionary<int, ColorTableRowOverride> rows, bool hasIndex)
+    {
+        if (!hasIndex)
+        {
+            rows.TryGetValue(15, out var r16);
+            return (r16?.A.Blend ?? RowBlend.Paint) != RowBlend.Paint;
+        }
+        for (int p = 0; p < 16; p++)
+        {
+            if (!rows.TryGetValue(p, out var r)) return false;
+            if (r.A.Blend == RowBlend.Paint || r.B.Blend == RowBlend.Paint) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// PAINT COVERAGE: the part of a coverage buffer that actually puts colour on the material, with the
+    /// print rows taken out of it.
+    /// <para/>
+    /// This one idea answers every "does this overlay contribute?" question at once. A print carries no
+    /// colour of its own — it recolours what is already there — so it must not claim territory from the
+    /// group beneath it, must not cast an ambient-occlusion shadow, must not bleach the wearer's skin tone,
+    /// and must not register a glow map. Each of those reads coverage, and each of them gets the right
+    /// answer with no special case once the coverage it reads is this one: for a pure print it is all zero.
+    /// <para/>
+    /// Fractional, not a yes/no: where an index cell lerps between a painting sub-row and a printing one,
+    /// the coverage lerps with it, exactly as the composite itself does.
+    /// <para/>
+    /// Returns the input untouched when nothing prints, so the common path allocates nothing. Never mutates
+    /// its input — the buffers come from the decode cache and are shared.
+    /// <para/>
+    /// <paramref name="hasIndex"/> says whether the overlay DECLARES an index, which is not the same as
+    /// having one in hand: an indexed overlay whose <c>_id</c> failed to load arrives here with a null
+    /// <paramref name="idx"/>, and consulting row 16 as though it were a flat overlay would be a guess about
+    /// texels the index was supposed to route. In that case this returns the coverage unchanged — the
+    /// overlay behaves exactly as it did before blend modes existed — and the caller warns.
+    /// </summary>
+    internal static byte[] PaintCoverage(byte[] cov, byte[]? idx,
+        Dictionary<int, ColorTableRowOverride> rows, int w, int h, bool hasIndex = false)
+    {
+        if (!AnyBlendRow(rows)) return cov;
+
+        if (idx == null)
+        {
+            // Declared an index but has none: say nothing rather than something wrong. All-paint is the
+            // pre-blend behaviour, so a broken _id degrades to "the print does not print" instead of to a
+            // print that claims territory or bleaches skin tone on texels nobody could route.
+            if (hasIndex) return cov;
+
+            // Genuinely flat: every texel resolves to row 16 sub-row A, so it is all or nothing.
+            rows.TryGetValue(15, out var r16);
+            if ((r16?.A.Blend ?? RowBlend.Paint) == RowBlend.Paint) return cov;
+            return new byte[cov.Length];   // a pure print paints nowhere
+        }
+
+        const int Pairs = 16;
+        var fA = new float[Pairs];
+        var fB = new float[Pairs];
+        for (int p = 0; p < Pairs; p++)
+        {
+            var pair = rows.TryGetValue(p, out var r) ? r : new ColorTableRowOverride();
+            fA[p] = pair.A.Blend == RowBlend.Paint ? 1f : 0f;
+            fB[p] = pair.B.Blend == RowBlend.Paint ? 1f : 0f;
+        }
+
+        var dst = (byte[])cov.Clone();
+        // Floored to a whole number of texels: the body reads idx[i + 1], so a buffer that is not a
+        // multiple of four would otherwise let the last iteration read one past the end. Every buffer here
+        // is RGBA today, which is exactly why this is worth pinning rather than assuming.
+        int n = Math.Min(Math.Min(dst.Length, idx.Length), w * h * 4) / 4 * 4;
+        ParallelPixels(0, n, 4, (from, to) =>
+        {
+            for (int i = from; i < to; i += 4)
+            {
+                int   pairIdx = idx[i] / 17;
+                float blendA  = idx[i + 1] / 255f;
+                float frac    = fB[pairIdx] + (fA[pairIdx] - fB[pairIdx]) * blendA;
+                dst[i + 3] = (byte)(dst[i + 3] * frac);
+            }
+        });
+        return dst;
+    }
+
+    /// <summary>
+    /// Does this coverage buffer cover anything at all?
+    /// <para/>
+    /// <see cref="AllRowsPrint"/> is a fast early-out and is deliberately strict — an index cell nobody
+    /// configured paints, so it is rarely true for an indexed overlay. That leaves the per-texel
+    /// <see cref="PaintCoverage"/> as the thing actually deciding, and this is how the surface phases ask it
+    /// whether there is any surface left: without it they run against an all-zero mask, changing nothing but
+    /// still loading the base normal and flagging it dirty for republication.
+    /// <para/>
+    /// Serial and short-circuiting: it returns on the first covered texel, so the ordinary case — an overlay
+    /// that covers something — costs almost nothing.
+    /// </summary>
+    internal static bool AnyCoverage(byte[]? cov)
+    {
+        if (cov == null) return false;
+        for (int a = 3; a < cov.Length; a += 4)
+            if (cov[a] != 0) return true;
+        return false;
+    }
+
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
     {
         var dict = new Dictionary<int, ColorTableRowOverride>();
@@ -10041,12 +10437,14 @@ public class CompositorService : IDisposable
                 if (a.Diffuse != null) (row.A.DiffuseR, row.A.DiffuseG, row.A.DiffuseB) = ParseHex(a.Diffuse);
                 row.A.Emissive = a.Emissive;
                 row.A.Opacity  = a.Opacity;
+                row.A.Blend    = a.Blend;
             }
             if (p.SubRowB is { } b)
             {
                 if (b.Diffuse != null) (row.B.DiffuseR, row.B.DiffuseG, row.B.DiffuseB) = ParseHex(b.Diffuse);
                 row.B.Emissive = b.Emissive;
                 row.B.Opacity  = b.Opacity;
+                row.B.Blend    = b.Blend;
             }
             dict[p.Row - 1] = row; // 1-based JSON → 0-based internal
         }

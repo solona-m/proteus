@@ -191,6 +191,38 @@
     "message": "Basisfarben unverändert — außer unter „Erweitert“, wo „Auf Standard zurücksetzen“ sie überschreibt und „Körper“ eine globale Einstellung ist, die keine Bindung erfasst.",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "Addieren",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "Mischmodus",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiplizieren",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Ineinanderkopieren",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "Auftragen",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "Ersetzen",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "Negativ multiplizieren",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "Wie die Grafik dieser Zeile mit dem kombiniert wird, was bereits auf der Haut liegt.\n\n\"Auftragen\" legt sie darüber – das, was jede Ebene bisher getan hat.\nAlles andere macht diese Zeile zu einem AUFDRUCK: Sie färbt den Stoff, den die\nanderen Ebenen dieses Mods aufgetragen haben, und wird auf deren Form beschnitten –\nein Regenbogen auf einem Netzstoff färbt so die Fäden und lässt die Löcher als Haut.\n\nEin Aufdruck erreicht nur die Ebenen des EIGENEN Mods; fremde Kleidung berührt er nie.\nAuf bloßer Haut trägt er gar nichts auf – ein allein ausgewählter Aufdruck zeigt also\nnichts. Dort ist schlicht nichts, worauf sich drucken ließe.\n\nMultiplizieren kann nur abdunkeln und wirkt auf sehr dunklem Stoff daher kaum – nimm\ndort stattdessen Negativ multiplizieren. Die Farbe dieser Zeile tönt die Grafik weiterhin,\nund ihre Deckkraft ist die Stärke des Aufdrucks.",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "Alle Körper",
     "description": ""

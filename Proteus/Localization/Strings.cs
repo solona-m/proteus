@@ -1109,6 +1109,35 @@ public sealed class ColorsStrings
     public readonly string OpacityTip = Loc.Localize("Colors.Opacity.Tip",
         "Negative fades this row toward transparent; positive pushes it toward opaque.");
 
+    public readonly string Blend = Loc.Localize("Colors.Blend.Label", "Blend");
+
+    public readonly string BlendTip = Loc.Localize("Colors.Blend.Tip",
+        "How this row's art combines with what is already on the skin.\n" +
+        "\n" +
+        "\"Paint\" lays it on top, which is what every layer has always done.\n" +
+        "Anything else makes this row a PRINT: it colours the fabric this mod's\n" +
+        "other layers painted, and is clipped to their shape — so a rainbow on a\n" +
+        "fishnet colours the threads and leaves the holes as skin.\n" +
+        "\n" +
+        "A print only reaches its OWN mod's layers; it never touches another mod's\n" +
+        "clothing. On bare skin it paints nothing at all, so a print selected on its\n" +
+        "own shows nothing — there is nothing there to print on.\n" +
+        "\n" +
+        "Multiply can only darken, so it reads faintly on very dark fabric — use\n" +
+        "Screen there instead. This row's colour still tints the art, and its\n" +
+        "Opacity is the print's strength.");
+
+    /// <summary>Display names for <see cref="RowBlend"/>, in declaration order.</summary>
+    public readonly string[] BlendNames =
+    [
+        Loc.Localize("Colors.Blend.Paint",    "Paint"),
+        Loc.Localize("Colors.Blend.Multiply", "Multiply"),
+        Loc.Localize("Colors.Blend.Screen",   "Screen"),
+        Loc.Localize("Colors.Blend.Overlay",  "Overlay"),
+        Loc.Localize("Colors.Blend.Add",      "Add"),
+        Loc.Localize("Colors.Blend.Replace",  "Replace"),
+    ];
+
     public readonly string Physical    = Loc.Localize("Colors.Section.Physical", "Physical");
     public readonly string ClothSuffix = Loc.Localize("Colors.Section.Physical.ClothSuffix", "— Cloth");
 

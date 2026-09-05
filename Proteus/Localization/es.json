@@ -191,6 +191,38 @@
     "message": "Los colores base no cambian, salvo en Avanzado, donde «Restaurar valores predeterminados» los reescribe y «Cuerpos» es un ajuste global que ningún vínculo captura.",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "Añadir",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "Fusión",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiplicar",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Superponer",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "Pintar",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "Reemplazar",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "Trama",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "Cómo se combina la imagen de esta fila con lo que ya hay sobre la piel.\n\n«Pintar» la coloca encima, que es lo que toda capa ha hecho siempre.\nCualquier otro modo convierte esta fila en un ESTAMPADO: colorea la tela que han\npintado las demás capas de este mod y se recorta a su forma, así que un arcoíris\nsobre una malla colorea los hilos y deja los huecos como piel.\n\nUn estampado solo alcanza las capas de SU PROPIO mod; nunca toca la ropa de otro.\nSobre la piel desnuda no pinta nada, de modo que un estampado seleccionado por sí\nsolo no muestra nada. Es deliberado: ahí no hay nada sobre lo que estampar.\n\nMultiplicar solo puede oscurecer, así que apenas se ve sobre tela muy oscura; usa\nTrama en ese caso. El color de esta fila sigue tiñendo la imagen, y su Opacidad\nes la intensidad del estampado.",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "Todos los cuerpos",
     "description": ""

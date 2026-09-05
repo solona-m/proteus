@@ -191,6 +191,38 @@
     "message": "기본 색상은 그대로입니다. 단 \"고급\"의 \"기본값으로 되돌리기\"는 기본 색상을 덮어쓰며, \"바디\"는 어떤 연결도 기록하지 않는 전역 설정입니다.",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "더하기",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "혼합 모드",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "곱하기",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "오버레이",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "페인트",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "바꾸기",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "스크린",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "이 행의 이미지를 이미 피부에 있는 것과 어떻게 합성할지 정합니다.\n\n\"페인트\"는 그 위에 얹기만 하며, 지금까지 모든 레이어가 해온 방식입니다.\n그 외를 고르면 이 행은 프린트가 됩니다. 같은 모드의 다른 레이어가 칠한\n천을 물들이고 그 모양대로 잘리므로, 망사에 무지개를 올리면 실만 물들고\n구멍은 피부로 남습니다.\n\n프린트는 자기 모드의 레이어에만 닿으며, 다른 모드의 옷은 절대 건드리지 않습니다.\n맨살 위에는 아무것도 칠하지 않으므로 프린트만 선택하면 아무것도 보이지 않습니다.\n의도된 동작입니다. 그 위에 찍을 바탕이 없기 때문입니다.\n\n곱하기는 어둡게만 할 수 있어 아주 어두운 천에서는 거의 보이지 않습니다.\n그럴 때는 스크린을 쓰세요. 이 행의 색은 여전히 이미지를 물들이며,\n불투명도가 프린트의 세기입니다.",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "모든 바디",
     "description": ""
