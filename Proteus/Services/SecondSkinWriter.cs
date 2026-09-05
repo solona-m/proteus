@@ -799,7 +799,7 @@ public static class SecondSkinWriter
                 catch (Exception ex) { diag?.Invoke($"authored cap failed to parse, ignoring: {ex.Message}"); }
                 if (capSrc != null && chosen.Bind != null)
                 {
-                    capUsed = $"{chosen.Name} ({(1f - bestRate) * 100:F0}% placed)";
+                    capUsed = $"{CapBodyName(chosen.Name)} ({(1f - bestRate) * 100:F0}% placed)";
                     diag?.Invoke($"authored cap: using '{chosen.Name}'");
                     var placed = TryPlaceCapFromBind(chosen.Bind, sourceModels, diag, chosen.Cap);
                     // NOT lifted clear of the toenails. Tried that: the cap measured as intersecting the
@@ -7102,6 +7102,23 @@ public static class SecondSkinWriter
         d.Sort();
         median = d[d.Count / 2];
         return d[(int)(d.Count * 0.90f)] - d[(int)(d.Count * 0.10f)];
+    }
+
+    /// <summary>
+    /// Which body a cap is for, from its file name, for saying out loud. The caps are named
+    /// <c>toecap.&lt;body&gt;.mdl</c>, so the body is the part after the last dot - "toecap.neolithe"
+    /// becomes "Neolithe". A name with no body in it is reported as it stands rather than guessed at.
+    /// <para/>
+    /// This exists because the chat line used to print the file stem: "Toe cap: toecap (100% placed)"
+    /// tells the wearer nothing, and on a body whose cap happens to be the unsuffixed one it reads like
+    /// a bug even when the right cap was chosen.
+    /// </summary>
+    private static string CapBodyName(string fileStem)
+    {
+        int dot = fileStem.LastIndexOf('.');
+        if (dot < 0 || dot == fileStem.Length - 1) return fileStem;
+        var body = fileStem[(dot + 1)..];
+        return char.ToUpperInvariant(body[0]) + body[1..];
     }
 
     /// <summary>
