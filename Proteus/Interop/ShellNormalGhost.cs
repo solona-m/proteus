@@ -68,6 +68,17 @@ public sealed unsafe class ShellNormalGhost : IDisposable
 
     public void Clear() => _active = false;
 
+    /// <summary>
+    /// Whether this owns, or is about to own, any shell normal slot.
+    /// <para/>
+    /// Read by <see cref="ShellCoverageFade"/>, which swaps the same <c>Texture**</c> slots for a different
+    /// reason. Two owners of one slot is how a texture gets freed while the other still has it published,
+    /// so the light-driven fade stands aside for the locator entirely. It stays true until the last swap has
+    /// been handed back, not merely until the highlight clears: a slot this still holds is a slot whose
+    /// original only this knows.
+    /// </summary>
+    public bool IsBusy => _active || _applied.Count > 0;
+
     private void OnFramework(IFramework fw) => Apply(objects.LocalPlayer?.Address ?? 0);
 
     private void Apply(nint addr)

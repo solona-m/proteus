@@ -63,6 +63,13 @@ Authors a basic overlay mod without leaving the game. Give it a name, an author,
 
 Texture slots the chosen material can't actually use are greyed out.
 
+Tick **Make this art glow** to turn a plain diffuse — art on a transparent background — into a glowing tattoo, with no hand-written metadata. The glow's colour comes from the picture itself, per pixel, so there's nothing else to set. Two behaviours:
+
+- **Always glow** — the tattoo is there in daylight and glows day and night. Kept gentle on purpose: this shader adds one flat colour across the whole tattoo rather than following the picture, so a strong value bleaches the art in daylight. For a brighter glow at night without that, raise **Glow** in Colors and set **Fades in light**.
+- **Only in the dark** — nothing in daylight, glowing in an unlit room, the way Atramentum Luminis tattoos behaved. The art fades as the light on you rises and takes its own surface with it, so there's skin and nothing else in the bright.
+
+Skin can't emit, so a glowing overlay renders on a second skin rather than being painted into yours — which is why the checkbox is only available on a skin or face target, and only once you've picked a diffuse.
+
 #### Import
 
 Takes a mod pack and converts it to a Proteus mod. Three types are supported:
@@ -175,6 +182,8 @@ Each row has two sub-rows:
 For each sub-row:
 - **Diffuse** (color swatch) — multiplicative tint applied to the overlay. White (`#FFFFFF`) shows the overlay's natural colors. Any other color tints it. You can recolor a plain grayscale stocking by picking a color here.
 - **Emissive** (0–1 slider) — how strongly the overlay glows, with its own color. Skin can't glow, so setting this switches the overlay to a cloth layer, the same way a sphere map does.
+- **Fades in light** (0–100% slider) — how much the light around you takes that glow away. 0% glows the same everywhere. 100% is a dark-only glow: full brightness in an unlit room, nothing at all under a midday sky or beside a lamp. It's set per row, so one half of a tattoo can be dark-only while the other half is always there.
+- **Hide in light** (checkbox) — makes this row's opacity follow its glow, so where the light has taken the glow away there's nothing left but skin. Without it a dark-only tattoo still leaves its own colour behind — usually black — and reads as a silhouette in daylight.
 - **Opacity** (-100 to 100 slider) — 0 is the mod default. -100 is transparent. 100 is fully opaque.
 - **Sphere map / Metalness / Roughness / Specular** — available on Cloth. Setting any of them switches the overlay to a second skin.
 

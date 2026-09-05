@@ -167,6 +167,10 @@
     "message": "[Proteus] 你的 {1} 上有部分层无法放置（层数：{0}）。它们不能进行种族形变，因此需要一个 Proteus 可以整体替换的栏位：空出一个戒指栏位（左右手皆可）或脸部装饰栏位，它们就会显示。",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] 你的 {1} 上有部分层被跳过（层数：{0}）——你的角色没有在绘制该部位，因此没有可供裁切的来源。请检查这些叠加层设置的 Surface 是否与你实际佩戴的脸部或部位一致。",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "高级",
     "description": ""
@@ -283,6 +287,14 @@
     "message": "{0}：{1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "有光时隐藏",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "让这一行的不透明度跟随发光：不再发光的地方就只剩皮肤。\n不启用时，仅在黑暗中发光的行仍会留下自身的颜色（通常是黑色），\n于是图案在白天看起来像一块暗斑。",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "让此子行的网格在角色身上发光，便于你在游戏中找到它。\n再次点击可停止。",
     "description": ""
@@ -297,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "点亮此子行在角色皮肤上对应的区域，便于你在游戏中找到它。\n再次点击可停止。（首次生成需要片刻。）",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "遇光变淡",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "场景光线会削弱这一行发光的程度。\n0% 表示在哪里都一样亮。100% 是只在黑暗中发光：在没有灯的房间里最亮，\n在正午的天空下或灯旁则完全看不见。\n按行设置，因此纹身的一半可以只在暗处发光，另一半始终可见。",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -345,6 +365,14 @@
   },
   "Colors.None": {
     "message": "无",
+    "description": ""
+  },
+  "Colors.OneSided.Label": {
+    "message": "这份贴图是刻意单侧的",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "仅当贴图只应出现在单侧时才开启，例如一条手臂上的纹身、一侧脸颊上的疤痕。\n其他情况请保持关闭，包括普通皮肤。\n原版身体和原版脸部让左右两侧使用相同的像素，因此为它们绘制的贴图会被对折：\n只保留一侧并镜像到另一侧。对称的图案看不出来，单侧的图案则会被毁掉。\n开启后，Proteus 会通过一个专属图层来渲染该叠加，其左右两侧分别读取你贴图的\n左右两半，因此两侧都会保留。\n这无法自动判断。真实皮肤从来都不对称——雀斑和痣在左右并不相同——只有作者知道\n这种差异是刻意的还是细节。",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -477,6 +505,10 @@
   },
   "Colors.SubRowB.Fmt": {
     "message": "第 {0} 行 B",
+    "description": ""
+  },
+  "Colors.SubRowUnused": {
+    "message": "没有任何像素采样此列 — 图像的索引在各处都选择另一列，因此在这里的修改不会显示。",
     "description": ""
   },
   "Colors.Tiling.Label": {
@@ -727,6 +759,14 @@
     "message": "名为“{0}”的模组文件夹已存在。",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "无法读取 {0} 来生成发光。请改用 PNG。",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "发光叠加层的颜色取自图案，因此需要一张漫反射贴图。",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0} 文件已不存在：{1}",
     "description": ""
@@ -755,6 +795,46 @@
     "message": "写入模组失败：{0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "这张脸部贴图按左右分成两半",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "仅当脸部贴图是按两半绘制时才勾选：角色的右侧画在图像的右半边，左侧画在左半边。\n普通脸部贴图让两侧脸颊使用相同的像素，因此只在一侧的标记无法存在——分成两半的贴图由 Proteus 通过脸部图层渲染。\n对任何普通脸部贴图请保持关闭。",
+    "description": ""
+  },
+  "Create.Glow.Always": {
+    "message": "始终发光",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "纹身在白天可见，昼夜都会发光。\n刻意保持柔和：该着色器会在整个纹身上叠加单一的平涂颜色，而不是跟随图案，\n因此数值过高会让图案在白天泛白。\n若想夜里更亮，请在“颜色”中提高发光并设置“遇光变淡”。",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "仅在黑暗中",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "白天什么都没有，在没有灯的房间里发光 —— 这正是 Atramentum Luminis 纹身的效果。\n随着照到你身上的光线增强，图案会淡去，并把自己的表面一起带走，\n因此明亮处只剩下皮肤。\n需要在设置中启用“对场景光线作出反应”（默认开启）。",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "让这幅图案发光",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "请先选择漫反射贴图 —— 发光的颜色取自图案本身。",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "只有皮肤和面部目标可以发光。发光叠加层绘制在从你身体切出的第二层皮肤上，\n而装备、饰品或武器没有可供切出的部分。",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "让图案发光。颜色逐像素取自图片本身 —— 没有别的需要设置。\n皮肤无法发光，因此发光叠加层会绘制在第二层皮肤上，\n而不是画进你的皮肤里。其他方面完全相同，\n之后可以用“颜色”里的发光滑块调整。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "创建一个基础的 Proteus 叠加模组。至少选择一张贴图；Proteus 会写入一个新的 Penumbra 模组并将其打开，便于你启用和调整。",
     "description": ""
@@ -773,6 +853,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "已创建“{0}”，已启用并在 Penumbra 中打开。",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "已创建“{0}”并在 Penumbra 中打开，但未能启用 —— 请在那里手动启用。",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -797,6 +881,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "重新执行身体检测并覆盖该字段。",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "已创建“{0}” —— 正在等待 Penumbra 加载完成…",
     "description": ""
   },
   "Create.Slot.Diffuse": {
@@ -845,6 +933,70 @@
   },
   "Create.WholeSkin.Tip": {
     "message": "当你转换的是一整套皮肤 Mod、而不是画在皮肤上的东西时，请勾选此项。\n贴图看起来像皮肤时 Proteus 会替你勾上；你自己的选择始终优先。\n由此有三个结果。法线贴图会替换材质上已有的那一张，而不是叠加上去——否则它会叠在下面\n同一张贴图上，每个毛孔和褶皱都被应用两次，身体相对脸部显得平板，脖子接缝处出现一条明显的线。\n其次是肤色抑制会关闭，让穿戴者的肤色透出来：抑制的用途是避免布料被重新染色，\n而这套贴图本身就是皮肤。\n第三是「身体」会设为「所有身体」，让这套皮肤也能应用到原版身体上。",
+    "description": ""
+  },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} 个路径",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "整合包声明它是为 {0} 绘制的，Proteus 会将其适配到你穿着的身体。",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "身体",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "将图像绘制到哪个身体材质上。能识别出身体时 Proteus 从整合包取值，否则取你当前穿着的身体 — 若你知道它是为另一种身体制作的，请自行更改。",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} 发光",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "导入发光皮肤包（不含模型、只有发光图像的 .pmp）。其发光会变成可重新上色、可调暗的 Proteus 叠层，无需着色器模组。",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "只导入发光图像。整合包自带的身体材质会被舍弃：它们只有配合替换过的皮肤着色器才有效，而 Proteus 会把发光绘制到你已经在用的肌肤上。",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus 没有种族或性别过滤：它会绘制到任何使用相同材质身体的角色上。对于非目标角色，请在 Penumbra 中关闭此模组。",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "此整合包中没有任何贴图包含发光遮罩。",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "仅导入一次，适用于：\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "无法读取该包：{0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "正在读取此整合包的贴图…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "已跳过",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\n已跳过：{1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "贴图：{0} / {1}",
     "description": ""
   },
   "Export.Dialog.Filter": {
@@ -1037,6 +1189,90 @@
   },
   "Import.Dialog.Title": {
     "message": "选择整合包",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "从发光皮肤包“{0}”导入。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "该模组名称没有可用字符——请使用字母或数字。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "已存在名为“{0}”的模组文件夹。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "该包已不存在：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "无法访问 Penumbra 的模组目录。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "第二次读取时该整合包的贴图均无法解析，因此未写入任何内容。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "此包中没有可导入的内容。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "“Proteus”为保留名称——请另选模组名称。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "写入模组失败：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "发光纹身",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "发光纹身 — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}{2}，但 Proteus 未能为你开启。请在 Penumbra 的“{3}”中勾选，否则不会绘制任何内容。",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "已导入“{0}” — 贴图：{1}{2}。发光已开启，且无需着色器模组。可在 Colors 中重新上色或调暗，也可在 Penumbra 的“{3}”中关闭。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "整合包的清单中提到了它，但压缩包内没有“{0}”。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "它的 Alpha 通道是空的，因此没有标记出任何发光区域。自发光贴图把发光的形状放在那里，没有形状的贴图不是纹身。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "它只有 {0}×{1}，属于着色器的效果贴图或调色板，而不是绘制在身体上的图像。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "无法解码其像素。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus 不认识身体“{0}”，在角色加载前也无法询问它穿的是哪一种。请登录后重新打开此整合包。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus 不知道此整合包的身体 UV，因此会将图像原样绘制到你当前穿着的身体（{0}）上，不做缩放。如果该包是为另一种身体绘制的，显示会出错 — 若你知道，请在下方更改目标身体。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "“{0}”在身体的 {1:P0} 上发光。这是允许的，但通常意味着该贴图并没有真正的 Alpha 通道 — 使用前请先检查效果。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "此整合包中没有可导入的内容 — 请参见上方的原因。",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {
@@ -1711,8 +1947,12 @@
     "message": "当确认有其他模组覆盖了 Proteus 正在合成的皮肤贴图时——例如自带一份身体贴图的\n纹身包或皮肤包——自动将 Proteus 的 Penumbra 优先级提升到其之上，并在聊天中说明。\n\n这种覆盖平时完全看不出来：叠加层只生效一半（凹凸出现了，颜色没有），\n而且每一行日志读起来都像是成功。\n\n只有当你确实希望其他模组在 Proteus 合成的路径上取胜时才关闭此项。\nProteus 从不凭猜测行动，只在确认发生覆盖时才会处理。",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "禁用自动重绘",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "自动重绘",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "让 Proteus 自行跟上世界的变化：在切换区域、更换装备和重绘之后重新合成，然后重新\n加载你的角色，让你能看到结果。\n\n关闭后 Proteus 基本变为手动：在你自己改动之前，它不会合成，也不会重新加载你。无论\n开或关，你当前的外观都会保留，你所做的编辑也依然生效——只是要等到有什么把你重绘之\n后才看得到：切换区域、更换装备，或 Penumbra 的 Redraw 按钮。\n\n关闭时有一个例外：如果你正穿着装备层，更换装备仍会重新合成，以免承载该层的物品被\n遗留在你已经脱下的东西上。即便如此，也仍然不会为此重绘你。\n\n只涵盖由 Proteus 发起的操作。Glamourer 的 \"Auto-Reload Gear\" 会在任何模组的设置发生\n变化时重新加载你，与此选项无关。",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1739,14 +1979,6 @@
     "message": "通过 Glamourer 的原地装备重载来刷新贴图，而不是完整重绘，从而避免\n消失/重现的闪烁。当 Glamourer 无法处理时会自动回退到完整重绘。",
     "description": ""
   },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "跳过无变化的重新合成",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "当没有任何影响输出的内容发生变化时，允许由切换区域或重绘触发的重新合成\n提前结束。你自己所做的更改始终会重新合成。只有在某项修改没有生效、\n需要排除此因素时才关闭。",
-    "description": ""
-  },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "寄载于隐形眼镜（保持戒指空闲）",
     "description": ""
@@ -1761,6 +1993,38 @@
   },
   "Settings.Hosting.RestoreAccessory.Tip": {
     "message": "强制完整重绘，以重新加载第二层皮肤所替换的任何戒指或手镯，将其还原为\n原始模型。若禁用或切换后装备外壳仍卡在某件饰品上，请使用此功能。",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled": {
+    "message": "对场景光线作出反应",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "让标记为“遇光变淡”的行随着照到你身上的光线增强而变暗。\n关闭时，所有发光都会像以前一样在任何地方保持作者设定的亮度。\n两种情况下都不会重新生成任何文件 —— 这是通过实时材质生效的。",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "光照强度",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 表示漆黑（暗处专用发光最亮），1 表示白昼（它们完全消失）。",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "手动设置光照强度",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "忽略场景，改用滑块的数值。\n这是不用等到黄昏就能看出暗处专用发光效果的最快方式，\n也适合团队姿势模式 —— 那里重要的是你自己布置的灯光。",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "读数 {0:0.00} —— 天空 {1:0.00}，灯光 {2:0.00}（{4} 个中有 {3} 个照到）",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
     "description": ""
   },
   "Settings.Output.Compression.Label": {
@@ -1805,6 +2069,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "寄载",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "对光线敏感的发光",
     "description": ""
   },
   "Settings.Section.Output": {

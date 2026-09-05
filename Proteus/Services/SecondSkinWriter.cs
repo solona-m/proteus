@@ -513,15 +513,28 @@ public static class SecondSkinWriter
     /// <param name="EnabledShapes">Shape keys the game has enabled on this model, to bake.</param>
     /// <param name="UvConv">Vertex UV conversion into the shell's space. Null = already there, leave alone.</param>
     /// <param name="DropConnectors">
-    /// Drop this source's redundant connector geometry. A Neolithe-tuned heuristic (see the emit loop), so
-    /// it is only ever right for a BODY source — pointed at a face, tail or ear it deletes real geometry.
+    /// Drop this source's redundant connector geometry. A body-shaped heuristic (see the emit loop), so it
+    /// is only ever right for a BODY source — pointed at a face, tail or ear it deletes real geometry.
+    /// </param>
+    /// <param name="OtherPartBands">
+    /// The vertical extent of every OTHER part in this shell. A connector ring is only redundant because a
+    /// neighbouring part already covers it, so this is what makes that test answerable rather than assumed
+    /// — see the emit loop. Null or empty means nothing else covers anything, and no ring is dropped.
+    /// </param>
+    /// <param name="UnmirrorSides">
+    /// This source's UV is MIRRORED (both sides of the body share one layout) and <paramref name="UvConv"/>
+    /// is expected to send the two sides to different halves of the shell's sheet. Costs a per-mesh pass
+    /// over positions and indices to work out which side each vertex is on, so it is only set when a layer
+    /// actually needs it — see <see cref="SurfaceMirror.AssignSides"/>.
     /// </param>
     public readonly record struct SourceSpec(
         byte[] Model,
         Func<string, bool>? KeepMaterial = null,
         HashSet<string>? EnabledShapes = null,
-        Func<float, float, (float U, float V)?>? UvConv = null,
-        bool DropConnectors = false);
+        UVRemapService.UvConversion? UvConv = null,
+        bool DropConnectors = false,
+        bool UnmirrorSides = false,
+        IReadOnlyList<(float Lo, float Hi)>? OtherPartBands = null);
 
     /// <summary>
     /// One entry of a mesh's vertex declaration: where and in what format a given attribute (Usage) sits
@@ -591,6 +604,13 @@ public static class SecondSkinWriter
         public string[] AttrNames = [];
         public ushort[][] BoneTables = [];
         public ushort[] SubmeshBoneMap = [];
+
+        /// <summary>
+        /// Where the shape block starts — i.e. where the bone tables ended. Recorded because that position
+        /// is version-dependent (v5 and v6 encode bone tables differently) and every block after it is
+        /// placed relative to it, so it is the single number that says whether a model was walked correctly.
+        /// </summary>
+        public int ShapeBlock;
         public ushort Lod0MeshIndex, Lod0MeshCount;   // only LOD0 meshes are shelled
         public byte[] BoneBBoxes = [];    // BoneCount * 32
         public byte[] ModelBBoxes = [];   // 4 * 32
@@ -607,7 +627,14 @@ public static class SecondSkinWriter
         // Set when THIS source's UVs are in a different body UV space than the shell's (a bibo-UV heel's
         // foot beside a gen3 torso). Rewrites each vertex's uv0 into the shell space so one art set —
         // already remapped into that space — lands correctly on every part. Null = same space, leave alone.
-        public Func<float, float, (float U, float V)?>? UvConv;
+        public UVRemapService.UvConversion? UvConv;
+
+        // This source's UV is mirrored and UvConv separates the two sides — see SourceSpec.UnmirrorSides.
+        public bool UnmirrorSides;
+
+        // The vertical extent of every OTHER part in this shell — what makes "is this connector redundant?"
+        // answerable. See SourceSpec.OtherPartBands and CoveredByAnotherPart.
+        public IReadOnlyList<(float Lo, float Hi)>? OtherPartBands;
 
         // Which of this source's meshes belong in the shell, and whether its connector heuristic runs.
         // Both per-source: see SourceSpec.
@@ -652,7 +679,7 @@ public static class SecondSkinWriter
         IReadOnlyList<AuthoredCapSet>? authoredCaps = null,
         // Per-source UV-space converter, parallel to `sources`; null entries are already in shell space.
         // See Source.UvConv.
-        IReadOnlyList<Func<float, float, (float U, float V)?>?>? uvConverters = null)
+        IReadOnlyList<UVRemapService.UvConversion?>? uvConverters = null)
         => Build(
             sources.Select((m, i) => new SourceSpec(
                 m,
@@ -692,6 +719,8 @@ public static class SecondSkinWriter
             var en = sources[i].EnabledShapes;
             parsed[i].EnabledShapes = en;
             parsed[i].UvConv = sources[i].UvConv;
+            parsed[i].UnmirrorSides = sources[i].UnmirrorSides;
+            parsed[i].OtherPartBands = sources[i].OtherPartBands;
             parsed[i].Keep = sources[i].KeepMaterial ?? IsBodySkinMaterial;
             parsed[i].DropConnectors = sources[i].DropConnectors;
             // Warn only on the failure case: an enabled shape the .mdl doesn't actually contain (nothing to
@@ -1009,7 +1038,8 @@ public static class SecondSkinWriter
         void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended, bool dropConnectors,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
-                      bool clearAttrs = false, CapUvPlan? capUv = null)
+                      bool clearAttrs = false, IReadOnlyList<(float Lo, float Hi)>? otherBands = null,
+                      CapUvPlan? capUv = null)
         {
             var s = src.S;
             uint U32(int o) => BitConverter.ToUInt32(s, o);
@@ -1358,9 +1388,27 @@ public static class SecondSkinWriter
                 // BEFORE coverage trimming — read it only when a layer actually asks for a cap.
                 bool wantCap = cov is { ToeCap: not null } && cov.ToeCapStrength > 0f;
                 var capTris = wantCap ? MeshTriangles(src, srcSubIdx, srcSubCount) : null;
+                // Which side of the body each vertex is on, when the conversion needs to tell them apart.
+                // Read from the triangles rather than each vertex's own X, because the midline vertices —
+                // exactly the ones a mirrored layout puts a UV seam through — sit at x ~ 0 and can't answer
+                // for themselves. Only computed when a layer actually un-mirrors; otherwise it is a pass over
+                // positions and indices for nothing.
+                sbyte[]? sides = null;
+                if (src.UnmirrorSides && src.UvConv != null)
+                {
+                    sides = MeshSides(src, m, vc, decl, vbo, bs, out int sideConflicts, out int sideStraddling);
+                    if (sideConflicts > 0 || sideStraddling > 0)
+                        // Not fatal: a disputed vertex converts as if it were on the +X side, which is the
+                        // behaviour it had before un-mirroring existed. Reported because a mirrored layout
+                        // is not supposed to have either (measured zero on every vanilla body part), so a
+                        // count here means this surface is laid out in a way this was not measured against.
+                        diag?.Invoke($"mesh {m}: {sideConflicts} vertex(es) claimed by both sides and "
+                                   + $"{sideStraddling} triangle(s) straddling the midline — those keep the +X half");
+                }
+
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
-                    out capSrcPos, out capOutPos, out capPlan, cov, capTris, diag,
+                    out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, diag,
                     buildCapGeometry: capSrc == null);
                 if (src.UvConv != null) uvMoved += vc;
 
@@ -1414,6 +1462,15 @@ public static class SecondSkinWriter
                 }
             }
 
+            // The biggest submesh in this mesh, as the scale everything else is judged against — see the
+            // connector test below for why an absolute triangle count is the wrong yardstick.
+            uint largestSub = 0;
+            for (int su = 0; su < srcSubCount; su++)
+            {
+                uint c = U32(src.SubmeshStart + (srcSubIdx + su) * 16 + 4) / 3;
+                if (c > largestSub) largestSub = c;
+            }
+
             // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
             var keptPerSub = new List<ushort[]>();
             var used = new bool[vc];
@@ -1433,11 +1490,52 @@ public static class SecondSkinWriter
                 uint so = U32(ss), sc = U32(ss + 4);
                 var keep = new List<ushort>();
 
-                // Drop redundant connector geometry on these bodies (Neolithe): the thin seam RINGS at the
-                // joints (wrist/ankle/…, ~100-120 tris — real skin parts are 800+), plus the mesh's LAST
-                // submesh (a duplicate variant, e.g. the second calf). Kept empty ⇒ contributes nothing;
-                // never applied to a single-submesh mesh (that IS the whole part).
-                if (dropConnectors && srcSubCount > 1 && (sc / 3 < 200 || su == srcSubCount - 1))
+                // Drop redundant connector geometry. TWO shapes of redundancy, and they are redundant
+                // against DIFFERENT things — which is the whole reason they are tested separately here:
+                //
+                //  · a thin seam RING at a joint (wrist/ankle/…), redundant because the NEIGHBOURING PART
+                //    draws the same stretch of body;
+                //  · the mesh's LAST submesh, a duplicate variant (Neolithe's second calf), redundant
+                //    because a SIBLING SUBMESH of this same mesh already draws it.
+                //
+                // Kept empty ⇒ contributes nothing; never applied to a single-submesh mesh (that IS the
+                // whole part).
+                //
+                // "Small" is RELATIVE to this mesh's own largest submesh, not the flat "< 200 triangles" this
+                // used to be. That threshold was read off Neolithe, whose real skin parts run 800+ triangles,
+                // and it silently ate whole body regions from any lower-poly source: gear that ships its own
+                // skin cuts it far coarser — Rinoa's exposed torso is 501 triangles ALL IN, so its neck (20)
+                // and its elbow (144) both looked like rings and vanished.
+                //
+                // And "redundant" is then CHECKED rather than assumed. A ring is only redundant because a
+                // neighbouring part covers the same band of the body; the ring at the top of a hand model is
+                // covered by the leg model above it, while Rinoa's neck has nothing above it at all. Without
+                // this the neck is indistinguishable from a wrist ring by shape or size — 20 triangles in a
+                // thin band at the part's own top edge is exactly what a seam ring looks like.
+                // A NULL band list means the caller told us nothing about the rest of the shell, so there is
+                // no redundancy to test and the old shape-only judgement stands. An EMPTY one is a real
+                // answer — this part is alone, nothing can be covering it, so no ring of it is redundant.
+                //
+                // The duplicate variant does NOT get that same test, and running it against the parts was a
+                // bug with a very visible face: no other part of a shell goes anywhere near the middle of a
+                // shin, so Neolithe's second calf (2184 triangles, y 0.14-0.41) always read as "nothing
+                // covers this", and the shell emitted it INSIDE the calf already there — a doubled sheer
+                // stocking from the ankle to below the knee. It is asked about its siblings instead, which
+                // is what it actually duplicates.
+                //
+                // SIZE is what separates the two, so the branches are exclusive on it rather than merely
+                // ordered. Being last is a weak signal on its own — a source is free to order its seam ring
+                // last, and a ring at a mesh's own top edge is always nested inside that mesh's main
+                // submesh, so a sibling test alone would delete it and hand Rinoa her bare neck straight
+                // back. A duplicate variant is a body region and reads as one: Neolithe's second calf is
+                // half its mesh's largest submesh, where the ankle ring beside it is a fortieth.
+                bool ringLike = sc / 3 < largestSub / 10;
+                bool duplicateVariant = !ringLike && su == srcSubCount - 1;
+                if (dropConnectors && srcSubCount > 1
+                    && (ringLike
+                        ? otherBands == null || CoveredByAnotherPart(src, decl, vbo, bs, so, sc, otherBands)
+                        : duplicateVariant
+                          && CoveredBySibling(src, decl, vbo, bs, srcSubIdx, srcSubCount, su, hiddenAttrs)))
                 {
                     keptPerSub.Add(keep.ToArray());
                     continue;
@@ -3450,7 +3548,7 @@ public static class SecondSkinWriter
                     // cutDef, not def: the toe-cap cut is applied through the layer's coverage argument.
                     // DropConnectors is per-source now, off the SourceSpec.
                     EmitMesh(src, m, matIndex, push, preserve: false, cov: cutDef, mapBase, ref mapAppended,
-                        dropConnectors: src.DropConnectors);
+                        dropConnectors: src.DropConnectors, otherBands: src.OtherPartBands);
                 }
             }
 
@@ -3569,7 +3667,18 @@ public static class SecondSkinWriter
         uint stackSize = (uint)(meshCount * DeclSize);
 
         var ms = new MemoryStream();
-        ms.Write(head.S, 0, 0x44);                                  // ModelFileHeader (patched below)
+        // ModelFileHeader, copied from source 0 and patched below — EXCEPT the version, which is forced to
+        // v6 because that is the only bone-table format this writer emits (see WriteBoneTablesV6).
+        //
+        // Copying the version verbatim made the output describe itself wrongly the moment source 0 was a v5
+        // model: a v5 header over v6 bone tables. The game then reads the tables as v5's fixed 132-byte
+        // structs, every mesh's table comes out as unrelated bytes, and each vertex weights to whatever joint
+        // those bytes happen to name — the whole shell flails. It stayed hidden while every source was v6;
+        // gear-bundled vanilla skin (Rinoa's top is v5, and sorts first) is what put a v5 model at index 0.
+        var fileHeader = new byte[0x44];
+        Array.Copy(head.S, fileHeader, 0x44);
+        BitConverter.TryWriteBytes(fileHeader.AsSpan(0), MdlVersionV6);
+        ms.Write(fileHeader);
         for (int i = 0; i < meshCount; i++) ms.Write(declOut[i]);   // each mesh's own (source) declaration
         ms.Write(new byte[4]);                                      // string count (unused)
         Span<byte> tmp4 = stackalloc byte[4];
@@ -3794,10 +3903,20 @@ public static class SecondSkinWriter
         return false;
     }
 
+    /// <summary>First .mdl version with the Dawntrail bone-table layout (a header array plus a shared index
+    /// pool). Anything older stores a fixed <see cref="V5BoneTableBytes"/>-byte struct per table.</summary>
+    private const uint MdlVersionV6 = 0x01000006;
+
+    /// <summary>v5 bone table: <c>u16 BoneIndex[64]</c> then <c>u32 BoneCount</c>.</summary>
+    private const int V5BoneTableBytes = 132;
+
     internal static Source Parse(byte[] s)
     {
         uint U32(int o) => BitConverter.ToUInt32(s, o);
         ushort U16(int o) => BitConverter.ToUInt16(s, o);
+
+        // Dawntrail (v6) or earlier (v5). Only the bone-table block differs — see the read below.
+        bool isV6 = U32(0) >= MdlVersionV6;
 
         ushort declCount = U16(12);
         uint vtxOff = U32(16), idxOff = U32(28);
@@ -3842,10 +3961,19 @@ public static class SecondSkinWriter
         int boneOffStart = matOffStart + matCount * 4;
         int p = boneOffStart + boneCount * 4;
 
+        // Bounds-guarded because a caller cannot always vouch for the offset: the shape block below is
+        // documented as leaving Shapes empty on a malformed block, and it reads a NAME before it can judge
+        // anything — so without this an offset outside the string table throws out of the whole parse
+        // instead, taking the entire second-skin build with it. An empty name simply fails to match any
+        // enabled shape, which is the "leaves Shapes empty" behaviour that block already intends.
         string Str(uint rel)
         {
-            int o = strBlock + (int)rel, e = o;
-            while (s[e] != 0) e++;
+            int o = strBlock + (int)rel;
+            // >= strSize, not > : an offset EQUAL to the block size is one past its last byte, which lands on
+            // the model header and reads its bytes back as a name.
+            if (rel >= strSize || o < 0 || o >= s.Length) return "";
+            int e = o;
+            while (e < s.Length && s[e] != 0) e++;
             return Encoding.ASCII.GetString(s, o, e - o);
         }
 
@@ -3856,18 +3984,47 @@ public static class SecondSkinWriter
         var attrNames = new string[attrCount];
         for (int i = 0; i < attrCount; i++) attrNames[i] = Str(U32(attrStart + i * 4));
 
-        // v6 bone tables — offset is in dwords, relative to each table's own header.
+        // ── Bone tables ──────────────────────────────────────────────────────
+        // The ONE block whose layout changed at Dawntrail, and everything after it — the shape block, the
+        // submesh bone map, the bounding boxes — is positioned relative to its end. Reading a v5 model with
+        // the v6 layout walks the wrong distance and puts every later read mid-file: the shape block comes
+        // out as arbitrary bytes and a shape's name offset lands outside the string table. Mods still ship
+        // v5 models, so this is reached by ordinary gear, not by anything exotic.
         var tables = new ushort[boneTableCount][];
-        for (int i = 0; i < boneTableCount; i++)
+        if (isV6)
         {
-            int headerPos = p + i * 4;
-            ushort off = U16(headerPos), size = U16(headerPos + 2);
-            int data = headerPos + off * 4;
-            var t = new ushort[size];
-            for (int k = 0; k < size; k++) t[k] = U16(data + k * 2);
-            tables[i] = t;
+            // Header array of { u16 offsetInDwords, u16 count } — the offset is relative to the table's OWN
+            // header — followed by one pool shared by every table.
+            for (int i = 0; i < boneTableCount; i++)
+            {
+                int headerPos = p + i * 4;
+                ushort off = U16(headerPos), size = U16(headerPos + 2);
+                int data = headerPos + off * 4;
+                var t = new ushort[size];
+                for (int k = 0; k < size; k++) t[k] = U16(data + k * 2);
+                tables[i] = t;
+            }
+            p += boneTableCount * 4 + U16(mh + 44) * 2;             // headers + BoneTableArrayCountTotal
         }
-        p += boneTableCount * 4 + U16(mh + 44) * 2;                 // headers + BoneTableArrayCountTotal
+        else
+        {
+            // Fixed struct per table, no pool: u16 BoneIndex[64] then u32 BoneCount.
+            for (int i = 0; i < boneTableCount; i++)
+            {
+                int at = p + i * V5BoneTableBytes;
+                // CLAMPED both ways. BoneCount is read straight out of the file, so a model that isn't
+                // really v5 — truncated, repacked by a broken tool, or misaligned for any reason — puts
+                // arbitrary bytes here. Math.Min alone bounds only the top: a value past int.MaxValue casts
+                // NEGATIVE, passes the upper clamp untouched, and `new ushort[negative]` throws out of Parse
+                // and takes the whole shell build with it. The v6 arm cannot do this because its count is a
+                // ushort; this one has to say so explicitly.
+                long declared = at + V5BoneTableBytes <= s.Length ? U32(at + 128) : 0;
+                var t = new ushort[Math.Clamp(declared, 0, 64)];
+                for (int k = 0; k < t.Length; k++) t[k] = U16(at + k * 2);
+                tables[i] = t;
+            }
+            p += boneTableCount * V5BoneTableBytes;
+        }
 
         // ── Shape (morph) block ──────────────────────────────────────────────
         // Layout: Shape[shapeCount] (16 B) then ShapeMesh[shapeMeshCount] (12 B) then ShapeValue[..] (4 B).
@@ -3957,6 +4114,7 @@ public static class SecondSkinWriter
             AttrNames = attrNames,
             BoneTables = tables,
             SubmeshBoneMap = map,
+            ShapeBlock = shapeBlock,
             BoneBBoxes = boneBB,
             ModelBBoxes = modelBB,
             Radius = BitConverter.ToSingle(s, mh),
@@ -4112,12 +4270,157 @@ public static class SecondSkinWriter
     /// there is no conversion). Those keep their original UV — see the normalization block.
     /// <paramref name="uvsPreConv"/> holds the UVs as they were BEFORE the conversion (null when there was
     /// none): <see cref="RetangentMesh"/> needs both layouts to re-fit the tangent frame.</summary>
+    /// <summary>
+    /// Which side of the body each vertex of mesh <paramref name="m"/> is on, for a source whose UV is
+    /// mirrored. Decodes this mesh's positions and walks its own submeshes' triangles, then hands both to
+    /// <see cref="SurfaceMirror.AssignSides"/>. Raw indices on purpose: a shape key redirects an index to a
+    /// morphed vertex a fraction of a unit away, which cannot move a vertex to the other side of the body.
+    /// </summary>
+    /// <summary>
+    /// Does another part of this shell already cover the vertical band this submesh occupies?
+    /// <para/>
+    /// This is what "redundant connector" actually means. A seam ring at a part's edge is safe to drop only
+    /// because the neighbouring part draws the same stretch of body — a hand model's top ring sits inside
+    /// the leg model's range, an ankle ring inside the shoe's. Geometry with nothing beside it is not a
+    /// connector however ring-shaped it looks, and dropping it leaves a bare band of the character wearing
+    /// the old skin.
+    /// <para/>
+    /// Compared on Y alone, which is coarse but is the axis parts are split along; the caller has already
+    /// established the submesh is small relative to its mesh, so this only has to separate "at a join" from
+    /// "at the end of the character". Answers FALSE when nothing else is in the shell — a lone part has no
+    /// neighbour, so none of its geometry is redundant.
+    /// </summary>
+    private static bool CoveredByAnotherPart(Source src, VElem[] decl, uint[] vbo, byte[] bs,
+        uint so, uint sc, IReadOnlyList<(float Lo, float Hi)> otherBands)
+        => otherBands.Count > 0
+        && SubmeshBand(src, decl, vbo, bs, so, sc) is { } band
+        && BandCovered(band, otherBands);
+
+    /// <summary>
+    /// Does another submesh of the SAME mesh already draw the band this one occupies?
+    /// <para/>
+    /// The other half of "redundant", and the one <see cref="CoveredByAnotherPart"/> cannot answer. A body's
+    /// duplicate variant submesh — Neolithe's second calf — is redundant against its own sibling, not against
+    /// a neighbouring part, so asking the parts about it is asking the wrong question: no other part is
+    /// anywhere near the middle of a shin, the test says "not redundant", and the shell emits both copies of
+    /// the calf, one inside the other. That is what a doubled sheer stocking is made of.
+    /// <para/>
+    /// Same Y-only comparison as the part test, for the same reason, and with the same answer when nothing
+    /// can be measured: false, keep the geometry.
+    /// <para/>
+    /// A sibling switched off by one of the pack's own toggles does NOT count, because it is not going to be
+    /// drawn: the emit loop empties those a few lines below this one's caller, so counting them would drop
+    /// the variant on the strength of a submesh that ends up contributing nothing and leave the band bare.
+    /// </summary>
+    private static bool CoveredBySibling(Source src, VElem[] decl, uint[] vbo, byte[] bs,
+        int subBase, int subCount, int self, IReadOnlySet<string>? hiddenAttrs)
+    {
+        var s = src.S;
+        int So(int su) => src.SubmeshStart + (subBase + su) * 16;
+        if (SubmeshBand(src, decl, vbo, bs,
+                BitConverter.ToUInt32(s, So(self)), BitConverter.ToUInt32(s, So(self) + 4)) is not { } band)
+            return false;
+
+        for (int su = 0; su < subCount; su++)
+        {
+            if (su == self) continue;
+            if (hiddenAttrs is { Count: > 0 }
+                && IsHidden(src, BitConverter.ToUInt32(s, So(su) + 8), hiddenAttrs)) continue;
+            if (SubmeshBand(src, decl, vbo, bs,
+                    BitConverter.ToUInt32(s, So(su)), BitConverter.ToUInt32(s, So(su) + 4)) is not { } other)
+                continue;
+            if (BandCovered(band, other)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The vertical extent of one submesh, or null when the positions can't be read.</summary>
+    private static (float Lo, float Hi)? SubmeshBand(Source src, VElem[] decl, uint[] vbo, byte[] bs,
+        uint so, uint sc)
+    {
+        VElem? pos = null;
+        foreach (var el in decl) if (el.Usage == UsePosition) { pos = el; break; }
+        if (pos is not { } pe || pe.Stream > 2 || bs[pe.Stream] == 0) return null;
+
+        var s = src.S;
+        float lo = float.MaxValue, hi = float.MinValue;
+        Span<float> tmp = stackalloc float[4];
+        for (uint t = 0; t < sc; t++)
+        {
+            int ip = src.Ib + (int)(so + t) * 2;
+            if (ip + 2 > s.Length) break;
+            int vi = BitConverter.ToUInt16(s, ip);
+            int a = (int)(src.Vb + vbo[pe.Stream]) + vi * bs[pe.Stream] + pe.Offset;
+            if (a < 0 || a + 16 > s.Length) continue;
+            ReadTyped(s, a, pe.Type, tmp);
+            if (tmp[1] < lo) lo = tmp[1];
+            if (tmp[1] > hi) hi = tmp[1];
+        }
+        return lo <= hi ? (lo, hi) : null;
+    }
+
+    /// <summary>Is <paramref name="band"/> contained in <paramref name="cover"/>?
+    /// <para/>
+    /// A hair of tolerance: geometry is authored to MEET, so ranges abut rather than overlap, and an exact
+    /// containment test would keep every ring that pokes a fraction past its neighbour's edge.</summary>
+    private static bool BandCovered((float Lo, float Hi) band, (float Lo, float Hi) cover)
+    {
+        const float Slack = 0.01f;
+        return band.Lo >= cover.Lo - Slack && band.Hi <= cover.Hi + Slack;
+    }
+
+    /// <summary>Is <paramref name="band"/> contained in ANY of <paramref name="covers"/>?</summary>
+    private static bool BandCovered((float Lo, float Hi) band, IReadOnlyList<(float Lo, float Hi)> covers)
+    {
+        foreach (var cover in covers)
+            if (BandCovered(band, cover)) return true;
+        return false;
+    }
+
+    private static sbyte[]? MeshSides(Source src, int m, ushort vc, VElem[] decl, uint[] vbo, byte[] bs,
+        out int conflicts, out int straddling)
+    {
+        conflicts = 0;
+        straddling = 0;
+        var s = src.S;
+        VElem? pos = null;
+        foreach (var el in decl) if (el.Usage == UsePosition) { pos = el; break; }
+        if (pos is not { } pe) return null;
+
+        var xs = new float[vc];
+        Span<float> tmp = stackalloc float[4];
+        for (int i = 0; i < vc; i++)
+        {
+            ReadTyped(s, src.Vb + (int)vbo[pe.Stream] + i * bs[pe.Stream] + pe.Offset, pe.Type, tmp);
+            xs[i] = tmp[0];
+        }
+
+        int mo = src.MeshStart + m * 36;
+        ushort srcSubIdx = BitConverter.ToUInt16(s, mo + 10), srcSubCount = BitConverter.ToUInt16(s, mo + 12);
+        var tris = new List<ushort>();
+        for (int su = 0; su < srcSubCount; su++)
+        {
+            int ss = src.SubmeshStart + (srcSubIdx + su) * 16;
+            uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
+            for (uint t = 0; t + 2 < sc; t += 3)
+            {
+                int p = src.Ib + (int)(so + t) * 2;
+                if (p + 5 >= s.Length) break;
+                tris.Add(BitConverter.ToUInt16(s, p));
+                tris.Add(BitConverter.ToUInt16(s, p + 2));
+                tris.Add(BitConverter.ToUInt16(s, p + 4));
+            }
+        }
+        return SurfaceMirror.AssignSides(xs, tris, out conflicts, out straddling);
+    }
+
     private static int BuildVerbatim(
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
         out (float U, float V)[]? uvsPreConv,
-        Func<float, float, (float U, float V)?>? uvConv,
+        UVRemapService.UvConversion? uvConv,
         out Vec3[]? capSrcPos, out Vec3[]? capOutPos, out ToeCapPlan? capPlan,
+        sbyte[]? sides = null,
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
         bool buildCapGeometry = true)
     {
@@ -4217,7 +4520,7 @@ public static class SecondSkinWriter
                 if (uvConv != null)
                 {
                     uvsPreConv![i] = (u, v);
-                    var moved = uvConv(u, v);
+                    var moved = uvConv(u, v, sides != null && i < sides.Length ? sides[i] : 0);
                     if (moved is { } mv) { u = mv.U; v = mv.V; }
                     else uvUnmapped++;
                 }

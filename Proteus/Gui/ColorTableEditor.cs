@@ -283,6 +283,27 @@ public static class ColorTableEditor
                     ImGui.SetTooltip(cs.WholeSkinTip);
             }
 
+            // One-sided art. DECLARED, because nothing can measure it: a real skin texture is never
+            // symmetric — freckles, moles — so probing the art called ordinary skin asymmetric and moved it
+            // onto a shell, where it lost the wearer's tone. Only the author knows whether a difference
+            // between the two sides is the point or just detail.
+            //
+            // Shown on the skin layer only. On a shell the art is already rendered through its own geometry
+            // and nothing folds it, so the tick would decide nothing.
+            if (showSkinTint && !editingBinding)
+            {
+                bool oneSided = first.AsymmetricArt == true;
+                if (ImGui.Checkbox($"{cs.OneSided}##asymmetric_{idScope}", ref oneSided))
+                {
+                    // Cleared to null rather than false, so an untick leaves the sidecar as it was before
+                    // anyone touched this — the documented "absent = symmetric" default.
+                    foreach (var d in overlays) d.AsymmetricArt = oneSided ? true : null;
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.OneSidedTip);
+            }
+
             // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
             // everything above this line is per-option and everything below it is not.
             if (drawExtraAdvanced != null)
@@ -536,9 +557,37 @@ public static class ColorTableEditor
         ref int selectedRow,
         ref bool changed,
         bool authoredPhysical = false,
-        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline = null)
+        IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline = null,
+        // The Masks tab. There a half-authored row pair renders with its unset half MIRRORED from the set
+        // one (SecondSkinService.BuildRows), because a mask shell's colour is the colorset over a white
+        // base. Display has to follow, or the picker and the model show different colours. False everywhere
+        // else, where an unset sub-row really is neutral and showing it as its partner would be a lie.
+        bool mirrorUnsetSubRows = false,
+        // Whether the light response can actually reach this table. True for a shell Proteus builds, whose
+        // colour table it re-asserts every frame and can therefore dim; FALSE for an imported pack's own
+        // material, which is published verbatim and never touched at runtime. Drawing the controls there
+        // would offer a setting that saves, reloads, and does nothing — the exact silent no-op this editor
+        // hides sphere maps under characterscroll to avoid.
+        bool lightResponseApplies = true,
+        // The sub-row column the index actually lands in — "A", "B", or null for "both, or nobody knows".
+        // The other column is then dimmed exactly as an unsampled ROW is, and for the same reason: on a
+        // shell with no _id the fabricated index is (255, 255, 0), so column B is dead on every one of the
+        // sixteen rows and the grid used to draw it as live anyway.
+        //
+        // Null is the honest default and stays honest: a gradient index genuinely uses both columns, and a
+        // scan that read nothing knows nothing. Neither is something to narrow away.
+        string? usedSubRow = null)
     {
         edited = FeatureEdit.Neutral;
+
+        // Resolved once rather than per swatch — this runs sixteen times a frame inside the picker.
+        //
+        // Never while mirroring. On a mask shell an unset sub-row renders as its PARTNER's values
+        // (SecondSkinService.BuildRows), so authoring the column the index doesn't sample still reaches the
+        // screen through the one it does — and calling it dead would be flatly false, which is worse than
+        // saying nothing.
+        bool onlyA = !mirrorUnsetSubRows && string.Equals(usedSubRow, "A", StringComparison.Ordinal);
+        bool onlyB = !mirrorUnsetSubRows && string.Equals(usedSubRow, "B", StringComparison.Ordinal);
 
         // The render mode drives which feature controls are LIVE vs dimmed; the features that are set
         // drive the mode back (inference happens in the caller). characterscroll drives its look from the
@@ -593,7 +642,8 @@ public static class ColorTableEditor
             if (!used && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(cs.RowUnusedTip);
 
-            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used);
+            DrawRowSwatches(rows, row, ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), used,
+                mirrorUnsetSubRows, onlyA, onlyB);
         }
 
         ImGui.Separator();
@@ -633,13 +683,22 @@ public static class ColorTableEditor
             ImGui.TableHeadersRow();
             ImGui.TableNextRow();
 
+            // Said in the dead column rather than dimmed like its swatch, because ImGui's Alpha style var
+            // REPLACES rather than multiplies: the controls below push their own alpha (the light-response
+            // pair pushes 1f whenever the row emits), so a wrapping push would be undone from the inside and
+            // dim only the half of the panel that happened not to push. A line that says why is also the
+            // thing someone hunting a control that "does nothing" actually needs.
             ImGui.TableNextColumn();
+            if (onlyB) ProteusStyle.DisabledWrapped(cs.SubRowUnused);
             DrawSubRow($"{idScope}_A", rows, selectedRow, true, mode, shellMaterialLeaves, skinGlowTargets,
-                authoredPhysical, physicalBaseline, ref edited, ref changed);
+                authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows,
+                lightResponseApplies);
 
             ImGui.TableNextColumn();
+            if (onlyA) ProteusStyle.DisabledWrapped(cs.SubRowUnused);
             DrawSubRow($"{idScope}_B", rows, selectedRow, false, mode, shellMaterialLeaves, skinGlowTargets,
-                authoredPhysical, physicalBaseline, ref edited, ref changed);
+                authoredPhysical, physicalBaseline, ref edited, ref changed, mirrorUnsetSubRows,
+                lightResponseApplies);
 
             ImGui.EndTable();
         }
@@ -699,8 +758,12 @@ public static class ColorTableEditor
     /// split top = sub-row A, bottom = sub-row B. The glow swatch is the emissive colour scaled by its
     /// intensity, i.e. what actually lands in the colour table, so a row with no glow reads as black.
     /// </summary>
+    /// <param name="onlyA">The index lands in column A everywhere, so the B half of this strip is dead.</param>
+    /// <param name="onlyB">The mirror of that. Both false = either the columns are shared or nothing is
+    /// known, and neither half is dimmed.</param>
     private static void DrawRowSwatches(
-        List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used)
+        List<ColorTableRowPreset> rows, int row, Vector2 min, Vector2 max, bool used,
+        bool mirrorUnsetSubRows = false, bool onlyA = false, bool onlyB = false)
     {
         var preset = rows.FirstOrDefault(r => r.Row == row);
         var draw = ImGui.GetWindowDrawList();
@@ -717,27 +780,50 @@ public static class ColorTableEditor
 
         // Rows the index texture never selects are dimmed, so the ones actually in play stand out.
         // ImGui's Disabled only fades the widget itself — these swatches are hand-drawn, so dim them too.
+        //
+        // Per HALF, not per row: the column is a second axis of the same fact. A shell with no _id samples
+        // (255, 255, 0), which is row 16 column A — so on most overlays fifteen rows are dead in full and
+        // the bottom half of the sixteenth is dead as well.
         float dim = used ? 1f : 0.25f;
+        float dimA = onlyB ? 0.25f : 1f;
+        float dimB = onlyA ? 0.25f : 1f;
 
-        Vector3 Swatch(ColorTableSubRowPreset? s, int column) => dim * (column switch
+        Vector3 Swatch(ColorTableSubRowPreset? s, int column, float half) => dim * half * (column switch
         {
             0 => HexToVec3(s?.Diffuse),
             1 => HexToVec3(s?.Specular),
             _ => HexToVec3(s?.EmissiveColor ?? s?.Diffuse) * (s?.Emissive ?? 0f),
         });
 
+        // Same mirror the detail panels and the renderer use, so the two halves of this swatch can't show
+        // something the big A/B panels below contradict.
+        var subA = preset?.SubRowA ?? (mirrorUnsetSubRows ? preset?.SubRowB : null);
+        var subB = preset?.SubRowB ?? (mirrorUnsetSubRows ? preset?.SubRowA : null);
+
         for (int c = 0; c < 3; c++)
         {
             float cx0 = x0 + c * colW, cx1 = cx0 + colW - 1f;
-            foreach (var (sub, ry0, ry1) in new[]
+            foreach (var (sub, ry0, ry1, half) in new[]
                      {
-                         (preset?.SubRowA, y0, midY),
-                         (preset?.SubRowB, midY, y1),
+                         (subA, y0, midY, dimA),
+                         (subB, midY, y1, dimB),
                      })
             {
-                var v = Swatch(sub, c);
+                var v = Swatch(sub, c, half);
                 uint col = ImGui.GetColorU32(new Vector4(v.X, v.Y, v.Z, 1f));
                 draw.AddRectFilled(new Vector2(cx0, ry0), new Vector2(cx1, ry1), col);
+
+                // A light-sensitive glow reads as an ordinary one here — the swatch shows the emissive it
+                // reaches in the DARK, which is the whole point of the setting and not something to dim
+                // away. Mark it instead: a notch in the glow swatch's top-right corner, so the strip says
+                // which regions go dark-only without lying about their colour.
+                if (c == 2 && (sub?.LightResponse ?? 0f) > 0f)
+                {
+                    float n = MathF.Min(ProteusStyle.S(4f), MathF.Min(cx1 - cx0, ry1 - ry0));
+                    draw.AddTriangleFilled(
+                        new Vector2(cx1 - n, ry0), new Vector2(cx1, ry0), new Vector2(cx1, ry0 + n),
+                        ImGui.GetColorU32(ImGuiCol.Text));
+                }
             }
         }
 
@@ -750,14 +836,22 @@ public static class ColorTableEditor
         IReadOnlyList<Proteus.Interop.SkinGlowTarget>? skinGlowTargets,
         bool authoredPhysical,
         IReadOnlyList<(float Roughness, float Metalness)>? physicalBaseline,
-        ref FeatureEdit edited, ref bool changed)
+        ref FeatureEdit edited, ref bool changed,
+        bool mirrorUnsetSubRows = false,
+        bool lightResponseApplies = true)
     {
         bool gear     = mode != RenderMode.Skin;
         bool material = mode == RenderMode.Cloth;   // sphere / metal / roughness live here
         const float DimAlpha = 0.5f;                // dimmed-but-clickable: a feature the mode ignores
 
         var preset = rows.FirstOrDefault(r => r.Row == row);
-        var sub = isA ? preset?.SubRowA : preset?.SubRowB;
+        // DISPLAY falls back to the other sub-row where that is what RENDERS — the Masks tab, whose shell
+        // mirrors a half-authored pair (SecondSkinService.BuildRows). Showing this panel's defaults there
+        // would put the picker and the model on different colours. Off elsewhere, where an unset sub-row
+        // really is neutral. Only the read is mirrored — Edit() below still materialises a fresh preset, so
+        // merely LOOKING at an unset half never turns it into an authored one.
+        var sub = (isA ? preset?.SubRowA : preset?.SubRowB)
+               ?? (mirrorUnsetSubRows ? (isA ? preset?.SubRowB : preset?.SubRowA) : null);
 
         ColorTableSubRowPreset Edit()
         {
@@ -903,6 +997,46 @@ public static class ColorTableEditor
         if (gear && ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.GlowAmountTip);
 
+        // How much of that glow the scene's light takes back, and whether the surface goes with it.
+        //
+        // Gear only — the light response is applied by rewriting this row's emissive in the live colour
+        // table, and skin has no colour table to rewrite. Dimmed-but-clickable when the row doesn't emit:
+        // there is nothing to fade yet, but the control still has to be reachable so it can be set up
+        // before the Glow is raised, per the dim-don't-hide rule the physical block follows.
+        //
+        // Neither raises `edited`. They modify a glow that is already there rather than asking for one, so
+        // flipping the overlay to Cloth off the back of them would move a deliberately-plain Skin overlay
+        // onto a shell for a setting that does nothing until someone turns the Glow up.
+        if (lightResponseApplies)
+        {
+            bool emits = (sub?.Emissive ?? 0f) > 0f;
+            using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, gear && emits ? 1f : DimAlpha);
+
+            float lightPct = (sub?.LightResponse ?? 0f) * 100f;
+            ImGui.SetNextItemWidth(70);
+            if (ImGui.DragFloat($"{cs.LightResponse}##lr_{id}", ref lightPct, 1f, 0f, 100f, "%.0f%%"))
+            {
+                var cell = Edit();
+                float v = Math.Clamp(lightPct / 100f, 0f, 1f);
+                // Stored as null at zero rather than an explicit 0: that is what ContentGlowRow.IsBlank
+                // reads to decide a sub-row says nothing and can be dropped, so an explicit zero would
+                // pin an otherwise empty row into metadata.json forever.
+                cell.LightResponse = v > 0f ? v : null;
+                changed = true;
+            }
+            if (gear && ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.LightResponseTip);
+
+            bool hide = sub?.HideInLight ?? false;
+            if (ImGui.Checkbox($"{cs.HideInLight}##hl_{id}", ref hide))
+            {
+                Edit().HideInLight = hide;
+                changed = true;
+            }
+            if (gear && ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.HideInLightTip);
+        }
+
         // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
         // coverage that becomes the normal map's blue channel (the transparency gate).
         int op = sub?.Opacity ?? 0;
@@ -1003,19 +1137,12 @@ public static class ColorTableEditor
     private static ColorTableSubRowPreset? _subClip;
     private static ColorTableRowPreset? _rowClip;
 
-    /// <summary>Deep copy of a sub-row. All fields are value types or immutable strings.</summary>
-    private static ColorTableSubRowPreset Clone(ColorTableSubRowPreset s) => new()
-    {
-        Diffuse         = s.Diffuse,
-        Emissive        = s.Emissive,
-        EmissiveColor   = s.EmissiveColor,
-        Opacity         = s.Opacity,
-        SphereMap       = s.SphereMap,
-        SphereIntensity = s.SphereIntensity,
-        Specular        = s.Specular,
-        Roughness       = s.Roughness,
-        Metalness       = s.Metalness,
-    };
+    /// <summary>Deep copy of a sub-row. All fields are value types or immutable strings.
+    /// <para/>
+    /// Delegates rather than listing the fields again: this was a second, hand-written copy of the same
+    /// list, and a field added to the preset reached only one of them — so copy/paste in the grid would
+    /// silently drop whatever was newest.</summary>
+    private static ColorTableSubRowPreset Clone(ColorTableSubRowPreset s) => s.Clone();
 
     private static ColorTableRowPreset CloneRow(ColorTableRowPreset? p) => new()
     {

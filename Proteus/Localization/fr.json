@@ -167,6 +167,10 @@
     "message": "[Proteus] Certaines couches sur votre {1} n'ont pas pu être placées (couches : {0}). Elles ne doivent pas être déformées par la race, il leur faut donc un emplacement que Proteus puisse remplacer entièrement : libérez un emplacement de bague (n'importe quelle main) ou celui des lunettes et elles apparaîtront.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Certaines couches sur votre {1} ont été ignorées (couches : {0}) — votre personnage n'affiche pas cette partie, il n'y avait donc rien à y découper. Vérifiez que la Surface définie sur ces calques correspond au visage ou à la partie que vous portez réellement.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "Avancé",
     "description": ""
@@ -283,6 +287,14 @@
     "message": "{0} : {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "Masquer à la lumière",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Fait suivre à l'opacité de cette ligne sa lueur : là où elle ne brille plus,\nil ne reste que la peau.\nSans cela, une ligne réservée à l'obscurité laisse sa propre couleur — souvent du noir —\nde sorte que le motif apparaît comme une tache sombre en plein jour.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Fait briller le maillage de cette sous-ligne sur votre personnage pour que vous le\nrepériez en jeu. Cliquez à nouveau pour arrêter.",
     "description": ""
@@ -297,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "Illumine la zone de cette sous-ligne sur la peau de votre personnage pour que vous la\nrepériez en jeu. Cliquez à nouveau pour arrêter. (La première fois demande un instant.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "S'estompe à la lumière",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "À quel point la lumière de la scène retire la lueur de cette ligne.\n0 % brille partout pareil. 100 % est une lueur réservée à l'obscurité : pleine intensité\ndans une pièce non éclairée, rien du tout sous un ciel de midi ou près d'une lampe.\nRéglé par ligne, pour qu'une moitié de tatouage ne brille que dans le noir et l'autre toujours.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -345,6 +365,14 @@
   },
   "Colors.None": {
     "message": "Aucun",
+    "description": ""
+  },
+  "Colors.OneSided.Label": {
+    "message": "Cette texture est volontairement d'un seul côté",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "Activez ceci pour une texture destinée à n'apparaître que d'UN seul côté : un tatouage sur\nun bras, une cicatrice sur une joue. Laissez-le désactivé pour tout le reste, peau ordinaire\ncomprise.\nUn corps vanilla et le visage vanilla donnent les mêmes pixels aux deux côtés, donc une\ntexture peinte pour eux est pliée en deux : un côté est conservé et reflété. C'est invisible\nsur un motif symétrique et cela ruine un motif d'un seul côté. Avec ceci activé, Proteus rend\nle calque via une couche propre dont les deux côtés lisent les deux moitiés de votre texture.\nCela ne peut pas être détecté à votre place. La vraie peau n'est jamais symétrique — taches\nde rousseur et grains de beauté diffèrent — vous seul savez si un écart est intentionnel.",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -477,6 +505,10 @@
   },
   "Colors.SubRowB.Fmt": {
     "message": "Ligne {0}B",
+    "description": ""
+  },
+  "Colors.SubRowUnused": {
+    "message": "Rien n’échantillonne cette colonne — l’index de l’illustration choisit l’autre partout, les modifications faites ici ne se verront donc pas.",
     "description": ""
   },
   "Colors.Tiling.Label": {
@@ -727,6 +759,14 @@
     "message": "Un dossier de mod nommé « {0} » existe déjà.",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "Impossible de lire {0} pour construire la lueur. Essayez un PNG.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "Une superposition lumineuse prend sa couleur du motif : il lui faut donc une texture diffuse.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "Le fichier {0} n'existe plus : {1}",
     "description": ""
@@ -755,6 +795,46 @@
     "message": "Échec de l'écriture du mod : {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "Cette texture de visage est séparée gauche/droite",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Cochez ceci uniquement pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister — Proteus affiche une texture séparée via un calque de visage.\nLaissez ceci décoché pour toute texture de visage normale.",
+    "description": ""
+  },
+  "Create.Glow.Always": {
+    "message": "Toujours briller",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "Le tatouage est visible en plein jour et brille jour et nuit.\nVolontairement discret : ce shader ajoute UNE couleur uniforme sur tout le tatouage au lieu\nde suivre l'image, donc une valeur forte délave le motif en plein jour.\nPour plus de lueur la nuit, montez Lueur dans Couleurs et réglez « S'estompe à la lumière ».",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Seulement dans le noir",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Rien en plein jour, lumineux dans une pièce sans lumière — ce que faisaient les tatouages Atramentum Luminis.\nLe motif s'estompe à mesure que la lumière monte et emporte sa propre surface avec lui,\nde sorte qu'il ne reste que la peau en pleine lumière.\nNécessite « Réagir à la lumière de la scène » dans les Paramètres, activé par défaut.",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "Faire briller ce motif",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Choisissez d'abord une texture diffuse — la lueur prend sa couleur du motif.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Seules les cibles peau et visage peuvent briller. Une superposition lumineuse est dessinée sur\nune seconde peau découpée dans votre corps, et un équipement, un accessoire ou une arme n'offre rien à découper.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "Allume le motif. Sa couleur vient de l'image elle-même, pixel par pixel — il n'y a\nrien d'autre à régler.\nLa peau ne peut pas émettre : une superposition lumineuse est donc rendue sur une\nseconde peau au lieu d'être peinte dans la vôtre. Tout le reste fonctionne pareil,\net le curseur Lueur dans Couleurs l'ajuste ensuite.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "Créez un mod de calque Proteus simple. Choisissez au moins une texture ; Proteus écrit un nouveau mod Penumbra et l'ouvre pour que vous puissiez l'activer et l'ajuster.",
     "description": ""
@@ -773,6 +853,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "« {0} » créé, activé et ouvert dans Penumbra.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "« {0} » créé et ouvert dans Penumbra, mais impossible de l'activer — activez-le là-bas.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -797,6 +881,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "Relance la détection du corps et écrase le champ.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "« {0} » créé — en attente de la fin du chargement par Penumbra…",
     "description": ""
   },
   "Create.Slot.Diffuse": {
@@ -845,6 +933,70 @@
   },
   "Create.WholeSkin.Tip": {
     "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nTrois conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nLa suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau. Et « Corps » passe\nà « Tous les corps », pour que la peau atteigne aussi un corps vanilla.",
+    "description": ""
+  },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} chemins",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "Le pack indique avoir été peint pour {0} ; Proteus l’adaptera au corps que vous portez.",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "Corps",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "Sur quel matériau de corps l’image est peinte. Proteus le déduit du pack quand il reconnaît le corps, et de celui que vous portez sinon — changez-le si vous savez que le pack visait un autre corps.",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} brille",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "Importez un pack de peau émissive (.pmp d’art lumineux sans modèles). Sa lueur devient un calque Proteus que vous pouvez recolorer et atténuer, sans aucun mod de shader.",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "Seule l’illustration lumineuse est importée. Les matériaux de corps du pack sont laissés de côté : ils ne fonctionnent qu’avec un shader de peau remplacé, et Proteus peint la lueur sur la peau que vous portez déjà.",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus n’a aucun filtre de race ou de sexe : cela peindra tout personnage portant un corps au même matériau. Désactivez le mod dans Penumbra pour les personnages qui ne sont pas concernés.",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "Aucune texture de ce pack ne porte de masque de lueur.",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "Importé une seule fois, pour :\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "Impossible de lire ce pack : {0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "Lecture des textures de ce pack…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "ignoré",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nIgnoré : {1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "Textures : {0} sur {1}",
     "description": ""
   },
   "Export.Dialog.Filter": {
@@ -1037,6 +1189,90 @@
   },
   "Import.Dialog.Title": {
     "message": "Sélectionner un pack",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "Importé depuis le pack de peau émissive « {0} ».",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "Ce nom de mod ne contient aucun caractère utilisable — utilisez des lettres ou des chiffres.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "Un dossier de mod nommé « {0} » existe déjà.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "Le pack n'est plus là : {0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Le dossier de mods de Penumbra n'est pas disponible.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "Aucune texture de ce pack n’a pu être lue au second passage ; rien n’a été écrit.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "« Proteus » est réservé — choisissez un autre nom de mod.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "Échec de l'écriture du mod : {0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "Tatouage lumineux",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "Tatouage lumineux — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}, mais Proteus n’a pas pu l’activer pour vous. Cochez-le sous « {3} » dans Penumbra, sinon rien ne sera peint.",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "« {0} » importé — textures : {1}{2}. La lueur est activée et ne nécessite aucun mod de shader. Recolorez-la ou atténuez-la dans Colors, ou désactivez-la sous « {3} » dans Penumbra.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "le manifeste du pack la nomme, mais l’archive ne contient pas « {0} ».",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "son canal alpha est vide : elle ne marque rien comme lumineux. Une carte émissive y place la forme de la lueur, et une carte sans forme n’est pas un tatouage.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "elle ne fait que {0}×{1} : c’est la carte d’effet ou de palette d’un shader, pas une illustration peinte sur un corps.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "ses pixels n’ont pas pu être décodés.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus ne connaît pas le corps « {0} » et ne peut pas demander à votre personnage lequel il porte tant qu’il n’est pas chargé. Connectez-vous et rouvrez ce pack.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus ne connaît pas la disposition corporelle de ce pack : il peindra donc l’image telle quelle sur le corps que vous portez ({0}), sans redimensionnement. Si le pack a été peint pour un autre corps, le rendu sera faux — changez la cible ci-dessous si vous le savez.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "« {0} » brille sur {1:P0} du corps. C’est valide, mais cela signifie généralement que la texture n’a pas de vrai canal alpha — vérifiez le résultat avant de l’utiliser.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "Rien dans ce pack ne peut être importé — voir les raisons ci-dessus.",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {
@@ -1711,8 +1947,12 @@
     "message": "Quand un autre mod est confirmé comme écrasant une texture de peau dans laquelle\nProteus compose — un pack de tatouages ou de peau livrant sa propre copie de la\ntexture du corps —, élève automatiquement la priorité Penumbra de Proteus au-dessus\net le signale dans le chat.\n\nCet écrasement est autrement invisible : les calques s'appliquent à moitié (le relief\npasse, la couleur non) et chaque ligne du journal se lit encore comme une réussite.\n\nNe désactivez ceci que si vous voulez délibérément qu'un autre mod l'emporte sur un\nchemin composé par Proteus. Proteus n'agit jamais sur une supposition — uniquement\nsur un écrasement confirmé.",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Désactiver le redessin automatique",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Redessin automatique",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Laisse Proteus suivre le monde tout seul : recomposition après un changement de\nzone, un changement d'équipement ou un redessin, puis rechargement de ton\npersonnage pour que tu voies le résultat.\n\nDésactive-le pour rendre Proteus essentiellement manuel : il ne composera plus et\nne te rechargera plus tant que tu ne changeras pas quelque chose toi-même. Ton\napparence actuelle reste en place dans les deux cas, et tes modifications\ns'appliquent toujours - tu ne les verras simplement qu'au prochain redessin :\nchangement de zone, changement d'équipement, ou le bouton Redraw de Penumbra.\n\nUne exception quand c'est désactivé : si tu portes une couche d'équipement, un\nchangement d'équipement recompose quand même, pour que l'objet qui héberge cette\ncouche ne reste pas coincé sur quelque chose que tu as retiré. Tu ne seras pas\nredessiné pour autant.\n\nNe couvre que ce que Proteus déclenche. L'option \"Auto-Reload Gear\" de Glamourer\nte recharge dès que les réglages d'un mod changent, indépendamment de ceci.",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1739,14 +1979,6 @@
     "message": "Actualise les textures via le rechargement d'équipement sur place de Glamourer plutôt\nqu'un redessin complet, évitant le clignotement de disparition/réapparition. Bascule\nautomatiquement sur un redessin complet quand Glamourer ne peut pas le traiter.",
     "description": ""
   },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Ignorer les recompositions inchangées",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Permet à une recomposition déclenchée par un changement de zone ou un redessin de\ns'arrêter tôt quand rien qui affecte le résultat n'a changé. Ce que vous modifiez\nvous-même est toujours recomposé. Ne désactivez ceci que pour écarter cette piste\nquand une modification ne prend pas effet.",
-    "description": ""
-  },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "Héberger sur des lunettes invisibles (garder les bagues libres)",
     "description": ""
@@ -1761,6 +1993,38 @@
   },
   "Settings.Hosting.RestoreAccessory.Tip": {
     "message": "Force un redessin complet pour recharger toute bague ou bracelet que la seconde peau\na remplacé, en rétablissant son modèle d'origine. À utiliser si une coque d'équipement\nreste bloquée sur un accessoire après une désactivation ou un changement.",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled": {
+    "message": "Réagir à la lumière de la scène",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Laisse les lignes marquées « S'estompe à la lumière » faiblir quand la lumière monte.\nDésactivé, chaque lueur brûle partout à sa luminosité d'origine, comme avant.\nRien n'est reconstruit dans les deux cas — cela passe par le matériau en cours.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Niveau de lumière",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 est l'obscurité totale (les lueurs d'obscurité sont au maximum), 1 est le plein jour (elles disparaissent).",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Définir le niveau de lumière à la main",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignore la scène et utilise le curseur à la place.\nLe moyen le plus rapide de voir ce que fait une lueur d'obscurité sans attendre le crépuscule,\net le bon réglage pour le gpose, où c'est votre propre éclairage qui compte.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Lecture {0:0.00} — ciel {1:0.00}, lampes {2:0.00} ({3} sur {4} atteignent)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
     "description": ""
   },
   "Settings.Output.Compression.Label": {
@@ -1805,6 +2069,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "Hébergement",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Lueur sensible à la lumière",
     "description": ""
   },
   "Settings.Section.Output": {

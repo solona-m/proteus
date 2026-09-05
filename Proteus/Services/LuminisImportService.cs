@@ -81,6 +81,11 @@ public sealed class LuminisImportService
         {
             ["bibo"] = ("bibo", "_bibo.mtrl"),
             ["gen3"] = ("gen3", "_b.mtrl"),
+            // Tight & Firm's Gen3, which emissive-skin packs address by that name and which is Gen3's UV
+            // space under Gen3's material suffix. Without the entry it falls through to the wearer's body,
+            // and a pack shipping bibo and tfgen3 sheets of one tattoo then declares the tfgen3 one to
+            // already be in bibo space — skipping the very remap that would have made it land correctly.
+            ["tfgen3"] = ("gen3", "_b.mtrl"),
         };
 
     /// <summary>
@@ -125,39 +130,18 @@ public sealed class LuminisImportService
     private const int CoverageGain = 8;
 
     /// <summary>
-    /// The surface UNDER the glow: black.
+    /// What an imported glow row asks of the scene light: everything. Atramentum Luminis tattoos were
+    /// dark-only — they lit an unlit room and were not there in daylight — so importing one as an
+    /// unconditional glow is not parity, it is a different effect that happens to use the same art. Both
+    /// halves are set: the glow fades, and the surface goes with it, or the tattoo would read as a black
+    /// patch at noon instead of as skin.
     /// <para/>
-    /// characterscroll declares no base texture at all (see GearMaterialWriter's sampler table), so this
-    /// row colour IS the whole unlit surface, and it is lit by the scene like any other. An Atramentum
-    /// Luminis panel is artwork drawn on black and has to read as black; the near-black grey this started
-    /// at came out as a visibly lifted charcoal wherever the light fell on it, against the true black of
-    /// the areas facing away.
+    /// The one piece of the glow surface that is NOT shared with <see cref="EmissiveSkinImportService"/>:
+    /// an emissive-skin pack's tattoo burns in daylight too, because that is what its shader did.
+    /// <para/>
+    /// Changed per region in Colors afterwards, which is the point of giving each plateau its own row.
     /// </summary>
-    private const string GlowSurfaceColour = "#000000";
-
-    /// <summary>The colour-table row a shell with no <c>_id</c> art samples: SecondSkinService fabricates
-    /// an index of (255, 255, 0), which is row pair 16, sub-row A.</summary>
-    private const int GlowRow = 16;
-
-    /// <summary>
-    /// The row emissive: 300%. Measured in game against the artwork, not derived.
-    /// <para/>
-    /// On characterscroll this is the multiplier the scroll map's brightness scales with. Much higher than
-    /// anything else in Proteus writes, and the reason is what the map holds: an Atramentum Luminis sheet
-    /// is mostly BLACK with thin neon on it, so the average pixel contributes nothing and only the lines
-    /// have anything to scale. The values tuned for a piece whose scroll map is saturated edge to edge —
-    /// <see cref="ContentGlowRow.DefaultGlow"/> at 25%, <see cref="RenderModeInference.GlowEmissive"/> at
-    /// 150% — both leave this art dim.
-    /// <para/>
-    /// It only reads correctly once <see cref="GlowSurfaceColour"/> is true black. Against the near-black
-    /// grey this started at, the same dial lifted the whole panel instead of the lines, which is what made
-    /// 150% look blown out earlier: the surface was rising with the glow.
-    /// <para/>
-    /// Worth being precise about, because the same field means something else one shader over: on plain
-    /// character.shpk it is a flat additive tint, and a quarter of WHITE there is a wash that turns black
-    /// artwork into white slabs. Both were observed here, on the way to getting the shader right.
-    /// </summary>
-    private const float GlowGate = 3.0f;
+    private const float GlowLightResponse = 1f;
 
     // ── Preview ──────────────────────────────────────────────────────────────
 
@@ -452,7 +436,7 @@ public sealed class LuminisImportService
     /// cannot remap: its art was painted in its own UV space, and the only thing that would ruin it is
     /// putting it through a transfer map meant for another body.
     /// </summary>
-    private static (string? BodyType, string? Suffix, bool FromWearer) ResolveBody(
+    internal static (string? BodyType, string? Suffix, bool FromWearer) ResolveBody(
         string token, string? wearerType, string? wearerSuffix)
     {
         if (Bodies.TryGetValue(token, out var known)) return (known.BodyType, known.Suffix, false);
@@ -776,6 +760,45 @@ public sealed class LuminisImportService
             glowDescriptor.ScrollTilingX = 1f;
             glowDescriptor.ScrollTilingY = 1f;
 
+            // One row per plateau, so each region of the tattoo can later be given its own colour, its own
+            // brightness and its own light response. Every row is written IDENTICALLY here on purpose: the
+            // regions differ in what they let the user do, not in how the import looks, and the per-pixel
+            // intensity that actually separates them is already baked into the scroll map above. A sheet
+            // with one plateau (or none the histogram trusts) keeps the old single-row shape and authors no
+            // index at all.
+            var bands = GlowBands(rgba);
+            int rowCount = Math.Max(1, bands.Count);
+            if (bands.Count > 1)
+            {
+                // PNG, not the .tex path Materialize would otherwise take: an index texture is a lookup,
+                // and BC7 is lossy enough to move a texel's red across a row boundary — which is why
+                // SecondSkinService refuses to compress the id slot either.
+                glowDescriptor.Index = "overlays/" + Materialize(
+                    BuildGlowIndex(rgba, bands), w, h, overlaysDir, plan.Stem + "_glow_id", encodeTo: null);
+                log?.Information("[Proteus] luminis import: {0} — {1} glow region(s), rows 1–{1}",
+                    plan.Label, bands.Count);
+            }
+
+            var glowRows = new List<ColorTableRowPreset>();
+            for (int r = 1; r <= rowCount; r++)
+                glowRows.Add(new ColorTableRowPreset
+                {
+                    // With an index the rows start at 1 and count up with the plateaus; without one the
+                    // shell samples the fabricated (255,255,0), which is row 16.
+                    Row = bands.Count > 1 ? r : GlowShell.Row,
+                    SubRowA = new ColorTableSubRowPreset
+                    {
+                        Emissive = GlowShell.Emissive,
+                        // Neutral: the scroll map is COLOURED, so it carries its own hue and a tinted
+                        // emissive would only push everything toward that tint.
+                        EmissiveColor = RenderModeInference.GlowEmissiveColour,
+                        Diffuse = GlowShell.SurfaceColour,
+                        // Dark-only, which is what these tattoos were: see GlowLightResponse.
+                        LightResponse = GlowLightResponse,
+                        HideInLight = true,
+                    },
+                });
+
             glowOptions.Add(new OverlayOption
             {
                 Name = GlowOptionName(plan, qualified),
@@ -784,21 +807,7 @@ public sealed class LuminisImportService
                 // declares none, so an emissive there would reach the skin option too — and any emissive
                 // makes RenderModeInference.HasCloth true, which would promote the author's plain body
                 // texture to a gear shell as well.
-                ColorTableRows =
-                [
-                    new ColorTableRowPreset
-                    {
-                        Row = GlowRow,
-                        SubRowA = new ColorTableSubRowPreset
-                        {
-                            Emissive = GlowGate,
-                            // Neutral: the scroll map is COLOURED, so it carries its own hue and a tinted
-                            // emissive would only push everything toward that tint.
-                            EmissiveColor = RenderModeInference.GlowEmissiveColour,
-                            Diffuse = GlowSurfaceColour,
-                        },
-                    },
-                ],
+                ColorTableRows = glowRows,
             });
 
             // ── the author's own skin ──
@@ -898,6 +907,32 @@ public sealed class LuminisImportService
 
         return new([.. glowOptions.Select(o => o.Name)], defaultOn);
     }
+
+    /// <summary>
+    /// Atramentum Luminis's alpha read as ordinary intensity — one byte per pixel, 0 dark and 255 fully
+    /// lit — which is what <see cref="GlowShell"/> works in.
+    /// <para/>
+    /// The inversion is the whole of this format's convention and belongs here, at its edge, rather than
+    /// inside a shared helper where an emissive-skin pack (whose alpha already reads the right way up)
+    /// would silently get it applied too.
+    /// </summary>
+    private static byte[] Intensity(byte[] rgba)
+    {
+        var lit = new byte[rgba.Length / 4];
+        for (int p = 0; p < lit.Length; p++) lit[p] = (byte)(255 - rgba[p * 4 + 3]);
+        return lit;
+    }
+
+    /// <summary>The distinct glow plateaus in an Atramentum Luminis mask, brightest first — see
+    /// <see cref="GlowShell.Bands"/>.</summary>
+    internal static List<int> GlowBands(byte[] rgba, int maxBands = GlowShell.MaxRegions,
+                                        float minFraction = GlowShell.MinRegionFraction)
+        => GlowShell.Bands(Intensity(rgba), maxBands, minFraction);
+
+    /// <summary>An index texture sending each glowing pixel to its plateau's row — see
+    /// <see cref="GlowShell.Index"/>.</summary>
+    internal static byte[] BuildGlowIndex(byte[] rgba, IReadOnlyList<int> bands)
+        => GlowShell.Index(Intensity(rgba), bands);
 
     /// <summary>Write one RGBA buffer into the sidecar and return its file name.</summary>
     private static string Materialize(

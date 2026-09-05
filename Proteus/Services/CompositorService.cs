@@ -84,7 +84,7 @@ public class CompositorService : IDisposable
     /// a composite, that blackout would re-arm after every restore, which is exactly when the player is
     /// most likely to be flipping gearsets. Consuming a single expected echo costs the same protection
     /// and nothing else. <paramref name="withinMs"/> only bounds how long we keep waiting for an echo
-    /// that may never arrive (a redraw suppressed by DisableAutoRedraw, say).
+    /// that may never arrive (a redraw suppressed by auto redraw being off, say).
     /// <para/>
     /// Deliberately NOT armed by the in-place reload: that path reloads textures through
     /// FlagSlotForUpdate and never touches the game's gearset load, so it produces no Gearset to discount.
@@ -152,6 +152,45 @@ public class CompositorService : IDisposable
     // are dropped wholesale when it changes. See RecordCompositeBaseKeys.
     private sealed record BaseKeySet(HashSet<string> Paths, int Hash, int Signature);
     private volatile BaseKeySet? _compositeBaseKeys;
+
+    /// <summary>
+    /// Which FILE each base path resolved to at the end of the last composite — a private copy of
+    /// <see cref="_upstreamByGamePath"/>, and deliberately NOT cleared by
+    /// <see cref="InvalidateUpstreamCache"/>. Surviving that is the entire point: the question it answers
+    /// is asked from the same handler that does the invalidating.
+    /// <para/>
+    /// The question is "did this settings change actually MOVE anything we read". <see cref="_compositeBaseKeys"/>
+    /// only says which paths a mod would have to supply to matter at all, and the answer to the rest was
+    /// assumed to be yes. That is far too coarse for the mods it fires on: the second skin cuts its shells
+    /// from the EQUIPPED GEAR models, so an outfit mod whose gloves we take the hand geometry from is a
+    /// legitimate base supplier — and every option toggled anywhere in it, in groups touching no file we
+    /// read, forced a full rebuild. See <see cref="ModSettingMovedABase"/>.
+    /// </summary>
+    private volatile IReadOnlyDictionary<string, string>? _lastBaseUpstreams;
+
+    /// <summary>
+    /// Mods with a deferred <see cref="ModSettingMovedABase"/> re-check in flight, so a user dragging a
+    /// slider or clicking through a group does not queue one per event.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _pendingMoveRecheck = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// How long after a settings change the deferred re-check re-asks whether a base moved.
+    ///
+    /// Penumbra recomputes the collection cache ASYNCHRONOUSLY after the event we react to, so the
+    /// immediate resolve can legitimately still return the pre-change winner — see
+    /// <see cref="SettleUpstreams"/>, which exists for the same reason and observed a contested path
+    /// resolving to three different mods on three consecutive reads. Believing that first answer is how
+    /// "no base moved" was reached for a change that had genuinely moved one: toggling the gloves group off
+    /// an outfit we cut the hand shell from, and the shell never rebuilding.
+    ///
+    /// Waiting longer BEFORE the first check would trade that for latency on every real change, and would
+    /// still be a guess about someone else's scheduler. Asking twice is not: the fast answer keeps a real
+    /// change at its old responsiveness, and the slow one is a backstop that costs nothing when the first
+    /// was right. A rebuild slower than this window delays the composite by another pass rather than
+    /// losing it, because a re-check that finds a moved base composites from there.
+    /// </summary>
+    private const int MovedBaseRecheckMs = 1200;
     // Signature of the equipped gear models the second skin cuts its shells from (feet/legs/hands/body).
     // The shell now depends on WHICH gear is worn — a heel poses the foot, a top reshapes the chest — so
     // a redraw that changes the equipped set must rebuild it. Equipping through the game fires no mod or
@@ -167,6 +206,23 @@ public class CompositorService : IDisposable
     /// <summary>The shell material file names (ss_{letter}.mtrl) for a gear overlay, or null if none were built.</summary>
     public IReadOnlyList<string>? GetShellMaterials(string modDir, string? group, string? option)
         => _shellMaterials.TryGetValue((modDir, group, option), out var leaves) ? leaves : null;
+
+    // Shell material leaf → what its rows want from the scene light, from the last shell build. Same
+    // publish contract as _shellMaterials: assembled on the composite thread, swapped in as one reference,
+    // never mutated afterwards — which is what lets the framework thread read it every frame with no lock.
+    private volatile Dictionary<string, ShellLightProfile> _shellLight = new();
+
+    /// <summary>
+    /// The light response of a shell material, or null when it asks for none — which is the overwhelmingly
+    /// common case and therefore the fast path: no light-sensitive glow anywhere means every lookup misses
+    /// and the runtime does exactly what it did before the feature existed.
+    /// </summary>
+    public ShellLightProfile? GetShellLight(string materialLeaf)
+        => _shellLight.TryGetValue(materialLeaf, out var p) ? p : null;
+
+    /// <summary>Whether ANY live shell asks for a light response. Lets the per-frame applier skip its whole
+    /// pass — including the character walk — on a character that has none.</summary>
+    public bool AnyShellLight => _shellLight.Count > 0;
 
     // Mod directory → the content materials of that mod backing a drawn mesh in the last composite, as
     // paths relative to the mod root. Same publish contract as _shellMaterials: assembled on the composite
@@ -224,6 +280,34 @@ public class CompositorService : IDisposable
     private string? _lastDrawnMaterials;
 
     /// <summary>
+    /// <see cref="ShellProbeKey"/> of the last shell the drawn check POSITIVELY confirmed is on the
+    /// character, or null if none ever was.
+    /// <para/>
+    /// Exists to bound the "forced composite that changed nothing redraws anyway" rule in the gear phase.
+    /// That rule is a safety net for a shell the game never picked up, and it is worth its flicker only
+    /// while the shell's state is UNKNOWN. Once the check has said the materials are on the character
+    /// there is nothing left for the redraw to repair, and the rule was firing on every settings change
+    /// the user made to any mod that feeds the composite — most of which say nothing about the shell.
+    /// <para/>
+    /// A KEY rather than a bool or a probe reference, so it needs no resetting and cannot go stale. The
+    /// check runs asynchronously ~800 ms after the composite that scheduled it, which is long enough to
+    /// land either side of the next composite's publish; a flag cleared by hand would race that, and a
+    /// reference would fail to match the fresh probe object an UNCHANGED rebuild allocates — the one
+    /// case this is here to recognise. Comparing content answers "is the shell now on the character the
+    /// one we saw drawn", which is the actual question, whoever wrote the value and when.
+    /// <para/>
+    /// One-directional by design: only a conclusive success sets it, and only a conclusive failure clears
+    /// it. "Inconclusive" and "deferred" leave it alone; every other state simply fails to match, so an
+    /// unknown shell always keeps its net.
+    /// </summary>
+    private volatile string? _shellConfirmedDrawnKey;
+
+    /// <summary>Content identity of a shell probe — the published material and model paths. Two probes
+    /// with the same key describe the same shell on the character, however many times it was rebuilt.</summary>
+    private static string ShellProbeKey(ShellDrawnProbe p)
+        => string.Join('\n', p.Materials) + '\u0000' + string.Join('\n', p.Models);
+
+    /// <summary>
     /// Drop all three shell locators together, for the tear-down paths that never reach the gear phase
     /// where they are normally published: the plugin being disabled, and the composite's own "no enabled
     /// mods" early return. They describe a shell on the character, so leaving them standing after the shell
@@ -236,6 +320,7 @@ public class CompositorService : IDisposable
     {
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
+        _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
         _lastDrawnMaterials = null;
@@ -621,6 +706,28 @@ public class CompositorService : IDisposable
         if (playerColl == null || collId != playerColl.Value)
             return;
 
+        // Option groups, priority and in-place edits cannot turn a mod ON or OFF — only EnableState,
+        // Inheritance and the temporary kinds can. So for these three, a live reading of "disabled" is not
+        // merely the current state, it is also the state the change happened IN: the mod contributed nothing
+        // before it and contributes nothing after, and the whole handler is a no-op. Ticking a different
+        // option in a mod that is switched off must not cost a 5-7s rebuild and a redraw.
+        //
+        // Deliberately ahead of the _knownDisabled gate below and NOT subject to it. That set only holds
+        // mods we have already acted on while off, so on a mod that has been disabled since before Proteus
+        // loaded — the common case for "I keep it around but turned off" — the first option click would
+        // otherwise fall straight through and recomposite. Here nothing has to be remembered: the change
+        // kind alone proves the mod did not just transition.
+        //
+        // The priority is folded into LastDiscovered for the same reason NoteSkippedDisabled exists: that
+        // list compares priority, and skipping without recording it turns the avoidance into a deferral.
+        if (change is ModSettingChange.Setting or ModSettingChange.Priority or ModSettingChange.Edited
+            && penumbra.GetModSettings(playerColl.Value, modDir) is { Enabled: false } off)
+        {
+            NoteSkippedDisabled(modDir, off.Priority);
+            log.Debug("[Proteus] ModSettingChanged:{0}:{1} on a disabled mod — no recomposite", change, modDir);
+            return;
+        }
+
         // A disabled mod contributes nothing: no overlay art, and no redirect that could move a base we
         // read. Tweaking its option groups, priority or temporary settings therefore cannot change the
         // composite, so skip the whole handler — including the upstream invalidation below, which is not
@@ -719,7 +826,8 @@ public class CompositorService : IDisposable
         // Not one of our overlay mods: the only other thing we react to is a body mod (ships an
         // obj/body/ material), whose change can leave the cached snapshot wrong without a redraw.
         // Its detection does manifest file I/O + a config.Save, so run it off the framework thread.
-        EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient);
+        EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient,
+            checkBasesMoved: true);
     }
 
     /// <summary>
@@ -829,8 +937,22 @@ public class CompositorService : IDisposable
         var known       = _bodyModCache.TryGetValue(modDir, out var cached);
         var wasSurface  = known && cached.IsSurfaceMod;
         var wasComposed = known && cached.AffectsComposite;
-        if (wasSurface || wasComposed) _activeMtrlSnapshotDirty = true;
-        InvalidateUpstreamCache($"ModDeleted:{modDir}");
+
+        // Deleting a mod that was contributing NOTHING changes nothing. Removing the directory of a mod
+        // that was switched off cannot move a base, cannot alter which materials are on the character, and
+        // cannot change a pixel of the composite — so it must not cost a rebuild and a redraw, and it must
+        // not drop the upstream cache either (that costs the next composite a full re-derivation, which
+        // briefly unpublishes our redirects).
+        //
+        // Asked BEFORE the bookkeeping below, because two of the three answers come out of state that
+        // bookkeeping erases.
+        var contributedNothing = KnownContributingNothing(modDir, wasComposed);
+        var wasDiscovered = LastDiscovered.Any(e =>
+            string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+
+        // Whether or not we rebuild, a deleted mod has to leave the overlay list: it is what the UI shows
+        // and what DiscoveredSetsEqual diffs, and skipping the recomposite means nothing else will refresh it.
+        ForgetDiscovered(modDir);
         // The directory can come back (a reinstall keeps the name), and it would come back enabled or not
         // on its own terms — a remembered "was disabled" from the old install must not suppress the first
         // event of the new one.
@@ -844,10 +966,74 @@ public class CompositorService : IDisposable
                 if (config.KnownBodyMods.Remove(modDir)) config.Save();
         });
 
-        if (LastDiscovered.All(e => !string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
-            && !wasComposed)
+        if (contributedNothing)
+        {
+            // Information, not Debug: this is the line that explains an absent recomposite.
+            log.Information("[Proteus] ModDeleted:{0}: mod was contributing nothing to the current build "
+                          + "— no recomposite", modDir);
+            return;
+        }
+
+        if (wasSurface || wasComposed) _activeMtrlSnapshotDirty = true;
+        InvalidateUpstreamCache($"ModDeleted:{modDir}");
+
+        // Read from the snapshot taken above, not from LastDiscovered — ForgetDiscovered has already
+        // removed the entry, so asking the list now would answer "not one of ours" for every overlay.
+        if (!wasDiscovered && !wasComposed)
             return;
         TriggerRecomposite($"ModDeleted:{modDir}");
+    }
+
+    /// <summary>
+    /// Do we POSITIVELY know this mod was contributing nothing to the build the character is wearing?
+    /// Asked when the mod's files are already gone, so Penumbra can no longer be consulted and the answer
+    /// has to come from what we remember.
+    /// <para/>
+    /// Unknown answers FALSE, in every direction. The asymmetry is the usual one: a needless recomposite
+    /// after a deletion costs a rebuild, while a skipped one leaves the character wearing a composite built
+    /// on a file that no longer exists.
+    /// </summary>
+    private bool KnownContributingNothing(string modDir, bool wasComposed)
+    {
+        // One of our overlay mods, recorded as disabled. LastDiscovered carries the enabled flag from
+        // DiscoverAll, so this is answerable even for a mod that has been off since before Proteus loaded —
+        // the whole point, since nothing would have generated an event for such a mod all session.
+        var discovered = LastDiscovered;   // one read: the list is replaced wholesale by other threads
+        var idx = discovered.FindIndex(e =>
+            string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0) return !discovered[idx].Enabled;
+
+        // Last time we looked at it, it was off. Set by OnModSettingChanged, which removes the entry again
+        // the moment the mod reads enabled, so membership here means "last observed disabled".
+        if (_knownDisabled.ContainsKey(modDir)) return true;
+
+        // A mod we classified as providing one of our base paths, that nevertheless supplied NONE of the
+        // files the last composite actually read. Either it was disabled or it lost every path to a
+        // higher-priority mod; both mean deleting it moves nothing. A mod we never classified as
+        // base-providing is left alone here — the old !wasComposed path below already declines to rebuild
+        // for it, and claiming knowledge we do not have would suppress the invalidation too.
+        if (wasComposed && _lastBaseUpstreams is { } upstreams)
+            return !upstreams.Values.Any(v =>
+                string.Equals(ModFolderOf(v), modDir, StringComparison.OrdinalIgnoreCase));
+
+        return false;
+    }
+
+    /// <summary>
+    /// Remove a mod from <see cref="LastDiscovered"/>. Copy-on-write, for the same reason
+    /// <see cref="NoteSkippedDisabled"/> is: background composite threads read the list and the UI
+    /// enumerates it. A composite in flight will overwrite this with its own fresher walk, which is
+    /// equally correct — the mod is gone from disk either way.
+    /// </summary>
+    private void ForgetDiscovered(string modDir)
+    {
+        var snapshot = LastDiscovered;
+        var idx = snapshot.FindIndex(e =>
+            string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0) return;
+        var updated = new List<OverlayEntry>(snapshot);
+        updated.RemoveAt(idx);
+        LastDiscovered = updated;
     }
 
     // ClassifySurfaceMod does manifest file I/O + a config.Save on a cache miss, both of which must stay
@@ -865,7 +1051,71 @@ public class CompositorService : IDisposable
     // can feed us WITHOUT looking like a surface mod: "Drenched Wet Skin" redirects Bibo's invented
     // chara/bibo_mid_*.tex paths directly and its manifest contains no obj/body/ literal at all, so the
     // old surface-only gate meant it never triggered a recomposite — measured, not hypothetical.
-    private void EvaluateSurfaceModOffThread(string modDir, string reason, bool force = true)
+    /// <summary>
+    /// Did a settings change on this mod move any base this composite actually reads? Answered by
+    /// RE-RESOLVING the paths it supplies that are also bases of ours, and comparing each against what the
+    /// last composite read for it.
+    /// <para/>
+    /// This is the second half of a test whose first half is <see cref="ClassifySurfaceMod"/>. That one asks
+    /// whether the mod COULD matter, from its manifest alone; it cannot ask whether this particular change
+    /// did, because Penumbra names the mod in the event and not the option group that moved. So the two run
+    /// in series: could it, and then did it.
+    /// <para/>
+    /// Everything unknown answers TRUE, in every direction — no remembered composite, no recorded base
+    /// set, a path with no previous resolution, one our own manifest is masking (where a resolve can only
+    /// return our own output and says nothing), or a resolve that throws. Being wrong in the false
+    /// direction is a composite that silently never happens and a character left wearing the old build, so
+    /// only a positive "resolves to the same file, and we know what it was" may skip.
+    /// <para/>
+    /// PATHS, not contents. The event behind this is a SETTINGS change, which moves which file wins rather
+    /// than what is inside one; a file edited in place arrives as ModAdded/ModDeleted, which do not consult
+    /// this. Hashing contents here would buy nothing and cost a read of every base on every toggle.
+    /// </summary>
+    private bool ModSettingMovedABase(IReadOnlyCollection<string> suppliedPaths, out string detail)
+    {
+        var known = _lastBaseUpstreams;
+        var bases = _compositeBaseKeys;
+        if (known == null || bases == null) { detail = "no composite to compare against"; return true; }
+
+        var shared = 0;
+        foreach (var p in suppliedPaths)
+        {
+            if (!bases.Paths.Contains(p)) continue;
+            shared++;
+
+            if (!known.TryGetValue(p, out var before))
+            {
+                detail = p + " was not resolved by the last composite";
+                return true;
+            }
+
+            string? now;
+            try { now = penumbra.ResolvePlayer(p); }
+            catch { detail = p + " could not be resolved"; return true; }
+
+            if (now == null || IsOwnOutput(now))
+            {
+                detail = p + " resolves to our own output, so its upstream is not observable";
+                return true;
+            }
+
+            var a = TryCanonicalise(now);
+            var b = TryCanonicalise(before);
+            if (a == null || b == null || !string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+            {
+                detail = p + ": " + before + " -> " + now;
+                return true;
+            }
+        }
+
+        // Reached only when every shared path re-resolved to the file the last composite read. A zero count
+        // cannot get here: the caller has already established that the mod supplies at least one base.
+        detail = shared + " shared base path(s) still resolve to the same file";
+        return false;
+    }
+
+    private void EvaluateSurfaceModOffThread(string modDir, string reason, bool force = true,
+        bool checkBasesMoved = false)
     {
         Task.Run(() =>
         {
@@ -904,6 +1154,30 @@ public class CompositorService : IDisposable
                     return;
                 }
 
+                // COULD it matter is now settled; this asks whether it DID. Only for a settings change:
+                // ModAdded rewrites the mod files wholesale, and comparing resolutions across that says
+                // nothing about the contents behind them.
+                //
+                // The manifest scan is repeated rather than threaded out of ClassifySurfaceMod because that
+                // one answers from a fingerprint cache and usually has no paths to hand. It is a handful of
+                // small JSON reads on a background thread, paid only for mods that already passed the
+                // affects gate, and it is what stands between toggling an outfit option and a multi-second
+                // rebuild.
+                if (checkBasesMoved)
+                {
+                    var supplied = ScanModManifests(Path.Combine(modsRoot, modDir)).Paths;
+                    if (!ModSettingMovedABase(supplied, out var why))
+                    {
+                        // Information, for the same reason as the affects gate above: this is the line that
+                        // explains an absent recomposite.
+                        log.Information("[Proteus] {0}: settings changed but no base moved ({1}) — no "
+                                      + "recomposite (re-checking in {2}ms)", reason, why, MovedBaseRecheckMs);
+                        ScheduleMovedBaseRecheck(modDir, supplied, reason, force);
+                        return;
+                    }
+                    log.Debug("[Proteus] {0}: a base moved ({1})", reason, why);
+                }
+
                 // The authoritative invalidation. MayMoveOurBases had to answer from a cached verdict with no
                 // disk access, so it can be working from a stale classification — a mod that only just began
                 // providing one of our bases would have been let through. ClassifySurfaceMod above has just
@@ -921,6 +1195,96 @@ public class CompositorService : IDisposable
                 log.Error(ex, "[Proteus] Body-mod evaluation failed for {0}", modDir);
             }
         });
+    }
+
+    /// <summary>
+    /// Ask <see cref="ModSettingMovedABase"/> once more, after Penumbra has had time to finish rebuilding
+    /// the collection, and composite if the answer has changed. See <see cref="MovedBaseRecheckMs"/> for why
+    /// the question is asked twice rather than once, later.
+    /// <para/>
+    /// One in flight per mod. Clicking through an option group fires an event per click, and each would
+    /// otherwise schedule its own re-check against the same manifests for the same answer; the first one
+    /// covers them all, because it reads the settled state whenever it happens to run.
+    /// </summary>
+    private void ScheduleMovedBaseRecheck(string modDir, IReadOnlyCollection<string> supplied,
+                                          string reason, bool force)
+    {
+        if (!_pendingMoveRecheck.TryAdd(modDir, 0)) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(MovedBaseRecheckMs).ConfigureAwait(false);
+                if (_disposed || !config.PluginEnabled) return;
+
+                // The manifests cannot have moved under a settings change, so the path set is still good.
+                // What may have moved is the baseline: a composite from some other trigger may have landed
+                // in the meantime and republished _lastBaseUpstreams, and comparing against THAT is right —
+                // it is the build the character is actually wearing.
+                if (!ModSettingMovedABase(supplied, out var why)) return;
+
+                log.Information("[Proteus] {0}: a base moved after all ({1}) — recompositing", reason, why);
+                InvalidateUpstreamCache(reason);
+                TriggerRecomposite(reason, force: force);
+            }
+            catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { }
+            catch (Exception ex) { log.Error(ex, "[Proteus] moved-base re-check failed for {0}", modDir); }
+            finally { _pendingMoveRecheck.TryRemove(modDir, out _); }
+        });
+    }
+
+    /// <summary>
+    /// Resolve the MODELS the second skin cuts its shells from, so they are recorded as the composite bases
+    /// they actually are.
+    ///
+    /// Everything else that feeds a composite reaches <see cref="_upstreamByGamePath"/> through
+    /// <see cref="ResolveUpstream"/>, and the base set is widened from that memo. These do not:
+    /// SecondSkinService resolves them with a direct <c>ResolvePlayer</c> call of its own, so the equipped
+    /// gear models were read on EVERY composite and recorded on none. <see cref="PrimeUpstreamCache"/> does
+    /// not reach them either — it excludes <c>chara/equipment</c> and <c>chara/accessory</c> outright, and
+    /// they are neither overlay materials nor keys of our published manifest.
+    ///
+    /// The consequence was a hole exactly where an outfit mod lives. Such a mod was classified as feeding
+    /// the composite only if it happened to supply something ELSE in the set — an append-host necklace, say
+    /// — and then <see cref="ModSettingMovedABase"/> compared that necklace and nothing else. Toggling the
+    /// gloves group off an outfit whose hand shell is cut from its glove model moved a path no one had
+    /// written down, so the honest answer to "did a base move" was "not one I know about", and the shell
+    /// kept the hands it had.
+    ///
+    /// Late in the run on purpose: the gear phase has finished, so this is a handful of resolves against a
+    /// settled collection, and their only consumers are the two records taken immediately after. Our own
+    /// manifest never publishes these paths — it redirects the HOST accessory, not the parts — so the
+    /// resolves come back clean.
+    /// </summary>
+    private void RecordShellSourceUpstreams()
+    {
+        try
+        {
+            // Bare-body and human models included, not just gear: a slot with nothing equipped is cut from
+            // the bare body, and an iris shell from the face model, so those are bases on exactly the same
+            // footing. A body mod moving one already reaches us through the material side, but the MODEL is
+            // what the shell reads and it is the model that has to be watched.
+            foreach (var p in ShellSourceModelPaths()) ResolveUpstream(p);
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: this is bookkeeping for the NEXT settings change, and the composite it runs at
+            // the end of has already published. Losing it costs one over-eager recomposite, not a wrong one.
+            log.Debug("[Proteus] recording shell source upstreams failed: {0}", ex.Message);
+        }
+    }
+
+    /// <summary>Every model game path the second skin may read as shell geometry, deduplicated.</summary>
+    private IEnumerable<string> ShellSourceModelPaths()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string? p) { if (!string.IsNullOrEmpty(p)) seen.Add(p!); }
+
+        if (_equippedPartModels is { } parts) foreach (var p in parts.Values) Add(p);
+        if (_bareBodyModels is { } bare) foreach (var p in bare.Values) Add(p);
+        if (_humanPartModels is { } human) foreach (var p in human) Add(p);
+        return seen;
     }
 
     private void OnPenumbraReady()
@@ -1043,7 +1407,13 @@ public class CompositorService : IDisposable
         }
 
         if (equipChanged && config.PluginEnabled)
-            TriggerRecomposite("equipment-change", force: false);
+            // Exempt from the manual-mode gate while a shell is standing: the reconcile above just put the
+            // carriers back from _lastShellCarrierSlots, and this is the only thing that recomputes which
+            // item should be carrying them. Skipping it with auto redraw off would pin the carrier to the
+            // gear the player just changed out of. No exemption when nothing is hosted — then there is no
+            // injection to keep correct and the change really is just a look.
+            TriggerRecomposite("equipment-change", force: false,
+                autoRedrawExempt: _secondSkinActive);
 
         if (Interlocked.Exchange(ref _pendingCustomizationRecomposite, 0) == 1)
             TriggerRecomposite("glamourer-customization", force: false);
@@ -1515,7 +1885,11 @@ public class CompositorService : IDisposable
                 // that no longer exists.
                 RememberHostDecision(gearWanted: false, shellBuilt: false, onFacewear: false, carrierSlots: []);
                 if (restoreAccessory) _needFullRedraw = true;
-                ReloadAndRedraw();   // character reverts to un-composited
+                // userRequested: unticking Enabled promises "clears Proteus' output, redraws you without
+                // it". The output is already withdrawn by the time we get here, so a suppressed redraw
+                // does not leave the old look — it leaves the character rendering textures nothing points
+                // at any more, with no way to tell the plugin actually switched off.
+                ReloadAndRedraw(userRequested: true);   // character reverts to un-composited
                 _secondSkinActive = false;
                 ClearShellLocators();   // the shell is off the character; nothing left for them to describe
 
@@ -1641,10 +2015,45 @@ public class CompositorService : IDisposable
     /// `mtrl:`/`content:`/`maskrow:` blocks. It is NOT a licence to skip: reuse still requires the skin
     /// fingerprint to match, so an edit that genuinely moves a skin texel rebuilds regardless.
     /// </param>
+    /// <param name="autoRedrawExempt">
+    /// This ambient trigger runs even with auto redraw off. For the case where skipping does not merely
+    /// leave the look stale but leaves an ACTION of ours wrong — see the equipment-change call site, where
+    /// a hosted shell means we are injecting carrier items into the player's gear off a host decision the
+    /// change just invalidated. It exempts the trigger from the manual-mode gate ONLY; the composite it
+    /// starts still reaches RefreshPlayerTextures, which stays gated, so the promise the setting makes —
+    /// we do not reload your character — is kept either way.
+    /// </param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
-        bool skinFingerprintAuthoritative = false)
+        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
+
+        // Auto redraw off means Proteus does nothing on its OWN initiative — not just that it withholds
+        // the reload at the end. An ambient trigger is the whole of that initiative, so it stops here,
+        // before the debounce timer and before any work is scheduled.
+        //
+        // `force` is exactly the right test, and the only one that already exists: it is set by every path
+        // the user drove (the Refresh button, every editor interaction, a mod's settings changing) and
+        // clear on every path the world drove (zoning, redraws, equipment changes, collection switches,
+        // Glamourer re-asserting temporary settings). Which is the distinction the setting is naming.
+        //
+        // Dropping these outright — rather than compositing and withholding the redraw — is safe because
+        // an ambient trigger's output is not owed to anyone yet: the previous composite stays published,
+        // so the character keeps wearing it, and turning the setting back on forces a catch-up composite
+        // (see StatusWindow's auto-redraw-enabled). The cost of being wrong is a stale look until the
+        // user acts, which is what they asked for.
+        //
+        // …with one exception, which is what autoRedrawExempt names: a stale LOOK is what the user signed
+        // up for, a stale ACTION is not. The shell's carrier items are equipped with ApplyFlag.Once, so the
+        // redraw hook re-asserts them from the remembered host decision after every redraw. Drop the
+        // equipment change that would recompute that decision and we keep forcing a carrier chosen for gear
+        // the player has since taken off, indefinitely, with no way for them to shake it loose.
+        if (!force && !config.AutoRedraw && !autoRedrawExempt)
+        {
+            log.Debug("[Proteus] Recomposite skipped ({0}) — auto redraw is off.", reason);
+            return;
+        }
+
         Highlighter?.Clear();
 
         // A forced composite that gets cancelled by an ambient one must not be lost. Without this latch the
@@ -1757,7 +2166,17 @@ public class CompositorService : IDisposable
                 // up front and wait for the body types to actually change, so we composite ONCE with
                 // the settled state. SchedulePostRedrawBodyTypeCheck stays as a backstop for a load
                 // slower than this window.
-                if (wasDirty && fresh != null
+                //
+                // Skipped when auto redraw is off. This is a REDRAW, and until this check existed it was
+                // the one redraw the setting did not cover: the flag was only ever read on the two
+                // post-publish paths (ReloadAndRedraw, ReloadAndRedrawWhenReady), so a settings change on
+                // any mod that marked the snapshot dirty reloaded the character here regardless of it.
+                // Users who turn auto redraw off are asking us never to reload their character on our own
+                // initiative, and they accept the consequence this branch exists to avoid: a body mod's
+                // new materials aren't live yet, so this composite reads the pre-change snapshot and a
+                // later one corrects it. The settle poll goes with it — with no reload to wait on it can
+                // only stall the composite ~3s for a body-type change that will never arrive.
+                if (wasDirty && fresh != null && config.AutoRedraw
                     && string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase))
                 {
                     var beforeKey = _lastCompositedBodyType;
@@ -2687,11 +3106,16 @@ public class CompositorService : IDisposable
                 // a multi-second composite, by which point the window had always lapsed.
                 ScheduleCarrierRetry((int)(GlassesInjectCooldownMs - sinceInject));
 
-            if (MetSnapshotKnown && !AnyMetWorn()
-                && sinceInject > GlassesInjectCooldownMs
-                && SetGlassesOnFramework(g.ItemId))
+            if (MetSnapshotKnown && !AnyMetWorn() && sinceInject > GlassesInjectCooldownMs)
             {
+                // Charge the cooldown on the ATTEMPT, not the success. A slot locked by another plugin
+                // refuses every equip, and stamping only on success left the window permanently open:
+                // the redraw hook and ScheduleCarrierRetry then re-tried on every single redraw.
+                var equipped = SetGlassesOnFramework(g.ItemId);
                 _lastGlassesInjectTick = Environment.TickCount64;
+                if (!equipped)
+                    return;
+
                 _injectedGlasses = true;
                 if (alreadyHosted)
                 {
@@ -2846,9 +3270,12 @@ public class CompositorService : IDisposable
             return;
         }
 
-        if (SetAccessoryOnFramework(r.ItemId, ringSlot))
+        // Charge the cooldown on the ATTEMPT, not the success — see the glasses. A slot another plugin has
+        // locked refuses every equip, and stamping only on success left the window permanently open.
+        var equipped = SetAccessoryOnFramework(r.ItemId, ringSlot);
+        _lastRingInjectTick = Environment.TickCount64;
+        if (equipped)
         {
-            _lastRingInjectTick = Environment.TickCount64;
             MarkCarrierInjected(ringSlot);
             // No follow-up recomposite: the shell is ALREADY published at the path this piece loads, so the
             // equip's own redraw lands on the finished shell (the glasses path needs one only when it
@@ -3186,7 +3613,16 @@ public class CompositorService : IDisposable
                 ReconcileInvisibleGlasses(gearWanted: false, shellBuilt: false, hostedOnFacewear: false);
                 ReconcileEmperorRing(gearWanted: false, shellBuilt: false, carrierSlots: []);
 
-                ReloadAndRedraw();
+                // userRequested, for the same reason SetEnabled(false) passes it: this branch has already
+                // published an EMPTY manifest, so a suppressed redraw does not preserve the old look — it
+                // strands the character rendering textures no redirect points at any more. Withdrawing
+                // output and refusing to redraw is the one combination that has no honest reading.
+                //
+                // Only ever changes behaviour with auto redraw off, and there this branch is reachable
+                // solely from a forced composite (ambient ones never run), i.e. from the user switching the
+                // last overlay mod off. So the flag never overrides the setting on a run the user didn't ask
+                // for.
+                ReloadAndRedraw(userRequested: true);
                 LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
                 ResultChanged?.Invoke();
                 return;
@@ -3244,6 +3680,43 @@ public class CompositorService : IDisposable
             // across layers (a skin group can outrank a gear group), so it needs the full picture.
             var allOverlays = new List<(OverlayEntry Entry, ResolvedOverlay Overlay)>();
 
+            var activeMtrl = _activeMtrlSnapshot;
+            // Declared out here so the sibling-synthesis pass below can tell "this body type isn't loaded
+            // at all" from "the type is loaded, but not the material this sibling would target" — the two
+            // read identically in the logs otherwise, and the distinction is the whole answer when a
+            // vanilla sibling silently stops being synthesized.
+            //
+            // Filled HERE, ahead of the entry loop, rather than beside that pass: the promotion below has to
+            // know whether the body being worn is the mirrored one before it can decide whether an overlay
+            // needs an un-mirrored shell.
+            var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (activeMtrl != null)
+                foreach (var m in activeMtrl)
+                {
+                    var bt = UVRemapService.InferBodyType(m);
+                    if (bt != null) activeBodyTypes.Add(bt);
+                }
+
+            // Some surface on this character is a MIRRORED body: one sheet for both sides, so asymmetric art
+            // painted into it is folded in half (see OverlayDescriptor.AsymmetricArt). Often that surface is
+            // the skin bundled INTO a garment rather than the body mod the wearer thinks of as theirs.
+            bool wearingMirroredBody = HasMirroredBodySurface(activeBodyTypes);
+
+            // Mods with an overlay that needs an un-mirrored shell. Those are the ones allowed past the gen2
+            // opt-in below — the character is wearing vanilla, so the shell isn't being synthesized onto some
+            // other body, it is the only way that mod's art can render at all.
+            var unmirrorMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Mods already told "your art is asymmetric but nothing is folding it", so the line is logged
+            // once per mod rather than once per overlay.
+            var asymmetricNotWorn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Shared with the editor so the two can't disagree about what was composited — see the static
+            // NeedsUnmirroredShell. The hoisted `wearingMirroredBody` is passed rather than re-read, so every
+            // overlay in this run is judged against one reading of the worn body.
+            bool NeedsUnmirroredShell(OverlayDescriptor d)
+                => CompositorService.NeedsUnmirroredShell(d, wearingMirroredBody);
+
             foreach (var entry in entries)
             {
                 if (entry.Metadata.HasContent)
@@ -3266,6 +3739,14 @@ public class CompositorService : IDisposable
                 }
 
                 var overlays = discovery.ResolveActiveOverlays(entry);
+
+                // Asymmetry is DECLARED, never measured here. It used to be probed on a null and written back
+                // to the mod, and that was wrong in a way no threshold could fix: a real skin texture is
+                // never symmetric — freckles, moles, a beauty mark — so the measurement said "asymmetric"
+                // about ordinary skin and moved it onto a shell, where it lost the wearer's tone and
+                // rendered grey and glossy. A deliberate one-sided design and incidental skin detail differ
+                // in degree, not in kind, so only the author can tell them apart. See
+                // OverlayDescriptor.AsymmetricArt and the tick in the colour panel.
 
                 // A restored design binding overrides metadata colors in-memory (metadata.json is
                 // never written). Replace each overlay's rows with the binding's, falling back to
@@ -3320,6 +3801,32 @@ public class CompositorService : IDisposable
                     // stops it: the shell builder is not material-aware, so a face overlay reaching it built
                     // a BODY shell and pasted the face art across the whole character.
                     bool canShell = CanRenderAsShell(overlay.Descriptor);
+                    bool unmirrors = NeedsUnmirroredShell(overlay.Descriptor);
+                    // Asymmetric art that is NOT being un-mirrored, said out loud. Without this the feature
+                    // simply does nothing and the log offers no reason at all — the shell lines report the
+                    // body they cut, never the body the character is wearing, and the two differ exactly
+                    // when this matters. Once per mod: the decision is the mod's, not the overlay's.
+                    if (!unmirrors && overlay.Descriptor.AsymmetricArt == true
+                        && !wearingMirroredBody && asymmetricNotWorn.Add(entry.ModDirectory))
+                        log.Information("[Proteus] {0}: art is asymmetric, but the body being worn is {1} — "
+                                      + "nothing folds it, so it paints normally. Un-mirroring is only for a "
+                                      + "character actually wearing vanilla/gen2 (and only then is vanilla the "
+                                      + "single active body type)",
+                            entry.ModDirectory,
+                            activeBodyTypes.Count == 0
+                                ? "not known yet"
+                                : string.Join("+", activeBodyTypes.OrderBy(x => x, StringComparer.Ordinal)));
+                    if (unmirrors)
+                    {
+                        if (canShell) unmirrorMods.Add(entry.ModDirectory);
+                        else
+                            // The fallback is the fold: the vanilla crop keeps the +X side and mirrors it.
+                            // Nothing renders blank, but half the art is gone and the log is the only place
+                            // that says so.
+                            log.Information("[Proteus] {0}: asymmetric art on a vanilla body, but no shell can "
+                                          + "be cut for the surface it paints — it falls back to the mirrored "
+                                          + "half-sheet and one side of the art is lost", entry.ModDirectory);
+                    }
                     if (!canShell && overlay.Descriptor.Layer == OverlayLayer.Gear)
                     {
                         var demoted = CloneDescriptor(overlay.Descriptor);
@@ -3333,10 +3840,19 @@ public class CompositorService : IDisposable
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
-                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell))
+                            overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
+                            unmirrors))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
+                        // Set AFTER the clone on purpose — CloneDescriptor round-trips through JSON and this
+                        // is [JsonIgnore], so it would not survive being set on the original.
+                        promoted.PromotedFromSkin = true;
+
+                        // Which shader it lands on — through the SAME predicate the editor asks, so the two
+                        // cannot disagree about what was composited (see RenderModeInference.PromotedShader).
+                        promoted.Shader = RenderModeInference.PromotedShader(promoted, overlay.ColorTableRows);
+
                         ov = overlay with { Descriptor = promoted };
 
                         // Only when GLOW is what moved it: an overlay already promoted for sitting above
@@ -3372,20 +3888,9 @@ public class CompositorService : IDisposable
             //     (the type is active for a different race/body code, not this one).
             //   - If a body material's type is NOT in the snapshot at all → keep (mid-switch: the
             //     new body type hasn't appeared yet; post-redraw check will clean up if needed).
-            var activeMtrl = _activeMtrlSnapshot;
-            // Declared out here so the sibling-synthesis pass below can tell "this body type isn't loaded
-            // at all" from "the type is loaded, but not the material this sibling would target" — the two
-            // read identically in the logs otherwise, and the distinction is the whole answer when a
-            // vanilla sibling silently stops being synthesized.
-            var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // activeMtrl / activeBodyTypes are built ahead of the entry loop above, because the gear
+            // promotion there needs to know which body is being worn.
             {
-                if (activeMtrl != null)
-                    foreach (var m in activeMtrl)
-                    {
-                        var bt = UVRemapService.InferBodyType(m);
-                        if (bt != null) activeBodyTypes.Add(bt);
-                    }
-
                 _lastCompositedBodyType = activeBodyTypes.Count > 0
                     ? string.Join(",", activeBodyTypes.OrderBy(x => x))
                     : null;
@@ -3797,7 +4302,7 @@ public class CompositorService : IDisposable
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
                 maskShellMods, baseKeys, contentLayers, skinOnly: true);
 
-            if (!force && config.SkipUnchangedComposites && Volatile.Read(ref _forcePending) == 0
+            if (!force && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
             {
                 // Still reconcile the carriers. They are ApplyFlag.Once, so whatever redraw led here may
@@ -3840,7 +4345,7 @@ public class CompositorService : IDisposable
             var lastSkin = _lastSkinPublish;
             bool skinReused =
                 (!force || skinFingerprintAuthoritative)
-                && config.SkipUnchangedComposites && Volatile.Read(ref _skinForcePending) == 0
+                && Volatile.Read(ref _skinForcePending) == 0
                 && _lastCompositeFingerprint != null
                 && lastSkin != null && skinFingerprint == lastSkin.Fingerprint
                 && lastSkin.Redirects.Count > 0
@@ -5579,6 +6084,7 @@ public class CompositorService : IDisposable
             // describe a shell that IS on the character, and the publish below still empties them when no
             // shell built this time.
             Dictionary<(string ModDir, string? Group, string? Option), List<string>>? nextShellMaterials = null;
+            Dictionary<string, ShellLightProfile>? nextShellLight = null;
             Dictionary<string, HashSet<string>>? nextContentMaterials = null;
             ShellDrawnProbe? nextShellDrawnCheck = null;
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
@@ -5790,10 +6296,15 @@ public class CompositorService : IDisposable
                         // post-settle read swaps _bodyShapeSnapshot mid-build.
                         var bodyShapes = _bodyShapeSnapshot;
 
-                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling.
+                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling —
+                        // EXCEPT for a mod whose art has to be un-mirrored. That opt-in asks "may Proteus
+                        // paint this onto a body besides the one you have on"; here vanilla IS the body being
+                        // worn, and the shell is not an extra rendering of the art but the only one that can
+                        // show both of its sides.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
-                            modDir => config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
+                            modDir => unmirrorMods.Contains(modDir)
+                                   || config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
@@ -5868,13 +6379,34 @@ public class CompositorService : IDisposable
                             // also forced, and treating THAT as a new model is what used to cost a redraw
                             // and its flicker on every colour change (see above). Here there is nothing to
                             // flicker away from — the output is identical either way.
+                            //
+                            // And bounded by what the drawn check last reported, because `force` is far
+                            // wider than the button this was written for. It is also set by every settings
+                            // change the user makes to any mod that FEEDS the composite — swapping a glove
+                            // option on an outfit whose model we cut a shell from, say — and those arrive
+                            // as often as someone fiddles with Penumbra. Each one produced this exact log
+                            // line and a full redraw for byte-identical output. The net is only worth its
+                            // flicker while the shell's state is unknown: once the check has confirmed the
+                            // materials are on the character, and nothing has changed since, there is
+                            // provably nothing for the redraw to fix.
                             bool nothingChanged = !shells.ModelChanged && !shapesChanged && !hostsChanged
                                                && !shells.ShellChanged;
+                            // Read against the probe still standing, i.e. the shell the character is wearing
+                            // right now: this runs BEFORE the publish below swaps in the new one. A changed
+                            // shell retires the verdict on its own, because its key no longer matches.
+                            var standing = _shellDrawnCheck;
+                            bool confirmedDrawn = standing != null
+                                && string.Equals(_shellConfirmedDrawnKey, ShellProbeKey(standing), StringComparison.Ordinal);
+                            bool unstickShell = force && nothingChanged && !confirmedDrawn;
                             _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
-                                           || (force && nothingChanged);
-                            if (force && nothingChanged)
-                                log.Debug("[Proteus] second skin unchanged on a forced composite — redrawing "
-                                        + "anyway, since an in-place reload can't reload a host accessory");
+                                           || unstickShell;
+                            if (unstickShell)
+                                log.Debug("[Proteus] second skin unchanged on a forced composite and not yet "
+                                        + "confirmed drawn — redrawing anyway, since an in-place reload "
+                                        + "can't reload a host accessory");
+                            else if (force && nothingChanged)
+                                log.Debug("[Proteus] second skin unchanged on a forced composite and already "
+                                        + "confirmed drawn — no redraw needed");
                             if (shells.ModelChanged)
                                 log.Debug("[Proteus] second skin model changed — forcing a full redraw");
                             else if (shapesChanged)
@@ -5885,6 +6417,7 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             nextShellMaterials = shells.ShellMaterials;
                             nextContentMaterials = shells.ContentMaterials;
+                            nextShellLight = shells.ShellLight;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
                             nextShellDrawnCheck = new ShellDrawnProbe(
@@ -5929,6 +6462,7 @@ public class CompositorService : IDisposable
             // ClearShellLocators instead.
             _shellMaterials   = nextShellMaterials ?? new();
             _contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
+            _shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             _shellDrawnCheck  = nextShellDrawnCheck;
 
             // No shell built this composite (no gear, or build failed) but hosts were redirected last time —
@@ -5989,8 +6523,15 @@ public class CompositorService : IDisposable
             // would drop paths a later mod change needs to be judged against, and the mod would read as
             // "does not affect us" — a missed recomposite, which is exactly the failure the widening
             // above exists to prevent. Adding is still safe and still useful.
+            // The MODELS the shell is cut from, which nothing else puts in the memo. See the method.
+            RecordShellSourceUpstreams();
+
             RecordCompositeBaseKeys(baseKeys.Concat(_upstreamByGamePath.Keys), baseSignature,
                 authoritative: !skinReused);
+            // Same moment, same run: what those base paths RESOLVED to, so the next settings change can be
+            // judged against a composite that really happened rather than against a live memo the handler
+            // is about to empty.
+            _lastBaseUpstreams = new Dictionary<string, string>(_upstreamByGamePath, StringComparer.OrdinalIgnoreCase);
 
             // Reconcile the injected host items AFTER the redirect mod is live, so when the equip's redraw
             // loads the model it resolves straight to the shell (no visible frames, no bare ring). Each
@@ -6607,7 +7148,7 @@ public class CompositorService : IDisposable
     ///
     /// ANCHORED ON THE EXPECTED TARGET, which is what makes the answer trustworthy. This runs straight after
     /// <c>ReloadModDirectory</c>, which Penumbra processes asynchronously, and the caller does not reliably
-    /// wait first: under DisableAutoRedraw nothing waits at all, and WaitForManifestLive returns immediately
+    /// wait first: with auto redraw off nothing waits at all, and WaitForManifestLive returns immediately
     /// whenever no redirect changed. Sampling until the answer merely STOPS MOVING is not enough — a reload
     /// still sitting in Penumbra's queue gives a perfectly stable PRE-reload answer, so "settled" and "never
     /// started" read identically, and a newly published path would be reported as lost to the very mod it was
@@ -7280,7 +7821,7 @@ public class CompositorService : IDisposable
     /// Two independent reasons, both of which outlive any improvement to the readiness probe:
     ///
     /// The reload is ASYNCHRONOUS. <see cref="WaitForManifestLive"/> does confirm the new manifest landed
-    /// (measured at 16-32 ms in practice), but it is skipped entirely under DisableAutoRedraw and can hit
+    /// (measured at 16-32 ms in practice), but it is skipped entirely when auto redraw is off and can hit
     /// its timeout, so "confirmed" is not something every path can rely on.
     ///
     /// And composites OVERLAP. Cancellation is cooperative and its last check sits far above the writes,
@@ -7334,7 +7875,7 @@ public class CompositorService : IDisposable
     /// give. It keeps anything named by ANY of the last <see cref="PublishHistoryDepth"/> manifests, so it
     /// does not matter which one Penumbra is currently serving — deleting right after publishing meant
     /// racing an asynchronous reload whose readiness poll times out routinely and is skipped entirely
-    /// under DisableAutoRedraw. And it stands down while another composite is in flight, because that
+    /// when auto redraw is off. And it stands down while another composite is in flight, because that
     /// composite has already passed its last cancellation check and will write files and publish them:
     /// deleting its output mid-run would hand it a manifest full of dangling redirects.
     ///
@@ -7385,15 +7926,17 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void ReloadAndRedraw(bool redraw = true)
+    /// <param name="userRequested">See <see cref="RefreshPlayerTextures"/> — the redraw IS the action, so
+    /// auto redraw does not gate it.</param>
+    private void ReloadAndRedraw(bool redraw = true, bool userRequested = false)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (redraw && !config.DisableAutoRedraw)
+        if (redraw && (config.AutoRedraw || userRequested))
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
-            RefreshPlayerTextures();
+            RefreshPlayerTextures(userRequested);
         }
     }
 
@@ -7455,8 +7998,29 @@ public class CompositorService : IDisposable
         });
     }
 
-    private void RefreshPlayerTextures()
+    /// <param name="userRequested">
+    /// This reload IS the thing the user asked for, so auto redraw does not gate it. Set only where the
+    /// redraw is the whole point of the action rather than a way to show its result — switching Proteus
+    /// off, whose entire promise is "clears Proteus' output, redraws you without it". Leaving that one
+    /// gated meant the output was withdrawn and the character kept rendering it, so the plugin looked
+    /// stuck on with the checkbox unticked. Same reasoning that already exempts RestoreChangedAccessory,
+    /// which reaches penumbra.RedrawPlayer directly rather than coming through here.
+    /// </param>
+    private void RefreshPlayerTextures(bool userRequested = false)
     {
+        // The chokepoint every self-initiated character reload goes through — in-place reload and full
+        // redraw alike — so the auto-redraw check is enforced HERE as well as at the call sites. Enforcing it
+        // only at the call sites is what let it be missed: the two post-publish paths checked it and the
+        // composite preamble's reload did not, so the setting silently meant "no redraw AFTER a publish"
+        // rather than "no redraw". Those call sites still check it too, because skipping the redraw is not
+        // the whole of what they need to skip (the preamble also has a ~3s settle poll that only makes
+        // sense if a reload actually happened).
+        if (!config.AutoRedraw && !userRequested)
+        {
+            log.Debug("[Proteus] Player reload skipped — auto redraw is off.");
+            return;
+        }
+
         if (config.UseInPlaceReload && !_needFullRedraw)
         {
             Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
@@ -7520,7 +8084,7 @@ public class CompositorService : IDisposable
     /// <returns>
     /// Whether the published manifest was OBSERVED to be live — a probe resolving to the file we just wrote,
     /// or a withdrawn path confirmed gone. False means unproven, not disproven: nothing changed so there was
-    /// nothing to probe, the wait timed out, or DisableAutoRedraw skipped it. <see cref="VerifyRedirectsLive"/>
+    /// nothing to probe, the wait timed out, or auto redraw was off. <see cref="VerifyRedirectsLive"/>
     /// needs the distinction, because "no path resolves to us" means we are outranked everywhere if the
     /// manifest is known live, and means nothing at all if it isn't.
     /// </returns>
@@ -7529,7 +8093,7 @@ public class CompositorService : IDisposable
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
-        if (config.DisableAutoRedraw) return false;
+        if (!config.AutoRedraw) return false;
 
         bool live = WaitForManifestLive(redirects, previous);
 
@@ -7697,6 +8261,9 @@ public class CompositorService : IDisposable
                     missing = expected.Materials.Where(p => !materials.Contains(p)).ToList();
                     if (missing.Count == 0)
                     {
+                        // The one place this is set. Everything below is a failure, an inconclusive read or
+                        // a deferral, and none of those may claim a shell is drawn.
+                        _shellConfirmedDrawnKey = ShellProbeKey(expected);
                         // INFORMATION, not Debug. This is the one line that separates "the shell is on the
                         // character and something about the RENDER is wrong" from "it never loaded", and the
                         // file log a user sends is INF+ — so at Debug the answer was never in the evidence,
@@ -7761,6 +8328,7 @@ public class CompositorService : IDisposable
 
                 // A failure makes the next success a transition, so print its paths in full when it comes.
                 _lastDrawnMaterials = null;
+                _shellConfirmedDrawnKey = null;
 
                 log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
                           + "shell material(s) never appeared on the character: {2}. The host accessory it "
@@ -8410,6 +8978,94 @@ public class CompositorService : IDisposable
         || mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The UV space an overlay's art was painted for: its declared <see cref="OverlayDescriptor.SourceBodyType"/>,
+    /// else inferred from the materials it targets (a mod listing only <c>*_bibo.mtrl</c> is bibo art).
+    /// Null for art that names no body layout, which is then assumed to be in the destination's space already.
+    /// </summary>
+    internal static string? SrcBodyTypeOf(OverlayDescriptor d)
+    {
+        if (d.SourceBodyType != null) return d.SourceBodyType;
+        if (d.MaterialGamePaths.Any(p => p.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)))
+            return "bibo";
+        if (d.MaterialGamePaths.Any(p => UVRemapService.InferBodyType(p) == "gen3")) return "gen3";
+        return null;
+    }
+
+    /// <summary>
+    /// Whether ANY vanilla/gen2 body surface is on the character — a mirrored layout, where one sheet
+    /// describes both sides and asymmetric art painted into it is folded in half.
+    /// <para/>
+    /// Presence, NOT exclusivity. This was first written as "gen2 and nothing else", on the reasoning that a
+    /// wardrobe holding gen2 beside an asymmetric body has somewhere un-mirrored for the art to land. That
+    /// is wrong, and it is wrong in the ordinary case rather than an exotic one: a character's skin is not
+    /// one surface. GEAR SHIPS ITS OWN SKIN — a garment model carries the body it exposes, and plenty of
+    /// them carry it as vanilla geometry pointing at <c>mt_c0201b0001_a.mtrl</c>. So a Bibo+ wearer in such
+    /// a top has a bibo body AND a gen2 torso at once, and the art on that torso really is folded. Having a
+    /// bibo surface elsewhere on the same character rescues nothing.
+    /// <para/>
+    /// <see cref="UVRemapService.InferBodyType"/> only answers gen2 for a material under <c>/obj/body/</c>,
+    /// so a hit here always means a real body surface rather than a same-suffixed equipment material.
+    /// </summary>
+    /// <remarks>
+    /// Takes the concrete <see cref="HashSet{T}"/> deliberately: both callers build theirs with an
+    /// OrdinalIgnoreCase comparer, and widening the parameter would send <c>Contains</c> to the LINQ
+    /// extension, whose case sensitivity depends on an implementation detail of the argument.
+    /// </remarks>
+    internal static bool HasMirroredBodySurface(HashSet<string> activeBodyTypes)
+        => activeBodyTypes.Contains("gen2");
+
+    /// <summary>
+    /// Whether this overlay can only keep BOTH of its sides on a shell — the third reason
+    /// <see cref="RenderModeInference.ShouldPromoteToGear"/> promotes a Skin overlay.
+    /// <para/>
+    /// Asymmetric art painted into a mirrored body is folded in half — one side discarded, the other
+    /// mirrored onto the whole body — and the skin layer has no way out of that, because it paints into the
+    /// body's own material and the body's own UVs. A shell can: it carries its own geometry, so its vertices
+    /// can be sent to both halves of the art's sheet (SecondSkinService's un-mirroring).
+    /// <para/>
+    /// Split from the composite's own <paramref name="wearingMirroredBody"/> so the EDITOR can ask the same
+    /// question (see the instance overload) without re-deriving it. The compositor passes the value it
+    /// hoisted once for the run; re-reading the live snapshot mid-run could answer two overlays differently.
+    /// </summary>
+    internal static bool NeedsUnmirroredShell(OverlayDescriptor d, bool wearingMirroredBody)
+    {
+        if (d.AsymmetricArt != true) return false;
+        // The art has to have two sides to spread: art authored in a mirrored space itself has only one,
+        // whatever the measurement said.
+        var src = d.SourceBodyType ?? SrcBodyTypeOf(d);
+        if (src == null || UVRemapService.DoubledSpaceOf(src) != null) return false;
+
+        // A doubled FACE sheet needs the shell unconditionally. The vanilla face layout is mirrored on every
+        // character — there is no second face to be wearing — so unlike the body there is no "is the worn one
+        // the mirrored one" question to ask, and activeBodyTypes never names a face anyway.
+        if (string.Equals(src, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase)) return true;
+
+        return wearingMirroredBody;
+    }
+
+    /// <summary>
+    /// <see cref="NeedsUnmirroredShell(OverlayDescriptor, bool)"/> against the CURRENTLY worn body, for the
+    /// editor — which has no composite run to inherit a hoisted answer from.
+    /// <para/>
+    /// Unlike <see cref="CanRenderAsShell"/> this one is deliberately live-state-dependent: whether the art
+    /// gets folded genuinely depends on which body is on the character right now, and an overlay that would
+    /// be promoted on vanilla is not promoted on bibo. The editor must follow that, or it shows Skin for
+    /// something the compositor rendered as a shell.
+    /// </summary>
+    public bool NeedsUnmirroredShell(OverlayDescriptor d)
+    {
+        var snapshot = _activeMtrlSnapshot;
+        if (snapshot == null) return false;   // nothing known about the worn body — keep today's behaviour
+        var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in snapshot)
+        {
+            var bt = UVRemapService.InferBodyType(m);
+            if (bt != null) types.Add(bt);
+        }
+        return NeedsUnmirroredShell(d, HasMirroredBodySurface(types));
+    }
+
+    /// <summary>
     /// Whether a shell can be cut for this overlay at all — the precondition on the auto-promotion in
     /// <see cref="RenderModeInference.ShouldPromoteToGear"/>. True for every surface the shell builder knows
     /// how to cut: the body, and the character's own face, hair, tail and ears. False for gear, accessories,
@@ -8969,7 +9625,8 @@ public class CompositorService : IDisposable
     /// <list type="bullet">
     /// <item>Texels already naming a configured row — including the whole blend band between two adjacent
     /// configured rows (with 15 and 16 set, every value from 239 to 254 already reads as row 15), so
-    /// boundaries between real rows keep their current appearance.</item>
+    /// boundaries between real rows keep their current appearance. The <paramref name="authored"/> flags are
+    /// the one exception, and only for texels nobody ever wrote.</item>
     /// <item>GREEN, the A/B sub-row weight. That one is a genuine continuous blend.</item>
     /// <item>Coverage/alpha. Edges stay antialiased — only the row they name is corrected.</item>
     /// </list>
@@ -8988,10 +9645,30 @@ public class CompositorService : IDisposable
     /// band (1–2 texels) PLUS however far the separate transparency gate can bleed past the edge — a BC7
     /// block is 4 texels, and mip sampling widens that — so the budget is deliberately larger than the band
     /// alone. Past this the row is left unmapped; more only costs time.</param>
+    /// <param name="authored">Optional per-texel flag: false marks a texel whose row selector was never
+    /// written by anyone, so it is repaired even when the value sitting there happens to name a configured
+    /// row. Needed because a SYNTHESIZED index background is a real selector — a mask shell has no _id of
+    /// its own, so <see cref="SecondSkinService"/> invents one and the masks paint over only part of it, and
+    /// the numeric test alone cannot tell "the author put this row here" from "nothing was written here".
+    /// Getting that wrong left the unclaimed band un-repaired the moment a colorset happened to configure
+    /// the seeded row. Null ⇒ every texel counts as authored (the case for a shell with real _id art).</param>
     internal static void SnapIndexRowsToDefined(byte[] index, int w, int h,
-        IReadOnlyCollection<int> definedRows, int dilate = 8)
+        IReadOnlyCollection<int> definedRows, int dilate = 8, bool[]? authored = null)
     {
         if (index.Length < w * h * 4 || definedRows.Count == 0 || w <= 0 || h <= 0) return;
+        if (authored != null && authored.Length < w * h)
+        {
+            // Ignore it rather than throw — this runs mid-composite and a half-applied repair is worse than
+            // none. But say so: silently dropping it turns a caller bug into "the fringe came back", which
+            // reads as a shader or art problem and is traced back here only by accident.
+            //
+            // Null-conditional because this is a pure static helper: the tests call it with no Dalamud
+            // behind them, and so would anything that ran before the plugin's services are injected.
+            Plugin.Log?.Error("[Proteus] SnapIndexRowsToDefined: authored flags cover {0} texels, need {1} — "
+                + "ignoring them, so unwritten texels naming a configured row will NOT be repaired",
+                authored.Length, w * h);
+            authored = null;
+        }
 
         var isDefined = new bool[17];
         foreach (var r in definedRows)
@@ -9000,42 +9677,90 @@ public class CompositorService : IDisposable
         int n = w * h;
         var valid = new bool[n];
         ParallelPixels(0, n, 1, (from, to) =>
-        { for (int p = from; p < to; p++) valid[p] = isDefined[index[p * 4] / 17 + 1]; });
+        { for (int p = from; p < to; p++) valid[p] = (authored?[p] ?? true) && isDefined[index[p * 4] / 17 + 1]; });
 
-        // One scratch buffer reused by every pass rather than a fresh clone per pass: `valid` is w×h bytes
-        // (4 MB on a 2048² map), and cloning it each pass churned ~16 MB per texture per composite — on a
-        // path that reruns for every shell on every colour edit.
-        var snapshotValid = new bool[n];
+        // Only an INVALID texel with a VALID neighbour can ever be filled, so the passes walk that frontier
+        // instead of rescanning the map. The old full-image scan per pass was nearly free while the invalid
+        // region was a thin antialiased edge band: it found nothing on the first pass and broke out. Once
+        // `authored` started marking a mask shell's whole unwritten background invalid there is real work
+        // every pass, and the full dilate budget of whole-map scans measured 103 ms against 16 ms for the
+        // early-exit case, on a 2048² map, on a path that reruns for every shell on every colour edit.
+        //
+        // The frontier is a boundary, so it is thousands of texels where the map is millions. Its worst
+        // case — an `authored` pattern shredded fine enough that the boundary IS most of the map — is no
+        // worse than the whole-map scan this replaces.
+        var queued = new bool[n];   // already on a frontier. Never cleared: once a texel fills it is valid
+                                    // for good, and the !valid test below is what keeps it from returning.
 
-        // Spread valid rows outward one texel per pass. Each pass reads the PREVIOUS pass's validity
-        // snapshot, so the result doesn't depend on which texel a worker reaches first.
-        for (int it = 0; it < dilate; it++)
+        // Row-major, matching the old scan order, so the frontier is walked in the same sequence and the
+        // "first valid neighbour wins" tie-breaks land identically.
+        var rowSeeds = new List<int>?[h];
+        Parallel.For(0, h, y =>
         {
-            Array.Copy(valid, snapshotValid, n);
-            int filled = 0;
-            Parallel.For(0, h, () => 0, (y, _, local) =>
+            List<int>? seeds = null;
+            int row = y * w;
+            for (int x = 0; x < w; x++)
             {
-                int row = y * w;
-                for (int x = 0; x < w; x++)
-                {
-                    int p = row + x;
-                    if (snapshotValid[p]) continue;
-                    // 4-neighbourhood; first valid neighbour wins. Diagonals add nothing here — the band is
-                    // contiguous, so an extra pass reaches anything a diagonal would.
-                    int src = -1;
-                    if (x > 0     && snapshotValid[p - 1]) src = p - 1;
-                    else if (x < w - 1 && snapshotValid[p + 1]) src = p + 1;
-                    else if (y > 0     && snapshotValid[p - w]) src = p - w;
-                    else if (y < h - 1 && snapshotValid[p + w]) src = p + w;
-                    if (src < 0) continue;
-                    index[p * 4]     = index[src * 4];       // row selector
-                    index[p * 4 + 1] = index[src * 4 + 1];   // and its sub-row weight, so the pair stays coherent
-                    valid[p] = true;
-                    local++;
-                }
-                return local;
-            }, local => Interlocked.Add(ref filled, local));
-            if (filled == 0) break;   // nothing left adjacent to a valid row
+                int p = row + x;
+                if (valid[p]) continue;
+                if ((x > 0 && valid[p - 1]) || (x < w - 1 && valid[p + 1])
+                 || (y > 0 && valid[p - w]) || (y < h - 1 && valid[p + w]))
+                    (seeds ??= new List<int>()).Add(p);
+            }
+            rowSeeds[y] = seeds;
+        });
+        var frontier = new List<int>();
+        foreach (var seeds in rowSeeds)
+        {
+            if (seeds == null) continue;
+            foreach (var p in seeds) { frontier.Add(p); queued[p] = true; }
+        }
+
+        // Spread valid rows outward one texel per pass.
+        var filled = new List<int>();
+        for (int it = 0; it < dilate && frontier.Count > 0; it++)
+        {
+            filled.Clear();
+            // `valid` is not written until the whole frontier has been resolved — that deferral is what the
+            // old snapshot buffer bought, so a texel's source can't be something this same pass just filled.
+            // No snapshot of `index` is needed for the same reason the old code needed none: every frontier
+            // texel is invalid, so none of them is another's source, and nothing is read and written at once.
+            foreach (var p in frontier)
+            {
+                int x = p % w, y = p / w;
+                // 4-neighbourhood; first valid neighbour wins. Diagonals add nothing here — the band is
+                // contiguous, so an extra pass reaches anything a diagonal would.
+                int src = -1;
+                if (x > 0     && valid[p - 1]) src = p - 1;
+                else if (x < w - 1 && valid[p + 1]) src = p + 1;
+                else if (y > 0     && valid[p - w]) src = p - w;
+                else if (y < h - 1 && valid[p + w]) src = p + w;
+                if (src < 0) continue;   // can't happen for a real frontier entry; cheap to not depend on it
+                index[p * 4]     = index[src * 4];       // row selector
+                index[p * 4 + 1] = index[src * 4 + 1];   // and its sub-row weight, so the pair stays coherent
+                filled.Add(p);
+            }
+            foreach (var p in filled) valid[p] = true;
+
+            // Anything still invalid that touches a texel this pass filled. It cannot be adjacent to an
+            // OLDER valid texel — that would have put it on this frontier, and every frontier entry fills.
+            var next = new List<int>();
+            foreach (var p in filled)
+            {
+                int x = p % w, y = p / w;
+                if (x > 0)     Consider(p - 1);
+                if (x < w - 1) Consider(p + 1);
+                if (y > 0)     Consider(p - w);
+                if (y < h - 1) Consider(p + w);
+            }
+            frontier = next;
+
+            void Consider(int q)
+            {
+                if (valid[q] || queued[q]) return;
+                queued[q] = true;
+                next.Add(q);
+            }
         }
     }
 

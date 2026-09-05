@@ -20,6 +20,12 @@ import { renderMarkdown, LANGS, docPathFor, mirrorPathFor } from './render.js';
 const OWNER = 'solona-m';
 const REPO = 'proteus';
 
+// A second plugin served by the same mirror. Only its release zips are hosted here — its listing
+// lives in the same repo.json this worker already proxies, and it ships no icon or documents, so it
+// needs nothing in STATIC_PROXIES. REPO stays the default everywhere else: rawUrl and the document
+// table below are Proteus's own docs, not a shared surface.
+const CAMERA_TOOLS_REPO = 'camera-tools-ffxiv';
+
 // Served at / and /README.md so the host explains itself instead of answering a bare 404. Inlined at
 // build time (scripts/embed-readme.mjs) rather than fetched, so it always describes THIS deployment
 // and the page has no runtime dependency on anything.
@@ -38,12 +44,24 @@ const README_TTL = 300;
 //
 // The first capture is the tag VERBATIM — no normalisation — so what is asked for is what is fetched.
 // Stable releases tag `v2608.309.0.0`, testing builds tag `testing-309`.
+//
+// Each entry carries the repo its paths resolve against, because the mirror now fronts two plugins.
+// Proteus's paths are the bare `/<tag>/<file>` forms and MUST stay that way: ProteusAssets.BaseUrls
+// builds them as `MirrorBase + tag + "/"` in every shipped build, so adding a prefix to them would
+// break every copy of the plugin already installed. A second plugin therefore gets a prefix segment
+// of its own rather than the existing routes being generalised.
 const ROUTES = [
-  /^\/(uvmaps-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.tif)$/,
+  { rx: /^\/(uvmaps-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.tif)$/, repo: REPO },
   // No space in the class: effect assets are uploaded with spaces already replaced by dots, because
   // GitHub rewrites spaces in asset names (see upload-effects.yml).
-  /^\/(effects-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.(?:png|jpe?g))$/,
-  /^\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/,
+  { rx: /^\/(effects-[a-z0-9.-]{1,32})\/([A-Za-z0-9_.-]{1,80}\.(?:png|jpe?g))$/, repo: REPO },
+  { rx: /^\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/, repo: REPO },
+  // Camera Tools. The prefix cannot collide with the route above it: that one requires the first
+  // segment to start `v<digit>` or `testing-<digit>`, which `camera-tools` does not.
+  {
+    rx: /^\/camera-tools\/(v[0-9][0-9.]{0,30}|testing-[0-9]{1,10})\/(latest\.zip)$/,
+    repo: CAMERA_TOOLS_REPO,
+  },
 ];
 
 const YEAR = 31536000;
@@ -315,9 +333,10 @@ export default {
 
     let tag = null;
     let file = null;
-    for (const rx of ROUTES) {
-      const m = rx.exec(url.pathname);
-      if (m) { tag = m[1]; file = m[2]; break; }
+    let repo = null;
+    for (const route of ROUTES) {
+      const m = route.rx.exec(url.pathname);
+      if (m) { tag = m[1]; file = m[2]; repo = route.repo; break; }
     }
     if (!tag) return new Response('Not found', { status: 404 });
 
@@ -331,7 +350,7 @@ export default {
 
     if (!hit) {
       const origin =
-        `https://github.com/${OWNER}/${REPO}/releases/download/${tag}/${encodeURIComponent(file)}` +
+        `https://github.com/${OWNER}/${repo}/releases/download/${tag}/${encodeURIComponent(file)}` +
         `?e=${ORIGIN_EPOCH}`;
 
       // Always fetch the WHOLE object, never the client's range: the cache needs a complete 200 to

@@ -43,6 +43,7 @@ public static class Strings
     public static ImportStrings   Import   { get; private set; } = new();
     public static ContentStrings  Content  { get; private set; } = new();
     public static LuminisStrings  Luminis  { get; private set; } = new();
+    public static EmissiveStrings Emissive { get; private set; } = new();
     public static EyeStrings      Eye      { get; private set; } = new();
     public static ExportStrings   Export   { get; private set; } = new();
     public static ModsListStrings ModsList { get; private set; } = new();
@@ -67,6 +68,7 @@ public static class Strings
         Import   = new ImportStrings();
         Content  = new ContentStrings();
         Luminis  = new LuminisStrings();
+        Emissive = new EmissiveStrings();
         Eye      = new EyeStrings();
         Export   = new ExportStrings();
         ModsList = new ModsListStrings();
@@ -220,6 +222,49 @@ public sealed class CreateStrings
         "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
         "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
 
+    public readonly string FaceSplit = Loc.Localize("Create.FaceSplit.Label",
+        "This face texture is split left/right") + "###createFaceSplit";
+
+    public readonly string FaceSplitTip = Loc.Localize("Create.FaceSplit.Tip",
+        "Tick this only for a face texture painted as TWO HALVES: the character's right side in " +
+        "the right half of the image, their left side in the left half.\n" +
+        "An ordinary face texture gives both cheeks the same pixels, so a mark on one side alone " +
+        "cannot exist in it — Proteus renders a split one through a face layer instead.\n" +
+        "Leave this off for any normal face texture.");
+
+    public readonly string Glow = Loc.Localize("Create.Glow.Label",
+        "Make this art glow") + "###createGlow";
+
+    public readonly string GlowTip = Loc.Localize("Create.Glow.Tip",
+        "Light the art up. Its colour comes from the picture itself, per pixel — there is\n" +
+        "nothing else to set.\n" +
+        "Skin can't emit, so a glowing overlay renders on a second skin instead of being\n" +
+        "painted into yours. Everything else about it works the same, and the Glow dial in\n" +
+        "Colors adjusts it afterwards.");
+
+    public readonly string GlowNeedsDiffuse = Loc.Localize("Create.Glow.NeedsDiffuse",
+        "Pick a diffuse texture first — the glow takes its colour from the art.");
+
+    public readonly string GlowNeedsSkin = Loc.Localize("Create.Glow.NeedsSkin",
+        "Only skin and face targets can glow. A glowing overlay is drawn on a second skin cut\n" +
+        "from your body, and there's nothing to cut one from on gear, an accessory or a weapon.");
+
+    public readonly string GlowAlways = Loc.Localize("Create.Glow.Always", "Always glow");
+
+    public readonly string GlowAlwaysTip = Loc.Localize("Create.Glow.Always.Tip",
+        "The tattoo is there in daylight and glows day and night.\n" +
+        "Kept gentle on purpose: this shader adds one flat colour across the whole tattoo\n" +
+        "rather than following the picture, so a strong value bleaches the art in daylight.\n" +
+        "For a brighter glow at night without that, raise Glow in Colors and set \"Fades in light\".");
+
+    public readonly string GlowDarkOnly = Loc.Localize("Create.Glow.DarkOnly", "Only in the dark");
+
+    public readonly string GlowDarkOnlyTip = Loc.Localize("Create.Glow.DarkOnly.Tip",
+        "Nothing in daylight, glowing in an unlit room — what Atramentum Luminis tattoos did.\n" +
+        "The art fades out as the light on you rises, and takes its own surface with it, so\n" +
+        "there's skin and nothing else in the bright.\n" +
+        "Needs \"React to the scene's light\" in Settings, which is on by default.");
+
     public readonly string NoIndex = Loc.Localize("Create.Slot.NoIndex",
         "This material has no index texture, and it isn't skin or face — nothing here\n" +
         "would read a colour-table row selector.");
@@ -266,6 +311,38 @@ public sealed class SettingsStrings
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
+
+    public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
+
+    public readonly string LightResponseEnabled = Loc.Localize("Settings.LightResponse.Enabled",
+        "React to the scene's light");
+
+    public readonly string LightResponseEnabledTip = Loc.Localize("Settings.LightResponse.Enabled.Tip",
+        "Let rows marked \"Fades in light\" dim as the light on you rises.\n"
+      + "Off, every glow burns at its authored brightness everywhere, the way it did before.\n"
+      + "Nothing is rebuilt either way — this reaches the character through the live material.");
+
+    public readonly string LightResponseManual = Loc.Localize("Settings.LightResponse.Manual",
+        "Set the light level by hand");
+
+    public readonly string LightResponseManualTip = Loc.Localize("Settings.LightResponse.Manual.Tip",
+        "Ignore the scene and use the slider instead.\n"
+      + "The quickest way to see what a dark-only glow does without waiting for dusk,\n"
+      + "and the right setting for gpose, where your own lighting rig is the point.");
+
+    public readonly string LightResponseLevel = Loc.Localize("Settings.LightResponse.Level", "Light level");
+
+    public readonly string LightResponseLevelTip = Loc.Localize("Settings.LightResponse.Level.Tip",
+        "0 is pitch dark (dark-only glows at full brightness), 1 is full daylight (they vanish).");
+
+    public readonly string LightResponseReadoutFmt = Loc.Localize("Settings.LightResponse.Readout.Fmt",
+        "Reading {0:0.00} — sky {1:0.00}, lamps {2:0.00} ({3} of {4} reached)");
+
+    /// <summary>The raw layout flags behind the sky term. Deliberately untranslated jargon on one line:
+    /// it exists to be screenshotted when the reading disagrees with the room.</summary>
+    public readonly string LightResponseSignalsFmt = Loc.Localize("Settings.LightResponse.Signals.Fmt",
+        "outdoor={0}  indoor={1}  envspace={2}  sky={3}");
+
     public readonly string SecDiagnostics = Loc.Localize("Settings.Section.Diagnostics", "Diagnostics");
 
     // ── general ─────────────────────────────────────────────────────────────────────────────────────
@@ -275,16 +352,21 @@ public sealed class SettingsStrings
         "Turning this off clears Proteus' output, redraws you without it,\n" +
         "and disables the managed \"Proteus\" mod in Penumbra.");
 
-    public readonly string DisableAutoRedraw =
-        Loc.Localize("Settings.General.DisableAutoRedraw.Label", "Disable auto redraw") + "###disableAutoRedraw";
+    public readonly string AutoRedraw =
+        Loc.Localize("Settings.General.AutoRedraw.Label", "Auto redraw") + "###autoRedraw";
 
-    public readonly string SkipUnchanged =
-        Loc.Localize("Settings.General.SkipUnchanged.Label", "Skip unchanged recomposites") + "###skipUnchanged";
-
-    public readonly string SkipUnchangedTip = Loc.Localize("Settings.General.SkipUnchanged.Tip",
-        "Let a recomposite triggered by zoning or a redraw stop early when nothing that\n" +
-        "affects the output has changed. Anything you change yourself always recomposites.\n" +
-        "Turn off only to rule this out when an edit isn't taking effect.");
+    public readonly string AutoRedrawTip = Loc.Localize("Settings.General.AutoRedraw.Tip",
+        "Let Proteus keep up with the world on its own - recompositing after zoning, gear\n" +
+        "changes and redraws, then reloading your character so you can see the result.\n\n" +
+        "Turn it off to make Proteus mostly manual: it won't composite or reload you until\n" +
+        "you change something yourself. Your current look stays on either way, and edits\n" +
+        "you make still apply - you just won't see them until something redraws you:\n" +
+        "zoning, changing gear, or Penumbra's Redraw button.\n\n" +
+        "One exception while it's off: if you're wearing a gear layer, changing gear still\n" +
+        "recomposites, so the item hosting that layer doesn't get stranded on something\n" +
+        "you took off. You still won't be redrawn for it.\n\n" +
+        "Only covers what Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads you\n" +
+        "whenever any mod's settings change, independently of this.");
 
     public readonly string AutoRaise =
         Loc.Localize("Settings.General.AutoRaise.Label", "Auto-raise mod priority") + "###autoRaise";
@@ -696,6 +778,86 @@ public sealed class LuminisStrings
         "No texture in this modpack carries an Atramentum Luminis glow mask.");
 }
 
+/// <summary>
+/// The emissive-skin <c>.pmp</c> half of the Import tab — a glowing tattoo built for one of the community
+/// skin shaders.
+/// <para/>
+/// Its own holder rather than shared keys with <see cref="LuminisStrings"/>, even where a sentence is word
+/// for word the same. The two panels describe different formats and their wording will drift as each is
+/// worked on; a shared key would silently carry an edit made for one into the other, which is exactly the
+/// class of change nobody reviews.
+/// </summary>
+public sealed class EmissiveStrings
+{
+    /// <summary>
+    /// The fifth bullet of the Import tab's intro, in the same voice as the others: what you get, not how.
+    /// Says "no shader mod" because needing one is the whole reason these packs are hard to wear — the art
+    /// is inert without a replaced skin.shpk installed alongside it.
+    /// </summary>
+    public readonly string Intro = Loc.Localize("Emissive.Intro",
+        "Import an emissive skin pack (.pmp of glow art with no models). Its glow becomes a Proteus overlay "
+      + "you can recolour and dim, with no shader mod needed.");
+
+    public readonly string ReadFailedFmt = Loc.Localize("Emissive.ReadFailed.Fmt",
+        "Couldn't read that pack: {0}");
+
+    /// <summary>
+    /// Shown between the pick and the preview, which for this one format are different frames. These masks
+    /// are full body sheets — the reference pack's is 8192² and takes a second to decode — so the read runs
+    /// on the pool and the tab has to say what it is waiting for rather than fall through to "pick a pack".
+    /// </summary>
+    public readonly string Reading = Loc.Localize("Emissive.Reading",
+        "Reading this pack's textures…");
+
+    public readonly string TextureCountFmt = Loc.Localize("Emissive.TextureCount.Fmt",
+        "Textures: {0} of {1}");
+
+    /// <summary>How much of the sheet the mask marks out — the number that says whether this really is glow
+    /// art, so it goes in the table rather than in a tooltip.</summary>
+    public readonly string GlowFmt = Loc.Localize("Emissive.Glow.Fmt", "{0:P1} glows");
+
+    public readonly string SizeFmt = Loc.Localize("Emissive.Size.Fmt", "{0}×{1}");
+
+    /// <summary>Several manifest paths over one picture, which some of these packs do.</summary>
+    public readonly string AliasesFmt = Loc.Localize("Emissive.Aliases.Fmt", "{0} paths");
+
+    public readonly string Skipped = Loc.Localize("Emissive.Skipped", "skipped");
+
+    public readonly string SkippedReasonFmt = Loc.Localize("Emissive.SkippedReason.Fmt", "{0}\nSkipped: {1}");
+
+    public readonly string PathsFmt = Loc.Localize("Emissive.Paths.Fmt", "Imported once, for:\n{0}");
+
+    public readonly string BodyTarget = Loc.Localize("Emissive.BodyTarget.Label", "Body") + "###emissiveBody";
+
+    public readonly string BodyTargetTip = Loc.Localize("Emissive.BodyTarget.Tip",
+        "Which body material the art is painted onto. Proteus picks this from the pack when it recognises "
+      + "the body, and from the one you're wearing when it doesn't — change it if you know the pack was "
+      + "made for a different one.");
+
+    public readonly string BodyFromPackFmt = Loc.Localize("Emissive.BodyFromPack.Fmt",
+        "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.");
+
+    /// <summary>
+    /// Said before the button, because it is the surprising half of this import: the pack's own redirects
+    /// are dropped. They are body materials rewired to name an emissive sampler that only a replaced
+    /// skin.shpk has, and republishing them would put the imported mod into a fight with Proteus over the
+    /// very material it composites into. Plain text, not the warning colour — this is true of a CORRECT
+    /// import.
+    /// </summary>
+    public readonly string MaterialsIgnored = Loc.Localize("Emissive.MaterialsIgnored",
+        "Only the glow art is imported. The pack's own body materials are left behind: they only work with "
+      + "a replaced skin shader, and Proteus paints the glow onto whatever skin you already wear.");
+
+    /// <summary>Stated plainly rather than in the warning colour, for the reason
+    /// <see cref="LuminisStrings.NoRaceFilter"/> gives.</summary>
+    public readonly string NoRaceFilter = Loc.Localize("Emissive.NoRaceFilter",
+        "Proteus has no race or sex filter: this paints any character wearing a body with the same "
+      + "material. Turn the mod off in Penumbra for characters it wasn't painted for.");
+
+    public readonly string NothingUsable = Loc.Localize("Emissive.NothingUsable",
+        "No texture in this pack carries a glow mask.");
+}
+
 /// <summary>The loose eye-texture pack (<c>.zip</c>) half of the Import tab.</summary>
 public sealed class EyeStrings
 {
@@ -917,6 +1079,31 @@ public sealed class ColorsStrings
         "Under an animated glow this is the effect's brightness, and a high value\n" +
         "blows a colourful scroll map out to white. Around 25% is a good start.");
 
+    /// <summary>
+    /// Shown at the top of whichever of the two columns the art's index never lands in. Most overlays carry
+    /// no index at all, and the shell then samples the fabricated (255, 255, 0) — row 16, column A — so
+    /// column B is dead on every row and used to be drawn as though it were not.
+    /// </summary>
+    public readonly string SubRowUnused = Loc.Localize("Colors.SubRowUnused",
+        "Nothing samples this column — the art's index picks the other one everywhere, "
+      + "so edits here won't show.");
+
+    public readonly string LightResponse = Loc.Localize("Colors.LightResponse.Label", "Fades in light");
+
+    public readonly string LightResponseTip = Loc.Localize("Colors.LightResponse.Tip",
+        "How much the scene's light takes this row's glow away.\n" +
+        "0% glows the same everywhere. 100% is a dark-only glow: full brightness in\n" +
+        "an unlit room, nothing at all under a midday sky or beside a lamp.\n" +
+        "Set per row, so one half of a tattoo can be dark-only and the other always on.");
+
+    public readonly string HideInLight = Loc.Localize("Colors.HideInLight.Label", "Hide in light");
+
+    public readonly string HideInLightTip = Loc.Localize("Colors.HideInLight.Tip",
+        "Let this row's opacity follow its glow, so where it has stopped glowing\n" +
+        "there is nothing left but skin.\n" +
+        "Without this a dark-only row still leaves its own colour behind — usually black —\n" +
+        "so the art reads as a dark patch in daylight instead of vanishing into the skin.");
+
     public readonly string Opacity = Loc.Localize("Colors.Opacity.Label", "Opacity");
 
     public readonly string OpacityTip = Loc.Localize("Colors.Opacity.Tip",
@@ -948,6 +1135,20 @@ public sealed class ColorsStrings
 
     public readonly string WholeSkin = Loc.Localize("Colors.WholeSkin.Label",
         "This overlay is the whole skin");
+
+    public readonly string OneSided = Loc.Localize("Colors.OneSided.Label",
+        "This art is deliberately one-sided");
+
+    public readonly string OneSidedTip = Loc.Localize("Colors.OneSided.Tip",
+        "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\n"
+      + "one cheek. Leave it off for anything else, including ordinary skin.\n"
+      + "A vanilla body and the vanilla face give both sides the same pixels, so art painted for\n"
+      + "them is folded in half: one side is kept and mirrored across. That is invisible on a\n"
+      + "symmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\n"
+      + "through a layer of its own whose two sides read the two halves of your sheet, so both\n"
+      + "sides survive.\n"
+      + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
+      + "left to right — so only you can say whether a difference is the point or just detail.");
 
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
