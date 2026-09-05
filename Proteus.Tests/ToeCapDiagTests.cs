@@ -111,8 +111,8 @@ public class ToeCapDiagTests
             byte[]? authored = null;
             foreach (var cand in new[]
                      {
-                         Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
-                         @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
+                         Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.neolithe.mdl"),
+                         @"E:\repos\Proteus\Proteus\Meshes\toecap.neolithe.mdl",
                      })
                 if (File.Exists(cand)) { authored = File.ReadAllBytes(cand); break; }
             o.WriteLine(authored == null ? "no authored cap" : $"authored cap {authored.Length} bytes");
@@ -272,15 +272,15 @@ public class ToeCapDiagTests
     /// cannot reproduce the foot it was measured against, it will not reproduce any other.
     /// <para/>
     /// Then place it on the body the GAME is currently handing us, which is the heeled foot, and report
-    /// how far that moves it. Writes Proteus/Meshes/toecap.bind on success.
+    /// how far that moves it. Writes Proteus/Meshes/toecap.neolithe.bind on success.
     /// </summary>
     [Fact]
     public void BakeAndCheckCapBind()
     {
         var capPath = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
-            @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
+            Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.neolithe.mdl"),
+            @"E:\repos\Proteus\Proteus\Meshes\toecap.neolithe.mdl",
         }.FirstOrDefault(File.Exists);
         if (capPath == null || !File.Exists(Sho)) return;
 
@@ -338,10 +338,10 @@ public class ToeCapDiagTests
         // start; measuring the round trip is the useful part and that still runs unconditionally.
         if (Environment.GetEnvironmentVariable("PROTEUS_WRITE_BIND") != "1")
         {
-            o.WriteLine("not writing toecap.bind — set PROTEUS_WRITE_BIND=1 to ship this bake");
+            o.WriteLine("not writing toecap.neolithe.bind — set PROTEUS_WRITE_BIND=1 to ship this bake");
             return;
         }
-        var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", "toecap.bind");
+        var outPath = Path.Combine(@"E:\repos\Proteus\Proteus\Meshes", "toecap.neolithe.bind");
         if (Directory.Exists(Path.GetDirectoryName(outPath)!))
         {
             File.WriteAllBytes(outPath, bind);
@@ -498,8 +498,8 @@ public class ToeCapDiagTests
         var capPath = Environment.GetEnvironmentVariable("PROTEUS_CAP_PATH")
                    ?? new[]
                       {
-                          Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.mdl"),
-                          @"E:\repos\Proteus\Proteus\Meshes\toecap.mdl",
+                          Path.Combine(AppContext.BaseDirectory, "Meshes", "toecap.neolithe.mdl"),
+                          @"E:\repos\Proteus\Proteus\Meshes\toecap.neolithe.mdl",
                       }.FirstOrDefault(File.Exists);
         var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
         if (capPath == null || !File.Exists(capPath) || !Directory.Exists(dir)) return;
