@@ -167,6 +167,10 @@
     "message": "[Proteus] {1}のレイヤーの一部を配置できませんでした（レイヤー数: {0}）。それらは種族変形を受けられないため、Proteusが丸ごと置き換えられるスロットが必要です。指輪スロット（左右どちらでも）か顔装備スロットを空けると表示されます。",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] {1}のレイヤーの一部をスキップしました（レイヤー数: {0}）。キャラクターがその部位を描画していないため、切り出す元がありませんでした。それらのオーバーレイに設定されたSurfaceが、実際に着けている顔や部位と一致しているか確認してください。",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "詳細設定",
     "description": ""
@@ -283,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "明るい場所では隠す",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "この行の不透明度を発光に追従させます。光らなくなった場所には肌だけが残ります。\nこれがないと、暗所専用の行でも自身の色（多くは黒）が残るため、\n日中は肌に溶け込まず暗いパッチとして見えてしまいます。",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "このサブ行のメッシュをキャラクター上で発光させ、ゲーム内で見つけやすく\nします。もう一度クリックすると停止します。",
     "description": ""
@@ -297,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "このサブ行の範囲をキャラクターの肌の上で光らせ、ゲーム内で見つけやすく\nします。もう一度クリックで停止。（初回は生成に少し時間がかかります。）",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "明るさで薄れる",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "周囲の明るさがこの行のグローをどれだけ打ち消すか。\n0% はどこでも同じ明るさ。100% は暗所専用のグローで、明かりのない部屋では最大、\n真昼の空の下やランプのそばでは完全に消えます。\n行ごとに設定できるので、タトゥーの半分だけを暗所専用にすることもできます。",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -345,6 +365,14 @@
   },
   "Colors.None": {
     "message": "なし",
+    "description": ""
+  },
+  "Colors.OneSided.Label": {
+    "message": "このアートは意図的に片側だけ",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "片側だけに表示させたいアート（片腕のタトゥー、片頬の傷など）でオンにしてください。\nそれ以外、通常の肌も含めてはオフのままにしてください。\nバニラの体とバニラの顔は左右に同じピクセルを与えるため、そこ向けに描いたアートは\n半分に折りたたまれます。片側だけが残り、反対側へ鏡像として写されます。左右対称の\nデザインでは気づきませんが、片側だけのデザインは台無しになります。\nオンにすると、Proteusは専用のレイヤーを介して描画し、その左右がテクスチャの左右\n半分をそれぞれ読むので、両側が残ります。\n自動では判別できません。実際の肌は決して左右対称ではなく、そばかすやほくろは左右で\n異なります。その違いが意図的かどうかは作者にしか分かりません。",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -477,6 +505,10 @@
   },
   "Colors.SubRowB.Fmt": {
     "message": "行{0}B",
+    "description": ""
+  },
+  "Colors.SubRowUnused": {
+    "message": "この列は参照されません。アートのインデックスはどこでも反対の列を選ぶため、ここを編集しても反映されません。",
     "description": ""
   },
   "Colors.Tiling.Label": {
@@ -727,6 +759,14 @@
     "message": "「{0}」という名前のMODフォルダはすでに存在します。",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "グローを作るために {0} を読み込めませんでした。PNG をお試しください。",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "光るオーバーレイは色を図案から取るため、ディフューズテクスチャが必要です。",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0}のファイルが見つかりません: {1}",
     "description": ""
@@ -755,6 +795,46 @@
     "message": "MODの書き込みに失敗しました: {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "この顔テクスチャは左右に分かれている",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "顔テクスチャを2つの半分として描いた場合にのみチェックしてください。キャラクターの右側を画像の右半分に、左側を左半分に描いたものです。\n通常の顔テクスチャは両方の頬に同じピクセルを使うため、片側だけの模様は存在できません。分割されたものはProteusが顔レイヤーとして描画します。\n通常の顔テクスチャではオフのままにしてください。",
+    "description": ""
+  },
+  "Create.Glow.Always": {
+    "message": "常に光る",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "タトゥーは昼間も見えていて、昼も夜も光ります。\n意図的に控えめです。このシェーダーは絵に沿うのではなくタトゥー全体に単一の色を\n加えるため、値を上げると日中に絵が白飛びします。\n夜だけ明るくしたい場合は「カラー」でグローを上げ、「明るさで薄れる」を設定してください。",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "暗い場所だけ",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "昼間は何も見えず、明かりのない部屋で光ります — Atramentum Luminis のタトゥーと同じです。\n周囲が明るくなるにつれて図案は消えていき、自分の表面も一緒に消すので、\n明るい場所では肌だけが残ります。\n設定の「シーンの明るさに反応する」が必要です（既定でオン）。",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "この図案を光らせる",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "先にディフューズテクスチャを選んでください。グローの色は図案から取られます。",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "光らせられるのは肌と顔のターゲットだけです。光るオーバーレイは体から切り出した\nセカンドスキンに描かれるため、装備・アクセサリ・武器には切り出す元がありません。",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "図案を光らせます。色は絵そのものからピクセル単位で決まるので、\n他に設定するものはありません。\n肌は発光できないため、光るオーバーレイは肌に塗り込まれるのではなく\nセカンドスキン上に描かれます。それ以外は同じで、あとから\n「カラー」のグローで調整できます。",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "基本的なProteusオーバーレイMODを作成します。テクスチャを1つ以上選ぶと、Proteusが新しいPenumbra MODを書き出して開くので、有効化して調整できます。",
     "description": ""
@@ -773,6 +853,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "「{0}」を作成し、有効化してPenumbraで開きました。",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "「{0}」を作成して Penumbra で開きましたが、有効にできませんでした。Penumbra 側で有効にしてください。",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -797,6 +881,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "ボディ検出をやり直し、フィールドを上書きします。",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "「{0}」を作成しました — Penumbra の読み込み完了を待っています…",
     "description": ""
   },
   "Create.Slot.Diffuse": {
@@ -845,6 +933,70 @@
   },
   "Create.WholeSkin.Tip": {
     "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は三つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。\n三つめは「ボディ」が「すべてのボディ」に設定され、バニラボディにも適用されるようになることです。",
+    "description": ""
+  },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} パス",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "このパックは {0} 向けとのことなので、Proteus が着用中のボディに合わせて変換します。",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "ボディ",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "アートをどのボディマテリアルに描くかです。Proteus はボディを認識できればパックから、できなければ着用中のものから選びます。別のボディ向けだと分かっている場合は変更してください。",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} 発光",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "発光スキンパック（モデルを含まない発光アートの .pmp）をインポートします。発光は色や強さを調整できる Proteus オーバーレイになり、シェーダー MOD は不要です。",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "発光アートだけをインポートします。パック自身のボディマテリアルは取り込みません。それらは差し替えたスキンシェーダーがないと機能せず、Proteus は今あなたが着ている肌の上に発光を描くからです。",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus には種族・性別フィルターがありません。同じマテリアルのボディを着ているキャラクターにはすべて適用されます。対象外のキャラクターでは Penumbra で MOD をオフにしてください。",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "このパックには発光マスクを持つテクスチャがありません。",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "次のパス向けに一度だけインポートされます:\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "そのパックを読み込めませんでした：{0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "このパックのテクスチャを読み込んでいます…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "スキップ",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nスキップ：{1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "テクスチャ: {1} 中 {0}",
     "description": ""
   },
   "Export.Dialog.Filter": {
@@ -1037,6 +1189,90 @@
   },
   "Import.Dialog.Title": {
     "message": "パックを選択",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "発光スキンパック「{0}」からインポートしました。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "そのMOD名には使用できる文字がありません。英数字を使ってください。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "「{0}」という名前のMODフォルダーは既に存在します。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "パックが見つかりません：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "PenumbraのMODディレクトリを利用できません。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "このパックのテクスチャは2回目の読み込みでいずれも読み取れなかったため、何も書き込まれませんでした。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "このパックにはインポートできるものがありません。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "「Proteus」は予約名です。別のMOD名を選んでください。",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "MODの書き出しに失敗しました：{0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "発光タトゥー",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "発光タトゥー — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。ただし Proteus は自動で有効にできませんでした。Penumbra の「{3}」でチェックしないと何も描画されません。",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "「{0}」をインポートしました — テクスチャ: {1}{2}。発光はオンになっており、シェーダー MOD は不要です。色や強さは Colors で調整でき、Penumbra の「{3}」でオフにできます。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "パックのマニフェストには記載されていますが、書庫に「{0}」が含まれていません。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "アルファチャンネルが空で、発光する箇所が指定されていません。エミッシブマップは発光の形をそこに置くため、形のないものはタトゥーではありません。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "サイズが {0}×{1} しかなく、身体に描かれたアートではなくシェーダーのエフェクトマップやパレットです。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "ピクセルをデコードできませんでした。",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus はボディ「{0}」を知らず、キャラクターが読み込まれるまで確認できません。ログインしてからこのパックを開き直してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus はこのパックのボディ UV を把握していないため、現在着用中のボディ（{0}）にそのままリサイズなしで描画します。別のボディ向けに作られている場合は崩れます。分かるなら下で対象ボディを変更してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "「{0}」はボディの {1:P0} が発光します。問題ない場合もありますが、通常はテクスチャに実質的なアルファチャンネルがないことを意味します。使う前に結果を確認してください。",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "このパックからインポートできるものはありません — 上の理由をご確認ください。",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {
@@ -1711,8 +1947,12 @@
     "message": "Proteusが合成先としている肌テクスチャを他のMODが上書きしていると確認された場合\n——ボディテクスチャの独自コピーを同梱したタトゥーMODや肌MODなど——\nProteusのPenumbra優先度を自動でその上に引き上げ、チャットで知らせます。\n\nこの上書きは通常まったく見えません。オーバーレイは中途半端に適用され\n（凹凸は乗るのに色は乗らない）、ログはどの行も成功として記録されます。\n\n他のMODにProteusの合成対象パスをあえて優先させたい場合のみオフにしてください。\nProteusは推測では動作せず、上書きが確認された場合にのみ動作します。",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "自動再描画を無効にする",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "自動再描画",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Proteusが自動で世界の変化に追従します。エリア移動・装備変更・再描画のあとに合成し\n直し、続けてキャラクターを再読み込みして、結果が見えるようにします。\n\nオフにするとProteusはほぼ手動になります。自分で何かを変更するまで、合成も再読み\n込みも行いません。どちらの場合も現在の見た目はそのまま残り、加えた編集も適用され\n続けます。ただし、何かがあなたを再描画するまでは目に見えません。エリア移動、装備\n変更、またはPenumbraのRedrawボタンです。\n\nオフのあいだの唯一の例外です。装備レイヤーを着用している場合、装備を変更すると合\n成だけは行われます。そのレイヤーを載せているアイテムが、脱いだものに取り残されな\nいようにするためです。それでも再描画は行われません。\n\n対象はProteusが開始するものだけです。GlamourerのAuto-Reload Gearは、どのMODであれ\n設定が変わるたびにあなたを再読み込みし、この設定とは無関係に動作します。",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1739,14 +1979,6 @@
     "message": "完全な再描画ではなくGlamourerの装備その場再読み込みでテクスチャを更新し、\n消えて出現する際のちらつきを避けます。Glamourerが処理できない場合は\n自動的に完全な再描画に切り替わります。",
     "description": ""
   },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "変更のない再合成をスキップ",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "エリア移動や再描画によって起きた再合成を、出力に影響する変更が何もない場合は\n早期に打ち切ります。自分で変更した内容は常に再合成されます。\n編集が反映されない原因を切り分けるときのみオフにしてください。",
-    "description": ""
-  },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "透明なメガネにホストする（指輪を空けておく）",
     "description": ""
@@ -1761,6 +1993,38 @@
   },
   "Settings.Hosting.RestoreAccessory.Tip": {
     "message": "完全な再描画を強制し、セカンドスキンが置き換えた指輪やブレスレットを\n読み込み直して元のモデルに戻します。無効化や切り替えのあとで装備シェルが\nアクセサリに残ってしまう場合にお使いください。",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled": {
+    "message": "シーンの明るさに反応する",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "「明るさで薄れる」を設定した行を、周囲が明るくなるほど暗くします。\nオフの場合は、これまでどおりどこでも作者が指定した明るさで光ります。\nどちらの場合も再生成は行われません — 実行中のマテリアル経由で反映されます。",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "明るさ",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 は真っ暗（暗所専用グローが最大）、1 は真昼（完全に消えます）。",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "明るさを手動で指定する",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "シーンを無視してスライダーの値を使います。\n夕暮れを待たずに暗所専用グローの見え方を確かめる最短の方法で、\n自分の照明が主役となるグループポーズにも適しています。",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "測定値 {0:0.00} — 空 {1:0.00}、ランプ {2:0.00}（{4} 個中 {3} 個が到達）",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
     "description": ""
   },
   "Settings.Output.Compression.Label": {
@@ -1805,6 +2069,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "ホスト先",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "光に反応するグロー",
     "description": ""
   },
   "Settings.Section.Output": {

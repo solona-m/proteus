@@ -60,6 +60,7 @@ async function check(name, path, expectStatus, expectOrigin) {
 // Release-asset subrequests carry the ORIGIN_EPOCH cache-buster; the exact value is not the point,
 // only that the path and tag reach the right upstream, so it is stripped before comparing.
 const GH = 'https://github.com/solona-m/proteus/releases/download';
+const CAM = 'https://github.com/solona-m/camera-tools-ffxiv/releases/download';
 const stripEpoch = (u) => (u ?? '').replace(/\?e=\d+$/, '');
 
 console.log('accepted paths:');
@@ -71,6 +72,25 @@ await check('stable plugin zip', '/v2608.309.0.0/latest.zip', 200,
   `${GH}/v2608.309.0.0/latest.zip`);
 await check('testing plugin zip', '/testing-309/latest.zip', 200,
   `${GH}/testing-309/latest.zip`);
+
+// A second plugin, served from a second repo. The assertions that matter are which upstream each
+// path resolves to: a prefixed path must never reach Proteus's repo, and Proteus's bare paths must
+// keep resolving exactly as before — they are hardcoded in every shipped build of the plugin.
+console.log('camera tools (second origin repo):');
+await check('camera tools stable zip', '/camera-tools/v2609.12.0.0/latest.zip', 200,
+  `${CAM}/v2609.12.0.0/latest.zip`);
+await check('camera tools testing zip', '/camera-tools/testing-12/latest.zip', 200,
+  `${CAM}/testing-12/latest.zip`);
+// Same tag shape, no prefix: still Proteus, not camera tools.
+await check('bare tag still resolves to proteus', '/v2609.12.0.0/latest.zip', 200,
+  `${GH}/v2609.12.0.0/latest.zip`);
+// The prefix is not a general escape hatch into another repo's release assets.
+await check('camera tools rejects other files', '/camera-tools/v1.0/payload.exe', 404, null);
+await check('camera tools rejects bad tag', '/camera-tools/random/latest.zip', 404, null);
+await check('camera tools rejects nesting', '/camera-tools/v1.0/sub/latest.zip', 404, null);
+await check('camera tools prefix alone', '/camera-tools/latest.zip', 404, null);
+// Proteus's asset tags do not leak through the prefixed route into the camera tools repo.
+await check('camera tools rejects uvmaps tag', '/camera-tools/uvmaps-v1/x.tif', 404, null);
 
 console.log('rejected paths (must never reach an origin):');
 await check('traversal', '/uvmaps-v1/../../../etc/passwd', 404, null);

@@ -51,14 +51,44 @@ internal static class SyntheticModel
     /// <summary>One LOD0 mesh, drawn with <paramref name="Material"/>.</summary>
     internal sealed record Mesh(string Material, params Sub[] Submeshes);
 
+    /// <summary>Dawntrail .mdl. Bone tables are a header array plus one shared pool of indices.</summary>
+    internal const uint V6 = 0x01000006;
+
+    /// <summary>
+    /// Pre-Dawntrail .mdl, still shipped by plenty of mods. The ONLY layout difference that matters to the
+    /// readers here is the bone table: v5 stores one fixed 132-byte struct per table
+    /// (<c>u16 BoneIndex[64]; u8 BoneCount; u8 pad[3]</c>) with no shared pool, so a v6 reader walks the
+    /// wrong distance and lands mid-file for everything that follows.
+    /// </summary>
+    internal const uint V5 = 0x01000005;
+
+    private const int V5BoneTableBytes = 132;
+
     /// <summary>
     /// Assemble the model. <paramref name="attrNames"/> is the attribute table in the order submesh masks
     /// index it — bit <c>i</c> of a mask means <c>attrNames[i]</c>.
     /// </summary>
+    /// <param name="version"><see cref="V6"/> (default) or <see cref="V5"/>.</param>
+    /// <param name="shapeNames">
+    /// Shape (morph) keys to emit, one ShapeMesh and one ShapeValue each. Worth setting on a version
+    /// fixture: the shape block is the FIRST thing after the bone table, so it is where a reader that walked
+    /// the wrong bone-table width lands — and because a shape is found by a name offset into the string
+    /// block, a misaligned read sends that offset outside the file rather than merely returning wrong data.
+    /// </param>
+    internal static byte[] Build(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
+                                 IReadOnlyList<string>? shapeNames = null)
+        => BuildCore(attrNames, meshes, version, shapeNames);
+
+    /// <inheritdoc cref="Build(IReadOnlyList{string}, Mesh[], uint, IReadOnlyList{string})"/>
     internal static byte[] Build(IReadOnlyList<string> attrNames, params Mesh[] meshes)
+        => BuildCore(attrNames, meshes, V6, null);
+
+    private static byte[] BuildCore(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
+                                    IReadOnlyList<string>? shapeNames)
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
         var bones = new[] { "n_root" };
+        var shapes = shapeNames ?? [];
 
         // ── string block: bones, attributes, materials, each NUL-terminated ──
         var strMs = new MemoryStream();
@@ -72,10 +102,11 @@ internal static class SyntheticModel
                 return at;
             })
         ];
-        var boneOff = Intern(bones);
-        var attrOff = Intern(attrNames);
-        var matOff  = Intern(materials);
-        var strings = strMs.ToArray();
+        var boneOff  = Intern(bones);
+        var attrOff  = Intern(attrNames);
+        var matOff   = Intern(materials);
+        var shapeOff = Intern(shapes);
+        var strings  = strMs.ToArray();
 
         // ── geometry: one triangle per submesh, three fresh vertices each ──
         var vBuf = new MemoryStream();
@@ -170,10 +201,15 @@ internal static class SyntheticModel
         W16(mh, 10, (ushort)materials.Count);
         W16(mh, 12, (ushort)bones.Length);
         W16(mh, 14, 1);                                                        // one bone table
+        W16(mh, 16, (ushort)shapes.Count);                                     // shapeCount
+        W16(mh, 18, (ushort)shapes.Count);                                     // one ShapeMesh each
+        W16(mh, 20, (ushort)shapes.Count);                                     // one ShapeValue each
         mh[22] = 1;                                                            // lodCount
         BitConverter.GetBytes(1f).CopyTo(mh, 28);                              // model clip
         BitConverter.GetBytes(1f).CopyTo(mh, 32);                              // shadow clip
-        W16(mh, 44, 2);                                                        // bone table shorts, padded even
+        // v6 only: the size of the shared bone-index pool. v5 has no pool, so this stays 0 there — and a
+        // reader that consults it regardless is exactly the bug the v5 fixture exists to catch.
+        W16(mh, 44, version == V6 ? (ushort)2 : (ushort)0);
         ms.Write(mh);
 
         long lodPos = ms.Position;
@@ -185,11 +221,47 @@ internal static class SyntheticModel
         foreach (var off in matOff) ms.Write(U32(off));
         foreach (var off in boneOff) ms.Write(U32(off));
 
-        // One v6 bone table: { u16 offsetInDwords, u16 count } then the entries, padded to an even count.
-        ms.Write(U16Bytes(1));
-        ms.Write(U16Bytes((ushort)bones.Length));
-        ms.Write(U16Bytes(0));
-        ms.Write(U16Bytes(0));                                                 // pad to an even short count
+        if (version == V6)
+        {
+            // One v6 bone table: { u16 offsetInDwords, u16 count } then the entries, padded to an even count.
+            ms.Write(U16Bytes(1));
+            ms.Write(U16Bytes((ushort)bones.Length));
+            ms.Write(U16Bytes(0));
+            ms.Write(U16Bytes(0));                                             // pad to an even short count
+        }
+        else
+        {
+            // One v5 bone table: u16 BoneIndex[64], then u8 BoneCount and 3 bytes of padding. Fixed width,
+            // no shared pool — index 0 is the single bone, the rest stay zero.
+            var table = new byte[V5BoneTableBytes];
+            table[128] = (byte)bones.Length;
+            ms.Write(table);
+        }
+
+        // ── shape block: Shape[] (16 B), then ShapeMesh[] (12 B), then ShapeValue[] (4 B) ──
+        for (int i = 0; i < shapes.Count; i++)
+        {
+            var shp = new byte[16];
+            W32(shp, 0, shapeOff[i]);                                          // name offset
+            W16(shp, 4, (ushort)i);                                            // LOD0 shapeMeshStart
+            W16(shp, 10, 1);                                                   // LOD0 shapeMeshCount
+            ms.Write(shp);
+        }
+        for (int i = 0; i < shapes.Count; i++)
+        {
+            var sm = new byte[12];
+            W32(sm, 0, 0);                                                     // mesh index offset
+            W32(sm, 4, 1);                                                     // value count
+            W32(sm, 8, (uint)i);                                               // value start
+            ms.Write(sm);
+        }
+        for (int i = 0; i < shapes.Count; i++)
+        {
+            var sv = new byte[4];
+            W16(sv, 0, 0);                                                     // base indices index
+            W16(sv, 2, 0);                                                     // replacing vertex index
+            ms.Write(sv);
+        }
 
         ms.Write(U32(0));                                                      // submesh bone map: no bytes
         ms.WriteByte(0);                                                       // padding amount
@@ -212,7 +284,7 @@ internal static class SyntheticModel
 
         var o = ms.ToArray();
         uint stackSize = (uint)(meshes.Length * DeclSize);
-        W32(o, 0, 0x01000006);                                                 // version
+        W32(o, 0, version);                                                    // version
         W32(o, 4, stackSize);
         W32(o, 8, (uint)(vtxOff - 0x44 - stackSize));                          // runtime size
         W16(o, 12, (ushort)meshes.Length);                                     // one declaration per mesh

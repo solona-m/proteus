@@ -362,6 +362,25 @@ public class OverlayDescriptor
     public string? SourceBodyType { get; set; }
 
     /// <summary>
+    /// The author's statement that this art is deliberately ONE-SIDED — a tattoo on one arm, a scar on one
+    /// cheek — and must not be folded. Null or false = treat it as symmetric, which is the default.
+    /// <para/>
+    /// It decides whether the overlay can survive a MIRRORED surface. bibo and gen3 give each side its own
+    /// half of the sheet; vanilla (gen2) and the vanilla face give both sides the same texels, so porting to
+    /// them folds the sheet in half — harmless for symmetric art, and for one-sided art it discards a side
+    /// and mirrors the other across. Set here, the overlay renders through an un-mirrored second-skin shell
+    /// that keeps both sides. Everything else stays on the cheap skin path.
+    /// <para/>
+    /// DECLARED, never measured. Proteus used to probe the art and write the answer here, and no threshold
+    /// could make that work: a real skin texture is never symmetric — freckles, moles, a beauty mark — so
+    /// ordinary skins measured "asymmetric" and were moved onto shells, where they lost the wearer's tone
+    /// and rendered grey and glossy. A deliberate one-sided design and incidental skin detail differ in
+    /// degree, not in kind, so only the author can separate them.
+    /// </summary>
+    [JsonPropertyName("AsymmetricArt")]
+    public bool? AsymmetricArt { get; set; }
+
+    /// <summary>
     /// Transient (never serialized): this is the synthesized top gear shell for a mod's active masks,
     /// coloured by <see cref="ProteusMetadata.MaskColorTableRows"/>. Its coverage/_id/relief come from the
     /// mod's masks (not from Diffuse/Normal/Index), and SecondSkinService skips the ordinary mask merge for
@@ -369,6 +388,21 @@ public class OverlayDescriptor
     /// </summary>
     [JsonIgnore]
     public bool IsMaskShell { get; set; }
+
+    /// <summary>
+    /// Transient (never serialized): this overlay was authored as SKIN and auto-promoted to a gear shell —
+    /// for sitting above gear, for a colorset feature skin.shpk can't render, or for asymmetric art on a
+    /// mirrored body. Set by the compositor's promotion, never by an author.
+    /// <para/>
+    /// It decides what an EMPTY colour table means. A shell with no row presets normally inherits the
+    /// vanilla template's table, which is right for an overlay someone deliberately made cloth — that
+    /// template belongs to the look being worn. It is wrong here: nobody chose gear, nobody chose colours,
+    /// and on the skin layer this art would have rendered at its authored colour. Inheriting e0041's table
+    /// instead multiplies it by a random vanilla top's palette — pink, olive and brown rows included — so a
+    /// promoted overlay takes the neutral-white baseline and renders as painted.
+    /// </summary>
+    [JsonIgnore]
+    public bool PromotedFromSkin { get; set; }
 }
 
 /// <summary>Maps one Penumbra option group to per-option overlay sets.</summary>
@@ -877,6 +911,22 @@ public static class ContentIndexTexture
     /// </summary>
     public static int RowOf(byte red) => Math.Clamp((red + 8) / 17 + 1, 1, 16);
 
+    /// <summary>
+    /// The row pair a red value names on an overlay's OWN <c>_id</c>, 1–16.
+    /// <para/>
+    /// TRUNCATED, where <see cref="RowOf"/> rounds, and the two must stay apart. They read different files
+    /// for different renderers: this one describes art Proteus wrote, painted by
+    /// <c>CompositorService.ApplyIndexedOverlay</c>, which bins <c>idx[i] / 17</c> — so agreeing with THAT
+    /// is the whole job, and rounding here would put the editor's live row one above the row the compositor
+    /// paints. <see cref="RowOf"/> rounds because the number it reads is a pack author's statement of
+    /// intent rather than something Proteus encoded.
+    /// <para/>
+    /// The disagreement is unreachable for anything Proteus authors: importers write
+    /// <c>(row − 1) × 17</c> exactly, and both readings return every one of those unchanged. Only
+    /// hand-painted or lossily-compressed art falls between them.
+    /// </summary>
+    public static int OverlayRowOf(byte red) => red / 17 + 1;
+
     public static Scan Read(byte[] rgba)
     {
         var rows = new HashSet<int>();
@@ -888,6 +938,66 @@ public static class ContentIndexTexture
             if (rgba[i + 1] > 127) anyA = true; else anyB = true;
         }
         return new Scan(rows, anyA == anyB ? null : anyA ? "A" : "B");
+    }
+
+    /// <summary>
+    /// The same question <see cref="Read"/> answers, asked of an overlay's own <c>_id</c> instead of a
+    /// pack's — under this side's rules, which differ in three ways worth stating together.
+    /// <list type="bullet">
+    /// <item>The row binning is <see cref="OverlayRowOf"/>, not <see cref="RowOf"/>.</item>
+    /// <item>A row must hold a real share of the art before it counts, rather than one texel. Antialiasing
+    /// and an art tool's colour bleed put stray reds all over a sheet, and the editor DIMS what this does
+    /// not name — so a row claimed off a handful of pixels is a row nobody can find, and one missed off a
+    /// legitimate few is a control that looks broken.</item>
+    /// <item>Transparency is not skipped. This path has something better: the UV island mask, which
+    /// excludes the padding bled outside the islands — the thing transparency stands in for over there.
+    /// An <c>_id</c> saved flat-alpha by a tool that treats it as an RGB map would otherwise read as
+    /// selecting nothing at all.</item>
+    /// </list>
+    /// Pure, and out of the drawing code, for the reason this whole class is: the conventions are what get
+    /// got wrong, and a convention nothing can call is a convention nothing can test.
+    /// </summary>
+    /// <param name="island">UV island coverage at its own resolution, sampled nearest-neighbour. Null
+    /// counts every texel.</param>
+    public static Scan ReadOverlay(
+        byte[] rgba, int width, int height, bool[]? island = null, int islandW = 0, int islandH = 0)
+    {
+        var rows = new HashSet<int>();
+        if (width <= 0 || height <= 0 || rgba.Length < (long)width * height * 4) return new(rows, null);
+        if (islandW <= 0 || islandH <= 0) island = null;
+
+        bool anyA = false, anyB = false;
+        var counts = new int[17];
+        int total = 0;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (island != null)
+                {
+                    // The map is its own resolution; sample it nearest-neighbour.
+                    int mx = x * islandW / width, my = y * islandH / height;
+                    int mi = my * islandW + mx;
+                    if (mi >= island.Length || !island[mi]) continue;   // outside the islands
+                }
+
+                int p = (y * width + x) * 4;
+                counts[OverlayRowOf(rgba[p])]++;
+                // Green blends sub-row A at 255 against B at 0.
+                if (rgba[p + 1] > 127) anyA = true; else anyB = true;
+                total++;
+            }
+        }
+
+        if (total == 0) return new(rows, null);
+
+        int threshold = Math.Max(64, total / 1000);   // 0.1% of the island area
+        for (int row = 1; row <= 16; row++)
+            if (counts[row] >= threshold)
+                rows.Add(row);
+
+        // A texture using BOTH columns narrows to neither: that is a gradient, not a mistake.
+        return new(rows, anyA == anyB ? null : anyA ? "A" : "B");
     }
 }
 
@@ -1000,7 +1110,8 @@ public static class ContentGlowRow
         => s.Diffuse == null && s.EmissiveColor == null && s.Specular == null
         && s.Emissive == 0f && s.Opacity == 0
         && s.SphereMap == null && s.SphereIntensity == null
-        && s.Roughness == null && s.Metalness == null;
+        && s.Roughness == null && s.Metalness == null
+        && s.LightResponse == null && !s.HideInLight;
 }
 
 /// <summary>Maps one Penumbra option group to per-option geometry.</summary>
@@ -1092,6 +1203,38 @@ public class ColorTableSubRowPreset
     /// </summary>
     [JsonPropertyName("Opacity")]
     public int Opacity { get; set; } = 0;
+
+    /// <summary>
+    /// How much of this region's glow the scene's light takes away, 0–1. Zero (the default) is the
+    /// unconditional glow every row had before: it emits the same in a lit street as in a cellar.
+    /// One is fully light-sensitive — the emissive scales by <c>1 − LightResponse × light</c>, so it
+    /// reaches full brightness only in the dark.
+    /// <para/>
+    /// Per SUB-ROW on purpose: this is what lets one half of a tattoo be a dark-only glow while the other
+    /// half is ordinary always-on art, since the index texture sends each half to its own cell. It only
+    /// means anything where <see cref="Emissive"/> is above zero — there is nothing to take away otherwise.
+    /// </summary>
+    [JsonPropertyName("LightResponse")]
+    public float? LightResponse { get; set; }
+
+    /// <summary>
+    /// Whether this region's OPACITY follows its glow, so where the light has taken the glow away there is
+    /// nothing left but skin.
+    /// <para/>
+    /// Fading the emissive alone still leaves the shell's own diffuse behind, and on characterscroll that
+    /// diffuse is the whole unlit surface — usually black, so a dark-only tattoo would read as a black
+    /// silhouette in daylight, which is exactly the thing Atramentum Luminis did not do.
+    /// <para/>
+    /// Per row like <see cref="LightResponse"/>, because the opacity it moves is the shell normal's BLUE
+    /// channel — the same coverage gate row <see cref="Opacity"/> is baked into — and the index texture says
+    /// which texel belongs to which row. So one region can vanish in daylight while the region beside it, on
+    /// the same shell and the same material, keeps glowing and stays solid.
+    /// <para/>
+    /// With no <see cref="LightResponse"/> it follows the glow all the way; with one, it fades only as far
+    /// as the glow does — pulling the surface out from under a glow that is still burning looks like a hole.
+    /// </summary>
+    [JsonPropertyName("HideInLight")]
+    public bool HideInLight { get; set; }
 
     /// <summary>
     /// Gear layer only. Sphere map to reflect on this row — a slice of the game's shared

@@ -233,7 +233,12 @@ public class GlamourerBridge : IDisposable
             var ec = reapplyState.Invoke(0, 0, ApplyFlag.Equipment);
             if (ec != GlamourerApiEc.Success)
             {
-                log.Debug("[Proteus] ReapplyState -> {0} (falling back to redraw)", ec);
+                // InvalidKey means another plugin holds a lock on this state, so the cheap in-place
+                // reload is unavailable and every composite falls back to a full redraw instead.
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] ReapplyState refused: another plugin holds a Glamourer lock on this character. Falling back to a full redraw.");
+                else
+                    log.Debug("[Proteus] ReapplyState -> {0} (falling back to redraw)", ec);
                 return false;
             }
             return true;
@@ -260,7 +265,10 @@ public class GlamourerBridge : IDisposable
             var ec = setBonusItem.Invoke(0, ApiBonusSlot.Glasses, itemId, key: 0, ApplyFlag.Once);
             if (ec != GlamourerApiEc.Success)
             {
-                log.Debug("[Proteus] SetBonusItem(Glasses,{0}) -> {1}", itemId, ec);
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] SetBonusItem(Glasses,{0}) refused: another plugin holds a Glamourer lock on the Glasses slot.", itemId);
+                else
+                    log.Debug("[Proteus] SetBonusItem(Glasses,{0}) -> {1}", itemId, ec);
                 return false;
             }
             return true;
@@ -330,7 +338,10 @@ public class GlamourerBridge : IDisposable
             var ec = setItem.Invoke(0, slot, itemId, NoStains, key: 0, ApplyFlag.Once);
             if (ec != GlamourerApiEc.Success)
             {
-                log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
+                if (ec == GlamourerApiEc.InvalidKey)
+                    log.Warning("[Proteus] SetItem({0},{1}) refused: another plugin holds a Glamourer lock on the {0} slot.", slot, itemId);
+                else
+                    log.Debug("[Proteus] SetItem({0},{1}) -> {2}", slot, itemId, ec);
                 return false;
             }
             return true;
@@ -426,6 +437,10 @@ public class GlamourerBridge : IDisposable
         // shell's host with them.
         if (changeType is StateChangeType.Equip or StateChangeType.BonusItem)
         {
+            // Our own ReapplyState raises an Equip per slot, and each one schedules another composite
+            // that reapplies again. Cost: a foreign equip inside the window is dropped until the next trigger.
+            if (WithinOwnReapplyEcho()) return;
+
             LocalPlayerEquipmentChanged?.Invoke();
             return;
         }

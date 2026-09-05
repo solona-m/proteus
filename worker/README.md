@@ -135,18 +135,30 @@ fallback**, since Dalamud fetches exactly one URL. In the separate `solona-m/plu
 
 ## Paths
 
-`/<tag>/<file>` maps 1:1 onto `releases/download/<tag>/<file>`. The tag already identifies the asset
-type, so there is no category segment for the client and the worker to disagree about.
+`/<tag>/<file>` maps 1:1 onto `releases/download/<tag>/<file>` in **this** repo. The tag already
+identifies the asset type, so there is no category segment for the client and the worker to disagree
+about.
 
 | Path | Origin |
 |---|---|
 | `/uvmaps-v1/bibo_to_gen3_transfer.tif` | `releases/download/uvmaps-v1/…` |
 | `/effects-v1/hello.kitty.png` | `releases/download/effects-v1/…` |
 | `/v2608.309.0.0/latest.zip` | `releases/download/v2608.309.0.0/…` |
+| `/camera-tools/v2609.12.0.0/latest.zip` | the same, in `solona-m/camera-tools-ffxiv` |
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
 | `/mirror.md` | this file |
+
+### A second plugin
+
+Camera Tools' release zips are mirrored under a `/camera-tools/` prefix, resolving against
+`solona-m/camera-tools-ffxiv` instead of this repo. Only its zips are here: its listing is inside the
+same `repo.json` already proxied at `/repo.json`, and it ships no icon or documents.
+
+Proteus's own paths deliberately keep no prefix. `ProteusAssets.BaseUrls` builds them as
+`MirrorBase + tag + "/"` in every shipped build, so moving them behind a prefix would break every
+copy of the plugin already installed. A new plugin gets a prefix of its own; the original stays bare.
 
 ### Documents render for browsers, stay raw for tools
 

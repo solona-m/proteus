@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Proteus.Services;
 using Xunit;
 
@@ -1013,4 +1014,179 @@ public class CompositorMathTests
     [Fact]
     public void CanRenderAsShell_NoMaterialNamed_Yes()   // can't place it — keep the prior behaviour
         => Assert.True(CompositorService.CanRenderAsShell(Target()));
+
+    // ── SnapIndexRowsToDefined ───────────────────────────────────────────────
+
+    /// <summary>An index texture with `red` per texel, green pinned to 255, opaque.</summary>
+    private static byte[] IndexOf(params byte[] reds)
+    {
+        var t = new byte[reds.Length * 4];
+        for (int i = 0; i < reds.Length; i++)
+        { t[i * 4] = reds[i]; t[i * 4 + 1] = 255; t[i * 4 + 3] = 255; }
+        return t;
+    }
+
+    [Fact]
+    public void SnapIndexRows_UndefinedRow_TakesNeighboursRow()
+    {
+        // red 255 → pair 16 (defined), red 0 → pair 1 (not defined) → dilated over from the left.
+        var index = IndexOf(255, 0, 0);
+        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 16 });
+        Assert.Equal(255, index[4]);
+        Assert.Equal(255, index[8]);
+    }
+
+    [Fact]
+    public void SnapIndexRows_DefinedRow_LeftAlone()
+    {
+        // Both pairs are configured, so the boundary between them is a real one — not a repair target.
+        var index = IndexOf(255, 0, 0);
+        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 });
+        Assert.Equal(0, index[4]);
+        Assert.Equal(0, index[8]);
+    }
+
+    [Fact]
+    public void SnapIndexRows_UnauthoredTexel_RepairedEvenWhenItsRowIsDefined()
+    {
+        // The regression this exists for: a mask shell has no _id, so the merge SYNTHESIZES one and paints
+        // over only the texels a mask claims. The unclaimed remainder is a real selector, and once the
+        // colorset happens to configure that row the numeric test alone calls it authored and the fringe
+        // survives — as white, when the seeded pair's other sub-row was never set.
+        var index = IndexOf(255, 0, 0);
+        var authored = new[] { true, false, false };
+        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: authored);
+        Assert.Equal(255, index[4]);
+        Assert.Equal(255, index[8]);
+    }
+
+    [Fact]
+    public void SnapIndexRows_NullAuthored_KeepsPriorBehaviour()
+    {
+        var withNull = IndexOf(255, 0, 0);
+        var withAllTrue = IndexOf(255, 0, 0);
+        CompositorService.SnapIndexRowsToDefined(withNull, 3, 1, new[] { 1, 16 });
+        CompositorService.SnapIndexRowsToDefined(withAllTrue, 3, 1, new[] { 1, 16 },
+            authored: new[] { true, true, true });
+        Assert.Equal(withAllTrue, withNull);
+    }
+
+    [Fact]
+    public void SnapIndexRows_ShortAuthored_Ignored()   // a mismatched array must not throw or half-apply
+    {
+        var index = IndexOf(255, 0, 0);
+        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: new[] { false });
+        Assert.Equal(0, index[4]);
+    }
+
+    [Fact]
+    public void SnapIndexRows_DilateBudget_StopsSpreading()
+    {
+        var index = IndexOf(255, 0, 0, 0, 0);
+        CompositorService.SnapIndexRowsToDefined(index, 5, 1, new[] { 16 }, dilate: 2);
+        Assert.Equal(255, index[4]);
+        Assert.Equal(255, index[8]);
+        Assert.Equal(0, index[12]);    // past the budget — left unmapped, and never drawn
+    }
+
+    /// <summary>
+    /// The straightforward version of the dilation: rescan the whole map every pass, filling any invalid
+    /// texel that has a valid neighbour in the pass-start snapshot. The shipping code walks a frontier
+    /// instead — the same fill, minus the texels that provably cannot be filled — because the full scan
+    /// stopped exiting early once `authored` marked a mask shell's whole background invalid. This is the
+    /// reference the optimisation has to stay byte-identical to.
+    /// </summary>
+    private static void NaiveSnap(byte[] index, int w, int h, int[] definedRows, int dilate, bool[]? authored)
+    {
+        var isDefined = new bool[17];
+        foreach (var r in definedRows)
+            if (r >= 1 && r <= 16) isDefined[r] = true;
+
+        int n = w * h;
+        var valid = new bool[n];
+        for (int p = 0; p < n; p++)
+            valid[p] = (authored?[p] ?? true) && isDefined[index[p * 4] / 17 + 1];
+
+        var snap = new bool[n];
+        for (int it = 0; it < dilate; it++)
+        {
+            Array.Copy(valid, snap, n);
+            int filled = 0;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int p = y * w + x;
+                    if (snap[p]) continue;
+                    int src = -1;
+                    if (x > 0 && snap[p - 1]) src = p - 1;
+                    else if (x < w - 1 && snap[p + 1]) src = p + 1;
+                    else if (y > 0 && snap[p - w]) src = p - w;
+                    else if (y < h - 1 && snap[p + w]) src = p + w;
+                    if (src < 0) continue;
+                    index[p * 4] = index[src * 4];
+                    index[p * 4 + 1] = index[src * 4 + 1];
+                    valid[p] = true;
+                    filled++;
+                }
+            if (filled == 0) break;
+        }
+    }
+
+    [Fact]
+    public void SnapIndexRows_FrontierWalk_MatchesTheNaiveFullScan()
+    {
+        // Randomised rather than hand-picked: what the frontier has to get right is an invariant about
+        // which texels are reachable, and the cases that break such a thing are odd shapes — islands,
+        // single-texel rows, a region touching an edge — not the tidy ones anybody thinks to write down.
+        var rng = new Random(20260831);
+        for (int trial = 0; trial < 400; trial++)
+        {
+            int w = 1 + rng.Next(40), h = 1 + rng.Next(40);
+            int n = w * h;
+
+            var index = new byte[n * 4];
+            for (int p = 0; p < n; p++)
+            {
+                index[p * 4]     = (byte)rng.Next(256);   // row selector
+                index[p * 4 + 1] = (byte)rng.Next(256);   // sub-row weight
+                index[p * 4 + 2] = (byte)rng.Next(256);   // must survive untouched
+                index[p * 4 + 3] = 255;
+            }
+
+            var defined = Enumerable.Range(1, 16).Where(_ => rng.Next(3) == 0).ToArray();
+            if (defined.Length == 0) defined = new[] { 1 + rng.Next(16) };
+
+            bool[]? authored = null;
+            if (rng.Next(2) == 0)
+            {
+                authored = new bool[n];
+                // Biased toward contiguous blobs, which is what mask coverage actually looks like, with
+                // enough noise to produce islands and ragged edges.
+                for (int p = 0; p < n; p++) authored[p] = rng.Next(100) < 70;
+            }
+
+            int dilate = rng.Next(4);
+
+            var mine = (byte[])index.Clone();
+            var reference = (byte[])index.Clone();
+            CompositorService.SnapIndexRowsToDefined(mine, w, h, defined, dilate, authored);
+            NaiveSnap(reference, w, h, defined, dilate, authored);
+
+            Assert.True(reference.AsSpan().SequenceEqual(mine),
+                $"trial {trial}: w={w} h={h} dilate={dilate} authored={(authored == null ? "null" : "set")} "
+                + $"rows=[{string.Join(",", defined)}]");
+        }
+    }
+
+    [Fact]
+    public void SnapIndexRows_CarriesGreenWithTheRow()
+    {
+        // Green is the A/B weight; a repaired texel has to take the pair AND the weight, or it lands on the
+        // sub-row the author never set.
+        var index = IndexOf(255, 0);
+        index[1] = 40;                 // the valid texel leans toward sub-row B
+        CompositorService.SnapIndexRowsToDefined(index, 2, 1, new[] { 16 });
+        Assert.Equal(255, index[4]);
+        Assert.Equal(40, index[5]);
+    }
 }

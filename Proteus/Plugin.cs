@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 588;
+    public const int BuildNumber = 618;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -68,6 +68,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly SkinDiffuseGlow skinGlow;
     private readonly ShellNormalGhost shellGhost;
     private readonly ShellColorsetApplier shellColorset;
+    private readonly SceneLightService sceneLight;
+    private readonly ShellCoverageFade shellCoverageFade;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -155,10 +157,35 @@ public sealed class Plugin : IDalamudPlugin
         skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log) { Ghost = shellGhost };
         Gui.ColorTableEditor.SkinGlow = skinGlow;
 
+        // How lit the wearer actually is, for light-sensitive glow. Reads the zone's placed lights (so
+        // indoors means something) plus a sky term outdoors; costs nothing while the level holds still.
+        sceneLight = new SceneLightService(Framework, ObjectTable, config, Log);
+        Gui.StatusWindow.SceneLight = sceneLight;
+
         // Re-asserts each shell's colorset onto the live material after the game rebuilds it (redraw), so a
         // dyed cloth shell shows its colour — the game's load-time colour-table cook drops the diffuse tint.
         // Takes the highlighter so it leaves a glow-highlighted shell's slot alone instead of fighting it.
-        shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter);
+        // Also the one place a light-sensitive row's emissive is scaled down, since the table it re-asserts
+        // every redraw is the same buffer that carries the glow.
+        shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter, sceneLight, config)
+        {
+            // Read through the compositor rather than handed a snapshot: it republishes the map on every
+            // composite, and a stale snapshot would go on dimming rows a rebuild had already changed.
+            LightFor = compositor.GetShellLight,
+        };
+
+        // The other half of a dark-only glow: a hiding row's opacity follows its glow, by scaling the shell
+        // normal's blue (its coverage), so the art vanishes into the skin in daylight rather than leaving a
+        // dark patch behind.
+        shellCoverageFade = new ShellCoverageFade(Framework, ObjectTable, sceneLight, textureLoader, config, Log)
+        {
+            LightFor = compositor.GetShellLight,
+            // Skips the whole per-frame character walk when nothing asks for a fade.
+            AnyLight = () => compositor.AnyShellLight,
+            // Both swap the shell normal's Texture** slot, so the fade stands aside while the locator holds
+            // one — two owners of a texture is how one gets freed while the other still has it published.
+            Ghost = shellGhost,
+        };
 
         var modCreation = new ModCreationService(penumbra, compositor, config, textureLoader, log);
         // Body catalogue for imports: probes the game data for the human bodies that exist, so an imported
@@ -171,6 +198,11 @@ public sealed class Plugin : IDalamudPlugin
         // textures live in one SqPack blob rather than as archive entries.
         var luminisImport = new LuminisImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
+        // Emissive-skin .pmp packs: the Penumbra-native cousin of the above, whose glow arrives as an
+        // emissive map's alpha instead of an inverted diffuse's. Shares the body catalogue for the same
+        // reason — both land art on whichever body material the wearer has on.
+        var emissiveImport = new EmissiveSkinImportService(
+            penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
         // Loose eye-texture zips. Its own catalogue because faces are not shared between races the way
         // bodies are, so the body probe can never answer for an iris.
         var irisCatalog = new IrisMaterialCatalog(DataManager.FileExists);
@@ -182,8 +214,8 @@ public sealed class Plugin : IDalamudPlugin
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
-            modCreation, onionImport, contentImport, luminisImport, eyeImport, modExport, textureLoader,
-            partsPanel);
+            modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
+            textureLoader, partsPanel);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
@@ -340,6 +372,10 @@ public sealed class Plugin : IDalamudPlugin
         // CompositorService's disposal guard (that runs further down) and wake into a torn-down plugin.
         try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }
 
+        // Same idea, much smaller: a window resize inside the save debounce is still a resize the user made,
+        // and an unload is the one thing that frame will never come back from.
+        try { statusWindow.FlushPendingSize(); } catch { /* tearing down — never block the unload */ }
+
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
@@ -350,9 +386,12 @@ public sealed class Plugin : IDalamudPlugin
         Gui.ColorTableEditor.EffectThumbs = null;
         Gui.ColorTableEditor.Highlighter = null;
         Gui.ColorTableEditor.SkinGlow = null;
+        Gui.StatusWindow.SceneLight = null;
         Gui.ProteusStyle.Fonts = null;   // before the dispose below, matching the null-then-dispose order above
         skinGlow.Dispose();
-        shellColorset.Dispose();   // before the highlighter it references
+        shellCoverageFade.Dispose();   // restores the shell normals it faded
+        shellColorset.Dispose();   // before the highlighter and the light probe it references
+        sceneLight.Dispose();
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();

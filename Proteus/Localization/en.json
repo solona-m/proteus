@@ -167,6 +167,10 @@
     "message": "[Proteus] Some layers on your {1} could not be placed (layers: {0}). Those must not be race-deformed, so they need a slot Proteus can replace outright: free a ring slot (either hand) or your facewear slot and they will appear.",
     "description": "NOTE the order: {0} is a count of layers, {1} is a list of body-part names. The English sentence uses {1} before {0}."
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] Some layers on your {1} were skipped (layers: {0}) — your character isn't drawing that part, so there was nothing to cut them from. Check the Surface set on those overlays matches the face or part you are actually wearing.",
+    "description": "NOTE the order: {0} is a count of layers, {1} is a list of body-part names. The English sentence uses {1} before {0}."
+  },
   "Colors.Advanced": {
     "message": "Advanced",
     "description": "Appears in the colour-table editor window."
@@ -283,6 +287,14 @@
     "message": "{0}: {1}",
     "description": "Tab caption when several option groups are active. {0} is the group name, {1} the option name - both come from the mod and are not translated."
   },
+  "Colors.HideInLight.Label": {
+    "message": "Hide in light",
+    "description": "Checkbox label. Appears in the colour-table editor window, under the Glow slider."
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "Let this row's opacity follow its glow, so where it has stopped glowing\nthere is nothing left but skin.\nWithout this a dark-only row still leaves its own colour behind — usually black —\nso the art reads as a dark patch in daylight instead of vanishing into the skin.",
+    "description": "Tooltip on the Hide in light checkbox. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "Make this sub-row's mesh glow on your character so you can find it\nin-game. Click again to stop.",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
@@ -298,6 +310,14 @@
   "Colors.Highlight.Skin.Tip": {
     "message": "Light up this sub-row's region on your character's skin so you can find\nit in-game. Click again to stop. (Takes a moment to build the first time.)",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.LightResponse.Label": {
+    "message": "Fades in light",
+    "description": "Control label. Appears in the colour-table editor window, under the Glow slider."
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "How much the scene's light takes this row's glow away.\n0% glows the same everywhere. 100% is a dark-only glow: full brightness in\nan unlit room, nothing at all under a midday sky or beside a lamp.\nSet per row, so one half of a tattoo can be dark-only and the other always on.",
+    "description": "Tooltip on the Fades in light slider. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Mask.Forced": {
     "message": "(forced)",
@@ -346,6 +366,14 @@
   "Colors.None": {
     "message": "None",
     "description": "Appears in the colour-table editor window."
+  },
+  "Colors.OneSided.Label": {
+    "message": "This art is deliberately one-sided",
+    "description": "Checkbox in the colour-table editor's Advanced section."
+  },
+  "Colors.OneSided.Tip": {
+    "message": "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\none cheek. Leave it off for anything else, including ordinary skin.\nA vanilla body and the vanilla face give both sides the same pixels, so art painted for\nthem is folded in half: one side is kept and mirrored across. That is invisible on a\nsymmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\nthrough a layer of its own whose two sides read the two halves of your sheet, so both\nsides survive.\nIt cannot be detected for you. Real skin is never symmetric — freckles and moles differ\nleft to right — so only you can say whether a difference is the point or just detail.",
+    "description": "Tooltip for the checkbox above. \"one-sided\" means appearing on only the left or only the right of the character. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Opacity.Label": {
     "message": "Opacity",
@@ -478,6 +506,10 @@
   "Colors.SubRowB.Fmt": {
     "message": "Row {0}B",
     "description": "Column header of the A/B panel. {0} is the row number; the trailing B identifies the sub-row and should stay B."
+  },
+  "Colors.SubRowUnused": {
+    "message": "Nothing samples this column — the art's index picks the other one everywhere, so edits here won't show.",
+    "description": "Colours panel: shown at the top of whichever of the two sub-row columns (A/B) the art never lands in. Most overlays carry no index texture, so column B is dead on every row."
   },
   "Colors.Tiling.Label": {
     "message": "Tiling",
@@ -727,6 +759,14 @@
     "message": "A mod folder named \"{0}\" already exists.",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "Couldn't read {0} to build the glow. Try a PNG.",
+    "description": "Error when the picked diffuse can't be decoded. {0} is the file name."
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "A glowing overlay takes its colour from the art, so it needs a diffuse texture.",
+    "description": "Error shown when Create is pressed with a glow style but no diffuse texture."
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "The {0} file no longer exists: {1}",
     "description": "{0} is a translated slot name (Diffuse/Mask/Normal/Index), {1} is a file path."
@@ -755,6 +795,46 @@
     "message": "Failed to write the mod: {0}",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Create.FaceSplit.Label": {
+    "message": "This face texture is split left/right",
+    "description": "Checkbox in the Create tab, shown only when the target material is a face. Keep the \"###createFaceSplit\" suffix out of the translation - it is not part of this string."
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
+    "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Create.Glow.Always": {
+    "message": "Always glow",
+    "description": "Radio button label in the Create tab."
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "The tattoo is there in daylight and glows day and night.\nKept gentle on purpose: this shader adds one flat colour across the whole tattoo\nrather than following the picture, so a strong value bleaches the art in daylight.\nFor a brighter glow at night without that, raise Glow in Colors and set \"Fades in light\".",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number."
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "Only in the dark",
+    "description": "Radio button label in the Create tab."
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "Nothing in daylight, glowing in an unlit room — what Atramentum Luminis tattoos did.\nThe art fades out as the light on you rises, and takes its own surface with it, so\nthere's skin and nothing else in the bright.\nNeeds \"React to the scene's light\" in Settings, which is on by default.",
+    "description": "Tooltip. \"Atramentum Luminis\" is the name of an older FFXIV shader mod - keep it as-is. Contains deliberate line breaks - keep the same number."
+  },
+  "Create.Glow.Label": {
+    "message": "Make this art glow",
+    "description": "Checkbox label in the Create tab."
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "Pick a diffuse texture first — the glow takes its colour from the art.",
+    "description": "Tooltip shown when the glow checkbox is disabled because no diffuse texture is picked."
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "Only skin and face targets can glow. A glowing overlay is drawn on a second skin cut\nfrom your body, and there's nothing to cut one from on gear, an accessory or a weapon.",
+    "description": "Tooltip shown when the glow checkbox is disabled because the material target isn't skin or a face. Contains a deliberate line break."
+  },
+  "Create.Glow.Tip": {
+    "message": "Light the art up. Its colour comes from the picture itself, per pixel — there is\nnothing else to set.\nSkin can't emit, so a glowing overlay renders on a second skin instead of being\npainted into yours. Everything else about it works the same, and the Glow dial in\nColors adjusts it afterwards.",
+    "description": "Tooltip on the glow checkbox. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Create.Intro": {
     "message": "Make a basic Proteus overlay mod. Pick at least one texture; Proteus writes a new Penumbra mod and opens it so you can enable and tweak it.",
     "description": "Appears in the Create tab."
@@ -774,6 +854,10 @@
   "Create.Ok.Fmt": {
     "message": "Created \"{0}\", enabled it, and opened it in Penumbra.",
     "description": "Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "Created \"{0}\" and opened it in Penumbra, but couldn't switch it on — enable it there.",
+    "description": "Result when the mod was created but Penumbra wouldn't report it as enabled. {0} is the mod name."
   },
   "Create.PickTexture.Title.Fmt": {
     "message": "Select {0} texture",
@@ -798,6 +882,10 @@
   "Create.Redetect.Tip": {
     "message": "Re-run body detection and overwrite the field.",
     "description": "Tooltip. Appears in the Create tab."
+  },
+  "Create.Registering.Fmt": {
+    "message": "Created \"{0}\" — waiting for Penumbra to finish loading it…",
+    "description": "Interim status while Penumbra finishes loading a newly created mod. {0} is the mod name."
   },
   "Create.Slot.Diffuse": {
     "message": "Diffuse",
@@ -846,6 +934,70 @@
   "Create.WholeSkin.Tip": {
     "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nThree things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin. And\n\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.",
     "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). The two quoted names are UI labels - use exactly your translations of Colors.Bodies.Label and Colors.Bodies.All so the tooltip names the control the user sees. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Emissive.Aliases.Fmt": {
+    "message": "{0} paths",
+    "description": "Import tab, emissive skin pack: this one picture is named by {0} different paths in the manifest."
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "The pack says it is painted for {0}, so Proteus will resize it onto whichever body you wear.",
+    "description": "Import tab, emissive skin pack: the pack named the body its art was painted for. {0} is that name, e.g. \"bibo\"."
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "Body",
+    "description": "Import tab, emissive skin pack: label of the combo choosing which body material the art lands on."
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "Which body material the art is painted onto. Proteus picks this from the pack when it recognises the body, and from the one you're wearing when it doesn't — change it if you know the pack was made for a different one.",
+    "description": "Import tab, emissive skin pack: tooltip on the body combo."
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} glows",
+    "description": "Import tab, emissive skin pack: how much of a texture its mask marks as glowing. The evidence that this is glow art rather than an ordinary texture, so keep the percent format."
+  },
+  "Emissive.Intro": {
+    "message": "Import an emissive skin pack (.pmp of glow art with no models). Its glow becomes a Proteus overlay you can recolour and dim, with no shader mod needed.",
+    "description": "Import tab: the fifth intro bullet, for emissive skin packs. Says what you get, not how. \"No shader mod needed\" is the point — these packs are inert without a replaced skin shader."
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "Only the glow art is imported. The pack's own body materials are left behind: they only work with a replaced skin shader, and Proteus paints the glow onto whatever skin you already wear.",
+    "description": "Import tab, emissive skin pack: said before the Import button. The pack's own body-material redirects are deliberately dropped; only the glow art is taken. Plain text, not a warning."
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus has no race or sex filter: this paints any character wearing a body with the same material. Turn the mod off in Penumbra for characters it wasn't painted for.",
+    "description": "Import tab, emissive skin pack: Proteus has no race or sex filter. Plain text, not a warning — it is true of every overlay, not something this pack did."
+  },
+  "Emissive.NothingUsable": {
+    "message": "No texture in this pack carries a glow mask.",
+    "description": "Import tab, emissive skin pack: tooltip on the disabled Import button when the pack carries no glow art."
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "Imported once, for:\n{0}",
+    "description": "Import tab, emissive skin pack: tooltip listing every manifest path that names one picture. {0} is a newline-separated list."
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "Couldn't read that pack: {0}",
+    "description": "Import tab: the picked .pmp could not be read at all. {0} is the reader's own message."
+  },
+  "Emissive.Reading": {
+    "message": "Reading this pack's textures…",
+    "description": "Import tab, emissive skin pack: shown between picking the file and the preview appearing, while the pack's textures are decoded on a background thread."
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": "Import tab, emissive skin pack: a texture's pixel size, width by height."
+  },
+  "Emissive.Skipped": {
+    "message": "skipped",
+    "description": "Import tab, emissive skin pack: table cell for a texture that will not be imported. The reason is in its tooltip."
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\nSkipped: {1}",
+    "description": "Import tab, emissive skin pack: tooltip on a skipped texture. {0} is its path, {1} the reason."
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "Textures: {0} of {1}",
+    "description": "Import tab, emissive skin pack: how many of the pack's textures will be imported. {0} is the count taken, {1} the count found."
   },
   "Export.Dialog.Filter": {
     "message": "Penumbra mod pack",
@@ -1038,6 +1190,90 @@
   "Import.Dialog.Title": {
     "message": "Select a pack",
     "description": "Title of the file picker. One dialog now offers both pack formats."
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "Imported from the emissive skin pack \"{0}\".",
+    "description": "Emissive skin import: the description written into the imported mod's Penumbra manifest. {0} is the source pack's file name."
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "That mod name has no usable characters — use letters or numbers.",
+    "description": "Emissive skin import: refused because the mod name has no characters a folder name can use."
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "A mod folder named \"{0}\" already exists.",
+    "description": "Emissive skin import: refused because a mod folder of that name already exists. {0} is the name."
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "The pack is no longer there: {0}",
+    "description": "Emissive skin import: refused because the picked file is no longer on disk. {0} is its path."
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Penumbra's mod directory isn't available.",
+    "description": "Emissive skin import: refused because Penumbra's mod directory could not be read."
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "None of this pack's textures could be read on the second pass, so nothing was written.",
+    "description": "Emissive skin import: the write produced nothing, because no texture decoded on the second pass."
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "Nothing in this pack can be imported.",
+    "description": "Emissive skin import: refused because nothing in the pack can be imported."
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "\"Proteus\" is reserved — choose a different mod name.",
+    "description": "Emissive skin import: refused because \"Proteus\" is the managed output mod's own folder."
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "Failed to write the mod: {0}",
+    "description": "Emissive skin import: the write failed. {0} is the exception's message."
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "Glow tattoo",
+    "description": "Emissive skin import: the Penumbra option name when the pack ships one picture."
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "Glow tattoo — {0}",
+    "description": "Emissive skin import: the Penumbra option name when the pack ships one picture per body layout. {0} is the body, e.g. \"bibo\"."
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}, but Proteus couldn't switch it on for you. Tick it under \"{3}\" in Penumbra, or nothing will paint.",
+    "description": "Emissive skin import: the mod is in but Proteus could not tick its option. {0} is the mod folder, {1} the texture count, {2} an optional \" (skipped: n)\" tail, {3} the Penumbra group name."
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "Imported \"{0}\" — textures: {1}{2}. The glow is on and needs no shader mod. Recolour or dim it in Colors, or switch it off under \"{3}\" in Penumbra.",
+    "description": "Emissive skin import: success. {0} is the mod folder, {1} the texture count, {2} an optional \" (skipped: n)\" tail, {3} the Penumbra group name. \"Colors\" is a Proteus tab name."
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "the pack's manifest names it but the archive doesn't contain \"{0}\".",
+    "description": "Emissive skin import: skipped because the pack's manifest names a file the archive does not contain. {0} is the missing archive entry."
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "its alpha channel is empty, so it marks nothing as glowing. An emissive map puts the shape of the glow there, and one without a shape is not a tattoo.",
+    "description": "Emissive skin import: skipped because the emissive map's alpha channel marks nothing as glowing."
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "it is only {0}×{1}, which is a shader's effect or palette map rather than art painted on a body.",
+    "description": "Emissive skin import: skipped because the texture is far too small to be body art — it is the shader's effect or palette map. {0} and {1} are its width and height."
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "its pixels couldn't be decoded.",
+    "description": "Emissive skin import: skipped because the texture's pixels could not be decoded."
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus doesn't know the body \"{0}\", and can't ask your character which one they are wearing until they're drawn. Load in and reopen this pack.",
+    "description": "Emissive skin import: skipped because Proteus knows neither the pack's body token nor the one the character is wearing. {0} is the token."
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus doesn't know this pack's body layout, so it will paint the art onto the body you're wearing ({0}) exactly as it is, with no resizing. If the pack was painted for a different body it will look wrong — change the body target below if you know better.",
+    "description": "Emissive skin import: warning that the pack's body layout is unknown, so the art is aimed at the body the character is wearing. {0} is that body's material suffix."
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "\"{0}\" glows across {1:P0} of the body. That is legal, but it usually means the texture has no real alpha channel — check the result before wearing it out.",
+    "description": "Emissive skin import: warning that a texture glows almost everywhere, which usually means it has no real alpha channel. {0} is its path, {1} the fraction — keep the percent format."
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "Nothing in this pack can be imported — see the reasons above.",
+    "description": "Emissive skin import: warning that nothing in the pack can be imported."
   },
   "Import.Eye.Description.Fmt": {
     "message": "Imported from the eye texture pack \"{0}\".",
@@ -1711,9 +1947,13 @@
     "message": "When another mod is confirmed to be overriding a skin texture Proteus composites\ninto — a tattoo or skin pack shipping its own copy of the body texture — raise\nProteus' Penumbra priority above it automatically, and say so in chat.\n\nThat override is otherwise invisible: overlays half-apply (the bumps land, the\ncolour doesn't) and every log line still reads as a success.\n\nTurn off only if you deliberately want another mod to win a path Proteus\ncomposites. Proteus never acts on a guess — only on a confirmed override.",
     "description": "Tooltip and (?) marker. Three paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "Disable auto redraw",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "Auto redraw",
     "description": "Checkbox in Settings > General."
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Let Proteus keep up with the world on its own - recompositing after zoning, gear\nchanges and redraws, then reloading your character so you can see the result.\n\nTurn it off to make Proteus mostly manual: it won't composite or reload you until\nyou change something yourself. Your current look stays on either way, and edits\nyou make still apply - you just won't see them until something redraws you:\nzoning, changing gear, or Penumbra's Redraw button.\n\nOne exception while it's off: if you're wearing a gear layer, changing gear still\nrecomposites, so the item hosting that layer doesn't get stranded on something\nyou took off. You still won't be redrawn for it.\n\nOnly covers what Proteus starts. Glamourer's \"Auto-Reload Gear\" reloads you\nwhenever any mod's settings change, independently of this.",
+    "description": "Tooltip and (?) marker. Four paragraphs - keep the blank lines. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.General.Enabled.Label": {
     "message": "Enabled",
@@ -1739,14 +1979,6 @@
     "message": "Refresh textures via Glamourer's in-place equipment reload instead of a full\nredraw, avoiding the despawn/respawn flicker. Falls back to a full redraw\nautomatically when Glamourer can't service it.",
     "description": "Tooltip. \"Glamourer\" is another plugin's name - never translate it. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "Skip unchanged recomposites",
-    "description": "Checkbox in Settings > General."
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "Let a recomposite triggered by zoning or a redraw stop early when nothing that\naffects the output has changed. Anything you change yourself always recomposites.\nTurn off only to rule this out when an edit isn't taking effect.",
-    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
-  },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "Host on invisible glasses (keep rings free)",
     "description": "Checkbox in Settings > Hosting."
@@ -1762,6 +1994,38 @@
   "Settings.Hosting.RestoreAccessory.Tip": {
     "message": "Force a full redraw to reload any ring/bracelet the second skin replaced,\nrestoring it to its original model. Use if a gear shell stays stuck on an\naccessory after disabling or swapping.",
     "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Settings.LightResponse.Enabled": {
+    "message": "React to the scene's light",
+    "description": "Checkbox label in the Settings tab."
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "Let rows marked \"Fades in light\" dim as the light on you rises.\nOff, every glow burns at its authored brightness everywhere, the way it did before.\nNothing is rebuilt either way — this reaches the character through the live material.",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Settings.LightResponse.Level": {
+    "message": "Light level",
+    "description": "Slider label in the Settings tab."
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0 is pitch dark (dark-only glows at full brightness), 1 is full daylight (they vanish).",
+    "description": "Tooltip on the light-level slider."
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "Set the light level by hand",
+    "description": "Checkbox label in the Settings tab."
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "Ignore the scene and use the slider instead.\nThe quickest way to see what a dark-only glow does without waiting for dusk,\nand the right setting for gpose, where your own lighting rig is the point.",
+    "description": "Tooltip. \"gpose\" is FFXIV's group-pose camera mode. Contains deliberate line breaks - keep the same number."
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "Reading {0:0.00} — sky {1:0.00}, lamps {2:0.00} ({3} of {4} reached)",
+    "description": "Diagnostic readout. {0} is the light level 0-1, {1} a count of nearby lights, {2} the sky's contribution, {3} the placed lights' contribution."
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
+    "description": "Diagnostic flags shown under the light readout. The words outdoor/indoor/envspace/sky are field names - keep them as-is."
   },
   "Settings.Output.Compression.Label": {
     "message": "Enable Compression",
@@ -1806,6 +2070,10 @@
   "Settings.Section.Hosting": {
     "message": "Hosting",
     "description": "Section heading in Settings: which equipment slot the second skin rides on."
+  },
+  "Settings.Section.LightResponse": {
+    "message": "Light-sensitive glow",
+    "description": "Section heading in the Settings tab."
   },
   "Settings.Section.Output": {
     "message": "Output",

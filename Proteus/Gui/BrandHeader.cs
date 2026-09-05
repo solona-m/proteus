@@ -39,10 +39,12 @@ internal static class BrandHeader
     /// Reserves vertical space only — see the remarks.
     /// </summary>
     /// <remarks>
-    /// The band deliberately contributes ZERO width to the layout. The status window is AlwaysAutoResize,
-    /// so sizing the band from GetContentRegionAvail() would be a feedback loop: a wider band makes wider
-    /// content, which makes a wider window, which makes a wider band, until MaximumSize clamps it. Instead
-    /// the width is measured from the settled content region and only the height is reserved.
+    /// The band deliberately contributes ZERO width to the layout. The status window is AlwaysAutoResize on
+    /// every tab but Toggles, so sizing the band from GetContentRegionAvail() would be a feedback loop: a
+    /// wider band makes wider content, which makes a wider window, which makes a wider band, until
+    /// MaximumSize clamps it. Instead the width is measured from the settled content region and only the
+    /// height is reserved. The band draws on every tab, so the rule holds everywhere even though the loop it
+    /// avoids can only close on the auto-fitting ones.
     /// </remarks>
     /// <param name="minWindowWidth">
     /// The window's own guaranteed minimum WIDTH, already scaled. Converted to a content-space floor

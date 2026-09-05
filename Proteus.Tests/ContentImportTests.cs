@@ -1240,6 +1240,190 @@ public class ContentImportTests
     }
 
     /// <summary>
+    /// A redirect whose game path the game can never request is not a piece.
+    /// <para/>
+    /// "STREGA - Gen 3 &amp; Bibo+ Compatibility" is the case: its default data declares every model a second
+    /// time with the option folder glued onto the FRONT of the game path — "Gen 3/Bra, Choker &amp;
+    /// Gloves/chara/equipment/e6046/model/c0101e6046_top.mdl". The tail still parses as a real garment, so
+    /// both copies landed in one unit under race 0101 and the import died on a duplicate key with nothing
+    /// written. Penumbra never resolves those paths either, so dropping them costs nothing.
+    /// </summary>
+    [Fact]
+    public void Default_redirects_that_are_not_game_paths_are_not_pieces()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_strega.mtrl", new SyntheticModel.Sub(0)));
+
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "STREGA",
+              "Author": "Someone",
+              "DefaultData": { "Files": {
+                "chara/x/mt_strega.mtrl": "common\\strega.mtrl",
+                "Gen 3/Bra/chara/equipment/e6046/model/c0101e6046_top.mdl":   "gen3\\model.mdl",
+                "Bibo+/Bra/chara/equipment/e6046/model/c0101e6046_top.mdl":   "bibo\\model.mdl"
+              } },
+              "Groups": [
+                {
+                  "Name": "Gen 3", "Type": "Multi",
+                  "Options": [
+                    { "Name": "Bra", "Files": { "chara/equipment/e6046/model/c0101e6046_top.mdl": "gen3\\model.mdl" } }
+                  ]
+                }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("common/strega.mtrl", new byte[64]),
+                ("gen3/model.mdl", model),
+                ("bibo/model.mdl", model),
+            });
+
+            // Only the group's own option ships a garment; the two prefixed copies are gone.
+            var preview = ContentImportService.Inspect(pmp);
+            var unit = Assert.Single(preview.Units);
+            Assert.Equal("Gen 3", unit.Group);
+
+            // And the write completes — this is what threw.
+            var sidecar = ContentImportService.BuildSidecar(preview, "STREGA (Proteus)", "Someone");
+            var piece = Assert.Single(
+                sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces));
+            Assert.Equal("Body", piece.Slot);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A prefixed path does not become an always-on material supplier either.
+    /// <para/>
+    /// The models were the crash; this is the quieter half. A source with no group is unconditional — the
+    /// fallback for a leaf whose option groups are all unselected, which after an import EVERY Multi group
+    /// is — so STREGA's eighty prefixed .mtrl entries would have invented a default material choice for a
+    /// pack that ships no default data at all, and <c>SelectedMaterialFile</c> scans backwards, so the one it
+    /// settled on was the worst-ranked of them.
+    /// </summary>
+    [Fact]
+    public void Prefixed_material_paths_do_not_become_unconditional_suppliers()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_strega.mtrl", new SyntheticModel.Sub(0)));
+
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "STREGA",
+              "Author": "Someone",
+              "DefaultData": { "Files": {
+                "chara/x/mt_strega.mtrl": "common\\strega.mtrl",
+                "Gen 3/Bra/chara/equipment/e6046/material/v0001/mt_strega.mtrl": "gen3\\strega.mtrl"
+              } },
+              "Groups": [
+                {
+                  "Name": "Gen 3", "Type": "Multi",
+                  "Options": [
+                    { "Name": "Bra", "Files": { "chara/equipment/e6046/model/c0101e6046_top.mdl": "gen3\\model.mdl" } }
+                  ]
+                }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("common/strega.mtrl", new byte[64]),
+                ("gen3/strega.mtrl", new byte[64]),
+                ("gen3/model.mdl", model),
+            });
+
+            var sidecar = ContentImportService.BuildSidecar(
+                ContentImportService.Inspect(pmp), "STREGA (Proteus)", "Someone");
+            var piece = Assert.Single(
+                sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces));
+
+            // The prefixed path shares the leaf, so it would rank beside the real one — and be the LAST
+            // candidate, which is exactly the one the backwards scan settles on.
+            Assert.Equal("chara/x/mt_strega.mtrl", Assert.Single(piece.GamePathsFor("mt_strega.mtrl")));
+            Assert.Equal("common/strega.mtrl", Assert.Single(piece.SourcesFor("mt_strega.mtrl")).File);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A second model for one race is dropped whole — its materials do not come along without it.
+    /// <para/>
+    /// Two game paths differing only by a folder land in one unit under one race code. That used to throw out
+    /// of <c>ToDictionary</c>; keeping the first is the answer, but the bindings have to be read from the same
+    /// variant the model came from. Merging every variant's carried a material the drawn model never names,
+    /// which reaches the sidecar, the candidate ranking and the colour panel's tab list alike.
+    /// </summary>
+    [Fact]
+    public void A_second_model_for_one_race_contributes_neither_geometry_nor_materials()
+    {
+        var dir = TempDir();
+        try
+        {
+            var first  = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_first.mtrl",  new SyntheticModel.Sub(0)));
+            var second = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_second.mtrl", new SyntheticModel.Sub(0)));
+
+            // Both paths pass the game-path test and both parse as Body/e6046/race 0101, so they collapse
+            // into one unit with two variants of the SAME race.
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "Doubled",
+              "Author": "Someone",
+              "DefaultData": { "Files": {
+                "chara/x/mt_first.mtrl":  "common\\first.mtrl",
+                "chara/x/mt_second.mtrl": "common\\second.mtrl"
+              } },
+              "Groups": [
+                {
+                  "Name": "Pieces", "Type": "Multi",
+                  "Options": [
+                    { "Name": "Bra", "Files": {
+                        "chara/equipment/e6046/model/c0101e6046_top.mdl":       "first\\model.mdl",
+                        "chara/equipment/e6046/extra/c0101e6046_top.mdl":       "second\\model.mdl"
+                    } }
+                  ]
+                }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("common/first.mtrl",  new byte[64]),
+                ("common/second.mtrl", new byte[64]),
+                ("first/model.mdl",  first),
+                ("second/model.mdl", second),
+            });
+
+            var preview = ContentImportService.Inspect(pmp);
+            // Precondition: both really did land in one unit, or the assertions below prove nothing.
+            var unit = Assert.Single(preview.Units);
+            Assert.Equal(2, unit.Variants.Count);
+            Assert.All(unit.Variants, v => Assert.Equal("0101", v.RaceCode));
+
+            var sidecar = ContentImportService.BuildSidecar(preview, "Doubled (Proteus)", "Someone");
+            var piece = Assert.Single(
+                sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces));
+
+            // One model for the race — the first declared — and only the materials THAT model names.
+            Assert.Equal("first/model.mdl", Assert.Single(piece.Models!).Value);
+            Assert.Equal("mt_first.mtrl", Assert.Single(piece.Materials).Key);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
     /// The chosen name reaches the copied manifest, which is the list Penumbra actually shows.
     /// <para/>
     /// An import leaves the original pack installable on its own terms, so both sit in the mod list at once.

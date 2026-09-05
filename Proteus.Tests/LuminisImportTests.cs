@@ -362,22 +362,102 @@ public class LuminisImportTests
         Assert.Null(metadata.OptionGroups![0].Options[0].ColorTableRows);
 
         var rows = metadata.OptionGroups[0].Options[1].ColorTableRows!;
-        var row = Assert.Single(rows);
-        // Row 16 sub-row A: a shell with no _id gets a fabricated index of (255, 255, 0), which selects it.
-        Assert.Equal(16, row.Row);
-        Assert.Null(row.SubRowB);
-        // 300%, measured in game. Far above what Proteus writes anywhere else, because the scroll map is
-        // mostly black with thin neon on it — only the lines have anything to scale.
-        Assert.Equal(3.0f, row.SubRowA!.Emissive);
-        Assert.True(row.SubRowA.Emissive <= 10f, "the editor's Glow dial clamps to 0-10");
-        Assert.Equal(RenderModeInference.GlowEmissiveColour, row.SubRowA.EmissiveColor);
-        // Black, not a near-black grey: characterscroll has no base texture, so this row colour is the
-        // entire unlit surface and anything above black reads as lifted charcoal under scene light.
-        Assert.Equal("#000000", row.SubRowA.Diffuse);
-        Assert.NotNull(row.SubRowA.Diffuse);   // near-black, so the scroll map's colour reads against it
+        Assert.NotEmpty(rows);
+
+        // Every row is written identically, whether the sheet resolved to one region or several: the
+        // plateaus differ in what the user can later do with them, not in how the import looks. The
+        // per-pixel intensity that actually separates them is baked into the scroll map.
+        foreach (var row in rows)
+        {
+            Assert.Null(row.SubRowB);
+            // 300%, measured in game. Far above what Proteus writes anywhere else, because the scroll map is
+            // mostly black with thin neon on it — only the lines have anything to scale.
+            Assert.Equal(3.0f, row.SubRowA!.Emissive);
+            Assert.True(row.SubRowA.Emissive <= 10f, "the editor's Glow dial clamps to 0-10");
+            Assert.Equal(RenderModeInference.GlowEmissiveColour, row.SubRowA.EmissiveColor);
+            // Black, not a near-black grey: characterscroll has no base texture, so this row colour is the
+            // entire unlit surface and anything above black reads as lifted charcoal under scene light.
+            Assert.Equal("#000000", row.SubRowA.Diffuse);
+            // Dark-only, which is what an Atramentum Luminis tattoo was. Both halves: the glow fades with
+            // the light and the surface goes with it, or the art reads as a black patch at noon.
+            Assert.Equal(1f, row.SubRowA.LightResponse);
+            Assert.True(row.SubRowA.HideInLight);
+        }
+
+        // Rows and index agree: with several regions the rows count up from 1 and an index selects them;
+        // with one, the shell samples the fabricated (255, 255, 0) — row 16 — and no index is authored.
+        var glow = metadata.OptionGroups[0].Options[1].Overlays![0];
+        if (rows.Count > 1)
+        {
+            Assert.Equal([.. Enumerable.Range(1, rows.Count)], rows.Select(r => r.Row));
+            Assert.NotNull(glow.Index);
+            // PNG, never .tex: an index is a lookup, and BC7 would move a texel's red across a row bucket.
+            Assert.EndsWith(".png", glow.Index);
+            Assert.True(File.Exists(Path.Combine(dir.Path, "Proteus", glow.Index!.Replace('/', Path.DirectorySeparatorChar))));
+        }
+        else
+        {
+            Assert.Equal(16, rows[0].Row);
+            Assert.Null(glow.Index);
+        }
 
         Assert.True(RenderModeInference.HasCloth(rows));
         Assert.False(RenderModeInference.HasCloth([]));
+    }
+
+    /// <summary>
+    /// The plateau split, on a mask shaped the way a real Atramentum Luminis one is: flat fills with an
+    /// antialiased edge between them. Two fills must come back as two regions, brightest first, and the
+    /// ramp between them must not earn a region of its own.
+    /// </summary>
+    [Fact]
+    public void SplitsFlatPlateausIntoRegionsBrightestFirst()
+    {
+        // 64×64. Left half glows fully (alpha 0), right half at half strength (alpha 128), with one column
+        // of ramp between them standing in for the antialiased outline.
+        const int w = 64, h = 64;
+        var rgba = new byte[w * h * 4];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int i = (y * w + x) * 4;
+                rgba[i] = rgba[i + 1] = rgba[i + 2] = 200;
+                rgba[i + 3] = x < 31 ? (byte)0 : x == 31 ? (byte)64 : (byte)128;
+            }
+
+        var bands = LuminisImportService.GlowBands(rgba);
+
+        Assert.Equal(2, bands.Count);
+        Assert.Equal(255, bands[0]);   // alpha 0 → fully lit, and first
+        Assert.Equal(127, bands[1]);   // alpha 128 → half lit
+
+        var id = LuminisImportService.BuildGlowIndex(rgba, bands);
+        // (row − 1) × 17, so band 0 → row 1 → red 0, band 1 → row 2 → red 17. Green 255 = sub-row A.
+        Assert.Equal(0, id[0]);
+        Assert.Equal(255, id[1]);
+        Assert.Equal(17, id[(0 * w + 63) * 4]);
+        // Round-trips through the decoder the shell actually uses, which is the only reading that matters.
+        Assert.Equal(1, ContentIndexTexture.RowOf(0));
+        Assert.Equal(2, ContentIndexTexture.RowOf(17));
+    }
+
+    /// <summary>
+    /// A mask with nothing on it, and one with a single flat fill, both keep the old single-row shape —
+    /// an index that says "every texel is row 1" is a texture and a row nobody needed.
+    /// </summary>
+    [Theory]
+    [InlineData(255, 0)]   // opaque everywhere: nothing glows at all
+    [InlineData(0, 1)]     // one flat fill
+    public void OneRegionOrNoneAuthorsNoIndex(byte alpha, int expectedBands)
+    {
+        var rgba = new byte[32 * 32 * 4];
+        for (int i = 0; i < rgba.Length; i += 4)
+        {
+            rgba[i] = rgba[i + 1] = rgba[i + 2] = 180;
+            rgba[i + 3] = alpha;
+        }
+
+        Assert.Equal(expectedBands, LuminisImportService.GlowBands(rgba).Count);
     }
 
     /// <summary>

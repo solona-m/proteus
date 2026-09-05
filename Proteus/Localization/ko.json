@@ -167,6 +167,10 @@
     "message": "[Proteus] {1}의 일부 레이어를 배치하지 못했습니다(레이어 수: {0}). 종족 변형을 받을 수 없는 레이어라 Proteus가 통째로 교체할 수 있는 칸이 필요합니다. 반지 칸(어느 손이든)이나 얼굴 장식 칸을 비우면 나타납니다.",
     "description": ""
   },
+  "Chat.UnresolvedSurfaces.Fmt": {
+    "message": "[Proteus] {1}의 일부 레이어를 건너뛰었습니다(레이어 수: {0}). 캐릭터가 해당 부위를 그리고 있지 않아 잘라낼 대상이 없었습니다. 해당 오버레이에 설정된 Surface가 실제로 착용 중인 얼굴 또는 부위와 일치하는지 확인하세요.",
+    "description": ""
+  },
   "Colors.Advanced": {
     "message": "고급",
     "description": ""
@@ -283,6 +287,14 @@
     "message": "{0}: {1}",
     "description": ""
   },
+  "Colors.HideInLight.Label": {
+    "message": "밝은 곳에서 숨기기",
+    "description": ""
+  },
+  "Colors.HideInLight.Tip": {
+    "message": "이 행의 불투명도가 발광을 따라가게 합니다. 빛나지 않는 곳에는 피부만 남습니다.\n이 옵션이 없으면 어둠 전용 행도 자기 색(보통 검정)을 남기기 때문에,\n낮에는 피부에 스며들지 않고 어두운 자국처럼 보입니다.",
+    "description": ""
+  },
   "Colors.Highlight.Gear.Tip": {
     "message": "이 하위 행의 메시를 캐릭터에서 발광시켜 게임 안에서 찾기 쉽게 합니다.\n다시 클릭하면 중지됩니다.",
     "description": ""
@@ -297,6 +309,14 @@
   },
   "Colors.Highlight.Skin.Tip": {
     "message": "이 하위 행의 영역을 캐릭터 피부 위에 밝게 표시해 게임 안에서 찾기 쉽게\n합니다. 다시 클릭하면 중지됩니다. (처음에는 생성에 잠시 걸립니다.)",
+    "description": ""
+  },
+  "Colors.LightResponse.Label": {
+    "message": "빛에 따라 흐려짐",
+    "description": ""
+  },
+  "Colors.LightResponse.Tip": {
+    "message": "주변 빛이 이 행의 발광을 얼마나 없애는지 정합니다.\n0%는 어디서나 똑같이 빛납니다. 100%는 어둠 전용 발광으로, 불 꺼진 방에서는 최대 밝기,\n한낮의 하늘 아래나 등불 옆에서는 전혀 보이지 않습니다.\n행마다 설정하므로 문신의 한쪽만 어둠 전용으로 만들 수 있습니다.",
     "description": ""
   },
   "Colors.Mask.Forced": {
@@ -345,6 +365,14 @@
   },
   "Colors.None": {
     "message": "없음",
+    "description": ""
+  },
+  "Colors.OneSided.Label": {
+    "message": "이 아트는 의도적으로 한쪽만",
+    "description": ""
+  },
+  "Colors.OneSided.Tip": {
+    "message": "한쪽에만 나타나야 하는 아트(한쪽 팔의 문신, 한쪽 뺨의 흉터)에만 켜세요.\n일반 피부를 포함해 그 밖의 모든 경우에는 꺼 두세요.\n바닐라 몸과 바닐라 얼굴은 양쪽에 같은 픽셀을 주므로, 그에 맞춰 그린 아트는 절반으로\n접힙니다. 한쪽만 남고 반대쪽으로 거울처럼 복사됩니다. 좌우 대칭 디자인에서는 보이지\n않지만 한쪽만의 디자인은 망가집니다.\n이 옵션을 켜면 Proteus가 전용 레이어로 렌더링하며, 그 좌우가 텍스처의 좌우 절반을\n각각 읽으므로 양쪽이 모두 남습니다.\n자동으로는 판별할 수 없습니다. 실제 피부는 결코 대칭이 아니며 주근깨와 점은 좌우가\n다릅니다. 그 차이가 의도인지 아닌지는 제작자만 알 수 있습니다.",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -477,6 +505,10 @@
   },
   "Colors.SubRowB.Fmt": {
     "message": "{0}번 행 B",
+    "description": ""
+  },
+  "Colors.SubRowUnused": {
+    "message": "이 열을 참조하는 픽셀이 없습니다 — 아트의 인덱스가 어디서나 반대쪽 열을 고르므로, 여기서 수정해도 나타나지 않습니다.",
     "description": ""
   },
   "Colors.Tiling.Label": {
@@ -727,6 +759,14 @@
     "message": "\"{0}\"(이)라는 이름의 모드 폴더가 이미 있습니다.",
     "description": ""
   },
+  "Create.Error.GlowDecodeFailed.Fmt": {
+    "message": "발광을 만들기 위해 {0}을(를) 읽지 못했습니다. PNG로 시도해 보세요.",
+    "description": ""
+  },
+  "Create.Error.GlowNeedsDiffuse": {
+    "message": "빛나는 오버레이는 색을 그림에서 가져오므로 디퓨즈 텍스처가 필요합니다.",
+    "description": ""
+  },
   "Create.Error.MissingFile.Fmt": {
     "message": "{0} 파일이 더 이상 존재하지 않습니다: {1}",
     "description": ""
@@ -755,6 +795,46 @@
     "message": "모드를 쓰지 못했습니다: {0}",
     "description": ""
   },
+  "Create.FaceSplit.Label": {
+    "message": "이 얼굴 텍스처는 좌우로 나뉘어 있음",
+    "description": ""
+  },
+  "Create.FaceSplit.Tip": {
+    "message": "얼굴 텍스처를 두 개의 절반으로 그린 경우에만 선택하세요. 캐릭터의 오른쪽은 이미지의 오른쪽 절반에, 왼쪽은 왼쪽 절반에 그린 것입니다.\n일반 얼굴 텍스처는 양쪽 뺨에 같은 픽셀을 사용하므로 한쪽에만 있는 무늬는 존재할 수 없습니다. 나뉜 텍스처는 Proteus가 얼굴 레이어로 렌더링합니다.\n일반 얼굴 텍스처에서는 꺼 두세요.",
+    "description": ""
+  },
+  "Create.Glow.Always": {
+    "message": "항상 빛남",
+    "description": ""
+  },
+  "Create.Glow.Always.Tip": {
+    "message": "문신은 낮에도 보이고 밤낮으로 빛납니다.\n일부러 은은하게 두었습니다. 이 셰이더는 그림을 따라가지 않고 문신 전체에 단일한\n색을 더하므로, 값을 높이면 낮에 그림이 하얗게 바랩니다.\n밤에만 더 밝게 하려면 색상에서 발광을 올리고 「빛에 따라 흐려짐」을 설정하세요.",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly": {
+    "message": "어두울 때만",
+    "description": ""
+  },
+  "Create.Glow.DarkOnly.Tip": {
+    "message": "낮에는 아무것도 보이지 않고, 불 꺼진 방에서 빛납니다 — Atramentum Luminis 문신과 같습니다.\n주변이 밝아질수록 그림이 사라지며 자신의 표면까지 함께 거두므로,\n밝은 곳에는 피부만 남습니다.\n설정의 「장면의 빛에 반응」이 필요하며 기본값은 켜짐입니다.",
+    "description": ""
+  },
+  "Create.Glow.Label": {
+    "message": "이 그림을 빛나게 하기",
+    "description": ""
+  },
+  "Create.Glow.NeedsDiffuse": {
+    "message": "먼저 디퓨즈 텍스처를 선택하세요. 발광 색은 그림에서 가져옵니다.",
+    "description": ""
+  },
+  "Create.Glow.NeedsSkin": {
+    "message": "빛날 수 있는 대상은 피부와 얼굴뿐입니다. 빛나는 오버레이는 몸에서 잘라낸\n세컨드 스킨에 그려지는데, 장비·장신구·무기에는 잘라낼 것이 없습니다.",
+    "description": ""
+  },
+  "Create.Glow.Tip": {
+    "message": "그림을 빛나게 합니다. 색은 그림 자체에서 픽셀 단위로 가져오므로\n따로 정할 것이 없습니다.\n피부는 발광할 수 없어서, 빛나는 오버레이는 피부에 그려지는 대신\n세컨드 스킨 위에 렌더링됩니다. 나머지는 모두 같고, 이후 색상 탭의\n발광 다이얼로 조절할 수 있습니다.",
+    "description": ""
+  },
   "Create.Intro": {
     "message": "기본적인 Proteus 오버레이 모드를 만듭니다. 텍스처를 하나 이상 선택하면 Proteus가 새 Penumbra 모드를 작성하고 열어 주므로 바로 활성화하고 조정할 수 있습니다.",
     "description": ""
@@ -773,6 +853,10 @@
   },
   "Create.Ok.Fmt": {
     "message": "\"{0}\"을(를) 만들고 활성화한 뒤 Penumbra에서 열었습니다.",
+    "description": ""
+  },
+  "Create.Ok.NotEnabled.Fmt": {
+    "message": "「{0}」을(를) 만들고 Penumbra에서 열었지만 켜지 못했습니다. 거기서 활성화해 주세요.",
     "description": ""
   },
   "Create.PickTexture.Title.Fmt": {
@@ -797,6 +881,10 @@
   },
   "Create.Redetect.Tip": {
     "message": "바디 감지를 다시 실행하고 입력란을 덮어씁니다.",
+    "description": ""
+  },
+  "Create.Registering.Fmt": {
+    "message": "「{0}」을(를) 만들었습니다 — Penumbra가 불러오기를 마칠 때까지 기다리는 중…",
     "description": ""
   },
   "Create.Slot.Diffuse": {
@@ -845,6 +933,70 @@
   },
   "Create.WholeSkin.Tip": {
     "message": "피부 위에 무언가를 덧그리는 것이 아니라 전체 피부 모드를 변환할 때 체크하세요.\n텍스처가 그렇게 보이면 Proteus가 대신 체크합니다. 직접 정한 값이 항상 우선합니다.\n세 가지가 따라옵니다. 노멀 맵이 머티리얼에 이미 있는 것 위에 더해지지 않고 교체합니다.\n그러지 않으면 아래의 같은 맵 위에 겹쳐져 모공과 주름이 두 번 적용되고, 몸이 얼굴에 비해\n평평해 보이며 목 이음새에 뚜렷한 선이 생깁니다.\n둘째로 피부색 억제가 꺼집니다. 착용자의 피부색이 그대로 반영됩니다. 억제는 천이 다시 물드는\n것을 막기 위한 것이고, 이 텍스처는 피부 그 자체이기 때문입니다.\n셋째로 \"바디\"가 \"모든 바디\"로 설정되어 바닐라 바디에도 적용됩니다.",
+    "description": ""
+  },
+  "Emissive.Aliases.Fmt": {
+    "message": "경로 {0}개",
+    "description": ""
+  },
+  "Emissive.BodyFromPack.Fmt": {
+    "message": "팩이 {0}용으로 그려졌다고 밝혀서, Proteus가 착용 중인 바디에 맞게 변환합니다.",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Label": {
+    "message": "바디",
+    "description": ""
+  },
+  "Emissive.BodyTarget.Tip": {
+    "message": "아트를 어느 바디 머티리얼에 그릴지입니다. Proteus는 바디를 알아볼 수 있을 때는 팩에서, 그렇지 않으면 착용 중인 바디에서 고릅니다. 다른 바디용임을 안다면 바꾸세요.",
+    "description": ""
+  },
+  "Emissive.Glow.Fmt": {
+    "message": "{0:P1} 발광",
+    "description": ""
+  },
+  "Emissive.Intro": {
+    "message": "발광 스킨 팩(모델이 없는 발광 아트 .pmp)을 가져옵니다. 그 빛은 색을 바꾸고 세기를 줄일 수 있는 Proteus 오버레이가 되며, 셰이더 모드가 필요 없습니다.",
+    "description": ""
+  },
+  "Emissive.MaterialsIgnored": {
+    "message": "발광 아트만 가져옵니다. 팩 자체의 몸 머티리얼은 가져오지 않습니다. 그것들은 교체된 피부 셰이더가 있어야만 작동하며, Proteus는 이미 착용 중인 피부 위에 빛을 그립니다.",
+    "description": ""
+  },
+  "Emissive.NoRaceFilter": {
+    "message": "Proteus에는 종족·성별 필터가 없습니다. 같은 머티리얼의 바디를 입은 모든 캐릭터에 그려집니다. 대상이 아닌 캐릭터에서는 Penumbra에서 모드를 끌주세요.",
+    "description": ""
+  },
+  "Emissive.NothingUsable": {
+    "message": "이 팩의 어느 텍스처에도 빛 마스크가 없습니다.",
+    "description": ""
+  },
+  "Emissive.Paths.Fmt": {
+    "message": "다음 경로용으로 한 번만 가져옵니다:\n{0}",
+    "description": ""
+  },
+  "Emissive.ReadFailed.Fmt": {
+    "message": "해당 팩을 읽을 수 없습니다: {0}",
+    "description": ""
+  },
+  "Emissive.Reading": {
+    "message": "이 팩의 텍스처를 읽는 중…",
+    "description": ""
+  },
+  "Emissive.Size.Fmt": {
+    "message": "{0}×{1}",
+    "description": ""
+  },
+  "Emissive.Skipped": {
+    "message": "건너뜀",
+    "description": ""
+  },
+  "Emissive.SkippedReason.Fmt": {
+    "message": "{0}\n건너뜀: {1}",
+    "description": ""
+  },
+  "Emissive.TextureCount.Fmt": {
+    "message": "텍스처: {1}개 중 {0}개",
     "description": ""
   },
   "Export.Dialog.Filter": {
@@ -1037,6 +1189,90 @@
   },
   "Import.Dialog.Title": {
     "message": "팩 선택",
+    "description": ""
+  },
+  "Import.Emissive.Description.Fmt": {
+    "message": "발광 스킨 팩 “{0}”에서 가져왔습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.BadName": {
+    "message": "그 모드 이름에는 사용할 수 있는 문자가 없습니다. 문자나 숫자를 사용하세요.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Exists.Fmt": {
+    "message": "\"{0}\"(이)라는 모드 폴더가 이미 있습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Gone.Fmt": {
+    "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoModDir": {
+    "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NoneWritten": {
+    "message": "이 팩의 텍스처를 두 번째 단계에서 하나도 읽지 못해 아무것도 기록하지 않았습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.NothingUsable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Reserved": {
+    "message": "\"Proteus\"는 예약된 이름입니다. 다른 모드 이름을 선택하세요.",
+    "description": ""
+  },
+  "Import.Emissive.Fail.Write.Fmt": {
+    "message": "모드를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "Import.Emissive.Option.Glow": {
+    "message": "빛나는 문신",
+    "description": ""
+  },
+  "Import.Emissive.Option.GlowFor.Fmt": {
+    "message": "빛나는 문신 — {0}",
+    "description": ""
+  },
+  "Import.Emissive.Result.NoSelection.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 다만 Proteus가 켜지 못했습니다. Penumbra의 “{3}”에서 직접 체크하세요. 그렇지 않으면 아무것도 그려지지 않습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Result.Ok.Fmt": {
+    "message": "“{0}” 가져옴 — 텍스처: {1}{2}. 빛이 켜져 있으며 셰이더 모드가 필요 없습니다. Colors에서 색을 바꾸거나 세기를 줄이고, Penumbra의 “{3}”에서 끌 수 있습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Missing.Fmt": {
+    "message": "팩의 매니페스트에는 적혀 있지만 압축 파일에 “{0}”이(가) 없습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.NoGlow": {
+    "message": "알파 채널이 비어 있어 빛나는 부분이 지정되어 있지 않습니다. 발광 맵은 빛의 모양을 거기에 담으며, 모양이 없는 것은 문신이 아닙니다.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.TooSmall.Fmt": {
+    "message": "크기가 {0}×{1}밖에 되지 않아, 몸에 그린 아트가 아니라 셰이더의 이펙트 맵이나 팔레트입니다.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.Undecodable": {
+    "message": "픽셀을 디코딩할 수 없었습니다.",
+    "description": ""
+  },
+  "Import.Emissive.Skip.UnknownBody.Fmt": {
+    "message": "Proteus는 바디 “{0}”을(를) 모르며, 캐릭터가 로드되기 전에는 물어볼 수도 없습니다. 접속한 뒤 이 팩을 다시 열어 주세요.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.FromWearer.Fmt": {
+    "message": "Proteus가 이 팩의 바디 UV를 몰라서, 현재 입고 있는 바디({0}) 위에 그대로 크기 조정 없이 그립니다. 다른 바디용으로 만들어졌다면 이상하게 보입니다 — 아다면 아래에서 대상 바디를 바꿔 주세요.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.MostlyGlow.Fmt": {
+    "message": "“{0}”은(는) 몸의 {1:P0}이(가) 빛납니다. 가능한 일이긴 하지만, 보통은 텍스처에 제대로 된 알파 채널이 없다는 뜻입니다. 쓰기 전에 결과를 확인하세요.",
+    "description": ""
+  },
+  "Import.Emissive.Warn.NothingImportable": {
+    "message": "이 팩에서 가져올 수 있는 것이 없습니다 — 위의 이유를 확인하세요.",
     "description": ""
   },
   "Import.Eye.Description.Fmt": {
@@ -1711,8 +1947,12 @@
     "message": "Proteus가 합성해 넣는 피부 텍스처를 다른 모드가 덮어쓰고 있다고 확인되면\n— 자체 바디 텍스처 사본을 포함한 문신 팩이나 피부 팩 등 —\nProteus의 Penumbra 우선도를 그 위로 자동으로 올리고 채팅으로 알립니다.\n\n이 덮어쓰기는 평소에는 전혀 드러나지 않습니다. 오버레이가 절반만 적용되고\n(요철은 올라가는데 색은 올라가지 않음), 로그의 모든 줄은 여전히 성공으로 보입니다.\n\nProteus가 합성하는 경로를 다른 모드가 의도적으로 차지하게 하려는 경우에만\n끄세요. Proteus는 추측으로 움직이지 않으며, 확인된 덮어쓰기에만 반응합니다.",
     "description": ""
   },
-  "Settings.General.DisableAutoRedraw.Label": {
-    "message": "자동 다시 그리기 비활성화",
+  "Settings.General.AutoRedraw.Label": {
+    "message": "자동 다시 그리기",
+    "description": ""
+  },
+  "Settings.General.AutoRedraw.Tip": {
+    "message": "Proteus가 알아서 세계의 변화를 따라가게 합니다. 지역 이동, 장비 변경, 다시 그리기\n이후에 다시 합성한 다음, 결과를 볼 수 있도록 캐릭터를 다시 불러옵니다.\n\n끄면 Proteus는 대부분 수동으로 동작합니다. 직접 무언가를 바꾸기 전까지는 합성하지도,\n다시 불러오지도 않습니다. 어느 쪽이든 현재 외형은 그대로 유지되고 편집한 내용도\n계속 적용됩니다 - 다만 무언가가 당신을 다시 그리기 전까지는 보이지 않을 뿐입니다.\n지역 이동, 장비 변경, 또는 Penumbra의 Redraw 버튼입니다.\n\n꺼져 있는 동안의 예외가 하나 있습니다. 장비 레이어를 착용 중이라면 장비를 바꿀 때는\n여전히 다시 합성합니다. 그 레이어를 담고 있는 아이템이 이미 벗은 것에 남겨지지\n않도록 하기 위해서입니다. 그래도 그것 때문에 다시 그려지지는 않습니다.\n\nProteus가 시작하는 것만 해당됩니다. Glamourer의 \"Auto-Reload Gear\"는 어떤 모드든\n설정이 바뀔 때마다 당신을 다시 불러오며, 이 설정과는 무관합니다.",
     "description": ""
   },
   "Settings.General.Enabled.Label": {
@@ -1739,14 +1979,6 @@
     "message": "전체 다시 그리기 대신 Glamourer의 제자리 장비 다시 불러오기로 텍스처를\n새로 고쳐, 사라졌다 나타나는 깜빡임을 피합니다. Glamourer가 처리할 수 없을\n때는 자동으로 전체 다시 그리기로 되돌아갑니다.",
     "description": ""
   },
-  "Settings.General.SkipUnchanged.Label": {
-    "message": "변경 없는 재합성 건너뛰기",
-    "description": ""
-  },
-  "Settings.General.SkipUnchanged.Tip": {
-    "message": "지역 이동이나 다시 그리기로 시작된 재합성을, 출력에 영향을 주는 변경이\n전혀 없을 때 일찍 중단하도록 합니다. 직접 변경한 내용은 항상 재합성됩니다.\n수정이 반영되지 않는 원인을 가려낼 때만 끄세요.",
-    "description": ""
-  },
   "Settings.Hosting.InvisibleGlasses.Label": {
     "message": "투명 안경에 얹기 (반지를 비워 둠)",
     "description": ""
@@ -1761,6 +1993,38 @@
   },
   "Settings.Hosting.RestoreAccessory.Tip": {
     "message": "전체 다시 그리기를 강제하여 세컨드 스킨이 대체한 반지나 팔찌를 다시 불러와\n원래 모델로 되돌립니다. 비활성화하거나 교체한 뒤에도 장비 셸이 장신구에\n남아 있을 때 사용하세요.",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled": {
+    "message": "장면의 빛에 반응",
+    "description": ""
+  },
+  "Settings.LightResponse.Enabled.Tip": {
+    "message": "「빛에 따라 흐려짐」으로 표시된 행이 주변이 밝아질수록 어두워집니다.\n끄면 모든 발광이 예전처럼 어디서나 제작자가 정한 밝기로 빛납니다.\n어느 쪽이든 다시 만들지 않습니다 — 실행 중인 머티리얼을 통해 반영됩니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Level": {
+    "message": "밝기",
+    "description": ""
+  },
+  "Settings.LightResponse.Level.Tip": {
+    "message": "0은 완전한 어둠(어둠 전용 발광이 최대), 1은 한낮(완전히 사라짐)입니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual": {
+    "message": "빛의 밝기를 직접 지정",
+    "description": ""
+  },
+  "Settings.LightResponse.Manual.Tip": {
+    "message": "장면을 무시하고 슬라이더 값을 사용합니다.\n해 질 녘을 기다리지 않고 어둠 전용 발광을 확인하는 가장 빠른 방법이며,\n직접 꾸민 조명이 핵심인 그룹 포즈에도 알맞습니다.",
+    "description": ""
+  },
+  "Settings.LightResponse.Readout.Fmt": {
+    "message": "측정값 {0:0.00} — 하늘 {1:0.00}, 램프 {2:0.00} ({4}개 중 {3}개 도달)",
+    "description": ""
+  },
+  "Settings.LightResponse.Signals.Fmt": {
+    "message": "outdoor={0}  indoor={1}  envspace={2}  sky={3}",
     "description": ""
   },
   "Settings.Output.Compression.Label": {
@@ -1805,6 +2069,10 @@
   },
   "Settings.Section.Hosting": {
     "message": "적재 위치",
+    "description": ""
+  },
+  "Settings.Section.LightResponse": {
+    "message": "빛에 반응하는 발광",
     "description": ""
   },
   "Settings.Section.Output": {
