@@ -191,6 +191,38 @@
     "message": "Base colors unchanged — except in Advanced, where \"Reset to defaults\" rewrites them and \"Bodies\" is a global setting no binding captures.",
     "description": "Appears in the colour-table editor window."
   },
+  "Colors.Blend.Add": {
+    "message": "Add",
+    "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. The row's colour is added to what is underneath."
+  },
+  "Colors.Blend.Label": {
+    "message": "Blend",
+    "description": "Dropdown label. Appears in the colour-table editor window, under Opacity."
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiply",
+    "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. The row's colour is multiplied into what is underneath, which can only darken it."
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Overlay",
+    "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. Multiplies in the dark areas and screens in the light ones. This is the standard graphics name for the mode - not related to the word \"overlay\" used elsewhere in Proteus for a mod's art layer."
+  },
+  "Colors.Blend.Paint": {
+    "message": "Paint",
+    "description": "Blend mode name in a dropdown, and the default. Appears in the colour-table editor window. The row's art is laid on top of what is underneath."
+  },
+  "Colors.Blend.Replace": {
+    "message": "Replace",
+    "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. The row's colour replaces what is underneath, keeping its shape."
+  },
+  "Colors.Blend.Screen": {
+    "message": "Screen",
+    "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. The opposite of Multiply - it can only lighten."
+  },
+  "Colors.Blend.Tip": {
+    "message": "How this row's art combines with what is already on the skin.\n\n\"Paint\" lays it on top, which is what every layer has always done.\nAnything else makes this row a PRINT: it colours the fabric this mod's\nother layers painted, and is clipped to their shape — so a rainbow on a\nfishnet colours the threads and leaves the holes as skin.\n\nA print only reaches its OWN mod's layers; it never touches another mod's\nclothing. On bare skin it paints nothing at all, so a print selected on its\nown shows nothing — there is nothing there to print on.\n\nMultiply can only darken, so it reads faintly on very dark fabric — use\nScreen there instead. This row's colour still tints the art, and its\nOpacity is the print's strength.",
+    "description": "Tooltip on the Blend dropdown. \"Paint\", \"Multiply\" and \"Screen\" are mode names - translate them the same way as the Colors.Blend.* entries above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Bodies.All": {
     "message": "All bodies",
     "description": "Appears in the colour-table editor window."

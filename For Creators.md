@@ -86,7 +86,41 @@ Color table rows control how Proteus tints and illuminates the overlay. Rows are
 - **LightResponse**: 0–1, how much the scene's light takes this row's glow away. Omitted or 0 is the unconditional glow every row had before — the same brightness in a lit street as in a cellar. 1 is dark-only: full brightness with no light on the wearer, nothing at all in daylight. It only means something where `Emissive` is above zero. Because it is per sub-row, one region of a tattoo can be dark-only while another is always on; the two are told apart by your `_id` texture, the same way their colours are.
 - **HideInLight**: `true` makes the row's *opacity follow its glow* — as the light takes the glow away it takes the surface with it, so where the row has stopped glowing there is nothing left but skin. Without it a dark-only row still leaves the shell's own colour behind, usually the near-black a glowing material wants, and the art reads as a dark silhouette at noon rather than vanishing. Per row, like `LightResponse`, because the opacity it moves is the shell normal's blue channel and your `_id` says which texel belongs to which row: one region can vanish in daylight while the region beside it stays. A `HideInLight` with no `LightResponse` follows the glow all the way; with one, it fades only as far as the glow does.
 
+- **Blend**: how the row combines with what your mod has already painted. `"Paint"` (the default, and what every row did before this existed) lays the art on top. Anything else makes the row a **print** — see below.
+
 None of these are baked into anything: Proteus applies them to the live material each frame, so the light changing costs no recomposite and nothing on disk is rebuilt. Users can switch the whole behaviour off, or pin the light level by hand, under **Settings → Light-sensitive glow**.
+
+##### Prints — `"Blend"`
+
+A print colours the fabric your other layers painted, instead of covering it. Give a fishnet stocking a rainbow print and the *threads* come out rainbow while the holes stay skin — which a plain overlay cannot do, because it would paint over the holes too.
+
+```json
+"ColorTableRows": [
+  { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Blend": "Multiply" } }
+]
+```
+
+| Mode | What it does |
+|---|---|
+| `Paint` | Alpha-over, the default. The row brings its own colour and lays it on top. |
+| `Multiply` | Darkens. White is invisible, black is opaque. What a printed pattern usually wants — ink on cloth takes the cloth's shading with it. |
+| `Screen` | Lightens. The complement of `Multiply`, and what a bright print on dark fabric needs. |
+| `Overlay` | `Multiply` in the fabric's shadows, `Screen` in its highlights. Keeps the weave's contrast, so the print reads as dyed *into* the cloth. |
+| `Add` | Purely additive — a sheen, or a dusting of glitter. Saturates to white. |
+| `Replace` | Takes the row's colour outright, keeping the fabric's shape. Flat, and loses the fabric's own shading. |
+
+Three rules worth knowing before you author one:
+
+- **A print only reaches your own mod's layers.** It never touches another mod's clothing, so a print cannot be shipped as a way to recolour someone else's work.
+- **On bare skin a print paints nothing.** Selected on its own it shows nothing at all — there is nothing there to print on. This is deliberate, not a failure; the plugin log says so at debug level.
+- **A print is never promoted to a cloth layer.** It has no coverage of its own to cut a shell from, and a shell would take it away from the very layers it exists to colour. Put glow on the fabric, not on the print.
+- **A print contributes colour and nothing else.** Its `Normal` and `Mask` are clipped to the same coverage its colour is, so a row that prints everywhere adds no relief, no gloss, no ambient occlusion and no skin-tone suppression. Relief belongs on the fabric, which is the thing that actually has a surface. If your print ships a normal map intending it to apply on its own, make the row `Paint` instead.
+
+If a row prints but its option also declares an `Index` that fails to load, Proteus cannot tell which texel belongs to which row, so the rows fall back to painting and a warning naming the mod goes to the log — the print will look like it simply stopped working.
+
+Because `Blend` is per sub-row, one region of a print can multiply while the region beside it screens — your `_id` texture tells them apart exactly as it does their colours. Mixing a printing row and a painting row in one option is allowed; the option then still counts as a surface (it casts ambient occlusion, and can still be promoted).
+
+The row's `Diffuse` still tints the art, and its `Opacity` is the print's strength.
 
 Users can override these values at any time from the Proteus status window. Their changes are written back to your `metadata.json` inside their local mod installation.
 

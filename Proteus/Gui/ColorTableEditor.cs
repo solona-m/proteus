@@ -1049,6 +1049,21 @@ public static class ColorTableEditor
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.OpacityTip);
 
+        // Blend is a SKIN idea: a print recolours what this mod painted into the skin, and a shell has a
+        // real colour table of its own instead. Shown only where it can do something.
+        if (mode == RenderMode.Skin)
+        {
+            int bl = (int)(sub?.Blend ?? RowBlend.Paint);
+            ImGui.SetNextItemWidth(110);
+            if (ImGui.Combo($"{cs.Blend}##bl_{id}", ref bl, cs.BlendNames, cs.BlendNames.Length))
+            {
+                Edit().Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.BlendTip);
+        }
+
         // Roughness / metalness / sphere map belong to Cloth. Dimmed-but-clickable in Skin (touch
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
         // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a

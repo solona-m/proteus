@@ -178,6 +178,46 @@ public class RenderModeInferenceTests
         => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
             Rows(), aboveGear: true, canShell: false));
 
+    // ── A print is never promoted ──────────────────────────────────────────────
+    // It has no coverage of its own to cut a shell from, and a shell would take it away from the very
+    // layers it exists to colour. It qualifies on every promotion route otherwise, so each needs vetoing.
+
+    [Fact]
+    public void Promote_PrintAboveGear_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: true));
+
+    [Fact]
+    public void Promote_PrintWithGlowRow_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Screen, Emissive = 0.5f }), aboveGear: false));
+
+    /// <summary>
+    /// The one that would have been most visible: a toe cap anywhere in the look promotes every shellable
+    /// skin overlay, which would have turned an opaque full-body print into a rainbow bodysuit.
+    /// </summary>
+    [Fact]
+    public void Promote_PrintWithToeCapWanted_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: false,
+            canShell: true, needsUnmirroredShell: false, toeCapWanted: true));
+
+    /// <summary>A row that paints is untouched by any of this.</summary>
+    [Fact]
+    public void Promote_PaintRowAboveGear_StillPromotes()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Paint }), aboveGear: true));
+
+    /// <summary>
+    /// Mixed rows are not a print: one painting sub-row means the option really does lay down a surface,
+    /// and the safe direction is to keep it.
+    /// </summary>
+    [Fact]
+    public void Promote_MixedPaintAndPrintRows_StillPromotes()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply },
+                 new ColorTableSubRowPreset { Blend = RowBlend.Paint }), aboveGear: true));
+
     // ── Override path (design binding) reads the override, not the descriptor ───
 
     [Fact]
