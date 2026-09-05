@@ -1828,6 +1828,75 @@ public class CompositorService : IDisposable
     public void SetActiveStackOverride(IReadOnlyDictionary<string, List<string>>? overrideByMod)
         => _stackOverride = overrideByMod;
 
+    // ── Color override (presets) ───────────────────────────────────────────────
+    //
+    // A second channel of exactly the same shape, pushed by PresetService. It is kept separate rather
+    // than merged into the design binding's because the two have different lifetimes: a preset is pinned
+    // to one mod until the user unpins it or a design supersedes it, while a binding is adopted and
+    // dropped wholesale as designs come and go.
+    //
+    // Precedence is per MOD, not per channel: a preset pinned on mod X wins for X, and every other mod
+    // still follows the design binding. That is what MergeByMod below expresses, and it is applied at the
+    // single point where the composite snapshots these — so nothing downstream has to know two channels
+    // exist.
+
+    private volatile IReadOnlyDictionary<string, OverlayColorOverride>? _presetColorOverride;
+    private volatile IReadOnlyDictionary<string, OverlayGearOverride>?  _presetGearOverride;
+    private volatile IReadOnlyDictionary<string, List<string>>?         _presetStackOverride;
+
+    public void SetPresetColorOverride(IReadOnlyDictionary<string, OverlayColorOverride>? overrideByMod)
+        => _presetColorOverride = overrideByMod;
+
+    public void SetPresetGearOverride(IReadOnlyDictionary<string, OverlayGearOverride>? overrideByMod)
+        => _presetGearOverride = overrideByMod;
+
+    public void SetPresetStackOverride(IReadOnlyDictionary<string, List<string>>? overrideByMod)
+        => _presetStackOverride = overrideByMod;
+
+    /// <summary>
+    /// One dictionary with <paramref name="top"/>'s entries winning per mod. Returns the other side
+    /// outright when either is empty, so the ordinary case — no preset pinned anywhere, or no design
+    /// bound — allocates nothing at all.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, T>? MergeByMod<T>(
+        IReadOnlyDictionary<string, T>? top, IReadOnlyDictionary<string, T>? bottom)
+    {
+        if (top == null || top.Count == 0) return bottom;
+        if (bottom == null || bottom.Count == 0) return top;
+
+        var merged = new Dictionary<string, T>(bottom, StringComparer.OrdinalIgnoreCase);
+        foreach (var (mod, value) in top) merged[mod] = value;
+        return merged;
+    }
+
+    /// <summary>
+    /// The colour override the composite would actually use for this mod — a pinned preset's if there is
+    /// one, else the active design binding's, else null for "the mod's own metadata".
+    /// <para/>
+    /// Anything that captures the current look must read through here rather than its own channel, or it
+    /// records what it happens to own instead of what the player is looking at. That is exactly how
+    /// "Update binding" would otherwise silently drop a preset applied on top of a binding.
+    /// </summary>
+    public OverlayColorOverride? EffectiveColorOverrideFor(string modDir)
+    {
+        if (_presetColorOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _colorOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
+    /// <inheritdoc cref="EffectiveColorOverrideFor"/>
+    public OverlayGearOverride? EffectiveGearOverrideFor(string modDir)
+    {
+        if (_presetGearOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _gearOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
+    /// <inheritdoc cref="EffectiveColorOverrideFor"/>
+    public IReadOnlyList<string>? EffectiveStackOverrideFor(string modDir)
+    {
+        if (_presetStackOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _stackOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
     /// <summary>
     /// Apply the plugin's enabled state, both visually and in Penumbra.
     ///
@@ -3632,8 +3701,11 @@ public class CompositorService : IDisposable
             var byMaterial = new Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>>(
                 StringComparer.OrdinalIgnoreCase);
 
-            var colorOverride = _colorOverride; // snapshot the volatile reference for this run
-            var gearOverride  = _gearOverride;
+            // Snapshot the volatile references for this run, with any pinned preset laid over the design
+            // binding per mod. Merging here, at the one place the composite reads them, is what keeps
+            // every use below — and there are many — ignorant of there being two channels.
+            var colorOverride = MergeByMod(_presetColorOverride, _colorOverride);
+            var gearOverride  = MergeByMod(_presetGearOverride,  _gearOverride);
 
             // The mod's shared "Masks" colorset, with the active design binding's override applied when it
             // has one — so mask colours are captured/restored per-design like the overlay colorsets are
@@ -3663,7 +3735,7 @@ public class CompositorService : IDisposable
             // Mod-wide stack position of an overlay (0 = top), from the active design binding's stack
             // override when it has one, else the global config order. Mirrors the mask/colour overrides so
             // a design captures/restores its tab arrangement without mutating the global stack config.
-            var stackOverride = _stackOverride; // snapshot the volatile reference for this run
+            var stackOverride = MergeByMod(_presetStackOverride, _stackOverride);
             int ModStackIndexFor(string modDir, string group, string option)
                 => stackOverride != null && stackOverride.TryGetValue(modDir, out var order)
                     ? Configuration.ModStackIndexIn(order, group, option)

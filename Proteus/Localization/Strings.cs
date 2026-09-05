@@ -50,6 +50,7 @@ public static class Strings
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
     public static ColorsStrings     Colors     { get; private set; } = new();
     public static PartsStrings      Parts      { get; private set; } = new();
+    public static PresetsStrings    Presets    { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -75,6 +76,7 @@ public static class Strings
         ColorPanel = new ColorPanelStrings();
         Colors     = new ColorsStrings();
         Parts      = new PartsStrings();
+        Presets    = new PresetsStrings();
     }
 }
 
@@ -1400,4 +1402,139 @@ public sealed class PartsStrings
 
     public readonly string RevertedFmt = Loc.Localize("Parts.Reverted.Fmt",
         "Undone. {0} model file(s) restored, and the option group removed.");
+}
+
+/// <summary>The named-looks strip at the top of a mod's colour editor. See <see cref="Gui.PresetBar"/>.</summary>
+public sealed class PresetsStrings
+{
+    public readonly string Header = Loc.Localize("Presets.Header", "Presets");
+
+    /// <summary>The collapsing header while a preset is worn, so a closed section still says which.</summary>
+    public readonly string HeaderAppliedFmt = Loc.Localize("Presets.HeaderApplied.Fmt", "Presets — {0}");
+
+    /// <summary>Bare text, with no "###id" suffix: this is a combo's preview value as well as a
+    /// selectable's label, and a preview value is rendered verbatim — the id would show on screen.</summary>
+    public readonly string NoPreset = Loc.Localize("Presets.None", "No preset");
+
+    public readonly string NoPresetTip = Loc.Localize("Presets.None.Tip",
+        "Wear the mod's own colours again. Your option ticks are left exactly as they are.");
+
+    /// <summary>Prefix on a chip the mod author shipped. A glyph rather than a word so it costs no
+    /// width in any language.</summary>
+    public readonly string PackMarker = Loc.Localize("Presets.PackMarker", "* ");
+
+    /// <summary>Suffix on the worn chip once the look has drifted from what was saved.</summary>
+    public readonly string ModifiedMarker = Loc.Localize("Presets.ModifiedMarker", "●");
+
+    public readonly string SaveNew = Loc.Localize("Presets.SaveNew", "+ Save…") + "###presetSaveNew";
+
+    public readonly string SaveNewTip = Loc.Localize("Presets.SaveNew.Tip",
+        "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.");
+
+    public readonly string Save = Loc.Localize("Presets.Save", "Save") + "###presetSaveGo";
+    public readonly string RenameConfirm = Loc.Localize("Presets.RenameConfirm", "Rename") + "###presetSaveGo";
+    public readonly string Cancel = Loc.Localize("Presets.Cancel", "Cancel");
+
+    public readonly string NeedsAName = Loc.Localize("Presets.NeedsAName", "Give it a name first.");
+
+    public readonly string NoCollection = Loc.Localize("Presets.NoCollection",
+        "Penumbra hasn't told Proteus which collection you're wearing yet.");
+
+    public readonly string FirstPresetName = Loc.Localize("Presets.FirstName", "My look");
+    public readonly string NthPresetNameFmt = Loc.Localize("Presets.NthName.Fmt", "My look {0}");
+
+    public readonly string SelectedFmt = Loc.Localize("Presets.Selected.Fmt", "{0} · {1}");
+
+    public readonly string FromPack = Loc.Localize("Presets.FromPack", "from the mod");
+
+    public readonly string PackReadOnly = Loc.Localize("Presets.PackReadOnly",
+        "This one came with the mod, so it can't be changed. Duplicate it to make it yours.");
+
+    public readonly string Update = Loc.Localize("Presets.Update", "Update");
+
+    public readonly string UpdateTip = Loc.Localize("Presets.Update.Tip",
+        "Fold everything on screen back into this preset.");
+
+    public readonly string NothingChanged = Loc.Localize("Presets.NothingChanged",
+        "Nothing has changed since this preset was saved.");
+
+    public readonly string Rename = Loc.Localize("Presets.Rename", "Rename");
+    public readonly string Duplicate = Loc.Localize("Presets.Duplicate", "Duplicate");
+
+    public readonly string ForkTip = Loc.Localize("Presets.Fork.Tip",
+        "Make an editable copy of the mod's preset and wear it.");
+
+    public readonly string CopyCodeTip = Loc.Localize("Presets.CopyCode.Tip",
+        "Copy this preset as a share code to paste to someone.");
+
+    public readonly string CodeCopied = Loc.Localize("Presets.CodeCopied", "Share code copied to the clipboard.");
+
+    public readonly string ExportTip = Loc.Localize("Presets.Export.Tip", "Save this preset as a file.");
+
+    public readonly string DeleteTip = Loc.Localize("Presets.Delete.Tip", "Hold Ctrl and click to delete this preset.");
+
+    public readonly string PasteCode = Loc.Localize("Presets.PasteCode", "Paste code");
+
+    public readonly string PasteCodeTip = Loc.Localize("Presets.PasteCode.Tip",
+        "Read a preset share code from the clipboard.");
+
+    public readonly string Import = Loc.Localize("Presets.Import", "Import…");
+    public readonly string ImportTip = Loc.Localize("Presets.Import.Tip", "Load a preset from a file.");
+
+    public readonly string StagedFmt = Loc.Localize("Presets.Staged.Fmt", "\"{0}\" is ready to add.");
+
+    public readonly string StagedOtherModFmt = Loc.Localize("Presets.StagedOtherMod.Fmt",
+        "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its " +
+        "options and colours this mod happens to share.");
+
+    public readonly string AddStaged = Loc.Localize("Presets.AddStaged", "Add");
+    public readonly string Discard = Loc.Localize("Presets.Discard", "Discard");
+    public readonly string AddedFmt = Loc.Localize("Presets.Added.Fmt", "Added \"{0}\".");
+
+    public readonly string ExportDialogTitle = Loc.Localize("Presets.ExportDialog.Title", "Save preset");
+    public readonly string ImportDialogTitle = Loc.Localize("Presets.ImportDialog.Title", "Open preset");
+    public readonly string DialogFilter = Loc.Localize("Presets.Dialog.Filter", "Proteus preset");
+
+    // The Import tab's .ptp branch — a preset picked where mods are normally installed.
+    public readonly string ImportFailedFmt = Loc.Localize("Presets.ImportFailed.Fmt",
+        "That isn't a preset Proteus can read: {0}");
+
+    public readonly string ImportedFromFmt = Loc.Localize("Presets.ImportedFrom.Fmt",
+        "Preset \"{0}\" — made for \"{1}\" by {2}.");
+
+    public readonly string NoMatchingMod = Loc.Localize("Presets.NoMatchingMod",
+        "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.");
+
+    public readonly string AddTo = Loc.Localize("Presets.AddTo", "Add to");
+    public readonly string PickAMod = Loc.Localize("Presets.PickAMod", "Pick a mod…");
+
+    public readonly string AddToTip = Loc.Localize("Presets.AddTo.Tip",
+        "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.");
+
+    public readonly string AddedToFmt = Loc.Localize("Presets.AddedTo.Fmt",
+        "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.");
+
+    public readonly string ExportedFmt = Loc.Localize("Presets.Exported.Fmt", "Saved to {0}.");
+    public readonly string ExportFailedFmt = Loc.Localize("Presets.ExportFailed.Fmt", "Couldn't save it: {0}");
+
+    public readonly string PartialApplyFmt = Loc.Localize("Presets.PartialApply.Fmt",
+        "\"{0}\" was applied as far as it goes. {1}");
+
+    public readonly string MissingGroupsFmt = Loc.Localize("Presets.MissingGroups.Fmt",
+        "The mod no longer has these option groups: {0}.");
+
+    public readonly string MissingOptionsFmt = Loc.Localize("Presets.MissingOptions.Fmt",
+        "These options are gone: {0}.");
+
+    public readonly string JustNow = Loc.Localize("Presets.JustNow", "just now");
+    public readonly string MinutesAgoFmt = Loc.Localize("Presets.MinutesAgo.Fmt", "{0} m ago");
+    public readonly string HoursAgoFmt = Loc.Localize("Presets.HoursAgo.Fmt", "{0} h ago");
+    public readonly string DaysAgoFmt = Loc.Localize("Presets.DaysAgo.Fmt", "{0} d ago");
+
+    /// <summary>The Mods-tab column and its combo entry for "nothing pinned".</summary>
+    public readonly string ColumnHeader = Loc.Localize("Presets.Column.Header", "Preset");
+    public readonly string ColumnNone = Loc.Localize("Presets.Column.None", "—");
+
+    public readonly string ColumnTip = Loc.Localize("Presets.Column.Tip",
+        "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.");
 }
