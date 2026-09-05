@@ -5402,8 +5402,14 @@ public class StatusWindow : Window
             // would fold in half. Asked through the compositor so the two share one answer — unlike the
             // others this one depends on which body is worn right now, so the editor cannot derive it.
             bool needsUnmirrored = activeOpt.Overlays.Any(compositor.NeedsUnmirroredShell);
+            // The fourth reason, and the only one that is nothing to do with this overlay: a toe cap
+            // selected anywhere in the look promotes every skin overlay that can be cut into a shell,
+            // because the cap is geometry and the skin layer has none. Asked of the compositor for the
+            // same reason as the un-mirroring above - it depends on other mods, not on what is selected
+            // here, so the editor cannot work it out.
+            bool capWanted = compositor.ToeCapWanted();
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
-                                                        needsUnmirrored))
+                                                        needsUnmirrored, capWanted))
             {
                 // The shader comes from the shared predicate too, not a hardcoded character.shpk: a promoted
                 // whole-skin overlay actually renders on skin.shpk, and showing it as cloth here offered the

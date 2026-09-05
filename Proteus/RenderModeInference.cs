@@ -79,6 +79,10 @@ public static class RenderModeInference
     /// <item><paramref name="needsUnmirroredShell"/> — its art differs left from right and the body being
     /// worn is mirrored, so painting it into the skin would fold it in half. Only a shell has geometry of
     /// its own to send the two sides to two halves of the sheet.</item>
+    /// <item><paramref name="toeCapWanted"/> — a toe cap is selected somewhere in the look. The cap is
+    /// GEOMETRY: it rebuilds the toes as one rounded shape, and only a shell has geometry to rebuild.
+    /// Painted into the skin the option simply does nothing, which is what it looked like — a whole
+    /// composite with no second-skin phase at all, because every active overlay was a skin layer.</item>
     /// </list>
     /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
     /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
@@ -97,11 +101,11 @@ public static class RenderModeInference
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
         IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
-        bool needsUnmirroredShell = false)
+        bool needsUnmirroredShell = false, bool toeCapWanted = false)
         => layer == OverlayLayer.Skin
         && !pinned
         && canShell
-        && (aboveGear || needsUnmirroredShell || HasCloth(rows ?? []));
+        && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []));
 
     /// <summary>
     /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same
