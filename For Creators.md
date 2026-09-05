@@ -269,6 +269,56 @@ The easiest way to get all this right is to build the group in Penumbra's own mo
 
 Each option can have its own `ColorTableRows`. If an option omits `ColorTableRows`, it inherits the top-level `ColorTableRows` if present.
 
+#### Shipping presets — starter looks
+
+A pack with a lot of groups is a blank page to whoever installs it. A **preset** is a named set of option
+ticks, colours and layer settings that a wearer applies in one click, and you can ship as many as you like
+in a top-level `Presets` array:
+
+```json
+{
+  "FormatVersion": 1,
+  "Name": "My Stockings",
+  "Presets": [
+    {
+      "Name": "Sheer",
+      "Description": "Barely-there, for a lighter skin tone.",
+      "Options": {
+        "Style": ["Roses"],
+        "Welt":  ["None"]
+      },
+      "Colors": {
+        "Options": {
+          "Style": { "Roses": [ { "Row": 16, "SubRowA": { "Diffuse": "#F3E2DA", "Opacity": -45 } } ] }
+        }
+      }
+    },
+    {
+      "Name": "Full coverage",
+      "Options": { "Style": ["Roses"], "Welt": ["Wide"] }
+    }
+  ]
+}
+```
+
+- `Options` maps a **Penumbra group name** to the option names ticked in it — the same names as in
+  `meta.json`. A single-select group takes a one-element list.
+- `Colors` and `Gear` take the same shapes the colour editor writes: `Top` for the mod-wide colorset,
+  `Mask` for the Masks tab, and `Options[group][option]` for one option's. Every part is optional — a
+  preset that only sets `Options` is perfectly good, and is the easiest kind to write by hand.
+- `StackOrder` is optional and rarely worth setting; omit it and the wearer's own stacking stands.
+- You don't need to write any of this by hand. Set the mod up the way you want it in game, press
+  **+ Save…** in the Colors panel, then use the preset's **Export** button and paste the file's contents
+  into your `Presets` array — dropping `Id`, which is per-machine.
+
+Presets you ship are marked with a `*` and are **read-only** in the UI: editing one makes the wearer an
+editable copy instead. That is deliberate, and it is what makes it safe for you to change or remove them
+in an update — nothing anyone saved is ever silently rewritten.
+
+Applying a preset does not touch your `metadata.json`. The option ticks go to Penumbra; the colours and
+layer settings ride on top only while the preset is worn, so **No preset** always gets your own colours
+back exactly as shipped.
+
 #### Independent toggleable pieces
 
 To let users enable pieces independently (e.g. top and bottom separately), use **two separate groups**, each with a `"None"` first option:

@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 622;
+    public const int BuildNumber = 627;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -56,6 +56,8 @@ public sealed class Plugin : IDalamudPlugin
     private volatile bool _disposed;
     private readonly DesignBindingService designBindings;
     private readonly GlamourerDesignWatcher designWatcher;
+    private readonly PresetService presets;
+    private readonly OverlayEditRouter editRouter;
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
@@ -130,6 +132,14 @@ public sealed class Plugin : IDalamudPlugin
         // users who set an override.
         glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
         designWatcher = new GlamourerDesignWatcher(designBindings, glamourer.EffectiveDesignsDirectory, log);
+
+        // After the bindings, which presets capture through (CaptureMod) so the two agree on what "the
+        // current look" is. The event back the other way keeps that one-directional: a design taking over
+        // drops the preset pins, and a direct call would have made the pair a construction cycle.
+        presets = new PresetService(penumbra, discovery, compositor, designBindings, pluginInterface, log);
+        designBindings.PresetsSuperseded += presets.ClearAllApplied;
+        editRouter = new OverlayEditRouter(presets, designBindings);
+
         ipcProvider = new IpcProvider(pluginInterface, compositor, discovery, log);
 
         // Sphere-map thumbnails for the colour table editor.
@@ -213,7 +223,8 @@ public sealed class Plugin : IDalamudPlugin
         partViewport = new Gui.PartViewport(TextureProvider, log);
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
 
-        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings, uvMapDl, uvRemap,
+        statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
+            presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
             textureLoader, partsPanel);
 
@@ -400,6 +411,8 @@ public sealed class Plugin : IDalamudPlugin
         fonts.Dispose();
         ipcProvider.Dispose();
         designWatcher.Dispose();
+        designBindings.PresetsSuperseded -= presets.ClearAllApplied;
+        presets.Dispose();
         designBindings.Dispose();
         uvMapDl.Dispose();
         effectsDl.Dispose();
