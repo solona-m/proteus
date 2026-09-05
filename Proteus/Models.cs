@@ -33,6 +33,16 @@ public class ProteusMetadata
     public List<OverlayOptionGroup>? OptionGroups { get; set; }
 
     /// <summary>
+    /// Starter looks the author ships with the pack: named sets of option ticks, colours and layer
+    /// settings a wearer can apply in one click. A pack with a dozen groups is otherwise a blank page.
+    /// <para/>
+    /// These are read-only in the UI — editing one forks a copy into the user's own store — so a mod
+    /// update can change them without silently rewriting anything the wearer saved.
+    /// </summary>
+    [JsonPropertyName("Presets")]
+    public List<ModPreset>? Presets { get; set; }
+
+    /// <summary>
     /// Per-row color table overrides (rows 1–16, matching FFXIV colorset numbering).
     /// Written by both mod authors and the Proteus UI. Drives diffuse tint and emissive.
     /// </summary>
@@ -1357,6 +1367,124 @@ public class ColorTableRowOverride
 {
     public ColorTableSubRow A { get; set; } = new();
     public ColorTableSubRow B { get; set; } = new();
+}
+
+/// <summary>Where a preset came from, which decides whether it can be edited in place.</summary>
+public enum PresetSource
+{
+    /// <summary>Saved by the wearer, in this machine's presets.json. Editable.</summary>
+    User,
+
+    /// <summary>Shipped by the mod author in the sidecar's metadata.json. Read-only — editing forks
+    /// a User copy, so a mod update is free to change what it ships.</summary>
+    Pack,
+}
+
+/// <summary>
+/// A named look for ONE mod: which of its Penumbra options are ticked, what colour every option's
+/// colorset carries, the layer/glow settings, and the overlay stacking order. Apply it, save over it,
+/// send it to someone.
+/// <para/>
+/// This is deliberately the portable subset of <see cref="Services.ProteusModBinding"/> — a design
+/// binding's per-mod slice — and nothing more. <c>Enabled</c> and <c>Priority</c> are left out because
+/// both are properties of a Penumbra collection rather than of a look: a preset that switched mods on
+/// and shuffled the composite stack would be a whole-setup tool, which is what design bindings already
+/// are.
+/// <para/>
+/// Named <c>ModPreset</c> rather than <c>Preset</c> because three neighbours already claim the shorter
+/// word — <see cref="GearSettingsPreset"/>, <see cref="ColorTableRowPreset"/>, and Penumbra's own
+/// <c>SettingPreset</c>.
+/// </summary>
+public class ModPreset
+{
+    [JsonPropertyName("Id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [JsonPropertyName("Name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("Description")]
+    public string? Description { get; set; }
+
+    /// <summary>Not serialised for user presets — it is implied by which store the preset lives in, and
+    /// a shared file must not be able to claim it came from a pack.</summary>
+    [JsonIgnore]
+    public PresetSource Source { get; set; } = PresetSource.User;
+
+    /// <summary>
+    /// The mod this look was made for, by display name and author. Carried so an import can say "this
+    /// was made for X" instead of quietly applying a stranger's colours.
+    /// <para/>
+    /// Names, not the mod directory: a directory is a Penumbra folder name local to one machine, and the
+    /// same pack routinely sits under different ones. Penumbra's own share format drops identifiers and
+    /// keeps names for exactly this reason.
+    /// </summary>
+    [JsonPropertyName("ModName")]
+    public string? ModName { get; set; }
+
+    [JsonPropertyName("ModAuthor")]
+    public string? ModAuthor { get; set; }
+
+    [JsonPropertyName("CreatedUtc")]
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+
+    [JsonPropertyName("LastEditUtc")]
+    public DateTime LastEditUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Penumbra option group name → the option names ticked in it.</summary>
+    [JsonPropertyName("Options")]
+    public Dictionary<string, List<string>> Options { get; set; } = new();
+
+    [JsonPropertyName("Colors")]
+    public OverlayColorOverride Colors { get; set; } = new();
+
+    [JsonPropertyName("Gear")]
+    public OverlayGearOverride Gear { get; set; } = new();
+
+    /// <summary>The overlay tab/stack order top-first (<see cref="Configuration.ModStackEntry"/> keys).
+    /// Empty means the preset never restacked anything, so the global order stands.</summary>
+    [JsonPropertyName("StackOrder")]
+    public List<string> StackOrder { get; set; } = new();
+
+    /// <summary>
+    /// An independent copy. Everything that hands a preset out — applying one into the live override
+    /// bag, forking a pack preset, importing — goes through here, so no two owners can ever end up
+    /// sharing a row list and editing the live look through the saved copy.
+    /// </summary>
+    public ModPreset Clone() => new()
+    {
+        Id          = Id,
+        Name        = Name,
+        Description = Description,
+        Source      = Source,
+        ModName     = ModName,
+        ModAuthor   = ModAuthor,
+        CreatedUtc  = CreatedUtc,
+        LastEditUtc = LastEditUtc,
+        Options     = Options.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value)),
+        Colors      = CloneColors(Colors),
+        Gear        = CloneGear(Gear),
+        StackOrder  = new List<string>(StackOrder),
+    };
+
+    private static OverlayColorOverride CloneColors(OverlayColorOverride o) => new()
+    {
+        Top     = o.Top?.Select(r => r.Clone()).ToList(),
+        Mask    = o.Mask?.Select(r => r.Clone()).ToList(),
+        Options = o.Options?.ToDictionary(
+            g => g.Key,
+            g => g.Value.ToDictionary(x => x.Key, x => x.Value.Select(r => r.Clone()).ToList())),
+    };
+
+    private static OverlayGearOverride CloneGear(OverlayGearOverride o) => new()
+    {
+        Top     = o.Top?.Clone(),
+        Mask    = o.Mask?.Clone(),
+        Content = o.Content?.Clone(),
+        Options = o.Options?.ToDictionary(
+            g => g.Key,
+            g => g.Value.ToDictionary(x => x.Key, x => x.Value.Clone())),
+    };
 }
 
 /// <summary>
