@@ -3,6 +3,32 @@
   "Name": "Example Stocking Overlays (Bibo+)",
   "Author": "YourNameHere",
 
+  "Presets": [
+    {
+      "Name": "Rose lace",
+      "Description": "Roses with the gloves on, warmed a little.",
+      "Options": {
+        "Stocking Pattern": ["Roses"],
+        "Gloves": ["Gloves"]
+      },
+      "Colors": {
+        "Options": {
+          "Stocking Pattern": {
+            "Roses": [ { "Row": 16, "SubRowA": { "Diffuse": "#F3E2DA", "Opacity": -20 } } ]
+          }
+        }
+      }
+    },
+    {
+      "Name": "Bare stripes",
+      "Description": "Stripes, no gloves, left the author's colours alone.",
+      "Options": {
+        "Stocking Pattern": ["Stripes"],
+        "Gloves": ["None"]
+      }
+    }
+  ],
+
   "OptionGroups": [
     {
       "PenumbraGroupName": "Stocking Pattern",

@@ -44,6 +44,7 @@ Lists every Penumbra mod that contains a Proteus sidecar. Click any column heade
 | On | Enable or disable Proteus compositing for that mod. |
 | Mod | The mod's display name. Click it to jump to the mod in Penumbra. |
 | Pri | Priority within Proteus's composite stack. Lower numbers go first (bottom layer). Drag to change; Ctrl-click to type. |
+| Preset | The saved look this mod is wearing. Pick another to switch to it without opening the color editor. Shows — for a mod that has no presets. |
 | Colors | Opens the color editor for that mod. |
 | Skindent | Ambient-occlusion shadow and normal indent for this mod's strap edges. "Pack" follows what the mod asked for; On/Off overrides it. |
 
@@ -72,7 +73,7 @@ Skin can't emit, so a glowing overlay renders on a second skin rather than being
 
 #### Import
 
-Takes a mod pack and converts it to a Proteus mod. Three types are supported:
+Takes a mod pack and converts it to a Proteus mod. Three types are supported — and it also accepts a shared preset:
 
 **Regular Penumbra mods (`.pmp`)** — wear parts of a normal gear mod without using a gear slot, and get the advanced colour-table features on top.
 
@@ -96,6 +97,10 @@ Atramentum Luminis packs hide their glow in a texture's alpha channel, and witho
 - Proteus recognises bibo and gen3 outright. For any other body it paints onto the one you're wearing without resizing, and says so; the **Body** picker overrides it if the pack was made for something else.
 - There's no race or sex filter, so the mod paints any character on a body with the same material. Turn it off in Penumbra for characters it wasn't painted for.
 - Eye glow isn't imported today, but message if you're interested.
+
+**Presets (`.ptp`)** — a look someone shared for a mod you already have.
+
+A preset isn't a mod, so nothing is installed: Proteus reads which mod it was made for, offers to add it to that one, and says so if you don't have it under that name — pick the right mod yourself and it goes there instead. It's saved, not worn; wear it from that mod's Presets section in Colors when you want it.
 
 #### Export
 
@@ -140,6 +145,23 @@ Three buttons here are worth knowing about:
 - **Restore changed accessory** — forces a full redraw if a second skin ever gets stuck on a ring or bracelet after disabling or swapping.
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
 - **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
+
+### Presets
+
+A **preset** is a named look for **one mod**: which of its options are ticked, all its colors, and its glow and layer settings. Complex packs — bodysuits, stockings — ship a dozen groups, and finding a combination worth wearing means poking at checkboxes until something clicks. A preset keeps that combination.
+
+Presets live in a collapsible **Presets** section at the bottom of a mod's color editor, below Advanced. **+ Save…** keeps how the mod looks right now under a name; the dropdown beside it picks which one to wear. Collapsed, the section header still names what you're wearing.
+
+- Presets marked `*` came with the mod. They're read-only — editing one gives you your own copy instead, so a mod update can never overwrite something you saved.
+- A `●` beside the worn preset means you've changed something since it was saved. **Update** folds those changes in; ignore it and the preset stays as it was.
+- **No preset** puts the mod's own colors back. Your option ticks are left alone — unpinning a look isn't a request to undo your own toggling.
+- Trying presets is free. Only the option ticks are written to Penumbra; the colors and layer settings ride on top while a preset is worn, and the mod's own files are never touched.
+
+Share one with **Copy code** (a string to paste into chat) or **Export…** (a `.ptp` file). The other side uses **Paste code** or **Import…**; a preset made for a different mod says so before it's added.
+
+Applying a preset while a design binding is active previews into that binding, like any other edit — press **Update binding** to keep it. Applying a Glamourer design unpins any presets, since the design carries its own colors; the presets themselves stay saved.
+
+If a mod update renames or removes an option, applying an old preset sets everything that still exists and tells you what it couldn't.
 
 ### Color Editor
 

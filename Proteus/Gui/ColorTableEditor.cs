@@ -99,10 +99,10 @@ public static class ColorTableEditor
         //
         // Passed in rather than inferred from `ovr != null`, which looks equivalent and is not: `ovr` comes
         // from GetEditableGearOverride, which returns null whenever the binding's GEAR dictionary has no
-        // entry for this mod, while `editingBinding` tests its COLOUR dictionary. A binding that has never
+        // entry for this mod, while `overrideActive` tests its COLOUR dictionary. A binding that has never
         // recorded gear settings — the ordinary case — has a live colour override and a null gear override
         // at the same time, so the inference is false exactly when it matters.
-        bool editingBinding = false)
+        bool overrideActive = false)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -261,10 +261,10 @@ public static class ColorTableEditor
             // feedback that keeps this honest.
             //
             // NormalMode is structural — which map ends up on the material — so it has no
-            // GearSettingsPreset field and no binding override; `editingBinding` hides the control rather
+            // GearSettingsPreset field and no binding override; `overrideActive` hides the control rather
             // than letting it write somewhere that is never saved. Skin mode and a normal to blend are both
             // required for it to mean anything.
-            if (showSkinTint && !editingBinding && overlays.Any(d => d.Normal != null))
+            if (showSkinTint && !overrideActive && overlays.Any(d => d.Normal != null))
             {
                 bool wholeSkin = first.NormalMode == NormalMode.Replace;
                 if (ImGui.Checkbox($"{cs.WholeSkin}##normalmode_{idScope}", ref wholeSkin))
@@ -290,7 +290,7 @@ public static class ColorTableEditor
             //
             // Shown on the skin layer only. On a shell the art is already rendered through its own geometry
             // and nothing folds it, so the tick would decide nothing.
-            if (showSkinTint && !editingBinding)
+            if (showSkinTint && !overrideActive)
             {
                 bool oneSided = first.AsymmetricArt == true;
                 if (ImGui.Checkbox($"{cs.OneSided}##asymmetric_{idScope}", ref oneSided))

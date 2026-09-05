@@ -45,6 +45,7 @@ Listet jeden Penumbra-Mod auf, der eine Proteus-Beidatei enthält. Klicke auf ei
 | An | Aktiviert oder deaktiviert die Proteus-Komposition für diesen Mod. |
 | Mod | Der Anzeigename des Mods. Klicke ihn an, um in Penumbra zu diesem Mod zu springen. |
 | Prio | Priorität innerhalb des Kompositionsstapels von Proteus. Niedrigere Zahlen kommen zuerst (untere Ebene). Ziehen zum Ändern, Strg-Klick zum Eintippen. |
+| Preset | Der gespeicherte Look, den dieser Mod gerade trägt. Wähle einen anderen, um ohne den Farbeditor umzuschalten. Zeigt — bei einem Mod ohne Presets. |
 | Farben | Öffnet den Farbeditor für diesen Mod. |
 | Skindent | Ambient-Occlusion-Schatten und Normal-Vertiefung an den Riemenkanten dieses Mods. „Paket“ folgt dem, was der Mod verlangt hat; An/Aus überschreibt es. |
 
@@ -91,6 +92,10 @@ Atramentum-Luminis-Pakete verstecken ihr Leuchten im Alphakanal einer Textur, un
 - Es gibt keinen Volks- oder Geschlechtsfilter, der Mod bemalt also jeden Charakter mit demselben Material. Schalte ihn in Penumbra für Charaktere aus, für die er nicht gemalt wurde.
 - Augenleuchten wird derzeit nicht importiert, aber schreib mir, wenn du daran Interesse hast.
 
+
+**Presets (`.ptp`)** — ein Look, den jemand für einen Mod geteilt hat, den du schon hast.
+
+Ein Preset ist kein Mod, also wird nichts installiert: Proteus liest, für welchen Mod es gemacht wurde, bietet an, es diesem hinzuzufügen, und sagt Bescheid, wenn du ihn unter dem Namen nicht hast — dann wählst du den richtigen Mod selbst. Es wird gespeichert, nicht getragen; trage es aus dem Presets-Abschnitt dieses Mods unter Farben, wenn du es haben willst.
 #### Export
 
 Speichert einen deiner Proteus-Mods als Penumbra-Modpaket (`.pmp`) zum Teilen. Wähle den Mod aus der Liste, drücke **Exportieren** und such einen Ort aus — der Dateiname wird aus dem Mod-Namen gefüllt, und der Dialog öffnet sich beim ersten Mal auf deinem Desktop und danach dort, wo du zuletzt gespeichert hast.
@@ -134,6 +139,23 @@ Drei Schaltflächen hier sind erwähnenswert:
 - **Geändertes Accessoire wiederherstellen** — erzwingt ein volles Neuzeichnen, falls eine zweite Haut nach dem Deaktivieren oder Tauschen einmal auf einem Ring oder Armband hängen bleibt.
 - **Texturcache leeren** — nutzen, wenn eine Texturänderung nicht auftaucht, z. B. weil du ein Overlay in derselben Größe neu exportiert hast.
 - **Leuchteffekt-Texturen** — öffnet den Ordner, aus dem Proteus die Scroll-Maps für animiertes Leuchten liest. Lege Bilder hinein, und sie erscheinen in der Effekt-Auswahlliste jedes Ausrüstungs-Overlays. Fahre über die Schaltfläche, um den vollen Pfad zu sehen.
+
+### Presets
+
+Ein **Preset** ist ein benannter Look für **einen Mod**: welche seiner Optionen angehakt sind, all seine Farben und seine Leucht- und Ebeneneinstellungen. Aufwendige Pakete — Bodysuits, Strümpfe — bringen ein Dutzend Gruppen mit, und eine sehenswerte Kombination zu finden heißt, so lange an Kästchen herumzuklicken, bis es passt. Ein Preset bewahrt diese Kombination.
+
+Presets liegen in einem aufklappbaren Abschnitt **Presets** unten im Farbeditor eines Mods, unterhalb von Erweitert. Mit **+ Speichern…** hältst du fest, wie der Mod gerade aussieht; das Auswahlfeld daneben bestimmt, welches Preset getragen wird. Zugeklappt nennt die Überschrift weiterhin, was du gerade trägst.
+
+- Mit `*` markierte Presets kamen mit dem Mod. Sie sind schreibgeschützt — beim Bearbeiten bekommst du stattdessen deine eigene Kopie, sodass ein Mod-Update nie etwas überschreibt, was du gespeichert hast.
+- Ein `●` neben dem getragenen Preset heißt, dass du seit dem Speichern etwas geändert hast. **Aktualisieren** übernimmt diese Änderungen; ignorierst du es, bleibt das Preset wie es war.
+- **Kein Preset** stellt die eigenen Farben des Mods wieder her. Deine Optionshaken bleiben unangetastet — einen Look abzulegen ist keine Aufforderung, dein eigenes Umschalten rückgängig zu machen.
+- Presets auszuprobieren kostet nichts. Nur die Optionshaken werden nach Penumbra geschrieben; die Farben und Ebeneneinstellungen liegen nur obenauf, solange ein Preset getragen wird, und die Dateien des Mods werden nie angefasst.
+
+Teile eines mit **Code kopieren** (eine Zeichenkette zum Einfügen in den Chat) oder **Exportieren…** (eine `.ptp`-Datei). Die Gegenseite nutzt **Code einfügen** oder **Importieren…**; ein Preset für einen anderen Mod sagt das, bevor es hinzugefügt wird.
+
+Ein Preset anzuwenden, während eine Design-Bindung aktiv ist, wirkt wie jede andere Bearbeitung als Vorschau auf diese Bindung — drücke **Bindung aktualisieren**, um es zu behalten. Ein angewendetes Glamourer-Design löst alle Presets ab, da das Design eigene Farben mitbringt; die Presets selbst bleiben gespeichert.
+
+Benennt oder entfernt ein Mod-Update eine Option, setzt ein altes Preset alles, was es noch gibt, und sagt dir, was nicht ging.
 
 ### Farbeditor
 

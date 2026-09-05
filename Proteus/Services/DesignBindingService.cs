@@ -100,10 +100,22 @@ public class DesignBindingService : IDisposable
     private readonly object gate = new();
     private DesignBindingStore store = new();
 
+    // The live colour / gear / stack overrides this design publishes, and the rules for editing them.
+    // Shared with PresetService, which owns a second bag on its own compositor channel — see
+    // OverlayOverrideBag for why one implementation rather than two.
+    private readonly OverlayOverrideBag overrides;
+
+    /// <summary>
+    /// Raised when a design takes over the look and any per-mod preset pinned on top of the previous one
+    /// no longer applies. Wired to <c>PresetService.ClearAllApplied</c> in Plugin.cs; an event rather than
+    /// a direct call because PresetService already depends on this service (it captures through
+    /// <see cref="CaptureMod"/>), and naming it here would close that into a construction cycle.
+    /// <para/>
+    /// Only the "currently applied" pins drop — the saved presets themselves are never touched.
+    /// </summary>
+    public event Action? PresetsSuperseded;
+
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
-    private Dictionary<string, OverlayColorOverride>? activeOverride;
-    private Dictionary<string, OverlayGearOverride>? activeGearOverride;
-    private Dictionary<string, List<string>>? activeStackOverride;
     private Guid? activeDesignId;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
@@ -139,6 +151,9 @@ public class DesignBindingService : IDisposable
         this.config     = config;
         this.framework  = framework;
         this.log        = log;
+
+        overrides = new OverlayOverrideBag(
+            compositor.SetActiveColorOverride, compositor.SetActiveGearOverride, compositor.SetActiveStackOverride);
 
         storePath = Path.Combine(pluginInterface.ConfigDirectory.FullName, "design_bindings.json");
         Load();
@@ -286,8 +301,10 @@ public class DesignBindingService : IDisposable
     // self-contained; the right one is selected at composite time via OverlayColorOverride.Resolve.
     private OverlayColorOverride CaptureColors(OverlayEntry e)
     {
-        OverlayColorOverride? active = null;
-        lock (gate) activeOverride?.TryGetValue(e.ModDirectory, out active);
+        // The EFFECTIVE colours, which means asking the compositor rather than this service's own bag: a
+        // preset applied on top of this binding is what the player is looking at, and "Update binding"
+        // must fold that in rather than silently reverting to what the binding already held.
+        var active = compositor.EffectiveColorOverrideFor(e.ModDirectory);
 
         var result = new OverlayColorOverride
         {
@@ -346,40 +363,48 @@ public class DesignBindingService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Snapshot ONE mod's current live state: its Penumbra enable/priority/option settings plus the
+    /// effective colours, gear and stack order — effective meaning what the composite is actually using,
+    /// so unsaved editor tweaks and any pinned preset are included.
+    /// <para/>
+    /// Public because presets capture through exactly this call. A preset then keeps only the portable
+    /// fields (see <see cref="ModPreset"/>); sharing the capture rather than writing a second one is
+    /// what stops the two drifting over which colour sources count — content packs' own option colours
+    /// were once missed here, and one implementation can only be wrong once.
+    /// </summary>
+    public ProteusModBinding CaptureMod(OverlayEntry e, Guid collId)
+    {
+        var settings = penumbra.GetModSettings(collId, e.ModDirectory);
+        var options  = settings?.Options is { } o
+            ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
+            : new Dictionary<string, List<string>>();
+
+        return new ProteusModBinding
+        {
+            ModDirectory = e.ModDirectory,
+            Enabled      = e.Enabled,
+            Priority     = e.Priority,
+            Options      = options,
+            Colors       = CaptureColors(e),
+            Gear         = CaptureGear(e),
+            StackOrder   = CaptureStackOrder(e.ModDirectory),
+        };
+    }
+
     // Snapshot every discovered Proteus mod's current live state (Penumbra enable/priority/options +
     // effective colors) into fresh binding entries. Shared by design-save capture and the manual
     // "Update binding" action.
     private List<ProteusModBinding> BuildModBindings(Guid collId)
-    {
-        var mods = new List<ProteusModBinding>();
-        foreach (var e in discovery.DiscoverAll())
-        {
-            var settings = penumbra.GetModSettings(collId, e.ModDirectory);
-            var options  = settings?.Options is { } o
-                ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
-                : new Dictionary<string, List<string>>();
+        => discovery.DiscoverAll().Select(e => CaptureMod(e, collId)).ToList();
 
-            mods.Add(new ProteusModBinding
-            {
-                ModDirectory = e.ModDirectory,
-                Enabled      = e.Enabled,
-                Priority     = e.Priority,
-                Options      = options,
-                Colors       = CaptureColors(e),
-                Gear         = CaptureGear(e),
-                StackOrder   = CaptureStackOrder(e.ModDirectory),
-            });
-        }
-        return mods;
-    }
-
-    // The mod-wide tab/stack order to record: the live override for this mod if a design is active (so an
-    // in-progress restack is captured), else the global config order. Empty when neither has one.
+    // The mod-wide tab/stack order to record: the effective override for this mod if one is live (so an
+    // in-progress restack, or a preset's arrangement, is captured), else the global config order. Empty
+    // when neither has one.
     private List<string> CaptureStackOrder(string modDir)
     {
-        lock (gate)
-            if (activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var live))
-                return new List<string>(live);
+        if (compositor.EffectiveStackOverrideFor(modDir) is { } live)
+            return new List<string>(live);
         return config.OverlayModStackOrder.TryGetValue(modDir, out var cfg)
             ? new List<string>(cfg)
             : new List<string>();
@@ -415,27 +440,22 @@ public class DesignBindingService : IDisposable
     /// </param>
     private void AdoptOverrides(DesignBinding b, Guid designId, bool suppressEcho)
     {
-        Dictionary<string, OverlayColorOverride> colours;
-        Dictionary<string, OverlayGearOverride>  gear;
-        Dictionary<string, List<string>>         stack;
-
         lock (gate)
         {
             if (suppressEcho) suppressUntilTick = Environment.TickCount64 + RestoreSuppressMs;
-            activeDesignId      = designId;
-            // Clone so live color edits preview without mutating the stored binding (they only fold
-            // in via UpdateActiveBindingFromCurrentState).
-            activeOverride      = colours = CloneOverrides(b.Mods);
-            activeGearOverride  = gear    = CloneGear(b.Mods);
-            activeStackOverride = stack   = CloneStack(b.Mods);
+            activeDesignId = designId;
         }
 
         PersistActiveDesignId(designId);
-        // The locals, not a re-read of the fields: SetEditableStackOrder publishes a fresh dictionary
-        // by design (copy-on-write), so re-reading outside the lock can publish someone else's swap.
-        compositor.SetActiveColorOverride(colours);
-        compositor.SetActiveGearOverride(gear);
-        compositor.SetActiveStackOverride(stack);
+
+        // A design is a whole-look switch, so it supersedes any per-mod preset pinned on top of the
+        // previous look — otherwise applying a design would appear to do nothing for that one mod. The
+        // presets themselves are untouched; only the "currently applied" pins drop.
+        PresetsSuperseded?.Invoke();
+
+        // Clone so live colour edits preview without mutating the stored binding (they only fold in via
+        // UpdateActiveBindingFromCurrentState).
+        overrides.Adopt(CloneOverrides(b.Mods), CloneGear(b.Mods), CloneStack(b.Mods));
     }
 
     /// <summary>
@@ -483,15 +503,11 @@ public class DesignBindingService : IDisposable
     /// </summary>
     private bool ClearOverrides()
     {
-        bool changed;
+        bool hadDesign;
         lock (gate)
         {
-            changed = activeDesignId != null || activeOverride != null
-                   || activeGearOverride != null || activeStackOverride != null;
-            activeDesignId      = null;
-            activeOverride      = null;
-            activeGearOverride  = null;
-            activeStackOverride = null;
+            hadDesign      = activeDesignId != null;
+            activeDesignId = null;
         }
 
         // Both of these run even when nothing was active, because both are about the state OUTSIDE this
@@ -502,12 +518,9 @@ public class DesignBindingService : IDisposable
         PersistActiveDesignId(null);
         if (BootRestoreArmed) FinishBootRestore("superseded by an explicit clear");
 
-        if (!changed) return false;
-
-        compositor.SetActiveColorOverride(null);
-        compositor.SetActiveGearOverride(null);
-        compositor.SetActiveStackOverride(null);
-        return true;
+        // Ordered so the return value keeps its old meaning: "anything was active" is true when either
+        // the design pointer or the override bag held something. Clear() un-publishes on its own.
+        return overrides.Clear() | hadDesign;
     }
 
     /// <summary>
@@ -635,232 +648,74 @@ public class DesignBindingService : IDisposable
     }
 
     // ── Live override editing (UI, framework thread) ────────────────────────────
+    //
+    // All of these are thin delegations to the shared override bag. The rules they used to spell out —
+    // peek never creates, an edit does; nested mutation in place, structural change copy-on-write —
+    // now live once in OverlayOverrideBag, because presets need exactly the same rules and two copies
+    // of them would drift.
 
     /// <summary>True when a binding is active and supplies colors for this mod.</summary>
-    public bool IsOverrideActiveFor(string modDir)
-    {
-        lock (gate) return activeOverride != null && activeOverride.ContainsKey(modDir);
-    }
+    public bool IsOverrideActiveFor(string modDir) => overrides.Governs(modDir);
 
-    /// <summary>
-    /// The mod's stored mask override — the single shared Masks tab's colorset — or null when the binding
-    /// has none. NEVER creates one.
-    /// <para/>
-    /// Creating on read is what made an edit invisible: merely drawing the Masks tab snapshotted the
-    /// metadata into the live override, and from then on that snapshot shadowed the metadata for as long as
-    /// the design stayed applied — so the editor showed the value you had just typed while the composite
-    /// kept using the snapshot. A binding must not change because you looked at it.
-    /// </summary>
-    public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
-    {
-        lock (gate)
-            return activeOverride != null && activeOverride.TryGetValue(modDir, out var ovr) ? ovr.Mask : null;
-    }
+    /// <inheritdoc cref="OverlayOverrideBag.PeekMaskRows"/>
+    public List<ColorTableRowPreset>? PeekMaskRows(string modDir) => overrides.PeekMaskRows(modDir);
 
-    /// <summary>
-    /// Install the mask rows as this binding's LIVE override, on an actual edit. Live preview only — the
-    /// stored binding on disk is untouched until "Update binding". Returns false when no binding is active,
-    /// so the caller persists to the metadata instead.
-    /// </summary>
+    /// <summary>Install the mask rows as this binding's LIVE override, on an actual edit. Live preview
+    /// only — the stored binding on disk is untouched until "Update binding". Returns false when no
+    /// binding is active, so the caller persists to the metadata instead.</summary>
     public bool SetMaskRows(string modDir, List<ColorTableRowPreset> rows)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
-            ovr.Mask = rows;
-            return true;
-        }
-    }
+        => overrides.SetMaskRows(modDir, rows);
 
-    /// <summary>The stored colour override for a mod's top-level rows, or one option's, or null when the
-    /// binding has none. NEVER creates one — same reason as <see cref="PeekMaskRows"/>.</summary>
+    /// <inheritdoc cref="OverlayOverrideBag.PeekRows"/>
     public List<ColorTableRowPreset>? PeekOverrideRows(string modDir, string? group, string? option)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return null;
-            if (group == null || option == null) return ovr.Top;
-            return ovr.Options != null && ovr.Options.TryGetValue(group, out var inner)
-                && inner.TryGetValue(option, out var rows) ? rows : null;
-        }
-    }
+        => overrides.PeekRows(modDir, group, option);
 
-    /// <summary>Install rows as this binding's LIVE override, on an actual edit. Preview only — the stored
-    /// binding is untouched until "Update binding". False when no binding is active.</summary>
+    /// <summary>Install rows as this binding's LIVE override, on an actual edit. Preview only — the
+    /// stored binding is untouched until "Update binding". False when no binding is active.</summary>
     public bool SetOverrideRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
-            if (group == null || option == null) { ovr.Top = rows; return true; }
-            ovr.Options ??= new();
-            if (!ovr.Options.TryGetValue(group, out var inner)) ovr.Options[group] = inner = new();
-            inner[option] = rows;
-            return true;
-        }
-    }
+        => overrides.SetRows(modDir, group, option, rows);
 
-    /// <summary>
-    /// Record a mod-wide tab restack while a design binding is active: into the live stack override (live
-    /// preview, folded into the binding on "Update binding"), NOT the global stack config — mirroring how
-    /// colour/gear edits stay on the binding. Returns false when no binding is active, so the caller
-    /// persists to the global config instead. Republishes to the compositor on success.
-    /// </summary>
     /// <summary>
     /// The active design binding's mod-wide tab order for this mod (<see cref="Configuration.ModStackEntry"/>
     /// keys, top-first), or null when no binding overrides it — so the tab strip orders its buttons by the
     /// same source the composite does (see CompositorService.ModStackIndexFor). Falls back to the global
     /// stack config when this returns null.
     /// </summary>
-    public IReadOnlyList<string>? ActiveStackOrderFor(string modDir)
-    {
-        lock (gate)
-            return activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var o)
-                ? new List<string>(o)
-                : null;
-    }
-
-    public bool SetEditableStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
-    {
-        IReadOnlyDictionary<string, List<string>>? published;
-        lock (gate)
-        {
-            if (activeDesignId == null || activeStackOverride == null) return false;
-            // Copy-on-write: the compositor reads the published dictionary on its background thread, so
-            // adding a key in place would be a structural mutation racing that read. Publish a fresh dict
-            // instead (the colour/gear overrides only ever mutate nested lists, never the dict shape).
-            var next = new Dictionary<string, List<string>>(activeStackOverride, StringComparer.OrdinalIgnoreCase)
-            {
-                [modDir] = topFirst.Select(x => Configuration.ModStackEntry(x.Group, x.Option)).ToList(),
-            };
-            activeStackOverride = next;
-            published = next;
-        }
-        compositor.SetActiveStackOverride(published);
-        return true;
-    }
+    public IReadOnlyList<string>? ActiveStackOrderFor(string modDir) => overrides.StackOrderFor(modDir);
 
     /// <summary>
-    /// The mutable gear-settings preset the layer/shader editor should bind to when an override is active
-    /// for this mod, or null if none. Mirrors <see cref="PeekOverrideRows"/>: group/option=null
-    /// targets the top-level overlay; otherwise the option's. Seeds from the metadata descriptor's own
-    /// gear settings when the override has nothing stored yet, so editing starts from what's on screen.
+    /// Record a mod-wide tab restack while a design binding is active: into the live stack override (live
+    /// preview, folded into the binding on "Update binding"), NOT the global stack config — mirroring how
+    /// colour/gear edits stay on the binding. Returns false when no binding is active, so the caller
+    /// persists to the global config instead.
     /// </summary>
+    public bool SetEditableStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
+        => overrides.SetStackOrder(modDir, topFirst);
+
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableGear"/>
     public GearSettingsPreset? GetEditableGearOverride(
         string modDir, string? group, string? option, OverlayDescriptor seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            if (group != null && option != null)
-            {
-                ovr.Options ??= new();
-                if (!ovr.Options.TryGetValue(group, out var inner))
-                    ovr.Options[group] = inner = new();
-                if (!inner.TryGetValue(option, out var g))
-                    inner[option] = g = GearSettingsPreset.From(seed);
-                return g;
-            }
-            return ovr.Top ??= GearSettingsPreset.From(seed);
-        }
-    }
+        => overrides.GetEditableGear(modDir, group, option, seed);
 
-    /// <summary>
-    /// The same, seeded from a preset rather than a descriptor — for a content pack's glow, which has no
-    /// overlay descriptor to snapshot. The seed is CLONED before it is stored, so a binding that starts
-    /// from the sidecar's own settings can never write back into them.
-    /// <para/>
-    /// An unconditional piece lands in <see cref="OverlayGearOverride.Content"/>, not
-    /// <see cref="OverlayGearOverride.Top"/>: Top is captured from the mod's first overlay descriptor, so
-    /// sharing it would let an overlay's scroll effect reach the pack's meshes and the reverse.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableContentGear"/>
     public GearSettingsPreset? GetEditableContentGearOverride(
         string modDir, string? group, string? option, GearSettingsPreset seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            if (group != null && option != null)
-            {
-                ovr.Options ??= new();
-                if (!ovr.Options.TryGetValue(group, out var inner))
-                    ovr.Options[group] = inner = new();
-                if (!inner.TryGetValue(option, out var g))
-                    inner[option] = g = seed.Clone();
-                return g;
-            }
-            return ovr.Content ??= seed.Clone();
-        }
-    }
+        => overrides.GetEditableContentGear(modDir, group, option, seed);
 
-    /// <summary>
-    /// Read-only peek at a content material's glow under the active design. Resolves through
-    /// <see cref="OverlayGearOverride.ResolveContent"/> — the SAME call the compositor makes — so the
-    /// editor and the composite can never disagree about which slot governs.
-    /// </summary>
-    /// <summary>
-    /// Clear the mod-wide gear scopes: the overlays' <see cref="OverlayGearOverride.Top"/> and an imported
-    /// pack's <see cref="OverlayGearOverride.Content"/>.
-    /// <para/>
-    /// Both, because "reset this option" with no option named means the mod-wide settings, and content lives
-    /// in its own slot precisely so it does NOT share Top. Clearing only one would leave a glow the reset
-    /// claimed to remove.
-    /// </summary>
-    private static bool ClearTopGear(OverlayGearOverride gear)
-    {
-        bool had = gear.Top != null || gear.Content != null;
-        gear.Top = null;
-        gear.Content = null;
-        return had;
-    }
-
+    /// <inheritdoc cref="OverlayOverrideBag.PeekContentGear"/>
     public GearSettingsPreset? PeekContentGearOverride(string modDir, string? group, string? option)
-    {
-        lock (gate)
-            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
-                ? ovr.ResolveContent(group, option)
-                : null;
-    }
+        => overrides.PeekContentGear(modDir, group, option);
 
-    /// <summary>
-    /// Read-only peek at the active design's captured gear settings for one option. Unlike
-    /// <see cref="GetEditableGearOverride"/> this creates nothing, so callers can ask about options the user
-    /// hasn't opened — needed when surveying every active option's effective layer. Null when no design is
-    /// active or that option has nothing captured (i.e. the mod's own descriptor still rules).
-    ///
-    /// Resolution goes through <see cref="OverlayGearOverride.Resolve"/> — the SAME call the compositor
-    /// makes — so the per-option entry and its top-level fallback are honoured identically. Looking only in
-    /// <c>Options</c> here would diverge for any active option the binding never captured (one added to the
-    /// mod after the design was saved, or one whose descriptors were empty at capture time): the composite
-    /// would apply <c>Top</c> while the editor read the raw descriptor.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.PeekGear"/>
     /// <remarks>Overlays only. A content pack's glow reads <see cref="PeekContentGearOverride"/>, which
     /// resolves against its own slot rather than <c>Top</c> — see <see cref="OverlayGearOverride.Content"/>
     /// for why the two must not share.</remarks>
     public GearSettingsPreset? PeekGearOverride(string modDir, string group, string option)
-    {
-        lock (gate)
-            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
-                ? ovr.Resolve(group, option)
-                : null;
-    }
+        => overrides.PeekGear(modDir, group, option);
 
-    /// <summary>
-    /// The mutable gear-settings preset the Masks tab should bind to when a design is active for this mod, or
-    /// null if none. Mirrors <see cref="GetEditableMaskRows"/> for the mod's single shared Masks tab — seeds
-    /// from the descriptor's own gear settings when the override has nothing stored yet.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableMaskGear"/>
     public GearSettingsPreset? GetEditableMaskGearOverride(string modDir, OverlayDescriptor seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            return ovr.Mask ??= GearSettingsPreset.From(seed);
-        }
-    }
+        => overrides.GetEditableMaskGear(modDir, seed);
 
     /// <summary>
     /// Drop ONE option's colour + gear override from the ACTIVE design's binding: from the live in-memory
@@ -873,20 +728,19 @@ public class DesignBindingService : IDisposable
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
     {
-        bool touched = false;
-        IReadOnlyDictionary<string, OverlayColorOverride>? colours;
-        IReadOnlyDictionary<string, OverlayGearOverride>? gears;
+        Guid id;
+        lock (gate)
+        {
+            if (activeDesignId is not { } active) return false;
+            id = active;
+        }
+
+        // The live copies, OUTSIDE `gate`: the bag has its own lock, and nesting the two here is the
+        // only place they would ever meet.
+        bool touched = overrides.ClearOption(modDir, group, option);
 
         lock (gate)
         {
-            if (activeDesignId is not { } id) return false;
-
-            // Live preview copies.
-            if (activeOverride != null && activeOverride.TryGetValue(modDir, out var col))
-                touched |= ClearScope(col.Options, group, option, () => { bool had = col.Top != null; col.Top = null; return had; });
-            if (activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var gear))
-                touched |= ClearScope(gear.Options, group, option, () => ClearTopGear(gear));
-
             // Persisted binding, so the design stops re-applying it.
             if (store.Bindings.TryGetValue(id, out var b))
             {
@@ -894,43 +748,25 @@ public class DesignBindingService : IDisposable
                     string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
                 if (mod != null)
                 {
-                    touched |= ClearScope(mod.Colors.Options, group, option,
+                    touched |= OverlayOverrideBag.ClearScope(mod.Colors.Options, group, option,
                         () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
-                    touched |= ClearScope(mod.Gear.Options, group, option, () => ClearTopGear(mod.Gear));
+                    touched |= OverlayOverrideBag.ClearScope(mod.Gear.Options, group, option,
+                        () => OverlayOverrideBag.ClearTopGear(mod.Gear));
                 }
             }
 
             // Serialising must happen under the lock (a consistent `store`), but the write must not:
             // this store reaches tens of MB and the caller is an ImGui button on the framework thread.
             if (touched) SaveDeferred();
-            colours = activeOverride;
-            gears   = activeGearOverride;
         }
 
         if (!touched) return false;
 
-        // Re-publish the trimmed overrides so the next composite drops this option's override.
-        compositor.SetActiveColorOverride(colours);
-        compositor.SetActiveGearOverride(gears);
         log.Information("[Proteus] cleared binding override for {0} [{1}/{2}] from the active design",
             modDir, group ?? "(top)", option ?? "(top)");
         return true;
     }
 
-    /// <summary>Remove one group/option entry from an override map (pruning the group when it empties),
-    /// or clear the top-level entry when BOTH group and option are null. Returns whether anything was
-    /// there. A half-specified scope (one null, one not) is a caller bug: refuse it rather than fall
-    /// through to clearing Top, which would wipe the settings every option inherits.</summary>
-    private static bool ClearScope<T>(Dictionary<string, Dictionary<string, T>>? options,
-        string? group, string? option, Func<bool> clearTop)
-    {
-        if (group == null && option == null) return clearTop();
-        if (group == null || option == null) return false;
-        if (options == null || !options.TryGetValue(group, out var inner)) return false;
-        if (!inner.Remove(option)) return false;
-        if (inner.Count == 0) options.Remove(group);
-        return true;
-    }
 
     /// <summary>
     /// Re-snapshot the current live Proteus state (Penumbra enable/priority/options + the live color
@@ -955,7 +791,6 @@ public class DesignBindingService : IDisposable
         var mods = BuildModBindings(collId.Value);
         name ??= glamourer.GetDesigns().TryGetValue(id, out var n) ? n : null;
 
-        Dictionary<string, OverlayColorOverride> newOverride;
         lock (gate)
         {
             if (activeDesignId != id) return false; // active binding changed underfoot
@@ -966,13 +801,22 @@ public class DesignBindingService : IDisposable
                 CapturedUtc = DateTime.UtcNow,
                 Mods        = mods,
             };
-            newOverride         = CloneOverrides(mods);
-            activeOverride      = newOverride;
-            activeStackOverride = CloneStack(mods);
             Save();
         }
-        compositor.SetActiveColorOverride(newOverride);
-        compositor.SetActiveStackOverride(activeStackOverride);
+
+        // All three, gear included. This used to skip gear, on the reasoning that the live gear objects
+        // were the very ones just captured so replacing them with clones bought nothing. That stopped
+        // being true when presets arrived: the capture reads the EFFECTIVE gear, which for a mod wearing
+        // a preset comes out of the preset's bag, while this bag still holds the design's older copy.
+        // Publishing colours but not gear left the stored binding holding the preset's glow and the
+        // screen showing the design's — and the line below then drops the preset that was making up the
+        // difference, so the glow visibly switched off the moment you pressed Update.
+        overrides.Adopt(CloneOverrides(mods), CloneGear(mods), CloneStack(mods));
+
+        // Everything the update just folded in came from the effective state, presets included, so the
+        // binding now holds it outright and the pins have nothing left to say.
+        PresetsSuperseded?.Invoke();
+
         compositor.TriggerRecomposite($"design-binding-update:{id}");
         log.Information("[Proteus] Updated binding for design {0} from current state.", name ?? id.ToString());
         return true;
@@ -1740,8 +1584,7 @@ public class DesignBindingService : IDisposable
     // metadata. Mirrors CaptureColors, so "Update binding" folds gear edits in just like colour edits.
     private OverlayGearOverride CaptureGear(OverlayEntry e)
     {
-        OverlayGearOverride? active = null;
-        lock (gate) activeGearOverride?.TryGetValue(e.ModDirectory, out active);
+        var active = compositor.EffectiveGearOverrideFor(e.ModDirectory);
 
         var result = new OverlayGearOverride();
 
