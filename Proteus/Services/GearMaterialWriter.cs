@@ -205,7 +205,8 @@ public static class GearMaterialWriter
 
     /// <summary>
     /// g_AlphaOffset (CRC of the name under the game's reflected CRC-32). "Enhanced Nylon" raises it to 1
-    /// on character.shpk for a sheerer alpha falloff. Gear non-scroll only.
+    /// on character.shpk for a sheerer alpha falloff; we push to 1.5 for a sheerer edge still. Gear
+    /// non-scroll only.
     /// </summary>
     private const uint ConstAlphaOffset = 0xD07A6A65;
 
@@ -414,7 +415,7 @@ public static class GearMaterialWriter
             // Sheer edge: always raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer — a
             // second skin should never be a hard cutout. Not applicable to characterscroll (handled above);
             // no-ops safely if the template lacks the constant.
-            r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1f).data;
+            r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1.5f).data;
         }
 
         // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
