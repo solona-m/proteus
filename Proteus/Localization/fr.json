@@ -359,6 +359,14 @@
     "message": "Une autre option active de ce mod est rendue comme de l'équipement, le masque doit donc\nse poser sur cette coque — il ne peut pas être peint dans la peau en dessous. Passez ces\noptions sur Skin (Avancé dans leurs onglets) et le masque retrouvera son propre choix\nde mode.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap est activé",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "L'option « Toe Cap » est cochée dans le groupe Masks de ce mod dans Penumbra. Elle\nreconstruit les orteils en une seule forme arrondie, donc les calques Skin de ce mod sont\npromus en tissu — il leur faut une géométrie que la couche peau n'a pas. Cela coûte une\nreconstruction de coque.\n\nSi vous ne l'avez pas cochée : Penumbra enregistre la sélection de ce groupe par INDEX\nd'option. Un mod réexporté avec ses options dans un autre ordre redirige donc en silence\ntoute sélection enregistrée. Recochez le groupe dans Penumbra pour le resynchroniser.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "Masques",
     "description": ""

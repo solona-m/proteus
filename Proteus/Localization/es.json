@@ -359,6 +359,14 @@
     "message": "Otra opción activa de este mod se representa como equipo, así que la máscara tiene que\napoyarse en ese caparazón: no puede pintarse en la piel de debajo. Cambia esas opciones\na Skin (Avanzado en sus pestañas) y la máscara recuperará su propia elección de modo.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap está activado",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "La opción «Toe Cap» está marcada en el grupo Masks de este mod en Penumbra. Reconstruye\nlos dedos del pie como una sola forma redondeada, así que las capas Skin de este mod se\nascienden a tela: necesitan una geometría que la capa de piel no tiene. Eso cuesta una\nreconstrucción del caparazón.\n\nSi no la marcaste tú: Penumbra guarda la selección de este grupo por ÍNDICE de opción, así\nque un mod reexportado con sus opciones en otro orden redirige en silencio cualquier\nselección guardada. Vuelve a marcar el grupo en Penumbra para resincronizarlo.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "Máscaras",
     "description": ""

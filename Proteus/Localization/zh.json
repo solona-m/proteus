@@ -359,6 +359,14 @@
     "message": "此模组中另一个已启用的选项按装备渲染，因此遮罩必须位于该外壳之上，\n无法绘制到其下的皮肤中。将那些选项切换为 Skin（在各自标签页的“高级”\n中），遮罩便能重新拥有自己的模式选择。",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap 已开启",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "在 Penumbra 中，此模组 Masks 分组里的“Toe Cap”选项已勾选。它会把脚趾重建为\n一个圆润的整体，因此此模组的 Skin 图层会被提升为布料——它们需要皮肤层没有的\n几何体。这会带来一次外壳重建。\n\n如果不是你勾的：Penumbra 按选项“序号”保存该分组的选择，所以模组重新导出后\n若选项顺序变了，已保存的选择会悄悄指向别的选项。请在 Penumbra 中重新勾选该\n分组以重新同步。",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "遮罩",
     "description": ""

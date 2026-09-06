@@ -2666,6 +2666,7 @@ public class CompositorService : IDisposable
         HashSet<string> maskShellMods,
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        HashSet<string> toeCapMods,
         bool skinOnly = false)
     {
         var sb = new System.Text.StringBuilder();
@@ -2713,6 +2714,14 @@ public class CompositorService : IDisposable
             sb.Append("maskasset:").Append(mod).Append('=')
               .Append(string.Join(",", maskAssetsByMod[mod].Select(a => $"{a.MaskPath}|{a.NormalPath}|{a.IndexPath}")))
               .Append('\n');
+
+        // The toe cap, which BOTH lines above are blind to: ResolveMaskPaths and ResolveActiveMaskAssets
+        // strip it ("caps aren't masks"), so for a mod whose overlays are already Gear — nothing left for
+        // the cap to promote — ticking or unticking it hashed identically to the published composite and an
+        // ambient trigger skipped the rebuild. Not skinOnly-gated: a cap promotes skin overlays to gear, so
+        // it moves the skin fingerprint too.
+        foreach (var mod in toeCapMods.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            sb.Append("cap:").Append(mod).Append('\n');
 
         // Shell-only for a mask-SHELL mod: its Masks colorset paints the shell's own material and nothing
         // else. Every skin consumer of maskRowsByMod already refuses those mods by name — the fallback-rows
@@ -3593,14 +3602,42 @@ public class CompositorService : IDisposable
     /// </summary>
     private int _compositesInFlight;
 
+    /// <summary>
+    /// Which composite is the newest one RUNNING. Stamped beside the in-flight increment below, so the two
+    /// share one total order and can never disagree about who started last.
+    /// <para/>
+    /// The token from <see cref="recompositeGate"/> cannot answer this question. It is cancelled at TRIGGER
+    /// time, before the replacement run exists — so a burst of four triggers cancels all four tokens, and a
+    /// late <c>ct</c> check would bail every run and publish NOTHING. It is also cancelled by triggers whose
+    /// run is then dropped in the settle waits and never composites at all. The epoch answers the question
+    /// that actually matters at the writes: "is something else going to publish after me?" The highest-epoch
+    /// STARTED run never bails on it, so exactly one run always reaches the manifest.
+    /// <para/>
+    /// Only needed BELOW the last <c>ct</c> check (the per-overlay loop). Above it <c>ct</c> strictly
+    /// dominates — it is set earlier for every run this could catch — so a check there would be dead code.
+    /// </summary>
+    private long _recompositeEpoch;
+
+    /// <summary>
+    /// True once a composite that started after this one exists. Read only below the last <c>ct</c> check;
+    /// see <see cref="_recompositeEpoch"/>.
+    /// </summary>
+    private bool Superseded(long epoch) => Volatile.Read(ref _recompositeEpoch) != epoch;
+
     // Neither bool is defaulted, deliberately: `force` never was, and defaulting only its companion would
     // let a future caller opt into skin reuse by omission. They are one decision, so they are passed together.
     private void Recomposite(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
     {
+        // Stamped HERE and not in TriggerRecomposite, and the distinction is load-bearing. Stamping at
+        // trigger time would let a trigger that never composites — dropped in a settle wait, or during
+        // teardown — orphan a run that had already done seconds of work, with nothing published and nothing
+        // scheduled to replace it. A run that has entered this method provably exists, and provably read a
+        // FRESHER draw state than the run it supersedes, which is the definition the checks below want.
+        var epoch = Interlocked.Increment(ref _recompositeEpoch);
         Interlocked.Increment(ref _compositesInFlight);
         try
         {
-            RecompositeBody(ct, force, skinFingerprintAuthoritative);
+            RecompositeBody(ct, epoch, force, skinFingerprintAuthoritative);
         }
         finally
         {
@@ -3608,7 +3645,8 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void RecompositeBody(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
+    private void RecompositeBody(CancellationToken ct, long epoch, bool force,
+                                 bool skinFingerprintAuthoritative)
     {
         try
         {
@@ -3808,10 +3846,13 @@ public class CompositorService : IDisposable
             // It has to be known before the promotion below, because a cap is geometry and geometry needs
             // a shell: with every overlay sitting on the skin layer the composite ran to completion with
             // no second-skin phase at all, and the cap option silently did nothing.
-            bool toeCapWanted = ToeCapWanted(entries);
-            if (toeCapWanted)
-                log.Debug("[Proteus] toe cap is selected — skin overlays that can be cut into a shell are "
-                        + "promoted to cloth, since the cap has to rebuild geometry the skin layer has none of");
+            var toeCapMods = ToeCapWanted(entries);
+            if (toeCapMods.Count > 0)
+                log.Debug("[Proteus] toe cap is selected in [{0}] — THAT MOD's skin overlays that can be cut "
+                        + "into a shell are promoted to cloth, since the cap has to rebuild geometry the skin "
+                        + "layer has none of. Other mods are left alone: a cap is a Penumbra option, and a "
+                        + "mod re-exported with its options reordered re-points every saved selection.",
+                    string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
             if (activeMtrl != null)
                 foreach (var m in activeMtrl)
                 {
@@ -3832,6 +3873,10 @@ public class CompositorService : IDisposable
             // Mods already told "your art is asymmetric but nothing is folding it", so the line is logged
             // once per mod rather than once per overlay.
             var asymmetricNotWorn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Same idea for the toe cap's narrowed promotion: mods already told that someone ELSE's cap no
+            // longer promotes them.
+            var capNarrowedMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Shared with the editor so the two can't disagree about what was composited — see the static
             // NeedsUnmirroredShell. The hoisted `wearingMirroredBody` is passed rather than re-read, so every
@@ -3961,9 +4006,33 @@ public class CompositorService : IDisposable
                     else if (!canShell && !overlay.Descriptor.ManualShaderLock
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
+                    // toeCapMods.Contains, not "any cap anywhere": a cap only promotes the overlays of the mod
+                    // that ships it. See ToeCapWanted for why the wider rule was unsafe.
+                    //
+                    // The cost of narrowing it, said out loud once per mod. A cap is applied to every shell
+                    // over the toes (SecondSkinService's sharedToeCap) but now only PROMOTES its own mod, so
+                    // another mod's skin stocking over the same toes stays skin and sleeves them. That is a
+                    // real trade — it just has to be findable, because the symptom is toes that look wrong in
+                    // a mod the user never touched.
+                    else if (toeCapMods.Count > 0 && !toeCapMods.Contains(entry.ModDirectory)
+                        && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                                overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
+                                canShell, unmirrors, false)
+                        && RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                                overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
+                                canShell, unmirrors, true)
+                        && capNarrowedMods.Add(entry.ModDirectory))
+                    {
+                        log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
+                                      + "mod's skin overlays stay on the skin — the cap still shapes any "
+                                      + "shell over the toes, but this mod has no shell to shape. Tick the "
+                                      + "cap in this mod too if its art should follow the rebuilt toes.",
+                            entry.ModDirectory,
+                            string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
+                    }
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
-                            unmirrors, toeCapWanted))
+                            unmirrors, toeCapMods.Contains(entry.ModDirectory)))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
@@ -4425,12 +4494,12 @@ public class CompositorService : IDisposable
             // below, so a skip leaves the previous composite's shell state intact.
             var fingerprint = BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
-                maskShellMods, baseKeys, contentLayers);
+                maskShellMods, baseKeys, contentLayers, toeCapMods);
 
             // The same inputs minus the ones only the shell reads — see the skin-reuse gate below.
             var skinFingerprint = BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
-                maskShellMods, baseKeys, contentLayers, skinOnly: true);
+                maskShellMods, baseKeys, contentLayers, toeCapMods, skinOnly: true);
 
             if (!force && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
@@ -6316,7 +6385,11 @@ public class CompositorService : IDisposable
             // the last real skin composite produced instead of publishing nothing: the panel would go blank
             // and the colour-table editor's Glow button would lose its targets, on a composite that changed
             // nothing about the skin.
-            _channelContributions = skinReused
+            // Into locals, published just below the supersede check. A superseded run reaches this point
+            // AFTER the winner may already have published, and assigning here would leave the two locators
+            // describing the losing run while the manifest describes the winning one — the editor's Glow
+            // locator pointing at materials the published manifest does not contain.
+            var nextChannelContributions = skinReused
                 ? lastSkin!.Contributions
                 : contributions.Values
                     .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
@@ -6325,8 +6398,8 @@ public class CompositorService : IDisposable
 
             LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
 
-            // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
-            _skinGlowTargets = skinReused
+            // The glow recipes gathered above (empty dict if no indexed skin overlays).
+            var nextSkinGlowTargets = skinReused
                 ? new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(lastSkin!.GlowTargets)
                 : new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
 
@@ -6335,12 +6408,55 @@ public class CompositorService : IDisposable
             var skinRedirectsThisRun =
                 new Dictionary<string, string>(redirects, StringComparer.OrdinalIgnoreCase);
 
+            // ── Superseded: stop before the shell build ───────────────────────
+            // The last ct check is ~1200 lines up, in the per-overlay loop, so without this a run that was
+            // superseded during the blend goes on to build a second skin and republish over the run that
+            // replaced it. One click producing four ModSettingChanged events ran three overlapping
+            // composites, two of which wrote byte-identical output, for ~30 s of wall clock.
+            //
+            // HERE and not one line lower: from _needFullRedraw / _secondSkinActive below, the shell state
+            // stops describing the published manifest, and the readers of _secondSkinActive (the redraw
+            // hook's carrier reconcile, the carrier retry) would be answering off a shell this run is not
+            // going to publish. Everything written above this point is content-hashed on disk, collected by
+            // the next PruneSupersededOutput — which is where a cancelled run's output already goes.
+            //
+            // The two UI locators are published just BELOW this, out of the locals above, so a run that
+            // stops here leaves the previous composite's values standing rather than the losing run's.
+            // _skinGlowTargets in particular must not be left EMPTY mid-composite: an empty
+            // GetSkinGlowTargets is what makes the colour-table editor fire glow-warmup / mask-glow-warmup,
+            // and that one-shot is spent permanently once burned — so blanking it here would ADD a trigger
+            // to the very burst this exists to shrink. Holding the previous value does neither.
+            //
+            // This also lands ABOVE SecondSkinService.Build, which clears remapCache and UnwearableContent
+            // on a service instance shared with the run that superseded us. Bailing here stops the loser
+            // thrashing the winner's cache, not merely its own.
+            //
+            // Nothing persistent is left half-written: _forcePending / _skinForcePending, the fingerprint
+            // and _lastSkinPublish are all set at the publish below, so the run that replaced us inherits
+            // every latch it is owed and its gates behave exactly as if we had never run.
+            if (Superseded(epoch))
+            {
+                log.Information("[Proteus] recomposite superseded — a newer composite is running; dropping "
+                              + "this one before the shell build ({0:F0}ms in)",
+                    PhaseCounter.MsSince(tRunStart));
+                return;
+            }
+
+            _channelContributions = nextChannelContributions;
+            _skinGlowTargets      = nextSkinGlowTargets;
+
             // ── Second skin: one gear shell per Layer:Gear overlay ────────────
             // Built from the body model the character is CURRENTLY drawing (resolved live through
             // Penumbra) — a shell cut from any other body shape shows the body through it.
             List<object>? manipulations = null;
-            _needFullRedraw = false;
-            _secondSkinActive = false;
+            // Built into LOCALS and published below the supersede check, for the same reason the three
+            // shell locators below are: a run that gets superseded during the gear build must not leave
+            // these describing a composite it never published. They outlive the run — _appendHostModelPaths
+            // is written THROUGH TO CONFIG — so a stale one is not self-correcting the way a redraw flag is.
+            bool nextNeedFullRedraw = false;
+            bool nextSecondSkinActive = false;
+            HashSet<string>? nextShellHostPaths = null;
+            HashSet<string>? nextAppendHosts = null;
             // The three UI-facing locators are built into LOCALS and published as one step after the gear
             // phase (below), instead of being cleared here and refilled ~1.2 s later. That clear opened a
             // window in which the fields said "no shell was built" while one plainly was: the editor's Glow
@@ -6609,7 +6725,7 @@ public class CompositorService : IDisposable
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
-                            _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
+                            nextSecondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
                             // Only new GEOMETRY forces the heavy path. A colorset edit rewrites just the
                             // .mtrl, and treating that like a new model cost a character redraw — and its
@@ -6623,8 +6739,9 @@ public class CompositorService : IDisposable
                             // reload — the morph didn't show until a manual refresh. Treat a shape-set change
                             // as a redraw trigger in its own right.
                             var shapeSig = BodyShapeSignature(bodyShapes);
+                            // Compared, not stored: the publish below records the signature for every
+                            // composite, and doing it here as well was a dead store that line overwrote.
                             bool shapesChanged = !string.Equals(shapeSig, _lastCompositedBodyShapeSig, StringComparison.Ordinal);
-                            _lastCompositedBodyShapeSig = shapeSig;
 
                             // A spill host being added or (crucially) dropped as the layer count changes needs
                             // a full redraw so the vacated accessory reloads its real model — the in-place
@@ -6632,7 +6749,7 @@ public class CompositorService : IDisposable
                             // hosts; this catches a host that simply vanished from the set.
                             var hostPaths = new HashSet<string>(shells.HostModelPaths, StringComparer.OrdinalIgnoreCase);
                             bool hostsChanged = !hostPaths.SetEquals(_lastShellHostPaths);
-                            _lastShellHostPaths = hostPaths;
+                            nextShellHostPaths = hostPaths;
 
                             // A FORCED trigger that produced NO change at all is the user pressing
                             // recomposite and getting byte-identical output. That is precisely the state an
@@ -6664,8 +6781,8 @@ public class CompositorService : IDisposable
                             bool confirmedDrawn = standing != null
                                 && string.Equals(_shellConfirmedDrawnKey, ShellProbeKey(standing), StringComparison.Ordinal);
                             bool unstickShell = force && nothingChanged && !confirmedDrawn;
-                            _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
-                                           || unstickShell;
+                            nextNeedFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
+                                              || unstickShell;
                             if (unstickShell)
                                 log.Debug("[Proteus] second skin unchanged on a forced composite and not yet "
                                         + "confirmed drawn — redrawing anyway, since an in-place reload "
@@ -6696,27 +6813,60 @@ public class CompositorService : IDisposable
                             // tell an append host from a carrier. Written only on a real change — this runs
                             // on every composite and config.Save() is disk I/O.
                             //
-                            // LAST in this block, and under the same lock every other off-thread save takes
-                            // (see _bodyModConfigLock). Save() serializes the whole Configuration, so an
-                            // unsynchronized one can throw "collection was modified" while ClassifySurfaceMod mutates
-                            // KnownBodyMods on its own thread — and thrown from higher up this block it would
-                            // be swallowed as "second skin build failed" and skip _needFullRedraw, leaving a
-                            // changed shell model to an in-place reload that never re-fetches an accessory
-                            // .mdl. Everything load-bearing is already assigned above; this can only lose
-                            // the persisted hint, which the next composite rewrites.
-                            var appendHosts = new HashSet<string>(shells.AppendHostModelPaths, StringComparer.OrdinalIgnoreCase);
-                            if (!appendHosts.SetEquals(_appendHostModelPaths))
-                            {
-                                _appendHostModelPaths = appendHosts;
-                                lock (_bodyModConfigLock)
-                                {
-                                    config.AppendHostModelPaths = [.. appendHosts];
-                                    config.Save();
-                                }
-                            }
+                            // Captured here, compared and SAVED below the supersede check. This is the one
+                            // piece of shell state that reaches disk, and config.Save() from a run that
+                            // publishes nothing is the only damage in this block that outlives the session:
+                            // the set is seeded from config at construction, so a stale one still masks the
+                            // wrong paths from PrimeUpstreamCache after a restart.
+                            nextAppendHosts =
+                                new HashSet<string>(shells.AppendHostModelPaths, StringComparer.OrdinalIgnoreCase);
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
+            }
+
+            // ── Superseded: stop before the publish ───────────────────────────
+            // The gear build above is seconds long, so a run that was current at the check before it may not
+            // be current now. This one is not an optimisation — it protects publish integrity.
+            //
+            // WriteManagedModJson is _manifestLock-guarded but replaces the manifest WHOLESALE with no
+            // version check, so a stale run finishing second does not merely waste time. It reinstates the
+            // pre-edit manifest, records its own fingerprint as "what is published" (self-consistent, so the
+            // next ambient trigger correctly skips), carries a stale skin into _lastSkinPublish, and CLEARS
+            // _forcePending — marking the newer run's forced work as satisfied while its output has just
+            // been overwritten. That is exactly the silent "my colour edit never applied" failure the latch
+            // was written to prevent, arriving through the publish race instead of through cancellation.
+            //
+            // Ahead of EVERY publish below, the shell state included. The gear phase writes no field of its
+            // own any more: _needFullRedraw, _secondSkinActive, _lastShellHostPaths and _appendHostModelPaths
+            // all come out of the next* locals below this check. A loser can reach the END of its gear build
+            // after the winner has already published, and a direct write up there would then overwrite the
+            // winner's host bookkeeping with the stale run's — _appendHostModelPaths worst of all, since it
+            // is written through to config and would survive a restart still masking the wrong paths from
+            // PrimeUpstreamCache.
+            if (Superseded(epoch))
+            {
+                log.Information("[Proteus] recomposite superseded — a newer composite is running; not "
+                              + "publishing ({0:F0}ms in)", PhaseCounter.MsSince(tRunStart));
+                return;
+            }
+
+            _needFullRedraw    = nextNeedFullRedraw;
+            _secondSkinActive  = nextSecondSkinActive;
+            if (nextShellHostPaths != null) _lastShellHostPaths = nextShellHostPaths;
+
+            // Only on a real change — this runs on every composite and config.Save() is disk I/O. Under the
+            // same lock every other off-thread save takes (see _bodyModConfigLock): Save() serializes the
+            // whole Configuration, so an unsynchronized one can throw "collection was modified" while
+            // ClassifySurfaceMod mutates KnownBodyMods on its own thread.
+            if (nextAppendHosts != null && !nextAppendHosts.SetEquals(_appendHostModelPaths))
+            {
+                _appendHostModelPaths = nextAppendHosts;
+                lock (_bodyModConfigLock)
+                {
+                    config.AppendHostModelPaths = [.. nextAppendHosts];
+                    config.Save();
+                }
             }
 
             // Publish the locators in one step, now that the gear phase has an answer. Null ⇒ no shell was
@@ -6740,10 +6890,15 @@ public class CompositorService : IDisposable
                 log.Debug("[Proteus] second skin removed — forcing a full redraw to restore host accessories");
             }
 
-            // Record the enabled-shape signature on EVERY composite — the gear phase above only sets it when
-            // a shell actually builds. Without this, a skin-only composite (no gear shell) on a character WITH
-            // shape keys leaves _lastCompositedBodyShapeSig stale, so SchedulePostRedrawBodyTypeCheck sees a
-            // permanent mismatch and recomposites forever. Same snapshot the composite ran against.
+            // Record the enabled-shape signature on EVERY composite. Without this, a skin-only composite (no
+            // gear shell) on a character WITH shape keys leaves _lastCompositedBodyShapeSig stale, so
+            // SchedulePostRedrawBodyTypeCheck sees a permanent mismatch and recomposites forever. Same
+            // snapshot the composite ran against.
+            //
+            // The ONLY write to this field on the publishing path. The gear phase used to assign it too,
+            // from its own `shapeSig` local, but that store was always overwritten by this line a moment
+            // later — so it was dead, and it is now simply gone rather than deferred. The live use of
+            // `shapeSig` is the `shapesChanged` comparison, which reads the field BEFORE writing it.
             _lastCompositedBodyShapeSig = BodyShapeSignature(_bodyShapeSnapshot);
 
             // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
@@ -9448,29 +9603,51 @@ public class CompositorService : IDisposable
     /// something the compositor rendered as a shell.
     /// </summary>
     /// <summary>
-    /// Is a toe cap selected anywhere in the look? Public for the same reason as
+    /// Which mods have a toe cap selected. Public for the same reason as
     /// <see cref="NeedsUnmirroredShell"/>: the editor asks the same promotion predicate the compositor
-    /// does, and it cannot derive this one - a cap belongs to the FOOT rather than to the overlay being
-    /// edited, so the answer lives in another mod as often as not.
+    /// does, and it cannot derive this one - the answer is a Penumbra selection, not anything on the
+    /// overlay being edited.
     /// <para/>
     /// Enabled mods only, matching the set the composite actually walks: a cap in a mod the user has
     /// switched off must not promote anything.
+    /// <para/>
+    /// Answered PER MOD rather than as one flag for the whole look. The promotion is drastic — every
+    /// shellable skin overlay it touches stops being skin — so the blast radius has to be bounded by
+    /// something the user can see. It could not be: a Penumbra multi-select group stores its selection as a
+    /// positional bitmask over option INDEX, so re-exporting a mod with its options in a different order
+    /// silently re-points every saved selection, and the toe cap is the one option that appears in no log
+    /// line and no editor row (ResolveMaskPaths and ResolveActiveMaskAssets both strip it — "caps aren't
+    /// masks"). A stale bit in one mod then promoted every other mod's overlays too, which is how a look
+    /// with three gear layers became nine. Per-mod, a mod can still only do this to itself.
     /// </summary>
-    public bool ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
+    public HashSet<string> ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
     {
-        bool want = allEntries.Any(e => e.Enabled && discovery.ResolveActiveToeCap(e) != null);
+        var want = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // The collection is read once, not once per mod. This walk cannot stop at the first cap the way the
+        // old bool could — it needs the whole set — so without hoisting it the fix would have added a
+        // GetPlayerCollectionId round trip for every enabled mod on every composite. The answer cannot
+        // change between two entries of the same run anyway; a null one means no player, so nothing is on.
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId != null)
+            foreach (var e in allEntries)
+                if (e.Enabled && discovery.ResolveActiveToeCap(e, collId.Value) != null)
+                    want.Add(e.ModDirectory);
         _toeCapWantedSnapshot = want;
         return want;
     }
 
     /// <summary>
-    /// The last composite's answer, for the editor - which has no entry list to walk and no composite run
-    /// to inherit one from. Follows <see cref="_activeMtrlSnapshot"/>'s pattern: false until a composite
-    /// has run, which is the behaviour there was before any of this existed.
+    /// The last composite's answer for one mod, for the editor - which has no entry list to walk and no
+    /// composite run to inherit one from. Follows <see cref="_activeMtrlSnapshot"/>'s pattern: false until a
+    /// composite has run, which is the behaviour there was before any of this existed.
     /// </summary>
-    public bool ToeCapWanted() => _toeCapWantedSnapshot;
+    public bool ToeCapWantedFor(string modDirectory) => _toeCapWantedSnapshot.Contains(modDirectory);
 
-    private volatile bool _toeCapWantedSnapshot;
+    /// <summary>
+    /// Replaced wholesale rather than mutated, so a reader never sees a half-filled set. The composite that
+    /// builds it is the only writer; every reader is on the framework thread.
+    /// </summary>
+    private volatile HashSet<string> _toeCapWantedSnapshot = new(StringComparer.OrdinalIgnoreCase);
 
     public bool NeedsUnmirroredShell(OverlayDescriptor d)
     {

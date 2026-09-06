@@ -5534,6 +5534,19 @@ public class StatusWindow : Window
                 && _glowWarmedMods.Add($"{entry.ModDirectory}\0masks\0{(maskAsGear ? 'g' : 's')}"))
                 compositor.TriggerRecomposite("mask-glow-warmup");
 
+            // The toe cap, which has no row of its own anywhere. It is an option in THIS group, but
+            // ResolveMaskPaths and ResolveActiveMaskAssets both strip it ("caps aren't masks"), so it appears
+            // in no mask list the user can see — and it is the one option that promotes the mod's skin
+            // overlays to cloth. A cap nobody remembered ticking therefore reshaped a whole look with nothing
+            // on screen to point at. Shown here so the tab that owns the group also owns this.
+            if (compositor.ToeCapWantedFor(entry.ModDirectory))
+            {
+                ImGui.TextDisabled(Strings.ColorPanel.ToeCapOn);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(Strings.ColorPanel.ToeCapOnTip);
+                ImGui.Separator();
+            }
+
             ColorTableEditor.DrawRows(maskScope, maskRows, usedRows, maskAsGear, maskShader,
                 maskShellMaterials,
                 maskGlowTargets,
@@ -5646,12 +5659,11 @@ public class StatusWindow : Window
             // would fold in half. Asked through the compositor so the two share one answer — unlike the
             // others this one depends on which body is worn right now, so the editor cannot derive it.
             bool needsUnmirrored = activeOpt.Overlays.Any(compositor.NeedsUnmirroredShell);
-            // The fourth reason, and the only one that is nothing to do with this overlay: a toe cap
-            // selected anywhere in the look promotes every skin overlay that can be cut into a shell,
-            // because the cap is geometry and the skin layer has none. Asked of the compositor for the
-            // same reason as the un-mirroring above - it depends on other mods, not on what is selected
-            // here, so the editor cannot work it out.
-            bool capWanted = compositor.ToeCapWanted();
+            // The fourth reason: a toe cap selected in THIS mod promotes its skin overlays that can be cut
+            // into a shell, because the cap is geometry and the skin layer has none. Asked of the compositor
+            // for the same reason as the un-mirroring above - the answer is a Penumbra selection in a group
+            // the editor does not own, so it cannot work it out from what is selected here.
+            bool capWanted = compositor.ToeCapWantedFor(entry.ModDirectory);
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
                                                         needsUnmirrored, capWanted))
             {

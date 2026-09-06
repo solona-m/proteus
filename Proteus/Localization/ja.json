@@ -359,6 +359,14 @@
     "message": "このMOD内の別の有効なオプションが装備として描画されるため、マスクはその\nシェルの上に乗る必要があり、下の肌に塗り込むことはできません。それらの\nオプションを（各タブの詳細設定で）Skinに切り替えると、マスクは自分の\nモード選択を取り戻します。",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap が有効です",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "PenumbraのこのMODのMasksグループで「Toe Cap」がオンになっています。つま先を\n丸い一つの形として作り直すため、このMODのSkinオーバーレイは布に昇格されます\n——肌レイヤーにはない形状が必要だからです。その分シェルの再構築が発生します。\n\nオンにした覚えがない場合：Penumbraはこのグループの選択をオプションの「番号」で\n保存します。そのためオプションの並び順を変えて再エクスポートされたMODでは、\n保存済みの選択が黙って別の項目を指します。Penumbraで選択し直してください。",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "マスク",
     "description": ""
