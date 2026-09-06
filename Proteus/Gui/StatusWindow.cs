@@ -141,12 +141,24 @@ public class StatusWindow : Window
     private enum ModSort { Enabled, Name, Priority }
     private ModSort _modSort = ModSort.Priority;
     private bool _modSortDesc = true;   // Priority descending = default
+    // Mods-tab search box. Kept across tab switches, unlike the combo filters in Export and Parts:
+    // those clear on IsWindowAppearing because their popup exists only to be typed at, while a box
+    // living in a tab body has no such event and forgetting the search every glance elsewhere is
+    // worse than remembering it. A stale filter explains itself — the no-match line quotes it back.
+    private string _modFilter = "";
+    // Width the mods table last occupied. The window is AlwaysAutoResize, so with the table gone its
+    // width would collapse around the search box — meaning the moment a keystroke stops matching, the
+    // window snaps narrow and the box being typed into slides out from under the cursor, then snaps
+    // back on the next backspace. Reserving the old width in the no-match state holds it still.
+    private float _modsTableWidth;
 
     // Bindings-tab column sort (display only). Defaults to newest-first, which is the order
     // DesignBindingService.Bindings already hands back — so the tab looks unchanged until sorted.
     private enum BindingSort { Design, Captured }
     private BindingSort _bindingSort = BindingSort.Captured;
     private bool _bindingSortDesc = true;
+    private string _bindingFilter = "";  // see _modFilter
+    private float _bindingsTableWidth;   // see _modsTableWidth
 
     // ── Create tab state ──
     private readonly FileDialogManager _fileDialog = new();
@@ -4443,18 +4455,43 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// Does this mod survive the export combo's filter? Matches the display name AND the folder name:
-    /// they routinely differ (Penumbra's folder is a sanitised form of the name, and the user can rename
-    /// either), so filtering on the label alone hides mods the user is searching for by folder.
+    /// Does this mod survive a filter box? Matches the display name AND the folder name: they routinely
+    /// differ (Penumbra's folder is a sanitised form of the name, and the user can rename either), so
+    /// filtering on the label alone hides mods the user is searching for by folder.
     /// <para/>
     /// Null-tolerant even though both fields are declared non-nullable: everything else that touches them
     /// interpolates them into a string, where a null from Penumbra prints empty — this is the one place it
     /// would throw, and a throw inside Draw takes the whole window down for the rest of the session.
     /// </summary>
+    private static bool MatchesNameOrFolder(OverlayEntry m, string filter)
+        => filter.Length == 0
+        || m.ModName?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true
+        || m.ModDirectory?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>The export combo's filter: name or folder, nothing else.</summary>
     private bool MatchesExportFilter(OverlayEntry m)
-        => _exportFilter.Length == 0
-        || m.ModName?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true
-        || m.ModDirectory?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true;
+        => MatchesNameOrFolder(m, _exportFilter);
+
+    /// <summary>
+    /// The Mods tab's search box. Name or folder as everywhere else, plus the author — that tab is the
+    /// one place the whole library is on screen at once, so pulling up everything by one creator is worth
+    /// the small divergence from the two combo filters.
+    /// <para/>
+    /// Metadata is null-conditional for the same reason it is on the row itself: discovery hands back an
+    /// entry even when its sidecar failed to parse.
+    /// </summary>
+    private bool MatchesModFilter(OverlayEntry m)
+        => MatchesNameOrFolder(m, _modFilter)
+        || m.Metadata?.Author?.Contains(_modFilter, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// The Bindings tab's search box. Matches what the row shows — the design's name, and the id it falls
+    /// back to when the name is missing (typed in full or in part, since the row prints only 8 characters).
+    /// </summary>
+    private bool MatchesBindingFilter(DesignBinding b)
+        => _bindingFilter.Length == 0
+        || b.DesignName?.Contains(_bindingFilter, StringComparison.OrdinalIgnoreCase) == true
+        || b.DesignId.ToString().Contains(_bindingFilter, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The Mods row's preset picker: what this mod is wearing, and a one-click switch to anything else it
@@ -4668,6 +4705,27 @@ public class StatusWindow : Window
         }
         else
         {
+            // Search box. A fixed scaled width rather than the -1 the two combo filters use: a popup has a
+            // settled width, but this window is AlwaysAutoResize, and a fill-width item sized from last
+            // frame's content region feeds straight into the auto-fit loop DrawTabBarRefresh works around.
+            ImGui.SetNextItemWidth(ProteusStyle.S(240f));
+            ImGui.InputTextWithHint("##modFilter", Strings.Export.FilterHint, ref _modFilter, 64);
+
+            // Narrow BEFORE sorting, so the sort's active-on-top grouping applies to what's left. Rows are
+            // keyed by ModDirectory throughout (the checkbox id, _priorityEdits, _colorWindowMod), never by
+            // index, so dropping rows here cannot land a click or an in-progress drag on the wrong mod.
+            // An empty filter short-circuits to the original list: Draw runs every frame, and the common
+            // case shouldn't pay for a delegate and a copy to reach the same answer.
+            var visible = _modFilter.Length == 0 ? mods : mods.Where(MatchesModFilter).ToList();
+            if (visible.Count == 0)
+            {
+                // Only reachable with something typed — the empty-library case was handled above. Say so
+                // instead of drawing a table that is nothing but a header row, which reads as a bug.
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Export.NoMatchFmt, _modFilter));
+                HoldWindowWidth(_modsTableWidth);
+                return;
+            }
+
             // EndTable is only legal when BeginTable returned true — it returns false when the table is
             // skipped (clipped away, or the host window isn't rendering), and calling EndTable anyway
             // trips an ImGui assertion in debug and corrupts table state in release.
@@ -4719,10 +4777,10 @@ public class StatusWindow : Window
             // job is the enabled state, so it keeps honouring its own direction and ascending still
             // brings the disabled ones up. Pinning there too would leave a sortable header that does
             // nothing when clicked.
-            var byActive = mods.OrderByDescending(e => e.Enabled);
+            var byActive = visible.OrderByDescending(e => e.Enabled);
             IOrderedEnumerable<OverlayEntry> ordered = _modSort switch
             {
-                ModSort.Enabled => _modSortDesc ? byActive : mods.OrderBy(e => e.Enabled),
+                ModSort.Enabled => _modSortDesc ? byActive : visible.OrderBy(e => e.Enabled),
                 ModSort.Name    => _modSortDesc ? byActive.ThenByDescending(e => e.ModName, StringComparer.OrdinalIgnoreCase)
                                                 : byActive.ThenBy(e => e.ModName, StringComparer.OrdinalIgnoreCase),
                 _               => _modSortDesc ? byActive.ThenByDescending(e => e.Priority)
@@ -4825,7 +4883,22 @@ public class StatusWindow : Window
             }
 
             ImGui.EndTable();
+            // EndTable submits the table's outer rect as an item, so this is the width the rows actually
+            // took — remembered for the no-match state above.
+            _modsTableWidth = ImGui.GetItemRectSize().X;
         }
+    }
+
+    /// <summary>
+    /// Reserve <paramref name="width"/> of horizontal space so an AlwaysAutoResize window keeps the width
+    /// it had while a table was on screen, instead of collapsing around whatever replaced the table.
+    /// Zero-height, so it costs a line of item spacing and nothing else; a zero or negative width (nothing
+    /// measured yet) draws nothing at all.
+    /// </summary>
+    private static void HoldWindowWidth(float width)
+    {
+        if (width > 0f)
+            ImGui.Dummy(new Vector2(width, 0f));
     }
 
     private void DrawBindingsTab()
@@ -4878,6 +4951,22 @@ public class StatusWindow : Window
             return;
         }
 
+        // Search box, below the empty guard so a tab with nothing in it never offers one, and below the
+        // "Active:" line, which reports what is applied right now and stays true whatever is searched for.
+        // Fixed scaled width for the reason given in DrawModsTab.
+        ImGui.SetNextItemWidth(ProteusStyle.S(240f));
+        ImGui.InputTextWithHint("##bindingFilter", Strings.Export.FilterHint, ref _bindingFilter, 64);
+
+        // Empty filter short-circuits to the original list — see the note in DrawModsTab.
+        IReadOnlyList<DesignBinding> visible =
+            _bindingFilter.Length == 0 ? bindings : bindings.Where(MatchesBindingFilter).ToList();
+        if (visible.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(string.Format(Strings.Export.NoMatchFmt, _bindingFilter));
+            HoldWindowWidth(_bindingsTableWidth);
+            return;
+        }
+
         // See the note in DrawModsTab: EndTable is only legal when BeginTable returned true. Returning here
         // also skips the deferred Apply/Unbind dispatch below, which is correct — no row was drawn, so
         // neither button can have been clicked.
@@ -4906,11 +4995,11 @@ public class StatusWindow : Window
         var ordered = _bindingSort switch
         {
             BindingSort.Design => _bindingSortDesc
-                ? bindings.OrderByDescending(Label, StringComparer.OrdinalIgnoreCase)
-                : bindings.OrderBy(Label, StringComparer.OrdinalIgnoreCase),
+                ? visible.OrderByDescending(Label, StringComparer.OrdinalIgnoreCase)
+                : visible.OrderBy(Label, StringComparer.OrdinalIgnoreCase),
             _ => _bindingSortDesc
-                ? bindings.OrderByDescending(x => x.CapturedUtc)
-                : bindings.OrderBy(x => x.CapturedUtc),
+                ? visible.OrderByDescending(x => x.CapturedUtc)
+                : visible.OrderBy(x => x.CapturedUtc),
         };
         var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -4972,6 +5061,7 @@ public class StatusWindow : Window
             }
         }
         ImGui.EndTable();
+        _bindingsTableWidth = ImGui.GetItemRectSize().X;   // see _modsTableWidth
 
         // All deferred past the loop: each mutates the binding state the rows are drawn from.
         if (toUpdate)
