@@ -905,6 +905,26 @@ public class TextureLoader
             ? ((byte[])rgba.Clone(), width, height)
             : (UVRemapService.ResizeBilinear(rgba, width, height, BaseTargetSize, BaseTargetSize), BaseTargetSize, BaseTargetSize);
 
+    /// <summary>
+    /// Bring a freshly decoded base texture up to <see cref="BaseTargetSize"/> BEFORE it enters the cache,
+    /// so the upscale is paid once per file instead of once per composite.
+    /// <para/>
+    /// The cache used to stay native, with <see cref="CloneOrUpscaleBase"/> upscaling the returned buffer
+    /// every time. That put a fully serial <c>ResizeBilinear</c> — 16.7M output pixels, four channels each —
+    /// on the blend's critical path on every recomposite, for textures that had not changed. Measured at
+    /// 1466 ms across 10 calls, 79% of the whole blend: this skin's base diffuse and mask are 2048² while
+    /// its normal is already 4096², so two of the three were re-upscaled from a cache HIT every run.
+    /// <para/>
+    /// Byte-identical: <c>ResizeBilinear</c> is deterministic, so caching its output rather than recomputing
+    /// it produces the same pixels. It costs cache budget — a 2048² entry grows 16.7 MB → 67 MB — which the
+    /// existing byte budget and LRU already account for.
+    /// </summary>
+    private static (byte[] rgba, int width, int height)? UpscaleForCache((byte[] rgba, int width, int height)? decoded)
+        => decoded is not { } v ? null
+         : v.width >= BaseTargetSize && v.height >= BaseTargetSize ? v
+         : (UVRemapService.ResizeBilinear(v.rgba, v.width, v.height, BaseTargetSize, BaseTargetSize),
+            BaseTargetSize, BaseTargetSize);
+
     public (byte[] rgba, int width, int height)? LoadBaseTexture(string? diskPath, string gamePath)
     {
         if (diskPath != null && File.Exists(diskPath))
@@ -912,7 +932,7 @@ public class TextureLoader
             var key = DiskKey("BD", diskPath);
             if (key != null)
             {
-                var hit = GetOrDecode(key, () => LoadTexAsRgba(diskPath));
+                var hit = GetOrDecode(key, () => UpscaleForCache(LoadTexAsRgba(diskPath)));
                 // Clone (or upscale to 4K): the caller composites overlays into this buffer in place.
                 if (hit != null) return CloneOrUpscaleBase(hit.Rgba, hit.Width, hit.Height);
                 // Decode failed — fall through to the game-data fallback below.
@@ -932,7 +952,8 @@ public class TextureLoader
             {
                 var tex = dataManager.GetFile<TexFile>(gamePath);
                 if (tex == null) return null;
-                return ConvertTex(tex);
+                // Upscaled before caching for the same reason as the disk path above.
+                return UpscaleForCache(ConvertTex(tex));
             }
             catch (Exception ex)
             {
