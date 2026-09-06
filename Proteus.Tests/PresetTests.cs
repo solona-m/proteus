@@ -148,6 +148,61 @@ public class PresetTests
     }
 
     [Fact]
+    public void Store_MintsAnIdForAHandWrittenPreset_SoTwoOfThemAreNotTheSamePin()
+    {
+        // Two presets typed into presets.json by hand, neither with an id. Left empty they would be one
+        // preset as far as pinning is concerned — pin either and both light up.
+        var raw = JsonSerializer.Deserialize<ModPresetStore>(
+            """{"Version":1,"Presets":{"my-mod":[{"Name":"One"},{"Name":"Two"}]}}""", JsonOpts)!.Normalized();
+
+        var ids = raw.Presets["my-mod"].Select(p => p.Id).ToList();
+        Assert.DoesNotContain(Guid.Empty, ids);
+        Assert.Equal(2, ids.Distinct().Count());
+    }
+
+    // ── Pack preset identity ────────────────────────────────────────────────────
+
+    private const string PackJson =
+        """{"FormatVersion":1,"Name":"My Stockings","Presets":[{"Name":"Sheer"},{"Name":"Opaque"}]}""";
+
+    [Fact]
+    public void PackPresetId_IsTheSame_EveryTimeTheMetadataIsRead()
+    {
+        // The pin is written from one read of metadata.json and looked up against the next one — a
+        // recomposite re-reads the sidecar within a frame of applying. An id minted per deserialization
+        // (which a `= Guid.NewGuid()` initializer does) dangled the pin instantly, and the picker fell
+        // back to "No preset" over a look that had applied perfectly well.
+        var first  = JsonSerializer.Deserialize<ProteusMetadata>(PackJson, JsonOpts)!.Presets!;
+        var second = JsonSerializer.Deserialize<ProteusMetadata>(PackJson, JsonOpts)!.Presets!;
+
+        Assert.Equal(PresetService.PackId("my-stockings", first[0]),
+                     PresetService.PackId("my-stockings", second[0]));
+        Assert.NotEqual(Guid.Empty, PresetService.PackId("my-stockings", first[0]));
+    }
+
+    [Fact]
+    public void PackPresetId_IsPerModAndPerName_SoTwoPacksSheerNeverCollide()
+    {
+        var presets = JsonSerializer.Deserialize<ProteusMetadata>(PackJson, JsonOpts)!.Presets!;
+
+        Assert.NotEqual(PresetService.PackId("my-stockings", presets[0]),
+                        PresetService.PackId("my-stockings", presets[1]));
+        Assert.NotEqual(PresetService.PackId("my-stockings",    presets[0]),
+                        PresetService.PackId("other-stockings", presets[0]));
+    }
+
+    [Fact]
+    public void PackPresetId_HonoursAnIdTheAuthorDidWrite()
+    {
+        var authored = Guid.NewGuid();
+        var presets  = JsonSerializer.Deserialize<ProteusMetadata>(
+            $$"""{"FormatVersion":1,"Presets":[{"Id":"{{authored}}","Name":"Sheer"}]}""", JsonOpts)!.Presets!;
+
+        // An authored id survives a rename, which is the whole reason to allow one.
+        Assert.Equal(authored, PresetService.PackId("my-stockings", presets[0]));
+    }
+
+    [Fact]
     public void SameLook_IgnoresNameAndTimestamps_ButNotTheCapturedFields()
     {
         var a = Sample();

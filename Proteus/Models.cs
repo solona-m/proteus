@@ -1397,8 +1397,19 @@ public enum PresetSource
 /// </summary>
 public class ModPreset
 {
+    /// <summary>
+    /// Empty until something stores this preset, and deliberately NOT a fresh Guid: a property
+    /// initializer runs on every deserialization, so a pack preset written with no id — which is how
+    /// every authored one is written — came back with a DIFFERENT random id each time its
+    /// <c>metadata.json</c> was re-read. The pin written when you picked it then pointed at an id no
+    /// listing had a frame later, and the picker fell back to "No preset" over a look that was applied
+    /// and staying applied.
+    /// <para/>
+    /// Empty is what lets <c>PresetService.PackId</c> derive the stable id instead. Nothing else needs a
+    /// default: a preset only enters the user's store through <c>PresetService.Add</c>, which mints one.
+    /// </summary>
     [JsonPropertyName("Id")]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
 
     [JsonPropertyName("Name")]
     public string Name { get; set; } = string.Empty;
