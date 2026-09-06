@@ -221,7 +221,9 @@ If your mod has multiple options (style variants, independent pieces, etc.) you 
 
 `"Type": "Single"` means only one option is active at a time. The options list just needs the names — all texture work is handled by Proteus, so `Files` stays empty. `Id` values are GUIDs Penumbra uses to keep a user's saved selections stable across mod updates; keep them the same when you re-export.
 
-**Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array wins. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
+**Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array starts on top — it draws over the later one, and it hides the later one wherever it is opaque. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
+
+This is only the **default**. The array order decides nothing once the wearer rearranges the option tabs in Proteus: their stack then sets both what draws on top and what covers what, and your `Groups` order is just the arrangement they start from.
 
 The easiest way to get all this right is to build the group in Penumbra's own mod editor, or let the Substance Painter packager write it for you.
 

@@ -425,6 +425,11 @@ public class CompositorService : IDisposable
     // Same, for mods whose skin overlay WANTED a shell but has no body surface to put one on (a face
     // overlay). Separate set so the two notices don't suppress each other on a mod that does both.
     private readonly ConcurrentDictionary<string, byte> _noShellMods = new(StringComparer.OrdinalIgnoreCase);
+    // Overlay/material pairs already reported (this session) as painting nothing, keyed by the reason
+    // too so a DIFFERENT cause on the same overlay still gets said. Being erased is usually permanent —
+    // a mask that covers the art, an opacity slider at the bottom of its range — and a composite runs on
+    // every gear change, so without this one hidden overlay writes a log line every few seconds.
+    private readonly ConcurrentDictionary<string, byte> _erasureReported = new(StringComparer.Ordinal);
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -4432,17 +4437,29 @@ public class CompositorService : IDisposable
             foreach (var list in byMaterial.Values)
             {
                 var sorted = list
-                    .OrderBy(p => p.Entry.Priority)
+                    .Select((p, i) => (p, i))
+                    .OrderBy(x => x.p.Entry.Priority)
                     // A print is not in the stack at all: it does not paint, it recolours what was painted,
                     // so it has to land after everything it can reach. Below Penumbra priority, so the
                     // cross-mod rule above still holds; ABOVE the tab strip, because the strip outranks
                     // GroupOrder and a key underneath it would be undone by anyone who has ever restacked
                     // their tabs. Dragging a print's tab was never going to mean anything once its whole job
                     // is to sit on top.
-                    .ThenBy(p => AnyBlendRow(p.Overlay.ColorTableRows) ? 1 : 0)
-                    .ThenByDescending(p => ModStackIndexFor(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
-                    .ThenByDescending(p => p.Overlay.GroupOrder)
-                    .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
+                    .ThenBy(x => AnyBlendRow(x.p.Overlay.ColorTableRows) ? 1 : 0)
+                    .ThenByDescending(x => ModStackIndexFor(x.p.Entry.ModDirectory, x.p.Overlay.OptionGroup ?? "", x.p.Overlay.Option ?? ""))
+                    .ThenByDescending(x => x.p.Overlay.GroupOrder)
+                    .ThenByDescending(x => config.StackIndexOf(x.p.Entry.ModDirectory, x.p.Overlay.OptionGroup ?? "", x.p.Overlay.Option ?? ""))
+                    // Two options in the SAME group, on a mod nobody has restacked, tie on every key above:
+                    // ModStackIndexFor and StackIndexOf are both int.MaxValue and the GroupOrder is shared.
+                    // Both sorts are stable, so the tie used to fall through to metadata order on each side —
+                    // and the two sides read it oppositely, because the tab strip lists top-first ascending
+                    // while this list is bottom-first. The strip showed the first option on top and the
+                    // composite put the last one there. Reversing the index here is what makes "leftmost tab
+                    // = on top" true for options WITHIN one group, not just across groups. It matters more
+                    // than it reads: Suppress now fades whatever sits below, so this tie decides which of two
+                    // same-group options keeps its relief where the other is opaque.
+                    .ThenByDescending(x => x.i)
+                    .Select(x => x.p)
                     .ToList();
                 list.Clear();
                 list.AddRange(sorted);
@@ -5101,13 +5118,31 @@ public class CompositorService : IDisposable
                 // Safe unlocked for the same reason claimCache is: one of these per material task.
                 var paintedByMod = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 
-                // ── Higher-priority group claims ──────────────────────────────
-                // A mod's groups are ranked by Penumbra's own numbering (group_002 beats group_003), and a
-                // higher group wins wherever it is VISIBLE: a lower one is faded by the higher one's alpha.
+                // ── Claims from higher in the stack ───────────────────────────
+                // An overlay is faded by whatever composites ABOVE it — and "above" means this material's
+                // own composite order, which `pairs` is already sorted into (bottom -> top, see the sort
+                // near the top of Composite). That is the same ranking the tab strip and Rank() use:
+                // ModStackIndexFor first, then GroupOrder, then the per-group stack. Keying this on
+                // GroupOrder alone — which it used to do — made the two disagree the moment anyone
+                // rearranged their tabs: the strip put Patterns on top of Fabric, the claim still let
+                // Fabric erase it, and no amount of dragging could fix it because the two rules read
+                // different keys.
+                //
                 // Coverage drives every channel — CovAt gates the normal/mask/emissive phases — so fading
-                // the alpha is also what stops a lower group's normal COMPOUNDING through an opaque higher
-                // one (CompoundNormal is additive), which is the bug that flattened the leather cup.
-                var claimCache = new Dictionary<(string Mod, int Group, int W, int H), byte[]?>();
+                // the alpha is also what stops a lower overlay's normal COMPOUNDING through an opaque
+                // higher one (CompoundNormal is additive), which is the bug that flattened the leather cup.
+                //
+                // ACROSS groups a mod nobody has restacked is unchanged: with no ModStackIndexFor the sort
+                // falls through to GroupOrder, so list position is group order and the claim set is what the
+                // old ordinal comparison produced. WITHIN a group it is not — the old test was
+                // `GroupOrder >= mine`, which excluded same-group peers outright, and walking the list
+                // includes them. Two options ticked in one multi-select group now stack against each other
+                // like any other pair. That is the wanted behaviour rather than a side effect: the claim is
+                // a per-texel alpha union (see UnionAlphaInto), so it only reaches where the option above is
+                // actually opaque, and there the diffuse was already covered by plain alpha-over — all that
+                // changes is that the one underneath stops compounding its relief through it, which is the
+                // whole point of the mechanism.
+                var claimCache = new Dictionary<(string Mod, int Stack, int W, int H), byte[]?>();
 
                 string? SrcTypeOf(OverlayDescriptor d)
                 {
@@ -5180,34 +5215,48 @@ public class CompositorService : IDisposable
                     return cov;
                 }
 
-                // Union alpha of every same-mod overlay in a higher-priority group.
-                byte[]? ClaimAt(string modDir, int groupOrder, int tw, int th)
+                // Union alpha of every same-mod overlay composited above this one.
+                //
+                // Built as a SUFFIX union rather than a fresh sweep per overlay: what sits above index i is
+                // what sits above i+1 plus the single overlay in between. Sweeping the whole tail each time
+                // costs O(n²) CoverageOf calls, and each of those is several full-buffer passes (mask,
+                // indexed opacity, print filter) on a 4K sheet — the recursion makes it one per overlay.
+                // The buffer is shared, not cloned, whenever the overlay in between adds nothing, so a mod
+                // holds one claim buffer per overlay that actually covers something.
+                byte[]? ClaimAt(string modDir, int stackIdx, int tw, int th)
                 {
-                    var key = (modDir, groupOrder, tw, th);
+                    var key = (modDir, stackIdx, tw, th);
                     if (claimCache.TryGetValue(key, out var hit)) return hit;
 
                     byte[]? acc = null;
-                    foreach (var (e, o) in pairs)
+                    if (stackIdx + 1 < pairs.Count)
                     {
-                        if (o.GroupOrder >= groupOrder) continue;
-                        if (!string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)) continue;
+                        var above = ClaimAt(modDir, stackIdx + 1, tw, th);
+                        acc = above;
 
-                        var cov = CoverageOf(e, o, tw, th);
-                        if (cov == null) continue;
-
-                        acc ??= new byte[tw * th];
-                        UnionAlphaInto(acc, cov);   // alpha-over union
+                        var (e, o) = pairs[stackIdx + 1];
+                        if (string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var cov = CoverageOf(e, o, tw, th);
+                            if (cov != null)
+                            {
+                                // Clone before mutating: `above` is the cached buffer for stackIdx + 1 and
+                                // every deeper level shares it.
+                                acc = above != null ? (byte[])above.Clone() : new byte[tw * th];
+                                UnionAlphaInto(acc, cov);   // alpha-over union
+                            }
+                        }
                     }
                     claimCache[key] = acc;
                     return acc;
                 }
 
-                // Fade a coverage buffer by what the higher groups already claim.
+                // Fade a coverage buffer by what the overlays above it in the stack already claim.
                 // `suppress` times only the clone and the serial pass at the end — never the whole call. The
                 // ClaimAt below reaches ApplyCoverageMask / ApplyIndexedOpacity / PaintCoverage, all already
                 // charged to `cov`, so timing the outer call would nest the two and overlayGlueMs would
                 // subtract the same milliseconds twice. See LoadIndexMerged for the same treatment.
-                byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int tw, int th)
+                byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int stackIdx, int tw, int th)
                 {
                     if (cov == null) return null;
 
@@ -5220,7 +5269,7 @@ public class CompositorService : IDisposable
                     // keeps its painting rows unsuppressed too. That is a real if unusual authoring case,
                     // and erring toward showing the author's art beats erring toward deleting it.
                     if (AnyBlendRow(o.ColorTableRows)) return cov;
-                    var claim = ClaimAt(e.ModDirectory, o.GroupOrder, tw, th);
+                    var claim = ClaimAt(e.ModDirectory, stackIdx, tw, th);
                     if (claim == null) return cov;
 
                     // Timed from here, after ClaimAt: the clone and this serial pass are the part of Suppress
@@ -5292,6 +5341,10 @@ public class CompositorService : IDisposable
                     if (ct.IsCancellationRequested) return;
 
                     PrefetchAhead(++pairIndex + 1);
+
+                    // This overlay's position in the composite stack, snapshotted per iteration so the
+                    // local functions below close over a value rather than the loop's shared counter.
+                    int stackIdx = pairIndex;
 
                     var desc        = resolved.Descriptor;
                     var srcBodyType = desc.SourceBodyType;
@@ -5455,11 +5508,15 @@ public class CompositorService : IDisposable
                     // consistent. Synth/mask-only coverage isn't used directly; those gate through CovAt.
                     // Order: Masks-group mask first, then opacity — so the user's transparency slider
                     // always scales the mask result rather than the mask overriding the slider.
+                    // Each stage below returns a NEW buffer, so holding the intermediates costs a reference
+                    // apiece and lets the erasure report say which one emptied the overlay.
+                    byte[]? ovAfterArt = diffuseOv, ovAfterMask = diffuseOv, ovAfterOpacity = diffuseOv;
                     if (desc.Diffuse != null && diffuseOv != null)
                     {
                         var msk = CombinedMaskAt(entry.ModDirectory, covW, covH, srcBodyType);
                         if (msk != null)
                             diffuseOv = ApplyCoverageMask(diffuseOv, msk.Value.W, msk.Value.T, MaskAdds(entry, resolved));
+                        ovAfterMask = diffuseOv;
                         if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
@@ -5468,11 +5525,69 @@ public class CompositorService : IDisposable
                         }
                         else if (desc.Index == null && row16A.Opacity != 0)
                             diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
+                        ovAfterOpacity = diffuseOv;
                     }
 
-                    // Phase A reads diffuseOv directly, so it needs the same higher-group fade CovAt
-                    // applies to every other channel. Suppress() clones, so covSrc stays raw for CovAt.
-                    diffuseOv = Suppress(diffuseOv, entry, resolved, covW, covH);
+                    // Phase A reads diffuseOv directly, so it needs the same fade from above CovAt applies
+                    // to every other channel. Suppress() clones, so covSrc stays raw for CovAt.
+                    diffuseOv = Suppress(diffuseOv, entry, resolved, stackIdx, covW, covH);
+
+                    // ── "Where did my overlay go?" ────────────────────────────
+                    // An overlay whose art loaded fine and then came out with no covered texel at all is a
+                    // silent failure: every stage did what it was told, and the result is nothing. Nothing
+                    // above logs it, and it costs an evening to find by hand — it took a hex dump of an
+                    // index texture to learn that a row's opacity slider was erasing a pattern. Walk the
+                    // stages back and name the one that emptied it. Only the failing overlay pays for the
+                    // attribution; the healthy path is one short-circuiting AnyCoverage.
+                    if (desc.Diffuse != null && ovAfterArt != null && !AnyCoverage(diffuseOv))
+                    {
+                        string why;
+                        if (!AnyCoverage(ovAfterArt))
+                            why = "its own art has no opaque texel";
+                        else if (!AnyCoverage(ovAfterMask))
+                            why = "the Masks group leaves nothing of it";
+                        else if (!AnyCoverage(ovAfterOpacity))
+                        {
+                            var neg = rows.Where(kv => kv.Value.A.Opacity < 0 || kv.Value.B.Opacity < 0)
+                                .Select(kv => $"row {kv.Key + 1}"
+                                    + (kv.Value.A.Opacity < 0 ? $" A={kv.Value.A.Opacity}" : "")
+                                    + (kv.Value.B.Opacity < 0 ? $" B={kv.Value.B.Opacity}" : ""))
+                                .ToList();
+                            why = neg.Count > 0
+                                ? $"a negative colour-row opacity fades it away ({string.Join(", ", neg)})"
+                                : "its colour-row opacity leaves nothing";
+                        }
+                        else
+                        {
+                            // Only overlays that actually CONTRIBUTED to the claim, which is not the same as
+                            // "everything above it": a pure print unions an all-zero buffer (PaintCoverage
+                            // strips its rows) and an overlay whose art failed to load contributes null.
+                            // Naming either of those sends the reader after an innocent. CoverageOf is
+                            // recomputed rather than cached, which is affordable precisely because this
+                            // branch only runs for an overlay that already came out empty.
+                            var above = new List<string>();
+                            for (int j = stackIdx + 1; j < pairs.Count; j++)
+                            {
+                                var (e2, o2) = pairs[j];
+                                if (!string.Equals(e2.ModDirectory, entry.ModDirectory,
+                                                   StringComparison.OrdinalIgnoreCase)) continue;
+                                if (!AnyCoverage(CoverageOf(e2, o2, covW, covH))) continue;
+                                above.Add(o2.OptionGroup != null && o2.Option != null
+                                    ? $"{o2.OptionGroup}/{o2.Option}"
+                                    : o2.Option ?? o2.OptionGroup ?? "an overlay with no option group");
+                            }
+                            why = above.Count > 0
+                                ? $"it is fully covered by {string.Join(", ", above)} above it in the stack"
+                                : "it was suppressed by another overlay in the same mod";
+                        }
+
+                        // Once per (overlay, material, reason) per session. The cause is normally permanent
+                        // and a composite runs on every gear change, so an unguarded line here would repeat
+                        // every few seconds; keying on the reason still lets a NEW cause be reported.
+                        if (_erasureReported.TryAdd($"{entry.ModDirectory} {optLabel} {mtrlGamePath} {why}", 0))
+                            log.Information("[Proteus] {0} ({1}) paints nothing on {2}: {3}",
+                                entry.ModDirectory, optLabel, mtrlGamePath, why);
+                    }
 
                     // Returns coverage at (tw × th): mask first, then opacity (indexed or flat).
                     // covSrc is raw — no opacity pre-baked — so the Masks-group always shapes
@@ -5515,8 +5630,8 @@ public class CompositorService : IDisposable
                         else if (cov != null && desc.Index == null && row16A.Opacity != 0)
                             cov = ScaleOverlayAlpha(cov, row16A.Opacity);
 
-                        // Finally, fade by what a higher-priority group in this mod already claims.
-                        cov = Suppress(cov, entry, resolved, tw, th);
+                        // Finally, fade by what this mod already claims above it in the stack.
+                        cov = Suppress(cov, entry, resolved, stackIdx, tw, th);
                         return cov;
                     }
 
