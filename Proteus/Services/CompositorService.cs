@@ -2775,10 +2775,19 @@ public class CompositorService : IDisposable
         //
         // `gear:` above stays in either way: gear OVERLAYS are Proteus mods, and their coverage drives the
         // skin's ambient-occlusion pass. Only the equipped FFXIV items are gear-side.
+        //
+        // _humanPartModels is folded in on BOTH sides. It was omitted entirely — this called the four-arg
+        // overload while the redraw hook called the five-arg one — so changing face or hairstyle hashed
+        // identically to the published composite and an ambient trigger took the unchanged-inputs skip. The
+        // shell is cut from those meshes and they are passed straight to SecondSkinService.Build, so it kept
+        // the geometry of the PREVIOUS face with, as EquipSignature's own doc puts it, no event anywhere in
+        // the plugin that noticed. It stays in under skinOnly too: the face is a skin surface in its own
+        // right, and its material is composited beside the body's.
         sb.Append("equip:")
           .Append(skinOnly
-              ? EquipSignature(null, null, null, _bareBodyModels)
-              : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels, _bareBodyModels))
+              ? EquipSignature(null, null, null, _bareBodyModels, _humanPartModels)
+              : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels,
+                               _bareBodyModels, _humanPartModels))
           .Append('\n');
         sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
         sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
@@ -4713,10 +4722,26 @@ public class CompositorService : IDisposable
 
                 // TextureLoader caches decoded PNGs across runs (keyed by path + mtime),
                 // and its Lazy wrapper dedups concurrent requests for the same file.
-                byte[]? LoadPng(string path, int w, int h) => textureLoader.LoadPngAsRgba(path, w, h);
+                // Timed even though decode-wait covers a MISS: a cache hit still costs whatever
+                // LoadPngAsRgba does to hand back a 4K buffer, and that never appeared in any counter.
+                byte[]? LoadPng(string path, int w, int h)
+                {
+                    var t0 = PhaseCounter.Begin();
+                    try { return textureLoader.LoadPngAsRgba(path, w, h); }
+                    finally { blendLoadStats.Stop(t0); }
+                }
 
                 var dstBodyType = UVRemapService.InferBodyType(mtrlGamePath);
                 byte[]? RemapIfNeeded(byte[]? png, int w, int h, string? srcType, string? overlayPath = null)
+                {
+                    // Same counter as LoadPng, and they cannot nest — LoadPng is evaluated as this
+                    // method's ARGUMENT, so it has already finished by the time this starts.
+                    var tRemap = PhaseCounter.Begin();
+                    try { return RemapIfNeededCore(png, w, h, srcType, overlayPath); }
+                    finally { blendLoadStats.Stop(tRemap); }
+                }
+
+                byte[]? RemapIfNeededCore(byte[]? png, int w, int h, string? srcType, string? overlayPath = null)
                 {
                     if (png == null || srcType == null || dstBodyType == null) return png;
                     if (string.Equals(srcType, dstBodyType, StringComparison.OrdinalIgnoreCase)) return png;
@@ -4763,6 +4788,13 @@ public class CompositorService : IDisposable
                 // "win" over whatever the mod's other overlay(s) would otherwise select there,
                 // using the exact same ColorTableRows the overlay's own Index already resolves
                 // against — no separate per-mask colorset needed.
+                // `idxmerge` times only the CLONE and the merge loops below — never the whole call. The loads
+                // this makes are already charged to `load`, and timing the outer call as well would nest the
+                // two, so subtracting both from the overlay total (see overlayGlueMs) would remove the same
+                // milliseconds twice and could clamp `glue` to zero over real work. Measuring the exclusive
+                // part directly avoids that without any subtraction arithmetic — which could not be made
+                // correct here anyway, since the counters are global and the other material's worker is
+                // adding to them concurrently.
                 byte[]? LoadIndexMerged(string idxPath, int w, int h, string? srcType, string modDir)
                 {
                     var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
@@ -4781,19 +4813,24 @@ public class CompositorService : IDisposable
                     // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
                     // mutation contract) — clone before writing into it, or a mask toggled off later
                     // still shows the swapped rows because the cache itself was corrupted.
+                    var tClone = PhaseCounter.Begin();
                     idx = (byte[])idx.Clone();
+                    blendIdxMergeStats.Stop(tClone);
                     foreach (var (maskPath, _, maskIndexPath) in assets)
                     {
                         if (maskIndexPath == null) continue;
                         var maskPng = RemapIfNeeded(LoadPng(maskPath, w, h), w, h, srcType, maskPath);
                         var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h), w, h, srcType, maskIndexPath);
                         if (maskPng == null || maskIdx == null) continue;
+                        // Timed per mask, excluding the two loads above — see the note on this method.
+                        var tMerge = PhaseCounter.Begin();
                         for (int i = 0; i < idx.Length; i += 4)
                         {
                             if (maskPng[i + 3] < 128) continue;
                             idx[i]     = maskIdx[i];
                             idx[i + 1] = maskIdx[i + 1];
                         }
+                        blendIdxMergeStats.Stop(tMerge);
                     }
                     return idx;
                 }
@@ -5024,7 +5061,7 @@ public class CompositorService : IDisposable
                     if (texPaths.Diffuse == null) { baseD = Array.Empty<byte>(); return null; }
 
                     var diffDisk = ResolveUpstream(texPaths.Diffuse);
-                    var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                    var loaded = TimedLoadBaseTexture(diffDisk, texPaths.Diffuse);
                     if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                     baseD ??= Array.Empty<byte>();
 
@@ -5166,6 +5203,10 @@ public class CompositorService : IDisposable
                 }
 
                 // Fade a coverage buffer by what the higher groups already claim.
+                // `suppress` times only the clone and the serial pass at the end — never the whole call. The
+                // ClaimAt below reaches ApplyCoverageMask / ApplyIndexedOpacity / PaintCoverage, all already
+                // charged to `cov`, so timing the outer call would nest the two and overlayGlueMs would
+                // subtract the same milliseconds twice. See LoadIndexMerged for the same treatment.
                 byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int tw, int th)
                 {
                     if (cov == null) return null;
@@ -5182,9 +5223,13 @@ public class CompositorService : IDisposable
                     var claim = ClaimAt(e.ModDirectory, o.GroupOrder, tw, th);
                     if (claim == null) return cov;
 
+                    // Timed from here, after ClaimAt: the clone and this serial pass are the part of Suppress
+                    // no other counter already covers.
+                    var tSup = PhaseCounter.Begin();
                     var dst = (byte[])cov.Clone();
                     for (int i = 0, a = 3; i < claim.Length && a < dst.Length; i++, a += 4)
                         dst[a] = (byte)(dst[a] * (255 - claim[i]) / 255);
+                    blendSuppressStats.Stop(tSup);
                     return dst;
                 }
 
@@ -5236,6 +5281,11 @@ public class CompositorService : IDisposable
                     }
                 }
 
+                // Measured as one block: the per-overlay kernels, their coverage rebuilds and every
+                // full-buffer clone underneath them. Not try/finally, matching tIslands and tAo — the only
+                // path out that skips the Stop is the cancellation check below, and a cancelled run's
+                // numbers are discarded with it.
+                var tOverlays = PhaseCounter.Begin();
                 int pairIndex = -1;
                 foreach (var (entry, resolved) in pairs)
                 {
@@ -5368,7 +5418,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -5500,9 +5550,13 @@ public class CompositorService : IDisposable
                         && !string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         var decision = CovAt(covW, covH);
+                        // Timed separately: ComputeSeamDropMask builds a w*h summed-area table serially and
+                        // is NOT covered by uvRemap.RemapStats, which times only Remap itself.
+                        var tSeamDrop = PhaseCounter.Begin();
                         var dropMask = decision != null
                             ? uvRemap.ComputeSeamDropMask(decision, covW, covH, srcBodyType, dstBodyType)
                             : null;
+                        blendSeamDropStats.Stop(tSeamDrop);
                         if (dropMask != null)
                         {
                             var cov = covSrc!;
@@ -5695,7 +5749,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -5714,7 +5768,9 @@ public class CompositorService : IDisposable
                         }
                     }
                 }
+                blendOverlayStats.Stop(tOverlays);
 
+                var tMaskRelief = PhaseCounter.Begin();
                 // ── Masks-driven relief ────────────────────────────────────────
                 // Runs once per mod, after every overlay in its stack has composited, for any
                 // active "Masks" option whose export also produced a companion relief normal
@@ -5778,7 +5834,9 @@ public class CompositorService : IDisposable
                         }
                     }
                 }
+                blendMaskReliefStats.Stop(tMaskRelief);
 
+                var tMaskDiffuse = PhaseCounter.Begin();
                 // ── Masks diffuse ──────────────────────────────────────────────
                 // A mod's single "Masks" tab colours its active masks from ONE shared table, composited on
                 // top of the overlay diffuse. The mask _id selects the row, so this is the only place a mask
@@ -5897,6 +5955,7 @@ public class CompositorService : IDisposable
                     if (anyGlow)
                         glowMaps.Add((modDir, SidecarDiscoveryService.MaskGroupName, "Masks", gmap, gw, gh));
                 }
+                blendMaskDiffuseStats.Stop(tMaskDiffuse);
 
                 // ── Ambient occlusion: soft contact-shadow on skin around strap / garment edges ──
                 // Each mod spreads its silhouette into the surrounding skin and darkens the diffuse just
@@ -7072,6 +7131,53 @@ public class CompositorService : IDisposable
     private readonly PhaseCounter blendSilhouetteStats = new();
     private readonly PhaseCounter blendBlurStats       = new();
 
+    // Splitting what was left. With AO measured at only 346ms of a 1549ms blend, `rest` held 1151ms across
+    // three unbounded regions and there was no way to tell which. These three are mutually exclusive and
+    // cover everything of size in the material task; whatever survives them is per-material setup.
+    //
+    // Measurement only — nothing is optimised off these until they have been read. Guessing where blend
+    // time goes has been wrong four times out of six on this pipeline, and the one real win (the island
+    // blur) was invisible until the sub-counters above existed.
+    private readonly PhaseCounter blendOverlayStats     = new();
+    private readonly PhaseCounter blendMaskReliefStats  = new();
+    private readonly PhaseCounter blendMaskDiffuseStats = new();
+
+    // Inside the overlay loop, which the three above measured at essentially ALL of the non-AO blend
+    // (maskrelief and maskdiffuse both came back at 0). These five split it by KERNEL rather than by
+    // region, because the expensive calls are scattered across ~470 lines and reached through local
+    // closures (CovAt, PaintCovAt, ClaimAt) that call each other — bracketing regions would double-count.
+    //
+    // Static because the kernels are static and are reached from many call sites; timing them at the
+    // definition catches every one without touching any caller. SecondSkinService calls some of them too,
+    // but the shell phase runs AFTER LogPhaseBreakdown prints, so those never land in a printed figure.
+    //
+    // EXCLUSIVITY IS THE INVARIANT HERE, and it is not free: overlayGlueMs subtracts every one of these
+    // from the overlay total, so any pair that nests would remove the same milliseconds twice and could
+    // report a `glue` of zero over real work. Two of them would nest naturally — LoadIndexMerged makes the
+    // loads that `load` counts, and Suppress reaches the kernels that `cov` counts — so each of those two
+    // times only its own exclusive region rather than its whole call. Subtracting a nested child's time
+    // instead would not work: the counters are global and the other material's worker adds to them
+    // concurrently, so a before/after delta would capture that worker's time too. Anything added here must
+    // keep the invariant the same way.
+    private static readonly PhaseCounter blendCovStats      = new();   // coverage build: clone-heavy leaves
+    private static readonly PhaseCounter blendDiffuseStats  = new();   // full-4K diffuse composites
+    private static readonly PhaseCounter blendNormalStats   = new();   // full-4K normal recombine
+    private readonly PhaseCounter blendIdxMergeStats        = new();   // index clone + serial mask merge
+    private readonly PhaseCounter blendSeamDropStats        = new();   // summed-area table, serial
+
+    // Round two. The five above accounted for 109ms of a 1628ms overlay loop — the coverage-rebuild
+    // theory measured at 21ms over 7 calls and is dead — so 93% of it was in the unnamed remainder.
+    // These four cover what the remainder is actually made of: the load path (which the decode counters
+    // do NOT cover, because a cache hit still costs a copy and LoadBaseTexture is a separate route),
+    // the two remaining local closures that touch whole buffers, and upstream resolution.
+    // CombinedMaskAt is deliberately NOT among them: it calls RemapIfNeeded internally, so timing it would
+    // double-count against `load`. Its loads land in `load` and its plane build stays in `glue`; it is
+    // memoised per (mod, w, h) anyway, so it runs a handful of times per composite.
+    private readonly PhaseCounter blendLoadStats     = new();   // LoadPng + RemapIfNeeded
+    private readonly PhaseCounter blendBaseLoadStats = new();   // LoadBaseTexture
+    private readonly PhaseCounter blendResolveStats  = new();   // ResolveUpstream
+    private readonly PhaseCounter blendSuppressStats = new();   // Suppress: clone + SERIAL full-buffer pass
+
     private void ResetBlendStats()
     {
         blendIslandStats.Reset();
@@ -7080,6 +7186,18 @@ public class CompositorService : IDisposable
         blendTagStats.Reset();
         blendSilhouetteStats.Reset();
         blendBlurStats.Reset();
+        blendOverlayStats.Reset();
+        blendMaskReliefStats.Reset();
+        blendMaskDiffuseStats.Reset();
+        blendCovStats.Reset();
+        blendDiffuseStats.Reset();
+        blendNormalStats.Reset();
+        blendIdxMergeStats.Reset();
+        blendSeamDropStats.Reset();
+        blendLoadStats.Reset();
+        blendBaseLoadStats.Reset();
+        blendResolveStats.Reset();
+        blendSuppressStats.Reset();
     }
 
     /// <summary>Time a seam-map lookup. A hit is near-free; a miss is a ~1s build, and the two are
@@ -7132,7 +7250,25 @@ public class CompositorService : IDisposable
         // under two headings. "rest" is then the per-overlay kernels and everything else unattributed:
         // the overlay blend passes, mask compositing, base clones, and whatever is genuinely left.
         var aoMs   = Math.Max(0, blendAoStats.Ms - (blendSeamStats.Ms + blendTagStats.Ms));
-        var restMs = blendMs - (blendIslandStats.Ms + blendSeamStats.Ms + aoMs + blendTagStats.Ms);
+        // The three regions that used to make up almost all of "rest": the per-overlay loop and the two
+        // post-loop Masks passes. Mutually exclusive and none of them overlaps AO, so they subtract cleanly.
+        //
+        // ONE caveat when reading them cold: decode-wait and remap are already out of blendMs, but a
+        // LoadPng or RemapIfNeeded inside the overlay loop is inside `overlay`. So on a cold run `overlay`
+        // double-counts against those two — both reported separately above — and `rest` is a floor rather
+        // than an exact remainder. Warm (the case worth optimising) both are ~0 and the split is exact.
+        var restMs = Math.Max(0, blendMs - (blendIslandStats.Ms + blendSeamStats.Ms + aoMs + blendTagStats.Ms
+                                          + blendOverlayStats.Ms + blendMaskReliefStats.Ms
+                                          + blendMaskDiffuseStats.Ms));
+        // What the five kernel counters do NOT account for inside the overlay loop: texture loads, the
+        // remaps around them, and the glue between passes. Clamped for the same reason `rest` is — the
+        // kernels are timed inside their own definitions and so include any decode-wait they trigger,
+        // which is already out of blendMs.
+        var overlayGlueMs = Math.Max(0, blendOverlayStats.Ms
+                                      - (blendCovStats.Ms + blendIdxMergeStats.Ms + blendDiffuseStats.Ms
+                                       + blendNormalStats.Ms + blendSeamDropStats.Ms
+                                       + blendLoadStats.Ms + blendBaseLoadStats.Ms + blendResolveStats.Ms
+                                       + blendSuppressStats.Ms));
         // The two measured pieces inside AO; "apply" is what remains of it (ApplyAmbientOcclusion,
         // ApplyNormalIndent, the coveredAbove merge, and the mask combine).
         var aoApplyMs = Math.Max(0, aoMs - (blendSilhouetteStats.Ms + blendBlurStats.Ms));
@@ -7141,14 +7277,25 @@ public class CompositorService : IDisposable
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit, {4} blocked) | " +
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
             "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} " +
-            "+ apply {20:F0}] | tag {21:F0}/{22} | rest {23:F0}) | " +
-            "swizzle {24:F0}ms | write {25:F0}ms ({26} files, {27:F0} MB) | composite {28:F0}ms | total {29:F0}ms | " +
-            "{30} material(s) | cache {31} entries, {32:F0} MB, {33} evicted (budget {34:F0} MB)",
+            "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
+            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} " +
+            "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
+            "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
+            "swizzle {46:F0}ms | write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
+            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB)",
             setupMs, wait.Ms, decode.Calls, hits.Calls, blocked.Calls,
             prefetch.Ms, decode.Ms, nativeD.Calls, decode.Calls, remap.Ms, remap.Calls,
             blendMs, blendIslandStats.Ms, blendSeamStats.Ms, blendSeamStats.Calls, aoMs,
             blendSilhouetteStats.Ms, blendSilhouetteStats.Calls, blendBlurStats.Ms, blendBlurStats.Calls,
-            aoApplyMs, blendTagStats.Ms, blendTagStats.Calls, restMs,
+            aoApplyMs, blendTagStats.Ms, blendTagStats.Calls,
+            blendOverlayStats.Ms,
+            blendCovStats.Ms, blendCovStats.Calls, blendIdxMergeStats.Ms, blendIdxMergeStats.Calls,
+            blendDiffuseStats.Ms, blendDiffuseStats.Calls, blendNormalStats.Ms, blendNormalStats.Calls,
+            blendSeamDropStats.Ms, blendSeamDropStats.Calls,
+            blendLoadStats.Ms, blendLoadStats.Calls, blendBaseLoadStats.Ms, blendBaseLoadStats.Calls,
+            blendResolveStats.Ms, blendResolveStats.Calls,
+            blendSuppressStats.Ms, blendSuppressStats.Calls, overlayGlueMs,
+            blendMaskReliefStats.Ms, blendMaskDiffuseStats.Ms, restMs,
             swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
@@ -7789,7 +7936,33 @@ public class CompositorService : IDisposable
     /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
     /// upstream, which lets the loader fall through to game data as before.
     /// </summary>
+    /// <summary>
+    /// Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.
+    /// <para/>
+    /// This is called from outside the blend too (PrimeUpstreamCache, the shell's source walk). Those land
+    /// in the counter as well, but the counter is reset per run and printed before the shell phase, so the
+    /// only non-blend contribution is setup — measured at ~30 ms, and reported separately.
+    /// </summary>
     private string? ResolveUpstream(string gamePath)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ResolveUpstreamCore(gamePath); }
+        finally { blendResolveStats.Stop(t0); }
+    }
+
+    /// <summary>
+    /// Time a base-texture load into the same counter as <see cref="ResolveUpstream"/>. The two never nest:
+    /// where a call reads <c>LoadBaseTexture(ResolveUpstream(p), p)</c> the resolve is an ARGUMENT, so it
+    /// has finished before the load begins.
+    /// </summary>
+    private (byte[] rgba, int width, int height)? TimedLoadBaseTexture(string? disk, string gamePath)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return textureLoader.LoadBaseTexture(disk, gamePath); }
+        finally { blendBaseLoadStats.Stop(t0); }
+    }
+
+    private string? ResolveUpstreamCore(string gamePath)
     {
         var disk = penumbra.ResolvePlayer(gamePath);
 
@@ -8928,7 +9101,7 @@ public class CompositorService : IDisposable
     // fingerprint of our own stale all-255 output (natural base normals avg ~5).
     private byte[] LoadBaseNormal(string gamePath, ref int w, ref int h)
     {
-        var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(gamePath), gamePath);
+        var loaded = TimedLoadBaseTexture(ResolveUpstream(gamePath), gamePath);
         if (!loaded.HasValue) return Array.Empty<byte>();
 
         var rgba = loaded.Value.rgba;
@@ -9024,7 +9197,16 @@ public class CompositorService : IDisposable
     /// </summary>
     private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
 
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h,
+        byte[]? painted = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { ApplyFlatOverlayCore(baseTex, ov, row, w, h, painted); }
+        finally { blendDiffuseStats.Stop(t0); }
+    }
+
+    private static void ApplyFlatOverlayCore(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h,
                                           byte[]? painted = null)
     {
         float cr = row.DiffuseR, cg = row.DiffuseG, cb = row.DiffuseB;
@@ -9072,6 +9254,19 @@ public class CompositorService : IDisposable
     // Per-pixel color and emissive driven by index texture.
     // isNormal = false: tint+composite diffuse; isNormal = true: write emissive to normal alpha.
     internal static void ApplyIndexedOverlay(
+        byte[] baseTex, byte[] ov, byte[] idx,
+        Dictionary<int, ColorTableRowOverride> rows,
+        bool isNormal, int w, int h, byte[]? painted = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        // isNormal routes emissive into the normal's alpha, so it belongs with the normal recombine
+        // rather than with the diffuse composites, even though it is the same kernel.
+        try { ApplyIndexedOverlayCore(baseTex, ov, idx, rows, isNormal, w, h, painted); }
+        finally { (isNormal ? blendNormalStats : blendDiffuseStats).Stop(t0); }
+    }
+
+    /// <summary>Body of <see cref="ApplyIndexedOverlay"/>, split out only so the call can be timed.</summary>
+    private static void ApplyIndexedOverlayCore(
         byte[] baseTex, byte[] ov, byte[] idx,
         Dictionary<int, ColorTableRowOverride> rows,
         bool isNormal, int w, int h, byte[]? painted = null)
@@ -9251,7 +9446,15 @@ public class CompositorService : IDisposable
         }
     }
 
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { CompoundNormalCore(dst, src, w, h, mask); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void CompoundNormalCore(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -9275,7 +9478,15 @@ public class CompositorService : IDisposable
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a). Dst alpha unchanged.
     // mask: if provided, effective alpha = min(src alpha, mask alpha) — used so a diffuse overlay
     // silhouette gates the normal composite (invisible diffuse pixels stay at base normal).
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { AlphaCompositeCore(dst, src, w, h, mask); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void AlphaCompositeCore(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -9300,7 +9511,15 @@ public class CompositorService : IDisposable
     // specular/subsurface shift that reads as extra shine). cov.alpha is the overlay opacity (sheer
     // gaps keep skin tone); `diffuse` is the composited diffuse at the normal's resolution, null →
     // luminance treated as 1 (coverage-only). `strength` is the global user multiplier.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void SuppressSkinColorInfluence(byte[] baseN, byte[] cov, byte[]? diffuse, int w, int h, float strength = 1f)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { SuppressSkinColorInfluenceCore(baseN, cov, diffuse, w, h, strength); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void SuppressSkinColorInfluenceCore(byte[] baseN, byte[] cov, byte[]? diffuse, int w, int h, float strength = 1f)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -10649,6 +10868,15 @@ public class CompositorService : IDisposable
     internal static byte[] PaintCoverage(byte[] cov, byte[]? idx,
         Dictionary<int, ColorTableRowOverride> rows, int w, int h, bool hasIndex = false)
     {
+        var t0 = PhaseCounter.Begin();
+        try { return PaintCoverageCore(cov, idx, rows, w, h, hasIndex); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    /// <summary>Body of <see cref="PaintCoverage"/>, split out only so the call can be timed.</summary>
+    private static byte[] PaintCoverageCore(byte[] cov, byte[]? idx,
+        Dictionary<int, ColorTableRowOverride> rows, int w, int h, bool hasIndex = false)
+    {
         if (!AnyBlendRow(rows)) return cov;
 
         if (idx == null)
@@ -10769,7 +10997,15 @@ public class CompositorService : IDisposable
 
     // Apply per-pixel opacity from the index texture, blending sub-row A/B values just
     // like diffuse color and emissive. Returns a new array; src and pngCache are not mutated.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ApplyIndexedOpacityCore(src, idx, rows); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ApplyIndexedOpacityCore(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
     {
         var dst = (byte[])src.Clone();
 
@@ -10806,7 +11042,15 @@ public class CompositorService : IDisposable
         return dst;
     }
 
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ScaleOverlayAlphaCore(src, opacity); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ScaleOverlayAlphaCore(byte[] src, int opacity)
     {
         var dst = (byte[])src.Clone();
         ParallelPixels(3, dst.Length, 4, (from, to) =>
@@ -10839,7 +11083,15 @@ public class CompositorService : IDisposable
     // so only the mod's HIGHEST-priority group is granted the forced opacity. Lower groups see W alone,
     // which is 0 wherever the mask is opaque, erasing them from the mask's territory instead of letting
     // them paint over it.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ApplyCoverageMask(byte[] coverageRgba, byte[]? w, byte[]? t, bool additive = true)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ApplyCoverageMaskCore(coverageRgba, w, t, additive); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ApplyCoverageMaskCore(byte[] coverageRgba, byte[]? w, byte[]? t, bool additive = true)
     {
         if (w == null || t == null) return coverageRgba;
         var dst = (byte[])coverageRgba.Clone();

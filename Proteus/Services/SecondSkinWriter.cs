@@ -776,7 +776,16 @@ public static class SecondSkinWriter
         // How far the chosen cap already stands off this body, measured at selection. The push below is
         // driven from it, so a cap authored thick and a cap authored thin both land at the same height.
         float capStandoff = 0f;
-        if (authoredCaps is { Count: > 0 })
+        // A cap is only worth choosing if something is going to graft it. `authoredCaps` says only that the
+        // PLUGIN SHIPS caps, which it always does — so on its own this ran the five-candidate selection and
+        // then a full placement on every build, for every host, whether or not any layer had asked for a
+        // cap. Measured at 2545 ms of a 4601 ms composite on a look with no cap selected anywhere, and the
+        // result was used by nothing: the per-layer test below (`wantCap`) is the first thing that asks.
+        //
+        // Same predicate as that test, hoisted. Keeping the two in step matters — a layer that wants a cap
+        // and finds none chosen renders sleeved toes, which is the fault this whole path exists to avoid.
+        bool anyLayerWantsCap = layers.Any(l => l.ToeCap != null && l.ToeCapStrength > 0f);
+        if (authoredCaps is { Count: > 0 } && anyLayerWantsCap)
         {
             // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
             // these bodies apart: barefoot it ranked the right cap first by a whisker, and in heels — a
@@ -7529,6 +7538,13 @@ public static class SecondSkinWriter
         if (bind.Length < 12 || BitConverter.ToUInt32(bind, 0) != CapBindMagic) return null;
         var tris = BindSurface(bodies);
         if (tris.Count == 0) return null;
+        // The UNFILTERED surface, kept rather than decoded again. `tris` is reassigned to the bone-filtered
+        // subset below, and two later uses want the whole thing — the nail-socket discs and the triangle
+        // count in the diagnostic. Both used to call BindSurface(bodies) afresh, so every candidate paid
+        // THREE full decodes of the same four body models (Parse + LOD0 + union-find + a SkinTri per
+        // triangle, and BindSurface is deliberately not ParseCached) where one would do. `Where(...).ToList()`
+        // allocates a new list, so this reference keeps pointing at the unfiltered set.
+        var allTris = tris;
 
         var r = new BinaryReader(new MemoryStream(bind));
         r.ReadUInt32();
@@ -7537,7 +7553,6 @@ public static class SecondSkinWriter
         // Version 1 still loads — a cap bound before the residual existed is imperfect, not unusable.
         if (version is not (1 or 2)) { diag?.Invoke($"cap bind: version {version} not understood"); return null; }
 
-        var all2 = BindSurface(bodies);
         int partCount = r.ReadInt32();
         var parts = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < partCount; i++) parts.Add(r.ReadString());
@@ -7547,8 +7562,12 @@ public static class SecondSkinWriter
                             || t.Wb.Any(x => parts.Contains(x.Bone))
                             || t.Wc.Any(x => parts.Contains(x.Bone))).ToList();
         if (tris.Count == 0) { diag?.Invoke("cap bind: this body has none of the bound bones"); return null; }
+        // Diagnostic only, and gated on someone listening. The scoring probe passes diag: null, so this
+        // block used to decode the whole body a third time and sweep every triangle's UVs to build a string
+        // that was then thrown away — the `var all = …` and `var sp = …` statements ran unconditionally
+        // because only the Invoke was null-conditional.
+        if (diag != null)
         {
-            var all = BindSurface(bodies);
             (float, float, float, float) Span(List<SkinTri> ts)
             {
                 float u0 = float.MaxValue, u1 = float.MinValue, v0 = float.MaxValue, v1 = float.MinValue;
@@ -7562,8 +7581,8 @@ public static class SecondSkinWriter
                 return (u0, u1, v0, v1);
             }
             var sp = Span(tris);
-            diag?.Invoke($"cap bind: {tris.Count} of {all.Count} triangle(s) carry the bound bones; "
-                       + $"their atlas spans u {sp.Item1:F3}..{sp.Item2:F3} v {sp.Item3:F3}..{sp.Item4:F3}");
+            diag($"cap bind: {tris.Count} of {allTris.Count} triangle(s) carry the bound bones; "
+               + $"their atlas spans u {sp.Item1:F3}..{sp.Item2:F3} v {sp.Item3:F3}..{sp.Item4:F3}");
         }
 
         int meshCount = r.ReadInt32();
@@ -7635,7 +7654,7 @@ public static class SecondSkinWriter
             // unplaceable on the very bodies this exists to serve.
             var socketOf = new int[vc];
             Array.Fill(socketOf, -1);
-            var discs2 = NailSocketDiscs(all2);
+            var discs2 = NailSocketDiscs(allTris);
             {
                 var discs = discs2;
                 int over = 0;
