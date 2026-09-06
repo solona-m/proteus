@@ -1068,6 +1068,14 @@ public sealed class ColorsStrings
 
     public readonly string Specular = Loc.Localize("Colors.Specular.Label", "Specular");
 
+    /// <summary>
+    /// Its own section since the glow colour, amount and light response were pulled out of "Colours".
+    /// NOT the same string as <see cref="GlowAmount"/>, which happens to render the same word in English —
+    /// that one is the slider's own label and can be renamed without touching the heading. The field cannot
+    /// be called <c>Glow</c> either: that is already the highlight button beside the Copy/Paste pair.
+    /// </summary>
+    public readonly string GlowSection = Loc.Localize("Colors.Section.Glow", "Glow");
+
     public readonly string GlowColour = Loc.Localize("Colors.GlowColour.Label", "Glow colour");
 
     public readonly string GlowColourTip = Loc.Localize("Colors.GlowColour.Tip",

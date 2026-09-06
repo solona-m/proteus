@@ -491,6 +491,10 @@
     "message": "Colours",
     "description": "Appears in the colour-table editor window."
   },
+  "Colors.Section.Glow": {
+    "message": "Glow",
+    "description": "Section heading in the colour-table editor window, above the glow colour, glow amount and light-response controls. English renders this the same word as \"Colors.GlowAmount.Label\", the slider directly beneath it — they are separate strings and your language need not match them."
+  },
   "Colors.Section.Physical": {
     "message": "Physical",
     "description": "Appears in the colour-table editor window."

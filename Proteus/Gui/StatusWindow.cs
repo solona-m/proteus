@@ -5161,8 +5161,9 @@ public class StatusWindow : Window
             if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
             {
                 ImGui.Separator();
-                if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##content_{entry.ModDirectory}",
-                        ImGuiTreeNodeFlags.NoTreePushOnOpen))
+                // Framed, to match the Presets bar and the other two Advanced disclosures. "###" so the
+                // localized word isn't hashed into the id and a language switch doesn't shut it.
+                if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###content_{entry.ModDirectory}"))
                     DrawBodiesAdvanced(entry);
                 return;
             }
@@ -5332,8 +5333,7 @@ public class StatusWindow : Window
             // that isn't painting, and "the bake never reached my body type" is one of the reasons why, so
             // the control would otherwise disappear in exactly the state that sends someone looking for it.
             ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
-            if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##noopt_{entry.ModDirectory}",
-                    ImGuiTreeNodeFlags.NoTreePushOnOpen))
+            if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
             return;
         }

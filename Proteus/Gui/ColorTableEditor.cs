@@ -188,7 +188,25 @@ public static class ColorTableEditor
         }
 
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
-        bool advOpen = ImGui.TreeNodeEx($"{cs.Advanced}##{advancedScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
+        //
+        // A CollapsingHeader rather than a bare TreeNodeEx, so this reads as the same kind of disclosure as
+        // the Presets bar directly below it: a full-width grey bar, not an arrow lost at the bottom of the
+        // panel. It returns the open state directly and pushes no tree, so NoTreePushOnOpen has nothing
+        // left to suppress and there is still no TreePop to pair.
+        //
+        // AllowItemOverlap is load-bearing, not decoration: the bar's hit box runs the full width of the
+        // panel, straight under the "Back to auto" button drawn on top of it below, and without the flag
+        // the header swallows that click and merely toggles itself. Mind the spelling — this ImGui predates
+        // 1.89.7, so the flag is AllowItemOverlap and NOT AllowOverlap, and there is no
+        // SetNextItemAllowOverlap. TreeNodeBehavior already calls SetItemAllowOverlap() for us when the
+        // flag is set, so the explicit call below is belt-and-braces; it is kept deliberately, not dead.
+        //
+        // "###" and not "##": an ImGui id is hashed from the WHOLE label, so with "##" the localized word
+        // "Advanced" was part of it and changing UI language silently reset every one of these to closed.
+        // "###" restarts the hash at the marker, so only the scope token counts.
+        bool advOpen = ImGui.CollapsingHeader($"{cs.Advanced}###adv_{advancedScope}",
+            ImGuiTreeNodeFlags.AllowItemOverlap);
+        ImGui.SetItemAllowOverlap();
 
         ImGui.SameLine(0f, 24f);
         DrawRenderingAsBadge(mode);
@@ -512,8 +530,16 @@ public static class ColorTableEditor
             _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
         };
         ImGui.TextUnformatted(Strings.Colors.RenderingAs);
+
+        // Where ImGui ACTUALLY put that text, which on a line following a framed item — the Advanced
+        // CollapsingHeader this rides on — is FramePadding.y below the raw line top, because a framed item
+        // makes the whole line share its baseline. Measured rather than assumed: after SameLine the cursor
+        // is back at the raw top, so the difference IS DC.CurrLineTextBaseOffset, and it comes out 0 on an
+        // ordinary line (the Masks tab) without needing a special case. Pill paints its lozenge straight to
+        // the draw list and would otherwise sit above its own label.
+        var textTop = ImGui.GetItemRectMin().Y;
         ImGui.SameLine();
-        ProteusStyle.Pill(ModeName(mode), badgeColor);
+        ProteusStyle.Pill(ModeName(mode), badgeColor, textTop - ImGui.GetCursorScreenPos().Y);
     }
 
     /// <summary>Point the descriptors' (or the live design-binding override's) Layer+Shader at
@@ -989,7 +1015,7 @@ public static class ColorTableEditor
         }
 
         // ── Colours ──────────────────────────────────────────────────────────
-        ImGui.TextDisabled(cs.Colours);
+        ProteusStyle.SubHeader(cs.Colours);
 
         var diffuse = HexToVec3(sub?.Diffuse);
         ImGui.SetNextItemWidth(22);
@@ -1016,7 +1042,52 @@ public static class ColorTableEditor
                 changed = true;
             }
         }
+
+        // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
+        // coverage that becomes the normal map's blue channel (the transparency gate).
+        //
+        // Sits at METHOD-BODY depth, deliberately outside the bare block below. One brace lower and it
+        // would inherit the glow colour's `gear ? 1f : DimAlpha` push, greying out the most-used control on
+        // the panel on exactly the mode — Skin — where it does the most work.
+        int op = sub?.Opacity ?? 0;
+        ImGui.SetNextItemWidth(70);
+        if (ImGui.DragInt($"{cs.Opacity}##o_{id}", ref op, 1f, -100, 100, "%d%%"))
+        {
+            Edit().Opacity = Math.Clamp(op, -100, 100);
+            changed = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.OpacityTip);
+
+        // Blend is a SKIN idea: a print recolours what this mod painted into the skin, and a shell has a
+        // real colour table of its own instead. Shown only where it can do something.
+        if (mode == RenderMode.Skin)
+        {
+            int bl = (int)(sub?.Blend ?? RowBlend.Paint);
+            ImGui.SetNextItemWidth(110);
+            if (ImGui.Combo($"{cs.Blend}##bl_{id}", ref bl, cs.BlendNames, cs.BlendNames.Length))
+            {
+                Edit().Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.BlendTip);
+        }
+
+        // ── Glow ─────────────────────────────────────────────────────────────
+        // Its own section rather than four more rows under "Colours", which named none of them. Everything
+        // below to the end of the light-response pair belongs to it.
+        //
+        // The heading is at method-body depth, ABOVE the bare block: the glow colour is dimmed on Skin but
+        // the amount below it is not (raising it is a request for a shell), so a heading that faded with
+        // the colour picker alone would be lying about the section it names.
+        ProteusStyle.SubHeader(cs.GlowSection);
+
         // Glow colour applies in any gear mode (it's the emissive colour); dimmed only on Skin.
+        //
+        // The bare braces are load-bearing and not style: they bound the alpha push to this one control.
+        // Without them it would run to the end of the method and silently dim the glow amount, the
+        // light-response pair, and — through the nested push further down — the whole Physical block.
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, gear ? 1f : DimAlpha);
             var emCol = HexToVec3(sub?.EmissiveColor ?? sub?.Diffuse);
@@ -1106,33 +1177,6 @@ public static class ColorTableEditor
                 ImGui.SetTooltip(cs.HideInLightTip);
         }
 
-        // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
-        // coverage that becomes the normal map's blue channel (the transparency gate).
-        int op = sub?.Opacity ?? 0;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragInt($"{cs.Opacity}##o_{id}", ref op, 1f, -100, 100, "%d%%"))
-        {
-            Edit().Opacity = Math.Clamp(op, -100, 100);
-            changed = true;
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.OpacityTip);
-
-        // Blend is a SKIN idea: a print recolours what this mod painted into the skin, and a shell has a
-        // real colour table of its own instead. Shown only where it can do something.
-        if (mode == RenderMode.Skin)
-        {
-            int bl = (int)(sub?.Blend ?? RowBlend.Paint);
-            ImGui.SetNextItemWidth(110);
-            if (ImGui.Combo($"{cs.Blend}##bl_{id}", ref bl, cs.BlendNames, cs.BlendNames.Length))
-            {
-                Edit().Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
-                changed = true;
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(cs.BlendTip);
-        }
-
         // Roughness / metalness / sphere map belong to Cloth. Dimmed-but-clickable in Skin (touch
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
         // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a
@@ -1147,8 +1191,7 @@ public static class ColorTableEditor
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
-            ImGui.TextDisabled(cs.Physical);
-            if (!material) { ImGui.SameLine(); ImGui.TextDisabled(cs.ClothSuffix); }
+            ProteusStyle.SubHeader(cs.Physical, material ? null : cs.ClothSuffix);
 
             // The values the MATERIAL already holds, when the caller supplied them, instead of this editor's
             // neutral defaults. A shell's material is built from a neutral template so 0.5 / 0 is what is
@@ -1184,7 +1227,7 @@ public static class ColorTableEditor
             // labelled as something else, and a stray 0 in it silently kills the glow.
             if (mode == RenderMode.Glow) return;
 
-            ImGui.TextDisabled(cs.SphereMap);
+            ProteusStyle.SubHeader(cs.SphereMap);
 
             int sphere = sub?.SphereMap ?? 0;
             DrawSpherePicker(id, ref sphere, out bool sphereChanged);
@@ -1217,7 +1260,7 @@ public static class ColorTableEditor
             // Below the Glow early-return above, so this is hidden on a scrolling material for the same
             // reason the sphere is: characterscroll reassigns halves in this neighbourhood, and a control
             // whose value the shader reads as something else is worse than no control.
-            ImGui.TextDisabled(cs.Tile);
+            ProteusStyle.SubHeader(cs.Tile);
 
             int tile = sub?.Tile ?? -1;
             DrawTilePicker(id, ref tile, out bool tileChanged);

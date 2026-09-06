@@ -491,6 +491,10 @@
     "message": "색상",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "발광",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "물리 속성",
     "description": ""

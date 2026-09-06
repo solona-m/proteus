@@ -491,6 +491,10 @@
     "message": "カラー",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "グロー",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "物理設定",
     "description": ""

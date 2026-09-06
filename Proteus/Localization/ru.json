@@ -491,6 +491,10 @@
     "message": "Цвета",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "Свечение",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "Физические свойства",
     "description": ""

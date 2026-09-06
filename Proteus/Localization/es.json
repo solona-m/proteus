@@ -491,6 +491,10 @@
     "message": "Colores",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "Brillo",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "Físico",
     "description": ""
