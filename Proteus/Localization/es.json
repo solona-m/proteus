@@ -527,6 +527,38 @@
     "message": "Intensidad",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "Tejido",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Patrón",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Ninguno",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Intensidad",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Escala U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Escala V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Un tejido repetido sobre esta región: uno de los 64 patrones propios del juego, así que no cuesta ninguna\ntextura. Es lo que hace que una segunda piel parezca tela en vez de piel; Proteus lo deja desactivado por\ndefecto porque un tejido sobre la piel desnuda parece grano. Necesita el sombreador de equipo, así que\nelegir uno mueve una capa de piel a un caparazón de tela.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Cuántas veces se repite el tejido por la superficie. Más alto es más fino; 16 es el valor por defecto del\njuego. U y V son las dos direcciones de la textura, así que separarlos estira el tejido en un sentido.",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "Refleja una capa del array de sphere maps compartido del juego.\nTanto el índice COMO la intensidad deben ser distintos de cero, o no ocurre nada.\nNO funciona con characterscroll.shpk: usa character.shpk.",
     "description": ""

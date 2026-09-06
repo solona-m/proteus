@@ -527,6 +527,38 @@
     "message": "Intensity",
     "description": "Control label. Appears in the colour-table editor window."
   },
+  "Colors.Section.Tile": {
+    "message": "Tile",
+    "description": "Section heading in the colour-table editor window, above the fabric-weave controls."
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Pattern",
+    "description": "Control label. Picks which of the game's 64 fabric weaves tiles over this colour row."
+  },
+  "Colors.Tile.None": {
+    "message": "None",
+    "description": "The 'no fabric weave' entry in the tile picker, and its label when nothing is picked."
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Strength",
+    "description": "Control label. How strongly the fabric weave shows, as a percentage."
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Scale U",
+    "description": "Control label. How many times the weave repeats across the texture's U (horizontal) axis."
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Scale V",
+    "description": "Control label. How many times the weave repeats across the texture's V (vertical) axis."
+  },
+  "Colors.Tile.Tip": {
+    "message": "A fabric weave tiled over this region — one of the game's own 64 patterns, so it costs no texture.\nThis is what makes a second skin read as cloth rather than skin; Proteus leaves it off by default\nbecause a weave over bare skin looks like grain. Needs the gear shader, so picking one moves a skin\noverlay onto a cloth shell.",
+    "description": "Tooltip on the tile picker in the colour-table editor window."
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "How many times the weave repeats across the surface. Higher is finer; 16 is the game's own default.\nU and V are the two directions of the texture, so setting them apart stretches the weave one way.",
+    "description": "Tooltip on the tile scale controls in the colour-table editor window."
+  },
   "Colors.Sphere.Tip": {
     "message": "Reflects a slice of the game's shared sphere map array.\nIndex AND intensity must both be non-zero, or nothing happens.\nDoes NOT work under characterscroll.shpk — use character.shpk.",
     "description": "\"characterscroll.shpk\" and \"character.shpk\" are shader file names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."

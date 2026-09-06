@@ -527,6 +527,38 @@
     "message": "Интенсивность",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "Плетение",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Узор",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Нет",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Сила",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Масштаб U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Масштаб V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Плетение ткани, замощённое по этой области — один из 64 узоров самой игры, поэтому текстура не нужна.\nИменно это делает вторую кожу похожей на ткань, а не на кожу; Proteus по умолчанию его отключает, так как\nплетение на голой коже выглядит как зернистость. Требует шейдер экипировки, поэтому выбор узора\nпереносит слой кожи на тканевую оболочку.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Сколько раз плетение повторяется по поверхности. Больше — мельче; 16 — значение по умолчанию в игре.\nU и V — два направления текстуры, поэтому разные значения растягивают плетение в одну сторону.",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "Отражает один слой из общего массива сфера-карт игры.\nИ индекс, И интенсивность должны быть ненулевыми, иначе ничего не произойдёт.\nНЕ работает под characterscroll.shpk — используйте character.shpk.",
     "description": ""

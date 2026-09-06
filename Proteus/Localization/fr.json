@@ -527,6 +527,38 @@
     "message": "Intensité",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "Tissage",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Motif",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Aucun",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Intensité",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Échelle U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Échelle V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Un tissage répété sur cette région — l'un des 64 motifs du jeu, il ne coûte donc aucune texture.\nC'est ce qui fait qu'une seconde peau ressemble à du tissu plutôt qu'à de la peau ; Proteus le laisse\ndésactivé par défaut, car un tissage sur la peau nue ressemble à du grain. Nécessite le shader\nd'équipement : en choisir un déplace un calque de peau vers une coque de tissu.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Combien de fois le tissage se répète sur la surface. Plus la valeur est élevée, plus le motif est fin ;\n16 est la valeur par défaut du jeu. U et V sont les deux directions de la texture : les régler\ndifféremment étire le tissage dans un sens.",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "Reflète une tranche du tableau de sphere maps partagé du jeu.\nL'index ET l'intensité doivent tous deux être non nuls, sinon rien ne se passe.\nNE fonctionne PAS sous characterscroll.shpk — utilisez character.shpk.",
     "description": ""

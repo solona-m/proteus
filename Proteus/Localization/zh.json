@@ -527,6 +527,38 @@
     "message": "强度",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "织纹",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "图案",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "无",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "强度",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "缩放 U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "缩放 V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "平铺在该区域上的织物纹理——来自游戏自带的 64 种图案，因此不占用任何贴图。\n这正是让第二层皮肤看起来像布料而非皮肤的设置；Proteus 默认关闭它，因为裸露皮肤上的织纹看起来像噪点。\n需要装备着色器，因此选择后会把皮肤图层移到布料外壳上。",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "织纹在表面上重复的次数。数值越大越细密；16 是游戏的默认值。\nU 和 V 是贴图的两个方向，将它们设为不同的值会让织纹沿一个方向拉伸。",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "反射游戏共享球面贴图数组中的一层。\n索引和强度必须同时不为零，否则不会有任何效果。\n在 characterscroll.shpk 下无效——请使用 character.shpk。",
     "description": ""

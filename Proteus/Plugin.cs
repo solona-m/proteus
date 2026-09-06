@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 640;
+    public const int BuildNumber = 641;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -62,6 +62,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly StatusWindow statusWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
+    private readonly TilePreview tilePreview;
     private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
     private readonly Gui.ProteusFonts fonts;
@@ -145,6 +146,8 @@ public sealed class Plugin : IDalamudPlugin
         // Sphere-map thumbnails for the colour table editor.
         spherePreview = new SphereMapPreview(TextureProvider, log);
         Gui.ColorTableEditor.Spheres = spherePreview;
+        tilePreview = new TilePreview(TextureProvider, log);
+        Gui.ColorTableEditor.Tiles = tilePreview;
 
         // Display typography (the game's Jupiter) for section headings and the header band. The atlas
         // builds asynchronously; drawing before it lands falls back to the default font on its own.
@@ -394,6 +397,7 @@ public sealed class Plugin : IDalamudPlugin
 
         windowSystem.RemoveAllWindows();
         Gui.ColorTableEditor.Spheres = null;
+        Gui.ColorTableEditor.Tiles = null;
         Gui.ColorTableEditor.EffectThumbs = null;
         Gui.ColorTableEditor.Highlighter = null;
         Gui.ColorTableEditor.SkinGlow = null;
@@ -406,6 +410,7 @@ public sealed class Plugin : IDalamudPlugin
         highlighter.Dispose();
         shellGhost.Dispose();   // after the highlighters (they may still be calling it) — restores ghosted normals
         spherePreview.Dispose();
+        tilePreview.Dispose();
 
         partViewport.Dispose();
         fonts.Dispose();

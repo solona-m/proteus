@@ -38,8 +38,10 @@ public static class ColorTableEditor
 
     // Were `const string`; a localized lookup is not a compile-time constant, so they read through the
     // string table now. Still resolved once per language, not once per frame — see Strings.
-    private static string SphereTip => Strings.Colors.SphereTip;
-    private static string MetalTip  => Strings.Colors.MetalTip;
+    private static string SphereTip    => Strings.Colors.SphereTip;
+    private static string MetalTip     => Strings.Colors.MetalTip;
+    private static string TileTip      => Strings.Colors.TileTip;
+    private static string TileScaleTip => Strings.Colors.TileScaleTip;
 
     /// <summary>
     /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling), the
@@ -707,6 +709,9 @@ public static class ColorTableEditor
     /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
     public static SphereMapPreview? Spheres { get; set; }
 
+    /// <summary>Thumbnails for the tile picker. Set once at startup; null just means no previews.</summary>
+    public static TilePreview? Tiles { get; set; }
+
     /// <summary>Thumbnails for the glow-effect picker. Set once at startup; null falls back to names only.</summary>
     public static EffectPreview? EffectThumbs { get; set; }
 
@@ -751,6 +756,70 @@ public static class ColorTableEditor
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(SphereTip);
+    }
+
+    /// <summary>
+    /// Fabric weave, as a dropdown of thumbnails — an index alone tells you nothing.
+    /// <para/>
+    /// <see cref="DrawSpherePicker"/> with one addition: a None entry. The sphere needs none because slice 0
+    /// there IS the game's empty sphere, but tile 0 is a real weave, so "no weave" has to be a choice of its
+    /// own. It is <paramref name="index"/> below zero, and it borrows the shared none icon
+    /// <see cref="SphereMapPreview.DrawNoneButton"/> exists to lend.
+    /// </summary>
+    private static void DrawTilePicker(string id, ref int index, out bool changed)
+    {
+        changed = false;
+        const float current = 32f;   // the one in use, beside the combo
+        const float thumb = 56f;     // the pictures in the list — click one to pick it
+
+        var cs = Strings.Colors;
+        if (index < 0) Spheres?.DrawNone(current);
+        else Tiles?.Draw(index, current);
+        if (Tiles != null || Spheres != null) ImGui.SameLine();
+
+        ImGui.SetNextItemWidth(70);
+        var label = index < 0 ? cs.TileNone : index.ToString();
+        if (ImGui.BeginCombo($"{cs.TilePattern}##tl_{id}", label, ImGuiComboFlags.HeightLarge))
+        {
+            // "No weave" first, so switching it off doesn't mean hunting through sixty-four pictures.
+            bool noneAvailable = false;
+            if (Spheres?.DrawNoneButton($"##tlnone_{id}", thumb, out noneAvailable) == true && index >= 0)
+            {
+                index = -1;
+                changed = true;
+                ImGui.CloseCurrentPopup();
+            }
+            if (noneAvailable) ImGui.SameLine();
+
+            if (ImGui.Selectable($"{cs.TileNone}##tln_{id}", index < 0, ImGuiSelectableFlags.None,
+                    new Vector2(0, thumb)) && index >= 0)
+            {
+                index = -1;
+                changed = true;
+            }
+
+            for (int i = 0; i < TilePreview.Count; i++)
+            {
+                // The picture is the button — clicking it selects that index and closes the list.
+                if (Tiles?.DrawButton($"##tlimg_{id}_{i}", i, thumb) == true && i != index)
+                {
+                    index = i;
+                    changed = true;
+                    ImGui.CloseCurrentPopup();
+                }
+                if (Tiles != null) ImGui.SameLine();
+
+                if (ImGui.Selectable($"{i}##tl_{id}_{i}", i == index, ImGuiSelectableFlags.None,
+                        new Vector2(0, thumb)) && i != index)
+                {
+                    index = i;
+                    changed = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(TileTip);
     }
 
     /// <summary>
@@ -1143,6 +1212,77 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(SphereTip);
+
+            // ── the fabric weave ─────────────────────────────────────────────
+            // Below the Glow early-return above, so this is hidden on a scrolling material for the same
+            // reason the sphere is: characterscroll reassigns halves in this neighbourhood, and a control
+            // whose value the shader reads as something else is worse than no control.
+            ImGui.TextDisabled(cs.Tile);
+
+            int tile = sub?.Tile ?? -1;
+            DrawTilePicker(id, ref tile, out bool tileChanged);
+            if (tileChanged)
+            {
+                var e = Edit();
+                e.Tile = tile < 0 ? null : Math.Clamp(tile, 0, TilePreview.Count - 1);
+                if (e.Tile != null)
+                {
+                    // A weave needs BOTH a pattern and a strength: the shell's material is built with tile
+                    // alpha zeroed on every row, so an index alone is an invisible tile. Seed it the way the
+                    // sphere seeds its intensity, and leave a value the user has already chosen alone.
+                    if ((e.TileStrength ?? 0f) <= 0f) e.TileStrength = 1f;
+                }
+                else
+                {
+                    // Clearing the pattern clears what only meant anything with it, so the sub-row can go
+                    // back to reading as blank — see ContentGlowRow.IsBlank, which decides whether a cell
+                    // survives at all.
+                    e.TileStrength = null;
+                    e.TileScaleU = null;
+                    e.TileScaleV = null;
+                }
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
+
+            // Strength and scale do nothing without a pattern to apply them to. Dimmed rather than hidden:
+            // reachable, so the panel doesn't reshuffle as soon as a weave is picked, but visibly inert.
+            //
+            // Multiplied INTO the enclosing alpha rather than set over it, because PushStyle assigns — the
+            // whole block is already dimmed in Skin mode, and a bare 1f here would make these three controls
+            // the brightest thing on a panel where everything around them is faded.
+            using (ImRaii.PushStyle(ImGuiStyleVar.Alpha,
+                       ImGui.GetStyle().Alpha * (sub?.Tile != null ? 1f : DimAlpha)))
+            {
+                float tileStrength = (sub?.TileStrength ?? 0f) * 100f;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileStrength}##ts_{id}", ref tileStrength, 1f, 0f, 100f, "%.0f%%"))
+                {
+                    Edit().TileStrength = Math.Clamp(tileStrength / 100f, 0f, 1f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+
+                float scaleU = sub?.TileScaleU ?? GearMaterialWriter.DefaultTileScale;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileScaleU}##tsu_{id}", ref scaleU, 0.25f, 0.1f, 256f, "%.1f"))
+                {
+                    Edit().TileScaleU = Math.Clamp(scaleU, 0.1f, 256f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+
+                float scaleV = sub?.TileScaleV ?? GearMaterialWriter.DefaultTileScale;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileScaleV}##tsv_{id}", ref scaleV, 0.25f, 0.1f, 256f, "%.1f"))
+                {
+                    Edit().TileScaleV = Math.Clamp(scaleV, 0.1f, 256f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(TileScaleTip);
+            }
         }
     }
 

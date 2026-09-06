@@ -100,6 +100,11 @@
          slicing the live GPU texture through native interop — so the slices are extracted offline
          and shipped instead. -->
     <EmbeddedResource Include="Resources\sphere_d_array.png" />
+    <!-- The 64 fabric weaves, as one 64x4096 vertical strip, for the colour row's Tile picker. Same story as
+         the spheres above — chara/common/texture/tile_norm_array.tex is an ARRAY texture Lumina throws on.
+         It is a NORMAL map, which raw is 64 near-identical lavender squares, so the strip ships pre-lit:
+         the slices are shaded offline into a readable emboss and stored as a single grey channel. -->
+    <EmbeddedResource Include="Resources\tile_norm_array.png" />
     <!-- Shown for sphere-map index 0 ("no sphere") in the picker, so it doesn't look like a real sphere. -->
     <EmbeddedResource Include="Resources\none.png" />
     <!-- The status window's header band: a 512x128 crop from the middle of images\icon.png, where the

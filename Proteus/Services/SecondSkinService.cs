@@ -4532,6 +4532,10 @@ public sealed class SecondSkinService
             SphereMapMask = sub.SphereIntensity,
             Roughness = sub.Roughness,
             Metalness = sub.Metalness,
+            TileIndex = sub.Tile,
+            TileStrength = sub.TileStrength,
+            TileScaleU = sub.TileScaleU,
+            TileScaleV = sub.TileScaleV,
         };
     }
 

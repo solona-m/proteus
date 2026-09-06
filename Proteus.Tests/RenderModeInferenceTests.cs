@@ -46,7 +46,25 @@ public class RenderModeInferenceTests
         new object[] { new ColorTableSubRowPreset { Metalness = 0.3f } },
         new object[] { new ColorTableSubRowPreset { SphereMap = 4 } },
         new object[] { new ColorTableSubRowPreset { SphereIntensity = 0.7f } },
+        new object[] { new ColorTableSubRowPreset { Tile = 12 } },
     };
+
+    /// <summary>
+    /// Tile SLICE ZERO is a real weave, so it counts — unlike sphere 0, which is the game's own empty entry.
+    /// <para/>
+    /// The trap is that the sphere beside it reads <c>SphereMap.GetValueOrDefault() &gt; 0</c>, and copying
+    /// that idiom here makes the first of the sixty-four weaves the one slice that cannot be used: the row
+    /// would never promote, the overlay would stay on skin.shpk, and picking it would do nothing at all.
+    /// </summary>
+    [Fact]
+    public void TileSliceZero_IsCloth()
+        => Assert.True(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Tile = 0 }));
+
+    /// <summary>A scale with no pattern to apply it to renders nothing, so it is not a reason to promote.</summary>
+    [Fact]
+    public void TileScaleAlone_IsNotCloth()
+        => Assert.False(RenderModeInference.IsClothSub(
+            new ColorTableSubRowPreset { TileScaleU = 8f, TileScaleV = 8f, TileStrength = 1f }));
 
     [Fact]
     public void ExplicitZeroMetal_IsNotCloth()   // metal 0 / sphere 0 are "off", not a Cloth signal
