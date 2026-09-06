@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,6 +41,14 @@ public class ModPresetStore
     {
         Presets = new Dictionary<string, List<ModPreset>>(Presets, StringComparer.OrdinalIgnoreCase);
         Applied = new Dictionary<string, Guid>(Applied, StringComparer.OrdinalIgnoreCase);
+
+        // A user preset without an id can only come from a hand-edited file, and leaving it empty would
+        // make every such preset the SAME preset as far as pinning is concerned. Minting here rather than
+        // in ModPreset's initializer is the whole point of that field having no default: see its remarks.
+        foreach (var mine in Presets.Values)
+            foreach (var p in mine)
+                if (p.Id == Guid.Empty) p.Id = Guid.NewGuid();
+
         return this;
     }
 }
@@ -135,7 +144,7 @@ public class PresetService : IDisposable
 
         foreach (var p in entry.Metadata.Presets ?? [])
             result.Add(new PresetInfo(
-                p.Id == Guid.Empty ? StableId(entry.ModDirectory, p.Name) : p.Id,
+                PackId(entry.ModDirectory, p),
                 p.Name, p.Description, PresetSource.Pack, p.LastEditUtc));
 
         lock (gate)
@@ -164,10 +173,7 @@ public class PresetService : IDisposable
         {
             var copy = packPreset.Clone();
             copy.Source = PresetSource.Pack;
-            // A pack preset's identity has to be stable across sessions (the pin points at it) but the
-            // author need not have written one. Derive it from the mod and the name so the same preset
-            // keeps the same id, and two packs' "Sheer" never collide.
-            if (copy.Id == Guid.Empty) copy.Id = StableId(entry.ModDirectory, copy.Name);
+            copy.Id     = PackId(entry.ModDirectory, copy);
             copy.ModName   ??= entry.ModName;
             copy.ModAuthor ??= entry.Metadata.Author;
             result.Add(copy);
@@ -405,10 +411,39 @@ public class PresetService : IDisposable
         }
     }
 
+    /// <summary>
+    /// A pack preset's identity: the author's own id when they wrote one, else derived from the mod and
+    /// the preset's name. Both listings resolve it through here — <see cref="ListFor"/> for the picker and
+    /// <see cref="PresetsFor"/> for the contents — so the id a pin is written with is by construction the
+    /// id the picker looks the pin up by.
+    /// <para/>
+    /// Authored presets carry no id in practice (nothing writes one), which makes the derived branch the
+    /// normal path rather than the fallback it reads as.
+    /// </summary>
+    internal static Guid PackId(string modDir, ModPreset preset)
+        => preset.Id == Guid.Empty ? StableId(modDir, preset.Name) : preset.Id;
+
     /// <summary>A deterministic id for a pack preset the author gave none, so the pin survives a
     /// restart. Guid.CreateVersion8 style would be nicer but this only has to be stable and collision-
     /// free across one mod's own preset names.</summary>
     private static Guid StableId(string modDir, string name)
+        => StableIds.GetOrAdd((modDir, name), static key => Derive(key.ModDir, key.Name));
+
+    /// <summary>
+    /// Memo for <see cref="StableId"/>, because <see cref="ListFor"/> is called every frame for every mod
+    /// row on screen and authored presets carry no id of their own — so the derived branch is the one that
+    /// runs, and without this, drawing the Mods table means hashing every pack preset's name of every mod
+    /// sixty times a second for an answer that cannot change.
+    /// <para/>
+    /// Never invalidated, and it never needs to be: the value is a pure function of the key. Bounded by
+    /// the preset names across the mods installed, and keyed on the arguments as given — two spellings of
+    /// one mod directory derive the same id and would simply take an entry each.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(string ModDir, string Name), Guid> StableIds = new();
+
+    /// <summary>The hash itself, split out only so the memo can call it from a lambda that captures
+    /// nothing.</summary>
+    private static Guid Derive(string modDir, string name)
     {
         var bytes = System.Security.Cryptography.MD5.HashData(
             System.Text.Encoding.UTF8.GetBytes($"proteus-pack-preset {modDir.ToLowerInvariant()} {name}"));
