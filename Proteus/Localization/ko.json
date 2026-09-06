@@ -359,6 +359,14 @@
     "message": "이 모드의 다른 활성 옵션이 장비로 렌더링되므로 마스크는 그 셸 위에 얹혀야 하며,\n아래의 피부에 그려 넣을 수 없습니다. 해당 옵션들을 (각 탭의 고급에서) Skin으로\n바꾸면 마스크가 자신의 모드 선택을 되찾습니다.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap이 켜져 있습니다",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "Penumbra에서 이 모드의 Masks 그룹에 «Toe Cap» 옵션이 체크되어 있습니다. 발가락을\n하나의 둥근 형태로 다시 만들기 때문에, 이 모드의 Skin 오버레이는 천으로 승격됩니다\n— 피부 레이어에는 없는 지오메트리가 필요하기 때문입니다. 그만큼 셸을 다시 만듭니다.\n\n직접 체크한 적이 없다면: Penumbra는 이 그룹의 선택을 옵션 «번호»로 저장하므로,\n옵션 순서가 바뀐 채 다시 내보낸 모드에서는 저장된 선택이 조용히 다른 항목을 가리킵니다.\nPenumbra에서 그룹을 다시 체크해 동기화하세요.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "마스크",
     "description": ""

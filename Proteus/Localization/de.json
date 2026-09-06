@@ -359,6 +359,14 @@
     "message": "Eine andere aktive Option in diesem Mod wird als Ausrüstung dargestellt, also muss die\nMaske auf dieser Hülle sitzen — sie kann nicht in die Haut darunter gemalt werden. Stelle\ndiese Optionen auf Skin (Erweitert auf ihren Reitern), dann bekommt die Maske ihre eigene\nModuswahl zurück.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap ist aktiv",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "Die Option „Toe Cap“ ist in der Masks-Gruppe dieses Mods in Penumbra angehakt. Sie baut\ndie Zehen als eine runde Form neu auf, daher werden die Skin-Overlays dieses Mods zu Stoff\nhochgestuft — sie brauchen Geometrie, die die Hautebene nicht hat. Das kostet einen Hüllen-Neubau.\n\nFalls du sie nicht angehakt hast: Penumbra speichert die Auswahl dieser Gruppe über den\nOptions-INDEX. Ein Mod, der mit anderer Optionsreihenfolge neu exportiert wurde, verschiebt\ndaher stillschweigend jede gespeicherte Auswahl. Hake die Gruppe in Penumbra neu an.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "Masken",
     "description": ""

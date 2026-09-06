@@ -399,9 +399,17 @@ public class SidecarDiscoveryService
     public string? ResolveActiveToeCap(OverlayEntry entry)
     {
         var collId = penumbra.GetPlayerCollectionId();
-        if (collId == null) return null;
+        return collId == null ? null : ResolveActiveToeCap(entry, collId.Value);
+    }
 
-        var settings = penumbra.GetModSettings(collId.Value, entry.ModDirectory);
+    /// <summary>
+    /// <see cref="ResolveActiveToeCap(OverlayEntry)"/> against a collection id the caller already has.
+    /// A caller asking about every mod in the look would otherwise re-fetch the player's collection once
+    /// per mod, and the answer cannot change between two entries of the same composite.
+    /// </summary>
+    public string? ResolveActiveToeCap(OverlayEntry entry, Guid collId)
+    {
+        var settings = penumbra.GetModSettings(collId, entry.ModDirectory);
         if (settings == null) return null;
 
         var selected = settings.Value.Options
@@ -415,8 +423,29 @@ public class SidecarDiscoveryService
         if (path == null)
             log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — no cap",
                 option, entry.SidecarRoot, MaskSubdir);
+        // Said out loud ONCE per mod and option, then dropped to Debug. The cap is the one option in this
+        // group that appears nowhere else — ResolveMaskPaths and ResolveActiveMaskAssets both strip it, so
+        // it is absent from the "masks=N [...]" lines and from the editor's mask list — and that silence is
+        // how a cap nobody selected went unnoticed while it promoted a whole look to cloth. But this method
+        // runs for every mod on every composite, so announcing it every time would turn the anomaly's own
+        // message into steady noise for the many people who ticked the cap deliberately. Announce, then be
+        // quiet; the Masks tab carries the same explanation for anyone who comes looking later.
+        else if (_toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0{option}", 0))
+            log.Information("[Proteus] toe cap \"{0}\" is selected in \"{1}\" — if you did not tick it, the "
+                          + "mod's option ORDER changed since the selection was saved (Penumbra stores it by "
+                          + "index); re-tick the group to re-sync it",
+                option, entry.ModDirectory);
+        else
+            log.Debug("[Proteus] toe cap \"{0}\" is selected in \"{1}\"", option, entry.ModDirectory);
         return path;
     }
+
+    /// <summary>
+    /// Which (mod, option) pairs have already had their toe cap announced at Information this session.
+    /// Concurrent because composites resolve this off the framework thread and two can overlap.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _toeCapAnnounced =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Pure mapping from selected mask-option names to existing <c>Masks/&lt;name&gt;.png</c> files

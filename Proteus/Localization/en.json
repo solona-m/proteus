@@ -359,6 +359,14 @@
     "message": "Another active option in this mod renders as gear, so the mask has to sit on that\nshell — it can't be painted into the skin underneath it. Switch those options to\nSkin (Advanced on their tabs) and the mask gets its own mode choice back.",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap is on",
+    "description": "Appears in the colour-table editor window, on the Masks tab. \"Toe Cap\" is the name of a reserved option in the mod's Masks group - keep it matching however that option name is shown."
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "The \"Toe Cap\" option is ticked in this mod's Masks group in Penumbra. It rebuilds\nthe toes as one rounded shape, so this mod's skin overlays are promoted to cloth —\nthey need geometry the skin layer hasn't got. That costs a shell rebuild.\n\nIf you didn't tick it: Penumbra stores this group's selection by option INDEX, so a\nmod re-exported with its options in a different order silently re-points every saved\nselection. Re-tick the group in Penumbra to re-sync it.",
+    "description": "Tooltip. Appears in the colour-table editor window, on the Masks tab. Contains deliberate line breaks - keep the same number, moving them where your language needs. One of them is a blank line separating the two paragraphs; keep that blank line."
+  },
   "Colors.MasksTab": {
     "message": "Masks",
     "description": "Name of the pinned first tab in the colour editor. Matches the \"Masks\" option group Proteus synthesises."

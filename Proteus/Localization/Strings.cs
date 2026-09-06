@@ -1257,6 +1257,17 @@ public sealed class ColorPanelStrings
         "Another active option in this mod renders as gear, so the mask has to sit on that\n" +
         "shell — it can't be painted into the skin underneath it. Switch those options to\n" +
         "Skin (Advanced on their tabs) and the mask gets its own mode choice back.");
+
+    public readonly string ToeCapOn = Loc.Localize("Colors.Mask.ToeCap", "Toe Cap is on");
+
+    public readonly string ToeCapOnTip = Loc.Localize("Colors.Mask.ToeCap.Tip",
+        "The \"Toe Cap\" option is ticked in this mod's Masks group in Penumbra. It rebuilds\n" +
+        "the toes as one rounded shape, so this mod's skin overlays are promoted to cloth —\n" +
+        "they need geometry the skin layer hasn't got. That costs a shell rebuild.\n" +
+        "\n" +
+        "If you didn't tick it: Penumbra stores this group's selection by option INDEX, so a\n" +
+        "mod re-exported with its options in a different order silently re-points every saved\n" +
+        "selection. Re-tick the group in Penumbra to re-sync it.");
 }
 
 /// <summary>Shared by the Mods and Bindings tabs.</summary>
