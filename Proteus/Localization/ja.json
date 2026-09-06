@@ -527,6 +527,38 @@
     "message": "強さ",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "生地",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "模様",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "なし",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "強さ",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "スケール U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "スケール V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "この領域に敷き詰められる生地の織り目です。ゲームに元からある64種類の模様なので、テクスチャは不要です。\nセカンドスキンを肌ではなく布に見せるのがこの設定です。素肌に織り目があるとざらつきに見えるため、\nProteusでは既定でオフになっています。装備シェーダーが必要なため、選ぶと肌レイヤーは布シェルへ移ります。",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "表面で織り目が繰り返される回数です。大きいほど細かくなり、16がゲームの既定値です。\nUとVはテクスチャの2方向なので、別々の値にすると織り目が一方向に伸びます。",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "ゲーム共有のスフィアマップ配列から1枚を反射させます。\nインデックスと強さの両方が0以外でないと何も起きません。\ncharacterscroll.shpkでは動作しません。character.shpkを使ってください。",
     "description": ""

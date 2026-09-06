@@ -392,6 +392,196 @@ public class GearMaterialWriterTests
         Assert.Null(GearMaterialWriter.ReadPhysical(noTable));
     }
 
+    // ── the fabric weave ─────────────────────────────────────────────────────
+
+    private const int HTileIndex = 25, HTileAlpha = 26;
+    private const int HTileXfUU = 28, HTileXfUV = 29, HTileXfVU = 30, HTileXfVV = 31;
+
+    /// <summary>
+    /// The tile index survives its encoding for EVERY slice, 0 and 63 included.
+    /// <para/>
+    /// It is not stored as a number: the shader reads <c>half * 64</c>, so the row carries
+    /// <c>(index + 0.5) / 64</c> — the half-step centring the value in its bucket so the truncating read
+    /// cannot land a slice off. Drop the <c>+ 0.5f</c> and the picker still looks right in the editor while
+    /// the game renders a neighbouring weave, which is exactly the kind of failure nobody reports as a bug.
+    /// </summary>
+    [Fact]
+    public void A_tile_index_round_trips_through_its_half_encoding()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 3;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        for (int i = 0; i < 64; i++)
+        {
+            var patched = GearMaterialWriter.PatchColorTable(
+                mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = i } });
+
+            // The read the shader performs, truncating exactly as it does.
+            Assert.Equal(i, (int)(Half(patched, rowAt + HTileIndex * 2) * 64f));
+        }
+    }
+
+    /// <summary>
+    /// An index with no strength writes a FULL weave rather than an invisible one.
+    /// <para/>
+    /// Build zeroes tile alpha on every row it writes, so a shell reaching the patch has a zero sitting
+    /// there. Writing an index alone would leave the row pointing at a weave at zero opacity — a silent
+    /// no-op of the same shape as a sphere index with a zero mask, which is why the editor seeds that one too.
+    /// </summary>
+    [Fact]
+    public void A_tile_index_with_no_strength_writes_a_full_weave()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 3;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        var patched = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = 7 } });
+        Assert.Equal(1f, Half(patched, rowAt + HTileAlpha * 2), 3);
+
+        // An explicit strength wins over that default, including a deliberate zero — "point at this weave
+        // but show none of it" has to remain expressible.
+        var faint = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = 7, TileStrength = 0.25f } });
+        Assert.Equal(0.25f, Half(faint, rowAt + HTileAlpha * 2), 3);
+
+        var off = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = 7, TileStrength = 0f } });
+        Assert.Equal(0f, Half(off, rowAt + HTileAlpha * 2), 3);
+    }
+
+    /// <summary>
+    /// A scale writes the transform's diagonal and pins its skew to zero, and one axis alone still writes
+    /// the whole matrix — otherwise a content pack's authored skew survives underneath a scale the user
+    /// believes is plain, and the weave shears for no visible reason.
+    /// </summary>
+    [Fact]
+    public void A_tile_scale_writes_a_plain_matrix_with_no_skew()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 3;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        var patched = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow>
+            {
+                [row] = new() { TileIndex = 2, TileScaleU = 8f, TileScaleV = 32f },
+            });
+
+        Assert.Equal(8f,  Half(patched, rowAt + HTileXfUU * 2), 3);
+        Assert.Equal(32f, Half(patched, rowAt + HTileXfVV * 2), 3);
+        Assert.Equal(0f,  Half(patched, rowAt + HTileXfUV * 2), 3);
+        Assert.Equal(0f,  Half(patched, rowAt + HTileXfVU * 2), 3);
+
+        // One axis given: the other falls back to the game's default of 16, and the skew is still cleared.
+        var uOnly = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = 2, TileScaleU = 4f } });
+        Assert.Equal(4f,  Half(uOnly, rowAt + HTileXfUU * 2), 3);
+        Assert.Equal(16f, Half(uOnly, rowAt + HTileXfVV * 2), 3);
+        Assert.Equal(0f,  Half(uOnly, rowAt + HTileXfUV * 2), 3);
+        Assert.Equal(0f,  Half(uOnly, rowAt + HTileXfVU * 2), 3);
+    }
+
+    /// <summary>
+    /// Strength or scale WITHOUT a pattern writes nothing at all.
+    /// <para/>
+    /// On their own they are not a weaker version of the same request, they are a different one. Strength
+    /// alone revives whatever weave the row already names — on a shell that is the vanilla template's, which
+    /// Build only silenced, so the body comes back wearing a pattern nobody picked. Scale alone re-tiles that
+    /// same unchosen weave and clears its skew, and on an imported pack it is doing that to the author's own
+    /// material, in place, with no second copy to restore from.
+    /// <para/>
+    /// Both are reachable: the editor's Strength and Scale controls are dimmed while no pattern is set, and
+    /// dimmed here means inert-LOOKING but still draggable. Hand-authored metadata has no guard at all.
+    /// </summary>
+    [Fact]
+    public void Strength_or_scale_without_a_pattern_writes_nothing()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 3;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        foreach (var orphan in new[]
+                 {
+                     new GearColorRow { TileStrength = 1f },
+                     new GearColorRow { TileScaleU = 8f, TileScaleV = 8f },
+                     new GearColorRow { TileStrength = 0.5f, TileScaleU = 4f },
+                 })
+        {
+            var patched = GearMaterialWriter.PatchColorTable(
+                mtrl, new Dictionary<int, GearColorRow> { [row] = orphan });
+
+            foreach (int half in new[] { HTileIndex, HTileAlpha, HTileXfUU, HTileXfUV, HTileXfVU, HTileXfVV })
+                Assert.Equal(Half(mtrl, rowAt + half * 2), Half(patched, rowAt + half * 2), 4);
+        }
+
+        // And the pattern is what unlocks them: the same strength alongside an index does land.
+        var withPattern = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { TileIndex = 5, TileStrength = 0.5f } });
+        Assert.Equal(0.5f, Half(withPattern, rowAt + HTileAlpha * 2), 3);
+    }
+
+    /// <summary>
+    /// A row carrying no tile fields leaves every tile half exactly as the author shipped it.
+    /// <para/>
+    /// This is the regression that protects imported content packs. Their material is edited IN PLACE, so a
+    /// tile half written on a row the user only recoloured is an author's weave silently replaced, with no
+    /// second copy to restore it from.
+    /// </summary>
+    [Fact]
+    public void A_row_with_no_tile_leaves_the_authors_weave_alone()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 0;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        var patched = GearMaterialWriter.PatchColorTable(
+            mtrl, new Dictionary<int, GearColorRow> { [row] = new() { Diffuse = (1f, 0f, 0f), Metalness = 1f } });
+
+        foreach (int half in new[] { HTileIndex, HTileAlpha, HTileXfUU, HTileXfUV, HTileXfVU, HTileXfVV })
+            Assert.Equal(Half(mtrl, rowAt + half * 2), Half(patched, rowAt + half * 2), 4);
+    }
+
+    /// <summary>
+    /// A scrolling material is never given a weave, however the row is set.
+    /// <para/>
+    /// characterscroll reassigns halves in this neighbourhood — 21 is the effect's visibility and 23 its
+    /// master switch, neither of which means that on character.shpk — so nothing justifies assuming 25/26
+    /// and 28-31 survive it. The editor hides the Tile block on a glow material for the same reason; this is
+    /// the writer-side half of that decision, and the pair is what keeps a stale value off the shader.
+    /// </summary>
+    [Fact]
+    public void A_glow_material_is_never_given_a_weave()
+    {
+        var mtrl = RealMaterial();
+        if (mtrl == null) return;
+
+        const int row = 3;
+        int rowAt = ColorSetStart(mtrl) + row * 64;
+
+        var patched = GearMaterialWriter.PatchColorTable(
+            mtrl,
+            new Dictionary<int, GearColorRow>
+            {
+                [row] = new() { TileIndex = 12, TileStrength = 1f, TileScaleU = 4f, TileScaleV = 4f },
+            },
+            isScroll: true);
+
+        foreach (int half in new[] { HTileIndex, HTileAlpha, HTileXfUU, HTileXfUV, HTileXfVU, HTileXfVV })
+            Assert.Equal(Half(mtrl, rowAt + half * 2), Half(patched, rowAt + half * 2), 4);
+    }
+
     private static Dictionary<int, GearColorRow> NeutralWhiteRows()
     {
         var rows = new Dictionary<int, GearColorRow>();

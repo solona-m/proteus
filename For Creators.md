@@ -90,6 +90,22 @@ Color table rows control how Proteus tints and illuminates the overlay. Rows are
 
 None of these are baked into anything: Proteus applies them to the live material each frame, so the light changing costs no recomposite and nothing on disk is rebuilt. Users can switch the whole behaviour off, or pin the light level by hand, under **Settings → Light-sensitive glow**.
 
+##### The fabric weave — `"Tile"`
+
+- **Tile**: which of the game's 64 fabric weaves tiles over this row, `0`–`63`. This is what makes a second skin read as *cloth* rather than skin, and it costs no texture of your own — the patterns are the game's, shared by every gear material. Proteus leaves it off by default, because the weave a gear template ships with looks like grain over bare skin. Note `0` is a real weave, not "off": omit the field for no weave. Like glow, it needs the gear shader, so setting it promotes a skin overlay to a cloth layer.
+- **TileStrength**: `0`–`1`, how strongly the weave shows. Omitted means full strength.
+- **TileScaleU** / **TileScaleV**: how many times the weave repeats across each axis of the texture. Omitted is the game's own default of `16`; higher is finer. Setting the two apart stretches the weave in one direction.
+
+Both only mean something alongside a `Tile`, and are ignored without one. On their own they would re-arm whatever weave the material already happens to name — the gear template's on a shell, the author's on an imported pack — which is never a pattern anyone picked.
+
+```json
+"ColorTableRows": [
+  { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Tile": 12, "TileScaleU": 24.0, "TileScaleV": 24.0 } }
+]
+```
+
+Unlike the light settings above, the weave is written into the shell's material when the look is composited, not applied per frame.
+
 ##### Prints — `"Blend"`
 
 A print colours the fabric your other layers painted, instead of covering it. Give a fishnet stocking a rainbow print and the *threads* come out rainbow while the holes stay skin — which a plain overlay cannot do, because it would paint over the holes too.

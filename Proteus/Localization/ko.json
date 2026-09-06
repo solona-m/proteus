@@ -527,6 +527,38 @@
     "message": "강도",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "직물 무늬",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "패턴",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "없음",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "강도",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "배율 U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "배율 V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "이 영역에 반복되는 직물 무늬입니다. 게임에 내장된 64가지 패턴 중 하나이므로 텍스처가 필요 없습니다.\n세컨드 스킨을 피부가 아닌 천처럼 보이게 하는 설정입니다. 맨살 위의 무늬는 잡티처럼 보이기 때문에\nProteus는 기본적으로 꺼 둡니다. 장비 셰이더가 필요하므로, 선택하면 피부 레이어가 천 셸로 옮겨집니다.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "무늬가 표면에서 반복되는 횟수입니다. 값이 클수록 촘촘해지며, 16이 게임의 기본값입니다.\nU와 V는 텍스처의 두 방향이므로, 다르게 설정하면 무늬가 한쪽으로 늘어납니다.",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "게임이 공유하는 스피어 맵 배열에서 한 장을 반사합니다.\n인덱스와 강도가 모두 0이 아니어야 하며, 아니면 아무 일도 일어나지 않습니다.\ncharacterscroll.shpk에서는 작동하지 않습니다 — character.shpk를 사용하세요.",
     "description": ""

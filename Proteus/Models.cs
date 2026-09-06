@@ -1179,6 +1179,8 @@ public static class ContentGlowRow
         && s.Emissive == 0f && s.Opacity == 0
         && s.SphereMap == null && s.SphereIntensity == null
         && s.Roughness == null && s.Metalness == null
+        && s.Tile == null && s.TileStrength == null
+        && s.TileScaleU == null && s.TileScaleV == null
         && s.LightResponse == null && !s.HideInLight;
 }
 
@@ -1339,6 +1341,39 @@ public class ColorTableSubRowPreset
     /// <summary>Gear layer only. Metalness (0–1). Null keeps the shader default.</summary>
     [JsonPropertyName("Metalness")]
     public float? Metalness { get; set; }
+
+    /// <summary>
+    /// Gear layer only. Which fabric weave tiles over this row — a slice of the game's shared
+    /// chara/common/texture/tile_norm_array.tex (0–63). Needs no texture of our own.
+    /// <para/>
+    /// Null means no weave, which is what a second skin wants by default: the vanilla weave reads as a
+    /// grainy texture real skin doesn't have, so <see cref="Proteus.Services.GearMaterialWriter"/> switches
+    /// it off on every row it builds. Note that zero is a REAL tile here, not "none" — unlike
+    /// <see cref="SphereMap"/>, whose slice 0 is the game's own empty entry.
+    /// </summary>
+    [JsonPropertyName("Tile")]
+    public int? Tile { get; set; }
+
+    /// <summary>Gear layer only. How strongly the weave shows (0–1). Null means full strength. Has no effect
+    /// without a <see cref="Tile"/>: strength on its own would revive whatever weave the material already
+    /// names, which is nothing anyone picked.</summary>
+    [JsonPropertyName("TileStrength")]
+    public float? TileStrength { get; set; }
+
+    /// <summary>
+    /// Gear layer only. How many times the weave repeats across the surface, per UV axis — the diagonal of
+    /// the row's tile transform. Null keeps the game's default of 16; higher is finer. Like
+    /// <see cref="TileStrength"/>, it has no effect without a <see cref="Tile"/>.
+    /// <para/>
+    /// Two scalars rather than a pair or a Vector2 because System.Text.Json ignores public FIELDS, so a
+    /// ValueTuple property would serialise into metadata.json as an empty object.
+    /// </summary>
+    [JsonPropertyName("TileScaleU")]
+    public float? TileScaleU { get; set; }
+
+    /// <inheritdoc cref="TileScaleU"/>
+    [JsonPropertyName("TileScaleV")]
+    public float? TileScaleV { get; set; }
 
     /// <summary>Copy. Every member is a value type or an immutable string, so the shallow copy IS a deep
     /// one — and MemberwiseClone keeps that true automatically when a property is added later, which a

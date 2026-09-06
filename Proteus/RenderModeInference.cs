@@ -62,6 +62,12 @@ public static class RenderModeInference
          || s.Metalness.GetValueOrDefault() > 0f
          || s.SphereMap.GetValueOrDefault() > 0
          || s.SphereIntensity.GetValueOrDefault() > 0f
+         // A weave lives in the colour table, and the skin layer has none: it BAKES textures through the
+         // compositor. Note "!= null" rather than the sphere's "> 0" — slice 0 is the game's own empty
+         // sphere but a REAL tile, so the sphere's idiom would make it unselectable in effect.
+         //
+         // TileScaleU/V are deliberately not here: a scale with no pattern to apply it to renders nothing.
+         || s.Tile != null
          || s.Emissive > 0f);
 
     /// <summary>Any Cloth feature (sphere/metal/specular/glow) is set across the option's rows.</summary>

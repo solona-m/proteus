@@ -527,6 +527,38 @@
     "message": "Intensität",
     "description": ""
   },
+  "Colors.Section.Tile": {
+    "message": "Gewebe",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Muster",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Keins",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Stärke",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Skalierung U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Skalierung V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Ein Gewebe, das über diesen Bereich gekachelt wird — eines der 64 spieleigenen Muster, es kostet also\nkeine Textur. Genau das lässt eine zweite Haut wie Stoff statt wie Haut wirken; Proteus lässt es\nstandardmäßig aus, weil ein Gewebe auf bloßer Haut wie Körnung aussieht. Benötigt den Ausrüstungs-Shader:\nEine Auswahl verschiebt eine Haut-Ebene auf eine Stoffhülle.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Wie oft sich das Gewebe über die Oberfläche wiederholt. Höher ist feiner; 16 ist der Standard des Spiels.\nU und V sind die beiden Richtungen der Textur — unterschiedliche Werte dehnen das Gewebe in eine Richtung.",
+    "description": ""
+  },
   "Colors.Sphere.Tip": {
     "message": "Reflektiert eine Ebene aus dem gemeinsamen Sphere-Map-Array des Spiels.\nIndex UND Intensität müssen beide ungleich null sein, sonst passiert nichts.\nFunktioniert NICHT unter characterscroll.shpk — nutze character.shpk.",
     "description": ""

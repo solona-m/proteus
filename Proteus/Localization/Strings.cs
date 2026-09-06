@@ -1150,6 +1150,23 @@ public sealed class ColorsStrings
     public readonly string SphereIndex = Loc.Localize("Colors.Sphere.Index.Label", "Index");
     public readonly string Intensity   = Loc.Localize("Colors.Sphere.Intensity.Label", "Intensity");
 
+    public readonly string Tile         = Loc.Localize("Colors.Section.Tile", "Tile");
+    public readonly string TilePattern  = Loc.Localize("Colors.Tile.Pattern.Label", "Pattern");
+    public readonly string TileNone     = Loc.Localize("Colors.Tile.None", "None");
+    public readonly string TileStrength = Loc.Localize("Colors.Tile.Strength.Label", "Strength");
+    public readonly string TileScaleU   = Loc.Localize("Colors.Tile.ScaleU.Label", "Scale U");
+    public readonly string TileScaleV   = Loc.Localize("Colors.Tile.ScaleV.Label", "Scale V");
+
+    public readonly string TileTip = Loc.Localize("Colors.Tile.Tip",
+        "A fabric weave tiled over this region — one of the game's own 64 patterns, so it costs no texture.\n"
+      + "This is what makes a second skin read as cloth rather than skin; Proteus leaves it off by default\n"
+      + "because a weave over bare skin looks like grain. Needs the gear shader, so picking one moves a skin\n"
+      + "overlay onto a cloth shell.");
+
+    public readonly string TileScaleTip = Loc.Localize("Colors.Tile.Scale.Tip",
+        "How many times the weave repeats across the surface. Higher is finer; 16 is the game's own default.\n"
+      + "U and V are the two directions of the texture, so setting them apart stretches the weave one way.");
+
     /// <summary>Deliberately the same wording as the global Settings slider: this is the same knob at a
     /// narrower scope, and calling it something else would read as a second, unrelated control.</summary>
     public readonly string SkinTint = Loc.Localize("Colors.SkinTint.Label", "Skin-tint suppression");
