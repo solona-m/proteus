@@ -491,6 +491,10 @@
     "message": "Farben",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "Leuchten",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "Physikalisch",
     "description": ""

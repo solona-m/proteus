@@ -130,6 +130,77 @@ public static class ProteusStyle
         ImGui.Dummy(new Vector2(0f, S(5f)));
     }
 
+    /// <summary>
+    /// A minor heading inside a panel: the label in the brand accent, then a hairline rule from the end of
+    /// the text to the right edge of the content region, centred on the label's middle.
+    /// <para/>
+    /// Deliberately NOT <see cref="SectionHeader"/>. That one is a Jupiter display heading over a fat
+    /// accent underline, which is right ONCE at the top of a panel and is noise five times down a table
+    /// column — and Jupiter is a Latin-only display face, so a heading that repeats this often has no
+    /// business on it. Same brand colour, a fraction of the weight.
+    /// <para/>
+    /// The right edge comes from <c>GetContentRegionAvail</c> and not from the window width, because the
+    /// caller draws inside a table cell: the A/B sub-row editor is a two-column table, and a window-width
+    /// rule would cross the column border and run out the far side of the other column. ImGui special-cases
+    /// a live table there and hands back the CELL's work rect, which is exactly what is wanted.
+    /// <para/>
+    /// Label and rule both end up multiplied by <c>style.Alpha</c> exactly ONCE, which is what lets a
+    /// heading inside an <c>ImRaii.PushStyle(ImGuiStyleVar.Alpha, …)</c> block fade with the controls it
+    /// names instead of staying bright over a dimmed section — the same trick <see cref="SectionHeader"/>
+    /// relies on. They get there by opposite routes, and mixing the two is the trap: the rule is drawn
+    /// straight to the draw list, so it has to be resolved here with <c>GetColorU32</c>, while the label is
+    /// pushed as a raw <c>Vector4</c> and left for ImGui to resolve when it draws the text. Pre-resolving
+    /// the pushed colour would apply the alpha a second time at draw, and a heading over a dimmed block
+    /// would come out at <c>α²</c> — half its intended opacity, barely brighter than its own rule.
+    /// </summary>
+    /// <param name="suffix">An optional dimmed qualifier drawn after the label ("Physical — Cloth"). Part
+    /// of the heading, so the rule starts after IT rather than being drawn through it.</param>
+    public static void SubHeader(string text, string? suffix = null)
+    {
+        // Air above, so the heading belongs to what follows rather than floating between two controls.
+        // Spacing rather than a Dummy: it costs exactly one ItemSpacing.Y, is already style-scaled, and
+        // submits no zero-width item for the GetItemRect* below to pick up instead of the label.
+        ImGui.Spacing();
+
+        // Not full-strength Accent: at the logo's own chroma, five of these down a column — times the two
+        // columns of the A/B table — reads as ten warnings rather than as structure.
+        //
+        // Pushed as a Vector4 and NOT as ImGui.GetColorU32(...): PushStyleColor stores whatever it is given
+        // and ImGui multiplies by style.Alpha when it resolves ImGuiCol.Text at draw time, so resolving it
+        // here too would apply the alpha twice. See the remark on the summary above — this is the one line
+        // in the helper where that distinction bites.
+        using (ImRaii.PushColor(ImGuiCol.Text, Accent.WithAlpha(0.85f)))
+            ImGui.TextUnformatted(text);
+
+        if (suffix != null)
+        {
+            ImGui.SameLine(0f, S(4f));
+            ImGui.TextDisabled(suffix);
+        }
+
+        // Measured off the item rect rather than a predicted CalcTextSize, for the same reason SectionHeader
+        // measures: the rule then tracks whatever font actually rendered, so a font atlas arriving a frame
+        // or two late is a non-event. With a suffix this is the SUFFIX's rect, which is what puts the rule
+        // after the whole heading instead of through it.
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+
+        // GetContentRegionAvail is measured from the CURRENT cursor, which is back at the start of the next
+        // line by now — so cursor.x + avail.x is the right edge of the cell (or of the window, outside one).
+        var x0    = max.X + S(6f);
+        var x1    = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var y     = MathF.Round((min.Y + max.Y) * 0.5f);   // whole pixel, or a 1px rule straddles two rows
+        var thick = MathF.Max(1f, S(1f));
+
+        // A long heading in a narrow column can leave no room, and a three-pixel stub is worse than nothing.
+        if (x1 > x0 + S(8f))
+            ImGui.GetWindowDrawList().AddRectFilled(
+                new Vector2(x0, y), new Vector2(x1, y + thick),
+                ImGui.GetColorU32(Accent.WithAlpha(0.28f)));
+
+        ImGui.Spacing();
+    }
+
     private static Vector2 PillPad => S(5f, 1f);
 
     /// <summary>The total size <see cref="Pill"/> occupies, label plus padding.</summary>
@@ -185,23 +256,32 @@ public static class ProteusStyle
     /// table asks for more room every frame, and an AlwaysAutoResize window creeps wider until it hits its
     /// maximum size. Draw straight to the draw list if the alignment has to depend on column geometry.
     /// </remarks>
-    public static void Pill(string text, Vector4 colour)
+    /// <param name="baselineOffset">How far ImGui will push TEXT down on this line so it shares a baseline
+    /// with a taller framed item beside it (<c>DC.CurrLineTextBaseOffset</c>) — zero on an ordinary line.
+    /// The label goes through <c>TextColored</c> and picks this up by itself; the lozenge is painted
+    /// straight to the draw list and does not, so beside a framed item the badge would sit above its own
+    /// text with the descenders hanging out the bottom. The public API cannot read the value, so the caller
+    /// measures it — see <c>ColorTableEditor.DrawRenderingAsBadge</c>.</param>
+    public static void Pill(string text, Vector4 colour, float baselineOffset = 0f)
     {
         var pad  = PillPad;
         var pill = PillSize(text);
 
         var draw   = ImGui.GetWindowDrawList();
-        var screen = ImGui.GetCursorScreenPos();
+        var screen = ImGui.GetCursorScreenPos() + new Vector2(0f, baselineOffset);
         var round  = S(3f);
         draw.AddRectFilled(screen, screen + pill, ImGui.GetColorU32(colour.WithAlpha(0.16f)), round);
         draw.AddRect(screen, screen + pill, ImGui.GetColorU32(colour.WithAlpha(0.55f)), round);
 
         // Submit the label inset into the badge, then rewind and reserve the badge itself, so the LAST
         // item is the pill and not the text. Same rewind idiom as the right-aligned header button.
+        //
+        // The label is NOT offset here — ImGui applies baselineOffset to it for us — while the reservation
+        // IS, so the item rect keeps covering what was actually painted.
         var local = ImGui.GetCursorPos();
         ImGui.SetCursorPos(local + pad);
         ImGui.TextColored(colour, text);
-        ImGui.SetCursorPos(local);
+        ImGui.SetCursorPos(local + new Vector2(0f, baselineOffset));
         ImGui.Dummy(pill);
     }
 

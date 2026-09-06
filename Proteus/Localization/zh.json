@@ -491,6 +491,10 @@
     "message": "颜色",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "发光",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "物理属性",
     "description": ""
