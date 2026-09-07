@@ -280,6 +280,62 @@ public class BustBridgeTests
     }
 
     [Fact]
+    public void TwoLayersWithDifferentCoverageSpanIdentically()
+    {
+        var (pos, nrm, tris, bust) = Chest();
+
+        // Two mods on one host, both spanning, with DIFFERENT coverage: a bodysuit that reaches the flanks
+        // and a bralette that stops at the cups. Solved per layer they reach different heights across the
+        // same cleavage, and wherever the lower one lifts further it comes through the upper — which is
+        // what the bralette's lace punching through the bodysuit was.
+        //
+        // The shells are separated by a push along the normal AFTER this, so the ONLY thing that keeps the
+        // stack in order is the two displacements being equal. This asserts that directly, against the two
+        // coverages the writer would otherwise have used one each.
+        var wide = new bool[pos.Length];
+        var narrow = new bool[pos.Length];
+        for (int i = 0; i < pos.Length; i++)
+        {
+            float ax = MathF.Abs(pos[i].X);
+            wide[i] = ax < 0.18f;
+            narrow[i] = ax < 0.13f;
+        }
+
+        // The union is what the host solves once with — the writer builds it in Build().
+        var union = new bool[pos.Length];
+        for (int i = 0; i < pos.Length; i++) union[i] = wide[i] || narrow[i];
+
+        var shared = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: union);
+        Assert.NotNull(shared);
+
+        // Per-layer solves must differ — otherwise this test proves nothing about sharing.
+        var perWide = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: wide);
+        var perNarrow = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: narrow);
+        Assert.NotNull(perWide);
+        Assert.NotNull(perNarrow);
+        float spread = 0f;
+        for (int i = 0; i < pos.Length; i++)
+            spread = MathF.Max(spread, MathF.Abs(perWide!.Delta[i].Z - perNarrow!.Delta[i].Z));
+        Assert.True(spread > 1e-4f,
+            "the two coverages produce the same displacement anyway — this fixture cannot detect crossing");
+
+        // Sharing keeps the stack in order only if the one plan is also not WORSE than either layer's own —
+        // fixing a crossing by flattening less is not a fix. Compared across the CLEAVAGE rather than per
+        // vertex: the bands, and so the chords, are derived from the region, so a wider region shifts
+        // individual vertices by a hair in both directions. What must not move is how far the span gets.
+        float Cleavage(SecondSkinWriter.BustBridgePlan p)
+        {
+            float best = 0f;
+            for (int i = 0; i < pos.Length; i++)
+                if (MathF.Abs(pos[i].X) < 0.04f) best = MathF.Max(best, p.Delta[i].Z);
+            return best;
+        }
+        float s = Cleavage(shared!), a = Cleavage(perWide!), b = Cleavage(perNarrow!);
+        Assert.True(s >= a - 1e-4f && s >= b - 1e-4f,
+            $"the shared span ({s:0.#####}) falls short of a per-layer one ({a:0.#####} / {b:0.#####})");
+    }
+
+    [Fact]
     public void DeclinesOnAnAlreadyConvexSurface()
     {
         // One lobe, no valley: a shoulder or an upper arm that happens to carry a little bust weight. The

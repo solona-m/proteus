@@ -795,6 +795,63 @@ public static class SecondSkinWriter
         // Same predicate as that test, hoisted. Keeping the two in step matters — a layer that wants a cap
         // and finds none chosen renders sleeved toes, which is the fault this whole path exists to avoid.
         bool anyLayerWantsCap = layers.Any(l => l.ToeCap != null && l.ToeCapStrength > 0f);
+
+        // ── the bust bridge is solved ONCE for the host, not once per layer ──────────────────────────
+        //
+        // STACK ORDER IS THE REASON. Shells sit a fifth of a millimetre apart and render in layer order,
+        // and a per-layer solve breaks that: each layer's region is gated on its OWN coverage, so two mods
+        // that both span — a bodysuit and a bralette over it — reach different heights across the same
+        // cleavage, and wherever the lower one lifts further it comes through the upper one. Seen exactly
+        // that way in game: the bralette's lace punching through the bodysuit it sits under.
+        //
+        // One displacement for every spanning layer keeps them exactly LayerSeparation apart, because the
+        // push that separates them is applied along the normal AFTER this and is untouched by it. The
+        // coverage handed to the solve is the UNION of the spanning layers', so the region is "where any
+        // of this host's spanning cloth is" — a layer whose own cloth stops earlier still moves with the
+        // rest there, and the triangles it does not draw are trimmed away regardless.
+        //
+        // It is also the cheap way round: the solve costs tens of milliseconds per mesh and was being paid
+        // once per layer per mesh for an answer that could not legitimately differ.
+        var bridgeLayers = layers.Where(l => l.BustBridgeStrength > 0f).ToList();
+        float bridgeStrength = bridgeLayers.Count == 0 ? 0f : bridgeLayers.Max(l => l.BustBridgeStrength);
+        SecondSkinLayer? bridgeDef = null;
+        if (bridgeLayers.Count > 0)
+        {
+            // A spanning layer with no coverage map paints everything, so the union is everything and the
+            // gate falls away — which is what a null Coverage already means downstream.
+            var sized = bridgeLayers.Where(l => l.Coverage != null && l.CoverageWidth > 0 && l.CoverageHeight > 0)
+                                    .ToList();
+            byte[]? union = null;
+            int uw = 0, uh = 0;
+            if (sized.Count == bridgeLayers.Count && sized.Count > 0)
+            {
+                uw = sized[0].CoverageWidth; uh = sized[0].CoverageHeight;
+                if (sized.All(l => l.CoverageWidth == uw && l.CoverageHeight == uh
+                                && l.Coverage!.Length >= uw * uh))
+                {
+                    union = (byte[])sized[0].Coverage!.Clone();
+                    for (int k = 1; k < sized.Count; k++)
+                    {
+                        var c = sized[k].Coverage!;
+                        for (int p = 0; p < union.Length; p++) if (c[p] > union[p]) union[p] = c[p];
+                    }
+                }
+            }
+            bridgeDef = new SecondSkinLayer
+            {
+                MaterialName = "/bridge.mtrl",       // never emitted; this carries coverage and strength only
+                Coverage = union,
+                CoverageWidth = union == null ? 0 : uw,
+                CoverageHeight = union == null ? 0 : uh,
+                BustBridgeStrength = bridgeStrength,
+            };
+            diag?.Invoke($"bust bridge: one solve for {bridgeLayers.Count} spanning layer(s) at strength "
+                       + $"{bridgeStrength:0.##}, coverage "
+                       + (union == null ? "union unavailable — spanning every bust vertex" : $"{uw}x{uh} union"));
+        }
+        // Per SOURCE MESH, so every layer of this host reuses the one answer.
+        var bridgePlans = new Dictionary<(Source, int), BustBridgePlan?>();
+        var bridgeWeights = new Dictionary<(Source, int), float[]?>();
         if (authoredCaps is { Count: > 0 } && anyLayerWantsCap)
         {
             // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
@@ -1447,12 +1504,32 @@ public static class SecondSkinWriter
                 // to know which vertices are on the bust, and that is settled from the mesh's BONE TABLE
                 // before any vertex is read — every mesh of the body but the torso names neither bust bone
                 // and drops out for the cost of one walk over a handful of names.
-                var bustWeights = cov is { BustBridgeStrength: > 0f }
-                    ? MeshBustWeights(src, m, vc, decl, vbo, bs)
-                    : null;
+                //
+                // Asked of the HOST's shared definition, not this layer's, so every spanning layer gets the
+                // same answer and the stack keeps its order. Memoised per mesh; only the first layer to
+                // reach a mesh pays for it.
+                float[]? bustWeights = null;
+                if (bridgeDef != null && cov is { BustBridgeStrength: > 0f })
+                {
+                    if (!bridgeWeights.TryGetValue((src, m), out bustWeights))
+                        bridgeWeights[(src, m)] = bustWeights = MeshBustWeights(src, m, vc, decl, vbo, bs);
+                }
                 var capTris = wantCap || bustWeights != null
                     ? MeshTriangles(src, srcSubIdx, srcSubCount)
                     : null;
+
+                // The solve itself, deferred until BuildVerbatim has normalised the mesh's UVs onto the
+                // tile the coverage map is indexed over — it cannot run before that and must not run twice.
+                Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null;
+                if (bustWeights is { } bw && bridgeDef != null)
+                    bridge = (bPos, bNrm, bTris, bUv) =>
+                    {
+                        if (bridgePlans.TryGetValue((src, m), out var cached)) return cached;
+                        var plan = BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
+                                                   CoveredVertices(bUv, bridgeDef, bPos.Length));
+                        bridgePlans[(src, m)] = plan;
+                        return plan;
+                    };
                 // Which side of the body each vertex is on, when the conversion needs to tell them apart.
                 // Read from the triangles rather than each vertex's own X, because the midline vertices —
                 // exactly the ones a mirrored layout puts a UV seam through — sit at x ~ 0 and can't answer
@@ -1474,7 +1551,7 @@ public static class SecondSkinWriter
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
                     out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, diag,
-                    buildCapGeometry: capSrc == null, bustWeights: bustWeights);
+                    buildCapGeometry: capSrc == null, bridge: bridge);
                 if (src.UvConv != null) uvMoved += vc;
 
                 // The tile normalization above shifts a mesh by the integer floor of its MINIMUM uv, which
@@ -4558,7 +4635,7 @@ public static class SecondSkinWriter
         sbyte[]? sides = null,
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
         bool buildCapGeometry = true,
-        float[]? bustWeights = null)
+        Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null)
     {
         int uvUnmapped = 0;
         uvsPreConv = null;
@@ -4681,12 +4758,11 @@ public static class SecondSkinWriter
             capPlan = plan;
 
             // The bust bridge, on the same footing: another displacement of the vertices this mesh already
-            // has. Its region is gated on coverage here rather than inside the solver so the solver stays
-            // a pure geometry pass — and because uvs[] is only now on the [0,1] tile the coverage map is
-            // indexed over.
-            var bridge = bustWeights is not null && cap is { BustBridgeStrength: > 0f } && capTris is not null
-                ? BustBridgeSolve(basePos, baseNrm, capTris, bustWeights, cap.BustBridgeStrength, capLog,
-                                  CoveredVertices(uvs, cap, vc))
+            // has. Resolved through the caller's own memo rather than solved here, so every layer of a host
+            // shares one answer and the stack keeps its order; it can only run at this point because the
+            // region is gated on coverage and uvs[] is only now on the tile that map is indexed over.
+            var bridgePlan = bridge is not null && capTris is not null
+                ? bridge(basePos, baseNrm, capTris, uvs)
                 : null;
 
             // Normals recomputed from the REBUILT surface — the source triangles minus the ones the cut
@@ -4696,9 +4772,9 @@ public static class SecondSkinWriter
             // push along a stale normal drives the two sides of the span apart.
             var finalNrm = plan is not null
                 ? CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!))
-                : bridge is not null
-                    ? RelaxedNormals(basePos, baseNrm, bridge.Delta, bridge.NodeOf, bridge.NodeWeight,
-                                     bridge.NodeNormal, capTris!)
+                : bridgePlan is not null
+                    ? RelaxedNormals(basePos, baseNrm, bridgePlan.Delta, bridgePlan.NodeOf, bridgePlan.NodeWeight,
+                                     bridgePlan.NodeNormal, capTris!)
                     : baseNrm;
 
             int stride = outStrides[pw.Stream];
@@ -4711,9 +4787,9 @@ public static class SecondSkinWriter
                 var p = basePos[i];
                 var n = finalNrm[i];
                 if (delta is not null) p = new Vec3(p.X + delta[i].X, p.Y + delta[i].Y, p.Z + delta[i].Z);
-                if (bridge is not null)
+                if (bridgePlan is not null)
                 {
-                    var bd = bridge.Delta[i];
+                    var bd = bridgePlan.Delta[i];
                     p = new Vec3(p.X + bd.X, p.Y + bd.Y, p.Z + bd.Z);
                 }
 
@@ -4724,7 +4800,7 @@ public static class SecondSkinWriter
                 // Only vertices the cap or the bridge actually reached get a new normal; everything else
                 // keeps the bytes it arrived with. The normal element has its own stream — not pos's.
                 bool reshade = plan is not null && plan.NodeWeight[plan.NodeOf[i]] > 0f
-                            || bridge is not null && bridge.NodeWeight[bridge.NodeOf[i]] > 0f;
+                            || bridgePlan is not null && bridgePlan.NodeWeight[bridgePlan.NodeOf[i]] > 0f;
                 if (reshade && norm is { } ne2)
                 {
                     if (WriteNormal(outStreams[ne2.Stream], i * outStrides[ne2.Stream] + ne2.Offset, ne2.Type,
@@ -4787,7 +4863,7 @@ public static class SecondSkinWriter
             // so far, so finalNrm above takes the cap's rebuilt topology and the bridge rides its
             // positions without reshading. Said out loud rather than assumed away — if a body ever puts
             // both on one mesh, the shading is what will look wrong, and this is the line that explains it.
-            if (plan is not null && bridge is not null)
+            if (plan is not null && bridgePlan is not null)
                 capLog?.Invoke("bust bridge: this mesh also carries a toe cap — the cap's normals win, the "
                              + "bridge moves positions only");
         }
