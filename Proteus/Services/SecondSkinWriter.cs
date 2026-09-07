@@ -7444,19 +7444,31 @@ public static class SecondSkinWriter
 
     /// <summary>
     /// Steepest the bridge's displacement may change between two vertices, as a ratio to the distance
-    /// between them — about 56° of tilt away from the shell it grows out of.
+    /// between them — about 39° of tilt away from the shell it grows out of.
     /// <para/>
     /// This is what bounds the fade in mesh terms rather than in vertex counts. A garment cannot lift a
     /// centimetre three vertices from its own edge without tearing, however the coverage map happens to
     /// have cut it — and the first build in game tore exactly there, at a slope around 10.
     /// <para/>
-    /// Chosen by measuring, not by taste: swept against a real torso, 1.5 and above all leave the span at
-    /// 83.3% of the dish (the construction never asks for more than that on sound geometry) while 1.0 cuts
-    /// it to 58% and 0.5 to 29%. So this is the loosest value that costs nothing where the geometry is
-    /// right, which is exactly what a safety limit should be — it must not be quietly shaping the result
-    /// in the ordinary case.
+    /// Chosen by measuring. Swept against a real torso with the axis and the fade as they now stand:
+    /// <code>
+    ///   slope   mean dish left   edges steeper than 1.0
+    ///   0.4         0.00591            0
+    ///   0.6         0.00494            0
+    ///   0.8         0.00440            0
+    ///   1.0         0.00419           72
+    ///   1.5         0.00412          146
+    /// </code>
+    /// Above 0.8 the span stops improving — 0.00412 against 0.00440, under 1% of the 0.01101 it started
+    /// from — and all that is bought is folds of 45° and steeper. Those are not smoothed by anything
+    /// afterwards and read as a jagged notch along a garment's edge, which is how this was found.
+    /// <para/>
+    /// It was 1.5 first, on a sweep taken before the axis was corrected and while a four-ring ramp was
+    /// still eating a third of the span. Both of those made a loose limit look free. Re-measure this
+    /// whenever either changes — a safety limit that has quietly become the thing shaping the result is
+    /// exactly what it should never be.
     /// </summary>
-    private const float BustMaxSlope = 1.5f;
+    private const float BustMaxSlope = 0.8f;
 
     /// <summary>
     /// How many times the slope limit is swept before giving up. One pass propagates one edge, and a
@@ -8221,13 +8233,19 @@ public static class SecondSkinWriter
 
             var c0 = Chord(b0, lat[n]);
             var c1 = Chord(b1, lat[n]);
-            // Outside the apexes in either band, that band contributes nothing rather than an
-            // extrapolation — the other one carries the blend on its own.
+            // A band with no chord at this lateral position — past its own apexes — contributes the node's
+            // OWN height, meaning "no span here", and the blend fades toward that.
+            //
+            // Handing the blend over to whichever band still has a chord is the obvious alternative and it
+            // steps: adjacent bands have slightly different apex positions, so a node just past one band's
+            // apex jumped from a half-blended lift to a full one while its neighbour a row away did not.
+            // That put a notch in the garment's edge, at band granularity, following the band boundary —
+            // the jagged bit reported on a bralette strap. Fading to no-lift keeps it continuous.
             float want = (c0, c1) switch
             {
                 ({ } a, { } b) => a + (b - a) * mix,
-                ({ } a, null)  => a,
-                (null, { } b)  => b,
+                ({ } a, null)  => a + (h0[n] - a) * mix,
+                (null, { } b)  => h0[n] + (b - h0[n]) * mix,
                 _              => float.MinValue,
             };
             if (want <= h0[n]) continue;   // already at or in front of the chord — a breast, or its flank
