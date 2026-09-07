@@ -7942,18 +7942,23 @@ public static class SecondSkinWriter
             }
 
             map ??= new byte[size * size];
-            // MAX over the triangle, not interpolated. This gates a groove off, so overstating the lifted
-            // area by a texel loses nothing while understating it leaves a sliver of seam drawn under cloth
-            // that is not touching — and the same conservative choice, for the same reason, as the cap's
-            // footprint rasteriser above.
+            // INTERPOLATED across the triangle, not the max of its corners.
+            //
+            // The max is the obvious choice for a conservative gate and it leaves a visible seam. The lift
+            // runs to forty times the contact threshold, so the map's boundary is where lift falls through
+            // a value it crosses steeply — and taking the corner max there makes that boundary follow the
+            // body's TRIANGLE EDGES rather than the contour of the lift. At a 4K map a body triangle spans
+            // more texels than the feather that follows, so the facets survive it: a hard, straight,
+            // stepped line of suppression across the ribs.
+            //
+            // Sub-texel triangles keep the conservative footprint fill — point-sampling a mesh finer than
+            // the map it writes into leaves a dotted mask rather than a solid one, which is the same trap
+            // CapFootprintMask documents.
             for (int t = 0; t + 2 < fTri.Length; t += 3)
             {
                 int a = fTri[t], b = fTri[t + 1], c = fTri[t + 2];
                 if (a >= vc || b >= vc || c >= vc) continue;
-                float m = MathF.Max(lift[a], MathF.Max(lift[b], lift[c]));
-                if (m <= BustBridgeEpsilon) continue;
-                byte v = (byte)Math.Clamp(MathF.Round(m / fullAt * 255f), 0f, 255f);
-                if (v == 0) continue;
+                if (MathF.Max(lift[a], MathF.Max(lift[b], lift[c])) <= BustBridgeEpsilon) continue;
 
                 float ax = fUv[a * 2] * size, ay = fUv[a * 2 + 1] * size;
                 float bx = fUv[b * 2] * size, by = fUv[b * 2 + 1] * size;
@@ -7963,13 +7968,33 @@ public static class SecondSkinWriter
                 int y0 = (int)MathF.Floor(MathF.Min(ay, MathF.Min(by, cy)));
                 int y1 = (int)MathF.Ceiling(MathF.Max(ay, MathF.Max(by, cy)));
                 if ((long)(x1 - x0 + 1) * (y1 - y0 + 1) > 1 << 18) continue;   // straddles a UV seam
+
+                float det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+                bool tiny = x1 - x0 <= 2 && y1 - y0 <= 2;
+                byte flat = (byte)Math.Clamp(
+                    MathF.Round(MathF.Max(lift[a], MathF.Max(lift[b], lift[c])) / fullAt * 255f), 0f, 255f);
+
                 for (int y = y0; y <= y1; y++)
                 {
                     int wy = (y % size + size) % size;
                     for (int x = x0; x <= x1; x++)
                     {
-                        int wx = (x % size + size) % size;
-                        int p = wy * size + wx;
+                        byte v;
+                        if (tiny || MathF.Abs(det) < 1e-9f) v = flat;
+                        else
+                        {
+                            float px = x + 0.5f, py = y + 0.5f;
+                            float l0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
+                            float l1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
+                            float l2 = 1f - l0 - l1;
+                            // A small negative margin keeps neighbouring triangles from leaving a seam of
+                            // untouched texels between them; the values agree along a shared edge anyway.
+                            if (l0 < -0.02f || l1 < -0.02f || l2 < -0.02f) continue;
+                            float m = l0 * lift[a] + l1 * lift[b] + l2 * lift[c];
+                            v = (byte)Math.Clamp(MathF.Round(m / fullAt * 255f), 0f, 255f);
+                        }
+                        if (v == 0) continue;
+                        int p = wy * size + (x % size + size) % size;
                         if (map[p] < v) map[p] = v;
                     }
                 }

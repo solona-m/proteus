@@ -179,6 +179,63 @@ public class BustBridgeDiagTests
         Assert.True(full > lit * 0.75, $"only {full} of {lit} lifted texels are past {fullAt}");
     }
 
+    /// <summary>
+    /// The map's edge must be a GRADIENT, not a step.
+    /// <para/>
+    /// The lift runs far past the contact threshold and falls off steeply, so the map is very nearly
+    /// binary — and taking the maximum over each triangle made its boundary follow the body's triangle
+    /// edges. Gating the skindent on that drew a hard faceted line of suppression across the ribs, plainly
+    /// visible in game. This measures the thing that was wrong: how many texels change by a large step
+    /// against their neighbour. A contour that follows the interpolated lift has almost none.
+    /// </summary>
+    [Fact]
+    public void StandoffMapEdgeIsAGradientNotAStep()
+    {
+        if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
+
+        const int size = 1024;
+        var map = SecondSkinWriter.BustStandoffMap(
+            new[] { File.ReadAllBytes(Torso) }, null, 0, 0, 1f, size, 0.0015f);
+        Assert.NotNull(map);
+
+        int edges = 0, harsh = 0, worst = 0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x + 1 < size; x++)
+            {
+                int p = y * size + x;
+                int d = Math.Abs(map![p] - map[p + 1]);
+                if (map[p] == 0 && map[p + 1] == 0) continue;
+                edges++;
+                if (d > worst) worst = d;
+                if (d > 64) harsh++;
+            }
+        o.WriteLine($"{edges} texel pairs inside the map, {harsh} jump by more than 64/255, worst {worst}");
+        Assert.True(edges > 0);
+        // Some jump is unavoidable at the outermost texel, where the map meets nothing at all — and the
+        // compositor feathers the whole thing by the indent's own radius afterwards. What must not happen
+        // is a large fraction of the boundary stepping at once, which is what facets look like.
+        Assert.True(harsh < edges * 0.06,
+            $"{harsh} of {edges} texel pairs step by more than a quarter — the edge is faceted, not smooth");
+
+        // ...and after the feather the compositor applies, which is the map that actually gates the
+        // indent, nothing should step at all. This is the end-to-end version of the same measurement.
+        int radius = Math.Max(1, (int)(size * 0.003f));   // the default AO softness
+        var soft = CompositorService.BlurCoverage(map!, size, size, radius);
+        int softHarsh = 0, softWorst = 0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x + 1 < size; x++)
+            {
+                int p = y * size + x;
+                if (soft[p] == 0 && soft[p + 1] == 0) continue;
+                int d = Math.Abs(soft[p] - soft[p + 1]);
+                if (d > softWorst) softWorst = d;
+                if (d > 64) softHarsh++;
+            }
+        o.WriteLine($"after feathering by {radius}: {softHarsh} harsh pairs, worst step {softWorst}");
+        Assert.True(softHarsh == 0,
+            $"{softHarsh} texel pairs still step after feathering (worst {softWorst})");
+    }
+
     private static void WriteObj(string path, SecondSkinWriter.Vec3[] pos, ushort[] tris)
     {
         using var w = new StreamWriter(path);

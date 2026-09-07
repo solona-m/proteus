@@ -6397,7 +6397,7 @@ public class CompositorService : IDisposable
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
                                         wN == wD && hN == hD ? coveredAbove : null, radiusN,
                                         wN == wD && hN == hD ? insidePlane : null,
-                                        BustStandoff(modDir, bodyMdls, strapN, wN, hN));
+                                        BustStandoff(modDir, bodyMdls, strapN, wN, hN, radiusN));
                                     aoIndentedNormal = true;
                                 }
                             }
@@ -7326,15 +7326,22 @@ public class CompositorService : IDisposable
     /// skindent — see <see cref="SecondSkinWriter.BustStandoffMap"/>. Null for a mod with no bust bridge,
     /// which is every mod by default and the only cost they pay for this.
     /// <para/>
+    /// BLURRED by the indent's own radius before it is used, and that is not cosmetic. The lift runs to
+    /// forty times the contact threshold and falls to nothing across the last few percent of the region,
+    /// so as a raw threshold the map is very nearly binary and its edge follows the body's TRIANGULATION.
+    /// Gating the indent on that put a hard faceted seam across the ribs — the suppression switching fully
+    /// off along a line of triangle edges. Blurring at the same radius the indent's own gradient spans
+    /// makes the two fade over one distance instead of one cutting the other off.
+    /// <para/>
     /// CACHED, because it runs the bridge's whole solve over every body model and the skin bake would
     /// otherwise pay for that on each composite, for each material, having changed nothing. The key is the
     /// mod, the body models' own identity (already computed for the seam map — path plus size and mtime,
-    /// so a re-exported body invalidates it) and the size asked for. The garment silhouette is NOT in the
-    /// key: it only decides which vertices qualify, the map is a coarse gate, and hashing a 4K buffer per
-    /// mod per material to sharpen a suppression mask is not a trade worth making.
+    /// so a re-exported body invalidates it), the size, and the blur radius. The garment silhouette is NOT
+    /// in the key: it only decides which vertices qualify, the map is a coarse gate, and hashing a 4K
+    /// buffer per mod per material to sharpen a suppression mask is not a trade worth making.
     /// </summary>
     private byte[]? BustStandoff(string modDir, IReadOnlyList<UvSeamMapService.SeamModel>? models,
-                                 byte[]? coverage, int w, int h)
+                                 byte[]? coverage, int w, int h, int radius)
     {
         if (models is not { Count: > 0 } || w <= 0 || w != h) return null;
         var entry = discovery.DiscoverAll().FirstOrDefault(e =>
@@ -7343,7 +7350,7 @@ public class CompositorService : IDisposable
         float strength = Math.Clamp(entry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
         if (strength <= 0f) return null;
 
-        var key = $"{modDir}\0{w}\0{strength}\0{string.Join("|", models.Select(m => m.Id))}";
+        var key = $"{modDir}\0{w}\0{radius}\0{strength}\0{string.Join("|", models.Select(m => m.Id))}";
         if (_bustStandoff.TryGetValue(key, out var hit)) return hit;
 
         var bodies = new List<byte[]>(models.Count);
@@ -7356,9 +7363,14 @@ public class CompositorService : IDisposable
             ? null
             : SecondSkinWriter.BustStandoffMap(bodies, coverage, w, h, strength, w, BustStandoffFull,
                                                msg => log.Debug("[Proteus] bust standoff: {0}", msg));
+        // Feather it out to the same distance the indent's own gradient spans, so the two meet as one
+        // fade rather than as a cut. Blurring RAISES the surrounding texels a little as well as softening
+        // the core, which errs toward suppressing slightly more skindent than strictly necessary — the
+        // safe direction, since the cost is a missing groove and the cost the other way is a visible seam.
+        if (map != null && radius >= 1) map = BlurCoverage(map, w, h, radius);
         _bustStandoff[key] = map;
-        log.Debug("[Proteus] bust standoff: {0} for {1} at {2} ({3} body model(s))",
-                  map == null ? "no map" : "built", modDir, w, bodies.Count);
+        log.Debug("[Proteus] bust standoff: {0} for {1} at {2}, feathered by {3} ({4} body model(s))",
+                  map == null ? "no map" : "built", modDir, w, radius, bodies.Count);
         return map;
     }
 
