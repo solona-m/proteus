@@ -1767,6 +1767,30 @@
     "message": "Colors",
     "description": "Opens the colour editor. Narrow table column - keep short."
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "This mod's Proteus data names the option group(s) {0}, which Penumbra's copy of the mod hasn't got — renamed or dropped when it was re-exported. Only its author can fix that.",
+    "description": "Why a mod that is switched on paints nothing. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, NOT a fixed-width column label, so full sentences are correct here. {0} is a comma-joined list of Penumbra option-group names written by the mod's author: leave them exactly as they arrive. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked in its \"{0}\" group in Penumbra.",
+    "description": "Why a mod that is switched on paints nothing. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is the Penumbra group name for masks, always the literal English \"Masks\" (it is the author's own group name and arrives already untranslated) - keep the quotes around it. \"Penumbra\" is a product name and is never translated. \"Gear\" here means worn equipment as opposed to skin."
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Its ticked options resolved, but none of them reached a surface this character has loaded.",
+    "description": "Why a mod that is switched on paints nothing - the fallback used when no more specific reason was found. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. \"Surface\" means a body/equipment material on the character."
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Nothing is ticked in Penumbra. This mod's {0} option group(s) — {1} — are all empty, so it paints nothing. Open it in Penumbra and tick an option in each.",
+    "description": "Why a mod that is switched on paints nothing - the most common reason, and what a freshly installed mod shows. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is a count of option groups; {1} is their names, comma-joined - Penumbra group names written by the mod's author, so leave them exactly as they arrive. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra didn't answer when Proteus asked which of this mod's options are on.",
+    "description": "Why a mod that is switched on paints nothing - Penumbra could not be queried, so nothing could be determined. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.",
+    "description": "Why a mod that is switched on paints nothing - it is built for other body types or races. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is what the mod paints and {1} is what the character is, both in the form \"bibo · Midlander F, Viera F\": a body-mod name, a middle dot, then FFXIV race names with M/F for the gender. Both arrive already built and untranslated - insert them verbatim."
+  },
   "Mods.NoSidecarMods": {
     "message": "No Proteus sidecar mods detected.",
     "description": "Appears in the Mods tab."

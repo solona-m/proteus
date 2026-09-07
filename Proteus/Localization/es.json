@@ -1767,6 +1767,30 @@
     "message": "Colores",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Los datos de Proteus de este mod nombran el grupo o los grupos de opciones {0}, que la copia del mod en Penumbra no tiene: se renombraron o se eliminaron al reexportarlo. Solo quien lo creó puede arreglarlo.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Sus máscaras se renderizan como equipo, y para eso hace falta una máscara con la que construir la prenda; en su grupo «{0}» de Penumbra no hay nada marcado.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Sus opciones marcadas se resolvieron, pero ninguna llegó a una superficie que este personaje tenga cargada.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "No hay nada marcado en Penumbra. Los {0} grupo(s) de opciones de este mod —{1}— están todos vacíos, así que no pinta nada. Ábrelo en Penumbra y marca una opción en cada uno.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra no respondió cuando Proteus preguntó qué opciones de este mod están activas.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Este mod pinta {0}, y tú eres {1}. Nada de lo que incluye encaja con el cuerpo que llevas.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "No se han detectado mods con archivo Proteus.",
     "description": ""

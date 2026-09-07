@@ -1767,6 +1767,30 @@
     "message": "Цвета",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Данные Proteus этого мода ссылаются на группы параметров {0}, которых нет в копии мода у Penumbra: они были переименованы или удалены при повторном экспорте. Исправить это может только автор.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Его маски отображаются как экипировка, а одежда строится именно из маски — но в группе «{0}» в Penumbra ничего не отмечено.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Отмеченные параметры обработаны, но ни один из них не достиг поверхности, загруженной этим персонажем.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "В Penumbra ничего не отмечено. Все {0} групп(ы) параметров этого мода — {1} — пусты, поэтому он ничего не рисует. Откройте его в Penumbra и отметьте по параметру в каждой.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra не ответила, когда Proteus запросил, какие параметры этого мода включены.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Этот мод рисует {0}, а вы — {1}. Ничто из того, что он содержит, не подходит к вашему телу.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Моды с сопроводительным файлом Proteus не найдены.",
     "description": ""

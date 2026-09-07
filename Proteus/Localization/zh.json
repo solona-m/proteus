@@ -1767,6 +1767,30 @@
     "message": "颜色",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "此模组的 Proteus 数据指定了选项组 {0}，但 Penumbra 中的模组副本没有这些组——重新导出时被改名或删除了。只有作者才能修复。",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "它的遮罩被设置为按装备渲染，而衣物需要用遮罩来构建——但在 Penumbra 中它的“{0}”组里没有勾选任何内容。",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "已勾选的选项都已解析，但没有一个抵达此角色已加载的表面。",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Penumbra 中没有勾选任何内容。此模组的 {0} 个选项组（{1}）全都是空的，因此不会绘制任何东西。请在 Penumbra 中打开它，并在每个组里勾选一个选项。",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Proteus 询问此模组的哪些选项已启用时，Penumbra 没有响应。",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "此模组绘制的是 {0}，而你是 {1}。它提供的内容都不适合你当前的身体。",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "未检测到带 Proteus 附属文件的模组。",
     "description": ""

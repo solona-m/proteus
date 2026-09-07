@@ -249,6 +249,15 @@ public class CompositorService : IDisposable
         => secondSkin.UnwearableContent.TryGetValue(modDir, out var why) ? why : null;
 
     /// <summary>
+    /// Why <paramref name="modDir"/> is switched on and yet contributed nothing to the last composite, or
+    /// null when it contributed something. See <see cref="InertReason"/> — this is the tier above
+    /// <see cref="GetUnwearableContentReason"/>: that one explains a pack whose pieces cannot be worn,
+    /// this one explains a mod that never got as far as having pieces to try.
+    /// </summary>
+    public InertReason? GetInertReason(string modDir)
+        => _inertMods.TryGetValue(modDir, out var r) ? r : null;
+
+    /// <summary>
     /// What the last shell build published, split by kind, for the drawn check after the redraw — see
     /// <see cref="SchedulePostRedrawShellCheck"/>.
     ///
@@ -430,6 +439,16 @@ public class CompositorService : IDisposable
     // a mask that covers the art, an opacity slider at the bottom of its range — and a composite runs on
     // every gear change, so without this one hidden overlay writes a log line every few seconds.
     private readonly ConcurrentDictionary<string, byte> _erasureReported = new(StringComparer.Ordinal);
+    // Mods already reported (this session) as contributing nothing at all, keyed by the whole reason and
+    // not just the mod — for the reason above. Someone who ticks an option and STILL sees nothing, now
+    // because the pack is for another race, has to be told the second thing; keying on the mod alone
+    // swallows exactly the half that would have helped them.
+    private readonly ConcurrentDictionary<string, byte> _inertReported = new(StringComparer.Ordinal);
+    // Why each enabled mod contributed nothing to the last composite — see ExplainInertMods. Published as
+    // one whole-dictionary swap, the same contract SecondSkinService.UnwearableContent uses, so the UI
+    // never reads a half-built map. Normally empty.
+    private volatile IReadOnlyDictionary<string, InertReason> _inertMods =
+        new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -3754,6 +3773,11 @@ public class CompositorService : IDisposable
                 // would otherwise publish them, so without this they keep describing the shell that was
                 // standing before the last mod was switched off.
                 ClearShellLocators();
+                // Same again for the "contributes nothing" warnings. This return also skips
+                // ExplainInertMods, which is what normally clears them — and a mod switched OFF is not a
+                // mod that contributes nothing, so leaving its amber warning up would be a lie about a row
+                // the user has already dealt with.
+                _inertMods = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
 
                 // This branch publishes an empty manifest, which no fingerprint describes — and it satisfies
                 // whatever forced work was owed, since "no enabled mods" IS the requested result.
@@ -3853,6 +3877,25 @@ public class CompositorService : IDisposable
             // needs an un-mirrored shell.
             var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // ── inputs to ExplainInertMods ───────────────────────────────────────────────────────────
+            // Three facts a mod that contributes NOTHING needs, each of which was previously computed and
+            // discarded. Collected here rather than recovered later because none of them survives: the
+            // resolver's empty list, the filter's removal and the worn race are all gone by the time the
+            // composite knows whether the mod ended up contributing.
+            //
+            // Why the resolved race codes rather than a bool: the message worth reading names both sides
+            // ("paints Midlander F …, and you are Roegadyn F"), and a bool cannot be turned back into that.
+            var resolution = new Dictionary<string, ResolutionDiagnostic>(StringComparer.OrdinalIgnoreCase);
+            // Mods the live-material filter took a material away from. A set and not a map: a dropped
+            // material always has a char code that does not match the wearer, or none at all — the branch
+            // that KEEPS a matching race is above every removal — so which of the three removals it was
+            // adds nothing the ladder could act on, and the wants/have pair says it better anyway.
+            var filteredOut = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // The character's own race code(s) as the filter understood them. Hoisted out of the nested
+            // block below so the explanation can name what the wearer actually is; null until the filter
+            // runs, and legitimately EMPTY mid-redraw, which the ladder has to treat as "don't know".
+            HashSet<string>? wornCharCodes = null;
+
             // Is a toe cap selected ANYWHERE in the look? Asked once, across every mod, because a cap
             // belongs to the foot rather than to the mod that ships the map — the same reasoning that
             // hands the shell builder every entry rather than only those contributing a shell.
@@ -3900,9 +3943,14 @@ public class CompositorService : IDisposable
 
             foreach (var entry in entries)
             {
+                // Both halves of the pack's selection state, merged below. A pack can ship overlays and
+                // geometry at once, and a mod that resolves neither has to be explained by BOTH sets of
+                // groups — describing only the overlay half told a content pack's wearer their groups were
+                // empty when the group they had ticked was on the other side.
+                var contentDiag = ResolutionDiagnostic.None;
                 if (entry.Metadata.HasContent)
                 {
-                    var content = discovery.ResolveActiveContent(entry);
+                    var content = discovery.ResolveActiveContent(entry, out contentDiag);
                     // A restored design binding overrides the pack's colours in memory, exactly as it does
                     // for overlays below — metadata.json is never written.
                     if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var cOvr))
@@ -3919,7 +3967,8 @@ public class CompositorService : IDisposable
                     foreach (var c in content) contentLayers.Add((entry, c));
                 }
 
-                var overlays = discovery.ResolveActiveOverlays(entry);
+                var overlays = discovery.ResolveActiveOverlays(entry, out var diag);
+                resolution[entry.ModDirectory] = diag.Merge(contentDiag);
 
                 // Asymmetry is DECLARED, never measured here. It used to be probed on a null and written back
                 // to the mod, and that was wrong in a way no threshold could fix: a real skin texture is
@@ -4122,6 +4171,18 @@ public class CompositorService : IDisposable
                         log.Debug("[Proteus] Glamourer race override: snapshot={0} → displayed={1}",
                             _lastCompositedCharCodes ?? "none", glamCode!);
 
+                    // What the wearer IS, for the benefit of anything that later has to explain why a
+                    // pack authored for other races painted nothing. The effective set, not the raw
+                    // snapshot: an overlay is judged against the race Glamourer is displaying.
+                    wornCharCodes = effectiveCharCodes;
+
+                    // Noted before the removal, because the removal is what destroys the evidence.
+                    void NoteDropped(string key)
+                    {
+                        if (!byMaterial.TryGetValue(key, out var doomed)) return;
+                        foreach (var (e, _) in doomed) filteredOut.Add(e.ModDirectory);
+                    }
+
                     foreach (var key in byMaterial.Keys.Where(k => !activeMtrl.Contains(k)).ToList())
                     {
                         var keyBodyType = UVRemapService.InferBodyType(key);
@@ -4138,6 +4199,7 @@ public class CompositorService : IDisposable
                                     continue; // keep
                                 log.Debug("[Proteus] Skipping body material (active types={0}): {1}",
                                     _lastCompositedBodyType ?? "none", key);
+                                NoteDropped(key);
                                 byMaterial.Remove(key);
                             }
                             else
@@ -4148,6 +4210,7 @@ public class CompositorService : IDisposable
                                     && !effectiveCharCodes.Contains(keyCharCode))
                                 {
                                     log.Debug("[Proteus] Skipping body material (wrong race): {0}", key);
+                                    NoteDropped(key);
                                     byMaterial.Remove(key);
                                 }
                                 // else: same race, body type absent → keep (mid body-type switch)
@@ -4178,6 +4241,7 @@ public class CompositorService : IDisposable
                                 continue;   // keep — ours, and the snapshot simply hasn't caught up
 
                             log.Debug("[Proteus] Skipping non-equipped material: {0}", key);
+                            NoteDropped(key);
                             byMaterial.Remove(key);
                         }
                     }
@@ -4421,6 +4485,14 @@ public class CompositorService : IDisposable
                     && maskDescByMod.TryGetValue(entry.ModDirectory, out var md2)
                     && md2.Layer == OverlayLayer.Gear)
                     maskShellMods.Add(entry.ModDirectory);
+
+            // Every mod that is switched on has now had its chance to reach one of the four destinations a
+            // mod can reach, so this is the first point at which "contributed nothing" is a settled fact —
+            // and, because the sibling pass above puts back what the race filter took, the first point at
+            // which it is a TRUE one. See ExplainInertMods; the placement is load-bearing.
+            ExplainInertMods(entries, byMaterial, gearOverlays, contentLayers, maskShellMods,
+                             maskDescByMod, resolution, filteredOut, wornCharCodes, activeBodyTypes,
+                             allOverlays);
 
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
             //
@@ -8184,6 +8256,268 @@ public class CompositorService : IDisposable
     public IReadOnlyList<ChannelContribution> ChannelContributions() => _channelContributions;
 
     private volatile IReadOnlyList<ChannelContribution> _channelContributions = [];
+
+    /// <summary>
+    /// Why an enabled mod contributed nothing at all. Ordered as the ladder tests them, most specific
+    /// first — see <see cref="Explain"/>.
+    /// <para/>
+    /// A typed cause rather than a finished sentence, because the two consumers need different sentences
+    /// from the same fact: the log wants English (a log is a bug report, and a translated one cannot be
+    /// searched or pasted into an issue) and the status window wants the user's language.
+    /// </summary>
+    public enum InertCause
+    {
+        /// <summary>Not inert. Never stored; the absence of an entry is what says a mod is fine.</summary>
+        None,
+        /// <summary>Penumbra did not answer when asked which options are on, so nothing could be resolved.
+        /// Says nothing about the mod — only that we could not find out.</summary>
+        SettingsUnreadable,
+        /// <summary>Every option group the pack declares is absent from Penumbra's copy of the mod. An
+        /// authoring error: nothing in them can ever be ticked, so only the author can fix it.</summary>
+        GroupsMissing,
+        /// <summary>The groups are all there and the user has ticked nothing in any of them. By far the
+        /// most common cause, and the one a freshly installed pack lands on.</summary>
+        NothingTicked,
+        /// <summary>Options are ticked, but every material the pack paints belongs to a body or race this
+        /// character is not wearing.</summary>
+        WrongRace,
+        /// <summary>The pack's masks render as a gear shell, and a shell is built FROM a mask — so with no
+        /// mask ticked there is nothing to build, and the ticked fabric has nowhere to land.</summary>
+        MaskNeedsShell,
+        /// <summary>Options resolved and nothing was obviously wrong, but none of it reached a surface this
+        /// character has loaded. The honest "we don't know" rung.</summary>
+        NothingReached,
+    }
+
+    /// <summary>
+    /// One enabled mod's reason for contributing nothing, with the parts both formatters need already
+    /// joined into readable text — group names, race names — so the English log line and the localized
+    /// tooltip state the same facts and cannot drift apart.
+    /// </summary>
+    /// <param name="Cause">Which rung of the ladder matched.</param>
+    /// <param name="GroupCount">How many option groups the pack declares. Only set for
+    /// <see cref="InertCause.NothingTicked"/>.</param>
+    /// <param name="Groups">The groups involved, comma-joined and in the pack's own order.</param>
+    /// <param name="Wants">What the pack paints — bodies and races — for
+    /// <see cref="InertCause.WrongRace"/>.</param>
+    /// <param name="Have">What the character actually is, same shape as <paramref name="Wants"/>.</param>
+    public readonly record struct InertReason(
+        InertCause Cause, int GroupCount, string Groups, string Wants, string Have);
+
+    /// <summary>
+    /// Which rung one inert mod lands on, given everything already known about it. Pure and static so the
+    /// ladder can be tested without a compositor, a collection or a character — the impure half (deciding
+    /// WHICH mods are inert, publishing, logging) is <see cref="ExplainInertMods"/>.
+    /// <para/>
+    /// First match wins, and the order is the point: the rungs run most-specific first so a mod with two
+    /// things wrong is described by the one the user can act on. A pack whose groups were renamed on
+    /// re-export also has nothing ticked — saying "tick an option" there would send them to a Penumbra
+    /// window with nothing in it to tick.
+    /// </summary>
+    /// <param name="masksSelected">Mask options ticked, toe cap excluded — it is not a mask.</param>
+    /// <param name="maskLayerIsGear">The pack's Masks tab renders as a shell rather than onto the skin.</param>
+    /// <param name="materialsFiltered">The live-material filter dropped at least one of this mod's
+    /// materials AND the sibling pass did not put it back.</param>
+    /// <param name="wants">What the pack paints, already readable. Empty when unknown.</param>
+    /// <param name="have">What the character is, same shape. Empty when the snapshot could not say —
+    /// which is a real state mid-redraw, and must not be reported as a mismatch.</param>
+    internal static InertReason Explain(
+        ResolutionDiagnostic diag,
+        bool maskGroupPresent,
+        int masksSelected,
+        bool maskLayerIsGear,
+        bool materialsFiltered,
+        string wants,
+        string have)
+    {
+        // 1. We could not find out. Distinct from every rung below, all of which are statements about the
+        //    mod: this one is a statement about Penumbra, and it must not be dressed up as the others.
+        //    Only Unavailable — an ASKED question that went unanswered — counts. NotAsked is the healthy
+        //    state of a pack whose content none of the selection touches, and treating it as a failure
+        //    would make every unconditional pack look broken.
+        if (diag.Settings == SettingsRead.Unavailable)
+            return new InertReason(InertCause.SettingsUnreadable, 0, "", "", "");
+
+        // 2. The pack names groups Penumbra has not got. Only when ALL of them are missing — a pack with
+        //    one stale group name and three good ones is a mod the user simply hasn't ticked.
+        if (diag.GroupCount > 0 && diag.MissingGroups.Count == diag.GroupCount)
+            return new InertReason(InertCause.GroupsMissing, diag.GroupCount,
+                string.Join(", ", diag.MissingGroups), "", "");
+
+        // 3. Nothing is ticked anywhere. Masks count as a group here even though they are a convention
+        //    rather than a metadata.json entry: to the person looking at Penumbra they are one more list
+        //    with nothing selected in it, and a message that names the other two and omits the one that
+        //    builds the garment would send them back a second time.
+        int selectable = diag.GroupCount + (maskGroupPresent ? 1 : 0);
+        int untouched  = diag.EmptyGroups.Count + diag.MissingGroups.Count
+                       + (maskGroupPresent && masksSelected == 0 ? 1 : 0);
+        if (selectable > 0 && untouched == selectable)
+        {
+            var names = diag.EmptyGroups.Concat(diag.MissingGroups).ToList();
+            if (maskGroupPresent && masksSelected == 0) names.Add(SidecarDiscoveryService.MaskGroupName);
+            return new InertReason(InertCause.NothingTicked, selectable, string.Join(", ", names), "", "");
+        }
+
+        // 4. Ticked, but for a body nobody here is wearing. Requires a known wearer: mid-redraw the
+        //    snapshot legitimately reports no char code at all, and announcing a race mismatch off that
+        //    would accuse every correctly-authored pack once per race change.
+        if (materialsFiltered && have.Length > 0 && wants.Length > 0)
+            return new InertReason(InertCause.WrongRace, 0, "", wants, have);
+
+        // 5. Ticked fabric with nothing to cut it into. The masks are the garment's shape, and with the
+        //    Masks tab set to Gear the shape is also the only surface — so no mask means no shell, and the
+        //    fabric has nowhere to land.
+        if (maskLayerIsGear && masksSelected == 0)
+            return new InertReason(InertCause.MaskNeedsShell, 0,
+                SidecarDiscoveryService.MaskGroupName, "", "");
+
+        // 6. Everything resolved and none of it arrived. Says so plainly rather than guessing; a wrong
+        //    specific reason is worse than an honest vague one, because it sends the reader somewhere.
+        return new InertReason(InertCause.NothingReached, 0, "", "", "");
+    }
+
+    /// <summary>
+    /// Find every mod that is switched on and contributed nothing to this composite, work out why, publish
+    /// it for the status window and say it once in the log.
+    /// <para/>
+    /// WHERE THIS IS CALLED FROM IS PART OF THE DESIGN. It must run after sibling synthesis, which puts
+    /// back overlays the live-material filter dropped: a Bibo-authored pack on a gen3 body loses every
+    /// material to that filter and then gets every one of them back through the transfer maps, so a ladder
+    /// run any earlier would report "wrong race" about packs that are rendering perfectly. It must also run
+    /// after the second <c>maskShellMods</c> loop, because a mask shell is the fourth and last way a mod
+    /// can contribute and the set is not complete until then. Both make this the first honest moment.
+    /// <para/>
+    /// SCOPE. This answers "nothing this mod has got as far as being scheduled". A mod that DID reach the
+    /// gear phase and then lost its shell — no host with room, no cuttable surface, a race its pieces do
+    /// not fit — is not inert and is not described here; that is
+    /// <see cref="SecondSkinService.UnwearableContent"/>'s job, surfaced through
+    /// <see cref="GetUnwearableContentReason"/>. The <c>contributing</c> set below is exactly the boundary
+    /// between the two, which is why they can never both fire for the same mod.
+    /// </summary>
+    private void ExplainInertMods(
+        List<OverlayEntry> entries,
+        Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>> byMaterial,
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        HashSet<string> maskShellMods,
+        Dictionary<string, OverlayDescriptor> maskDescByMod,
+        Dictionary<string, ResolutionDiagnostic> resolution,
+        HashSet<string> filteredOut,
+        HashSet<string>? wornCharCodes,
+        HashSet<string> activeBodyTypes,
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays)
+    {
+        // The four destinations a mod can reach, unioned in one pass. Walking byMaterial per mod instead
+        // would be O(mods x materials x overlays) on the composite's hot path for an answer that is almost
+        // always "everything is fine".
+        //
+        // Materials the AO top-up added carry an EMPTY overlay list, so they contribute no mod here — which
+        // is right: a shadow cast onto a material by someone ELSE's gear is not this mod contributing.
+        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in byMaterial.Values)
+            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
+        foreach (var (e, _) in gearOverlays)  contributing.Add(e.ModDirectory);
+        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
+        foreach (var m in maskShellMods)      contributing.Add(m);
+
+        var inert = entries.Where(e => !contributing.Contains(e.ModDirectory)).ToList();
+        if (inert.Count == 0)
+        {
+            // Publish the empty map rather than leaving the last one standing: a mod the user has just
+            // fixed must lose its warning, and "no entry" is how this says a mod is fine.
+            if (_inertMods.Count > 0)
+                _inertMods = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
+            return;
+        }
+
+        // Only now — and only for the handful of mods that came out empty — is it worth asking Penumbra
+        // anything extra. On the healthy path this line is never reached.
+        var collId = penumbra.GetPlayerCollectionId();
+
+        var have = wornCharCodes is { Count: > 0 }
+            ? Describe(activeBodyTypes, wornCharCodes)
+            : "";
+
+        var next = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in inert)
+        {
+            var diag = resolution.TryGetValue(entry.ModDirectory, out var d) ? d : ResolutionDiagnostic.None;
+
+            // No collection is the same failure the resolvers report as Unavailable, reached by a
+            // different door — and it has to be folded in here rather than left to them, because a pack
+            // whose overlays and content both short-circuit before the IPC hop never asked and so never
+            // found out. Without this a masks-only pack during a Penumbra outage came out as the ladder's
+            // shrug instead of naming the outage.
+            if (!collId.HasValue) diag = diag with { Settings = SettingsRead.Unavailable };
+
+            // The group names Penumbra has for this mod were parsed out of its meta.json on the way here,
+            // so the mask question is answered from that instead of re-reading the same file.
+            var (maskGroup, masksOn) = collId.HasValue
+                ? discovery.MaskSelectionState(entry, collId.Value, diag.PenumbraGroups)
+                : (false, 0);
+
+            // What this pack paints, read off its OWN descriptors rather than off what survived — the
+            // surviving set is empty, which is the thing being explained.
+            var mine = allOverlays.Where(p => string.Equals(p.Entry.ModDirectory, entry.ModDirectory,
+                                                            StringComparison.OrdinalIgnoreCase))
+                                  .SelectMany(p => p.Overlay.Descriptor.MaterialGamePaths)
+                                  .ToList();
+            var wants = mine.Count > 0
+                ? Describe(mine.Select(UVRemapService.InferBodyType).OfType<string>(),
+                           mine.Select(ExtractHumanCharCode).OfType<string>())
+                : "";
+
+            bool maskGear = maskDescByMod.TryGetValue(entry.ModDirectory, out var md)
+                         && md.Layer == OverlayLayer.Gear;
+
+            var reason = Explain(diag, maskGroup, masksOn, maskGear,
+                                 filteredOut.Contains(entry.ModDirectory), wants, have);
+            next[entry.ModDirectory] = reason;
+
+            if (_inertReported.TryAdd(
+                    $"{entry.ModDirectory}\0{reason.Cause}\0{reason.Groups}\0{reason.Wants}\0{reason.Have}", 0))
+                log.Information("[Proteus] {0} is enabled but contributes nothing: {1}",
+                    entry.ModDirectory, EnglishInert(reason));
+        }
+
+        _inertMods = next;
+    }
+
+    /// <summary>
+    /// "bibo · Midlander F, Viera F" — a body-type set and a race-code set as one phrase, deduplicated and
+    /// in the order given. Both halves matter and neither is enough alone: the same race on Bibo+ and on
+    /// gen3 are different surfaces, and the same body on two races are different files.
+    /// </summary>
+    private static string Describe(IEnumerable<string> bodyTypes, IEnumerable<string> charCodes)
+    {
+        var bodies = string.Join("+", bodyTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
+        var races  = ModelRace.DescribeAll(charCodes);
+        if (bodies.Length == 0) return races;
+        return races.Length == 0 ? bodies : $"{bodies} · {races}";
+    }
+
+    /// <summary>
+    /// One <see cref="InertReason"/> as English. The log stays English in every locale on purpose: it is
+    /// evidence, and evidence that changes language cannot be searched for, compared against another
+    /// user's, or pasted into an issue. The translated wording of the same facts lives in the status
+    /// window — see <c>Strings.Mods.Inert*</c>.
+    /// </summary>
+    private static string EnglishInert(InertReason r) => r.Cause switch
+    {
+        InertCause.SettingsUnreadable =>
+            "Penumbra did not answer when asked which of its options are on",
+        InertCause.GroupsMissing =>
+            $"its Proteus data names option group(s) [{r.Groups}] that Penumbra's copy of the mod has not "
+          + "got — renamed or dropped on re-export, so nothing in them can ever be selected",
+        InertCause.NothingTicked =>
+            $"nothing is ticked in Penumbra — its {r.GroupCount} option group(s) [{r.Groups}] are all empty",
+        InertCause.WrongRace =>
+            $"it paints {r.Wants}, and this character is {r.Have}",
+        InertCause.MaskNeedsShell =>
+            $"its masks render as gear, which needs a mask to build the shell from, and nothing is ticked "
+          + $"in its \"{r.Groups}\" group",
+        _ => "its ticked options resolved, but none of them reached a surface this character has loaded",
+    };
 
     /// <summary>
     /// What each base game path currently resolves to, as (path, mod folder, settled) — the files the

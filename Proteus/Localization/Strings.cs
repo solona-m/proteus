@@ -137,6 +137,43 @@ public sealed class ModsStrings
         "metadata.json; absent means off).\n" +
         "On / Off = your own setting for this mod, overriding the pack.\n\n" +
         "(The global strength sliders are in Settings.)");
+
+    // ── "this mod is on and painting nothing" ────────────────────────────────────────────────────────
+    // The faces of CompositorService.InertReason. The LOG says the same things in English literals, on
+    // purpose — a log is evidence, and evidence that changes language cannot be searched or compared.
+    // See CompositorService.EnglishInert, which must be kept saying the same facts as these.
+    //
+    // Unlike the rest of this class these are wrapped tooltip and panel text, not column labels: they are
+    // allowed to be sentences.
+
+    /// <summary>{0} is how many option groups the mod has; {1} is their names, comma-joined, in the mod's
+    /// own order — Penumbra group names, which are the author's and are never translated.</summary>
+    public readonly string InertNothingTickedFmt = Loc.Localize("Mods.Inert.NothingTicked.Fmt",
+        "Nothing is ticked in Penumbra. This mod's {0} option group(s) — {1} — are all empty, so it " +
+        "paints nothing. Open it in Penumbra and tick an option in each.");
+
+    /// <summary>{0} is the comma-joined names of groups the mod's Proteus data expects but Penumbra has
+    /// not got. Author-facing: the user cannot fix this one.</summary>
+    public readonly string InertGroupsMissingFmt = Loc.Localize("Mods.Inert.GroupsMissing.Fmt",
+        "This mod's Proteus data names the option group(s) {0}, which Penumbra's copy of the mod hasn't " +
+        "got — renamed or dropped when it was re-exported. Only its author can fix that.");
+
+    /// <summary>{0} is what the mod paints and {1} what the character is, both as "body · Race F" — e.g.
+    /// "bibo · Midlander F, Viera F". Race names come from ModelRace and are not translated.</summary>
+    public readonly string InertWrongRaceFmt = Loc.Localize("Mods.Inert.WrongRace.Fmt",
+        "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.");
+
+    /// <summary>{0} is the Penumbra group name for masks — literally "Masks", the author's own group
+    /// name, which arrives already untranslated.</summary>
+    public readonly string InertMaskNeedsShellFmt = Loc.Localize("Mods.Inert.MaskNeedsShell.Fmt",
+        "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked " +
+        "in its \"{0}\" group in Penumbra.");
+
+    public readonly string InertNothingReached = Loc.Localize("Mods.Inert.NothingReached",
+        "Its ticked options resolved, but none of them reached a surface this character has loaded.");
+
+    public readonly string InertSettingsUnreadable = Loc.Localize("Mods.Inert.SettingsUnreadable",
+        "Penumbra didn't answer when Proteus asked which of this mod's options are on.");
 }
 
 public sealed class BindingsStrings
