@@ -2681,18 +2681,25 @@ public sealed class SecondSkinService
             log.Information("[Proteus] second skin: bust bridge at {0:0.##} applies to every shell of \"{1}\"",
                 bStrength, bMod);
 
-        // The OUTERMOST spanning shell on each host — the only one whose backfaces anyone can see.
+        // Which MOD is outermost on each host — every one of its shells gets its backfaces drawn, and no
+        // one else's do.
         //
-        // Showing them on every spanning shell is what the first version did, and it puts the underside of
-        // each inner shell into the transparent pass as well. Those are surfaces nothing can look at: the
-        // shell above already covers them. All they do is add blended layers, and with three shells a fifth
-        // of a millimetre apart that showed as the lower garment bleeding through the upper one in patches
-        // — which looks exactly like a hole in the upper garment or a shell crossing it, and is neither.
-        // Measured on that build: layer separation was intact at 0.0002 everywhere, so nothing had moved.
-        var topSpanningOnHost = new Dictionary<int, int>();
+        // Two wrong versions preceded this and each is worth keeping straight. Showing them on EVERY
+        // spanning shell puts the underside of each inner shell into the transparent pass too; those are
+        // surfaces nothing can look at, since the shell above covers them, so all they add is blended
+        // layers — with three shells a fifth of a millimetre apart that read as the lower garment bleeding
+        // through the upper one in patches. (Measured on that build: layer separation was intact at 0.0002
+        // everywhere, so nothing had actually moved. It looked exactly like a hole or a crossing and was
+        // neither.)
+        //
+        // Showing them on the single outermost SHELL is worse, because a mod's mask shell is appended
+        // after its fabric and so is outermost of all: the flag landed on the mask alone and the garment
+        // underneath it stopped drawing. A mod is one garment, and its shells are one surface stacked for
+        // colour, not separate things — so the unit is the mod, not the layer.
+        var topSpanningModOnHost = new Dictionary<int, string>();
         foreach (var (wi, wh) in work)
             if (bridgeByMod.ContainsKey(gearOverlays[wi].Entry.ModDirectory))
-                topSpanningOnHost[wh] = wi;   // work is in stack order, so the last one wins
+                topSpanningModOnHost[wh] = gearOverlays[wi].Entry.ModDirectory;   // work is in stack order
 
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
@@ -2812,9 +2819,10 @@ public sealed class SecondSkinService
             bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
             // A spanning shell needs its backfaces drawn: it lifts off the body between the breasts, so the
             // inside of the span is visible from below and from the side, and culled it reads as a hole
-            // through the garment rather than as cloth with an underside. Only the OUTERMOST one, though —
-            // see topSpanningOnHost for what showing them on all of them did.
-            bool spanning = topSpanningOnHost.TryGetValue(hIdx, out var topIdx) && topIdx == i;
+            // through the garment rather than as cloth with an underside. Every shell of the outermost
+            // MOD, and only those — see topSpanningModOnHost for the two narrower rules that failed.
+            bool spanning = topSpanningModOnHost.TryGetValue(hIdx, out var topMod)
+                         && string.Equals(topMod, entry.ModDirectory, StringComparison.OrdinalIgnoreCase);
             try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell, showBackfaces: spanning); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
