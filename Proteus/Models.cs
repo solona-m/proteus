@@ -80,6 +80,41 @@ public class ProteusMetadata
     public bool? AmbientOcclusion { get; set; }
 
     /// <summary>
+    /// Whether this mod's shells should span the cleavage as a garment does instead of following the body
+    /// into it. Null or false = off, which is what every existing mod keeps.
+    /// <para/>
+    /// A shell is a displaced copy of the body, so cloth over the chest sinks into the valley between the
+    /// breasts and reads as body paint rather than fabric. Real cloth bridges it: a taut span between the
+    /// forward-most point on each breast. Same class of defect the toe cap fixes for hosiery, and the same
+    /// remedy — relax the surface across the gap and let the geometry, not the texture, say it is cloth.
+    /// <para/>
+    /// WHOLE-MOD, deliberately, and not a per-option setting like most of what the colour panel edits.
+    /// Two reasons, and the second is the load-bearing one:
+    /// <list type="bullet">
+    /// <item>A garment either spans or it does not. That is one decision about the piece, not twelve
+    /// separate ones about each fabric it can be dressed in.</item>
+    /// <item>A mod's shells are stacked a fifth of a millimetre apart, and its MASK shell rides on top of
+    /// the rest. Per option there is nowhere to tick it for the mask — it is not an option, it is
+    /// <see cref="MaskDescriptor"/> — so a mod whose fabrics all paint into the skin (the common shape:
+    /// every fabric on the Skin layer, the mask carrying the only geometry) had no reachable control at
+    /// all. And where both existed, spanning one and not the other drives the mask straight through the
+    /// fabric, which looks worse than neither spanning.</item>
+    /// </list>
+    /// The region is found from the skeleton (<c>j_mune_l</c> / <c>j_mune_r</c>) and each shell's own
+    /// coverage, so there is nothing to paint and nothing to keep in sync with the art. Body surfaces only;
+    /// a face or a tail has no bust bones and declines.
+    /// </summary>
+    [JsonPropertyName("BustBridge")]
+    public bool? BustBridge { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="BustBridge"/> relaxes toward the flat span (0–1, default 1). Lower values
+    /// keep more of the underlying cleavage; 0 disables the pass without clearing the tick.
+    /// </summary>
+    [JsonPropertyName("BustBridgeStrength")]
+    public float? BustBridgeStrength { get; set; }
+
+    /// <summary>
     /// Geometry this pack contributes unconditionally — used when it declares no
     /// <see cref="ContentGroups"/>. See <see cref="ContentPiece"/>.
     /// </summary>

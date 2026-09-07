@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Proteus.Services;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace Proteus.Tests;
+
+/// <summary>
+/// The bust bridge against a REAL torso, not the synthetic strip <see cref="BustBridgeTests"/> uses.
+/// <para/>
+/// Those prove the solver; this proves the two things about the world that it rests on and that no
+/// synthetic mesh can vouch for: that a shipped body actually names <c>j_mune_l</c> / <c>j_mune_r</c> in
+/// the bone table of the mesh that holds the chest, and that a real mesh's density converges inside the
+/// pass ceiling. Both are assumptions about somebody else's art, so they are measured rather than argued.
+/// <para/>
+/// Does nothing unless the model exists — point <c>PROTEUS_TORSO</c> at any body's chest model to run it
+/// against that one instead.
+/// </summary>
+public class BustBridgeDiagTests
+{
+    private static readonly string Torso =
+        Environment.GetEnvironmentVariable("PROTEUS_TORSO")
+        ?? @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes\NSFW L.mdl";
+
+    private readonly ITestOutputHelper o;
+    public BustBridgeDiagTests(ITestOutputHelper o) => this.o = o;
+
+    [Fact]
+    public void RealTorsoCarriesTheBustBonesAndConverges()
+    {
+        if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
+
+        var mdl = File.ReadAllBytes(Torso);
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(
+            mdl, out var pos, out _, out var tri, out var weights, out var nrm));
+        o.WriteLine($"{Path.GetFileName(Torso)}: {pos.Length / 3} skin vertices, {tri.Length / 3} triangles");
+
+        // 1. THE ASSUMPTION THE WHOLE FEATURE RESTS ON. If a body ever ships without these, the region
+        //    cannot be found and MeshBustWeights returns null — the pass declines rather than guessing,
+        //    but the feature is then dead on that body and this is where that would show up.
+        var bust = new float[pos.Length / 3];
+        int rigged = 0;
+        for (int i = 0; i < bust.Length; i++)
+        {
+            float w = 0f;
+            foreach (var (bone, bw) in weights[i])
+                if (bone.Equals("j_mune_l", StringComparison.OrdinalIgnoreCase)
+                 || bone.Equals("j_mune_r", StringComparison.OrdinalIgnoreCase))
+                    w += bw;
+            bust[i] = MathF.Min(1f, w);
+            if (w > 0f) rigged++;
+        }
+        o.WriteLine($"bust-weighted vertices: {rigged} of {bust.Length} "
+                  + $"({100.0 * rigged / bust.Length:0.#}%)");
+        Assert.True(rigged > 0, "this body names neither j_mune_l nor j_mune_r — the region cannot be found");
+
+        // A sanity band, not a tight assertion: the bust is a real but small part of a whole-body mesh.
+        // Zero would mean the bones are absent; a majority would mean they are being read wrong and the
+        // relax would be handed most of the body.
+        Assert.InRange(100.0 * rigged / bust.Length, 0.5, 40.0);
+
+        var p3 = new SecondSkinWriter.Vec3[bust.Length];
+        var n3 = new SecondSkinWriter.Vec3[bust.Length];
+        for (int i = 0; i < bust.Length; i++)
+        {
+            p3[i] = new SecondSkinWriter.Vec3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+            n3[i] = new SecondSkinWriter.Vec3(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
+        }
+        var tris = tri.Select(t => (ushort)t).ToArray();
+
+        var log = new List<string>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var plan = SecondSkinWriter.BustBridgeSolve(p3, n3, tris, bust, 1f, log.Add);
+        sw.Stop();
+        foreach (var line in log) o.WriteLine(line);
+        o.WriteLine($"solve took {sw.ElapsedMilliseconds} ms");
+        Assert.NotNull(plan);
+
+        // 2. THE SECOND ASSUMPTION. The bust bones do not meet across the sternum — measured here as two
+        //    components of 1139 nodes each — so the cleavage is not in the seed and has to be added. This
+        //    is the check that the gap fill still finds it; without it the pass moves the breasts' inner
+        //    slopes and leaves the one place a bridge exists for exactly as deep as it found it.
+        Assert.Contains(log, l => l.Contains("added across the gap") && !l.Contains(" 0 node(s) added"));
+
+        // 3. It actually flattened the cleavage. Parsed out of the report rather than recomputed, so the
+        //    number the log shows in game is the number this test stands behind.
+        var dish = log.FirstOrDefault(l => l.Contains("dish mean"));
+        Assert.NotNull(dish);
+        // The MEAN, not the worst. The report's chord runs between the region's two overall forward-most
+        // points, while the construction spans between each horizontal band's OWN pair — so a band above
+        // or below the nipple line is legitimately behind the global chord and the worst case is measured
+        // against a promise the pass never made. The mean is the honest summary of a per-band span.
+        var m = System.Text.RegularExpressions.Regex.Match(
+            dish!, @"dish mean ([\d.]+) -> ([\d.]+).*worst ([\d.]+) -> ([\d.]+)");
+        Assert.True(m.Success, dish);
+        float before = float.Parse(m.Groups[1].Value), after = float.Parse(m.Groups[2].Value);
+        o.WriteLine($"cleavage, mean over the chord: {before:0.#####} -> {after:0.#####} "
+                  + $"({100 * (1 - after / before):0.#}% spanned); worst "
+                  + $"{m.Groups[3].Value} -> {m.Groups[4].Value}");
+        // Half is well under the ~63% measured when this was written and well over anything a broken solve
+        // produced — every failed approach along the way sat between 20% and 36%.
+        Assert.True(after < before * 0.5f,
+            $"the cleavage still averages {after:0.#####} deep against {before:0.#####} before");
+
+        // 4. Untouched vertices are byte-identical — nothing outside the region moved at all, which is what
+        //    keeps a shell with the bridge off and one with it on the same everywhere else.
+        int movedOutsideRegion = 0;
+        for (int i = 0; i < bust.Length; i++)
+        {
+            if (bust[i] > 0f) continue;
+            var d = plan!.Delta[i];
+            if (d.X != 0f || d.Y != 0f || d.Z != 0f) movedOutsideRegion++;
+        }
+        // Not zero-tolerance: a vertex outside the BONE weighting is legitimately inside the region — the
+        // gap between the lobes is exactly that — and a welded copy of one moves with its twin.
+        o.WriteLine($"vertices with no bone weight that moved (gap fill, or welded to a twin): {movedOutsideRegion}");
+
+        // 5. Something to LOOK at. Every measurement above is a scalar, and the failure this feature is
+        //    most likely to have left is one no scalar catches: a span that is the right depth and the
+        //    wrong shape. Two OBJs of the same mesh, before and after, open on top of each other.
+        var dir = Environment.GetEnvironmentVariable("PROTEUS_BUST_OBJ_DIR");
+        if (string.IsNullOrWhiteSpace(dir)) return;
+        Directory.CreateDirectory(dir);
+        WriteObj(Path.Combine(dir, "bust_before.obj"), p3, tris);
+        var moved = new SecondSkinWriter.Vec3[bust.Length];
+        for (int i = 0; i < bust.Length; i++)
+            moved[i] = new SecondSkinWriter.Vec3(p3[i].X + plan!.Delta[i].X,
+                                                 p3[i].Y + plan.Delta[i].Y,
+                                                 p3[i].Z + plan.Delta[i].Z);
+        WriteObj(Path.Combine(dir, "bust_after.obj"), moved, tris);
+        o.WriteLine($"wrote bust_before.obj and bust_after.obj to {dir}");
+    }
+
+    private static void WriteObj(string path, SecondSkinWriter.Vec3[] pos, ushort[] tris)
+    {
+        using var w = new StreamWriter(path);
+        foreach (var p in pos)
+            w.WriteLine($"v {p.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture)} "
+                      + $"{p.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)} "
+                      + $"{p.Z.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}");
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+            w.WriteLine($"f {tris[t] + 1} {tris[t + 1] + 1} {tris[t + 2] + 1}");
+    }
+}

@@ -251,6 +251,22 @@
     "message": "このMODをどのボディタイプに焼き込むか：\nすべてのボディ = 姉妹ボディ（bibo↔gen3/Eve）＋バニラ（gen2）\nbibo+gen3 = 姉妹ボディのみに焼き込む（既定）\nオフ = 合成しない\n\nこのオプションだけでなく、MOD全体に適用されます。",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "谷間を布で渡す",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "渡す量",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "布が平らな渡しにどこまで緩むかを決めます。1.00 で完全に渡します。\n値を下げるほど、下にある形状が多く残ります。",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "胸元にかかる布に対して有効にしてください。\nProteus は衣服を体のコピーとして作るため、既定では体に沿って谷間へ落ち込みます。\nそれが、布ではなく塗りに見える原因です。実際の布は谷間を渡ります——\n左右それぞれの胸の最も前に出た点を結ぶ、まっすぐな線として。\nこれを有効にすると、胸の間の布はその線まで緩められます。内側へ引かれることは決してないので、\n体に食い込むことはなく、胸そのものの形も保たれます。\nネックラインによって胸の間の布がすでに切り取られている場合、渡すものが無いため、\nこの設定は何もしません。",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "行をコピー",
     "description": ""

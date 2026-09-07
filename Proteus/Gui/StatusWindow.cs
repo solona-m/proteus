@@ -5754,8 +5754,12 @@ public class StatusWindow : Window
             // for the same reason as the un-mirroring above - the answer is a Penumbra selection in a group
             // the editor does not own, so it cannot work it out from what is selected here.
             bool capWanted = compositor.ToeCapWantedFor(entry.ModDirectory);
+            // The fifth: this MOD's bust bridge, which is geometry for the same reason a cap is. Read off
+            // the sidecar rather than the option — it is one decision about the whole pack, and the tick
+            // that sets it lives in the whole-mod part of Advanced.
+            bool bridgeWanted = entry.Metadata.BustBridge == true;
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
-                                                        needsUnmirrored, capWanted))
+                                                        needsUnmirrored, capWanted, bridgeWanted))
             {
                 // The shader comes from the shared predicate too, not a hardcoded character.shpk: a promoted
                 // whole-skin overlay actually renders on skin.shpk, and showing it as cloth here offered the
@@ -5899,6 +5903,51 @@ public class StatusWindow : Window
         // so a control that quietly writes global config instead has to break that expectation out loud.
         if (binding)
             ImGui.TextDisabled(cp.BodiesGlobalNote);
+
+        DrawBustBridgeAdvanced(entry);
+    }
+
+    /// <summary>
+    /// The mod-wide bust bridge, drawn in the whole-mod part of Advanced beside Bodies — so it appears on
+    /// every tab, INCLUDING Masks, which is the one that needed it most: on the common mod shape (every
+    /// fabric on the Skin layer, the Masks descriptor carrying the only geometry) the mask shell is the
+    /// garment, and a per-option control could not reach it at all.
+    /// <para/>
+    /// Written to the sidecar rather than to <see cref="Configuration"/> like Bodies above, because this is
+    /// an AUTHORING decision that should ship with the pack: whether a garment lifts off the sternum is
+    /// part of how the piece is meant to look, not a preference of whoever is wearing it.
+    /// </summary>
+    private void DrawBustBridgeAdvanced(OverlayEntry entry)
+    {
+        var md = entry.Metadata;
+        var cs = Strings.Colors;
+        bool on = md.BustBridge == true;
+        if (ImGui.Checkbox($"{cs.BustBridge}##bustbridge_{entry.ModDirectory}", ref on))
+        {
+            // Cleared to null rather than false, so an untick leaves the sidecar as it was before anyone
+            // opened this — the documented "absent = off" default.
+            md.BustBridge = on ? true : null;
+            if (!on) md.BustBridgeStrength = null;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "bust-bridge");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.BustBridgeTip);
+
+        if (!on) return;
+        float strength = md.BustBridgeStrength ?? 1f;
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat($"{cs.BustBridgeStrength}##bustbridgestr_{entry.ModDirectory}",
+                ref strength, 0.01f, 0f, 1f, "%.2f"))
+        {
+            // 1 is the default, so it is stored as omitted — the sidecar stays free of no-op lines and
+            // "absent = full" keeps meaning what it says.
+            md.BustBridgeStrength = Math.Abs(strength - 1f) < 0.001f ? null : strength;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "bust-bridge");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.BustBridgeStrengthTip);
     }
 
     /// <summary>

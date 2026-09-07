@@ -251,6 +251,22 @@
     "message": "En qué tipos de cuerpo grabar este mod:\nTodos los cuerpos = cuerpo hermano (bibo↔gen3/Eve) + original (gen2)\nbibo+gen3 = grabar solo en el cuerpo hermano (predeterminado)\nNinguno = sin síntesis\n\nSe aplica a todo el mod, no solo a esta opción.",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "Tensar la tela sobre el escote",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "Cantidad de tensado",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "Cuánto se relaja la tela hacia el tendido plano. 1,00 lo tiende por completo; los valores\nmás bajos conservan más de la forma de debajo.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "Activa esto para tela sobre el pecho.\nProteus construye una prenda como una copia del cuerpo, así que por defecto sigue al\ncuerpo hacia el escote, que es lo que hace que se lea como pintura y no como tela. La tela\nreal tiende el hueco: una línea recta entre el punto más adelantado de cada pecho.\nCon esto activado, la tela entre los pechos se relaja hasta esa línea. Nunca se tira de\nnada hacia dentro, así que no puede cortar el cuerpo, y los pechos conservan su forma.\nDonde un escote ya ha recortado la tela entre las copas no hay nada que tender, y esto\nno hace nada.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copiar fila",
     "description": ""

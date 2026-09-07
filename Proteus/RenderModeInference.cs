@@ -108,6 +108,10 @@ public static class RenderModeInference
     /// GEOMETRY: it rebuilds the toes as one rounded shape, and only a shell has geometry to rebuild.
     /// Painted into the skin the option simply does nothing, which is what it looked like — a whole
     /// composite with no second-skin phase at all, because every active overlay was a skin layer.</item>
+    /// <item><paramref name="bustBridge"/> — this overlay asks to span the cleavage, which is also
+    /// GEOMETRY, and for the same reason. Unlike <paramref name="toeCapWanted"/> this is the overlay's own
+    /// setting rather than a mod-wide Penumbra selection, so it promotes only the option that asked and
+    /// needs no scan to discover.</item>
     /// </list>
     /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
     /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
@@ -126,7 +130,7 @@ public static class RenderModeInference
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
         IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
-        bool needsUnmirroredShell = false, bool toeCapWanted = false)
+        bool needsUnmirroredShell = false, bool toeCapWanted = false, bool bustBridge = false)
         => layer == OverlayLayer.Skin
         && !pinned
         && canShell
@@ -136,7 +140,7 @@ public static class RenderModeInference
         // this load-bearing rather than defensive: toeCapWanted promotes every shellable skin overlay in the
         // look, so one toe cap would turn an opaque full-body print into a rainbow bodysuit.
         && !IsPrint(rows ?? [])
-        && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []));
+        && (aboveGear || needsUnmirroredShell || toeCapWanted || bustBridge || HasCloth(rows ?? []));
 
     /// <summary>
     /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same

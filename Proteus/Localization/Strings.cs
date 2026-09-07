@@ -1206,6 +1206,26 @@ public sealed class ColorsStrings
       + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
       + "left to right — so only you can say whether a difference is the point or just detail.");
 
+    public readonly string BustBridge = Loc.Localize("Colors.BustBridge.Label",
+        "Span the cleavage");
+
+    public readonly string BustBridgeTip = Loc.Localize("Colors.BustBridge.Tip",
+        "Turn this on for cloth over the chest.\n"
+      + "Proteus builds a garment as a copy of the body, so by default it follows the body into\n"
+      + "the cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\n"
+      + "the gap: a straight line between the furthest-forward point of each breast.\n"
+      + "With this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\n"
+      + "pulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\n"
+      + "Where a neckline has cut the cloth away between the cups there is nothing to span, and\n"
+      + "this does nothing.");
+
+    public readonly string BustBridgeStrength = Loc.Localize("Colors.BustBridge.Strength.Label",
+        "Span amount");
+
+    public readonly string BustBridgeStrengthTip = Loc.Localize("Colors.BustBridge.Strength.Tip",
+        "How far the fabric relaxes toward the flat span. 1.00 spans it fully; lower values keep\n"
+      + "more of the shape underneath.");
+
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"

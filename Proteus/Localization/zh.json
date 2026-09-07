@@ -251,6 +251,22 @@
     "message": "将此模组烘焙到哪些身体类型：\n所有身体 = 同系身体（bibo↔gen3/Eve）＋原版（gen2）\nbibo+gen3 = 仅烘焙到同系身体（默认）\n关闭 = 不进行合成\n\n作用于整个模组，而不仅是此选项。",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "布料横跨乳沟",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "跨越程度",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "布料向平直跨越松弛的程度。1.00 为完全跨越；\n数值越低，越保留下方原本的形状。",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "为覆盖胸部的布料开启此项。\nProteus 以身体的副本来构建衣物，因此默认会顺着身体陷进乳沟——\n这正是它看起来像彩绘而非布料的原因。真实的布料会横跨这段间隙：\n一条连接两侧乳房最前端的直线。\n开启后，两乳之间的布料会松弛到那条直线上。任何位置都不会被向内拉，\n因此不会切入身体，乳房本身也保持原有形状。\n若领口已把罩杯之间的布料裁掉，则没有可横跨的部分，\n此项不起作用。",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "复制行",
     "description": ""

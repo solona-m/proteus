@@ -251,6 +251,22 @@
     "message": "Auf welche Körpertypen dieser Mod gebacken wird:\nAlle Körper = Geschwisterkörper (bibo↔gen3/Eve) + Standard (gen2)\nbibo+gen3 = nur auf den Geschwisterkörper backen (Standard)\nAus = keine Synthese\n\nGilt für den ganzen Mod, nicht nur für diese Option.",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "Dekolleté überspannen",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "Spannstärke",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "Wie weit sich der Stoff zur flachen Spannung hin entspannt. 1,00 überspannt vollständig;\nniedrigere Werte behalten mehr von der Form darunter.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "Aktiviere dies für Stoff über der Brust.\nProteus baut ein Kleidungsstück als Kopie des Körpers, folgt also standardmäßig dem\nKörper ins Dekolleté — und genau das lässt es wie Farbe statt wie Stoff wirken. Echter\nStoff überspannt die Lücke: eine gerade Linie zwischen den vordersten Punkten beider Brüste.\nDamit wird der Stoff zwischen den Brüsten auf diese Linie hinaus entspannt. Nichts wird je\nnach innen gezogen, es kann also nicht in den Körper schneiden, und die Brüste behalten ihre Form.\nWo ein Ausschnitt den Stoff zwischen den Körbchen weggeschnitten hat, gibt es nichts zu\nüberspannen, und dies bewirkt nichts.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Zeile kopieren",
     "description": ""

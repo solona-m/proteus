@@ -35,6 +35,16 @@ public sealed class SecondSkinLayer
     public float ToeCapStrength { get; init; } = 1f;
 
     /// <summary>
+    /// How far this layer's cloth relaxes across the cleavage instead of following the body into it
+    /// (0 = off, which is the default and every existing shell's behaviour; 1 = a flat span).
+    /// <para/>
+    /// Unlike the toe cap there is no map: the region is the bust bones' influence intersected with this
+    /// layer's own <see cref="Coverage"/>, so nothing has to be painted and nothing can fall out of sync
+    /// with the art. See <c>BustBridgeSolve</c>.
+    /// </summary>
+    public float BustBridgeStrength { get; init; }
+
+    /// <summary>
     /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
     /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
     /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
@@ -1433,7 +1443,16 @@ public static class SecondSkinWriter
                 // The toe cap smooths across the mesh's own topology, so it needs the mesh's triangle list
                 // BEFORE coverage trimming — read it only when a layer actually asks for a cap.
                 bool wantCap = cov is { ToeCap: not null } && cov.ToeCapStrength > 0f;
-                var capTris = wantCap ? MeshTriangles(src, srcSubIdx, srcSubCount) : null;
+                // The bust bridge relaxes across the same topology and wants the same list. It also needs
+                // to know which vertices are on the bust, and that is settled from the mesh's BONE TABLE
+                // before any vertex is read — every mesh of the body but the torso names neither bust bone
+                // and drops out for the cost of one walk over a handful of names.
+                var bustWeights = cov is { BustBridgeStrength: > 0f }
+                    ? MeshBustWeights(src, m, vc, decl, vbo, bs)
+                    : null;
+                var capTris = wantCap || bustWeights != null
+                    ? MeshTriangles(src, srcSubIdx, srcSubCount)
+                    : null;
                 // Which side of the body each vertex is on, when the conversion needs to tell them apart.
                 // Read from the triangles rather than each vertex's own X, because the midline vertices —
                 // exactly the ones a mirrored layout puts a UV seam through — sit at x ~ 0 and can't answer
@@ -1455,7 +1474,7 @@ public static class SecondSkinWriter
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
                     out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, diag,
-                    buildCapGeometry: capSrc == null);
+                    buildCapGeometry: capSrc == null, bustWeights: bustWeights);
                 if (src.UvConv != null) uvMoved += vc;
 
                 // The tile normalization above shifts a mesh by the integer floor of its MINIMUM uv, which
@@ -3289,6 +3308,7 @@ public static class SecondSkinWriter
                     ToeCapWidth = 0,
                     ToeCapHeight = 0,
                     ToeCapStrength = def.ToeCapStrength,
+                    BustBridgeStrength = def.BustBridgeStrength,
                 };
 
             // The cap's rim, pushed to this layer's offset, ready for the shell meshes below to close
@@ -3331,6 +3351,7 @@ public static class SecondSkinWriter
                     ToeCapWidth = def.ToeCapWidth,
                     ToeCapHeight = def.ToeCapHeight,
                     ToeCapStrength = def.ToeCapStrength,
+                    BustBridgeStrength = def.BustBridgeStrength,
                 };
 
             byte[]? footprint = null;
@@ -3524,6 +3545,7 @@ public static class SecondSkinWriter
                     ToeCapWidth = cutSide,
                     ToeCapHeight = cutSide,
                     ToeCapStrength = def.ToeCapStrength,
+                    BustBridgeStrength = def.BustBridgeStrength,
                 };
             }
 
@@ -4460,6 +4482,73 @@ public static class SecondSkinWriter
         return SurfaceMirror.AssignSides(xs, tris, out conflicts, out straddling);
     }
 
+    /// <summary>
+    /// Per-vertex bust-region weight for one mesh — how much of the vertex is skinned to
+    /// <see cref="BustBoneL"/> / <see cref="BustBoneR"/>, clamped to 1. Null when this mesh's bone table
+    /// names neither, which is every mesh but the torso and is the cheap early-out the pass leans on.
+    /// <para/>
+    /// The bones, not the art, define the region: they are on the game's own skeleton, so every body a
+    /// shell can be cut from has them, and their influence is exactly both breasts and the cleavage
+    /// between them. A painted map would have to be redrawn per UV space and would drift from the mesh; a
+    /// protrusion heuristic would find the belly and the shoulder blades as readily as the bust.
+    /// <para/>
+    /// Weights are read the same way <see cref="TryReadLod0Geometry(byte[], out float[], out float[],
+    /// out int[], out (string, float)[][], out float[], bool, bool, Func{string, bool})"/> reads them:
+    /// through the mesh's own bone table into the model's names, because a blend index means nothing
+    /// outside the table it was written against.
+    /// </summary>
+    private static float[]? MeshBustWeights(Source src, int m, ushort vc, VElem[] decl, uint[] vbo, byte[] bs)
+    {
+        var s = src.S;
+        int mo = src.MeshStart + m * 36;
+        if (mo + 36 > s.Length) return null;
+        ushort meshBoneTbl = BitConverter.ToUInt16(s, mo + 14);
+        if (meshBoneTbl >= src.BoneTables.Length) return null;
+        var boneTbl = src.BoneTables[meshBoneTbl];
+
+        // Which LOCAL indices are the bust bones. Resolved once per mesh, before any vertex is touched:
+        // a torso is thousands of vertices and every other mesh of the body would otherwise pay for the
+        // whole per-vertex scan to learn it has no bust bones at all.
+        int localL = -1, localR = -1;
+        for (int i = 0; i < boneTbl.Length; i++)
+        {
+            if (boneTbl[i] >= src.BoneNames.Length) continue;
+            var nm = src.BoneNames[boneTbl[i]];
+            if (localL < 0 && string.Equals(nm, BustBoneL, StringComparison.OrdinalIgnoreCase)) localL = i;
+            else if (localR < 0 && string.Equals(nm, BustBoneR, StringComparison.OrdinalIgnoreCase)) localR = i;
+        }
+        if (localL < 0 && localR < 0) return null;
+
+        VElem? wEl = null, iEl = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UseBlendWeight) wEl ??= el;
+            else if (el.Usage == UseBlendIndices) iEl ??= el;
+        }
+        if (wEl is not { } we || iEl is not { } ie || we.Stream > 2 || ie.Stream > 2) return null;
+
+        int nInf = BlendCount(we.Type);
+        var outW = new float[vc];
+        bool any = false;
+        for (int k = 0; k < vc; k++)
+        {
+            int wa = src.Vb + (int)vbo[we.Stream] + k * bs[we.Stream] + we.Offset;
+            int ia = src.Vb + (int)vbo[ie.Stream] + k * bs[ie.Stream] + ie.Offset;
+            if (wa < 0 || ia < 0 || wa + nInf > s.Length || ia + nInf > s.Length) continue;
+            float acc = 0f;
+            for (int q = 0; q < nInf; q++)
+            {
+                int local = s[ia + q];
+                if (local != localL && local != localR) continue;
+                acc += s[wa + q] / 255f;
+            }
+            if (acc <= 0f) continue;
+            outW[k] = MathF.Min(1f, acc);
+            any = true;
+        }
+        return any ? outW : null;
+    }
+
     private static int BuildVerbatim(
         byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push,
         out byte[][] outStreams, out byte[] outStrides, out byte[] declBlock, out (float U, float V)[] uvs,
@@ -4468,7 +4557,8 @@ public static class SecondSkinWriter
         out Vec3[]? capSrcPos, out Vec3[]? capOutPos, out ToeCapPlan? capPlan,
         sbyte[]? sides = null,
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
-        bool buildCapGeometry = true)
+        bool buildCapGeometry = true,
+        float[]? bustWeights = null)
     {
         int uvUnmapped = 0;
         uvsPreConv = null;
@@ -4590,9 +4680,26 @@ public static class SecondSkinWriter
             var delta = plan?.Delta;
             capPlan = plan;
 
+            // The bust bridge, on the same footing: another displacement of the vertices this mesh already
+            // has. Its region is gated on coverage here rather than inside the solver so the solver stays
+            // a pure geometry pass — and because uvs[] is only now on the [0,1] tile the coverage map is
+            // indexed over.
+            var bridge = bustWeights is not null && cap is { BustBridgeStrength: > 0f } && capTris is not null
+                ? BustBridgeSolve(basePos, baseNrm, capTris, bustWeights, cap.BustBridgeStrength, capLog,
+                                  CoveredVertices(uvs, cap, vc))
+                : null;
+
             // Normals recomputed from the REBUILT surface — the source triangles minus the ones the cut
             // removed, plus the cap's own. Without this the shell keeps shading as the toes it replaced.
-            var finalNrm = plan is null ? baseNrm : CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!));
+            // The bridge changes no topology, so it reshades against the mesh's own triangles; a flattened
+            // span still carrying the cleavage's normals reads as a cleavage however far it moved, and the
+            // push along a stale normal drives the two sides of the span apart.
+            var finalNrm = plan is not null
+                ? CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!))
+                : bridge is not null
+                    ? RelaxedNormals(basePos, baseNrm, bridge.Delta, bridge.NodeOf, bridge.NodeWeight,
+                                     bridge.NodeNormal, capTris!)
+                    : baseNrm;
 
             int stride = outStrides[pw.Stream];
             int normalsWritten = 0, uvsWritten = 0;
@@ -4604,14 +4711,21 @@ public static class SecondSkinWriter
                 var p = basePos[i];
                 var n = finalNrm[i];
                 if (delta is not null) p = new Vec3(p.X + delta[i].X, p.Y + delta[i].Y, p.Z + delta[i].Z);
+                if (bridge is not null)
+                {
+                    var bd = bridge.Delta[i];
+                    p = new Vec3(p.X + bd.X, p.Y + bd.Y, p.Z + bd.Z);
+                }
 
                 var final = new Vec3(p.X + n.X * push, p.Y + n.Y * push, p.Z + n.Z * push);
                 WriteXYZ(outStreams[pw.Stream], i * stride + pw.Offset, pw.Type, final.X, final.Y, final.Z);
                 if (outPos is not null) outPos[i] = final;
 
-                // Only vertices the cap actually reached get a new normal; everything else keeps the
-                // bytes it arrived with. The normal element has its own stream — it need not be pos's.
-                if (plan is not null && norm is { } ne2 && plan.NodeWeight[plan.NodeOf[i]] > 0f)
+                // Only vertices the cap or the bridge actually reached get a new normal; everything else
+                // keeps the bytes it arrived with. The normal element has its own stream — not pos's.
+                bool reshade = plan is not null && plan.NodeWeight[plan.NodeOf[i]] > 0f
+                            || bridge is not null && bridge.NodeWeight[bridge.NodeOf[i]] > 0f;
+                if (reshade && norm is { } ne2)
                 {
                     if (WriteNormal(outStreams[ne2.Stream], i * outStrides[ne2.Stream] + ne2.Offset, ne2.Type,
                             n.X, n.Y, n.Z))
@@ -4668,6 +4782,14 @@ public static class SecondSkinWriter
                 if (encoderMissing)
                     capLog($"toe cap: no encoder for normal type {norm?.Type} — that mesh keeps its old shading");
             }
+
+            // A cap and a bridge on ONE mesh: a foot and a chest are different meshes on every body seen
+            // so far, so finalNrm above takes the cap's rebuilt topology and the bridge rides its
+            // positions without reshading. Said out loud rather than assumed away — if a body ever puts
+            // both on one mesh, the shading is what will look wrong, and this is the line that explains it.
+            if (plan is not null && bridge is not null)
+                capLog?.Invoke("bust bridge: this mesh also carries a toe cap — the cap's normals win, the "
+                             + "bridge moves positions only");
         }
 
         // Declaration: copy the source mesh's block verbatim, splicing in a uv1 element only when we
@@ -7182,6 +7304,869 @@ public static class SecondSkinWriter
             CutNode = cutNode, NewTriangles = newTris,
         };
     }
+
+    // ── bust bridge ───────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The two base-skeleton breast bones. Present on every body a shell can be cut from — vanilla,
+    /// Bibo+, gen3 and their descendants all rig to the game's own skeleton — which is what lets the bust
+    /// region be found with no painted map and no per-body table.
+    /// </summary>
+    private const string BustBoneL = "j_mune_l", BustBoneR = "j_mune_r";
+
+    /// <summary>
+    /// Fewest welded nodes the region needs before a bridge is attempted. A handful of stray bust-weighted
+    /// vertices — the top of a mesh that mostly holds the arms — describe no cleavage to span.
+    /// </summary>
+    private const int MinBustBridgeNodes = 24;
+
+    /// <summary>
+    /// Movement below which a bust-bridge node counts as untouched, in model units — a thousandth of the
+    /// shell's own <see cref="BaseOffset"/>, so comfortably under anything that could be seen. It decides
+    /// which nodes are reported as moved and which keep their original normal bytes.
+    /// </summary>
+    private const float BustBridgeEpsilon = 1e-6f;
+
+    /// <summary>
+    /// How much longer than the shortest crossing a path between the two bust lobes may be and still count
+    /// as "between" them. In edges, so it scales with a body's own mesh density rather than with any
+    /// distance measured in model units.
+    /// <para/>
+    /// The sternum is not equally narrow at every height — the crossing at the apexes is shorter than the
+    /// one near the collarbone — so this has to be more than a step or two or the fill is a single band
+    /// across the middle rather than the whole cleavage.
+    /// </summary>
+    private const int BustGapSlack = 8;
+
+    /// <summary>
+    /// Ceiling on how far the gap search will walk from a lobe. Bounds the breadth-first sweep on a mesh
+    /// whose lobes are not actually facing each other; the <see cref="BustGapSlack"/> test does the real
+    /// selecting.
+    /// </summary>
+    private const int BustGapMaxSteps = 64;
+
+    /// <summary>
+    /// How many rings of the region's outer edge the effect ramps over, so the bridge rejoins the
+    /// untouched shell without a crease. In edges, for the same reason as <see cref="BustGapSlack"/>.
+    /// <para/>
+    /// ONE, not the four this started with, because <see cref="BustMaxSlope"/> now does this job properly
+    /// and does it in the mesh's own units. Counting rings cannot know how far a ring IS: on a bralette,
+    /// whose region is a narrow band, four rings ate a third of the span (0.055 asked, 0.037 left) purely
+    /// because the region was small — the fade was set by how much cloth there was rather than by how
+    /// steeply the surface may bend. The slope limit is the same guarantee expressed as geometry, so this
+    /// is left at one ring only to take the hard 0-to-1 step off the outermost vertices.
+    /// </summary>
+    private const int BustFadeSteps = 1;
+
+
+    /// <summary>
+    /// How many [1,2,1] passes the per-band apex line is smoothed with before the chords are drawn between
+    /// the two of them. Enough to take the mesh-sampling wobble out of it, few enough that the apex line
+    /// still follows the breast it was measured from.
+    /// </summary>
+    private const int BustBandSmoothing = 3;
+
+    /// <summary>
+    /// Steepest the bridge's displacement may change between two vertices, as a ratio to the distance
+    /// between them — about 56° of tilt away from the shell it grows out of.
+    /// <para/>
+    /// This is what bounds the fade in mesh terms rather than in vertex counts. A garment cannot lift a
+    /// centimetre three vertices from its own edge without tearing, however the coverage map happens to
+    /// have cut it — and the first build in game tore exactly there, at a slope around 10.
+    /// <para/>
+    /// Chosen by measuring, not by taste: swept against a real torso, 1.5 and above all leave the span at
+    /// 83.3% of the dish (the construction never asks for more than that on sound geometry) while 1.0 cuts
+    /// it to 58% and 0.5 to 29%. So this is the loosest value that costs nothing where the geometry is
+    /// right, which is exactly what a safety limit should be — it must not be quietly shaping the result
+    /// in the ordinary case.
+    /// </summary>
+    private const float BustMaxSlope = 1.5f;
+
+    /// <summary>
+    /// How many times the slope limit is swept before giving up. One pass propagates one edge, and a
+    /// region is tens of edges across; it normally settles long before this and stops early when it does.
+    /// </summary>
+    private const int BustSlopePasses = 200;
+
+    /// <summary>
+    /// What the bust bridge decided. The same four fields <see cref="RelaxedNormals"/> needs, and nothing
+    /// else: this pass moves vertices and never changes topology, so there is no cut, no dropped island
+    /// and no reprojected UV — a vertex keeps the coordinate it already had, which is still the right one
+    /// because it only slid forward along the chest.
+    /// </summary>
+    internal sealed class BustBridgePlan
+    {
+        /// <summary>Per-vertex displacement, indexed like the mesh's vertices.</summary>
+        public required Vec3[] Delta { get; init; }
+
+        /// <summary>Vertex index -> welded node index.</summary>
+        public required int[] NodeOf { get; init; }
+
+        /// <summary>Per-node region weight, 0 where the bridge left it alone.</summary>
+        public required float[] NodeWeight { get; init; }
+
+        /// <summary>Per-node normalized average of the members' source normals.</summary>
+        public required Vec3[] NodeNormal { get; init; }
+    }
+
+    /// <summary>
+    /// Bust bridge: per-vertex displacement that relaxes cloth across the cleavage, so a garment spans
+    /// between the breasts as fabric does instead of sinking into the valley the way a copy of the body
+    /// must.
+    /// <para/>
+    /// The region is measured, not painted: <paramref name="bust"/> is the bust bones' influence per
+    /// vertex, already multiplied by this layer's coverage so only cloth moves. Where a neckline has cut
+    /// the cloth away between the cups there is nothing to relax and the pass correctly does nothing.
+    /// <para/>
+    /// The surface is treated as a height field along the chest's outward axis, and every node is lifted to
+    /// the straight line between the furthest-forward point of each breast in its own horizontal row — the
+    /// chord, taken directly rather than converged toward. <see cref="ChordTarget"/> holds the construction
+    /// and the record of the three relaxations that were tried before it and why each failed.
+    /// <para/>
+    /// Because a node is only ever lifted, never lowered, no vertex can move into the body; because the
+    /// chord's endpoints are the apexes themselves, the breasts keep their shape exactly. Not clipping the
+    /// breasts and spanning between them flat are the same construction, not two constraints traded off
+    /// against each other.
+    /// <para/>
+    /// Vertices are WELDED by position first, for the reason the cap welds: a body mesh splits vertices at
+    /// UV seams and the sternum carries one, so two coincident copies relaxing on their own neighbour sets
+    /// would drift apart and crack the shell open down the middle.
+    /// <para/>
+    /// Returns null when the region is too small to describe a cleavage — the caller then writes exactly
+    /// what it would have without this feature.
+    /// </summary>
+    /// <param name="bust">Per-vertex region weight in 0..1, already gated on coverage.</param>
+    internal static BustBridgePlan? BustBridgeSolve(
+        Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
+        Action<string>? log = null, bool[]? covered = null)
+    {
+        int vc = pos.Length;
+        if (vc == 0 || strength <= 0f || bust.Length < vc) return null;
+
+        var nodeOf = WeldByPosition(pos, out int nodeCount);
+
+        var start = new Vec3[nodeCount];
+        var nNorm = new Vec3[nodeCount];
+        var members = new int[nodeCount];
+        // The SEED — where the bust bones say a breast is, on cloth this layer actually paints. It only
+        // has to find the two lobes; BustRegionWeights turns it into the region that may move.
+        var seed = new bool[nodeCount];
+        // Uncovered cloth pins the region at the garment's own edge, so a node is seeded only if EVERY
+        // welded copy of it is painted. Any copy being cut away means the boundary runs through here.
+        var cut = new bool[nodeCount];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            start[n] = new Vec3(start[n].X + pos[i].X, start[n].Y + pos[i].Y, start[n].Z + pos[i].Z);
+            nNorm[n] = new Vec3(nNorm[n].X + nrm[i].X, nNorm[n].Y + nrm[i].Y, nNorm[n].Z + nrm[i].Z);
+            if (bust[i] > 0f) seed[n] = true;
+            if (covered != null && i < covered.Length && !covered[i]) cut[n] = true;
+            members[n]++;
+        }
+        int seeded = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            float inv = 1f / members[n];
+            start[n] = new Vec3(start[n].X * inv, start[n].Y * inv, start[n].Z * inv);
+            nNorm[n] = Normalize(nNorm[n]) ?? default;
+            if (cut[n]) seed[n] = false;
+            if (seed[n]) seeded++;
+        }
+        if (seeded < MinBustBridgeNodes)
+        {
+            if (seeded > 0)
+                log?.Invoke($"bust bridge: SKIPPED, {seeded} bust node(s) is under "
+                          + $"MinBustBridgeNodes ({MinBustBridgeNodes})");
+            return null;
+        }
+
+        // Edge adjacency over the welded nodes, deduped — a shared edge would otherwise pull twice and
+        // bias the plane fit toward whichever neighbour happens to be used by more triangles.
+        var adj = new List<int>[nodeCount];
+        var seen = new HashSet<long>();
+        void Link(int a, int b)
+        {
+            if (a == b) return;
+            long key = a < b ? (long)a * nodeCount + b : (long)b * nodeCount + a;
+            if (!seen.Add(key)) return;
+            (adj[a] ??= new List<int>()).Add(b);
+            (adj[b] ??= new List<int>()).Add(a);
+        }
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;   // never fault on a bad index
+            int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+            Link(a, b); Link(b, c); Link(c, a);
+        }
+        for (int n = 0; n < nodeCount; n++) adj[n] ??= new List<int>();
+
+        // The gap between the lobes is where the whole feature happens, and the bones do not reach it.
+        // Cloth the layer does not paint is excluded from the region OUTRIGHT — handed in, not subtracted
+        // afterwards. Subtracting it afterwards is what tore the shell in game: the fade ramp had already
+        // been computed over a region that still contained the unpainted vertices, so zeroing them left
+        // full-weight vertices sitting directly beside zeroed ones. Adjacent vertices then differed by the
+        // whole displacement instead of by a fifth of it, and the garment's edge came out as a row of
+        // centimetre-high spikes. Excluded first, the ramp runs down to the garment's own edge properly.
+        var nW = BustRegionWeights(seed, cut, adj, nodeCount, log);
+
+        int region = 0;
+        for (int n = 0; n < nodeCount; n++) if (nW[n] > 0f) region++;
+        if (region < MinBustBridgeNodes)
+        {
+            log?.Invoke($"bust bridge: SKIPPED, {region} region node(s) survive the coverage gate");
+            return null;
+        }
+
+        // A rough outward direction to get started — the region's own weighted mean normal. Only used to
+        // find the other two axes and to settle the final one's sign; it is NOT the direction anything
+        // moves in. See below for why that distinction is the difference between a span and a mess.
+        var seedOut = Normalize(WeightedMean(nNorm, nW, nodeCount));
+        if (seedOut is not { } outSeed)
+        {
+            log?.Invoke("bust bridge: SKIPPED, the region's normals cancel out — no outward axis");
+            return null;
+        }
+
+        // The direction the span runs in — breast to breast. Everything is spanned ACROSS this and along
+        // nothing else, because the cleavage is a saddle and an isotropic relax settles on it unchanged.
+        var across = PrincipalAcross(start, nW, nodeCount, outSeed);
+        if (across is not { } lateral)
+        {
+            log?.Invoke("bust bridge: SKIPPED, the region has no principal direction across the chest");
+            return null;
+        }
+
+        // Up the body: the widest spread in the plane across the span direction, measured over the WHOLE
+        // MESH rather than over the region.
+        //
+        // Over the region it is wrong, and not subtly. A bust region is a curved band, so in the
+        // (up, depth) plane its points lie on a diagonal and the principal direction follows that diagonal
+        // rather than the vertical — 38° off on a whole bust, 11° on a bralette, each one tilting the
+        // final axis by the same amount. The mesh it is cut from is a torso: hips to neck, unambiguously
+        // taller than it is deep, and its principal direction is the body's own vertical whatever shape
+        // the garment on it happens to be.
+        var everywhere = new float[nodeCount];
+        Array.Fill(everywhere, 1f);
+        var upward = PrincipalAcross(start, everywhere, nodeCount, lateral);
+        if (upward is not { } vertical)
+        {
+            log?.Invoke("bust bridge: SKIPPED, the region has no vertical extent");
+            return null;
+        }
+
+        // THE DIRECTION CLOTH ACTUALLY MOVES: perpendicular to both, i.e. straight out from the chest.
+        //
+        // Deliberately not the mean normal, which is what this used at first and which is wrong wherever a
+        // garment does not cover the breast symmetrically. A bralette sits on the UPPER slope, so its
+        // normals average 21° upward — and lifting along that slides every vertex up the body as well as
+        // out. Below the apex the surface rises faster than 21°, so a vertex moving up-and-out ends up
+        // INSIDE the breast: the "it's clipping into the breasts underneath" report, from a pass whose
+        // whole promise is that it never moves anything inward. It never did — along its own axis. The
+        // axis was the bug.
+        //
+        // Perpendicular to the body's vertical, a chest front is single-valued: moving out along it cannot
+        // re-enter the body, which is what makes the promise true against the body rather than against a
+        // number.
+        var ax = Normalize(new Vec3(lateral.Y * vertical.Z - lateral.Z * vertical.Y,
+                                    lateral.Z * vertical.X - lateral.X * vertical.Z,
+                                    lateral.X * vertical.Y - lateral.Y * vertical.X)) ?? outSeed;
+        if (ax.X * outSeed.X + ax.Y * outSeed.Y + ax.Z * outSeed.Z < 0f)
+            ax = new Vec3(-ax.X, -ax.Y, -ax.Z);   // point it out of the body, not into it
+
+        var h0 = new float[nodeCount];
+        var lat = new float[nodeCount];
+        var ver = new float[nodeCount];
+        for (int n = 0; n < nodeCount; n++)
+        {
+            var p = start[n];
+            h0[n] = p.X * ax.X + p.Y * ax.Y + p.Z * ax.Z;
+            lat[n] = p.X * lateral.X + p.Y * lateral.Y + p.Z * lateral.Z;
+            ver[n] = p.X * vertical.X + p.Y * vertical.Y + p.Z * vertical.Z;
+        }
+
+        var h = ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log);
+
+        // How far of the way to the chord each node actually goes: the region ramp fades the effect into
+        // the untouched shell at the region's edge, and the strength is the user's "how much of this do I
+        // want". Both scale the finished displacement rather than the construction, so the span the solve
+        // computed stays exactly straight and only how far the cloth travels toward it varies.
+        var scale = new float[nodeCount];
+        for (int n = 0; n < nodeCount; n++) scale[n] = (h[n] - h0[n]) * nW[n] * strength;
+
+        // What the CONSTRUCTION asked for, before the ramp and the slope limit trim it, so the report can
+        // say which of the three actually decided the result. Without this a span that came out shallow
+        // looks identical whether the chord was shallow, the region ramp ate it, or the slope limit did —
+        // and they need completely different fixes.
+        float wantedMax = 0f, rampedMax = 0f;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            wantedMax = MathF.Max(wantedMax, h[n] - h0[n]);
+            rampedMax = MathF.Max(rampedMax, scale[n]);
+        }
+
+        // SLOPE LIMIT — the guarantee that the shell cannot tear, whatever shape the region came out.
+        //
+        // Everything above decides how far each vertex should travel; nothing above bounds how much that
+        // can differ between two vertices joined by an edge, and a garment lifting a centimetre where its
+        // neighbour lifts nothing is a spike, not a span. The region ramp is meant to prevent that and
+        // depends on the region's boundary being smooth, which the coverage map does not promise.
+        //
+        // Each node is pulled down to at most its neighbour's rise plus what the edge between them can
+        // absorb. Only ever lowers, so "never moves inward" survives it, and repeated until it settles
+        // because one pass only propagates one edge. This is what makes the fade a property of the mesh
+        // rather than of a step count guessed against one body.
+        for (int pass = 0; pass < BustSlopePasses; pass++)
+        {
+            float worst = 0f;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (scale[n] <= 0f) continue;
+                foreach (int k in adj[n])
+                {
+                    float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
+                    float cap = scale[k] + BustMaxSlope * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                    if (cap >= scale[n]) continue;
+                    worst = MathF.Max(worst, scale[n] - cap);
+                    scale[n] = cap;
+                }
+            }
+            if (worst <= BustBridgeEpsilon) break;
+        }
+
+        var delta = new Vec3[vc];
+        int moved = 0;
+        float maxMove = 0f;
+        for (int i = 0; i < vc; i++)
+        {
+            float d = scale[nodeOf[i]];
+            if (d <= BustBridgeEpsilon) continue;
+            delta[i] = new Vec3(ax.X * d, ax.Y * d, ax.Z * d);
+            if (d > maxMove) maxMove = d;
+        }
+        // Counted per NODE, not per vertex, so the number means "how much of the chest moved" rather than
+        // how many UV-seam copies the mesh happens to carry.
+        for (int n = 0; n < nodeCount; n++) if (scale[n] > BustBridgeEpsilon) moved++;
+
+        if (moved == 0)
+        {
+            log?.Invoke($"bust bridge: {region} region node(s), nothing moved — the cloth here already "
+                      + "spans straight between the breasts");
+            return null;
+        }
+
+        // Measured on the FINAL heights — after the region ramp and the strength — because that is the
+        // surface the shell actually gets, and a report on the unscaled solve would claim a flat span for
+        // a bridge the user had turned down to a quarter.
+        var hFinal = new float[nodeCount];
+        for (int n = 0; n < nodeCount; n++) hFinal[n] = h0[n] + scale[n];
+        var chord = ChordReport(start, h0, hFinal, nW, nodeCount, ax, lateral);
+
+        // Nodes the bridge never moved report zero weight, so the normal pass leaves their bytes exactly
+        // as they were and an untouched shell stays byte-identical.
+        for (int n = 0; n < nodeCount; n++)
+            if (scale[n] <= BustBridgeEpsilon) nW[n] = 0f;
+
+        log?.Invoke($"bust bridge: axis ({ax.X:0.###},{ax.Y:0.###},{ax.Z:0.###}), {region} region node(s), "
+                  + $"{moved} moved, max {maxMove:0.#####} "
+                  + $"(chord asked {wantedMax:0.#####}, ramp left {rampedMax:0.#####}, slope left {maxMove:0.#####})"
+                  + chord);
+
+        return new BustBridgePlan
+        {
+            Delta = delta, NodeOf = nodeOf, NodeWeight = nW, NodeNormal = nNorm,
+        };
+    }
+
+    /// <summary>
+    /// Which vertices this layer actually paints, or null when it paints everything — the gate that makes
+    /// the bust region "the cloth over the bust" rather than "the bust".
+    /// <para/>
+    /// Sampled nearest per vertex, like the toe cap's mask, and deliberately NOT through
+    /// <see cref="AnyVisible"/>: that keeps a triangle when any texel under it is lit, so the cloth
+    /// survives a little past where a per-vertex test says it is. The difference is the point — the
+    /// outermost ring of cloth vertices comes out uncovered and becomes the pinned boundary the relax
+    /// solves against, which is exactly the condition a span needs at its edge.
+    /// </summary>
+    private static bool[]? CoveredVertices((float U, float V)[] uv, SecondSkinLayer layer, int count)
+    {
+        var mask = layer.Coverage;
+        int w = layer.CoverageWidth, h = layer.CoverageHeight;
+        if (mask == null || w <= 0 || h <= 0 || mask.Length < w * h) return null;
+
+        var outC = new bool[count];
+        int n = Math.Min(count, uv.Length);
+        for (int i = 0; i < n; i++)
+        {
+            int x = ((int)MathF.Floor(uv[i].U * w) % w + w) % w;
+            int y = ((int)MathF.Floor(uv[i].V * h) % h + h) % h;
+            outC[i] = mask[y * w + x] >= CoverageFloor;
+        }
+        return outC;
+    }
+
+    /// <summary>
+    /// The region the bridge is allowed to move: the bust, PLUS the gap between its two lobes, faded to
+    /// zero at its outer edge. 1 inside, 0 outside, a ramp in between.
+    /// <para/>
+    /// The gap fill is not a refinement — without it the feature cannot work at all. Measured on a shipped
+    /// Neolithe torso, the bust bones' influence forms exactly TWO components of 1139 nodes each and they
+    /// do not meet: the sternum between them carries no bust weight, so 39 of the 59 midline nodes were
+    /// pinned and the cleavage — the one place a bridge exists to span — was the one place that could not
+    /// move. The relax dutifully reported 667 vertices moved while leaving the dish at 0.01633, exactly as
+    /// deep as it found it.
+    /// <para/>
+    /// The gap is selected by a GEODESIC ELLIPSE: a node counts as between the lobes when its combined
+    /// graph distance to both is within <see cref="BustGapSlack"/> of the shortest crossing there is. A
+    /// plain dilation would have done as well for the sternum and also swallowed the belly, which lies
+    /// directly below both lobes and is reachable from each in a handful of steps; requiring the SUM to be
+    /// near-minimal is what distinguishes "between them" from "near both of them".
+    /// <para/>
+    /// The gap ignores <paramref name="excluded"/>, unlike the seed, and that asymmetry is the point. A
+    /// garment's hem is pinned everywhere it lies ON the body — the band under the bust, the edges by the
+    /// arms — because there it really is anchored. Between the cups it is not: that hem is the top of the
+    /// span itself, and pinning it holds the one edge the whole feature exists to lift. On a bralette that
+    /// left the top of the cleavage diving as deep as it started while the surface below it spanned.
+    /// So: coverage decides where the bust IS, and the gap between the lobes is part of the region whether
+    /// or not anything is painted there.
+    /// <para/>
+    /// The bone weight is used to FIND the bust and then discarded as a ramp. It is a poor one: on that
+    /// same torso the midline nodes that carry any bust weight at all carry 0.008 to 0.035, so scaling the
+    /// displacement by it would have cancelled the span even after the gap was unpinned. The ramp instead
+    /// comes from graph distance to the region's own edge, which is uniform across bodies and does not
+    /// depend on how an author happened to paint weights.
+    /// </summary>
+    private static float[] BustRegionWeights(bool[] seed, bool[] excluded, List<int>[] adj, int nodeCount,
+                                             Action<string>? log)
+    {
+        // The lobes: connected components of the seed.
+        var comp = new int[nodeCount];
+        Array.Fill(comp, -1);
+        var sizes = new List<int>();
+        var stack = new Stack<int>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (!seed[n] || comp[n] >= 0) continue;
+            int id = sizes.Count, size = 0;
+            comp[n] = id;
+            stack.Push(n);
+            while (stack.Count > 0)
+            {
+                int q = stack.Pop();
+                size++;
+                if (adj[q] == null) continue;
+                foreach (int k in adj[q])
+                    if (seed[k] && comp[k] < 0) { comp[k] = id; stack.Push(k); }
+            }
+            sizes.Add(size);
+        }
+
+        var inRegion = (bool[])seed.Clone();
+        int gapAdded = 0;
+
+        // Two lobes or more: fill between the two LARGEST. Anything smaller is a stray scrap of weighting,
+        // not a breast, and bridging to one would drag the region somewhere arbitrary.
+        var largest = Enumerable.Range(0, sizes.Count).OrderByDescending(i => sizes[i]).Take(2).ToList();
+        if (largest.Count == 2)
+        {
+            var dA = GapDistance(comp, largest[0], seed, adj, nodeCount);
+            var dB = GapDistance(comp, largest[1], seed, adj, nodeCount);
+
+            int best = int.MaxValue;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (seed[n] || dA[n] < 0 || dB[n] < 0) continue;
+                int sum = dA[n] + dB[n];
+                if (sum < best) best = sum;
+            }
+            if (best != int.MaxValue)
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    if (seed[n] || dA[n] < 0 || dB[n] < 0) continue;
+                    if (dA[n] + dB[n] > best + BustGapSlack) continue;
+                    inRegion[n] = true;
+                    gapAdded++;
+                }
+            log?.Invoke($"bust bridge: {sizes.Count} lobe(s) "
+                      + $"[{string.Join(", ", sizes.OrderByDescending(s => s).Take(4))}], "
+                      + $"{gapAdded} node(s) added across the gap (shortest crossing {best} edges)");
+        }
+        else
+        {
+            log?.Invoke($"bust bridge: {sizes.Count} lobe(s) — no gap to fill");
+        }
+
+        // The ramp: graph distance inward from the region's edge, so the bridge fades into the untouched
+        // shell instead of ending in a crease.
+        var depth = new int[nodeCount];
+        Array.Fill(depth, -1);
+        var queue = new Queue<int>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (inRegion[n] || adj[n] == null) continue;
+            foreach (int k in adj[n])
+                if (inRegion[k] && depth[k] < 0) { depth[k] = 1; queue.Enqueue(k); }
+        }
+        while (queue.Count > 0)
+        {
+            int q = queue.Dequeue();
+            if (depth[q] >= BustFadeSteps + 1 || adj[q] == null) continue;
+            foreach (int k in adj[q])
+                if (inRegion[k] && depth[k] < 0) { depth[k] = depth[q] + 1; queue.Enqueue(k); }
+        }
+
+        var w = new float[nodeCount];
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (!inRegion[n]) continue;
+            // depth < 0 means the ramp never reached it — deep inside, or a region with no outside at all
+            // (a mesh entirely covered by the bust, which no body has). Full weight either way.
+            w[n] = depth[n] < 0 ? 1f : MathF.Min(1f, depth[n] / (float)(BustFadeSteps + 1));
+        }
+        return w;
+    }
+
+    /// <summary>
+    /// Breadth-first edge distance from one component of <paramref name="seed"/> to every node OUTSIDE the
+    /// seed. -1 for anything unreached. Seeded from the component's own nodes at distance 0 and never
+    /// travelling back through the seed, so the numbers describe the gap and not a walk over the bust.
+    /// </summary>
+    private static int[] GapDistance(int[] comp, int id, bool[] seed, List<int>[] adj, int nodeCount)
+    {
+        var d = new int[nodeCount];
+        Array.Fill(d, -1);
+        var queue = new Queue<int>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (comp[n] != id || adj[n] == null) continue;
+            foreach (int k in adj[n])
+                if (!seed[k] && d[k] < 0) { d[k] = 1; queue.Enqueue(k); }
+        }
+        while (queue.Count > 0)
+        {
+            int q = queue.Dequeue();
+            if (d[q] >= BustGapMaxSteps || adj[q] == null) continue;
+            foreach (int k in adj[q])
+                if (!seed[k] && d[k] < 0) { d[k] = d[q] + 1; queue.Enqueue(k); }
+        }
+        return d;
+    }
+
+    /// <summary>
+    /// The height each node should reach: the straight line between the furthest-forward point of each
+    /// breast, taken row by row across the chest. Never below where the node already is.
+    /// <para/>
+    /// This is the whole solve, and it is a construction rather than an iteration. Three relaxations were
+    /// tried first and each failed for a reason worth keeping, because each is the obvious thing to reach
+    /// for:
+    /// <list type="bullet">
+    /// <item>"raise to the neighbour MEAN" reads any slope as concavity on a triangulated quad grid, where
+    /// a vertex's neighbours are lopsided, and inflates the whole garment a little more every pass.</item>
+    /// <item>"raise to a fitted PLANE" fixes that and cannot touch a cleavage at all: a cleavage is a
+    /// SADDLE — dished across, bulging from collarbone to ribcage — and an isotropic operator sees the two
+    /// curvatures cancel. It converged in 320 passes having closed 0.012 of a 0.059 dish.</item>
+    /// <item>"raise to a LINE fitted across" is directionally right and fragile in practice: on an
+    /// irregular mesh the per-vertex test for whether a node even has neighbours either side goes both
+    /// ways between adjacent vertices, so half a row lifts and half stays, which crumples the surface
+    /// rather than flattening it.</item>
+    /// </list>
+    /// A row's answer is known in closed form — it is the chord — so nothing is gained by iterating toward
+    /// it, and everything that went wrong above came from iterating. Taking it directly also makes the
+    /// three properties the feature promises true by construction rather than at convergence: the span is
+    /// exactly straight, the apexes are its endpoints and cannot move, and no node is ever placed below
+    /// where it started, so it cannot enter the body.
+    /// <para/>
+    /// Rows are bands of <paramref name="ver"/> about one mesh edge tall, and a node reads the chord
+    /// interpolated between the two nearest band centres, so the result is a smooth ruled surface rather
+    /// than a stack of steps. Outside the two apexes nothing moves: this bridges BETWEEN the breasts and
+    /// leaves their outer flanks alone.
+    /// </summary>
+    private static float[] ChordTarget(float[] h0, float[] lat, float[] ver, float[] w, int count,
+                                       List<int>[] adj, Vec3[] pos, Action<string>? log)
+    {
+        var target = (float[])h0.Clone();
+
+        float loV = float.MaxValue, hiV = float.MinValue, midLat = 0f;
+        int n0 = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            loV = MathF.Min(loV, ver[n]); hiV = MathF.Max(hiV, ver[n]);
+            midLat += lat[n];
+            n0++;
+        }
+        if (n0 < 2) return target;
+        midLat /= n0;
+
+        // One band per edge of mesh, so a band is as fine as the geometry can express and no finer.
+        float edge = 0f;
+        int edges = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f || adj[n] == null) continue;
+            foreach (int k in adj[n])
+            {
+                float dx = pos[k].X - pos[n].X, dy = pos[k].Y - pos[n].Y, dz = pos[k].Z - pos[n].Z;
+                edge += MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                edges++;
+            }
+        }
+        edge = edges > 0 ? edge / edges : 0f;
+        int bands = edge > 1e-6f ? (int)MathF.Round((hiV - loV) / edge) : 0;
+        bands = Math.Clamp(bands, 3, 512);
+        float bandH = (hiV - loV) / bands;
+        if (bandH <= 1e-9f) return target;
+
+        // Each band's two apexes: the furthest-forward node either side of the chest's midline.
+        var latL = new float[bands]; var hL = new float[bands];
+        var latR = new float[bands]; var hR = new float[bands];
+        var have = new bool[bands];
+        for (int b = 0; b < bands; b++) { hL[b] = float.MinValue; hR[b] = float.MinValue; }
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            int b = Math.Clamp((int)((ver[n] - loV) / bandH), 0, bands - 1);
+            if (lat[n] < midLat) { if (h0[n] > hL[b]) { hL[b] = h0[n]; latL[b] = lat[n]; } }
+            else                 { if (h0[n] > hR[b]) { hR[b] = h0[n]; latR[b] = lat[n]; } }
+        }
+        int usable = 0;
+        for (int b = 0; b < bands; b++)
+        {
+            have[b] = hL[b] > float.MinValue && hR[b] > float.MinValue && latR[b] - latL[b] > 1e-6f;
+            if (have[b]) usable++;
+        }
+        if (usable == 0)
+        {
+            log?.Invoke("bust bridge: no band has a forward-most point on BOTH sides — nothing to span");
+            return target;
+        }
+
+        // A band with a lobe on only one side (the very top and bottom of the region, where the cleavage
+        // has run out) borrows its neighbour's, so the span tapers away instead of ending in a step.
+        for (int b = 0; b < bands; b++)
+        {
+            if (have[b]) continue;
+            int near = -1;
+            for (int d = 1; d < bands && near < 0; d++)
+            {
+                if (b - d >= 0 && have[b - d]) near = b - d;
+                else if (b + d < bands && have[b + d]) near = b + d;
+            }
+            if (near < 0) continue;
+            latL[b] = latL[near]; hL[b] = hL[near];
+            latR[b] = latR[near]; hR[b] = hR[near];
+        }
+
+        // Smooth the apex LINE down each breast before spanning between the two of them. Each band takes
+        // its apex from whichever vertex happens to be furthest forward in it, and on an irregular mesh
+        // that wobbles by a fraction of an edge from one band to the next — which the chord then amplifies
+        // all the way across the cleavage. Measured: two nodes 1mm apart at the sternum came out 5mm apart
+        // because they fell in adjacent bands.
+        //
+        // Safe to smooth downward as well as up: a node is only ever lifted from where it started, so a
+        // chord pulled slightly under a real apex leaves that apex exactly where it is.
+        for (int pass = 0; pass < BustBandSmoothing; pass++)
+        {
+            Smooth1D(hL, bands); Smooth1D(latL, bands);
+            Smooth1D(hR, bands); Smooth1D(latR, bands);
+        }
+
+        // The chord at one band, evaluated at a lateral position — or null outside the two apexes, which
+        // is what keeps this a bridge BETWEEN the breasts rather than a flattening of the whole chest.
+        float? Chord(int b, float u)
+        {
+            if (u <= latL[b] || u >= latR[b]) return null;
+            float t = (u - latL[b]) / (latR[b] - latL[b]);
+            return hL[b] + (hR[b] - hL[b]) * t;
+        }
+
+        int lifted = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+
+            // Between the two nearest band CENTRES, so the surface is ruled between rows rather than
+            // stepped at their boundaries.
+            float f = (ver[n] - loV) / bandH - 0.5f;
+            int b0 = Math.Clamp((int)MathF.Floor(f), 0, bands - 1);
+            int b1 = Math.Clamp(b0 + 1, 0, bands - 1);
+            float mix = Math.Clamp(f - b0, 0f, 1f);
+
+            var c0 = Chord(b0, lat[n]);
+            var c1 = Chord(b1, lat[n]);
+            // Outside the apexes in either band, that band contributes nothing rather than an
+            // extrapolation — the other one carries the blend on its own.
+            float want = (c0, c1) switch
+            {
+                ({ } a, { } b) => a + (b - a) * mix,
+                ({ } a, null)  => a,
+                (null, { } b)  => b,
+                _              => float.MinValue,
+            };
+            if (want <= h0[n]) continue;   // already at or in front of the chord — a breast, or its flank
+            target[n] = want;
+            lifted++;
+        }
+
+        log?.Invoke($"bust bridge: {bands} band(s) of {bandH:0.#####} ({usable} with a lobe either side), "
+                  + $"{lifted} node(s) lifted to the chord");
+        return target;
+    }
+
+    /// <summary>One [1,2,1] pass over a band series, ends held.</summary>
+    private static void Smooth1D(float[] a, int count)
+    {
+        if (count < 3) return;
+        var src = new float[count];
+        Array.Copy(a, src, count);
+        for (int i = 1; i < count - 1; i++)
+            a[i] = (src[i - 1] + 2f * src[i] + src[i + 1]) * 0.25f;
+    }
+
+
+    /// <summary>
+    /// The region's principal direction ACROSS <paramref name="ax"/> — on a chest, the line from one
+    /// breast to the other. Derived from the geometry in hand rather than taken as model-space X, because
+    /// nothing else in this pass assumes a model-space convention and a caller on another surface would
+    /// get a plainly wrong answer from a constant.
+    /// </summary>
+    private static Vec3? PrincipalAcross(Vec3[] pos, float[] weight, int count, Vec3 ax)
+    {
+        var mid = default(Vec3);
+        float n = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (weight[i] <= 0f) continue;
+            mid = new Vec3(mid.X + pos[i].X, mid.Y + pos[i].Y, mid.Z + pos[i].Z);
+            n++;
+        }
+        if (n < 2f) return null;
+        mid = new Vec3(mid.X / n, mid.Y / n, mid.Z / n);
+
+        Basis(ax, out var bu, out var bv);
+        float suu = 0f, svv = 0f, suv = 0f;
+        for (int i = 0; i < count; i++)
+        {
+            if (weight[i] <= 0f) continue;
+            var d = new Vec3(pos[i].X - mid.X, pos[i].Y - mid.Y, pos[i].Z - mid.Z);
+            float a = d.X * bu.X + d.Y * bu.Y + d.Z * bu.Z;
+            float b = d.X * bv.X + d.Y * bv.Y + d.Z * bv.Z;
+            suu += a * a; svv += b * b; suv += a * b;
+        }
+        // Leading eigenvector of the 2x2 covariance, in closed form.
+        float theta = 0.5f * MathF.Atan2(2f * suv, suu - svv);
+        float cu = MathF.Cos(theta), cv = MathF.Sin(theta);
+        return Normalize(new Vec3(bu.X * cu + bv.X * cv, bu.Y * cu + bv.Y * cv, bu.Z * cu + bv.Z * cv));
+    }
+
+    /// <summary>Weighted mean of a per-node vector, unnormalized.</summary>
+    private static Vec3 WeightedMean(Vec3[] v, float[] w, int count)
+    {
+        var acc = default(Vec3);
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            acc = new Vec3(acc.X + v[n].X * w[n], acc.Y + v[n].Y * w[n], acc.Z + v[n].Z * w[n]);
+        }
+        return acc;
+    }
+
+    /// <summary>
+    /// How deep the dish between the two apexes was, and how much of it is left — the number that says
+    /// whether the bridge WORKED. "N moved" only says it did something, and a run that stalls half way
+    /// (too few passes, or a region cut in two by a neckline so the sides never see each other) moves
+    /// plenty of vertices while leaving the dish it was meant to remove.
+    /// <para/>
+    /// Measured ONLY along the cleavage — nodes within <see cref="ChordBand"/> of the segment joining the
+    /// apexes. Measuring the whole region against that one line is the obvious version and it is
+    /// meaningless: the top of a breast near the collarbone and its underside at the ribcage both project
+    /// between the apexes and both sit a long way behind the line, quite correctly. On a real torso that
+    /// reported a residual of 0.079 against an apex gap of 0.156 for a bridge that had done its job.
+    /// <para/>
+    /// Lobes are separated along <paramref name="lateral"/> — the same direction the relax spans, so the
+    /// report cannot disagree with the solve about which way the cleavage runs.
+    /// </summary>
+    private static string ChordReport(Vec3[] start, float[] h0, float[] h, float[] w, int count,
+                                      Vec3 ax, Vec3 lateral)
+    {
+        // Lateral direction: the widest spread of the region, taken across the outward axis. On a chest
+        // that is left-to-right, and it is derived the same way the axis is.
+        var mid = default(Vec3);
+        float wsum = 0f;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            mid = new Vec3(mid.X + start[n].X, mid.Y + start[n].Y, mid.Z + start[n].Z);
+            wsum++;
+        }
+        if (wsum < 2f) return "";
+        mid = new Vec3(mid.X / wsum, mid.Y / wsum, mid.Z / wsum);
+
+        int apexL = -1, apexR = -1;
+        float bestL = float.MinValue, bestR = float.MinValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            var d = new Vec3(start[n].X - mid.X, start[n].Y - mid.Y, start[n].Z - mid.Z);
+            float lat = d.X * lateral.X + d.Y * lateral.Y + d.Z * lateral.Z;
+            if (lat >= 0f) { if (h0[n] > bestR) { bestR = h0[n]; apexR = n; } }
+            else           { if (h0[n] > bestL) { bestL = h0[n]; apexL = n; } }
+        }
+        if (apexL < 0 || apexR < 0) return "";
+
+        // The dish along the chord, before and after. Which nodes count is decided ACROSS the axis only —
+        // their depth along it is the very thing being measured, so letting it into the "is this node on
+        // the cleavage" test excludes exactly the nodes the report exists to look at. Measured in full 3D
+        // it did: the sternum sits 0.05 behind the nipple line on a real torso against a band of 0.019, so
+        // every deep node was filtered out and what came back was the dish beside the nipples, which is
+        // convex, does not move, and reported an unchanged 0.01641 for a bridge that had filled 0.012 of it.
+        Vec3 Across(Vec3 p)
+        {
+            float along = p.X * ax.X + p.Y * ax.Y + p.Z * ax.Z;
+            return new Vec3(p.X - ax.X * along, p.Y - ax.Y * along, p.Z - ax.Z * along);
+        }
+
+        var pl = start[apexL];
+        var pr = start[apexR];
+        var seg = Across(new Vec3(pr.X - pl.X, pr.Y - pl.Y, pr.Z - pl.Z));
+        float span = seg.X * seg.X + seg.Y * seg.Y + seg.Z * seg.Z;
+        if (span <= 1e-12f) return "";
+        float band = ChordBand * ChordBand * span;
+
+        // Mean AND worst, because they answer different questions and the worst alone misleads. On a real
+        // torso the deepest sternum node came within 0.005 of the chord while the reported max stayed at
+        // 0.044, held up by a single node at the edge of the band that the fit could not place — which
+        // reads as "the bridge did nothing" when almost all of it had worked.
+        float wasMax = 0f, nowMax = 0f;
+        double wasSum = 0, nowSum = 0;
+        int sampled = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            var d = Across(new Vec3(start[n].X - pl.X, start[n].Y - pl.Y, start[n].Z - pl.Z));
+            float t = (d.X * seg.X + d.Y * seg.Y + d.Z * seg.Z) / span;
+            if (t <= 0f || t >= 1f) continue;
+            // How far off the apex-to-apex line it sits, across the axis — on a chest, how far above or
+            // below the nipple line. Further off than the band and the chord says nothing about it.
+            var perp = new Vec3(d.X - seg.X * t, d.Y - seg.Y * t, d.Z - seg.Z * t);
+            if (perp.X * perp.X + perp.Y * perp.Y + perp.Z * perp.Z > band) continue;
+            float chord = h0[apexL] + (h0[apexR] - h0[apexL]) * t;
+            float a = MathF.Max(0f, chord - h0[n]), b = MathF.Max(0f, chord - h[n]);
+            wasMax = MathF.Max(wasMax, a); nowMax = MathF.Max(nowMax, b);
+            wasSum += a; nowSum += b;
+            sampled++;
+        }
+        string where = $", apexes ({pl.X:0.###},{pl.Y:0.###},{pl.Z:0.###})-({pr.X:0.###},{pr.Y:0.###},{pr.Z:0.###})"
+                     + $" gap {MathF.Sqrt(span):0.####}";
+        if (sampled == 0) return where + ", nothing on the chord to measure";
+        return where + $", dish mean {wasSum / sampled:0.#####} -> {nowSum / sampled:0.#####}"
+                     + $", worst {wasMax:0.#####} -> {nowMax:0.#####}, over {sampled} node(s)";
+    }
+
+    /// <summary>
+    /// How far off the apex-to-apex segment a node may be and still count as part of the cleavage —
+    /// measured ACROSS the chest axis, as a fraction of the segment's length. Only used for reporting.
+    /// </summary>
+    private const float ChordBand = 0.12f;
 
     /// <summary>Longest cycle in a rim adjacency map, walked in connectivity order.</summary>
     private static List<int> LongestLoop(Dictionary<int, List<int>> rim)
@@ -9831,14 +10816,22 @@ public static class SecondSkinWriter
     /// copy of a node gets the same answer, so UV seams inside the cap don't crack.
     /// </summary>
     private static Vec3[] CapNormals(Vec3[] basePos, Vec3[] baseNrm, ToeCapPlan plan, ushort[] tris)
+        => RelaxedNormals(basePos, baseNrm, plan.Delta, plan.NodeOf, plan.NodeWeight, plan.NodeNormal, tris);
+
+    /// <inheritdoc cref="CapNormals"/>
+    /// <remarks>
+    /// The plan-free form, shared by every pass that moves vertices without changing which vertices exist.
+    /// The toe cap hands it a rebuilt topology; the bust bridge hands it the mesh's own, unchanged.
+    /// </remarks>
+    private static Vec3[] RelaxedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
+                                         float[] nodeWeight, Vec3[] nodeNormal, ushort[] tris)
     {
         int vc = basePos.Length;
-        var nodeOf = plan.NodeOf;
-        int nodeCount = plan.NodeWeight.Length;
+        int nodeCount = nodeWeight.Length;
 
         var def = new Vec3[vc];
         for (int i = 0; i < vc; i++)
-            def[i] = new Vec3(basePos[i].X + plan.Delta[i].X, basePos[i].Y + plan.Delta[i].Y, basePos[i].Z + plan.Delta[i].Z);
+            def[i] = new Vec3(basePos[i].X + delta[i].X, basePos[i].Y + delta[i].Y, basePos[i].Z + delta[i].Z);
 
         // Deduped by node triple: capTris spans every submesh of the mesh, including the duplicate
         // variant the connector filter drops later, and a doubled face would skew the average.
@@ -9867,20 +10860,20 @@ public static class SecondSkinWriter
         // push drive the shell into the body, so decide it once from the source normals we trust.
         float agree = 0;
         for (int n = 0; n < nodeCount; n++)
-            if (plan.NodeWeight[n] > 0f)
-                agree += accum[n].X * plan.NodeNormal[n].X + accum[n].Y * plan.NodeNormal[n].Y + accum[n].Z * plan.NodeNormal[n].Z;
+            if (nodeWeight[n] > 0f)
+                agree += accum[n].X * nodeNormal[n].X + accum[n].Y * nodeNormal[n].Y + accum[n].Z * nodeNormal[n].Z;
         float sign = agree < 0f ? -1f : 1f;
 
         var outN = new Vec3[vc];
         for (int i = 0; i < vc; i++)
         {
             int n = nodeOf[i];
-            float w = plan.NodeWeight[n];
+            float w = nodeWeight[n];
             if (w <= 0f) { outN[i] = baseNrm[i]; continue; }   // untouched: original bytes must survive
 
             var a = accum[n];
-            var fresh = Normalize(new Vec3(a.X * sign, a.Y * sign, a.Z * sign)) ?? plan.NodeNormal[n];
-            var src = plan.NodeNormal[n];
+            var fresh = Normalize(new Vec3(a.X * sign, a.Y * sign, a.Z * sign)) ?? nodeNormal[n];
+            var src = nodeNormal[n];
 
             // Blend against the NODE-averaged source normal, not this vertex's own, so welded copies
             // land on identical bytes; the weight fade rejoins the untouched shell without a crease.

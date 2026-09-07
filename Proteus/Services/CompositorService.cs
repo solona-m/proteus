@@ -4029,12 +4029,14 @@ public class CompositorService : IDisposable
                     // real trade — it just has to be findable, because the symptom is toes that look wrong in
                     // a mod the user never touched.
                     else if (toeCapMods.Count > 0 && !toeCapMods.Contains(entry.ModDirectory)
+                        // The bust bridge is held EQUAL across the pair on purpose: this asks what the cap
+                        // alone decides, and an overlay that would be promoted anyway is not being narrowed.
                         && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                                 overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
-                                canShell, unmirrors, false)
+                                canShell, unmirrors, false, entry.Metadata.BustBridge == true)
                         && RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                                 overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
-                                canShell, unmirrors, true)
+                                canShell, unmirrors, true, entry.Metadata.BustBridge == true)
                         && capNarrowedMods.Add(entry.ModDirectory))
                     {
                         log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
@@ -4046,7 +4048,8 @@ public class CompositorService : IDisposable
                     }
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
-                            unmirrors, toeCapMods.Contains(entry.ModDirectory)))
+                            unmirrors, toeCapMods.Contains(entry.ModDirectory),
+                            entry.Metadata.BustBridge == true))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
