@@ -6396,7 +6396,8 @@ public class CompositorService : IDisposable
                                 {
                                     ApplyNormalIndent(baseN, blurredN, strapN, wN, hN, aoNormal,
                                         wN == wD && hN == hD ? coveredAbove : null, radiusN,
-                                        wN == wD && hN == hD ? insidePlane : null);
+                                        wN == wD && hN == hD ? insidePlane : null,
+                                        BustStandoff(modDir, bodyMdls, strapN, wN, hN));
                                     aoIndentedNormal = true;
                                 }
                             }
@@ -7320,6 +7321,57 @@ public class CompositorService : IDisposable
 
     /// <summary>Time a seam-map lookup. A hit is near-free; a miss is a ~1s build, and the two are
     /// indistinguishable in the log without this.</summary>
+    /// <summary>
+    /// Where a bridged garment has lifted clear of the bust, as a body-UV suppression map for the
+    /// skindent — see <see cref="SecondSkinWriter.BustStandoffMap"/>. Null for a mod with no bust bridge,
+    /// which is every mod by default and the only cost they pay for this.
+    /// <para/>
+    /// CACHED, because it runs the bridge's whole solve over every body model and the skin bake would
+    /// otherwise pay for that on each composite, for each material, having changed nothing. The key is the
+    /// mod, the body models' own identity (already computed for the seam map — path plus size and mtime,
+    /// so a re-exported body invalidates it) and the size asked for. The garment silhouette is NOT in the
+    /// key: it only decides which vertices qualify, the map is a coarse gate, and hashing a 4K buffer per
+    /// mod per material to sharpen a suppression mask is not a trade worth making.
+    /// </summary>
+    private byte[]? BustStandoff(string modDir, IReadOnlyList<UvSeamMapService.SeamModel>? models,
+                                 byte[]? coverage, int w, int h)
+    {
+        if (models is not { Count: > 0 } || w <= 0 || w != h) return null;
+        var entry = discovery.DiscoverAll().FirstOrDefault(e =>
+            string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
+        if (entry?.Metadata.BustBridge != true) return null;
+        float strength = Math.Clamp(entry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
+        if (strength <= 0f) return null;
+
+        var key = $"{modDir}\0{w}\0{strength}\0{string.Join("|", models.Select(m => m.Id))}";
+        if (_bustStandoff.TryGetValue(key, out var hit)) return hit;
+
+        var bodies = new List<byte[]>(models.Count);
+        foreach (var m in models)
+        {
+            try { if (m.Load() is { Length: > 0 } b) bodies.Add(b); }
+            catch { /* unreadable body — the map simply covers less */ }
+        }
+        var map = bodies.Count == 0
+            ? null
+            : SecondSkinWriter.BustStandoffMap(bodies, coverage, w, h, strength, w, BustStandoffFull,
+                                               msg => log.Debug("[Proteus] bust standoff: {0}", msg));
+        _bustStandoff[key] = map;
+        log.Debug("[Proteus] bust standoff: {0} for {1} at {2} ({3} body model(s))",
+                  map == null ? "no map" : "built", modDir, w, bodies.Count);
+        return map;
+    }
+
+    /// <summary>
+    /// Lift at which the skindent is fully suppressed, in model units — about a millimetre and a half on a
+    /// body two units tall. The shell's own resting offset is <c>SecondSkinWriter.BaseOffset</c> (0.001),
+    /// so anything within this really is lying on the skin and still marks it; a spanned cleavage runs to
+    /// forty times it and marks nothing.
+    /// </summary>
+    private const float BustStandoffFull = 0.0015f;
+
+    private readonly Dictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
+
     private int[]? TimedSeamSource(IReadOnlyList<UvSeamMapService.SeamModel> models, int w, int h, int reach)
     {
         var t = PhaseCounter.Begin();
@@ -9780,7 +9832,8 @@ public class CompositorService : IDisposable
     /// which leaves the tilt exactly as it was at the resolution the depth default was tuned against.
     /// </param>
     internal static void ApplyNormalIndent(byte[] baseN, byte[] blurred, byte[] strap, int w, int h, float strength,
-        byte[]? coveredAbove = null, int radius = IndentRefRadius, byte[]? inside = null)
+        byte[]? coveredAbove = null, int radius = IndentRefRadius, byte[]? inside = null,
+        byte[]? liftedOff = null)
     {
         if (strength <= 0f) return;
         if (inside != null && inside.Length < w * h) inside = null;
@@ -9796,6 +9849,12 @@ public class CompositorService : IDisposable
             {
                 float edge = 1f - strap[row + x] / 255f;   // skin side of the edge only
                 if (coveredAbove != null) edge *= 1f - coveredAbove[row + x] / 255f;   // hidden under a higher layer
+                // ...and not pressing on the skin at all. A skindent is the mark cloth leaves where it
+                // bears on the body; where a bridged shell has lifted clear of the bust there is no
+                // contact to mark, and drawing one puts the seam of a garment onto skin it is no longer
+                // touching. Same shape as coveredAbove because it is the same kind of statement: this
+                // texel's garment is not in a position to affect the skin here.
+                if (liftedOff != null) edge *= 1f - liftedOff[row + x] / 255f;
                 if (edge <= 0f) continue;
                 int xm = x > 0 ? x - 1 : 0;
                 int xp = x < w - 1 ? x + 1 : w - 1;

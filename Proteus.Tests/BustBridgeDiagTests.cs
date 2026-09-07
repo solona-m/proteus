@@ -134,6 +134,51 @@ public class BustBridgeDiagTests
         o.WriteLine($"wrote bust_before.obj and bust_after.obj to {dir}");
     }
 
+    /// <summary>
+    /// The standoff map the skin bake gates skindenting on. Runs the same solve over the whole body and
+    /// rasterises the lift into body UV, so this checks the two things that make it usable: it lands on
+    /// the CHEST rather than smeared over the atlas, and the lift there is far enough past the contact
+    /// threshold to actually suppress rather than merely dim.
+    /// </summary>
+    [Fact]
+    public void StandoffMapCoversTheChestAndNothingElse()
+    {
+        if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
+
+        const int size = 512;
+        const float fullAt = 0.0015f;
+        var map = SecondSkinWriter.BustStandoffMap(
+            new[] { File.ReadAllBytes(Torso) }, null, 0, 0, 1f, size, fullAt);
+        Assert.NotNull(map);
+
+        int lit = 0, full = 0, minX = size, maxX = -1, minY = size, maxY = -1;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                byte v = map![y * size + x];
+                if (v == 0) continue;
+                lit++;
+                if (v == 255) full++;
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+        float u0 = minX / (float)size, u1 = maxX / (float)size;
+        float v0 = minY / (float)size, v1 = maxY / (float)size;
+        o.WriteLine($"{lit} texels lifted ({100.0 * lit / map!.Length:0.##}%), {full} fully suppressed; "
+                  + $"u {u0:0.###}..{u1:0.###}, v {v0:0.###}..{v1:0.###}");
+
+        Assert.True(lit > 0, "nothing lifted — the map would suppress no skindent at all");
+        // A few percent of the atlas. Much more means it is marking something other than the cleavage,
+        // and a map that suppresses broadly would quietly take skindenting off whole garments.
+        Assert.InRange(100.0 * lit / map.Length, 0.1, 8.0);
+        // Straddling the midline and in the upper half of the body: the chest, not the hips or the arms.
+        Assert.True(u0 < 0.5f && u1 > 0.5f, $"the lifted region does not straddle the midline (u {u0}..{u1})");
+        Assert.True(v1 < 0.5f, $"the lifted region reaches below the torso (v {v0}..{v1})");
+        // Nearly all of it saturated: the span clears the contact threshold many times over, so this is a
+        // gate rather than a fade, and a change that quietly halved the lift would show up here.
+        Assert.True(full > lit * 0.75, $"only {full} of {lit} lifted texels are past {fullAt}");
+    }
+
     private static void WriteObj(string path, SecondSkinWriter.Vec3[] pos, ushort[] tris)
     {
         using var w = new StreamWriter(path);

@@ -2797,7 +2797,11 @@ public sealed class SecondSkinService
             // separate argument. A promoted overlay still carries its own art, so mirroring would tint and
             // light it at every green < 255 texel; see BuildRows.
             bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            // A spanning shell needs its backfaces drawn: it lifts off the body between the breasts, so the
+            // inside of the span is visible from below and from the side, and culled it reads as a hole
+            // through the garment rather than as cloth with an underside.
+            bool spanning = bridgeByMod.ContainsKey(entry.ModDirectory);
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell, showBackfaces: spanning); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");

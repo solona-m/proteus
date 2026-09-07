@@ -7439,6 +7439,16 @@ public static class SecondSkinWriter
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null)
+        => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered);
+
+    /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
+    /// <remarks>
+    /// Int indices, because a caller working on the WHOLE body rather than one mesh — the standoff map
+    /// does — concatenates every skin mesh and runs past what a ushort can address.
+    /// </remarks>
+    internal static BustBridgePlan? BustBridgeSolve(
+        Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
+        Action<string>? log = null, bool[]? covered = null)
     {
         int vc = pos.Length;
         if (vc == 0 || strength <= 0f || bust.Length < vc) return null;
@@ -7849,6 +7859,123 @@ public static class SecondSkinWriter
                 if (!seed[k] && d[k] < 0) { d[k] = d[q] + 1; queue.Enqueue(k); }
         }
         return d;
+    }
+
+    /// <summary>
+    /// How far a bridged shell stands OFF the skin, as a body-UV map: 0 where the cloth still lies on the
+    /// body, 255 where it has lifted <paramref name="fullAt"/> or more. Null when this body has no bust
+    /// bones, nothing is covered, or the bridge would not fire.
+    /// <para/>
+    /// Exists because the skin bake and the shell are built in that order, and the bake needs to know
+    /// something only the shell knows. Skindenting presses a groove into the SKIN under a garment's edge,
+    /// which is right while the cloth is against the body and wrong the moment it is not: a spanned
+    /// cleavage floats centimetres clear, and denting the skin beneath it draws the seam of a garment that
+    /// is no longer touching there. The compositor cannot wait for the shell — it has already published the
+    /// normal by then — so the bridge's own solve is run here over the body models the bake already holds.
+    /// <para/>
+    /// Deliberately the same <see cref="BustBridgeSolve"/> the shell uses, not an approximation of it. A
+    /// second implementation of "where does the cloth lift" would drift from the first, and the failure
+    /// would be a groove appearing exactly where the geometry says there is no contact — invisible in code
+    /// review and obvious in game.
+    /// </summary>
+    /// <param name="fullAt">Lift at which suppression is total, in model units.</param>
+    internal static byte[]? BustStandoffMap(IReadOnlyList<byte[]> bodies, byte[]? coverage, int covW, int covH,
+                                           float strength, int size, float fullAt, Action<string>? log = null)
+    {
+        if (bodies.Count == 0 || size <= 0 || strength <= 0f || fullAt <= 0f) return null;
+
+        byte[]? map = null;
+        foreach (var mdl in bodies)
+        {
+            if (mdl is not { Length: > 0 }) continue;
+            if (!TryReadLod0Geometry(mdl, out var fPos, out var fUv, out var fTri, out var fW, out var fNrm))
+                continue;
+            int vc = fPos.Length / 3;
+            if (vc == 0 || fTri.Length < 3) continue;
+
+            var bust = new float[vc];
+            bool anyBust = false;
+            for (int i = 0; i < vc; i++)
+            {
+                float acc = 0f;
+                foreach (var (bone, bw) in fW[i])
+                    if (bone.Equals(BustBoneL, StringComparison.OrdinalIgnoreCase)
+                     || bone.Equals(BustBoneR, StringComparison.OrdinalIgnoreCase))
+                        acc += bw;
+                if (acc <= 0f) continue;
+                bust[i] = MathF.Min(1f, acc);
+                anyBust = true;
+            }
+            if (!anyBust) continue;
+
+            // Sampled with WRAP, like every other body-UV read here: a body's UVs need not live in the
+            // [0,1] tile, and the shell writer normalises per mesh while this reads every mesh at once.
+            // Wrapping makes an integer tile offset irrelevant instead of putting a whole mesh on row 0.
+            bool[]? covered = null;
+            if (coverage != null && covW > 0 && covH > 0 && coverage.Length >= covW * covH)
+            {
+                covered = new bool[vc];
+                for (int i = 0; i < vc; i++)
+                {
+                    int x = ((int)MathF.Floor(fUv[i * 2] * covW) % covW + covW) % covW;
+                    int y = ((int)MathF.Floor(fUv[i * 2 + 1] * covH) % covH + covH) % covH;
+                    covered[i] = coverage[y * covW + x] >= CoverageFloor;
+                }
+            }
+
+            var p3 = new Vec3[vc];
+            var n3 = new Vec3[vc];
+            for (int i = 0; i < vc; i++)
+            {
+                p3[i] = new Vec3(fPos[i * 3], fPos[i * 3 + 1], fPos[i * 3 + 2]);
+                n3[i] = new Vec3(fNrm[i * 3], fNrm[i * 3 + 1], fNrm[i * 3 + 2]);
+            }
+
+            var plan = BustBridgeSolve(p3, n3, fTri, bust, strength, log, covered);
+            if (plan == null) continue;
+
+            var lift = new float[vc];
+            for (int i = 0; i < vc; i++)
+            {
+                var d = plan.Delta[i];
+                lift[i] = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+            }
+
+            map ??= new byte[size * size];
+            // MAX over the triangle, not interpolated. This gates a groove off, so overstating the lifted
+            // area by a texel loses nothing while understating it leaves a sliver of seam drawn under cloth
+            // that is not touching — and the same conservative choice, for the same reason, as the cap's
+            // footprint rasteriser above.
+            for (int t = 0; t + 2 < fTri.Length; t += 3)
+            {
+                int a = fTri[t], b = fTri[t + 1], c = fTri[t + 2];
+                if (a >= vc || b >= vc || c >= vc) continue;
+                float m = MathF.Max(lift[a], MathF.Max(lift[b], lift[c]));
+                if (m <= BustBridgeEpsilon) continue;
+                byte v = (byte)Math.Clamp(MathF.Round(m / fullAt * 255f), 0f, 255f);
+                if (v == 0) continue;
+
+                float ax = fUv[a * 2] * size, ay = fUv[a * 2 + 1] * size;
+                float bx = fUv[b * 2] * size, by = fUv[b * 2 + 1] * size;
+                float cx = fUv[c * 2] * size, cy = fUv[c * 2 + 1] * size;
+                int x0 = (int)MathF.Floor(MathF.Min(ax, MathF.Min(bx, cx)));
+                int x1 = (int)MathF.Ceiling(MathF.Max(ax, MathF.Max(bx, cx)));
+                int y0 = (int)MathF.Floor(MathF.Min(ay, MathF.Min(by, cy)));
+                int y1 = (int)MathF.Ceiling(MathF.Max(ay, MathF.Max(by, cy)));
+                if ((long)(x1 - x0 + 1) * (y1 - y0 + 1) > 1 << 18) continue;   // straddles a UV seam
+                for (int y = y0; y <= y1; y++)
+                {
+                    int wy = (y % size + size) % size;
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        int wx = (x % size + size) % size;
+                        int p = wy * size + wx;
+                        if (map[p] < v) map[p] = v;
+                    }
+                }
+            }
+        }
+        return map;
     }
 
     /// <summary>
