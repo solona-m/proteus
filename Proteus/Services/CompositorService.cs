@@ -6342,7 +6342,8 @@ public class CompositorService : IDisposable
                                     : BlurCoverage(strapD, wD, hD, radiusD);
                                 blendBlurStats.Stop(tBlurD);
                                 SnapshotBaseDiffuse();
-                                ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove);
+                                ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove,
+                                    BustStandoff(modDir, bodyMdls, strapD, wD, hD, radiusD));
                                 // AO is a real edit to the skin diffuse in its own right — a gear-layer mod
                                 // with no skin overlay at all still legitimately owns the buffer through it.
                                 diffuseBlended = true;
@@ -7363,11 +7364,30 @@ public class CompositorService : IDisposable
             ? null
             : SecondSkinWriter.BustStandoffMap(bodies, coverage, w, h, strength, w, BustStandoffFull,
                                                msg => log.Debug("[Proteus] bust standoff: {0}", msg));
-        // Feather it out to the same distance the indent's own gradient spans, so the two meet as one
-        // fade rather than as a cut. Blurring RAISES the surrounding texels a little as well as softening
-        // the core, which errs toward suppressing slightly more skindent than strictly necessary — the
-        // safe direction, since the cost is a missing groove and the cost the other way is a visible seam.
-        if (map != null && radius >= 1) map = BlurCoverage(map, w, h, radius);
+        // GROW first, then feather. A shadow or a groove at a texel is cast by cloth some distance away,
+        // so it must be suppressed when any cloth WITHIN THAT REACH has lifted — a maximum over the
+        // neighbourhood. Feathering alone only reached the halo touching the garment and left its outer
+        // half, which reads as a shadow with clean skin between it and the cloth supposedly casting it.
+        //
+        // How far to grow follows from the two things after it, and both are easy to under-count.
+        //
+        // The halo reaches BlurCoveragePasses boxes of the radius — two boxes of radius r have a support
+        // of 2r. The feather then eats its OWN support off the grown mask's edge, because a box blur pulls
+        // down everything within its reach of a boundary. So the saturated core that survives is
+        // (grow − feather reach), and it must still cover 2r.
+        //
+        // Feathered with ONE pass rather than two, so its bite is r and a grow of 3r suffices. Two passes
+        // would need 4r, and growing the mask that far starts suppressing skindent along garment edges
+        // well away from anything that lifted. One box pass is still a gradient, which is all the feather
+        // was ever for.
+        //
+        // Under-counting here is invisible in the code and plain on skin: grown by r the outer half of the
+        // halo survives, by 2r a ring of it does, and even at 3r-with-two-passes six texels of it remain.
+        if (map != null && radius >= 1)
+        {
+            map = MaxFilter(map, w, h, radius * (BlurCoveragePasses + 1));
+            map = BlurCoverage(map, w, h, radius, iterations: 1);
+        }
         _bustStandoff[key] = map;
         log.Debug("[Proteus] bust standoff: {0} for {1} at {2}, feathered by {3} ({4} body model(s))",
                   map == null ? "no map" : "built", modDir, w, radius, bodies.Count);
@@ -9721,12 +9741,70 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
+    /// Separable maximum filter of a single-channel plane: each texel takes the largest value within
+    /// <paramref name="radius"/> of it.
+    /// <para/>
+    /// A BLUR is the wrong tool for the one caller of this, and the difference is visible. A contact
+    /// shadow at a texel is cast by cloth up to the blur radius away, so the question "should this shadow
+    /// exist" is "is any cloth NEAR here lifted" — a maximum over the neighbourhood, not an average of it.
+    /// Feathering the lift map instead suppressed the halo immediately beside the garment and left its
+    /// outer half standing, which reads as a shadow with a band of clean skin between it and the cloth
+    /// casting it. That was the report.
+    /// <para/>
+    /// Van Herk / Gil-Werman: block prefix and suffix maxima make each pass O(1) per texel regardless of
+    /// radius, which matters because the alternative at a 4K map and a radius of twelve is a hundred
+    /// million comparisons per axis. The window is clamped rather than wrapped at the plane's edges, which
+    /// can only overstate the result there — the safe direction for a suppression mask.
+    /// </summary>
+    internal static byte[] MaxFilter(byte[] src, int w, int h, int radius)
+    {
+        if (radius < 1 || w <= 0 || h <= 0 || src.Length < w * h) return (byte[])src.Clone();
+        var mid = new byte[w * h];
+        var dst = new byte[w * h];
+        int k = 2 * radius + 1;
+        var pre = new byte[Math.Max(w, h)];
+        var suf = new byte[Math.Max(w, h)];
+
+        void Line(byte[] s, int sOff, int sStep, byte[] d, int dOff, int dStep, int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                byte v = s[sOff + i * sStep];
+                pre[i] = i % k == 0 ? v : Math.Max(pre[i - 1], v);
+            }
+            for (int i = n - 1; i >= 0; i--)
+            {
+                byte v = s[sOff + i * sStep];
+                suf[i] = i == n - 1 || (i + 1) % k == 0 ? v : Math.Max(suf[i + 1], v);
+            }
+            for (int i = 0; i < n; i++)
+            {
+                byte a = suf[i - radius >= 0 ? i - radius : 0];
+                byte b = pre[i + radius < n ? i + radius : n - 1];
+                d[dOff + i * dStep] = Math.Max(a, b);
+            }
+        }
+
+        for (int y = 0; y < h; y++) Line(src, y * w, 1, mid, y * w, 1, w);
+        for (int x = 0; x < w; x++) Line(mid, x, w, dst, x, w, h);
+        return dst;
+    }
+
+    /// <summary>
     /// Separable box blur of a single-channel (1 byte/pixel) plane. Two box passes per iteration
     /// (horizontal then vertical) approximate a smooth Gaussian falloff — used to spread a strap's
     /// coverage into the surrounding skin for the ambient-occlusion halo. Unlike the ParallelPixels
     /// kernels this reads neighbours, so it parallelises over independent rows/columns instead.
     /// </summary>
-    internal static byte[] BlurCoverage(byte[] src, int w, int h, int radius, int iterations = 2)
+    /// <summary>
+    /// Box passes <see cref="BlurCoverage"/> makes by default, and so the multiple of its radius that a
+    /// blurred coverage actually reaches. Named because the standoff mask has to be grown by exactly that
+    /// far to cover the whole halo, and a constant of 2 sitting at the far end of the file would be a
+    /// silent dependency on this default.
+    /// </summary>
+    internal const int BlurCoveragePasses = 2;
+
+    internal static byte[] BlurCoverage(byte[] src, int w, int h, int radius, int iterations = BlurCoveragePasses)
     {
         if (radius < 1 || w <= 0 || h <= 0 || src.Length < w * h) return (byte[])src.Clone();
         var a = (byte[])src.Clone();
@@ -9791,7 +9869,7 @@ public class CompositorService : IDisposable
     // coveredAbove (optional, single-channel w*h): where a HIGHER-stacked garment is opaque the shadow is
     // suppressed — a lower garment's contact shadow can't fall on skin that another layer covers.
     internal static void ApplyAmbientOcclusion(byte[] baseD, byte[] strap, byte[] blurred, int w, int h, float strength,
-        byte[]? coveredAbove = null)
+        byte[]? coveredAbove = null, byte[]? liftedOff = null)
     {
         if (strength <= 0f) return;
         ParallelPixels(0, w * h, 1, (from, to) =>
@@ -9801,6 +9879,12 @@ public class CompositorService : IDisposable
                 float s = strap[p] / 255f;
                 float halo = (blurred[p] / 255f) * (1f - s);
                 if (coveredAbove != null) halo *= 1f - coveredAbove[p] / 255f;   // hidden under a higher layer
+                // ...and lifted clear of the skin, so there is no contact to shade. This is a CONTACT
+                // shadow — the darkening where cloth meets body — and a garment spanning the cleavage
+                // touches nothing there. Gated exactly like the indent it accompanies: the two describe the
+                // same contact, and suppressing one without the other leaves the shadow of an edge that is
+                // no longer against the skin.
+                if (liftedOff != null) halo *= 1f - liftedOff[p] / 255f;
                 if (halo <= 0f) continue;
                 float k = 1f - strength * halo;
                 if (k >= 1f) continue;

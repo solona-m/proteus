@@ -1232,6 +1232,152 @@ public class CompositorMathTests
         Assert.Equal(new byte[] { 200, 150, 100, 255 }, baseD);
     }
 
+    /// <summary>
+    /// A contact shadow needs contact. Where a bridged garment has lifted clear of the bust there is
+    /// nothing touching the skin, so the AO halo must be suppressed exactly as the indent's is.
+    /// <para/>
+    /// This pairs with <c>ApplyNormalIndent_LiftedOff_SuppressesTheIndent</c> deliberately: the two passes
+    /// describe the SAME contact, and gating only one of them is the bug this was written for — the indent
+    /// went quiet while the shadow stayed, leaving pale smudges on the skin under a garment that was no
+    /// longer against it.
+    /// </summary>
+    [Fact]
+    public void ApplyAmbientOcclusion_LiftedOff_SuppressesTheHalo()
+    {
+        int w = 3, h = 1;
+        var baseD = new byte[]
+        {
+            200, 200, 200, 255,
+            200, 200, 200, 255,
+            200, 200, 200, 255,
+        };
+        var strap   = new byte[] { 255, 0,   0 };
+        var blurred = new byte[] { 255, 200, 0 };
+        // p1 is in the halo AND fully lifted; p2 is in neither.
+        var lifted  = new byte[] { 0,   255, 0 };
+
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f,
+                                                coveredAbove: null, liftedOff: lifted);
+
+        Assert.Equal(200, baseD[4]);   // lifted clear: no contact, so no shadow
+
+        // ...and half-lifted shades half as much, so the suppression is a fade and not a switch — which is
+        // what lets the compositor feather it and get a gradient rather than a seam.
+        var half = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
+        CompositorService.ApplyAmbientOcclusion(half, strap, blurred, w, h, strength: 0.5f,
+                                                coveredAbove: null, liftedOff: new byte[] { 0, 128, 0 });
+        var none = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
+        CompositorService.ApplyAmbientOcclusion(none, strap, blurred, w, h, strength: 0.5f);
+        Assert.True(half[4] > none[4] && half[4] < 200,
+            $"half-lifted should shade between none ({none[4]}) and full (200), got {half[4]}");
+    }
+
+    /// <summary>
+    /// The separable maximum filter, against a brute-force max over the same window.
+    /// <para/>
+    /// Checked exhaustively rather than by a couple of cases because it is a block-decomposition algorithm
+    /// (van Herk): its whole risk is off-by-one indexing at block boundaries, which shows up for some
+    /// radii and positions and not others, and produces a mask that is merely a bit wrong rather than
+    /// obviously broken.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(8)]
+    public void MaxFilter_MatchesABruteForceWindow(int radius)
+    {
+        const int w = 23, h = 17;
+        var src = new byte[w * h];
+        var rng = new Random(1234 + radius);
+        for (int i = 0; i < src.Length; i++) src[i] = (byte)rng.Next(256);
+
+        var got = CompositorService.MaxFilter(src, w, h, radius);
+
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                byte want = 0;
+                for (int dy = -radius; dy <= radius; dy++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        int sx = Math.Clamp(x + dx, 0, w - 1), sy = Math.Clamp(y + dy, 0, h - 1);
+                        if (src[sy * w + sx] > want) want = src[sy * w + sx];
+                    }
+                // The clamped window may reach a little past the true one at the plane's edges, which can
+                // only raise the result — so the filter must never come out UNDER the brute-force answer.
+                Assert.True(got[y * w + x] >= want,
+                    $"r={radius} at ({x},{y}): {got[y * w + x]} < {want}");
+            }
+    }
+
+    [Fact]
+    public void MaxFilter_GrowsARegionByTheRadius()
+    {
+        // The property the caller actually depends on: a lifted spot suppresses everything within the
+        // shadow's own reach of it, so no halo cast by lifted cloth survives.
+        const int w = 41, h = 41, r = 6;
+        var src = new byte[w * h];
+        src[20 * w + 20] = 255;
+
+        var got = CompositorService.MaxFilter(src, w, h, r);
+
+        Assert.Equal(255, got[20 * w + 20]);
+        Assert.Equal(255, got[20 * w + (20 + r)]);       // exactly at the radius, still covered
+        Assert.Equal(255, got[(20 - r) * w + 20]);
+        Assert.Equal(0, got[20 * w + (20 + r + 1)]);     // one past it, untouched
+        Assert.Equal(0, got[(20 + r + 1) * w + 20]);
+    }
+
+    /// <summary>
+    /// End to end: a garment whose cloth has lifted must leave NO shadow anywhere, not a ring of it.
+    /// <para/>
+    /// The failure this pins is specific and was visible in game — the halo immediately beside the cloth
+    /// suppressed and its outer part left standing, so the skin showed a band of shadow with clean skin
+    /// between it and the garment casting it. It comes from growing the lift mask by less than the halo
+    /// actually reaches, which is <see cref="CompositorService.BlurCoveragePasses"/> box passes of the
+    /// radius, not one.
+    /// </summary>
+    [Fact]
+    public void LiftedCloth_LeavesNoRingOfShadow()
+    {
+        const int w = 96, h = 1, radius = 6;
+
+        // Cloth on the left half, skin on the right. The whole garment has lifted clear.
+        var strap = new byte[w * h];
+        for (int x = 0; x < 40; x++) strap[x] = 255;
+        var lift = new byte[w * h];
+        for (int x = 0; x < 40; x++) lift[x] = 255;
+
+        var blurred = CompositorService.BlurCoverage(strap, w, h, radius);
+        // Exactly what BustStandoff does: grow past the halo's reach by the feather's own bite, then
+        // feather. Growing by less leaves a ring — by 2r it is 12 texels of faint shadow standing off the
+        // cloth, which is what this was written against.
+        var grown = CompositorService.BlurCoverage(
+            CompositorService.MaxFilter(lift, w, h, radius * (CompositorService.BlurCoveragePasses + 1)),
+            w, h, radius, iterations: 1);
+
+        var baseD = new byte[w * h * 4];
+        for (int p = 0; p < w * h; p++) { baseD[p * 4] = baseD[p * 4 + 1] = baseD[p * 4 + 2] = 200; baseD[p * 4 + 3] = 255; }
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, 1f, null, grown);
+
+        // Nothing anywhere may be shaded: every texel the halo reaches is within the lifted cloth's reach.
+        int shaded = 0, worstX = -1, worst = 255;
+        for (int p = 0; p < w * h; p++)
+            if (baseD[p * 4] < 200) { shaded++; if (baseD[p * 4] < worst) { worst = baseD[p * 4]; worstX = p; } }
+        Assert.True(shaded == 0,
+            $"{shaded} texels still shaded under fully lifted cloth (darkest {worst} at x={worstX})");
+
+        // ...and the fixture is capable of showing shadow at all, so a pass that shades nothing for an
+        // unrelated reason cannot make this test vacuous.
+        var control = new byte[w * h * 4];
+        for (int p = 0; p < w * h; p++) { control[p * 4] = control[p * 4 + 1] = control[p * 4 + 2] = 200; control[p * 4 + 3] = 255; }
+        CompositorService.ApplyAmbientOcclusion(control, strap, blurred, w, h, 1f);
+        Assert.True(control.Where((_, i) => i % 4 == 0).Any(v => v < 200),
+            "the control shades nothing — this fixture proves nothing");
+    }
+
     // ── ApplyNormalIndent ───────────────────────────────────────────────────────
 
     [Fact]
@@ -1261,6 +1407,43 @@ public class CompositorMathTests
         Assert.Equal(255, baseN[14]);
         Assert.Equal(128, baseN[9]);        // green untouched (single row → no vertical gradient)
         Assert.Equal(128, baseN[13]);
+    }
+
+    /// <summary>
+    /// The indent's half of the pair — see <c>ApplyAmbientOcclusion_LiftedOff_SuppressesTheHalo</c>. A
+    /// skindent is the mark cloth leaves where it bears on the body; lifted clear of the bust it bears on
+    /// nothing, and pressing a groove there draws the seam of a garment that is not touching.
+    /// </summary>
+    [Fact]
+    public void ApplyNormalIndent_LiftedOff_SuppressesTheIndent()
+    {
+        int w = 4, h = 1;
+        byte[] Fresh() => new byte[]
+        {
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+        };
+        var strap   = new byte[] { 255, 255, 0, 0 };
+        var blurred = new byte[] { 255, 192, 64, 0 };
+
+        var lifted = Fresh();
+        CompositorService.ApplyNormalIndent(lifted, blurred, strap, w, h, strength: 0.5f,
+            coveredAbove: null, radius: 6, inside: null,
+            liftedOff: new byte[] { 0, 0, 255, 255 });
+        Assert.Equal(128, lifted[8]);    // x2: lifted clear, so no groove
+        Assert.Equal(128, lifted[12]);   // x3: likewise
+
+        // Half-lifted leans half as far — a fade, not a switch, so the map can be feathered.
+        var partial = Fresh();
+        CompositorService.ApplyNormalIndent(partial, blurred, strap, w, h, strength: 0.5f,
+            coveredAbove: null, radius: 6, inside: null,
+            liftedOff: new byte[] { 0, 0, 128, 128 });
+        var full = Fresh();
+        CompositorService.ApplyNormalIndent(full, blurred, strap, w, h, strength: 0.5f);
+        Assert.True(partial[8] > full[8] && partial[8] < 128,
+            $"half-lifted should lean between full ({full[8]}) and none (128), got {partial[8]}");
     }
 
     [Fact]
