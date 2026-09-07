@@ -236,6 +236,68 @@ public class BustBridgeDiagTests
             $"{softHarsh} texel pairs still step after feathering (worst {softWorst})");
     }
 
+    /// <summary>
+    /// No fold in the span may be steeper than <c>BustMaxSlope</c>, on real body topology.
+    /// <para/>
+    /// The synthetic version of this only ever sees a tidy grid. On a body the demand for steepness comes
+    /// from the region's own boundary — the garment's edge, the reach of the bust bones — and the limit is
+    /// genuinely binding there. Left at 1.5 that produced 146 edges folding at 56°, which is the jagged
+    /// notch reported along a bralette strap. The measurement is what the limit was tuned against, so it
+    /// belongs in the suite rather than in a scratch file.
+    /// </summary>
+    [Fact]
+    public void NoFoldInTheSpanIsSteeperThanTheLimit()
+    {
+        if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
+
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(
+            File.ReadAllBytes(Torso), out var pos, out _, out var tri, out var weights, out var nrm));
+        int vc = pos.Length / 3;
+
+        var bust = new float[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            float acc = 0f;
+            foreach (var (bone, bw) in weights[i])
+                if (bone.Equals("j_mune_l", StringComparison.OrdinalIgnoreCase)
+                 || bone.Equals("j_mune_r", StringComparison.OrdinalIgnoreCase)) acc += bw;
+            bust[i] = MathF.Min(1f, acc);
+        }
+        var p3 = new SecondSkinWriter.Vec3[vc];
+        var n3 = new SecondSkinWriter.Vec3[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            p3[i] = new SecondSkinWriter.Vec3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+            n3[i] = new SecondSkinWriter.Vec3(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
+        }
+
+        var plan = SecondSkinWriter.BustBridgeSolve(p3, n3, tri, bust, 1f);
+        Assert.NotNull(plan);
+
+        static float Mag(SecondSkinWriter.Vec3 d) => MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+        var slopes = new List<float>();
+        for (int t = 0; t + 2 < tri.Length; t += 3)
+            for (int e = 0; e < 3; e++)
+            {
+                int a = tri[t + e], b = tri[t + (e + 1) % 3];
+                float ma = Mag(plan!.Delta[a]), mb = Mag(plan.Delta[b]);
+                if (ma == 0f && mb == 0f) continue;
+                float dx = pos[a * 3] - pos[b * 3], dy = pos[a * 3 + 1] - pos[b * 3 + 1],
+                      dz = pos[a * 3 + 2] - pos[b * 3 + 2];
+                float len = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (len > 1e-9f) slopes.Add(MathF.Abs(ma - mb) / len);
+            }
+        slopes.Sort();
+        float P(double q) => slopes[Math.Min(slopes.Count - 1, (int)(slopes.Count * q))];
+        o.WriteLine($"{slopes.Count} edges in the span: p50 {P(.5):0.###}, p90 {P(.9):0.###}, "
+                  + $"p99 {P(.99):0.###}, max {slopes[^1]:0.###}");
+
+        // A little over the limit for welded copies and float noise. The build this was written against
+        // measured a max of 0.8 exactly, and the one before it 1.5.
+        Assert.True(slopes[^1] < 1.0f,
+            $"a fold in the span reaches {slopes[^1]:0.###} per unit length — steep enough to read as a notch");
+    }
+
     private static void WriteObj(string path, SecondSkinWriter.Vec3[] pos, ushort[] tris)
     {
         using var w = new StreamWriter(path);
