@@ -2681,6 +2681,19 @@ public sealed class SecondSkinService
             log.Information("[Proteus] second skin: bust bridge at {0:0.##} applies to every shell of \"{1}\"",
                 bStrength, bMod);
 
+        // The OUTERMOST spanning shell on each host — the only one whose backfaces anyone can see.
+        //
+        // Showing them on every spanning shell is what the first version did, and it puts the underside of
+        // each inner shell into the transparent pass as well. Those are surfaces nothing can look at: the
+        // shell above already covers them. All they do is add blended layers, and with three shells a fifth
+        // of a millimetre apart that showed as the lower garment bleeding through the upper one in patches
+        // — which looks exactly like a hole in the upper garment or a shell crossing it, and is neither.
+        // Measured on that build: layer separation was intact at 0.0002 everywhere, so nothing had moved.
+        var topSpanningOnHost = new Dictionary<int, int>();
+        foreach (var (wi, wh) in work)
+            if (bridgeByMod.ContainsKey(gearOverlays[wi].Entry.ModDirectory))
+                topSpanningOnHost[wh] = wi;   // work is in stack order, so the last one wins
+
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
         {
@@ -2799,8 +2812,9 @@ public sealed class SecondSkinService
             bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
             // A spanning shell needs its backfaces drawn: it lifts off the body between the breasts, so the
             // inside of the span is visible from below and from the side, and culled it reads as a hole
-            // through the garment rather than as cloth with an underside.
-            bool spanning = bridgeByMod.ContainsKey(entry.ModDirectory);
+            // through the garment rather than as cloth with an underside. Only the OUTERMOST one, though —
+            // see topSpanningOnHost for what showing them on all of them did.
+            bool spanning = topSpanningOnHost.TryGetValue(hIdx, out var topIdx) && topIdx == i;
             try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell, showBackfaces: spanning); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
