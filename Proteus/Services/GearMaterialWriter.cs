@@ -291,8 +291,10 @@ public static class GearMaterialWriter
         IReadOnlyDictionary<int, GearColorRow>? rows,
         ScrollSettings? scroll = null,
         bool cutoutAlpha = false,
-        bool linearizeDiffuse = false)   // convert the colorset diffuse sRGB→linear (mask shells: colour lives
-    {                                    // in the colorset over a white base, so it must match the skin bake)
+        bool linearizeDiffuse = false,   // convert the colorset diffuse sRGB→linear (mask shells: colour lives
+                                         // in the colorset over a white base, so it must match the skin bake)
+        bool showBackfaces = false)
+    {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
 
@@ -384,7 +386,13 @@ public static class GearMaterialWriter
                         + addDataSize + dataSetSize;
         if (shaderStart + 12 <= r.Length)
         {
-            uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency | FlagHideBackfaces;
+            uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency;
+            // Backfaces are hidden by default because a shell hugs the body: nothing can see its inside,
+            // and drawing it doubles the transparent surfaces the sheer blend has to sort. A shell that
+            // SPANS lifts off the body, and then the inside of the span faces the viewer wherever they
+            // look up under it — hidden, that reads as a hole straight through the garment.
+            if (showBackfaces) flags &= ~FlagHideBackfaces;
+            else               flags |= FlagHideBackfaces;
 
             BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
         }
