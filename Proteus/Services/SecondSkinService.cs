@@ -2662,6 +2662,25 @@ public sealed class SecondSkinService
             }
         }
 
+        // A bust bridge belongs to the GARMENT, not to the one layer it was ticked on. A mod's shells are
+        // stacked a fifth of a millimetre apart, so if the fabric spans the cleavage and the mask shell
+        // over it does not, the mask sinks THROUGH the fabric and the look is worse than with neither
+        // spanning. Any of a mod's shells asking for it spans all of them, at the strongest setting asked.
+        //
+        // Per MOD, not global like the toe cap: a cap is a property of the foot everyone's stockings share,
+        // whereas whether a garment lifts off the sternum is a design choice about that garment.
+        var bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+                     .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
+        {
+            if (bEntry.Metadata.BustBridge != true) continue;
+            float s = Math.Clamp(bEntry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
+            if (s > 0f) bridgeByMod[bEntry.ModDirectory] = s;
+        }
+        foreach (var (bMod, bStrength) in bridgeByMod)
+            log.Information("[Proteus] second skin: bust bridge at {0:0.##} applies to every shell of \"{1}\"",
+                bStrength, bMod);
+
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
         {
@@ -2813,6 +2832,13 @@ public sealed class SecondSkinService
                 ToeCapWidth = toeCap == null ? 0 : ToeCapSize,
                 ToeCapHeight = toeCap == null ? 0 : ToeCapSize,
                 ToeCapStrength = Math.Clamp(ov.Descriptor.ToeCapStrength ?? 1f, 0f, 1f),
+                // BODY SURFACES ONLY, for the same reason the cap is: a face or a tail has no bust bones,
+                // so the pass would decline anyway — but saying so here keeps the gate where the reason
+                // for it is, instead of in a silent early return three files away.
+                BustBridgeStrength = layerSurf.Key.IsBody
+                                  && bridgeByMod.TryGetValue(entry.ModDirectory, out var bridgeS)
+                    ? bridgeS
+                    : 0f,
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;
@@ -3174,6 +3200,7 @@ public sealed class SecondSkinService
                 DumpShellInputs(h, srcs, perHostLayers[h], host.BaseModel);
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                     out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps());
+                DumpShellOutput(h, shell);
             }
             catch (EmptyShellException ex) when (ex.ByToggle)
             {
@@ -3561,7 +3588,8 @@ public sealed class SecondSkinService
                 var l = layers[i];
                 sb.AppendLine($"layer[{i}] material={l.MaterialName} "
                             + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
-                            + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength}");
+                            + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
+                            + $"bustBridge={l.BustBridgeStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }
@@ -3571,6 +3599,30 @@ public sealed class SecondSkinService
         catch (Exception ex)
         {
             log.Warning(ex, "[Proteus] second skin: could not dump build inputs");
+        }
+    }
+
+    /// <summary>
+    /// The finished shell, beside the inputs that produced it. Same opt-in as
+    /// <see cref="DumpShellInputs"/> — the folder existing is the switch.
+    /// <para/>
+    /// Worth its own file rather than being rebuilt from the inputs offline: a harness that reconstructs
+    /// the shell can differ from the game's in ways that are the whole question (which bodies were merged,
+    /// which shapes were on, which host it landed on), and then the mesh being measured is not the mesh
+    /// anyone saw. This is the one the game actually published.
+    /// </summary>
+    private void DumpShellOutput(int host, byte[] shell)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, $"host{host}_shell.mdl"), shell);
+            log.Information("[Proteus] second skin: dumped built shell for host {0} to {1}", host, dir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not dump built shell");
         }
     }
 

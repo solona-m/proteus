@@ -251,6 +251,22 @@
     "message": "Which body types to bake this mod onto:\nAll bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\nbibo+gen3 = bake to the sibling body only (default)\nOff = no synthesis\n\nApplies to the whole mod, not just this option.",
     "description": "Mentions the body mods bibo, gen3, Eve and gen2 - all names, never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.BustBridge.Label": {
+    "message": "Span the cleavage",
+    "description": "Checkbox in the colour-table editor's Advanced section."
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "Span amount",
+    "description": "Control label for the slider beside the checkbox above. Appears in the colour-table editor window."
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "How far the fabric relaxes toward the flat span. 1.00 spans it fully; lower values keep\nmore of the shape underneath.",
+    "description": "Tooltip for the slider above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "Turn this on for cloth over the chest.\nProteus builds a garment as a copy of the body, so by default it follows the body into\nthe cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\nthe gap: a straight line between the furthest-forward point of each breast.\nWith this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\npulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\nWhere a neckline has cut the cloth away between the cups there is nothing to span, and\nthis does nothing.",
+    "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copy row",
     "description": "Button caption. Appears in the colour-table editor window."

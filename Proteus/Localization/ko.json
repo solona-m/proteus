@@ -251,6 +251,22 @@
     "message": "이 모드를 어떤 바디 유형에 구울지:\n모든 바디 = 자매 바디(bibo↔gen3/Eve) + 기본(gen2)\nbibo+gen3 = 자매 바디에만 굽기(기본값)\n끔 = 합성하지 않음\n\n이 옵션뿐 아니라 모드 전체에 적용됩니다.",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "가슴 사이를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "잇는 정도",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "천이 평평한 연결선을 향해 얼마나 이완되는지. 1.00은 완전히 잇습니다.\n값이 낮을수록 아래의 형태가 더 많이 남습니다.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에, 기본적으로 몸을 따라 가슴골로\n들어갑니다. 그래서 천이 아니라 칠한 것처럼 보입니다. 실제 천은 그 틈을 가로지릅니다.\n양쪽 가슴에서 가장 앞으로 나온 지점을 잇는 직선으로요.\n이 설정을 켜면 가슴 사이의 천이 그 선까지 이완됩니다. 안쪽으로 당겨지는 일은 없으므로\n몸을 파고들 수 없고, 가슴 자체의 형태도 그대로 유지됩니다.\n네크라인이 이미 컵 사이의 천을 잘라낸 곳에는 이을 것이 없으므로,\n이 설정은 아무 일도 하지 않습니다.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "행 복사",
     "description": ""

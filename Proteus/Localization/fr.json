@@ -251,6 +251,22 @@
     "message": "Sur quels types de corps cuire ce mod :\nTous les corps = corps frère (bibo↔gen3/Eve) + d'origine (gen2)\nbibo+gen3 = cuire uniquement sur le corps frère (par défaut)\nAucun = pas de synthèse\n\nS'applique à tout le mod, pas seulement à cette option.",
     "description": ""
   },
+  "Colors.BustBridge.Label": {
+    "message": "Tendre le tissu sur le décolleté",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "Intensité du tendu",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "Jusqu'où le tissu se détend vers le tendu plat. 1,00 le tend entièrement ; les valeurs plus\nbasses conservent davantage la forme en dessous.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : par défaut, il suit donc le corps\njusque dans le décolleté — c'est ce qui le fait lire comme de la peinture plutôt que du\ntissu. Le vrai tissu tend l'écart : une ligne droite entre le point le plus avancé de chaque sein.\nAvec ceci, le tissu entre les seins est détendu jusqu'à cette ligne. Rien n'est jamais tiré\nvers l'intérieur : cela ne peut donc pas entrer dans le corps, et les seins gardent leur forme.\nLà où une encolure a déjà découpé le tissu entre les bonnets, il n'y a rien à tendre, et\nceci ne fait rien.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copier la ligne",
     "description": ""

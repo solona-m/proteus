@@ -324,8 +324,8 @@ public static class ColorTableEditor
                     ImGui.SetTooltip(cs.OneSidedTip);
             }
 
-            // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
-            // everything above this line is per-option and everything below it is not.
+            // Whole-mod settings the caller owns (which bodies to bake onto, and the bust bridge).
+            // Separated because everything above this line is per-option and everything below it is not.
             if (drawExtraAdvanced != null)
             {
                 ImGui.Separator();
