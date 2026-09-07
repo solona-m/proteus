@@ -1767,6 +1767,30 @@
     "message": "Farben",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Die Proteus-Daten dieses Mods nennen die Optionsgruppe(n) {0}, die es in Penumbras Kopie des Mods nicht gibt — beim erneuten Export umbenannt oder entfernt. Das kann nur die Person beheben, die den Mod erstellt hat.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Seine Masken werden als Ausrüstung gerendert, und dafür wird eine Maske benötigt, aus der das Kleidungsstück gebaut wird — in seiner Gruppe „{0}“ ist in Penumbra aber nichts ausgewählt.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Seine ausgewählten Optionen wurden aufgelöst, aber keine davon hat eine Oberfläche erreicht, die dieser Charakter geladen hat.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "In Penumbra ist nichts ausgewählt. Die {0} Optionsgruppe(n) dieses Mods — {1} — sind alle leer, deshalb malt er nichts. Öffne ihn in Penumbra und wähle in jeder eine Option aus.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra hat nicht geantwortet, als Proteus abgefragt hat, welche Optionen dieses Mods aktiv sind.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Dieser Mod malt {0}, und du bist {1}. Nichts, was er mitbringt, passt zu dem Körper, den du trägst.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Keine Proteus-Beidatei-Mods erkannt.",
     "description": ""

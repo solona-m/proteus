@@ -1767,6 +1767,30 @@
     "message": "カラー",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "この Mod の Proteus データはオプショングループ {0} を指定していますが、Penumbra 側の Mod にはそのグループがありません。再エクスポート時に名前が変わったか削除されています。修正できるのは作者だけです。",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "マスクが装備として描画される設定になっています。衣装はマスクから作られるため、Penumbra の「{0}」グループで何も選択されていないと何も作られません。",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "選択したオプションは解決されましたが、このキャラクターが読み込んでいる面には届きませんでした。",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Penumbra で何も選択されていません。この Mod の {0} 個のオプショングループ（{1}）はすべて空なので、何も描画されません。Penumbra で開いて、それぞれオプションを選択してください。",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "この Mod のどのオプションが有効かを Proteus が問い合わせましたが、Penumbra から応答がありませんでした。",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "この Mod は {0} 用ですが、あなたは {1} です。同梱されているものはどれも、現在の体に合いません。",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Proteusサイドカー付きMODが見つかりません。",
     "description": ""
