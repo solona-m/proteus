@@ -45,6 +45,15 @@ public sealed class SecondSkinLayer
     public float BustBridgeStrength { get; init; }
 
     /// <summary>
+    /// How far this layer's cloth is smoothed over the nipple (0 = off, which is the default and every
+    /// existing shell's behaviour; 1 = full smoothing).
+    /// <para/>
+    /// Shares the region, the axis and the solve with <see cref="BustBridgeStrength"/> and is independent
+    /// of it: a mod may want either. See <c>NippleSmoothTarget</c>.
+    /// </summary>
+    public float NippleSmoothStrength { get; init; }
+
+    /// <summary>
     /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
     /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
     /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
@@ -812,8 +821,16 @@ public static class SecondSkinWriter
         //
         // It is also the cheap way round: the solve costs tens of milliseconds per mesh and was being paid
         // once per layer per mesh for an answer that could not legitimately differ.
+        // Both chest passes come through here — the span and the nipple smooth. Separate settings, one
+        // solve: same region, same axis, and the same reason for sharing it across a host's layers.
+        // Only the SPAN is a shell pass. The nipple relax belongs to the body — SmoothBodyNipples runs it
+        // there, and the shell inherits it by being cut from the smoothed body afterwards. Running it here
+        // as well is the defect that put the garment inside the skin: two relaxes over two different meshes
+        // cannot agree, and measured on a real capture they disagreed by 2-3.3mm. `NippleSmoothStrength`
+        // survives on the layer as the DECLARATION — the body pass builds its coverage union from it.
         var bridgeLayers = layers.Where(l => l.BustBridgeStrength > 0f).ToList();
         float bridgeStrength = bridgeLayers.Count == 0 ? 0f : bridgeLayers.Max(l => l.BustBridgeStrength);
+        const float smoothStrength = 0f;
         SecondSkinLayer? bridgeDef = null;
         if (bridgeLayers.Count > 0)
         {
@@ -844,9 +861,10 @@ public static class SecondSkinWriter
                 CoverageWidth = union == null ? 0 : uw,
                 CoverageHeight = union == null ? 0 : uh,
                 BustBridgeStrength = bridgeStrength,
+                NippleSmoothStrength = smoothStrength,
             };
-            diag?.Invoke($"bust bridge: one solve for {bridgeLayers.Count} spanning layer(s) at strength "
-                       + $"{bridgeStrength:0.##}, coverage "
+            diag?.Invoke($"bust bridge: one solve for {bridgeLayers.Count} chest layer(s) — span "
+                       + $"{bridgeStrength:0.##}, smooth {smoothStrength:0.##}, coverage "
                        + (union == null ? "union unavailable — spanning every bust vertex" : $"{uw}x{uh} union"));
         }
         // Per SOURCE MESH, so every layer of this host reuses the one answer.
@@ -1509,7 +1527,7 @@ public static class SecondSkinWriter
                 // same answer and the stack keeps its order. Memoised per mesh; only the first layer to
                 // reach a mesh pays for it.
                 float[]? bustWeights = null;
-                if (bridgeDef != null && cov is { BustBridgeStrength: > 0f })
+                if (bridgeDef != null && cov is { } cl && (cl.BustBridgeStrength > 0f || cl.NippleSmoothStrength > 0f))
                 {
                     if (!bridgeWeights.TryGetValue((src, m), out bustWeights))
                         bridgeWeights[(src, m)] = bustWeights = MeshBustWeights(src, m, vc, decl, vbo, bs);
@@ -1526,7 +1544,7 @@ public static class SecondSkinWriter
                     {
                         if (bridgePlans.TryGetValue((src, m), out var cached)) return cached;
                         var plan = BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
-                                                   CoveredVertices(bUv, bridgeDef, bPos.Length));
+                                                   CoveredVertices(bUv, bridgeDef, bPos.Length), smoothStrength);
                         bridgePlans[(src, m)] = plan;
                         return plan;
                     };
@@ -3386,6 +3404,7 @@ public static class SecondSkinWriter
                     ToeCapHeight = 0,
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
+                    NippleSmoothStrength = def.NippleSmoothStrength,
                 };
 
             // The cap's rim, pushed to this layer's offset, ready for the shell meshes below to close
@@ -3429,6 +3448,7 @@ public static class SecondSkinWriter
                     ToeCapHeight = def.ToeCapHeight,
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
+                    NippleSmoothStrength = def.NippleSmoothStrength,
                 };
 
             byte[]? footprint = null;
@@ -3623,6 +3643,7 @@ public static class SecondSkinWriter
                     ToeCapHeight = cutSide,
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
+                    NippleSmoothStrength = def.NippleSmoothStrength,
                 };
             }
 
@@ -7526,8 +7547,9 @@ public static class SecondSkinWriter
     /// <param name="bust">Per-vertex region weight in 0..1, already gated on coverage.</param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
-        Action<string>? log = null, bool[]? covered = null)
-        => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered);
+        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f)
+        => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
+                           smoothStrength);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>
@@ -7536,10 +7558,10 @@ public static class SecondSkinWriter
     /// </remarks>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
-        Action<string>? log = null, bool[]? covered = null)
+        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f)
     {
         int vc = pos.Length;
-        if (vc == 0 || strength <= 0f || bust.Length < vc) return null;
+        if (vc == 0 || (strength <= 0f && smoothStrength <= 0f) || bust.Length < vc) return null;
 
         var nodeOf = WeldByPosition(pos, out int nodeCount);
 
@@ -7552,12 +7574,15 @@ public static class SecondSkinWriter
         // Uncovered cloth pins the region at the garment's own edge, so a node is seeded only if EVERY
         // welded copy of it is painted. Any copy being cut away means the boundary runs through here.
         var cut = new bool[nodeCount];
+        // The bust WITHOUT the coverage gate. Where a breast is, is a fact about the body; what a garment
+        // paints is a fact about the garment, and the nipple smooth needs the first to locate itself.
+        var onBust = new bool[nodeCount];
         for (int i = 0; i < vc; i++)
         {
             int n = nodeOf[i];
             start[n] = new Vec3(start[n].X + pos[i].X, start[n].Y + pos[i].Y, start[n].Z + pos[i].Z);
             nNorm[n] = new Vec3(nNorm[n].X + nrm[i].X, nNorm[n].Y + nrm[i].Y, nNorm[n].Z + nrm[i].Z);
-            if (bust[i] > 0f) seed[n] = true;
+            if (bust[i] > 0f) { seed[n] = true; onBust[n] = true; }
             if (covered != null && i < covered.Length && !covered[i]) cut[n] = true;
             members[n]++;
         }
@@ -7682,7 +7707,7 @@ public static class SecondSkinWriter
             ver[n] = p.X * vertical.X + p.Y * vertical.Y + p.Z * vertical.Z;
         }
 
-        var h = ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log);
+        var h = strength > 0f ? ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log) : h0;
 
         // How far of the way to the chord each node actually goes: the region ramp fades the effect into
         // the untouched shell at the region's edge, and the strength is the user's "how much of this do I
@@ -7699,7 +7724,7 @@ public static class SecondSkinWriter
         for (int n = 0; n < nodeCount; n++)
         {
             wantedMax = MathF.Max(wantedMax, h[n] - h0[n]);
-            rampedMax = MathF.Max(rampedMax, scale[n]);
+            rampedMax = MathF.Max(rampedMax, MathF.Abs(scale[n]));
         }
 
         // SLOPE LIMIT — the guarantee that the shell cannot tear, whatever shape the region came out.
@@ -7709,46 +7734,122 @@ public static class SecondSkinWriter
         // neighbour lifts nothing is a spike, not a span. The region ramp is meant to prevent that and
         // depends on the region's boundary being smooth, which the coverage map does not promise.
         //
-        // Each node is pulled down to at most its neighbour's rise plus what the edge between them can
-        // absorb. Only ever lowers, so "never moves inward" survives it, and repeated until it settles
-        // because one pass only propagates one edge. This is what makes the fade a property of the mesh
-        // rather than of a step count guessed against one body.
-        for (int pass = 0; pass < BustSlopePasses; pass++)
+        // Each node is pulled toward its neighbour's displacement until the difference is no more than the
+        // edge between them can absorb, repeated until it settles because one pass only propagates one
+        // edge. This is what makes the fade a property of the mesh rather than of a step count guessed
+        // against one body.
+        //
+        // TWO-SIDED, because the span only ever raises but the nipple smooth may lower: a limit that
+        // looked at positive displacements alone would leave the rim of the smoothed patch unbounded.
+        //
+        // It only ever moves a node TOWARD zero. That restriction is what makes the sweep safe rather than
+        // merely symmetric — a plain "clamp into the neighbour's window" also pulls an untouched node UP
+        // to meet a displaced one, which invents displacement where the region deliberately has none,
+        // unpins the boundary, and tears the shell. Measured that way at a slope of 3.45 on a ragged
+        // coverage edge, against a limit of 0.8.
+        void LimitSlope(float[] v)
         {
-            float worst = 0f;
+            for (int pass = 0; pass < BustSlopePasses; pass++)
+            {
+                float worst = 0f;
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    if (v[n] == 0f) continue;
+                    foreach (int k in adj[n])
+                    {
+                        float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
+                        float room = BustMaxSlope * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                        if (v[n] > 0f)
+                        {
+                            float cap = MathF.Max(0f, v[k] + room);
+                            if (cap >= v[n]) continue;
+                            worst = MathF.Max(worst, v[n] - cap);
+                            v[n] = cap;
+                        }
+                        else
+                        {
+                            float flo = MathF.Min(0f, v[k] - room);
+                            if (flo <= v[n]) continue;
+                            worst = MathF.Max(worst, flo - v[n]);
+                            v[n] = flo;
+                        }
+                    }
+                }
+                if (worst <= BustBridgeEpsilon) break;
+            }
+        }
+        LimitSlope(scale);
+
+        // THE NIPPLE RELAX, on the surface the span left behind, so a garment doing both gets a spanned
+        // chest that is then smoothed rather than two constructions arguing over the same vertices.
+        //
+        // It is a 3-D displacement and the span is not, so it cannot be folded into `scale`. That is the
+        // whole point: see NippleSmoothTarget. Slope-limited per component — the sweep only ever moves a
+        // value toward zero, so doing it axis by axis is safe — because the falloff is multiplied by the
+        // coverage ramp, and a coverage edge cutting through the disc is exactly the ragged boundary the
+        // limit exists to absorb.
+        Vec3[]? nipple = null;
+        if (smoothStrength > 0f)
+        {
+            var spanned = new Vec3[nodeCount];
+            var spannedH = new float[nodeCount];
             for (int n = 0; n < nodeCount; n++)
             {
-                if (scale[n] <= 0f) continue;
-                foreach (int k in adj[n])
+                spanned[n] = new Vec3(start[n].X + ax.X * scale[n],
+                                      start[n].Y + ax.Y * scale[n],
+                                      start[n].Z + ax.Z * scale[n]);
+                spannedH[n] = h0[n] + scale[n];
+            }
+            nipple = NippleSmoothTarget(spanned, spannedH, lat, ver, nW, seed, nodeCount, adj, ax,
+                                        smoothStrength, log);
+            if (nipple != null)
+            {
+                var comp = new float[nodeCount];
+                for (int c = 0; c < 3; c++)
                 {
-                    float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
-                    float cap = scale[k] + BustMaxSlope * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-                    if (cap >= scale[n]) continue;
-                    worst = MathF.Max(worst, scale[n] - cap);
-                    scale[n] = cap;
+                    for (int n = 0; n < nodeCount; n++)
+                        comp[n] = c == 0 ? nipple[n].X : c == 1 ? nipple[n].Y : nipple[n].Z;
+                    LimitSlope(comp);
+                    for (int n = 0; n < nodeCount; n++)
+                        nipple[n] = c == 0 ? new Vec3(comp[n], nipple[n].Y, nipple[n].Z)
+                                  : c == 1 ? new Vec3(nipple[n].X, comp[n], nipple[n].Z)
+                                           : new Vec3(nipple[n].X, nipple[n].Y, comp[n]);
                 }
             }
-            if (worst <= BustBridgeEpsilon) break;
         }
 
         var delta = new Vec3[vc];
         int moved = 0;
         float maxMove = 0f;
+        // Magnitude, not sign: the span only raises but the nipple relax may lower, and a test on the
+        // signed value would drop every vertex the relax moved and then report that nothing happened.
+        //
+        // The two compose by ADDITION, and they are different kinds of thing — the span is a scalar along
+        // one axis, the relax is a free 3-D move. Nothing here reduces one to the other.
+        float NodeMove(int n)
+        {
+            float s = MathF.Abs(scale[n]);
+            return nipple is null ? s : s + Len(nipple[n]);
+        }
         for (int i = 0; i < vc; i++)
         {
-            float d = scale[nodeOf[i]];
-            if (d <= BustBridgeEpsilon) continue;
-            delta[i] = new Vec3(ax.X * d, ax.Y * d, ax.Z * d);
-            if (d > maxMove) maxMove = d;
+            int n = nodeOf[i];
+            float d = scale[n];
+            var v = new Vec3(ax.X * d, ax.Y * d, ax.Z * d);
+            if (nipple is { } np) v = new Vec3(v.X + np[n].X, v.Y + np[n].Y, v.Z + np[n].Z);
+            float mag = Len(v);
+            if (mag <= BustBridgeEpsilon) continue;
+            delta[i] = v;
+            if (mag > maxMove) maxMove = mag;
         }
         // Counted per NODE, not per vertex, so the number means "how much of the chest moved" rather than
         // how many UV-seam copies the mesh happens to carry.
-        for (int n = 0; n < nodeCount; n++) if (scale[n] > BustBridgeEpsilon) moved++;
+        for (int n = 0; n < nodeCount; n++) if (NodeMove(n) > BustBridgeEpsilon) moved++;
 
         if (moved == 0)
         {
-            log?.Invoke($"bust bridge: {region} region node(s), nothing moved — the cloth here already "
-                      + "spans straight between the breasts");
+            log?.Invoke($"bust bridge: {region} region node(s), nothing moved — the cloth here is already "
+                      + "the shape it was asked for");
             return null;
         }
 
@@ -7760,9 +7861,11 @@ public static class SecondSkinWriter
         var chord = ChordReport(start, h0, hFinal, nW, nodeCount, ax, lateral);
 
         // Nodes the bridge never moved report zero weight, so the normal pass leaves their bytes exactly
-        // as they were and an untouched shell stays byte-identical.
+        // as they were and an untouched shell stays byte-identical. It has to count the relax as well as
+        // the span: a node the relax alone moved would otherwise be written at its new position and
+        // reshaded from its old one.
         for (int n = 0; n < nodeCount; n++)
-            if (scale[n] <= BustBridgeEpsilon) nW[n] = 0f;
+            if (NodeMove(n) <= BustBridgeEpsilon) nW[n] = 0f;
 
         log?.Invoke($"bust bridge: axis ({ax.X:0.###},{ax.Y:0.###},{ax.Z:0.###}), {region} region node(s), "
                   + $"{moved} moved, max {maxMove:0.#####} "
@@ -8256,6 +8359,623 @@ public static class SecondSkinWriter
         log?.Invoke($"bust bridge: {bands} band(s) of {bandH:0.#####} ({usable} with a lobe either side), "
                   + $"{lifted} node(s) lifted to the chord");
         return target;
+    }
+
+    /// <summary>
+    /// The other half of the nipple smooth: the same relax applied to the BODY the shell is cut from,
+    /// returned as a modified copy of the model. Null when nothing qualified, so the caller publishes
+    /// nothing.
+    /// <para/>
+    /// It has to exist. Smoothing a shell LOWERS it, and a shell rides one millimetre off the skin, so a
+    /// smoothed garment sits inside the body and the body's own nipple appears through it — a patch of
+    /// bare skin with the point still standing in the middle. There is no way around that from the shell
+    /// alone: lifting the patch back out clears the body but restores the nipple exactly, because the lift
+    /// is uniform and the largest drop is at the tip.
+    /// <para/>
+    /// Deliberately the SAME <see cref="BustBridgeSolve"/> the shell uses, on the same coverage. A second
+    /// implementation of "how the nipple is smoothed" would drift from the first, and the failure would be
+    /// the two surfaces disagreeing by a fraction of a millimetre — which is exactly the size of gap that
+    /// shows through.
+    /// <para/>
+    /// GATED ON COVERAGE, so only skin a garment actually covers is touched. Smoothing the body wherever
+    /// the bones say "breast" would take the nipple off a character who is not wearing anything.
+    /// <para/>
+    /// Positions and normals, in place. Nothing here changes the file's length, so no offset in the header
+    /// moves and none of <c>ModelAttributeWriter</c>'s splice-and-shift machinery is needed — the bytes are
+    /// copied and overwritten where they sit.
+    /// </summary>
+    internal static byte[]? SmoothBodyNipples(byte[] mdl, SecondSkinLayer gate, float strength,
+                                              Action<string>? log = null)
+    {
+        if (mdl is not { Length: > 0 } || strength <= 0f) return null;
+
+        Source src;
+        try { src = Parse(mdl); }
+        catch { return null; }
+
+        var outBytes = (byte[])mdl.Clone();
+        var s = src.S;
+        int meshesTouched = 0, vertsMoved = 0, normalsWritten = 0;
+        float most = 0f;
+        // Hoisted: a stackalloc inside the mesh loop is a stack leak, since the frame only unwinds on
+        // return.
+        Span<float> tmp = stackalloc float[4];
+
+        // SKIN MESHES ONLY, by the same filter the shell is cut with. A body model is not all skin: it
+        // carries the smallclothes, the nails and the PIERCINGS, and a body0 measured here had all three.
+        // Relaxing a nipple piercing is not smoothing a breast, it is deforming jewellery.
+        var matNames = ReadMaterialNames(s, src);
+
+        int end = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        for (int m = src.Lod0MeshIndex; m < end; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (mo + 36 > s.Length) break;
+            ushort vc = BitConverter.ToUInt16(s, mo);
+            if (vc == 0) continue;
+
+            ushort matIdx = BitConverter.ToUInt16(s, mo + 8);
+            if (matIdx >= matNames.Count || SkinMaterialBodyType(matNames[matIdx]) == null) continue;
+
+            var decl = m < src.Decls.Length ? src.Decls[m] : [];
+            VElem? pe = null, ne = null, ue = null;
+            foreach (var el in decl)
+            {
+                if (el.Usage == UsePosition) pe ??= el;
+                else if (el.Usage == UseNormal) ne ??= el;
+                else if (el.Usage == UseUV && el.UsageIndex == 0) ue ??= el;
+            }
+            if (pe is not { } pos || ne is not { } nrm || ue is not { } uvE) continue;
+            if (pos.Stream > 2 || nrm.Stream > 2 || uvE.Stream > 2) continue;
+
+            uint[] vbo = { BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
+                           BitConverter.ToUInt32(s, mo + 28) };
+            byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+            if (bs[pos.Stream] == 0) continue;
+
+            // Every mesh but the torso names neither bust bone and drops out for the cost of one walk
+            // over a handful of names — the same early-out the shell's pass leans on.
+            var bust = MeshBustWeights(src, m, vc, decl, vbo, bs);
+            if (bust == null) continue;
+
+            ushort subIdx = BitConverter.ToUInt16(s, mo + 10), subCount = BitConverter.ToUInt16(s, mo + 12);
+            var tris = MeshTriangles(src, subIdx, subCount);
+            if (tris.Length < 3) continue;
+
+            var p3 = new Vec3[vc];
+            var n3 = new Vec3[vc];
+            var uv = new (float U, float V)[vc];
+            for (int i = 0; i < vc; i++)
+            {
+                ReadTyped(s, src.Vb + (int)vbo[pos.Stream] + i * bs[pos.Stream] + pos.Offset, pos.Type, tmp);
+                p3[i] = new Vec3(tmp[0], tmp[1], tmp[2]);
+                ReadTyped(s, src.Vb + (int)vbo[nrm.Stream] + i * bs[nrm.Stream] + nrm.Offset, nrm.Type, tmp);
+                float nx = tmp[0], ny = tmp[1], nz = tmp[2];
+                if (nrm.Type == 8) { nx = nx * 2 - 1; ny = ny * 2 - 1; nz = nz * 2 - 1; }
+                float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                n3[i] = len > 1e-6f ? new Vec3(nx / len, ny / len, nz / len) : new Vec3(0, 0, 1);
+                ReadTyped(s, src.Vb + (int)vbo[uvE.Stream] + i * bs[uvE.Stream] + uvE.Offset, uvE.Type, tmp);
+                uv[i] = (tmp[0], tmp[1]);
+            }
+
+            // Sampled with WRAP, like every other body-UV read here: a body's UVs need not sit in the
+            // [0,1] tile, and wrapping makes an integer tile offset irrelevant rather than putting a whole
+            // mesh on row 0.
+            var covered = CoveredVertices(uv, gate, vc);
+
+            var plan = BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, strength);
+            if (plan == null) continue;
+
+            // RESHADE, for the same reason the shell does: a flattened nipple still carrying the nipple's
+            // normals reads as a nipple however far the vertices moved. It matters more here than it does
+            // on a shell, because the shell is CUT FROM THIS and pushed out along the normal it finds — so
+            // a stale normal does not merely mis-shade the skin, it splays the garment above it.
+            var finalNrm = RelaxedNormals(p3, n3, plan.Delta, plan.NodeOf, plan.NodeWeight,
+                                          plan.NodeNormal, tris);
+
+            int stride = bs[pos.Stream];
+            int nStride = bs[nrm.Stream];
+            for (int i = 0; i < vc; i++)
+            {
+                // Position and normal have DIFFERENT tests. A vertex moves only if its own delta is real;
+                // it reshades if it is anywhere in the relaxed region, because a normal is a property of
+                // the neighbours — a vertex that stayed put beside one that dropped has a new normal.
+                var d = plan.Delta[i];
+                float mag = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+                if (mag > BustBridgeEpsilon)
+                {
+                    WriteXYZ(outBytes, src.Vb + (int)vbo[pos.Stream] + i * stride + pos.Offset, pos.Type,
+                             p3[i].X + d.X, p3[i].Y + d.Y, p3[i].Z + d.Z);
+                    vertsMoved++;
+                    most = MathF.Max(most, mag);
+                }
+
+                if (plan.NodeWeight[plan.NodeOf[i]] <= 0f) continue;
+                var fn = finalNrm[i];
+                if (WriteNormal(outBytes, src.Vb + (int)vbo[nrm.Stream] + i * nStride + nrm.Offset,
+                                nrm.Type, fn.X, fn.Y, fn.Z))
+                    normalsWritten++;
+            }
+            meshesTouched++;
+        }
+
+        if (vertsMoved == 0) return null;
+        log?.Invoke($"body smooth: {vertsMoved} vertex(es) across {meshesTouched} mesh(es), "
+                  + $"moved by up to {most:0.#####}, {normalsWritten} normal(s) reshaded");
+        return outBytes;
+    }
+
+    /// <summary>
+    /// Smooth the nipple out: find each one, then relax a small disc around it — literally what a modeller
+    /// does with a relax brush, which is where the shape of this came from and what it is measured against.
+    /// <para/>
+    /// Relaxing LOWERS a surface, so this runs on the BODY and the shell is cut from the result. Doing it
+    /// to the shell instead does not work and cannot be tuned into working: the shell rides one millimetre
+    /// off the skin, so a relaxed shell sits inside the body and the body's own nipple stands through it.
+    /// Measured on a real capture, the shell finished 1.98mm (worst 3.33mm) BEHIND the skin across the
+    /// areola against a correct +1.2mm elsewhere — a well with a point in the middle of it, which is
+    /// exactly what it looked like in game.
+    /// <para/>
+    /// FINDING THE NIPPLE IS THE WHOLE PROBLEM, and it took a hand-edited mesh to settle. On a real body
+    /// it is NOT the forward-most point of the breast: measured against a modeller's own relax pass, the
+    /// nipples sat at x ±0.0737 while the shell's frontmost vertex was at x −0.0453, 34mm away and a
+    /// millimetre further forward. A breast's broad curve out-reaches the small bump sitting on it.
+    /// <para/>
+    /// What does find it is PROMINENCE — height above the mean of a ring at roughly a nipple's own radius.
+    /// The bump wins that even though the curve wins on raw height. Measured on the same mesh, the peak of
+    /// it landed 3mm from where the modeller had brushed, symmetrically on both sides. A tighter ring does
+    /// not work: at 8–16mm the peak jumped to the collarbone and the armpit, because at that scale other
+    /// detail competes.
+    /// <para/>
+    /// THE OPERATOR IS A 3-D RELAX, and every part of that matters. Three earlier constructions are
+    /// recorded so they are not retried, and all three failed for the same underlying reason.
+    /// <list type="bullet">
+    /// <item>Doming OVER the tip (raise-only, so nothing could come through) cannot work: under raise-only
+    /// the tip cannot move, so the bump keeps its height and only its sharpness changes.</item>
+    /// <item>Smoothing the whole bust region at a fixed SCALE avoids needing a landmark at all and is too
+    /// blunt — it takes the breast's own curvature with it.</item>
+    /// <item>Relaxing the HEIGHT FIELD along the span's axis, which is what this used to do. It reads as
+    /// lumpy and cannot be tuned out. Most of what makes a relax look smooth is the TANGENTIAL component:
+    /// vertices slide along the surface and even out their spacing. Measured against the modeller's own
+    /// pass, past 6mm from the tip the tangential move was 1.92mm against 0.61mm along the normal — three
+    /// times more sideways than inward. A height-field operator produces exactly none of it, so the uneven
+    /// spacing survives untouched and only the depth changes.</item>
+    /// </list>
+    /// <para/>
+    /// IT MUST NOT RUN TO CONVERGENCE. A masked Laplacian at its fixed point is a discrete HARMONIC patch
+    /// pinned to the disc's rim, and a harmonic patch over a convex cap is a BOWL — it interpolates the rim
+    /// and sits below the original everywhere inside. That is the dished areola with the nipple still
+    /// standing in it. The previous version stopped either at a prominence target or when nothing moved;
+    /// the target was never reached (54% of a 65% goal) so it always took the second and ran 1345 passes to
+    /// full convergence. A brush is a few strokes: it takes off high curvature and leaves low curvature —
+    /// the breast — alone. Hence a fixed, small <see cref="NipplePasses"/> and no stopping rule at all.
+    /// <para/>
+    /// The falloff is applied to the RESULT, not to each pass. Modulating the rate does nothing in the
+    /// limit — every node with any weight ends at the same place, so the falloff cancels out entirely and
+    /// the disc gets a hard rim. Blending the finished relax is what a brush's falloff actually is.
+    /// <para/>
+    /// Returns a per-node 3-D displacement, or null if there was nothing to do.
+    /// </summary>
+    /// <param name="pos">Node positions to relax — the surface AFTER the span, so the two compose.</param>
+    /// <param name="h">Height along the chest axis, for the prominence locator only.</param>
+    /// <param name="w">How much each node may be smoothed — the region ramp, gated on this layer's
+    /// coverage, so the effect fades out at the garment's edge like everything else here.</param>
+    /// <param name="ax">The chest's outward axis — the direction the dome floor lifts along.</param>
+    /// <param name="onBust">
+    /// Every node the bust bones reach, WITHOUT the coverage gate — the breast as it exists, rather than
+    /// the part of it this garment happens to cover.
+    /// <para/>
+    /// Measuring and editing need different sets and conflating them broke the feature outright on a
+    /// small garment. Where the nipple is, how proud it stands and what curve the breast has around it are
+    /// facts about the body; a bralette does not change them. Read off the coverage-gated region instead,
+    /// the dome ring fell mostly outside the cloth and came back with 22 nodes fitting to a curvature of
+    /// -10.74/+2.18 — not a dome, so it was rejected on both sides, the floor never ran, the finishing
+    /// relax got zero nodes, and the whole pass moved the tip by three tenths of a millimetre.
+    /// <para/>
+    /// So everything measured here reads <paramref name="onBust"/>, and everything WRITTEN is still gated
+    /// by <paramref name="w"/> — which is what keeps the pass off skin no garment covers.
+    /// </param>
+    private static Vec3[]? NippleSmoothTarget(Vec3[] pos, float[] h, float[] lat, float[] ver, float[] w,
+                                              bool[] onBust, int count, List<int>[] adj, Vec3 ax,
+                                              float strength, Action<string>? log)
+    {
+        var measure = new List<int>();
+        var region = new List<int>();
+        float loLat = float.MaxValue, hiLat = float.MinValue, midLat = 0f;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] > 0f) region.Add(n);
+            if (!onBust[n]) continue;
+            measure.Add(n);
+            loLat = MathF.Min(loLat, lat[n]);
+            hiLat = MathF.Max(hiLat, lat[n]);
+            midLat += lat[n];
+        }
+        if (measure.Count < MinBustBridgeNodes || region.Count == 0) return null;
+        midLat /= measure.Count;
+
+        // Every distance here is a fraction of the bust's own width, so it means the same thing on any
+        // body. The ring is a nipple's radius; the disc is what the brush covered.
+        float extent = hiLat - loLat;
+        if (extent <= 1e-6f) return null;
+        float ringIn = extent * NippleRingInner, ringOut = extent * NippleRingOuter;
+        float radius = extent * NippleDiscRadius;
+
+        float Across(int i, int j)
+        {
+            float du = lat[i] - lat[j], dv = ver[i] - ver[j];
+            return MathF.Sqrt(du * du + dv * dv);
+        }
+
+        // The nipple on each side: the node standing proudest of a ring around it.
+        int nipL = -1, nipR = -1;
+        float promL = 0f, promR = 0f;
+        foreach (int n in measure)
+        {
+            float sum = 0f;
+            int ring = 0;
+            foreach (int k in measure)
+            {
+                float r = Across(n, k);
+                if (r < ringIn || r > ringOut) continue;
+                sum += h[k];
+                ring++;
+            }
+            if (ring < 4) continue;
+            float prom = h[n] - sum / ring;
+            if (lat[n] < midLat) { if (prom > promL) { promL = prom; nipL = n; } }
+            else                 { if (prom > promR) { promR = prom; nipR = n; } }
+        }
+        if (nipL < 0 && nipR < 0)
+        {
+            log?.Invoke("nipple smooth: nothing stands proud of its surroundings — nothing to smooth");
+            return null;
+        }
+
+        // How much each node is relaxed: full at a nipple, nothing at the disc's edge.
+        var amount = new float[count];
+        int touched = 0;
+        foreach (int n in region)
+        {
+            float best = 0f;
+            foreach (int nip in stackalloc[] { nipL, nipR })
+            {
+                if (nip < 0) continue;
+                float r = Across(n, nip) / radius;
+                if (r >= 1f) continue;
+                best = MathF.Max(best, 1f - Smoothstep(r));
+            }
+            if (best <= 0f) continue;
+            amount[n] = best * w[n];
+            touched++;
+        }
+        if (touched == 0) return null;
+
+        // THE BRUSH. Move every node in the patch toward the centroid of its neighbours, in 3-D, a fixed
+        // small number of times. Uniform lambda — the falloff is applied to the finished result below, not
+        // here, for the reason in the summary.
+        //
+        // Jacobi, not Gauss-Seidel: `cur` is read and `next` is written, so the answer does not depend on
+        // the order nodes happen to sit in the array. Lambda stays at or below 0.5 because a plain
+        // "replace with the neighbour average" (lambda 1) has eigenvalue -1 on the checkerboard mode and
+        // oscillates rather than converging.
+        var patch = region.Where(n => amount[n] > 0f).ToList();
+        var cur = (Vec3[])pos.Clone();
+        var next = (Vec3[])pos.Clone();
+        for (int pass = 0; pass < NipplePasses; pass++)
+        {
+            foreach (int n in patch)
+            {
+                if (adj[n] is not { Count: > 0 } near) continue;
+                float sx = 0f, sy = 0f, sz = 0f;
+                foreach (int k in near) { sx += cur[k].X; sy += cur[k].Y; sz += cur[k].Z; }
+                float inv = 1f / near.Count;
+                next[n] = new Vec3(
+                    cur[n].X + (sx * inv - cur[n].X) * NippleRelaxLambda,
+                    cur[n].Y + (sy * inv - cur[n].Y) * NippleRelaxLambda,
+                    cur[n].Z + (sz * inv - cur[n].Z) * NippleRelaxLambda);
+            }
+            (cur, next) = (next, cur);
+        }
+
+        // Falloff and strength on the RESULT. Turning the strength down then keeps the same smoothing and
+        // travels less of the way toward it, instead of changing what the brush does.
+        var delta = new Vec3[count];
+        foreach (int n in patch)
+        {
+            float a = amount[n] * strength;
+            delta[n] = new Vec3((cur[n].X - pos[n].X) * a, (cur[n].Y - pos[n].Y) * a, (cur[n].Z - pos[n].Z) * a);
+        }
+
+        // ── the dome floor ──────────────────────────────────────────────────────────────────────
+        //
+        // A nipple sits in a TROUGH, and the relax cannot fill it. Measured on a real body as height
+        // above the mean of a ring 4-7mm away: the untouched breast reads +2.0mm at the tip and then
+        // -1.36, -1.46, -1.19mm through 5-13mm — a dish ringing the nipple. Shaving the tip leaves that
+        // ring behind, which is the "still slightly concave, it should still be convex slightly" report.
+        //
+        // Widening the relax to cover it does not work and the numbers say why: a bigger disc lowers the
+        // surround, so the tip stands PROUDER relative to it (0.65mm at a 10mm disc, 1.04mm at an 18mm
+        // one) and the nipple comes back. The two jobs are opposed, so they are two passes.
+        //
+        // This one only ever RAISES, toward a quadric fitted to the breast beyond it and extrapolated
+        // inward. That makes it safe by construction: it cannot dish anything, and it cannot invent a
+        // bulge, because its ceiling is the breast's own curve. The lift also goes to zero on its own at
+        // the annulus, where the surface IS the fit, so the region needs no falloff of its own — the edge
+        // is continuous by construction rather than by tapering.
+        //
+        // Skipped rather than forced when the fit is not a dome. A garment covering half a breast leaves
+        // a crescent, and extrapolating a quadric off one is how a "fix" invents a bulge that was never
+        // there.
+        float floorRadius = radius * NippleDomeReach;
+        float domeCap = MathF.Max(promL, promR);
+        int lifted = 0, shortNodes = 0;
+        float mostLift = 0f, shortfall = 0f;
+        // Which nodes this pass has any business touching, and how much — the floor's own reach, faded.
+        // The finishing relax below borrows it rather than working over the whole bust region: with no
+        // coverage map the region is the entire chest, and smoothing all of it spread the edit over 188mm
+        // of body when the feature being fixed is 20mm across.
+        var finishW = new float[count];
+        foreach (int nip in stackalloc[] { nipL, nipR })
+        {
+            if (nip < 0) continue;
+            // Sampled off the BUST, not off the covered part of it — see the onBust note.
+            var ring = new List<(double, double, double)>();
+            foreach (int n in measure)
+            {
+                float r = Across(n, nip);
+                if (r < radius * NippleDomeRingInner || r > radius * NippleDomeRingOuter) continue;
+                ring.Add((lat[n] - lat[nip], ver[n] - ver[nip], h[n]));
+            }
+            var q = FitQuadric(ring);
+            if (q == null || q[3] >= 0 || q[5] >= 0)
+            {
+                log?.Invoke($"nipple smooth: no dome to fill toward on one side ({ring.Count} ring node(s)"
+                          + (q == null ? ", fit failed" : $", curvature {q[3]:0.##}/{q[5]:0.##} is not convex")
+                          + ") — that side keeps whatever trough it has");
+                continue;
+            }
+            // A quadric extrapolated inward from a ring can run away if the ring stopped describing the
+            // breast — swept far enough out it starts taking in the chest wall and the underbust, and the
+            // fit stops being a breast at all. The apex is the sanity check: the dome may reach the
+            // nipple's own height, since that is the surface it is continuing, but a dome that wants to
+            // stand PROUD of where the nipple was is extrapolating, not fitting.
+            if (q[0] > h[nip])
+            {
+                log?.Invoke($"nipple smooth: the dome fit on one side extrapolates past the nipple itself "
+                          + $"({q[0]:0.#####} against {h[nip]:0.#####}) — discarded, that side keeps its trough");
+                continue;
+            }
+
+            foreach (int n in region)
+            {
+                float rr = Across(n, nip);
+                if (rr > floorRadius) continue;
+                // Each node belongs to its nearer nipple, so the two domes cannot fight over the nodes
+                // between them.
+                if (nipL >= 0 && nipR >= 0 && rr > Across(n, nip == nipL ? nipR : nipL)) continue;
+
+                // TAPER THE EDGE. "The lift goes to zero on its own where the surface meets the fit, so
+                // the region needs no falloff" was wrong, and the silhouette showed it: a 3.6mm step at
+                // the boundary and a cliff below the breast. A quadric is not a good enough model of a
+                // breast for the fit to actually meet the surface at its own inner edge, so the lift
+                // arrives at the boundary still worth millimetres. Faded explicitly instead.
+                float edge = rr / floorRadius;
+                float fade = edge <= NippleDomeSolid ? 1f
+                           : 1f - Smoothstep((edge - NippleDomeSolid) / (1f - NippleDomeSolid));
+                finishW[n] = MathF.Max(finishW[n], w[n] * fade);
+
+                double u = lat[n] - lat[nip], v = ver[n] - ver[nip];
+                double dome = q[0] + q[1] * u + q[2] * v + q[3] * u * u + q[4] * u * v + q[5] * v * v;
+                // Measured against where the relax has already left it, so the two compose instead of
+                // the floor undoing the shave.
+                float here = (pos[n].X + delta[n].X) * ax.X
+                           + (pos[n].Y + delta[n].Y) * ax.Y
+                           + (pos[n].Z + delta[n].Z) * ax.Z;
+                // TOWARD the dome, from either side. Raise-only was tried and is self-defeating: it fills
+                // the trough, but it also lifts the tip the relax has just brought down, so the nipple
+                // came back — measured at 1.06mm proud against 0.65mm with no floor at all. The relax and
+                // the floor were pulling against each other on the same nodes.
+                //
+                // The dome is what this whole patch should BE: the breast's own curve, continued through
+                // where the nipple was. So the height goes to it, and the relax's job narrows to what
+                // only it can do — sliding vertices tangentially so the patch is evenly spaced.
+                // BOUNDED BY THE BUMP. The trough a nipple sits in is a feature of that nipple, so it
+                // cannot be deeper than the nipple is tall — and a quadric extrapolated inward can be, if
+                // the ring stopped describing a breast. The apex guard above only tests the dome AT the
+                // nipple and so misses a fit that is sane there and wild further out: on a second body it
+                // asked for 27mm of lift, against a nipple standing 19mm proud.
+                float want = Math.Clamp((float)dome - here, -domeCap, domeCap);
+                float lift = want * w[n] * strength * fade;
+                if (want > 0f) { shortfall += want - lift; shortNodes++; }
+                if (MathF.Abs(lift) <= 1e-7f) continue;
+                delta[n] = new Vec3(delta[n].X + ax.X * lift,
+                                    delta[n].Y + ax.Y * lift,
+                                    delta[n].Z + ax.Z * lift);
+                lifted++;
+                mostLift = MathF.Max(mostLift, MathF.Abs(lift));
+            }
+        }
+
+        // ── the light relax ─────────────────────────────────────────────────────────────────────
+        //
+        // The body arrives BUMPY at vertex scale and nothing above fixes it. Measured as the mean offset
+        // of a vertex from its own neighbours' centroid, over the 20mm around a nipple: the upstream body
+        // reads 0.192mm and this pass had been leaving 0.162mm, against 0.022mm on the same geometry after
+        // a modeller's light relax. So the shape was right and the surface was still lumpy.
+        //
+        // The reason none of the passes above removed it is that every one of them lands as
+        // `position + (target - position) * weight`, and wherever that weight is short of 1 — which is
+        // most of a falloff — the original's roughness survives in proportion. Smoothing the RESULT is the
+        // only place it can be taken out.
+        //
+        // A PLAIN Laplacian, and Taubin is specifically wrong for this. What makes a surface read as
+        // smooth at vertex scale is largely that each vertex sits at its neighbours' centroid, and moving
+        // it there is a tangential correction as much as a normal one. Taubin's whole design is to undo
+        // part of that so it cannot lose shape — which is right for de-jaggying and wrong here: over the
+        // same geometry it stalled at 0.119mm however long it ran, against 0.022mm for the modeller's own
+        // relax and 0.192mm untouched.
+        //
+        // Its shrinkage is not worth protecting against at this scale. A Laplacian pulls a sphere of
+        // radius R in by about λh²/4R per pass; on a 50mm breast at 0.8mm spacing that is under two
+        // hundredths of a millimetre across the whole pass, which is far below what any of this moves on
+        // purpose.
+        if (NippleFinishPasses > 0)
+        {
+            var cur2 = new Vec3[count];
+            var next2 = new Vec3[count];
+            for (int n = 0; n < count; n++)
+                cur2[n] = new Vec3(pos[n].X + delta[n].X, pos[n].Y + delta[n].Y, pos[n].Z + delta[n].Z);
+            Array.Copy(cur2, next2, count);
+
+            // KEPT SHORT rather than made safe. Two ways of removing the shape cost were measured and
+            // both are worse than simply not running long enough to incur it:
+            //
+            // Taubin stalls at 0.119mm however long it runs — the negative step that protects its shape
+            // is the same one that undoes the redistribution this is for. Projecting out the normal
+            // component (a purely tangential relax, shape-free by construction) plateaus at 0.075mm and
+            // slides vertices up to 10mm ALONG the surface, which drags their UVs with them and smears
+            // the texture.
+            //
+            // At six passes the plain step reaches 0.059mm and adds 0.06mm to the largest displacement in
+            // the whole pass — the shrinkage only becomes real past about twelve, where the same figure
+            // starts climbing through 7mm and the breast quietly deflates.
+            var finishNodes = region.Where(n => finishW[n] > 0f).ToList();
+            for (int pass = 0; pass < NippleFinishPasses; pass++)
+            {
+                foreach (int n in finishNodes)
+                {
+                    if (adj[n] is not { Count: > 0 } near) continue;
+                    float sx = 0f, sy = 0f, sz = 0f;
+                    foreach (int j in near) { sx += cur2[j].X; sy += cur2[j].Y; sz += cur2[j].Z; }
+                    float inv = 1f / near.Count;
+                    next2[n] = new Vec3(cur2[n].X + (sx * inv - cur2[n].X) * NippleFinishLambda,
+                                        cur2[n].Y + (sy * inv - cur2[n].Y) * NippleFinishLambda,
+                                        cur2[n].Z + (sz * inv - cur2[n].Z) * NippleFinishLambda);
+                }
+                (cur2, next2) = (next2, cur2);
+            }
+
+            // Faded by coverage and strength like everything else, so it stops at the garment's edge.
+            foreach (int n in finishNodes)
+            {
+                float a = finishW[n] * strength;
+                if (a <= 0f) continue;
+                float bx = pos[n].X + delta[n].X, by = pos[n].Y + delta[n].Y, bz = pos[n].Z + delta[n].Z;
+                delta[n] = new Vec3(delta[n].X + (cur2[n].X - bx) * a,
+                                    delta[n].Y + (cur2[n].Y - by) * a,
+                                    delta[n].Z + (cur2[n].Z - bz) * a);
+            }
+
+            if (log != null)
+            {
+                // Measured on the graph the pass actually smooths, over the nodes it actually touched —
+                // an export re-welds and re-splits, and that has made this number lie before.
+                double Rough(Func<int, Vec3> at)
+                {
+                    double sum = 0; int n2 = 0;
+                    foreach (int n in patch)
+                    {
+                        if (adj[n] is not { Count: > 2 } near) continue;
+                        float sx = 0f, sy = 0f, sz = 0f;
+                        foreach (int j in near) { var q2 = at(j); sx += q2.X; sy += q2.Y; sz += q2.Z; }
+                        float inv = 1f / near.Count;
+                        var me = at(n);
+                        sum += Len(new Vec3(sx * inv - me.X, sy * inv - me.Y, sz * inv - me.Z));
+                        n2++;
+                    }
+                    return n2 == 0 ? 0 : sum / n2;
+                }
+                float meanW = patch.Count == 0 ? 0f : patch.Average(n => w[n]);
+                log($"nipple smooth: finish {NippleFinishPasses} pass(es) over {finishNodes.Count} node(s), "
+                  + $"roughness {Rough(n => pos[n]):0.######} -> "
+                  + $"{Rough(n => new Vec3(pos[n].X + delta[n].X, pos[n].Y + delta[n].Y, pos[n].Z + delta[n].Z)):0.######}"
+                  + $", mean coverage weight {meanW:0.###}");
+            }
+        }
+
+        float most = 0f;
+        foreach (int n in region) most = MathF.Max(most, Len(delta[n]));
+
+        int tip = promL >= promR ? nipL : nipR;
+        string Where(int n) => n < 0 ? "none"
+            : $"({pos[n].X:0.###},{pos[n].Y:0.###},{pos[n].Z:0.###})";
+        log?.Invoke($"nipple smooth: {measure.Count} bust node(s), {region.Count} of them covered; "
+                  + $"nipples {Where(nipL)} prom {promL:0.#####} / {Where(nipR)} prom "
+                  + $"{promR:0.#####}, ring {ringIn:0.####}-{ringOut:0.####}, disc {radius:0.####}, "
+                  + $"{touched} node(s) over {NipplePasses} pass(es), {lifted} filled toward the breast's "
+                  + $"own curve by up to {mostLift:0.#####} (left {(shortNodes > 0 ? shortfall / shortNodes : 0f):0.#####} "
+                  + $"short on average over {shortNodes}), tip moved "
+                  + $"{(tip >= 0 ? Len(delta[tip]) : 0f):0.#####}, up to {most:0.#####}");
+        return delta;
+    }
+
+    /// <summary>
+    /// The ring a node's prominence is measured against, as a fraction of the bust's lateral extent —
+    /// roughly a nipple's own radius out to twice it.
+    /// <para/>
+    /// Not smaller. At half these values the peak moved off the breast entirely, onto the collarbone and
+    /// the armpit, because at that scale a body has plenty of other detail to compete with. At these it
+    /// landed within 3mm of where a modeller brushed, on both sides.
+    /// </summary>
+    private const float NippleRingInner = 0.045f, NippleRingOuter = 0.09f;
+
+    /// <summary>
+    /// The relaxed disc's radius, as a fraction of the bust's lateral extent — about 10mm on the body this
+    /// was fitted against, which is the "roughly twice the nipple" a modeller reaches for.
+    /// <para/>
+    /// THIS is the constant that decides whether the result follows the breast. Past a few hundred passes
+    /// the relax has converged inside the disc, so the displacement is just the falloff's own shape; the
+    /// radius therefore sets the PROFILE and <see cref="NipplePasses"/> only sets its depth.
+    /// <para/>
+    /// Fitted on the profile's SHAPE — each band as a fraction of the tip — against the modeller's pass,
+    /// because that is what the eye reads. An earlier fit minimised absolute band error instead and chose
+    /// 0.055, which matched the millimetres while taking proportionally too much off the surround and too
+    /// little off the peak: a flat spot on a curved breast, reported as caving in rather than following it.
+    /// <para/>
+    /// Nudged from 0.044 to here once the dome floor existed, on measured convexity rather than on that
+    /// shape fit. This disc no longer decides the result by itself — the floor sets how the surround
+    /// finishes — and what this one still owns is how proud the tip is left, which comes out lowest here.
+    /// </summary>
+    private const float NippleDiscRadius = 0.050f;
+
+    /// <summary>
+    /// How far each relax pass moves a vertex toward its neighbours' average. UNDER-RELAXED, and that is
+    /// not a refinement — at 1 the pass does not converge at all.
+    /// <para/>
+    /// Taking the neighbour average outright is a Jacobi step with λ = 1, whose highest-frequency mode has
+    /// eigenvalue −1: it flips sign every pass instead of decaying. The falloff meant that only the middle
+    /// of the patch ran at 1, so the surroundings smoothed normally while the tip sat there oscillating —
+    /// a bump that would not move, inside a recess that did, which is exactly how it was reported. The tip
+    /// netted 0.3mm in 400 passes.
+    /// <para/>
+    /// Halving the step makes every mode decay monotonically, which is the textbook cure and costs only
+    /// twice as many passes.
+    /// </summary>
+    private const float NippleRelaxLambda = 0.5f;
+
+    /// <summary>
+    /// How many relax passes. A FIXED count, because that is what a brush is — a few strokes, then the
+    /// modeller lifts the pen. There is deliberately no stopping rule: every version that had one ran to
+    /// convergence instead, and a converged masked Laplacian is a harmonic patch, which over a convex
+    /// breast is a bowl. See <c>NippleSmoothTarget</c>.
+    /// <para/>
+    /// Sets the DEPTH only; <see cref="NippleDiscRadius"/> sets the shape. It saturates — on the fitting
+    /// body 1000 passes reached 2.55mm at the tip and 1400 reached 2.70mm, against the modeller's 3.17mm —
+    /// because once the relax has converged inside the disc there is nothing left to take.
+    /// <para/>
+    /// Large because the feature is large next to the vertex spacing: a Laplacian attenuates a wavelength
+    /// L at a rate set by (spacing/L)², and a 10mm nipple on a 1mm mesh needs hundreds of passes to move
+    /// at all. Twelve did essentially nothing (0.12mm). It is still only a few million float operations on
+    /// a patch of about a thousand nodes.
+    /// </summary>
+    private const int NipplePasses = 1400;
+
+    /// <summary>Hermite smoothstep, clamped.</summary>
+    private static float Smoothstep(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return t * t * (3f - 2f * t);
     }
 
     /// <summary>One [1,2,1] pass over a band series, ends held.</summary>
@@ -11069,8 +11789,8 @@ public static class SecondSkinWriter
     /// The plan-free form, shared by every pass that moves vertices without changing which vertices exist.
     /// The toe cap hands it a rebuilt topology; the bust bridge hands it the mesh's own, unchanged.
     /// </remarks>
-    private static Vec3[] RelaxedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
-                                         float[] nodeWeight, Vec3[] nodeNormal, ushort[] tris)
+    internal static Vec3[] RelaxedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
+                                          float[] nodeWeight, Vec3[] nodeNormal, ushort[] tris)
     {
         int vc = basePos.Length;
         int nodeCount = nodeWeight.Length;
@@ -11100,6 +11820,57 @@ public static class SecondSkinWriter
 
             foreach (int n in stackalloc[] { na, nb, nc })
                 accum[n] = new Vec3(accum[n].X + cxp, accum[n].Y + cyp, accum[n].Z + czp);
+        }
+
+        // SMOOTH THE NORMAL FIELD. Everything above gives each node the area-weighted sum of the faces
+        // around it, which is faceted whenever the triangles are — and on a real body they are: edge
+        // lengths across the chest vary with a coefficient of variation of 0.735, so neighbouring edges
+        // differ in length by about 70%.
+        //
+        // This matters more than the geometry it comes from, twice over. Shading displays the surface's
+        // DERIVATIVE, so noise in the normals is far more visible than the position noise underneath it;
+        // and a shell is built as `position + normal * BaseOffset`, so scattered normals become up to a
+        // millimetre of scattered POSITION in the garment. The noise is amplified, not merely copied.
+        //
+        // Jacobi over the welded-node graph, so the answer does not depend on the order nodes sit in.
+        // Only nodes the pass touched are smoothed — everything else must keep its original bytes — but
+        // neighbours are READ regardless of weight, so a node on the region's edge averages against real
+        // normals rather than against zero, which would drag it toward nothing and crease the boundary.
+        //
+        // Normalized once, after the last pass rather than during: these are area-weighted sums, and
+        // normalizing between passes throws away the weighting that makes a large triangle count for more
+        // than a sliver.
+        if (NormalSmoothPasses > 0)
+        {
+            var nbr = new List<int>[nodeCount];
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                ushort ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+                if (ia >= vc || ib >= vc || ic >= vc) continue;
+                int na = nodeOf[ia], nb = nodeOf[ib], nc = nodeOf[ic];
+                if (na == nb || nb == nc || na == nc) continue;
+                void Link(int a, int b)
+                {
+                    (nbr[a] ??= new List<int>()).Add(b);
+                    (nbr[b] ??= new List<int>()).Add(a);
+                }
+                Link(na, nb); Link(nb, nc); Link(nc, na);
+            }
+
+            var swap = new Vec3[nodeCount];
+            for (int pass = 0; pass < NormalSmoothPasses; pass++)
+            {
+                Array.Copy(accum, swap, nodeCount);
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    if (nodeWeight[n] <= 0f || nbr[n] is not { Count: > 0 } near) continue;
+                    float sx = accum[n].X, sy = accum[n].Y, sz = accum[n].Z;
+                    foreach (int k in near) { sx += accum[k].X; sy += accum[k].Y; sz += accum[k].Z; }
+                    float inv = 1f / (near.Count + 1);
+                    swap[n] = new Vec3(sx * inv, sy * inv, sz * inv);
+                }
+                (accum, swap) = (swap, accum);
+            }
         }
 
         // Winding is not guaranteed here. Getting it backwards shades the cap inside out AND makes the
@@ -11868,6 +12639,144 @@ public static class SecondSkinWriter
         float len = MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
         return len > 1e-6f ? new Vec3(v.X / len, v.Y / len, v.Z / len) : null;
     }
+
+    private static float Len(Vec3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+
+    /// <summary>
+    /// Least-squares fit of h = a + bu + cv + du² + euv + fv² to scattered (u,v,h), by Gaussian
+    /// elimination with partial pivoting on the 6x6 normal equations. Null if it is underdetermined or
+    /// singular — a caller must have a fallback, since a coverage-clipped region can supply neither
+    /// enough points nor enough spread.
+    /// <para/>
+    /// Six terms rather than a radial h = h0 + kr²: a nipple does not sit on the apex of the breast, so
+    /// the surface under it SLOPES, and a rotationally symmetric fit averages that slope away and returns
+    /// a dome tilted out of the surface it is meant to continue. The linear pair carry the slope and the
+    /// three quadratic terms carry anisotropic curvature.
+    /// </summary>
+    private static double[]? FitQuadric(List<(double U, double V, double H)> pts)
+    {
+        if (pts.Count < 12) return null;
+        var m = new double[6, 7];
+        Span<double> t = stackalloc double[6];
+        foreach (var (u, v, h) in pts)
+        {
+            // WEIGHTED toward the near edge of the ring, by 1/r². Unweighted, the far side of the ring
+            // dominates simply by being further out, and the two axes are not equivalent out there: a ring
+            // wide enough to be stable reaches the collarbone above and the underbust below long before it
+            // runs out of breast sideways. So the vertical curvature collapses while the horizontal barely
+            // moves, and the dome comes out as a cylinder — measured on a real body as 3.86 across against
+            // 1.68 up, from a breast that was very nearly isotropic (5.45 / 5.45). That is a surface which
+            // reads round from one angle and flat from another.
+            double r2 = u * u + v * v;
+            double wt = r2 > 1e-12 ? 1.0 / r2 : 1e12;
+            t[0] = 1; t[1] = u; t[2] = v; t[3] = u * u; t[4] = u * v; t[5] = v * v;
+            for (int i = 0; i < 6; i++)
+            {
+                for (int j = 0; j < 6; j++) m[i, j] += wt * t[i] * t[j];
+                m[i, 6] += wt * t[i] * h;
+            }
+        }
+        for (int c = 0; c < 6; c++)
+        {
+            int piv = c;
+            for (int r = c + 1; r < 6; r++) if (Math.Abs(m[r, c]) > Math.Abs(m[piv, c])) piv = r;
+            if (Math.Abs(m[piv, c]) < 1e-18) return null;
+            if (piv != c) for (int j = 0; j <= 6; j++) (m[c, j], m[piv, j]) = (m[piv, j], m[c, j]);
+            for (int r = 0; r < 6; r++)
+            {
+                if (r == c) continue;
+                double f = m[r, c] / m[c, c];
+                for (int j = c; j <= 6; j++) m[r, j] -= f * m[c, j];
+            }
+        }
+        var x = new double[6];
+        for (int i = 0; i < 6; i++) x[i] = m[i, 6] / m[i, i];
+        return x;
+    }
+
+    /// <summary>
+    /// Where the dome fit samples the breast, as multiples of the relaxed disc's radius — about 18 to
+    /// 26mm on the body this was measured against. The band has to start OUTSIDE the trough the nipple
+    /// sits in, which runs to roughly 18mm, or the fit is dragged down by the very dent it exists to
+    /// fill; and it has to stop before the ring stops being breast at all.
+    /// <para/>
+    /// Held in as tightly as that because of ISOTROPY, which is what a wider band costs. The untouched
+    /// breast is very nearly as curved up-and-down as it is side-to-side (5.45 against 5.45, measured
+    /// over 10mm). Fitted at 2.0-3.1 the result came out 3.85 across against 1.81 up — a cylinder, round
+    /// from one angle and flat from another, which is exactly how it was reported. At 1.6-2.3 it is
+    /// 3.51 against 2.44.
+    /// <para/>
+    /// The cost is paid at the tip: a nearer band extrapolates to a higher apex, so slightly more of the
+    /// nipple survives (1.09 against 0.79 as a band average). That trade is monotonic along this axis —
+    /// moving the band out lowers the tip and flattens the vertical — so these two numbers are the knob
+    /// to reach for if either end needs adjusting.
+    /// </summary>
+    /// <summary>
+    /// Rounds of the finishing Taubin relax, each a positive step and a negative one. See the block in
+    /// <c>NippleSmoothTarget</c>.
+    /// </summary>
+    private const int NippleFinishPasses = 6;
+
+    /// <summary>How far each finishing pass moves a vertex toward its neighbours' centroid. Under-relaxed
+    /// for the same reason the main relax is: at 1 a Jacobi step oscillates on the checkerboard mode
+    /// instead of converging.</summary>
+    private const float NippleFinishLambda = 0.5f;
+
+    /// <inheritdoc cref="NippleDomeRingOuter"/>
+    private const float NippleDomeRingInner = 1.6f;
+
+    /// <inheritdoc cref="NippleDomeRingInner"/>
+    private const float NippleDomeRingOuter = 2.3f;
+
+    /// <summary>
+    /// The fraction of the region's radius that is pulled fully to the dome, before the pull fades out to
+    /// nothing at the edge. See the taper in <c>NippleSmoothTarget</c> for why it is not 1.
+    /// <para/>
+    /// Chosen on the SIDE-VIEW SILHOUETTE — the furthest-forward point at each height, which is the
+    /// outline a side view actually draws and the only measurement here that has not misled. At 0.7 the
+    /// breast's outline lifted 3.5mm; at 0.5 it lifts 2.6mm and keeps a real peak instead of flattening
+    /// into a plateau.
+    /// </summary>
+    private const float NippleDomeSolid = 0.5f;
+
+    /// <summary>
+    /// How far the dome floor reaches beyond the relaxed disc, as a multiple of its radius. It has to
+    /// cover the trough the nipple sits in, which on a real body runs to about 13mm — well past the disc
+    /// that shaves the tip.
+    /// <para/>
+    /// Chosen against the side-view silhouette together with <see cref="NippleDomeSolid"/>, since the two
+    /// trade directly: reaching further fills more of the trough and moves the breast's outline more.
+    /// 1.6 leaves the outline untouched but barely fills; 2.6 fills no better than 2.0 and lifts the
+    /// outline further. 2.0 fills the trough best of any of them and costs 2.6mm of outline.
+    /// <para/>
+    /// Not swept past about 2.6. The annulus sits beyond this, and out there it stops describing a breast
+    /// and starts taking in the chest wall — visible in an earlier sweep as convexity that improved
+    /// smoothly to 2.4, scored best at 2.6 and collapsed at 2.8. A value next to that cliff would be tuned
+    /// to one body rather than to the shape of the problem.
+    /// </summary>
+    private const float NippleDomeReach = 2.0f;
+
+    /// <summary>
+    /// How many times the recomputed normal field is averaged over the welded-node graph before it is
+    /// written. See the block in <see cref="RelaxedNormals"/> for why this exists at all.
+    /// <para/>
+    /// WITHOUT IT THE GEOMETRY PASS MAKES SHADING WORSE, which is the measurement that put it here.
+    /// Mean angle between the normals of vertices sharing an edge, within 30mm of the nipple on a real
+    /// body: the untouched body reads 6.19°, and the relax alone takes it to 7.67°. The shape improves
+    /// and the surface shades rougher than it started, which is exactly "it matches the skin perfectly,
+    /// but it's not a graceful curve".
+    /// <para/>
+    /// Chosen off the curve on that body — 4 passes give 4.92°, 8 give 3.81°, 16 give 2.66°, and it
+    /// saturates around 2.43° by 32. Sixteen is past the knee without being at the floor: less than half
+    /// the faceting the body started with, at a smoothing radius of about 3mm on a 0.8mm mesh, which is
+    /// far too small to touch a breast's own form. Pushing to the floor buys 0.2° and starts flattening
+    /// the shading cues that make a surface read as curved at all — waxy, a breast lit like a balloon.
+    /// <para/>
+    /// This only ever changes SHADING. No vertex moves because of it — verified across that whole sweep,
+    /// where the largest vertex displacement stayed 4.389mm at every pass count — which is what keeps it
+    /// separable from the geometry passes and testable on its own.
+    /// </summary>
+    private const int NormalSmoothPasses = 16;
 
     /// <summary>Any two unit vectors spanning the plane perpendicular to <paramref name="n"/>.</summary>
     private static void Basis(Vec3 n, out Vec3 u, out Vec3 v)

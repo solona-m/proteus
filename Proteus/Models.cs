@@ -115,6 +115,31 @@ public class ProteusMetadata
     public float? BustBridgeStrength { get; set; }
 
     /// <summary>
+    /// Whether this mod's shells should smooth the nipple out instead of reproducing it as a point. Null
+    /// or false = off, which is what every existing mod keeps.
+    /// <para/>
+    /// A shell is a displaced copy of the body, so a garment over the chest carries the nipple through as
+    /// faithfully as it carries everything else — which reads as body paint rather than cloth, the same
+    /// complaint <see cref="BustBridge"/> answers for the cleavage.
+    /// <para/>
+    /// INCOMPLETE ON ITS OWN. Smoothing lowers the shell, and a shell has only a millimetre of
+    /// clearance over the skin, so the body's own nipple will show through wherever it stood prouder
+    /// than that. Smoothing the skin to match is the other half and does not exist yet.
+    /// <para/>
+    /// Whole-mod for the same two reasons <see cref="BustBridge"/> is, and independent of it: a mod may
+    /// want either. Body surfaces only.
+    /// </summary>
+    [JsonPropertyName("SmoothNipples")]
+    public bool? SmoothNipples { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="SmoothNipples"/> region is smoothed (0-1, default 1). Lower values keep more
+    /// of the shape underneath; 0 disables the pass without clearing the tick.
+    /// </summary>
+    [JsonPropertyName("SmoothNipplesStrength")]
+    public float? SmoothNipplesStrength { get; set; }
+
+    /// <summary>
     /// Geometry this pack contributes unconditionally — used when it declares no
     /// <see cref="ContentGroups"/>. See <see cref="ContentPiece"/>.
     /// </summary>

@@ -298,6 +298,52 @@ public class BustBridgeDiagTests
             $"a fold in the span reaches {slopes[^1]:0.###} per unit length — steep enough to read as a notch");
     }
 
+    /// <summary>
+    /// The body half: republishing the worn body with its chest relaxed.
+    /// <para/>
+    /// This is the first thing Proteus writes into a model's VERTEX data, so the checks are about the file
+    /// staying a valid model as much as about the geometry: same length (positions only, so no header
+    /// offset moves), same vertex count, and the edit confined to the chest.
+    /// </summary>
+    [Fact]
+    public void BodySmoothMovesTheChestAndNothingElse()
+    {
+        if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
+
+        var before = File.ReadAllBytes(Torso);
+        var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };   // no coverage map = covers all
+        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 1f, o.WriteLine);
+        Assert.NotNull(after);
+
+        // Positions are overwritten in place, so nothing in the header can have moved.
+        Assert.Equal(before.Length, after!.Length);
+
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(before, out var pa, out _, out var ta));
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(after, out var pb, out _, out var tb));
+        Assert.Equal(pa.Length, pb.Length);
+        Assert.Equal(ta.Length, tb.Length);
+
+        int moved = 0;
+        float worst = 0f, loY = float.MaxValue, hiY = float.MinValue;
+        for (int i = 0; i * 3 + 2 < pa.Length; i++)
+        {
+            float dx = pb[i * 3] - pa[i * 3], dy = pb[i * 3 + 1] - pa[i * 3 + 1], dz = pb[i * 3 + 2] - pa[i * 3 + 2];
+            float m = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (m <= 1e-6f) continue;
+            moved++;
+            worst = MathF.Max(worst, m);
+            loY = MathF.Min(loY, pa[i * 3 + 1]);
+            hiY = MathF.Max(hiY, pa[i * 3 + 1]);
+        }
+        o.WriteLine($"{moved} of {pa.Length / 3} vertices moved, max {worst:0.#####}, y {loY:0.###}..{hiY:0.###}");
+
+        Assert.True(moved > 0, "nothing moved — the body keeps its nipple and the garment will clip into it");
+        // A chest's worth, not a body's worth.
+        Assert.True(moved < pa.Length / 3 * 0.25, $"{moved} vertices is too much of the body to be the chest");
+        // And confined to the bust's own band, so nothing near the hips or the neck was touched.
+        Assert.True(hiY - loY < 0.12f, $"the edit spans {hiY - loY:0.###} vertically — wider than a bust");
+    }
+
     private static void WriteObj(string path, SecondSkinWriter.Vec3[] pos, ushort[] tris)
     {
         using var w = new StreamWriter(path);

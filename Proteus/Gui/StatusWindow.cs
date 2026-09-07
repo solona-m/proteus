@@ -5757,7 +5757,7 @@ public class StatusWindow : Window
             // The fifth: this MOD's bust bridge, which is geometry for the same reason a cap is. Read off
             // the sidecar rather than the option — it is one decision about the whole pack, and the tick
             // that sets it lives in the whole-mod part of Advanced.
-            bool bridgeWanted = entry.Metadata.BustBridge == true;
+            bool bridgeWanted = entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true;
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
                                                         needsUnmirrored, capWanted, bridgeWanted))
             {
@@ -5934,7 +5934,8 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.BustBridgeTip);
 
-        if (!on) return;
+        if (on)
+        {
         float strength = md.BustBridgeStrength ?? 1f;
         ImGui.SetNextItemWidth(150);
         if (ImGui.DragFloat($"{cs.BustBridgeStrength}##bustbridgestr_{entry.ModDirectory}",
@@ -5948,6 +5949,33 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.BustBridgeStrengthTip);
+        }
+
+        // Independent of the bridge above, and beside it because they are the same kind of decision
+        // about the same part of the garment. A mod may want either.
+        bool smooth = md.SmoothNipples == true;
+        if (ImGui.Checkbox($"{cs.SmoothNipples}##smoothnipples_{entry.ModDirectory}", ref smooth))
+        {
+            md.SmoothNipples = smooth ? true : null;
+            if (!smooth) md.SmoothNipplesStrength = null;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "smooth-nipples");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.SmoothNipplesTip);
+
+        if (!smooth) return;
+        float smoothStrength = md.SmoothNipplesStrength ?? 1f;
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat($"{cs.SmoothNipplesStrength}##smoothnipplesstr_{entry.ModDirectory}",
+                ref smoothStrength, 0.01f, 0f, 1f, "%.2f"))
+        {
+            md.SmoothNipplesStrength = Math.Abs(smoothStrength - 1f) < 0.001f ? null : smoothStrength;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "smooth-nipples");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.SmoothNipplesStrengthTip);
     }
 
     /// <summary>
