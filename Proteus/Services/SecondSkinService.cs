@@ -567,6 +567,18 @@ public sealed class SecondSkinService
     /// doesn't, a redraw landing mid-write would read a half-written model. Same reasoning and same shape
     /// as TextureLoader.WriteWithRetry and PenumbraModMeta.AtomicWrite.
     /// </summary>
+    /// <summary>
+    /// The body models as the USER installed them, by game path — remembered before the nipple smooth
+    /// republishes any of them, so later composites never read our own output back as their source.
+    /// <para/>
+    /// Known limit: if the wearer swaps body mods while the smooth is on, this keeps handing out the old
+    /// bytes, because the path now resolves to our file and there is nothing left to notice the change
+    /// through. The proper cure is <c>CompositorService.PrimeUpstreamCache</c>, which already unpublishes
+    /// and re-reads for exactly this reason — its <c>IsReadableBase</c> filter excludes equipment paths
+    /// and would have to admit these.
+    /// </summary>
+    private readonly Dictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
+
     private static bool WriteIfChanged(string path, byte[] data)
     {
         try
@@ -1245,7 +1257,21 @@ public sealed class SecondSkinService
             // game path unchanged, so read from the game data in that case. The transcoder reads each
             // model's own vertex declaration, so vanilla and modded models both skin correctly.
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
-            var bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+            // THE BODY MAY NOW BE ONE OF OUR OWN PUBLICATIONS. The nipple smooth republishes the body with
+            // its chest relaxed, so from the next composite onward this path resolves to that file — and
+            // cutting a shell from it, or smoothing it again, would compound the effect a little more
+            // every time. The upstream is remembered the first time it is seen and used from then on, so
+            // every pass keeps working from the body the user actually installed.
+            //
+            // Falling back to the game's own data (what the host loader does in this situation) is wrong
+            // here: that is VANILLA, and a character wearing a Bibo body would have its shell cut from a
+            // body it is not wearing.
+            var bytes = bodyDisk != null && IsInsideOutputRoot(bodyDisk, outputRoot)
+                     && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered)
+                ? remembered
+                : textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+            if (bytes != null && (bodyDisk == null || !IsInsideOutputRoot(bodyDisk, outputRoot)))
+                _upstreamBodies[bodyGamePath] = bytes;
 
             if (bytes == null)
             {
@@ -2669,14 +2695,27 @@ public sealed class SecondSkinService
         //
         // Per MOD, not global like the toe cap: a cap is a property of the foot everyone's stockings share,
         // whereas whether a garment lifts off the sternum is a design choice about that garment.
+        // The nipple smooth travels with it, for the same reason and by the same rule — two shells of
+        // one garment smoothing by different amounts would cross exactly as two spanning differently do.
         var bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
                      .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
         {
-            if (bEntry.Metadata.BustBridge != true) continue;
-            float s = Math.Clamp(bEntry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
-            if (s > 0f) bridgeByMod[bEntry.ModDirectory] = s;
+            if (bEntry.Metadata.BustBridge == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
+                if (s > 0f) bridgeByMod[bEntry.ModDirectory] = s;
+            }
+            if (bEntry.Metadata.SmoothNipples == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.SmoothNipplesStrength ?? 1f, 0f, 1f);
+                if (s > 0f) smoothByMod[bEntry.ModDirectory] = s;
+            }
         }
+        foreach (var (sMod, sStrength) in smoothByMod)
+            log.Information("[Proteus] second skin: nipple smoothing at {0:0.##} applies to every shell of \"{1}\"",
+                sStrength, sMod);
         foreach (var (bMod, bStrength) in bridgeByMod)
             log.Information("[Proteus] second skin: bust bridge at {0:0.##} applies to every shell of \"{1}\"",
                 bStrength, bMod);
@@ -2864,6 +2903,10 @@ public sealed class SecondSkinService
                 BustBridgeStrength = layerSurf.Key.IsBody
                                   && bridgeByMod.TryGetValue(entry.ModDirectory, out var bridgeS)
                     ? bridgeS
+                    : 0f,
+                NippleSmoothStrength = layerSurf.Key.IsBody
+                                    && smoothByMod.TryGetValue(entry.ModDirectory, out var smoothS)
+                    ? smoothS
                     : 0f,
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
@@ -3193,8 +3236,86 @@ public sealed class SecondSkinService
         else
             _lastClaimedCarriers = null;   // re-arm: the same mod mattering later is news again
 
-        // Build one shell model per host that got layers; fold each into the single Result.
         bool modelChangedAny = false;
+
+        // ── the body under the garment, BEFORE anything is cut from it ────────────────────────────
+        //
+        // Smoothing lowers a surface, and a shell rides one millimetre off the skin — so a shell smoothed
+        // on its own sits INSIDE the body and the body's own nipple stands through it. That is not a
+        // tuning problem, it is what two independent relaxes on two different meshes must do: measured on
+        // a real capture the shell ended up 2-3.3mm BEHIND the skin across the areola, which is exactly
+        // the well with a point in the middle of it that the shell-only version produced.
+        //
+        // So there is only ever ONE relax. It happens here, to the body, and the shell is then cut from
+        // the smoothed body and pushed out along its reshaded normals. That restores the guarantee the
+        // whole second-skin scheme rests on — a shell is a displaced COPY of what is published beneath
+        // it, so it cannot be pierced by it — instead of trying to keep two surfaces in step by hand.
+        //
+        // Only where a garment that asked for it COVERS, so an uncovered breast keeps its own shape.
+        if (smoothByMod.Count > 0)
+        {
+            float smoothMax = smoothByMod.Values.Max();
+            byte[]? union = null;
+            int uw = 0, uh = 0;
+            foreach (var l in perHostLayers.SelectMany(x => x))
+            {
+                if (l.NippleSmoothStrength <= 0f || l.Coverage == null
+                 || l.CoverageWidth <= 0 || l.CoverageHeight <= 0) continue;
+                if (union == null) { uw = l.CoverageWidth; uh = l.CoverageHeight; union = (byte[])l.Coverage.Clone(); }
+                else if (l.CoverageWidth == uw && l.CoverageHeight == uh && l.Coverage.Length >= uw * uh)
+                    for (int p = 0; p < union.Length; p++) if (l.Coverage[p] > union[p]) union[p] = l.Coverage[p];
+            }
+            var gate = new SecondSkinLayer
+            {
+                MaterialName = "/bodysmooth.mtrl",   // never emitted; carries the coverage only
+                Coverage = union,
+                CoverageWidth = union == null ? 0 : uw,
+                CoverageHeight = union == null ? 0 : uh,
+            };
+
+            var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (bBytes, _, bPath, _) in bodies)
+            {
+                byte[]? smoothed;
+                try
+                {
+                    smoothed = SecondSkinWriter.SmoothBodyNipples(bBytes, gate, smoothMax,
+                        msg => log.Debug("[Proteus] second skin: {0}", msg));
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] second skin: could not smooth {0}", bPath);
+                    continue;
+                }
+                if (smoothed == null) continue;   // no bust bones, or nothing covered — most parts
+
+                var disk = Path.Combine(modelsDir, "smoothed_" + CompositorService.SanitizeName(bPath) + ".mdl");
+                bool changed = WriteIfChanged(disk, smoothed);
+                redirects[bPath] = Rel(outputRoot, disk);
+                modelChangedAny |= changed;
+                smoothedBody[bPath] = smoothed;
+                if (changed)
+                    log.Information("[Proteus] second skin: republished {0} with the chest relaxed", bPath);
+            }
+
+            if (smoothedBody.Count > 0)
+            {
+                // Re-point every surface at the bodies just published. SourcePaths is index-aligned with
+                // Sources, so a part that did not smooth (no bust bones — most of them) keeps its own bytes.
+                for (int i = 0; i < surfaces.Count; i++)
+                {
+                    var s = surfaces[i];
+                    var swapped = s.Sources.Select((src, k) =>
+                        k < s.SourcePaths.Count && smoothedBody.TryGetValue(s.SourcePaths[k], out var nb)
+                            ? src with { Model = nb }
+                            : src).ToList();
+                    surfaces[i] = s with { Sources = swapped };
+                }
+
+            }
+        }
+
+        // Build one shell model per host that got layers; fold each into the single Result.
         var hostModelPaths = new List<string>();
         var appendHostModelPaths = new List<string>();
         for (int h = 0; h < hosts.Count; h++)
@@ -3615,7 +3736,7 @@ public sealed class SecondSkinService
                 sb.AppendLine($"layer[{i}] material={l.MaterialName} "
                             + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
                             + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
-                            + $"bustBridge={l.BustBridgeStrength}");
+                            + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }

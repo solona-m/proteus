@@ -1226,6 +1226,24 @@ public sealed class ColorsStrings
         "How far the fabric relaxes toward the flat span. 1.00 spans it fully; lower values keep\n"
       + "more of the shape underneath.");
 
+    public readonly string SmoothNipples = Loc.Localize("Colors.SmoothNipples.Label",
+        "Smooth the nipple");
+
+    public readonly string SmoothNipplesTip = Loc.Localize("Colors.SmoothNipples.Tip",
+        "Turn this on for cloth over the chest.\n"
+      + "Proteus builds a garment as a copy of the body, so it reproduces the nipple as a point —\n"
+      + "which reads as body paint rather than fabric. With this on, the fabric over it is smoothed\n"
+      + "into the surrounding curve.\n"
+      + "NOT FINISHED YET: this smooths the garment, and the body underneath keeps its own shape, so\n"
+      + "on a close fit it can still show through. Smoothing the skin to match is still to come.");
+
+    public readonly string SmoothNipplesStrength = Loc.Localize("Colors.SmoothNipples.Strength.Label",
+        "Smoothing amount");
+
+    public readonly string SmoothNipplesStrengthTip = Loc.Localize("Colors.SmoothNipples.Strength.Tip",
+        "How far the fabric is smoothed. 1.00 smooths it fully; lower values keep more of the\n"
+      + "shape underneath.");
+
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"
