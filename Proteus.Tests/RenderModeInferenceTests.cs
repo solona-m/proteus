@@ -220,6 +220,42 @@ public class RenderModeInferenceTests
             Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: false,
             canShell: true, needsUnmirroredShell: false, toeCapWanted: true));
 
+    // ── chest geometry overrides the pin, but not the print veto ───────────────
+    // Span and nipple smoothing move vertices, and a skin layer is painted into the body's textures and
+    // has no vertices. So pinning to Skin and then ticking one of them is a contradiction, not a
+    // preference, and honouring the pin means silently doing nothing — which is exactly how it presented:
+    // every flag set, the mod logged as spanning, and no visible change anywhere.
+
+    [Fact]
+    public void Promote_ChestGeometryOnPinnedSkin_PromotesAnyway()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
+            Rows(), aboveGear: false, canShell: true, needsUnmirroredShell: false,
+            toeCapWanted: false, chestGeometry: true));
+
+    /// <summary>The pin still holds for every route that is an inference rather than a request.</summary>
+    [Fact]
+    public void Promote_PinnedSkinAboveGearWithoutChestGeometry_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
+            Rows(), aboveGear: true));
+
+    /// <summary>
+    /// The print veto is NOT overridden, unlike the pin. Giving a print its own shell both invents a
+    /// rainbow bodysuit and strips the colour from the layers it exists to tint; the chest pass reaches
+    /// the garment through whichever of the mod's layers is a real surface.
+    /// </summary>
+    [Fact]
+    public void Promote_PrintWithChestGeometry_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: false,
+            canShell: true, needsUnmirroredShell: false, toeCapWanted: false, chestGeometry: true));
+
+    /// <summary>And the surface veto is not overridden either — there is still nowhere to put it.</summary>
+    [Fact]
+    public void Promote_ChestGeometryWithNoShellSurface_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
+            Rows(), aboveGear: false, canShell: false, needsUnmirroredShell: false,
+            toeCapWanted: false, chestGeometry: true));
+
     /// <summary>A row that paints is untouched by any of this.</summary>
     [Fact]
     public void Promote_PaintRowAboveGear_StillPromotes()
