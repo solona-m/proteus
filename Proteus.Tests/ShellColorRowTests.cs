@@ -164,4 +164,52 @@ public class ShellColorRowTests
         Assert.True(rows.ContainsKey(0));
         Assert.False(rows.ContainsKey(1));
     }
+
+    /// <summary>
+    /// The weave reaches both builders. Neither knows about it directly — both go through
+    /// <c>RowFrom</c>, which is what stops a shell and a content material disagreeing about what a preset
+    /// means, and this is what keeps that true as fields are added.
+    /// </summary>
+    [Fact]
+    public void TileCarriesThroughBothRowBuilders()
+    {
+        var preset = new List<ColorTableRowPreset>
+        {
+            new()
+            {
+                Row = 1,
+                SubRowA = new ColorTableSubRowPreset
+                {
+                    Diffuse = "#FFFFFF", Tile = 9, TileStrength = 0.5f, TileScaleU = 8f, TileScaleV = 4f,
+                },
+            },
+        };
+
+        foreach (var rows in new[] { SecondSkinService.BuildRows(preset)!, SecondSkinService.BuildSparseRows(preset)! })
+        {
+            Assert.Equal(9, rows[0].TileIndex);
+            Assert.Equal(0.5f, rows[0].TileStrength);
+            Assert.Equal(8f, rows[0].TileScaleU);
+            Assert.Equal(4f, rows[0].TileScaleV);
+        }
+    }
+
+    /// <summary>
+    /// A mask shell mirrors a half-authored pair, and the weave has to travel with it. The mirror exists
+    /// because the shader lerps B toward A — a weave on one half only would fringe along the seam exactly
+    /// as an unmirrored colour does.
+    /// </summary>
+    [Fact]
+    public void MaskShellMirrorsTheWeave()
+    {
+        var rows = SecondSkinService.BuildRows(
+            new List<ColorTableRowPreset>
+            {
+                new() { Row = 1, SubRowA = new ColorTableSubRowPreset { Diffuse = "#FFFFFF", Tile = 5 } },
+            },
+            isMaskShell: true)!;
+
+        Assert.Equal(5, rows[0].TileIndex);
+        Assert.Equal(5, rows[1].TileIndex);
+    }
 }

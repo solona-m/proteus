@@ -100,10 +100,22 @@ public class DesignBindingService : IDisposable
     private readonly object gate = new();
     private DesignBindingStore store = new();
 
+    // The live colour / gear / stack overrides this design publishes, and the rules for editing them.
+    // Shared with PresetService, which owns a second bag on its own compositor channel — see
+    // OverlayOverrideBag for why one implementation rather than two.
+    private readonly OverlayOverrideBag overrides;
+
+    /// <summary>
+    /// Raised when a design takes over the look and any per-mod preset pinned on top of the previous one
+    /// no longer applies. Wired to <c>PresetService.ClearAllApplied</c> in Plugin.cs; an event rather than
+    /// a direct call because PresetService already depends on this service (it captures through
+    /// <see cref="CaptureMod"/>), and naming it here would close that into a construction cycle.
+    /// <para/>
+    /// Only the "currently applied" pins drop — the saved presets themselves are never touched.
+    /// </summary>
+    public event Action? PresetsSuperseded;
+
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
-    private Dictionary<string, OverlayColorOverride>? activeOverride;
-    private Dictionary<string, OverlayGearOverride>? activeGearOverride;
-    private Dictionary<string, List<string>>? activeStackOverride;
     private Guid? activeDesignId;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
@@ -139,6 +151,9 @@ public class DesignBindingService : IDisposable
         this.config     = config;
         this.framework  = framework;
         this.log        = log;
+
+        overrides = new OverlayOverrideBag(
+            compositor.SetActiveColorOverride, compositor.SetActiveGearOverride, compositor.SetActiveStackOverride);
 
         storePath = Path.Combine(pluginInterface.ConfigDirectory.FullName, "design_bindings.json");
         Load();
@@ -286,8 +301,10 @@ public class DesignBindingService : IDisposable
     // self-contained; the right one is selected at composite time via OverlayColorOverride.Resolve.
     private OverlayColorOverride CaptureColors(OverlayEntry e)
     {
-        OverlayColorOverride? active = null;
-        lock (gate) activeOverride?.TryGetValue(e.ModDirectory, out active);
+        // The EFFECTIVE colours, which means asking the compositor rather than this service's own bag: a
+        // preset applied on top of this binding is what the player is looking at, and "Update binding"
+        // must fold that in rather than silently reverting to what the binding already held.
+        var active = compositor.EffectiveColorOverrideFor(e.ModDirectory);
 
         var result = new OverlayColorOverride
         {
@@ -346,40 +363,48 @@ public class DesignBindingService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Snapshot ONE mod's current live state: its Penumbra enable/priority/option settings plus the
+    /// effective colours, gear and stack order — effective meaning what the composite is actually using,
+    /// so unsaved editor tweaks and any pinned preset are included.
+    /// <para/>
+    /// Public because presets capture through exactly this call. A preset then keeps only the portable
+    /// fields (see <see cref="ModPreset"/>); sharing the capture rather than writing a second one is
+    /// what stops the two drifting over which colour sources count — content packs' own option colours
+    /// were once missed here, and one implementation can only be wrong once.
+    /// </summary>
+    public ProteusModBinding CaptureMod(OverlayEntry e, Guid collId)
+    {
+        var settings = penumbra.GetModSettings(collId, e.ModDirectory);
+        var options  = settings?.Options is { } o
+            ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
+            : new Dictionary<string, List<string>>();
+
+        return new ProteusModBinding
+        {
+            ModDirectory = e.ModDirectory,
+            Enabled      = e.Enabled,
+            Priority     = e.Priority,
+            Options      = options,
+            Colors       = CaptureColors(e),
+            Gear         = CaptureGear(e),
+            StackOrder   = CaptureStackOrder(e.ModDirectory),
+        };
+    }
+
     // Snapshot every discovered Proteus mod's current live state (Penumbra enable/priority/options +
     // effective colors) into fresh binding entries. Shared by design-save capture and the manual
     // "Update binding" action.
     private List<ProteusModBinding> BuildModBindings(Guid collId)
-    {
-        var mods = new List<ProteusModBinding>();
-        foreach (var e in discovery.DiscoverAll())
-        {
-            var settings = penumbra.GetModSettings(collId, e.ModDirectory);
-            var options  = settings?.Options is { } o
-                ? o.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
-                : new Dictionary<string, List<string>>();
+        => discovery.DiscoverAll().Select(e => CaptureMod(e, collId)).ToList();
 
-            mods.Add(new ProteusModBinding
-            {
-                ModDirectory = e.ModDirectory,
-                Enabled      = e.Enabled,
-                Priority     = e.Priority,
-                Options      = options,
-                Colors       = CaptureColors(e),
-                Gear         = CaptureGear(e),
-                StackOrder   = CaptureStackOrder(e.ModDirectory),
-            });
-        }
-        return mods;
-    }
-
-    // The mod-wide tab/stack order to record: the live override for this mod if a design is active (so an
-    // in-progress restack is captured), else the global config order. Empty when neither has one.
+    // The mod-wide tab/stack order to record: the effective override for this mod if one is live (so an
+    // in-progress restack, or a preset's arrangement, is captured), else the global config order. Empty
+    // when neither has one.
     private List<string> CaptureStackOrder(string modDir)
     {
-        lock (gate)
-            if (activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var live))
-                return new List<string>(live);
+        if (compositor.EffectiveStackOverrideFor(modDir) is { } live)
+            return new List<string>(live);
         return config.OverlayModStackOrder.TryGetValue(modDir, out var cfg)
             ? new List<string>(cfg)
             : new List<string>();
@@ -415,27 +440,22 @@ public class DesignBindingService : IDisposable
     /// </param>
     private void AdoptOverrides(DesignBinding b, Guid designId, bool suppressEcho)
     {
-        Dictionary<string, OverlayColorOverride> colours;
-        Dictionary<string, OverlayGearOverride>  gear;
-        Dictionary<string, List<string>>         stack;
-
         lock (gate)
         {
             if (suppressEcho) suppressUntilTick = Environment.TickCount64 + RestoreSuppressMs;
-            activeDesignId      = designId;
-            // Clone so live color edits preview without mutating the stored binding (they only fold
-            // in via UpdateActiveBindingFromCurrentState).
-            activeOverride      = colours = CloneOverrides(b.Mods);
-            activeGearOverride  = gear    = CloneGear(b.Mods);
-            activeStackOverride = stack   = CloneStack(b.Mods);
+            activeDesignId = designId;
         }
 
         PersistActiveDesignId(designId);
-        // The locals, not a re-read of the fields: SetEditableStackOrder publishes a fresh dictionary
-        // by design (copy-on-write), so re-reading outside the lock can publish someone else's swap.
-        compositor.SetActiveColorOverride(colours);
-        compositor.SetActiveGearOverride(gear);
-        compositor.SetActiveStackOverride(stack);
+
+        // A design is a whole-look switch, so it supersedes any per-mod preset pinned on top of the
+        // previous look — otherwise applying a design would appear to do nothing for that one mod. The
+        // presets themselves are untouched; only the "currently applied" pins drop.
+        PresetsSuperseded?.Invoke();
+
+        // Clone so live colour edits preview without mutating the stored binding (they only fold in via
+        // UpdateActiveBindingFromCurrentState).
+        overrides.Adopt(CloneOverrides(b.Mods), CloneGear(b.Mods), CloneStack(b.Mods));
     }
 
     /// <summary>
@@ -483,15 +503,11 @@ public class DesignBindingService : IDisposable
     /// </summary>
     private bool ClearOverrides()
     {
-        bool changed;
+        bool hadDesign;
         lock (gate)
         {
-            changed = activeDesignId != null || activeOverride != null
-                   || activeGearOverride != null || activeStackOverride != null;
-            activeDesignId      = null;
-            activeOverride      = null;
-            activeGearOverride  = null;
-            activeStackOverride = null;
+            hadDesign      = activeDesignId != null;
+            activeDesignId = null;
         }
 
         // Both of these run even when nothing was active, because both are about the state OUTSIDE this
@@ -502,12 +518,9 @@ public class DesignBindingService : IDisposable
         PersistActiveDesignId(null);
         if (BootRestoreArmed) FinishBootRestore("superseded by an explicit clear");
 
-        if (!changed) return false;
-
-        compositor.SetActiveColorOverride(null);
-        compositor.SetActiveGearOverride(null);
-        compositor.SetActiveStackOverride(null);
-        return true;
+        // Ordered so the return value keeps its old meaning: "anything was active" is true when either
+        // the design pointer or the override bag held something. Clear() un-publishes on its own.
+        return overrides.Clear() | hadDesign;
     }
 
     /// <summary>
@@ -635,232 +648,74 @@ public class DesignBindingService : IDisposable
     }
 
     // ── Live override editing (UI, framework thread) ────────────────────────────
+    //
+    // All of these are thin delegations to the shared override bag. The rules they used to spell out —
+    // peek never creates, an edit does; nested mutation in place, structural change copy-on-write —
+    // now live once in OverlayOverrideBag, because presets need exactly the same rules and two copies
+    // of them would drift.
 
     /// <summary>True when a binding is active and supplies colors for this mod.</summary>
-    public bool IsOverrideActiveFor(string modDir)
-    {
-        lock (gate) return activeOverride != null && activeOverride.ContainsKey(modDir);
-    }
+    public bool IsOverrideActiveFor(string modDir) => overrides.Governs(modDir);
 
-    /// <summary>
-    /// The mod's stored mask override — the single shared Masks tab's colorset — or null when the binding
-    /// has none. NEVER creates one.
-    /// <para/>
-    /// Creating on read is what made an edit invisible: merely drawing the Masks tab snapshotted the
-    /// metadata into the live override, and from then on that snapshot shadowed the metadata for as long as
-    /// the design stayed applied — so the editor showed the value you had just typed while the composite
-    /// kept using the snapshot. A binding must not change because you looked at it.
-    /// </summary>
-    public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
-    {
-        lock (gate)
-            return activeOverride != null && activeOverride.TryGetValue(modDir, out var ovr) ? ovr.Mask : null;
-    }
+    /// <inheritdoc cref="OverlayOverrideBag.PeekMaskRows"/>
+    public List<ColorTableRowPreset>? PeekMaskRows(string modDir) => overrides.PeekMaskRows(modDir);
 
-    /// <summary>
-    /// Install the mask rows as this binding's LIVE override, on an actual edit. Live preview only — the
-    /// stored binding on disk is untouched until "Update binding". Returns false when no binding is active,
-    /// so the caller persists to the metadata instead.
-    /// </summary>
+    /// <summary>Install the mask rows as this binding's LIVE override, on an actual edit. Live preview
+    /// only — the stored binding on disk is untouched until "Update binding". Returns false when no
+    /// binding is active, so the caller persists to the metadata instead.</summary>
     public bool SetMaskRows(string modDir, List<ColorTableRowPreset> rows)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
-            ovr.Mask = rows;
-            return true;
-        }
-    }
+        => overrides.SetMaskRows(modDir, rows);
 
-    /// <summary>The stored colour override for a mod's top-level rows, or one option's, or null when the
-    /// binding has none. NEVER creates one — same reason as <see cref="PeekMaskRows"/>.</summary>
+    /// <inheritdoc cref="OverlayOverrideBag.PeekRows"/>
     public List<ColorTableRowPreset>? PeekOverrideRows(string modDir, string? group, string? option)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return null;
-            if (group == null || option == null) return ovr.Top;
-            return ovr.Options != null && ovr.Options.TryGetValue(group, out var inner)
-                && inner.TryGetValue(option, out var rows) ? rows : null;
-        }
-    }
+        => overrides.PeekRows(modDir, group, option);
 
-    /// <summary>Install rows as this binding's LIVE override, on an actual edit. Preview only — the stored
-    /// binding is untouched until "Update binding". False when no binding is active.</summary>
+    /// <summary>Install rows as this binding's LIVE override, on an actual edit. Preview only — the
+    /// stored binding is untouched until "Update binding". False when no binding is active.</summary>
     public bool SetOverrideRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
-    {
-        lock (gate)
-        {
-            if (activeOverride == null || !activeOverride.TryGetValue(modDir, out var ovr)) return false;
-            if (group == null || option == null) { ovr.Top = rows; return true; }
-            ovr.Options ??= new();
-            if (!ovr.Options.TryGetValue(group, out var inner)) ovr.Options[group] = inner = new();
-            inner[option] = rows;
-            return true;
-        }
-    }
+        => overrides.SetRows(modDir, group, option, rows);
 
-    /// <summary>
-    /// Record a mod-wide tab restack while a design binding is active: into the live stack override (live
-    /// preview, folded into the binding on "Update binding"), NOT the global stack config — mirroring how
-    /// colour/gear edits stay on the binding. Returns false when no binding is active, so the caller
-    /// persists to the global config instead. Republishes to the compositor on success.
-    /// </summary>
     /// <summary>
     /// The active design binding's mod-wide tab order for this mod (<see cref="Configuration.ModStackEntry"/>
     /// keys, top-first), or null when no binding overrides it — so the tab strip orders its buttons by the
     /// same source the composite does (see CompositorService.ModStackIndexFor). Falls back to the global
     /// stack config when this returns null.
     /// </summary>
-    public IReadOnlyList<string>? ActiveStackOrderFor(string modDir)
-    {
-        lock (gate)
-            return activeStackOverride != null && activeStackOverride.TryGetValue(modDir, out var o)
-                ? new List<string>(o)
-                : null;
-    }
-
-    public bool SetEditableStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
-    {
-        IReadOnlyDictionary<string, List<string>>? published;
-        lock (gate)
-        {
-            if (activeDesignId == null || activeStackOverride == null) return false;
-            // Copy-on-write: the compositor reads the published dictionary on its background thread, so
-            // adding a key in place would be a structural mutation racing that read. Publish a fresh dict
-            // instead (the colour/gear overrides only ever mutate nested lists, never the dict shape).
-            var next = new Dictionary<string, List<string>>(activeStackOverride, StringComparer.OrdinalIgnoreCase)
-            {
-                [modDir] = topFirst.Select(x => Configuration.ModStackEntry(x.Group, x.Option)).ToList(),
-            };
-            activeStackOverride = next;
-            published = next;
-        }
-        compositor.SetActiveStackOverride(published);
-        return true;
-    }
+    public IReadOnlyList<string>? ActiveStackOrderFor(string modDir) => overrides.StackOrderFor(modDir);
 
     /// <summary>
-    /// The mutable gear-settings preset the layer/shader editor should bind to when an override is active
-    /// for this mod, or null if none. Mirrors <see cref="PeekOverrideRows"/>: group/option=null
-    /// targets the top-level overlay; otherwise the option's. Seeds from the metadata descriptor's own
-    /// gear settings when the override has nothing stored yet, so editing starts from what's on screen.
+    /// Record a mod-wide tab restack while a design binding is active: into the live stack override (live
+    /// preview, folded into the binding on "Update binding"), NOT the global stack config — mirroring how
+    /// colour/gear edits stay on the binding. Returns false when no binding is active, so the caller
+    /// persists to the global config instead.
     /// </summary>
+    public bool SetEditableStackOrder(string modDir, IEnumerable<(string Group, string Option)> topFirst)
+        => overrides.SetStackOrder(modDir, topFirst);
+
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableGear"/>
     public GearSettingsPreset? GetEditableGearOverride(
         string modDir, string? group, string? option, OverlayDescriptor seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            if (group != null && option != null)
-            {
-                ovr.Options ??= new();
-                if (!ovr.Options.TryGetValue(group, out var inner))
-                    ovr.Options[group] = inner = new();
-                if (!inner.TryGetValue(option, out var g))
-                    inner[option] = g = GearSettingsPreset.From(seed);
-                return g;
-            }
-            return ovr.Top ??= GearSettingsPreset.From(seed);
-        }
-    }
+        => overrides.GetEditableGear(modDir, group, option, seed);
 
-    /// <summary>
-    /// The same, seeded from a preset rather than a descriptor — for a content pack's glow, which has no
-    /// overlay descriptor to snapshot. The seed is CLONED before it is stored, so a binding that starts
-    /// from the sidecar's own settings can never write back into them.
-    /// <para/>
-    /// An unconditional piece lands in <see cref="OverlayGearOverride.Content"/>, not
-    /// <see cref="OverlayGearOverride.Top"/>: Top is captured from the mod's first overlay descriptor, so
-    /// sharing it would let an overlay's scroll effect reach the pack's meshes and the reverse.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableContentGear"/>
     public GearSettingsPreset? GetEditableContentGearOverride(
         string modDir, string? group, string? option, GearSettingsPreset seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            if (group != null && option != null)
-            {
-                ovr.Options ??= new();
-                if (!ovr.Options.TryGetValue(group, out var inner))
-                    ovr.Options[group] = inner = new();
-                if (!inner.TryGetValue(option, out var g))
-                    inner[option] = g = seed.Clone();
-                return g;
-            }
-            return ovr.Content ??= seed.Clone();
-        }
-    }
+        => overrides.GetEditableContentGear(modDir, group, option, seed);
 
-    /// <summary>
-    /// Read-only peek at a content material's glow under the active design. Resolves through
-    /// <see cref="OverlayGearOverride.ResolveContent"/> — the SAME call the compositor makes — so the
-    /// editor and the composite can never disagree about which slot governs.
-    /// </summary>
-    /// <summary>
-    /// Clear the mod-wide gear scopes: the overlays' <see cref="OverlayGearOverride.Top"/> and an imported
-    /// pack's <see cref="OverlayGearOverride.Content"/>.
-    /// <para/>
-    /// Both, because "reset this option" with no option named means the mod-wide settings, and content lives
-    /// in its own slot precisely so it does NOT share Top. Clearing only one would leave a glow the reset
-    /// claimed to remove.
-    /// </summary>
-    private static bool ClearTopGear(OverlayGearOverride gear)
-    {
-        bool had = gear.Top != null || gear.Content != null;
-        gear.Top = null;
-        gear.Content = null;
-        return had;
-    }
-
+    /// <inheritdoc cref="OverlayOverrideBag.PeekContentGear"/>
     public GearSettingsPreset? PeekContentGearOverride(string modDir, string? group, string? option)
-    {
-        lock (gate)
-            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
-                ? ovr.ResolveContent(group, option)
-                : null;
-    }
+        => overrides.PeekContentGear(modDir, group, option);
 
-    /// <summary>
-    /// Read-only peek at the active design's captured gear settings for one option. Unlike
-    /// <see cref="GetEditableGearOverride"/> this creates nothing, so callers can ask about options the user
-    /// hasn't opened — needed when surveying every active option's effective layer. Null when no design is
-    /// active or that option has nothing captured (i.e. the mod's own descriptor still rules).
-    ///
-    /// Resolution goes through <see cref="OverlayGearOverride.Resolve"/> — the SAME call the compositor
-    /// makes — so the per-option entry and its top-level fallback are honoured identically. Looking only in
-    /// <c>Options</c> here would diverge for any active option the binding never captured (one added to the
-    /// mod after the design was saved, or one whose descriptors were empty at capture time): the composite
-    /// would apply <c>Top</c> while the editor read the raw descriptor.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.PeekGear"/>
     /// <remarks>Overlays only. A content pack's glow reads <see cref="PeekContentGearOverride"/>, which
     /// resolves against its own slot rather than <c>Top</c> — see <see cref="OverlayGearOverride.Content"/>
     /// for why the two must not share.</remarks>
     public GearSettingsPreset? PeekGearOverride(string modDir, string group, string option)
-    {
-        lock (gate)
-            return activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var ovr)
-                ? ovr.Resolve(group, option)
-                : null;
-    }
+        => overrides.PeekGear(modDir, group, option);
 
-    /// <summary>
-    /// The mutable gear-settings preset the Masks tab should bind to when a design is active for this mod, or
-    /// null if none. Mirrors <see cref="GetEditableMaskRows"/> for the mod's single shared Masks tab — seeds
-    /// from the descriptor's own gear settings when the override has nothing stored yet.
-    /// </summary>
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableMaskGear"/>
     public GearSettingsPreset? GetEditableMaskGearOverride(string modDir, OverlayDescriptor seed)
-    {
-        lock (gate)
-        {
-            if (activeGearOverride == null || !activeGearOverride.TryGetValue(modDir, out var ovr))
-                return null;
-            return ovr.Mask ??= GearSettingsPreset.From(seed);
-        }
-    }
+        => overrides.GetEditableMaskGear(modDir, seed);
 
     /// <summary>
     /// Drop ONE option's colour + gear override from the ACTIVE design's binding: from the live in-memory
@@ -873,20 +728,19 @@ public class DesignBindingService : IDisposable
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
     {
-        bool touched = false;
-        IReadOnlyDictionary<string, OverlayColorOverride>? colours;
-        IReadOnlyDictionary<string, OverlayGearOverride>? gears;
+        Guid id;
+        lock (gate)
+        {
+            if (activeDesignId is not { } active) return false;
+            id = active;
+        }
+
+        // The live copies, OUTSIDE `gate`: the bag has its own lock, and nesting the two here is the
+        // only place they would ever meet.
+        bool touched = overrides.ClearOption(modDir, group, option);
 
         lock (gate)
         {
-            if (activeDesignId is not { } id) return false;
-
-            // Live preview copies.
-            if (activeOverride != null && activeOverride.TryGetValue(modDir, out var col))
-                touched |= ClearScope(col.Options, group, option, () => { bool had = col.Top != null; col.Top = null; return had; });
-            if (activeGearOverride != null && activeGearOverride.TryGetValue(modDir, out var gear))
-                touched |= ClearScope(gear.Options, group, option, () => ClearTopGear(gear));
-
             // Persisted binding, so the design stops re-applying it.
             if (store.Bindings.TryGetValue(id, out var b))
             {
@@ -894,43 +748,25 @@ public class DesignBindingService : IDisposable
                     string.Equals(m.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase));
                 if (mod != null)
                 {
-                    touched |= ClearScope(mod.Colors.Options, group, option,
+                    touched |= OverlayOverrideBag.ClearScope(mod.Colors.Options, group, option,
                         () => { bool had = mod.Colors.Top != null; mod.Colors.Top = null; return had; });
-                    touched |= ClearScope(mod.Gear.Options, group, option, () => ClearTopGear(mod.Gear));
+                    touched |= OverlayOverrideBag.ClearScope(mod.Gear.Options, group, option,
+                        () => OverlayOverrideBag.ClearTopGear(mod.Gear));
                 }
             }
 
             // Serialising must happen under the lock (a consistent `store`), but the write must not:
             // this store reaches tens of MB and the caller is an ImGui button on the framework thread.
             if (touched) SaveDeferred();
-            colours = activeOverride;
-            gears   = activeGearOverride;
         }
 
         if (!touched) return false;
 
-        // Re-publish the trimmed overrides so the next composite drops this option's override.
-        compositor.SetActiveColorOverride(colours);
-        compositor.SetActiveGearOverride(gears);
         log.Information("[Proteus] cleared binding override for {0} [{1}/{2}] from the active design",
             modDir, group ?? "(top)", option ?? "(top)");
         return true;
     }
 
-    /// <summary>Remove one group/option entry from an override map (pruning the group when it empties),
-    /// or clear the top-level entry when BOTH group and option are null. Returns whether anything was
-    /// there. A half-specified scope (one null, one not) is a caller bug: refuse it rather than fall
-    /// through to clearing Top, which would wipe the settings every option inherits.</summary>
-    private static bool ClearScope<T>(Dictionary<string, Dictionary<string, T>>? options,
-        string? group, string? option, Func<bool> clearTop)
-    {
-        if (group == null && option == null) return clearTop();
-        if (group == null || option == null) return false;
-        if (options == null || !options.TryGetValue(group, out var inner)) return false;
-        if (!inner.Remove(option)) return false;
-        if (inner.Count == 0) options.Remove(group);
-        return true;
-    }
 
     /// <summary>
     /// Re-snapshot the current live Proteus state (Penumbra enable/priority/options + the live color
@@ -955,7 +791,6 @@ public class DesignBindingService : IDisposable
         var mods = BuildModBindings(collId.Value);
         name ??= glamourer.GetDesigns().TryGetValue(id, out var n) ? n : null;
 
-        Dictionary<string, OverlayColorOverride> newOverride;
         lock (gate)
         {
             if (activeDesignId != id) return false; // active binding changed underfoot
@@ -966,13 +801,22 @@ public class DesignBindingService : IDisposable
                 CapturedUtc = DateTime.UtcNow,
                 Mods        = mods,
             };
-            newOverride         = CloneOverrides(mods);
-            activeOverride      = newOverride;
-            activeStackOverride = CloneStack(mods);
             Save();
         }
-        compositor.SetActiveColorOverride(newOverride);
-        compositor.SetActiveStackOverride(activeStackOverride);
+
+        // All three, gear included. This used to skip gear, on the reasoning that the live gear objects
+        // were the very ones just captured so replacing them with clones bought nothing. That stopped
+        // being true when presets arrived: the capture reads the EFFECTIVE gear, which for a mod wearing
+        // a preset comes out of the preset's bag, while this bag still holds the design's older copy.
+        // Publishing colours but not gear left the stored binding holding the preset's glow and the
+        // screen showing the design's — and the line below then drops the preset that was making up the
+        // difference, so the glow visibly switched off the moment you pressed Update.
+        overrides.Adopt(CloneOverrides(mods), CloneGear(mods), CloneStack(mods));
+
+        // Everything the update just folded in came from the effective state, presets included, so the
+        // binding now holds it outright and the pins have nothing left to say.
+        PresetsSuperseded?.Invoke();
+
         compositor.TriggerRecomposite($"design-binding-update:{id}");
         log.Information("[Proteus] Updated binding for design {0} from current state.", name ?? id.ToString());
         return true;
@@ -1142,19 +986,12 @@ public class DesignBindingService : IDisposable
         var state = glamourer.GetObjectState(0);
         if (state == null) return; // can't read state → abstain
 
-        // Match against the player's OWN choices: strip anything Proteus equipped for them (the invisible
-        // glasses and the Emperor's ring hosts) or nothing would ever match and every Proteus mod would be
-        // disabled.
-        //
-        // Asked of the compositor, which knows what it actually injected, rather than derived from the
-        // feature toggles. Either way round is a trap: gating on the toggle misses our item during the
-        // window between switching it off and the recomposite pulling it, while blanking the id whenever
-        // the feature is off would erase the player's OWN Emperor's New Ring — a common invisible-ring
-        // glamour — from every comparison. Both mistakes end in a design that matches nothing.
-        state = NeutralizeProteusOwnedState(state,
-            compositor.InjectedGlassesItemId, compositor.InjectedCarrierItemIds);
-
-        var pick = MatchBinding(state);
+        // Judge each design on the player's OWN choices: retire the slots Proteus is borrowing (the
+        // invisible glasses and the accessory carriers) or nothing would ever match and every Proteus mod
+        // would be disabled. The boot restore has always done this; the live path compared designs as
+        // saved, so a design saved while the shell was hosted demanded our carrier ring for ever after.
+        var carriers = LiveCarriers();
+        var pick = MatchBinding(state, carriers);
 
         if (pick == null)
         {
@@ -1167,12 +1004,13 @@ public class DesignBindingService : IDisposable
                 return;
             }
 
-            // No binding matched, so overrides get dropped and gear dyes revert to metadata. A per-candidate
-            // "REJECTED: <first field that differed>" line used to be emitted here for every binding the
-            // player owns; it fired on the ordinary path (most designs are SUPPOSED not to match the state
-            // being applied), so it was many warnings per apply describing correct behaviour. The summary
-            // below is the part that reports something actually went wrong.
+            // No binding matched, so overrides get dropped and gear dyes revert to metadata. The warning
+            // says what it COST; the debug lines below say why, for the handful of candidates that could
+            // plausibly have matched. A "REJECTED: <first field that differed>" line for every binding the
+            // player owns used to be emitted here as a warning, which fired on the ordinary path (most
+            // designs are SUPPOSED not to match the state being applied) — hence both the cap and the level.
             log.Warning("[Proteus] design-binding: NO binding matched the applied state — dropping colour/gear overrides (dyes revert to metadata white).");
+            ReportNoMatch(state, carriers);
             HandleUnboundDesign();
             return;
         }
@@ -1182,42 +1020,126 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// The binding that best matches an already-neutralized player state, or null when none does.
+    /// The binding that best matches the player's live state, or null when none does.
     /// <para/>
     /// For ambiguous matches (variations of the same outfit share a gear set), prefer the most
     /// *specific* match — the design that constrains the most applied fields (e.g. one that also
     /// matches the applied dye beats a gear-only design). Break remaining ties by the most recently
     /// captured binding, which avoids stale older overrides sticking around.
     /// <para/>
-    /// Shared by the live apply path and the boot restore so both resolve a look identically.
+    /// Shared by the live apply path and the boot restore so both resolve a look identically — including
+    /// <paramref name="carriers"/>, which both must pass. The live path skipping it is what left a design
+    /// saved while the shell was hosted unable to match anything ever again.
     /// </summary>
-    /// <param name="stripCarriers">
-    /// When set, each candidate design has the shell's carrier slots removed before it is compared — see
-    /// <see cref="StripCarriers"/>. The caller must have stripped the state with the same ids. Only the
-    /// boot restore passes this; the live path compares designs as saved.
+    /// <param name="carriers">
+    /// What Proteus has on the player, so each candidate design can have those slots retired before it is
+    /// compared — see <see cref="StripCarriers"/> and <see cref="BestMatches"/>.
     /// </param>
-    private Guid? MatchBinding(JObject neutralizedState, (ulong? Glasses, IReadOnlyList<ulong> Accessories)? stripCarriers = null)
+    private Guid? MatchBinding(JObject state, Carriers carriers)
     {
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
 
-        var matches = new List<(Guid id, int specificity)>();
+        var candidates = new List<(Guid Id, JObject Design)>(candidateIds.Length);
         foreach (var id in candidateIds)
-        {
-            var design = GetDesignCached(id);
-            if (design == null) continue;
-            if (stripCarriers is { } c) design = StripCarriers(design, c.Glasses, c.Accessories);
-            if (StateMatches(design, neutralizedState, out var spec))
-                matches.Add((id, spec));
-        }
+            if (GetDesignCached(id) is { } design)
+                candidates.Add((id, design));
 
-        if (matches.Count == 0) return null;
-        if (matches.Count == 1) return matches[0].id;
-
-        var best = matches.Max(m => m.specificity);
-        var top  = matches.Where(m => m.specificity == best).Select(m => m.id).ToList();
+        var top = BestMatches(candidates, state, carriers);
+        if (top.Count == 0) return null;
         if (top.Count == 1) return top[0];
         lock (gate) return PickMostRecent(top, store.Bindings);
+    }
+
+    /// <summary>
+    /// The candidates that match best, as a list because the caller breaks remaining ties on recency.
+    /// Empty when none matched.
+    /// <para/>
+    /// TWO PASSES, and the order is the whole point:
+    /// <list type="number">
+    /// <item>STRICT — retire only the slots a design demonstrably captured FROM us, by carrier item id.
+    /// That rescue cannot distort anything: a design naming our carrier ring is naming an item the player
+    /// never chose, whoever else it is compared against.</item>
+    /// <item>LOOSE — additionally retire every slot we are currently BORROWING, whatever the design names
+    /// there. Necessary for a design saved before we took the slot (their own ring is simply not in the
+    /// live state to compare against), but it drops a real criterion, so two designs differing only by
+    /// that ring stop being distinguishable and the recency tie-break decides between them.</item>
+    /// </list>
+    /// Running loose only when strict finds NOTHING keeps that cost where it belongs. It matters because
+    /// the loser of a bad tie-break is not just a wrong look: <see cref="Restore"/> writes enable /
+    /// priority / options into the Penumbra collection and disables every unbound mod, so picking the
+    /// wrong sibling design leaves edits behind that outlive the apply.
+    /// <para/>
+    /// It also contains the one ownership signal we cannot fully trust. The glasses flag is set by
+    /// ADOPTION — the reconcile claims a pair of our set that it finds already worn — so a player who
+    /// wears the invisible facewear as their own glamour reads as us borrowing the slot. On the strict
+    /// pass that misreading cannot cost them anything, and by the time the loose pass runs there is
+    /// nothing left to lose.
+    /// </summary>
+    internal static List<Guid> BestMatches(
+        IReadOnlyList<(Guid Id, JObject Design)> candidates, JObject state, Carriers carriers)
+    {
+        var top = Pass(carriers.ItemsOnly);
+        // Skip the second pass when it would repeat the first: no borrowed slots means the two are the
+        // same comparison, and re-running it would clone every design again for an identical answer.
+        if (top.Count == 0 && carriers.RetiresSlots)
+            top = Pass(carriers);
+        return top;
+
+        List<Guid> Pass(Carriers c)
+        {
+            var matches = new List<(Guid id, int specificity)>();
+            foreach (var (id, design) in candidates)
+                if (StateMatches(StripCarriers(design, c), state, out var spec))
+                    matches.Add((id, spec));
+
+            if (matches.Count == 0) return [];
+            var best = matches.Max(m => m.specificity);
+            return matches.Where(m => m.specificity == best).Select(m => m.id).ToList();
+        }
+    }
+
+    // How many bindings a failed match explains itself against. The reason is only interesting for designs
+    // that could plausibly have been the one being applied, and every binding the player owns is far too
+    // many lines for something that also fires whenever they apply a design they never bound.
+    private const int NoMatchReportCandidates = 4;
+
+    /// <summary>
+    /// Say, at Debug, why the likeliest candidates were rejected: the design that WAS active (the one whose
+    /// colours just got dropped, and the only one whose failure is definitely a fault) followed by the most
+    /// recently captured bindings. Reaches the same verdict as <see cref="MatchBinding"/> because it runs
+    /// the same comparison, only asking <see cref="StateMatches"/> for the field that differed.
+    /// </summary>
+    private void ReportNoMatch(JObject state, Carriers carriers)
+    {
+        List<Guid> candidates;
+        lock (gate)
+        {
+            candidates = store.Bindings.OrderByDescending(kv => kv.Value.CapturedUtc)
+                              .Select(kv => kv.Key).Take(NoMatchReportCandidates).ToList();
+            if (config.LastActiveDesignId is { } last && store.Bindings.ContainsKey(last))
+            {
+                candidates.Remove(last);
+                candidates.Insert(0, last);
+            }
+        }
+
+        foreach (var id in candidates.Take(NoMatchReportCandidates))
+        {
+            string? name;
+            lock (gate) name = store.Bindings.TryGetValue(id, out var b) ? b.DesignName : null;
+            name ??= id.ToString();
+
+            if (GetDesignCached(id) is not { } design)
+            {
+                log.Debug("[Proteus] design-binding: {0} rejected — gone from Glamourer.", name);
+                continue;
+            }
+
+            string? why = null;
+            StateMatches(StripCarriers(design, carriers), state, out _, r => why ??= r);
+            log.Debug("[Proteus] design-binding: {0} rejected — {1}", name, why ?? "(no reason reported)");
+        }
     }
 
     // ── Boot restore (framework thread) ─────────────────────────────────────────
@@ -1285,24 +1207,13 @@ public class DesignBindingService : IDisposable
     /// resolved, so a state caught mid-transition doesn't decide the answer. True once the window
     /// lapses, at which point this must resolve one way or the other.
     /// </param>
-    private void TryBootRestore(JObject rawState, bool final)
+    private void TryBootRestore(JObject state, bool final)
     {
-        // The design and the state are treated ASYMMETRICALLY, deliberately. StateMatches only ever
-        // reads a state slot the DESIGN carries (both its loops walk the design's properties), so:
-        //
-        //  • the design gets the carrier REMOVED, below, via StripCarriers — a slot it no longer carries
-        //    stops being a criterion at all, which is what rescues a design that captured our facewear;
-        //  • the state gets the carrier ZEROED, here, via NeutralizeProteusOwnedState — REMOVING it
-        //    there would turn a slot the design does carry from "compares equal" into "state has no
-        //    item". That is precisely the mismatch the neutralizer was written to prevent: a design
-        //    saved with an empty right ring stores ItemId 0, so our ring has to look like 0, not like
-        //    an absent slot. It bites whenever the carrier is still equipped at load — a crash, or a
-        //    Dispose removal that has not landed yet.
-        //
-        // Carrier ids come from the game sheets rather than the compositor's injection flags, which are
-        // still false at boot because no composite has run to set them.
+        // Only the DESIGN is touched, never the state: StateMatches reads a state slot only where the
+        // design carries one (both its loops walk the design's properties), so retiring a slot from the
+        // design retires it as a criterion outright — including the case where our carrier is still
+        // equipped at load (a crash, or a Dispose removal that has not landed yet).
         var carriers = BootCarriers();
-        var state    = NeutralizeProteusOwnedState(rawState, carriers.Glasses, carriers.Accessories);
 
         // 1. The design we were on when we unloaded, VERIFIED against the live state.
         if (config.LastActiveDesignId is { } lastId)
@@ -1324,7 +1235,7 @@ public class DesignBindingService : IDisposable
             }
             else
             {
-                design = StripCarriers(design, carriers.Glasses, carriers.Accessories);
+                design = StripCarriers(design, carriers);
                 string? why = null;
                 if (BootIdStillApplies(design, state, r => why ??= r))
                 {
@@ -1373,15 +1284,14 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>Whether the remembered design can still be adopted: it must still exist in Glamourer
-    /// (a deleted one reads as null) and still match the character's neutralized live state.</summary>
-    /// <param name="onMismatch">Reports the first field that differed, for the boot log. This is the
-    /// one place the reason is worth having: everywhere else a non-match is the ordinary outcome, but
-    /// here it is the difference between the player's colours coming back and not.</param>
-    internal static bool BootIdStillApplies(JObject? design, JObject neutralizedState,
+    /// (a deleted one reads as null) and still match the character's live state. The design must already
+    /// have had its carrier slots retired — see <see cref="StripCarriers"/>.</summary>
+    /// <param name="onMismatch">Reports the first field that differed, for the boot log.</param>
+    internal static bool BootIdStillApplies(JObject? design, JObject state,
                                             Action<string>? onMismatch = null)
     {
         if (design == null) return false;
-        return StateMatches(design, neutralizedState, out _, onMismatch);
+        return StateMatches(design, state, out _, onMismatch);
     }
 
     /// <summary>One-shot: unhook the poll and release the boot composite, whatever the outcome. Every
@@ -1424,8 +1334,8 @@ public class DesignBindingService : IDisposable
     // dye/bonus/appearance scores higher than a gear-only design for the same look, so the caller can
     // prefer the most-constrained match. Any mismatch on an applied field rejects the design outright.
     /// <remarks>
-    /// Compares the design against the player's OWN choices, so the caller must first strip anything
-    /// Proteus wrote on their behalf — see <see cref="NeutralizeProteusOwnedState"/>.
+    /// Compares the design against the player's OWN choices, so the caller must first retire whatever
+    /// Proteus put on them — see <see cref="StripCarriers"/>, which the caller applies to the DESIGN.
     /// </remarks>
     internal static bool StateMatches(JObject design, JObject state, out int specificity)
         => StateMatches(design, state, out specificity, null);
@@ -1529,111 +1439,92 @@ public class DesignBindingService : IDisposable
     private static bool IdEquals(JToken? a, JToken? b)
         => a != null && b != null && a.ToObject<ulong>() == b.ToObject<ulong>();
 
-    /// <summary>
-    /// Blank out every part of the player's Glamourer state that PROTEUS wrote, so design matching only
-    /// ever sees the player's own choices. Returns a copy; the input is left alone.
-    ///
-    /// This is the single place that knows what Proteus injects. Without it, anything we equip on the
-    /// player's behalf makes their live state differ from every design that saved that field: no design
-    /// matches, the apply is treated as unbound, and <see cref="HandleUnboundDesign"/> disables every
-    /// Proteus mod. Keep this in step with each new injection rather than teaching the matcher about them
-    /// one at a time — the failure mode is losing the user's whole setup.
-    /// </summary>
-    /// <param name="syntheticGlassesId">
-    /// The Glasses-slot item id of the invisible-glasses host, when that feature has one equipped.
-    /// </param>
-    /// <param name="syntheticRingId">
-    /// The item id of the Emperor's-ring host, when that feature has one equipped in the right ring slot.
-    /// </param>
-    internal static JObject NeutralizeProteusOwnedState(JObject state, ulong? syntheticGlassesId,
-        IReadOnlyList<ulong>? syntheticAccessoryIds = null)
-    {
-        JObject? copy = null;
-
-        if (syntheticGlassesId is { } glasses && state["Bonus"] is JObject bonus)
-        {
-            foreach (var prop in bonus.Properties())
-            {
-                if (prop.Value is not JObject slot) continue;
-                if (slot["BonusId"] is not { } id || id.ToObject<ulong>() != glasses) continue;
-
-                // Ours — present it as an empty slot so a design that saved "no glasses" still matches.
-                copy ??= (JObject)state.DeepClone();
-                if (((JObject?)copy["Bonus"])?[prop.Name] is JObject target)
-                    target["BonusId"] = 0;
-            }
-        }
-
-        // Same for every invisible accessory we equip to host a shell — either hand, the bracelet, the
-        // necklace, since a carrier goes to whichever slots were free. Nothing zero-ish about the ids: a
-        // design that saved an empty ring stores ItemId 0, so that is what "not the player's choice" has to
-        // look like here — otherwise wearing our carrier makes every such design mismatch.
-        //
-        // A LIST of ids, because the pieces share an accessory model set but are separate items; matching on
-        // one id would leave the others looking like deliberate jewellery.
-        if (syntheticAccessoryIds is { Count: > 0 } carriers)
-        {
-            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
-            {
-                if ((copy ?? state)["Equipment"] is not JObject equip
-                    || equip[accessorySlot] is not JObject slot
-                    || slot["ItemId"] is not { } rid || !carriers.Contains(rid.ToObject<ulong>()))
-                    continue;
-                copy ??= (JObject)state.DeepClone();
-                if (((JObject?)copy["Equipment"])?[accessorySlot] is JObject target)
-                    target["ItemId"] = 0;
-            }
-        }
-
-        return copy ?? state;
-    }
-
     // Glamourer packs a bonus item as (type << 48) | row id, so the sheet row we resolve a carrier by
     // lives in the low 48 bits — e.g. Glasses row 1 reads as 562949953421313.
     private const ulong BonusIdRowMask = 0x0000_FFFF_FFFF_FFFF;
 
-    private static readonly string[] RingSlots = ["RFinger", "LFinger"];
+    /// <summary>The Glamourer equipment-slot names a carrier can ride, from the one place that decides
+    /// them — <see cref="InvisibleRing.CarrierSlots"/>. Duplicating the list here is how the neutralizer
+    /// and the stripper drifted apart before.</summary>
+    private static readonly string[] CarrierSlotNames =
+        InvisibleRing.CarrierSlots.Select(c => c.EqdpSlot).Distinct(StringComparer.Ordinal).ToArray();
 
     /// <summary>
-    /// Remove the shell's CARRIER slots — the facewear Proteus equips, and the Emperor's ring it may host
-    /// on — from a DESIGN, so it is not judged on a slot Proteus owns. Returns the input unchanged when
-    /// it carries neither.
-    /// <para/>
-    /// This exists because <see cref="NeutralizeProteusOwnedState"/> can only fix the state, and the
-    /// carrier ends up on the DESIGN too: saving a Glamourer design while the shell is hosted captures
-    /// our injected facewear as part of the look. That design then demands a bonus item the player never
-    /// chose — and by the time the boot restore verifies it, Dispose has already taken the carrier off,
-    /// so the design mismatches on a slot that is entirely our own doing. Observed as
-    /// <c>Bonus/Glasses: BonusId 562949953421313 != state 844424946909184</c>.
-    /// <para/>
-    /// DESIGNS ONLY — never pass a state. StateMatches walks the design's properties and looks the state
-    /// up per design-carried slot, so dropping a slot from the design retires it as a criterion (what we
-    /// want), while dropping one from the state turns a slot the design DOES carry from "compares equal"
-    /// into "state has no item". Use <see cref="NeutralizeProteusOwnedState"/> for the state, which
-    /// zeroes rather than removes — a design saved with an empty right ring stores ItemId 0, so that is
-    /// what our carrier has to look like there.
-    /// <para/>
-    /// The caller identifies the carriers from the Glasses/Ring sheets rather than from the compositor's
-    /// injection flags, which are still false at boot — no composite has run to set them yet. That is
-    /// safe in this direction: the worst case is that a player who genuinely wears the carrier item
-    /// stops having it count toward a match, which loosens specificity rather than fabricating one.
+    /// What Proteus currently has on the player, in the two forms design matching needs.
     /// </summary>
-    internal static JObject StripCarriers(JObject design, ulong? glassesRow, IReadOnlyList<ulong>? accessoryItems)
+    /// <param name="GlassesRow">The Glasses SHEET ROW of the invisible facewear host (not the packed
+    /// BonusId a design stores — <see cref="StripCarriers"/> masks before comparing).</param>
+    /// <param name="AccessoryItems">Item ids of the invisible accessories that can host a shell. A LIST
+    /// because the pieces share a model set but are separate items — the Emperor's New Ring, Bracelets
+    /// and Necklace — so one id could not cover them all.</param>
+    /// <param name="OwnedSlots">Glamourer slot names we are CURRENTLY borrowing. Empty where ownership is
+    /// unknowable (the boot path's glasses), which falls back to id-matching alone.</param>
+    /// <param name="GlassesSlotOwned">Whether the Glasses slot is one we are currently borrowing.</param>
+    internal readonly record struct Carriers(
+        ulong? GlassesRow,
+        IReadOnlyList<ulong>? AccessoryItems,
+        IReadOnlyList<string>? OwnedSlots = null,
+        bool GlassesSlotOwned = false)
+    {
+        /// <summary>Does this retire whole SLOTS, over and above the carrier items themselves? When it
+        /// does not, the strict and loose passes in <see cref="BestMatches"/> are the same comparison.</summary>
+        internal bool RetiresSlots => GlassesSlotOwned || OwnedSlots is { Count: > 0 };
+
+        /// <summary>This, with slot retirement dropped — the strict pass's view, where only a design that
+        /// actually names one of our carrier items gives anything up.</summary>
+        internal Carriers ItemsOnly => new(GlassesRow, AccessoryItems);
+    }
+
+    /// <summary>
+    /// Retire the slots PROTEUS owns from a DESIGN, so it is never judged on a slot it did not really
+    /// choose. Returns the input unchanged when there is nothing to retire.
+    /// <para/>
+    /// Two separate rescues, and a design needs whichever applies:
+    /// <list type="bullet">
+    /// <item>By ITEM — the design CAPTURED a carrier. Saving a Glamourer design while the shell is hosted
+    /// bakes our injected facewear or ring into the look, so the design then demands an item the player
+    /// never picked. Observed as <c>Bonus/Glasses: BonusId 562949953421313 != state 844424946909184</c>
+    /// and as an <c>RFinger</c> holding carrier item 9295.</item>
+    /// <item>By SLOT — the design named the player's OWN jewellery in a slot we have since borrowed. Their
+    /// choice is gone from the live state while we hold the slot, so it cannot be compared to anything.</item>
+    /// </list>
+    /// <para/>
+    /// DESIGNS ONLY — never pass a state. StateMatches walks the design's properties and looks the state up
+    /// per design-carried slot, so dropping a slot from the design retires it as a criterion (what we want),
+    /// while dropping one from the state turns a slot the design DOES carry into "state has no item".
+    /// <para/>
+    /// Retiring is deliberately the WHOLE mechanism. The state used to be doctored in parallel — our
+    /// carrier's ItemId overwritten with 0, on the premise that "a design that saved an empty ring stores
+    /// ItemId 0". It does not: Glamourer writes a per-slot sentinel (4294967155 and neighbours, and
+    /// 844424946909184 for bare Glasses), never 0, so that pass could not make a single design match and
+    /// merely hid the real fix. One mechanism, on one side.
+    /// <para/>
+    /// Retiring a whole SLOT drops a real criterion, so two designs differing only by that ring stop being
+    /// distinguishable. That is why <see cref="BestMatches"/> asks for it only once the strict, item-only
+    /// view has failed outright — see there for what a bad tie-break costs.
+    /// </summary>
+    internal static JObject StripCarriers(JObject design, Carriers carriers)
     {
         List<(string Container, string Slot)>? drop = null;
 
-        if (glassesRow is { } g && design["Bonus"] is JObject bonus)
+        if (design["Bonus"] is JObject bonus)
             foreach (var p in bonus.Properties())
-                if (p.Value is JObject s && s["BonusId"] is { } id
-                    && (id.ToObject<ulong>() & BonusIdRowMask) == g)
+            {
+                var ours = carriers.GlassesRow is { } g && p.Value is JObject s && s["BonusId"] is { } id
+                        && (id.ToObject<ulong>() & BonusIdRowMask) == g;
+                if (ours || (carriers.GlassesSlotOwned && p.Name == "Glasses"))
                     (drop ??= []).Add(("Bonus", p.Name));
+            }
 
-        // Every accessory slot a carrier can ride, not just the fingers — see NeutralizeProteusOwnedState.
-        if (accessoryItems is { Count: > 0 } carriers && design["Equipment"] is JObject equip)
-            foreach (var accessorySlot in new[] { "RFinger", "LFinger", "Wrists", "Neck" })
-                if (equip[accessorySlot] is JObject s && s["ItemId"] is { } iid
-                    && carriers.Contains(iid.ToObject<ulong>()))
+        if (design["Equipment"] is JObject equip)
+            foreach (var accessorySlot in CarrierSlotNames)
+            {
+                if (equip[accessorySlot] is not JObject s) continue;
+                var ours = carriers.AccessoryItems is { Count: > 0 } items && s["ItemId"] is { } iid
+                        && items.Contains(iid.ToObject<ulong>());
+                if (ours || carriers.OwnedSlots?.Contains(accessorySlot, StringComparer.Ordinal) == true)
                     (drop ??= []).Add(("Equipment", accessorySlot));
+            }
 
         if (drop == null) return design;
 
@@ -1643,15 +1534,35 @@ public class DesignBindingService : IDisposable
         return copy;
     }
 
-    /// <summary>The carrier ids to strip at boot, straight from the game sheets.</summary>
-    // Every accessory slot's invisible piece, not just the ring: at boot we cannot know which slots a
-    // carrier was left in, so all of them are neutralized. Harmless for a slot we never used — the id only
-    // matches if that exact item is actually worn.
-    private (ulong? Glasses, IReadOnlyList<ulong> Accessories) BootCarriers()
-        => (InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId,
-            InvisibleRing.CarrierSlots
-                .Select(c => InvisibleRing.ResolveFor(Plugin.DataManager, log, c.Slot)?.ItemId)
-                .Where(id => id != null).Select(id => id!.Value).Distinct().ToList());
+    /// <summary>What Proteus has on the player right now, for the live apply path. Straight from the
+    /// compositor, which knows what it actually injected — deriving it from the feature toggles instead
+    /// misses our item in the window between switching a feature off and the recomposite pulling it, and
+    /// blanking by id whenever a feature is off would erase the player's OWN Emperor's New Ring (a common
+    /// invisible-ring glamour) from every comparison.</summary>
+    private Carriers LiveCarriers()
+    {
+        // Non-null only while WE have a pair on, so it doubles as the ownership flag — with the caveat
+        // that "ours" there includes a pair the reconcile ADOPTED because it found our set already worn.
+        // Someone wearing the invisible facewear as their own glamour therefore reads as us borrowing the
+        // slot; BestMatches is what keeps that from costing them a match.
+        var glasses = compositor.InjectedGlassesItemId;
+        return new Carriers(glasses, compositor.InjectedCarrierItemIds,
+            compositor.InjectedCarrierSlots, GlassesSlotOwned: glasses != null);
+    }
+
+    /// <summary>The carriers to retire at boot.</summary>
+    // The accessory SLOTS are known (ownership is persisted in the config), but the item ids come from the
+    // game sheets: a carrier can be left worn in a slot we did not record, and the glasses flag in
+    // particular is in-memory only, so it is false at boot however things really stand. Harmless in this
+    // direction — an id only retires a slot if that exact item is actually named there, so the worst case
+    // is that a player who genuinely wears the carrier item stops having it count toward a match, which
+    // loosens specificity rather than fabricating one.
+    private Carriers BootCarriers()
+        => new(InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ItemId,
+               InvisibleRing.CarrierSlots
+                   .Select(c => InvisibleRing.ResolveFor(Plugin.DataManager, log, c.Slot)?.ItemId)
+                   .Where(id => id != null).Select(id => id!.Value).Distinct().ToList(),
+               compositor.InjectedCarrierSlots);
 
     // Compare whichever numeric colour fields the design entry carries against the state entry, with
     // a small tolerance to absorb float round-trip noise. A field present on the design but missing
@@ -1740,8 +1651,7 @@ public class DesignBindingService : IDisposable
     // metadata. Mirrors CaptureColors, so "Update binding" folds gear edits in just like colour edits.
     private OverlayGearOverride CaptureGear(OverlayEntry e)
     {
-        OverlayGearOverride? active = null;
-        lock (gate) activeGearOverride?.TryGetValue(e.ModDirectory, out active);
+        var active = compositor.EffectiveGearOverrideFor(e.ModDirectory);
 
         var result = new OverlayGearOverride();
 

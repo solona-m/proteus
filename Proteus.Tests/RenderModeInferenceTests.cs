@@ -46,7 +46,25 @@ public class RenderModeInferenceTests
         new object[] { new ColorTableSubRowPreset { Metalness = 0.3f } },
         new object[] { new ColorTableSubRowPreset { SphereMap = 4 } },
         new object[] { new ColorTableSubRowPreset { SphereIntensity = 0.7f } },
+        new object[] { new ColorTableSubRowPreset { Tile = 12 } },
     };
+
+    /// <summary>
+    /// Tile SLICE ZERO is a real weave, so it counts — unlike sphere 0, which is the game's own empty entry.
+    /// <para/>
+    /// The trap is that the sphere beside it reads <c>SphereMap.GetValueOrDefault() &gt; 0</c>, and copying
+    /// that idiom here makes the first of the sixty-four weaves the one slice that cannot be used: the row
+    /// would never promote, the overlay would stay on skin.shpk, and picking it would do nothing at all.
+    /// </summary>
+    [Fact]
+    public void TileSliceZero_IsCloth()
+        => Assert.True(RenderModeInference.IsClothSub(new ColorTableSubRowPreset { Tile = 0 }));
+
+    /// <summary>A scale with no pattern to apply it to renders nothing, so it is not a reason to promote.</summary>
+    [Fact]
+    public void TileScaleAlone_IsNotCloth()
+        => Assert.False(RenderModeInference.IsClothSub(
+            new ColorTableSubRowPreset { TileScaleU = 8f, TileScaleV = 8f, TileStrength = 1f }));
 
     [Fact]
     public void ExplicitZeroMetal_IsNotCloth()   // metal 0 / sphere 0 are "off", not a Cloth signal
@@ -177,6 +195,46 @@ public class RenderModeInferenceTests
     public void Promote_AboveGearWithNoShellSurface_StaysSkin()
         => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
             Rows(), aboveGear: true, canShell: false));
+
+    // ── A print is never promoted ──────────────────────────────────────────────
+    // It has no coverage of its own to cut a shell from, and a shell would take it away from the very
+    // layers it exists to colour. It qualifies on every promotion route otherwise, so each needs vetoing.
+
+    [Fact]
+    public void Promote_PrintAboveGear_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: true));
+
+    [Fact]
+    public void Promote_PrintWithGlowRow_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Screen, Emissive = 0.5f }), aboveGear: false));
+
+    /// <summary>
+    /// The one that would have been most visible: a toe cap anywhere in the look promotes every shellable
+    /// skin overlay, which would have turned an opaque full-body print into a rainbow bodysuit.
+    /// </summary>
+    [Fact]
+    public void Promote_PrintWithToeCapWanted_StaysSkin()
+        => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: false,
+            canShell: true, needsUnmirroredShell: false, toeCapWanted: true));
+
+    /// <summary>A row that paints is untouched by any of this.</summary>
+    [Fact]
+    public void Promote_PaintRowAboveGear_StillPromotes()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Paint }), aboveGear: true));
+
+    /// <summary>
+    /// Mixed rows are not a print: one painting sub-row means the option really does lay down a surface,
+    /// and the safe direction is to keep it.
+    /// </summary>
+    [Fact]
+    public void Promote_MixedPaintAndPrintRows_StillPromotes()
+        => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
+            Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply },
+                 new ColorTableSubRowPreset { Blend = RowBlend.Paint }), aboveGear: true));
 
     // ── Override path (design binding) reads the override, not the descriptor ───
 

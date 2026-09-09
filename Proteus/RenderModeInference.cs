@@ -62,11 +62,36 @@ public static class RenderModeInference
          || s.Metalness.GetValueOrDefault() > 0f
          || s.SphereMap.GetValueOrDefault() > 0
          || s.SphereIntensity.GetValueOrDefault() > 0f
+         // A weave lives in the colour table, and the skin layer has none: it BAKES textures through the
+         // compositor. Note "!= null" rather than the sphere's "> 0" — slice 0 is the game's own empty
+         // sphere but a REAL tile, so the sphere's idiom would make it unselectable in effect.
+         //
+         // TileScaleU/V are deliberately not here: a scale with no pattern to apply it to renders nothing.
+         || s.Tile != null
          || s.Emissive > 0f);
 
     /// <summary>Any Cloth feature (sphere/metal/specular/glow) is set across the option's rows.</summary>
     public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows)
         => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
+
+    /// <summary>
+    /// Every sub-row the author configured here composites as a print, so the option carries colour and no
+    /// surface at all.
+    /// <para/>
+    /// Derived from the rows rather than taken as a parameter on purpose: <see cref="ShouldPromoteToGear"/>
+    /// already receives them, and the compositor and the editor must never be able to disagree about what
+    /// was composited.
+    /// </summary>
+    public static bool IsPrint(IEnumerable<ColorTableRowPreset> rows)
+    {
+        bool any = false;
+        foreach (var r in rows)
+        {
+            if (r.SubRowA is { } a) { if (a.Blend == RowBlend.Paint) return false; any = true; }
+            if (r.SubRowB is { } b) { if (b.Blend == RowBlend.Paint) return false; any = true; }
+        }
+        return any;
+    }
 
     /// <summary>
     /// Whether a stored Skin overlay has to be composited as a gear shell instead. Two reasons, both
@@ -79,6 +104,10 @@ public static class RenderModeInference
     /// <item><paramref name="needsUnmirroredShell"/> — its art differs left from right and the body being
     /// worn is mirrored, so painting it into the skin would fold it in half. Only a shell has geometry of
     /// its own to send the two sides to two halves of the sheet.</item>
+    /// <item><paramref name="toeCapWanted"/> — a toe cap is selected somewhere in the look. The cap is
+    /// GEOMETRY: it rebuilds the toes as one rounded shape, and only a shell has geometry to rebuild.
+    /// Painted into the skin the option simply does nothing, which is what it looked like — a whole
+    /// composite with no second-skin phase at all, because every active overlay was a skin layer.</item>
     /// </list>
     /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
     /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
@@ -97,11 +126,17 @@ public static class RenderModeInference
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
         IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
-        bool needsUnmirroredShell = false)
+        bool needsUnmirroredShell = false, bool toeCapWanted = false)
         => layer == OverlayLayer.Skin
         && !pinned
         && canShell
-        && (aboveGear || needsUnmirroredShell || HasCloth(rows ?? []));
+        // A print is never promoted: it has no coverage of its own to cut a shell from, and a shell would
+        // take it away from the very layers it exists to colour — they are composited into the skin, and it
+        // would no longer be there to reach them. It qualifies on every route otherwise, which is what makes
+        // this load-bearing rather than defensive: toeCapWanted promotes every shellable skin overlay in the
+        // look, so one toe cap would turn an opaque full-body print into a rainbow bodysuit.
+        && !IsPrint(rows ?? [])
+        && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []));
 
     /// <summary>
     /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same

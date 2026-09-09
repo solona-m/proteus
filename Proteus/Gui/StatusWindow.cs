@@ -29,6 +29,12 @@ public class StatusWindow : Window
     private readonly PenumbraBridge penumbra;
     private readonly Configuration config;
     private readonly DesignBindingService designBindings;
+    private readonly PresetService presets;
+    private readonly OverlayEditRouter editRouter;
+
+    /// <summary>The named-looks strip at the top of the colour editor. Constructed here rather than
+    /// injected because it is a widget with no life of its own outside this window.</summary>
+    private readonly PresetBar presetBar;
     private readonly UVMapDownloadService uvMapDl;
     private readonly UVRemapService uvRemap;
     private readonly ModCreationService modCreation;
@@ -135,12 +141,24 @@ public class StatusWindow : Window
     private enum ModSort { Enabled, Name, Priority }
     private ModSort _modSort = ModSort.Priority;
     private bool _modSortDesc = true;   // Priority descending = default
+    // Mods-tab search box. Kept across tab switches, unlike the combo filters in Export and Parts:
+    // those clear on IsWindowAppearing because their popup exists only to be typed at, while a box
+    // living in a tab body has no such event and forgetting the search every glance elsewhere is
+    // worse than remembering it. A stale filter explains itself — the no-match line quotes it back.
+    private string _modFilter = "";
+    // Width the mods table last occupied. The window is AlwaysAutoResize, so with the table gone its
+    // width would collapse around the search box — meaning the moment a keystroke stops matching, the
+    // window snaps narrow and the box being typed into slides out from under the cursor, then snaps
+    // back on the next backspace. Reserving the old width in the no-match state holds it still.
+    private float _modsTableWidth;
 
     // Bindings-tab column sort (display only). Defaults to newest-first, which is the order
     // DesignBindingService.Bindings already hands back — so the tab looks unchanged until sorted.
     private enum BindingSort { Design, Captured }
     private BindingSort _bindingSort = BindingSort.Captured;
     private bool _bindingSortDesc = true;
+    private string _bindingFilter = "";  // see _modFilter
+    private float _bindingsTableWidth;   // see _modsTableWidth
 
     // ── Create tab state ──
     private readonly FileDialogManager _fileDialog = new();
@@ -215,6 +233,29 @@ public class StatusWindow : Window
     // see TickLuminisImport for why this one import can span frames when the other two cannot.
     private bool _luminisAwaiting;
     private LuminisImportService.PreparedImport? _luminisAwaited;
+
+    // ── Preset (.ptp) import state ──
+    //
+    // The odd one out: every other kind of pick installs a MOD, while a preset is a look that only means
+    // anything against a mod already installed. So this one asks which mod rather than making one, and
+    // never auto-imports — landing someone else's colours on a mod without being asked is not a thing to
+    // do on one click.
+    private sealed class PresetImport
+    {
+        public required ModPreset Preset;
+
+        /// <summary>Every Proteus mod it could be added to, for the picker.</summary>
+        public required List<OverlayEntry> Candidates;
+
+        /// <summary>The chosen target, empty when the preset's own mod name matched none of them.</summary>
+        public string ModDirectory = string.Empty;
+
+        /// <summary>Whether <see cref="ModDirectory"/> was filled in by matching the name the preset was
+        /// saved against, rather than being left for the user to choose.</summary>
+        public bool Matched;
+    }
+
+    private PresetImport? _presetImport;
 
     // ── Eye pack (.zip) import state ──
     // A fourth set, kept apart from the other three for the reason given above.
@@ -305,6 +346,8 @@ public class StatusWindow : Window
         PenumbraBridge penumbra,
         Configuration config,
         DesignBindingService designBindings,
+        PresetService presets,
+        OverlayEditRouter editRouter,
         UVMapDownloadService uvMapDl,
         UVRemapService uvRemap,
         ModCreationService modCreation,
@@ -326,6 +369,8 @@ public class StatusWindow : Window
         this.penumbra       = penumbra;
         this.config         = config;
         this.designBindings = designBindings;
+        this.presets        = presets;
+        this.editRouter     = editRouter;
         this.uvMapDl        = uvMapDl;
         this.uvRemap        = uvRemap;
         this.modCreation    = modCreation;
@@ -337,6 +382,10 @@ public class StatusWindow : Window
         this.textureLoader  = textureLoader;
         this.modExport      = modExport;
         this.parts          = parts;
+
+        // Shares this window's one FileDialogManager: it has to be pumped every frame from Draw(), and a
+        // second instance would need a second pump nobody would remember to add.
+        presetBar = new PresetBar(presets, penumbra, _fileDialog, config, Plugin.Log);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -2081,7 +2130,8 @@ public class StatusWindow : Window
                     + "{" + PenumbraPackage.Extension
                     + "," + OnionPackage.Extension
                     + "," + TexToolsPackage.Extension
-                    + "," + EyePackage.Extension + "}",
+                    + "," + EyePackage.Extension
+                    + "," + PresetCodec.FileExtension + "}",
                 (ok, paths) =>
                 {
                     if (!ok) return;
@@ -2095,6 +2145,15 @@ public class StatusWindow : Window
         // button — the content preview prints it first thing, the Onion path prints it just below — but
         // when nothing has been picked there is no such name, and a SameLine left hanging would drag the
         // "pick a pack" line up onto the button's row instead.
+        // Presets first: it is the one pick that installs nothing, so it must not fall through to a
+        // preview that would offer to make a mod out of it.
+        if (_presetImport != null)
+        {
+            ImGui.SameLine();
+            DrawPresetImport(_presetImport);
+            return;
+        }
+
         if (_contentPreview != null)
         {
             ImGui.SameLine();
@@ -2235,7 +2294,12 @@ public class StatusWindow : Window
         _emissivePickToken++;
         _emissiveLoading = false;
 
-        if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
+        // Cleared here rather than in all five loaders, for the reason above: the one place a pick
+        // arrives is the one place a loader added later cannot forget.
+        _presetImport = null;
+
+        if (path.EndsWith(PresetCodec.FileExtension, StringComparison.OrdinalIgnoreCase)) LoadPresetFile(path);
+        else if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
         else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
         else if (path.EndsWith(EyePackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadEyePack(path);
         else LoadPenumbraPack(path);
@@ -2287,6 +2351,10 @@ public class StatusWindow : Window
     /// </summary>
     private void AutoImport()
     {
+        // A preset is never imported on the strength of the pick alone: it needs a target mod, and putting
+        // someone else's colours on one without being asked is not a one-click decision.
+        if (_presetImport != null) return;
+
         if (_importBusy || string.IsNullOrWhiteSpace(_importName)) return;
 
         if (_contentPreview is { } content)
@@ -2470,6 +2538,105 @@ public class StatusWindow : Window
     /// </summary>
     /// <param name="pack">The manifest <see cref="LoadPenumbraPack"/> already parsed, or null to read it
     /// here.</param>
+    /// <summary>
+    /// A <c>.ptp</c> picked here. It carries the display name of the mod it was saved against, so the
+    /// usual case — someone posts a preset, you pick the file — resolves to a target on its own; the
+    /// picker is there for when it doesn't, or when you mean to put it somewhere else.
+    /// <para/>
+    /// Matching is by mod NAME rather than directory: a directory is a Penumbra folder local to one
+    /// machine, and the same pack routinely sits under a different one on the receiving side.
+    /// </summary>
+    private void LoadPresetFile(string path)
+    {
+        _importPath = path;
+        _importStatus = null;
+        _importPreview = null;    // see LoadOnionPack
+        _contentPreview = null;
+        _luminisPreview = null;
+        _emissivePreview = null;
+        _eyePreview = null;
+        _importMaterials = null;
+        // Blanked so a name left behind by a previous pick cannot make AutoImport think there is a mod
+        // waiting to be created out of this.
+        _importName = string.Empty;
+
+        var result = PresetCodec.FromFile(path);
+        if (result.Preset is not { } preset)
+        {
+            _importStatus = string.Format(Strings.Presets.ImportFailedFmt, result.Error);
+            _importStatusOk = false;
+            return;
+        }
+
+        var mods    = discovery.DiscoverAll();
+        var matches = mods
+            .Where(m => string.Equals(m.ModName, preset.ModName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        _presetImport = new PresetImport
+        {
+            Preset     = preset,
+            Candidates = mods,
+            // Only an unambiguous match preselects. Two installed mods sharing a display name is rare but
+            // real (a pack and its own converted copy), and guessing between them would put a stranger's
+            // colours on the wrong one.
+            ModDirectory = matches.Count == 1 ? matches[0].ModDirectory : string.Empty,
+            Matched      = matches.Count == 1,
+        };
+    }
+
+    /// <summary>
+    /// The preset preview: what it is, which mod it was made for, and where it is about to go. Adds it to
+    /// that mod's saved presets WITHOUT wearing it — an import should not change how you look before you
+    /// have seen what it is.
+    /// </summary>
+    private void DrawPresetImport(PresetImport state)
+    {
+        var ps = Strings.Presets;
+        var p  = state.Preset;
+
+        ImGui.TextUnformatted(Path.GetFileName(_importPath ?? string.Empty));
+
+        using (ProteusStyle.Card(state.Matched ? null : ProteusStyle.Warn))
+        {
+            ImGui.PushTextWrapPos(ImGui.GetWindowContentRegionMax().X - ProteusStyle.S(14f));
+            ImGui.TextUnformatted(string.Format(ps.ImportedFromFmt,
+                p.Name, p.ModName ?? "?", p.ModAuthor ?? "?"));
+            if (!state.Matched)
+                ImGui.TextColored(ProteusStyle.Warn, ps.NoMatchingMod);
+            ImGui.PopTextWrapPos();
+        }
+
+        var target = state.Candidates
+            .FirstOrDefault(m => string.Equals(m.ModDirectory, state.ModDirectory, StringComparison.OrdinalIgnoreCase));
+
+        ImGui.TextUnformatted(ps.AddTo);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(ProteusStyle.S(260f));
+        if (ImGui.BeginCombo("##presetImportMod", target?.ModName ?? ps.PickAMod))
+        {
+            for (var i = 0; i < state.Candidates.Count; i++)
+            {
+                var m = state.Candidates[i];
+                using var _ = ImRaii.PushId(i);
+                if (ImGui.Selectable(m.ModName, m.ModDirectory == state.ModDirectory))
+                    state.ModDirectory = m.ModDirectory;
+            }
+            ImGui.EndCombo();
+        }
+
+        ImGui.SameLine();
+        using (ImRaii.Disabled(target == null))
+            if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Plus, ps.AddStaged) && target != null)
+            {
+                var added = presets.Add(target.ModDirectory, p);
+                _presetImport = null;
+                _importStatus = string.Format(ps.AddedToFmt, added.Name, target.ModName);
+                _importStatusOk = true;
+            }
+        ProteusStyle.ReasonTooltip(target == null ? ps.PickAMod : ps.AddToTip);
+    }
+
     private void LoadContentPack(string path, PenumbraPackage.Contents? pack = null)
     {
         _importPath = path;
@@ -3331,7 +3498,7 @@ public class StatusWindow : Window
     /// <c>GearMaterialWriter.PatchColorTable</c>, which writes only the rows it is given.
     /// </summary>
     private void DrawContentColorEditor(
-        OverlayEntry entry, bool editingBinding,
+        OverlayEntry entry, bool overrideActive,
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         // Resolved HERE rather than through discovery.ResolveActiveContent, which is otherwise the same
@@ -3505,7 +3672,7 @@ public class StatusWindow : Window
         // furniture around a single grid.
         if (byMaterial.Count == 1)
         {
-            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, editingBinding,
+            DrawContentMaterial(entry, byMaterial[0].Mtrl, byMaterial[0].Owners, overrideActive,
                 selectionStamp, effects);
             return;
         }
@@ -3520,7 +3687,7 @@ public class StatusWindow : Window
             var label = names.Count > 0 ? string.Join(", ", names) : Path.GetFileNameWithoutExtension(mtrl);
             using var tab = ImRaii.TabItem($"{label}##content_{mtrl}");
             if (!tab) continue;
-            DrawContentMaterial(entry, mtrl, owners, editingBinding, selectionStamp, effects);
+            DrawContentMaterial(entry, mtrl, owners, overrideActive, selectionStamp, effects);
         }
     }
 
@@ -3532,7 +3699,7 @@ public class StatusWindow : Window
     /// material slot and leave half the pieces the old colour.
     /// </summary>
     private void DrawContentMaterial(
-        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool editingBinding, string selectionStamp,
+        OverlayEntry entry, string mtrl, List<ContentOwner> owners, bool overrideActive, string selectionStamp,
         IReadOnlyList<(string Name, string Path, bool FromMod)> effects)
     {
         var (leadGroup, leadOption, _) = owners[0];
@@ -3603,14 +3770,14 @@ public class StatusWindow : Window
         // on a COPY and only install it once something actually changes, so merely opening the panel never
         // creates an override — and the compositor is reading the real one from another thread meanwhile.
         var stored  = StoredContentRows(entry, leadGroup, leadOption, mtrl);
-        var ovrRows = editingBinding
-            ? designBindings.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
-        var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
+        var ovrRows = overrideActive
+            ? editRouter.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
+        var rows = overrideActive ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
 
         // The glow, on the same copy-while-binding rule as the rows above.
         var storedGlow = StoredContentGlow(entry, leadGroup, leadOption, mtrl);
-        var ovrGlow = editingBinding
-            ? designBindings.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
+        var ovrGlow = overrideActive
+            ? editRouter.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
         var glow = (ovrGlow ?? storedGlow).Clone();
         bool glowing = glow.GlowKey() != null;
 
@@ -3705,7 +3872,7 @@ public class StatusWindow : Window
         // it. Fanning out was what made a pack with one always-on piece share one set of settings between
         // every tab, and it is no longer needed for the reason it existed: a per-material edit cannot make
         // two options disagree about a material they share, because there is only one place to disagree.
-        if (!editingBinding)
+        if (!overrideActive)
         {
             if (changed) StoreContentRows(entry, mtrl, DesignBindingService.CopyRows(rows));
             if (glowChanged) StoreContentGlow(entry, mtrl, glow.Clone());
@@ -3725,10 +3892,10 @@ public class StatusWindow : Window
         foreach (var (group, option, _) in owners)
         {
             if (changed)
-                designBindings.SetOverrideRows(
+                editRouter.SetOverrideRows(
                     entry.ModDirectory, group, option, DesignBindingService.CopyRows(rows));
             if (glowChanged)
-                designBindings.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
+                editRouter.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
                     ?.ApplyScrollFrom(glow);
         }
 
@@ -4288,18 +4455,102 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// Does this mod survive the export combo's filter? Matches the display name AND the folder name:
-    /// they routinely differ (Penumbra's folder is a sanitised form of the name, and the user can rename
-    /// either), so filtering on the label alone hides mods the user is searching for by folder.
+    /// Does this mod survive a filter box? Matches the display name AND the folder name: they routinely
+    /// differ (Penumbra's folder is a sanitised form of the name, and the user can rename either), so
+    /// filtering on the label alone hides mods the user is searching for by folder.
     /// <para/>
     /// Null-tolerant even though both fields are declared non-nullable: everything else that touches them
     /// interpolates them into a string, where a null from Penumbra prints empty — this is the one place it
     /// would throw, and a throw inside Draw takes the whole window down for the rest of the session.
     /// </summary>
+    private static bool MatchesNameOrFolder(OverlayEntry m, string filter)
+        => filter.Length == 0
+        || m.ModName?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true
+        || m.ModDirectory?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>The export combo's filter: name or folder, nothing else.</summary>
     private bool MatchesExportFilter(OverlayEntry m)
-        => _exportFilter.Length == 0
-        || m.ModName?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true
-        || m.ModDirectory?.Contains(_exportFilter, StringComparison.OrdinalIgnoreCase) == true;
+        => MatchesNameOrFolder(m, _exportFilter);
+
+    /// <summary>
+    /// The Mods tab's search box. Name or folder as everywhere else, plus the author — that tab is the
+    /// one place the whole library is on screen at once, so pulling up everything by one creator is worth
+    /// the small divergence from the two combo filters.
+    /// <para/>
+    /// Metadata is null-conditional for the same reason it is on the row itself: discovery hands back an
+    /// entry even when its sidecar failed to parse.
+    /// </summary>
+    private bool MatchesModFilter(OverlayEntry m)
+        => MatchesNameOrFolder(m, _modFilter)
+        || m.Metadata?.Author?.Contains(_modFilter, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// The Bindings tab's search box. Matches what the row shows — the design's name, and the id it falls
+    /// back to when the name is missing (typed in full or in part, since the row prints only 8 characters).
+    /// </summary>
+    private bool MatchesBindingFilter(DesignBinding b)
+        => _bindingFilter.Length == 0
+        || b.DesignName?.Contains(_bindingFilter, StringComparison.OrdinalIgnoreCase) == true
+        || b.DesignId.ToString().Contains(_bindingFilter, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The Mods row's preset picker: what this mod is wearing, and a one-click switch to anything else it
+    /// has. Deliberately just the pin — saving, renaming and sharing all live in the colour editor's
+    /// preset strip, because those need the look on screen to make sense.
+    /// <para/>
+    /// A mod with no presets at all shows a dash rather than an empty combo: an interactive control that
+    /// opens onto nothing reads as broken.
+    /// </summary>
+    private void DrawPresetCell(OverlayEntry entry, Guid? collId)
+    {
+        var ps  = Strings.Presets;
+        var all = presets.ListFor(entry);
+        if (all.Count == 0)
+        {
+            ImGui.TextDisabled(ps.ColumnNone);
+            ProteusStyle.ReasonTooltip(ps.ColumnTip);
+            return;
+        }
+
+        var appliedId = presets.AppliedIdFor(entry.ModDirectory);
+        var current   = appliedId is { } id ? all.FirstOrDefault(p => p.Id == id) : null;
+        var label     = current == null ? ps.NoPreset : current.Name;
+
+        // Applied after the combo closes: Apply/ClearApplied both republish the override dictionaries and
+        // kick a composite, and doing that between BeginCombo and EndCombo mutates what is being drawn.
+        Guid? toApply = null;
+        bool  toClear = false;
+
+        // Disabled outright without a collection rather than left live to swallow the click: wearing a
+        // preset writes Penumbra options, which needs one. Half of this control would still work — the
+        // clear path needs no collection — and a combo that silently ignores every entry but one reads
+        // as broken, where a disabled one with a reason reads as "not yet".
+        using (ImRaii.Disabled(collId == null))
+        {
+            ImGui.SetNextItemWidth(ProteusStyle.S(112f));
+            if (ImGui.BeginCombo($"##preset_{entry.ModDirectory}", ProteusStyle.Ellipsize(label, ProteusStyle.S(96f))))
+            {
+                if (ImGui.Selectable(ps.NoPreset, current == null)) toClear = true;
+                ImGui.Separator();
+
+                for (var i = 0; i < all.Count; i++)
+                {
+                    var p = all[i];
+                    using var _ = ImRaii.PushId(i);
+                    var name = (p.Source == PresetSource.Pack ? ps.PackMarker : string.Empty) + p.Name;
+                    if (ImGui.Selectable(name, p.Id == appliedId)) toApply = p.Id;
+                }
+                ImGui.EndCombo();
+            }
+        }
+        // AllowWhenDisabled inside, so the reason is readable on the disabled control — which is the only
+        // state in which anyone needs it.
+        ProteusStyle.ReasonTooltip(collId == null ? ps.NoCollection : ps.ColumnTip);
+
+        if (toClear) presets.ClearApplied(entry.ModDirectory);
+        else if (toApply is { } pick && collId is { } c && presets.Get(entry, pick) is { } preset)
+            presets.Apply(entry, c, preset);
+    }
 
     /// <summary>
     /// Ask where to save, then zip on the pool. The dialog callback runs on the framework thread, inline
@@ -4436,6 +4687,25 @@ public class StatusWindow : Window
             .ToList();
     }
 
+    /// <summary>
+    /// One <see cref="CompositorService.InertReason"/> as a sentence in the user's language. The compositor
+    /// publishes a typed cause rather than finished text precisely so this can differ from the English the
+    /// log records — see <c>CompositorService.EnglishInert</c>, which must keep stating the same facts.
+    /// </summary>
+    private static string DescribeInert(CompositorService.InertReason r)
+    {
+        var ms = Strings.Mods;
+        return r.Cause switch
+        {
+            CompositorService.InertCause.SettingsUnreadable => ms.InertSettingsUnreadable,
+            CompositorService.InertCause.GroupsMissing      => string.Format(ms.InertGroupsMissingFmt, r.Groups),
+            CompositorService.InertCause.NothingTicked      => string.Format(ms.InertNothingTickedFmt, r.GroupCount, r.Groups),
+            CompositorService.InertCause.WrongRace          => string.Format(ms.InertWrongRaceFmt, r.Wants, r.Have),
+            CompositorService.InertCause.MaskNeedsShell     => string.Format(ms.InertMaskNeedsShellFmt, r.Groups),
+            _                                               => ms.InertNothingReached,
+        };
+    }
+
     private void DrawModsTab()
     {
         // ── Overlay mod list ─────────────────────────────────────────────────
@@ -4454,12 +4724,36 @@ public class StatusWindow : Window
         }
         else
         {
+            // Search box. A fixed scaled width rather than the -1 the two combo filters use: a popup has a
+            // settled width, but this window is AlwaysAutoResize, and a fill-width item sized from last
+            // frame's content region feeds straight into the auto-fit loop DrawTabBarRefresh works around.
+            ImGui.SetNextItemWidth(ProteusStyle.S(240f));
+            ImGui.InputTextWithHint("##modFilter", Strings.Export.FilterHint, ref _modFilter, 64);
+
+            // Narrow BEFORE sorting, so the sort's active-on-top grouping applies to what's left. Rows are
+            // keyed by ModDirectory throughout (the checkbox id, _priorityEdits, _colorWindowMod), never by
+            // index, so dropping rows here cannot land a click or an in-progress drag on the wrong mod.
+            // An empty filter short-circuits to the original list: Draw runs every frame, and the common
+            // case shouldn't pay for a delegate and a copy to reach the same answer.
+            var visible = _modFilter.Length == 0 ? mods : mods.Where(MatchesModFilter).ToList();
+            if (visible.Count == 0)
+            {
+                // Only reachable with something typed — the empty-library case was handled above. Say so
+                // instead of drawing a table that is nothing but a header row, which reads as a bug.
+                ProteusStyle.DisabledWrapped(string.Format(Strings.Export.NoMatchFmt, _modFilter));
+                HoldWindowWidth(_modsTableWidth);
+                return;
+            }
+
             // EndTable is only legal when BeginTable returned true — it returns false when the table is
             // skipped (clipped away, or the host window isn't rendering), and calling EndTable anyway
             // trips an ImGui assertion in debug and corrupts table state in release.
             // Bodies is NOT here: it moved into the colour panel's Advanced disclosure, beside the other
             // per-mod knob that decides how the overlay renders rather than what it is.
-            if (!ImGui.BeginTable("##mods", 5,
+            // "##mods2", not "##mods": ImGui keys per-column widths and sort state off the table id, and a
+            // saved 5-column layout applied to this 6-column one mis-sizes every column until the game is
+            // restarted. A new id starts clean.
+            if (!ImGui.BeginTable("##mods2", 6,
                     ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.RowBg))
                 return;
             // Widths are scaled: the table's text is, so unscaled columns clip their own headers at 1.5x.
@@ -4471,6 +4765,7 @@ public class StatusWindow : Window
             ImGui.TableSetupColumn("On",     ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(32f));
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
+            ImGui.TableSetupColumn("Preset", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(120f));
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
             ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(96f));
 
@@ -4482,6 +4777,7 @@ public class StatusWindow : Window
             ProteusStyle.SortableHeader(ms.ColOn,       "modOn",   ModSort.Enabled,  ref _modSort, ref _modSortDesc, defaultDesc: true);
             ProteusStyle.SortableHeader(ms.ColMod,      "modName", ModSort.Name,     ref _modSort, ref _modSortDesc, defaultDesc: false);
             ProteusStyle.SortableHeader(ms.ColPriority, "modPri",  ModSort.Priority, ref _modSort, ref _modSortDesc, defaultDesc: true);
+            ImGui.TableNextColumn(); ImGui.TableHeader(Strings.Presets.ColumnHeader);
             ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColColors);
             ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColSkindent);
 
@@ -4500,10 +4796,10 @@ public class StatusWindow : Window
             // job is the enabled state, so it keeps honouring its own direction and ascending still
             // brings the disabled ones up. Pinning there too would leave a sortable header that does
             // nothing when clicked.
-            var byActive = mods.OrderByDescending(e => e.Enabled);
+            var byActive = visible.OrderByDescending(e => e.Enabled);
             IOrderedEnumerable<OverlayEntry> ordered = _modSort switch
             {
-                ModSort.Enabled => _modSortDesc ? byActive : mods.OrderBy(e => e.Enabled),
+                ModSort.Enabled => _modSortDesc ? byActive : visible.OrderBy(e => e.Enabled),
                 ModSort.Name    => _modSortDesc ? byActive.ThenByDescending(e => e.ModName, StringComparer.OrdinalIgnoreCase)
                                                 : byActive.ThenBy(e => e.ModName, StringComparer.OrdinalIgnoreCase),
                 _               => _modSortDesc ? byActive.ThenByDescending(e => e.Priority)
@@ -4531,6 +4827,27 @@ public class StatusWindow : Window
                 // out for a state the user never chose reads as "broken" rather than as "not in this
                 // design". Enabled mods composite now, so enabled is the only thing this colour says.
                 ImGui.TableNextColumn();
+
+                // An amber "!" for a mod that is ON and painting nothing — the one state this list used to
+                // render identically to a mod that works. Only for enabled rows: a disabled mod contributes
+                // nothing for a reason already shown by the checkbox beside it.
+                //
+                // A glyph inside the stretch column rather than a column of its own, because a column would
+                // be empty on every row almost every time, and widening the table for it would push the
+                // three fixed columns about for a case that is meant to be rare.
+                // Formatted once, not once per tooltip call: ReasonTooltip takes finished text, so the
+                // string.Format below runs whether or not anything is hovered — twice a frame, forever,
+                // if the two call sites each build their own.
+                var inertTip = active && compositor.GetInertReason(entry.ModDirectory) is { } why
+                    ? DescribeInert(why)
+                    : null;
+                if (inertTip != null)
+                {
+                    ImGui.TextColored(ProteusStyle.Warn, "!");
+                    ProteusStyle.ReasonTooltip(inertTip);
+                    ImGui.SameLine(0f, ProteusStyle.S(4f));
+                }
+
                 using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
                 {
                     if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
@@ -4538,6 +4855,9 @@ public class StatusWindow : Window
                         penumbra.OpenToMod(entry.ModDirectory);
                     }
                 }
+                // Repeated on the name itself: the glyph is four pixels wide, and someone who has noticed
+                // a row is wrong will hover the mod, not the punctuation.
+                ProteusStyle.ReasonTooltip(inertTip);
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();
@@ -4553,6 +4873,11 @@ public class StatusWindow : Window
                     // Live edit only (see enable toggle above); folded into the binding via the button.
                     RecompositeForOverlay(entry, "penumbra-priority");
                 }
+
+                // Preset — switch this mod's saved look without opening the colour editor, which is the
+                // whole point of the feature for someone who just wants to try the pack's own looks.
+                ImGui.TableNextColumn();
+                DrawPresetCell(entry, collId);
 
                 // Colors button. Opens a real window (not a popup) so it survives clicking away —
                 // colour work means going back and forth with the game, and a popup dies on any
@@ -4601,7 +4926,22 @@ public class StatusWindow : Window
             }
 
             ImGui.EndTable();
+            // EndTable submits the table's outer rect as an item, so this is the width the rows actually
+            // took — remembered for the no-match state above.
+            _modsTableWidth = ImGui.GetItemRectSize().X;
         }
+    }
+
+    /// <summary>
+    /// Reserve <paramref name="width"/> of horizontal space so an AlwaysAutoResize window keeps the width
+    /// it had while a table was on screen, instead of collapsing around whatever replaced the table.
+    /// Zero-height, so it costs a line of item spacing and nothing else; a zero or negative width (nothing
+    /// measured yet) draws nothing at all.
+    /// </summary>
+    private static void HoldWindowWidth(float width)
+    {
+        if (width > 0f)
+            ImGui.Dummy(new Vector2(width, 0f));
     }
 
     private void DrawBindingsTab()
@@ -4654,6 +4994,22 @@ public class StatusWindow : Window
             return;
         }
 
+        // Search box, below the empty guard so a tab with nothing in it never offers one, and below the
+        // "Active:" line, which reports what is applied right now and stays true whatever is searched for.
+        // Fixed scaled width for the reason given in DrawModsTab.
+        ImGui.SetNextItemWidth(ProteusStyle.S(240f));
+        ImGui.InputTextWithHint("##bindingFilter", Strings.Export.FilterHint, ref _bindingFilter, 64);
+
+        // Empty filter short-circuits to the original list — see the note in DrawModsTab.
+        IReadOnlyList<DesignBinding> visible =
+            _bindingFilter.Length == 0 ? bindings : bindings.Where(MatchesBindingFilter).ToList();
+        if (visible.Count == 0)
+        {
+            ProteusStyle.DisabledWrapped(string.Format(Strings.Export.NoMatchFmt, _bindingFilter));
+            HoldWindowWidth(_bindingsTableWidth);
+            return;
+        }
+
         // See the note in DrawModsTab: EndTable is only legal when BeginTable returned true. Returning here
         // also skips the deferred Apply/Unbind dispatch below, which is correct — no row was drawn, so
         // neither button can have been clicked.
@@ -4682,11 +5038,11 @@ public class StatusWindow : Window
         var ordered = _bindingSort switch
         {
             BindingSort.Design => _bindingSortDesc
-                ? bindings.OrderByDescending(Label, StringComparer.OrdinalIgnoreCase)
-                : bindings.OrderBy(Label, StringComparer.OrdinalIgnoreCase),
+                ? visible.OrderByDescending(Label, StringComparer.OrdinalIgnoreCase)
+                : visible.OrderBy(Label, StringComparer.OrdinalIgnoreCase),
             _ => _bindingSortDesc
-                ? bindings.OrderByDescending(x => x.CapturedUtc)
-                : bindings.OrderBy(x => x.CapturedUtc),
+                ? visible.OrderByDescending(x => x.CapturedUtc)
+                : visible.OrderBy(x => x.CapturedUtc),
         };
         var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -4748,6 +5104,7 @@ public class StatusWindow : Window
             }
         }
         ImGui.EndTable();
+        _bindingsTableWidth = ImGui.GetItemRectSize().X;   // see _modsTableWidth
 
         // All deferred past the loop: each mutates the binding state the rows are drawn from.
         if (toUpdate)
@@ -4760,13 +5117,33 @@ public class StatusWindow : Window
 
     private void DrawColorEditor(OverlayEntry entry)
     {
+        DrawColorEditorBody(entry);
+
+        // Last on the panel, below Advanced, and collapsed until asked for. A preset is picked once and
+        // then left alone, where everything above is touched constantly — so it earns a footer rather
+        // than the top of the panel, and its header carries the worn preset's name so a collapsed
+        // section still answers "which look is this?".
+        //
+        // Drawn out here rather than at the end of the body because that body returns early on five
+        // different paths (no overlays, content-only, masks-only…), and a preset belongs to the MOD, not
+        // to whichever of those drew.
+        presetBar.Draw(entry);
+    }
+
+    private void DrawColorEditorBody(OverlayEntry entry)
+    {
         // display: false — this is a mod name the user chose, and Jupiter is a display face with narrow
         // glyph coverage, so a CJK or accented name would render as boxes.
         ProteusStyle.SectionHeader(entry.ModName, display: false);
 
-        // When a design binding drives this mod, edits target the binding (not metadata.json).
-        bool editingBinding = designBindings.IsOverrideActiveFor(entry.ModDirectory);
-        if (editingBinding)
+        // When something other than the mod's own metadata drives this mod — a pinned preset or an active
+        // design binding — every edit below previews into that instead of writing metadata.json.
+        // OverlayEditRouter decides which; this only has to know that one of them owns the look.
+        bool overrideActive = editRouter.HasOverride(entry.ModDirectory);
+
+        // The binding card is about a DESIGN specifically, so it asks the binding service rather than the
+        // router: a preset pinned on an unbound mod must not claim a design is editing it.
+        if (designBindings.IsOverrideActiveFor(entry.ModDirectory))
         {
             var activeId = designBindings.ActiveDesignId;
             var name = designBindings.Bindings.FirstOrDefault(b => b.DesignId == activeId)?.DesignName
@@ -4822,13 +5199,14 @@ public class StatusWindow : Window
         // material the PACK ships, so the only control that means anything is the colour grid itself.
         if (entry.Metadata is { HasContent: true })
         {
-            DrawContentColorEditor(entry, editingBinding, effects);
+            DrawContentColorEditor(entry, overrideActive, effects);
             // A pack may ship geometry AND overlays; only a pure content pack is finished here.
             if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
             {
                 ImGui.Separator();
-                if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##content_{entry.ModDirectory}",
-                        ImGuiTreeNodeFlags.NoTreePushOnOpen))
+                // Framed, to match the Presets bar and the other two Advanced disclosures. "###" so the
+                // localized word isn't hashed into the id and a language switch doesn't shut it.
+                if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###content_{entry.ModDirectory}"))
                     DrawBodiesAdvanced(entry);
                 return;
             }
@@ -4843,8 +5221,8 @@ public class StatusWindow : Window
             // tab below for why creating the override on read is wrong. While editing a binding this ALWAYS
             // works on a copy, even when an override already exists: the override is what the compositor
             // reads from another thread, so the draw loop must never be writing into it.
-            var ovrRows  = editingBinding ? designBindings.PeekOverrideRows(entry.ModDirectory, null, null) : null;
-            var rows = editingBinding ? DesignBindingService.CopyRows(ovrRows ?? metaRows) : metaRows;
+            var ovrRows  = overrideActive ? editRouter.PeekOverrideRows(entry.ModDirectory, null, null) : null;
+            var rows = overrideActive ? DesignBindingService.CopyRows(ovrRows ?? metaRows) : metaRows;
 
             var usedRowsSimple = new HashSet<int>();
             var columnsSimple  = new List<string?>();
@@ -4878,8 +5256,8 @@ public class StatusWindow : Window
             // Layer/shader normally persist to metadata.json — but while a binding is being edited they
             // go into its gear override (live preview, saved on "Update binding"), like colour rows.
             var simpleOverlays = entry.Metadata.Overlays ?? [];
-            var gearOvrSimple = editingBinding && simpleOverlays.Count > 0
-                ? designBindings.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
+            var gearOvrSimple = overrideActive && simpleOverlays.Count > 0
+                ? editRouter.GetEditableGearOverride(entry.ModDirectory, null, null, simpleOverlays[0])
                 : null;
             var modeBeforeSimple = EffectiveMode(simpleOverlays, gearOvrSimple);
             var (gearSimple, shaderSimple) = ColorTableEditor.EffectiveLayerShader(simpleOverlays, gearOvrSimple);
@@ -4902,7 +5280,7 @@ public class StatusWindow : Window
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
                 resetDisabledReason: ResetBlockedReason(entry),
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
-                editingBinding: editingBinding);
+                overrideActive: overrideActive);
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -4925,14 +5303,14 @@ public class StatusWindow : Window
                 // first point we know one happened, so drawing alone never changes the binding) and fold it
                 // into the stored binding on "Update binding". Base metadata persists only when NOT editing
                 // a binding — except a reset, which exists precisely to rewrite the base and must land.
-                if (editingBinding && !resetSimple)
-                    designBindings.SetOverrideRows(entry.ModDirectory, null, null, rows);
+                if (overrideActive && !resetSimple)
+                    editRouter.SetOverrideRows(entry.ModDirectory, null, null, rows);
                 // NOT on a reset: ResetToDefaults has already restored entry.Metadata in place, and `rows`
                 // is a working copy taken BEFORE it ran — writing that back would undo the restore and then
                 // save the undone state over the mod's own settings.
-                if (!editingBinding && !resetSimple)
+                if (!overrideActive && !resetSimple)
                     entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
-                if (!editingBinding || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+                if (!overrideActive || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) RecompositeForOverlay(entry, "mode-change");
                 // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
@@ -4991,17 +5369,37 @@ public class StatusWindow : Window
         var maskAssets = discovery.ResolveActiveMaskAssets(entry);
         bool anyMaskWithId = maskAssets.Any(a => a.IndexPath != null);
 
+        // Why this mod is painting nothing, if it is. Drawn ABOVE the tab strip and not only in the
+        // nothing-selected branch below: the two causes hardest to work out on your own — a pack built for
+        // another body, and masks that render as gear with no mask ticked — both leave options ticked and
+        // tabs on screen, so a notice that only appears when the strip is empty misses them entirely. That
+        // is the state this panel looks most normal in and is most wrong.
+        var inertReason = compositor.GetInertReason(entry.ModDirectory);
+        var inertText   = inertReason is { } r ? DescribeInert(r) : null;
+
         if (activeOptions.Count == 0 && !anyMaskWithId)
         {
             // Nothing selected means there are no colours to edit — but Bodies is a MOD-wide setting and
             // this panel is now its only home, so it can't leave with the tabs. An all-"None" mod is a mod
             // that isn't painting, and "the bake never reached my body type" is one of the reasons why, so
             // the control would otherwise disappear in exactly the state that sends someone looking for it.
-            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
-            if (ImGui.TreeNodeEx($"{Strings.Colors.Advanced}##noopt_{entry.ModDirectory}",
-                    ImGuiTreeNodeFlags.NoTreePushOnOpen))
+            //
+            // When the compositor knows WHICH of those reasons it is, say that instead of the generic line:
+            // this panel is the second place someone looks after the Mods tab, and "no active options" is
+            // true of a renamed group and a wrong-race pack alike while helping with neither.
+            if (inertText != null)
+                ProteusStyle.WarnWrapped(inertText);
+            else
+                ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
             return;
+        }
+
+        if (inertText != null)
+        {
+            ProteusStyle.WarnWrapped(inertText);
+            ImGui.Spacing();
         }
 
         // Show the tabs in TRUE stacking order, top-first — the same ordering the compositor applies,
@@ -5023,7 +5421,7 @@ public class StatusWindow : Window
             // While a design binding is active the mod-wide order lives on the binding, not the global
             // config (the composite reads it via CompositorService.ModStackIndexFor) — so the tab strip must
             // order its buttons the same way, or a restack moves the cloth but leaves the buttons put.
-            var stackOvr = designBindings.ActiveStackOrderFor(entry.ModDirectory);
+            var stackOvr = editRouter.ActiveStackOrderFor(entry.ModDirectory);
             int ModStackIdx(string group, string option)
                 => stackOvr != null
                     ? Configuration.ModStackIndexIn(stackOvr, group, option)
@@ -5125,7 +5523,7 @@ public class StatusWindow : Window
                 // While a design binding is being edited the restack is a live-preview override on the
                 // binding (folded in via "Update binding"), like colour/gear edits — the global stack
                 // config is left untouched. Falls back to the global config when no binding is active.
-                if (!(editingBinding && designBindings.SetEditableStackOrder(entry.ModDirectory, topFirst)))
+                if (!(overrideActive && editRouter.SetEditableStackOrder(entry.ModDirectory, topFirst)))
                     config.SetModStackOrder(entry.ModDirectory, topFirst);
                 RecompositeForOverlay(entry, "stack-reorder");
             }
@@ -5231,8 +5629,8 @@ public class StatusWindow : Window
             // what the old GetEditableMaskRows did) snapshotted the metadata just for drawing the tab, and
             // that snapshot then shadowed every later metadata edit for as long as the design stayed
             // applied — the editor showed the new colour while the composite kept painting the old one.
-            var storedMaskRows = editingBinding ? designBindings.PeekMaskRows(entry.ModDirectory) : null;
-            var maskRows = editingBinding
+            var storedMaskRows = overrideActive ? editRouter.PeekMaskRows(entry.ModDirectory) : null;
+            var maskRows = overrideActive
                 ? DesignBindingService.CopyRows(storedMaskRows ?? baseMaskRows)
                 : baseMaskRows;
             var maskScope = $"{entry.ModDirectory}_{SidecarDiscoveryService.MaskGroupName}";
@@ -5250,7 +5648,7 @@ public class StatusWindow : Window
             {
                 if (string.Equals(x.GroupName, SidecarDiscoveryService.MaskGroupName, StringComparison.Ordinal))
                     return false;
-                var ovr = designBindings.PeekGearOverride(entry.ModDirectory, x.GroupName, x.Option.Name);
+                var ovr = editRouter.PeekGearOverride(entry.ModDirectory, x.GroupName, x.Option.Name);
                 // Tested per DESCRIPTOR, not just the option's first: the compositor turns EVERY Gear
                 // descriptor into its own shell, so one gear descriptor anywhere in the option is enough to
                 // put the mask on a shell. (EffectiveLayerShader alone reads only overlays[0].)
@@ -5261,8 +5659,8 @@ public class StatusWindow : Window
             // ReconcileMode/DrawGlowFooter when not editing a binding; the binding's gear override is mutated
             // instead when one is active.
             var maskDesc = entry.Metadata.MaskDescriptor ?? new OverlayDescriptor { Layer = OverlayLayer.Skin };
-            var maskGearOvr = editingBinding
-                ? designBindings.GetEditableMaskGearOverride(entry.ModDirectory, maskDesc)
+            var maskGearOvr = overrideActive
+                ? editRouter.GetEditableMaskGearOverride(entry.ModDirectory, maskDesc)
                 : null;
 
             var maskModeBefore = EffectiveMode([maskDesc], maskGearOvr);
@@ -5289,6 +5687,19 @@ public class StatusWindow : Window
             if (config.PluginEnabled && entry.Enabled && maskLocatorMissing
                 && _glowWarmedMods.Add($"{entry.ModDirectory}\0masks\0{(maskAsGear ? 'g' : 's')}"))
                 compositor.TriggerRecomposite("mask-glow-warmup");
+
+            // The toe cap, which has no row of its own anywhere. It is an option in THIS group, but
+            // ResolveMaskPaths and ResolveActiveMaskAssets both strip it ("caps aren't masks"), so it appears
+            // in no mask list the user can see — and it is the one option that promotes the mod's skin
+            // overlays to cloth. A cap nobody remembered ticking therefore reshaped a whole look with nothing
+            // on screen to point at. Shown here so the tab that owns the group also owns this.
+            if (compositor.ToeCapWantedFor(entry.ModDirectory))
+            {
+                ImGui.TextDisabled(Strings.ColorPanel.ToeCapOn);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(Strings.ColorPanel.ToeCapOnTip);
+                ImGui.Separator();
+            }
 
             ColorTableEditor.DrawRows(maskScope, maskRows, usedRows, maskAsGear, maskShader,
                 maskShellMaterials,
@@ -5325,7 +5736,7 @@ public class StatusWindow : Window
                     // own pass, and a promoted mask gets a shell descriptor built from scratch — so the
                     // slider would be a control that saves and does nothing.
                     skinTintApplies: false,
-                    editingBinding: editingBinding);
+                    overrideActive: overrideActive);
                 maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
                     maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
                 ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
@@ -5337,9 +5748,9 @@ public class StatusWindow : Window
                 // first point at which we know an edit actually happened, so the binding never changes just
                 // from being looked at. Still preview-only; the stored binding on disk is untouched until
                 // "Update binding". Base metadata persists only when NOT editing a binding.
-                if (editingBinding)
+                if (overrideActive)
                 {
-                    designBindings.SetMaskRows(entry.ModDirectory, maskRows);
+                    editRouter.SetMaskRows(entry.ModDirectory, maskRows);
                 }
                 else
                 {
@@ -5358,17 +5769,17 @@ public class StatusWindow : Window
         }
 
         var optRows = activeOpt.ColorTableRows ?? [];
-        var ovrOptRows = editingBinding
-            ? designBindings.PeekOverrideRows(entry.ModDirectory, groupName, activeOpt.Name)
+        var ovrOptRows = overrideActive
+            ? editRouter.PeekOverrideRows(entry.ModDirectory, groupName, activeOpt.Name)
             : null;
-        var editRows = editingBinding ? DesignBindingService.CopyRows(ovrOptRows ?? optRows) : optRows;
+        var editRows = overrideActive ? DesignBindingService.CopyRows(ovrOptRows ?? optRows) : optRows;
 
         var scope = $"{entry.ModDirectory}_{groupName}_{activeOpt.Name}";
 
         // Layer/shader normally persist to metadata.json — but while a binding is being edited they go
         // into its gear override (live preview, saved on "Update binding"), like colour rows.
-        var gearOvrOpt = editingBinding && activeOpt.Overlays.Count > 0
-            ? designBindings.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
+        var gearOvrOpt = overrideActive && activeOpt.Overlays.Count > 0
+            ? editRouter.GetEditableGearOverride(entry.ModDirectory, groupName, activeOpt.Name, activeOpt.Overlays[0])
             : null;
         var modeBefore = EffectiveMode(activeOpt.Overlays, gearOvrOpt);
         var (gear, shader) = ColorTableEditor.EffectiveLayerShader(activeOpt.Overlays, gearOvrOpt);
@@ -5402,8 +5813,13 @@ public class StatusWindow : Window
             // would fold in half. Asked through the compositor so the two share one answer — unlike the
             // others this one depends on which body is worn right now, so the editor cannot derive it.
             bool needsUnmirrored = activeOpt.Overlays.Any(compositor.NeedsUnmirroredShell);
+            // The fourth reason: a toe cap selected in THIS mod promotes its skin overlays that can be cut
+            // into a shell, because the cap is geometry and the skin layer has none. Asked of the compositor
+            // for the same reason as the un-mirroring above - the answer is a Penumbra selection in a group
+            // the editor does not own, so it cannot work it out from what is selected here.
+            bool capWanted = compositor.ToeCapWantedFor(entry.ModDirectory);
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
-                                                        needsUnmirrored))
+                                                        needsUnmirrored, capWanted))
             {
                 // The shader comes from the shared predicate too, not a hardcoded character.shpk: a promoted
                 // whole-skin overlay actually renders on skin.shpk, and showing it as cloth here offered the
@@ -5468,7 +5884,7 @@ public class StatusWindow : Window
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             promotedToGear: promotedToGear,
             noShellReason: noShellReason,
-            editingBinding: editingBinding);
+            overrideActive: overrideActive);
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).
@@ -5492,12 +5908,12 @@ public class StatusWindow : Window
             // Install the edited rows as the binding's live override at the first point we know an edit
             // happened, so the binding never changes just from being drawn. Preview only — the stored
             // binding is written on "Update binding".
-            if (editingBinding && !resetOpt)
-                designBindings.SetOverrideRows(entry.ModDirectory, groupName, activeOpt.Name, editRows);
+            if (overrideActive && !resetOpt)
+                editRouter.SetOverrideRows(entry.ModDirectory, groupName, activeOpt.Name, editRows);
             // NOT on a reset — see the simple-mod path: the reset already rewrote activeOpt in place.
-            if (!editingBinding && !resetOpt)
+            if (!overrideActive && !resetOpt)
                 activeOpt.ColorTableRows = editRows;
-            if (!editingBinding || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+            if (!overrideActive || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) RecompositeForOverlay(entry, "mode-change");
             // Rows only — see the simple-mod path above.
@@ -5537,7 +5953,9 @@ public class StatusWindow : Window
             }
             ImGui.EndCombo();
         }
-        bool binding = designBindings.IsOverrideActiveFor(entry.ModDirectory);
+        // The router, not the binding service: Bodies is global config that NEITHER a binding nor a preset
+        // captures, so the warning belongs wherever the rest of the panel is previewing rather than saving.
+        bool binding = editRouter.HasOverride(entry.ModDirectory);
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cp.BodiesTip + (binding ? cp.BodiesGlobalSuffix : ""));
 
@@ -5765,7 +6183,7 @@ public class StatusWindow : Window
         // Only now that the base really was restored: a design binding keeps its OWN captured
         // Layer/Shader/colours for this option and re-imposes them on every apply, so the restore would
         // look like nothing happened while that override survives. Other designs keep theirs.
-        designBindings.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
+        editRouter.ClearOptionOverride(entry.ModDirectory, groupName, option?.Name);
 
         // Descriptor Index paths may differ from the edited ones, so the cached row scans are stale.
         foreach (var k in _indexRowCache.Keys.Where(k => k.StartsWith(entry.SidecarRoot)).ToList())
