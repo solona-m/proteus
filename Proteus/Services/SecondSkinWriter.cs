@@ -54,6 +54,22 @@ public sealed class SecondSkinLayer
     public float NippleSmoothStrength { get; init; }
 
     /// <summary>
+    /// How far this layer's cloth spans the gluteal cleft instead of following the body into it
+    /// (0 = off, which is the default and every existing shell's behaviour; 1 = a flat span).
+    /// <para/>
+    /// The same construction as <see cref="BustBridgeStrength"/> on the same shape — two lobes with a
+    /// recessed midline — and it runs as its own solve rather than sharing the bust's, because the two
+    /// sit on opposite sides of the body with their own axes. Measured on a real body the cleft dishes
+    /// 39mm at its deepest against the cleavage's 11mm, so it is the larger of the two features.
+    /// <para/>
+    /// Seeded differently, and that difference is the whole reason this is not simply the bust pass with
+    /// other bone names: the breast bones are a symmetric PAIR whose influence misses the sternum, while
+    /// the hip is ONE midline bone that covers the cheeks, the cleft and the crotch together. See
+    /// <c>HipBone</c> and <c>Facing</c>.
+    /// </summary>
+    public float CleftBridgeStrength { get; init; }
+
+    /// <summary>
     /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
     /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
     /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
@@ -828,19 +844,27 @@ public static class SecondSkinWriter
         // as well is the defect that put the garment inside the skin: two relaxes over two different meshes
         // cannot agree, and measured on a real capture they disagreed by 2-3.3mm. `NippleSmoothStrength`
         // survives on the layer as the DECLARATION — the body pass builds its coverage union from it.
-        var bridgeLayers = layers.Where(l => l.BustBridgeStrength > 0f).ToList();
-        float bridgeStrength = bridgeLayers.Count == 0 ? 0f : bridgeLayers.Max(l => l.BustBridgeStrength);
+        // ONE DEFINITION PER FEATURE, not one shared by both. They are separate passes over separate parts
+        // of the body, and each one's coverage gate has to be the union of the layers that asked for THAT
+        // pass. Sharing a single union let a cleft layer with no coverage map (which legitimately means
+        // "paints everything") widen the BUST's gate to the whole bust region — moving cloth under
+        // garments whose mods never ticked the bust bridge at all.
         const float smoothStrength = 0f;
-        SecondSkinLayer? bridgeDef = null;
-        if (bridgeLayers.Count > 0)
+        var bustLayers  = layers.Where(l => l.BustBridgeStrength > 0f).ToList();
+        var cleftLayers = layers.Where(l => l.CleftBridgeStrength > 0f).ToList();
+        float bridgeStrength = bustLayers.Count  == 0 ? 0f : bustLayers.Max(l => l.BustBridgeStrength);
+        float cleftStrength  = cleftLayers.Count == 0 ? 0f : cleftLayers.Max(l => l.CleftBridgeStrength);
+
+        SecondSkinLayer? MakeDef(List<SecondSkinLayer> ls, float bust, float cleft, string what)
         {
+            if (ls.Count == 0) return null;
             // A spanning layer with no coverage map paints everything, so the union is everything and the
             // gate falls away — which is what a null Coverage already means downstream.
-            var sized = bridgeLayers.Where(l => l.Coverage != null && l.CoverageWidth > 0 && l.CoverageHeight > 0)
-                                    .ToList();
+            var sized = ls.Where(l => l.Coverage != null && l.CoverageWidth > 0 && l.CoverageHeight > 0)
+                          .ToList();
             byte[]? union = null;
             int uw = 0, uh = 0;
-            if (sized.Count == bridgeLayers.Count && sized.Count > 0)
+            if (sized.Count == ls.Count && sized.Count > 0)
             {
                 uw = sized[0].CoverageWidth; uh = sized[0].CoverageHeight;
                 if (sized.All(l => l.CoverageWidth == uw && l.CoverageHeight == uh
@@ -854,22 +878,36 @@ public static class SecondSkinWriter
                     }
                 }
             }
-            bridgeDef = new SecondSkinLayer
+            diag?.Invoke($"bust bridge: one {what} solve for {ls.Count} layer(s) — span {bust:0.##}, "
+                       + $"cleft {cleft:0.##}, smooth {smoothStrength:0.##}, coverage "
+                       + (union == null ? "union unavailable — spanning every seeded vertex"
+                                        : $"{uw}x{uh} union"));
+            return new SecondSkinLayer
             {
                 MaterialName = "/bridge.mtrl",       // never emitted; this carries coverage and strength only
                 Coverage = union,
                 CoverageWidth = union == null ? 0 : uw,
                 CoverageHeight = union == null ? 0 : uh,
-                BustBridgeStrength = bridgeStrength,
+                BustBridgeStrength = bust,
                 NippleSmoothStrength = smoothStrength,
+                CleftBridgeStrength = cleft,
             };
-            diag?.Invoke($"bust bridge: one solve for {bridgeLayers.Count} chest layer(s) — span "
-                       + $"{bridgeStrength:0.##}, smooth {smoothStrength:0.##}, coverage "
-                       + (union == null ? "union unavailable — spanning every bust vertex" : $"{uw}x{uh} union"));
         }
-        // Per SOURCE MESH, so every layer of this host reuses the one answer.
-        var bridgePlans = new Dictionary<(Source, int), BustBridgePlan?>();
+
+        var bridgeDef = MakeDef(bustLayers, bridgeStrength, 0f, "chest");
+        var cleftDef  = MakeDef(cleftLayers, 0f, cleftStrength, "cleft");
+        // Per SOURCE MESH AND PER FEATURE SET, so every layer of this host that asked for the same thing
+        // reuses the one answer — and a layer that asked for something else does not inherit it.
+        //
+        // Keyed on what the layer wants, not on the mesh alone, because the settings are per MOD and two
+        // mods on one host legitimately differ. Under a mesh-only key the first layer to arrive decided
+        // for all of them: a bust-only layer cached a bust-only plan and the cleft layer behind it was
+        // then displaced by a bust bridge it never asked for and got no cleft at all. Worse, a
+        // nipple-smoothing layer passes the gate, solves with both strengths at zero, gets null back and
+        // caches THAT — and a cached null reads as a hit, so every later layer on that mesh did nothing.
+        var bridgePlans = new Dictionary<(Source, int, bool, bool), BustBridgePlan?>();
         var bridgeWeights = new Dictionary<(Source, int), float[]?>();
+        var cleftWeightCache = new Dictionary<(Source, int), float[]?>();
         if (authoredCaps is { Count: > 0 } && anyLayerWantsCap)
         {
             // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
@@ -1526,28 +1564,69 @@ public static class SecondSkinWriter
                 // Asked of the HOST's shared definition, not this layer's, so every spanning layer gets the
                 // same answer and the stack keeps its order. Memoised per mesh; only the first layer to
                 // reach a mesh pays for it.
-                float[]? bustWeights = null;
-                if (bridgeDef != null && cov is { } cl && (cl.BustBridgeStrength > 0f || cl.NippleSmoothStrength > 0f))
+                // What THIS layer asked for. The nipple smooth is not here: it is a body-side pass now, so
+                // a layer that only smooths nipples must not drag the chest solve in behind it — that is
+                // what produced the null plan that poisoned the mesh for everyone after it.
+                bool wantBust  = bridgeDef != null && cov is { } cl  && cl.BustBridgeStrength  > 0f;
+                bool wantCleft = cleftDef  != null && cov is { } cl2 && cl2.CleftBridgeStrength > 0f;
+
+                float[]? bustWeights = null, cleftWeights = null;
+                if (wantBust)
                 {
                     if (!bridgeWeights.TryGetValue((src, m), out bustWeights))
-                        bridgeWeights[(src, m)] = bustWeights = MeshBustWeights(src, m, vc, decl, vbo, bs);
+                        bridgeWeights[(src, m)] = bustWeights =
+                            MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR]);
                 }
-                var capTris = wantCap || bustWeights != null
+                // The cleft is its own seed on its own mesh: the bust rides the torso and this rides the
+                // legs part, so on a real body the two never even reach the same call.
+                if (wantCleft)
+                {
+                    if (!cleftWeightCache.TryGetValue((src, m), out cleftWeights))
+                        cleftWeightCache[(src, m)] = cleftWeights =
+                            MeshRegionWeights(src, m, vc, decl, vbo, bs, [HipBone], [ThighBoneL, ThighBoneR]);
+                }
+                var capTris = wantCap || bustWeights != null || cleftWeights != null
                     ? MeshTriangles(src, srcSubIdx, srcSubCount)
                     : null;
 
                 // The solve itself, deferred until BuildVerbatim has normalised the mesh's UVs onto the
                 // tile the coverage map is indexed over — it cannot run before that and must not run twice.
                 Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null;
-                if (bustWeights is { } bw && bridgeDef != null)
+                if (bustWeights != null || cleftWeights != null)
+                {
+                    // The definitions travel with the weights they belong to: the weights are only
+                    // non-null when their own definition was, so capturing the pair keeps that provable
+                    // inside the lambda instead of asserted.
+                    var bw = bustWeights;   var bDef = bridgeDef;
+                    var cw = cleftWeights;  var cDef = cleftDef;
+                    var key = (src, m, bw != null, cw != null);
                     bridge = (bPos, bNrm, bTris, bUv) =>
                     {
-                        if (bridgePlans.TryGetValue((src, m), out var cached)) return cached;
-                        var plan = BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
-                                                   CoveredVertices(bUv, bridgeDef, bPos.Length), smoothStrength);
-                        bridgePlans[(src, m)] = plan;
+                        if (bridgePlans.TryGetValue(key, out var cached)) return cached;
+
+                        // Each pass is gated by the union of the layers that asked for IT, so the two
+                        // coverages are resolved separately even though one mesh carries both.
+                        var plan = bw == null || bDef == null ? null
+                            : BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
+                                              CoveredVertices(bUv, bDef, bPos.Length), smoothStrength);
+
+                        if (cw != null && cDef != null)
+                        {
+                            // Facing is gated on a COPY: the weights are memoised per mesh and shared by
+                            // every layer of the host, so gating in place would have the second layer read
+                            // a seed the first had already cut down.
+                            var backOnly = (float[])cw.Clone();
+                            GateToBackFacing(backOnly, bNrm);
+                            plan = MergePlans(plan,
+                                BustBridgeSolve(bPos, bNrm, bTris, backOnly, cleftStrength, diag,
+                                                CoveredVertices(bUv, cDef, bPos.Length),
+                                                smoothStrength: 0f, fillGap: false));
+                        }
+
+                        bridgePlans[key] = plan;
                         return plan;
                     };
+                }
                 // Which side of the body each vertex is on, when the conversion needs to tell them apart.
                 // Read from the triangles rather than each vertex's own X, because the midline vertices —
                 // exactly the ones a mirrored layout puts a UV seam through — sit at x ~ 0 and can't answer
@@ -3405,6 +3484,7 @@ public static class SecondSkinWriter
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
                     NippleSmoothStrength = def.NippleSmoothStrength,
+                    CleftBridgeStrength = def.CleftBridgeStrength,
                 };
 
             // The cap's rim, pushed to this layer's offset, ready for the shell meshes below to close
@@ -3449,6 +3529,7 @@ public static class SecondSkinWriter
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
                     NippleSmoothStrength = def.NippleSmoothStrength,
+                    CleftBridgeStrength = def.CleftBridgeStrength,
                 };
 
             byte[]? footprint = null;
@@ -3644,6 +3725,7 @@ public static class SecondSkinWriter
                     ToeCapStrength = def.ToeCapStrength,
                     BustBridgeStrength = def.BustBridgeStrength,
                     NippleSmoothStrength = def.NippleSmoothStrength,
+                    CleftBridgeStrength = def.CleftBridgeStrength,
                 };
             }
 
@@ -4581,21 +4663,39 @@ public static class SecondSkinWriter
     }
 
     /// <summary>
-    /// Per-vertex bust-region weight for one mesh — how much of the vertex is skinned to
-    /// <see cref="BustBoneL"/> / <see cref="BustBoneR"/>, clamped to 1. Null when this mesh's bone table
-    /// names neither, which is every mesh but the torso and is the cheap early-out the pass leans on.
+    /// Per-vertex region weight for one mesh — how much of the vertex is skinned to any of
+    /// <paramref name="bones"/>, clamped to 1. Null when this mesh's bone table names none of them, which
+    /// is every mesh but the one carrying that part of the body and is the cheap early-out these passes
+    /// lean on.
     /// <para/>
     /// The bones, not the art, define the region: they are on the game's own skeleton, so every body a
-    /// shell can be cut from has them, and their influence is exactly both breasts and the cleavage
-    /// between them. A painted map would have to be redrawn per UV space and would drift from the mesh; a
-    /// protrusion heuristic would find the belly and the shoulder blades as readily as the bust.
+    /// shell can be cut from has them. A painted map would have to be redrawn per UV space and would drift
+    /// from the mesh; a protrusion heuristic would find the belly and the shoulder blades as readily as
+    /// the bust.
+    /// <para/>
+    /// A LIST rather than the original pair, because the regions differ in shape. The bust is two bones
+    /// whose influence misses the sternum, so the gap between them IS the cleavage and the region grows
+    /// into it. The buttocks are one midline bone (<see cref="HipBone"/>) covering both cheeks and the
+    /// cleft together — and covering the crotch on the other side of the body, which is why a seed taken
+    /// from bones alone is not enough down there and the caller adds a facing gate.
     /// <para/>
     /// Weights are read the same way <see cref="TryReadLod0Geometry(byte[], out float[], out float[],
     /// out int[], out (string, float)[][], out float[], bool, bool, Func{string, bool})"/> reads them:
     /// through the mesh's own bone table into the model's names, because a blend index means nothing
     /// outside the table it was written against.
     /// </summary>
-    private static float[]? MeshBustWeights(Source src, int m, ushort vc, VElem[] decl, uint[] vbo, byte[] bs)
+    /// <param name="losesTo">
+    /// Bones that, where they outweigh <paramref name="bones"/>, mean the vertex belongs to them instead.
+    /// <para/>
+    /// The hip's influence does not stop at the buttocks — it runs down into the upper thighs, and there
+    /// the surface either side of the midline is two LEGS rather than two cheeks. Spanned, that lays a
+    /// sheet across the gap between them: measured, 192 vertices moved by up to 68mm through the 120mm
+    /// below the cleft. Bounding it by height would need a number per body; asking which bone owns the
+    /// vertex is the same question the skeleton already answers, and it cut exactly those bands and
+    /// nothing else.
+    /// </param>
+    private static float[]? MeshRegionWeights(Source src, int m, ushort vc, VElem[] decl, uint[] vbo,
+                                              byte[] bs, string[] bones, string[]? losesTo = null)
     {
         var s = src.S;
         int mo = src.MeshStart + m * 36;
@@ -4604,18 +4704,25 @@ public static class SecondSkinWriter
         if (meshBoneTbl >= src.BoneTables.Length) return null;
         var boneTbl = src.BoneTables[meshBoneTbl];
 
-        // Which LOCAL indices are the bust bones. Resolved once per mesh, before any vertex is touched:
-        // a torso is thousands of vertices and every other mesh of the body would otherwise pay for the
-        // whole per-vertex scan to learn it has no bust bones at all.
-        int localL = -1, localR = -1;
-        for (int i = 0; i < boneTbl.Length; i++)
+        // Which LOCAL indices are the region's bones. Resolved once per mesh, before any vertex is
+        // touched: a torso is thousands of vertices and every other mesh of the body would otherwise pay
+        // for the whole per-vertex scan to learn it has none of them.
+        Span<bool> isRegion = stackalloc bool[256];
+        Span<bool> isRival = stackalloc bool[256];
+        bool anyBone = false;
+        for (int i = 0; i < boneTbl.Length && i < 256; i++)
         {
             if (boneTbl[i] >= src.BoneNames.Length) continue;
             var nm = src.BoneNames[boneTbl[i]];
-            if (localL < 0 && string.Equals(nm, BustBoneL, StringComparison.OrdinalIgnoreCase)) localL = i;
-            else if (localR < 0 && string.Equals(nm, BustBoneR, StringComparison.OrdinalIgnoreCase)) localR = i;
+            foreach (var want in bones)
+                if (string.Equals(nm, want, StringComparison.OrdinalIgnoreCase))
+                { isRegion[i] = true; anyBone = true; break; }
+            if (losesTo == null) continue;
+            foreach (var rival in losesTo)
+                if (string.Equals(nm, rival, StringComparison.OrdinalIgnoreCase))
+                { isRival[i] = true; break; }
         }
-        if (localL < 0 && localR < 0) return null;
+        if (!anyBone) return null;
 
         VElem? wEl = null, iEl = null;
         foreach (var el in decl)
@@ -4633,14 +4740,15 @@ public static class SecondSkinWriter
             int wa = src.Vb + (int)vbo[we.Stream] + k * bs[we.Stream] + we.Offset;
             int ia = src.Vb + (int)vbo[ie.Stream] + k * bs[ie.Stream] + ie.Offset;
             if (wa < 0 || ia < 0 || wa + nInf > s.Length || ia + nInf > s.Length) continue;
-            float acc = 0f;
+            float acc = 0f, rival = 0f;
             for (int q = 0; q < nInf; q++)
             {
                 int local = s[ia + q];
-                if (local != localL && local != localR) continue;
-                acc += s[wa + q] / 255f;
+                if (local >= 256) continue;
+                if (isRegion[local]) acc += s[wa + q] / 255f;
+                else if (isRival[local]) rival += s[wa + q] / 255f;
             }
-            if (acc <= 0f) continue;
+            if (acc <= 0f || rival >= acc) continue;
             outW[k] = MathF.Min(1f, acc);
             any = true;
         }
@@ -7412,6 +7520,96 @@ public static class SecondSkinWriter
     private const string BustBoneL = "j_mune_l", BustBoneR = "j_mune_r";
 
     /// <summary>
+    /// The base-skeleton hip bone. One bone, on the midline, and its influence covers the buttocks, the
+    /// cleft between them, AND the crotch on the other side of the body — so unlike the bust it cannot
+    /// seed a region on its own. See <see cref="Facing"/>.
+    /// <para/>
+    /// The thighs (<c>j_asi_a_l</c>/<c>j_asi_a_r</c>) were the obvious alternative, being a symmetric pair
+    /// like the breast bones, and they are not usable for the cleft: measured on a real body they reach
+    /// the buttock band with about a fifth of the hip's weight (80 against 678 in total), because the
+    /// lobes either side of the cleft are hip-weighted and the thigh bones are for the legs below them.
+    /// </summary>
+    private const string HipBone = "j_kosi";
+
+    /// <summary>
+    /// The two thigh roots. Not a seed — the cleft's lobes are hip-weighted, and measured on a real body
+    /// these reach the buttock band with about a fifth of the hip's weight. They are the RIVAL: where they
+    /// outweigh the hip the vertex is on a leg, and the surface either side of the midline there is two
+    /// legs rather than two cheeks. See <c>MeshRegionWeights</c>'s losesTo.
+    /// </summary>
+    private const string ThighBoneL = "j_asi_a_l", ThighBoneR = "j_asi_a_r";
+
+    /// <summary>
+    /// How close to the midpoint between a band's two apexes the surface has to come before that band
+    /// counts as a cleft rather than a gap, as a fraction of the apexes' own separation. See the check in
+    /// <c>ChordTarget</c>.
+    /// <para/>
+    /// Generous on purpose: it is separating "there is a floor here" from "there is nothing here at all",
+    /// not measuring how deep the floor is. A quarter of the way in from either side leaves plenty of room
+    /// for a cleavage whose sternum sits well off-centre.
+    /// </summary>
+    private const float ChordMidlineGap = 0.25f;
+
+
+    /// <summary>
+    /// Two solves over one mesh, as a single plan. The chest and the cleft are separate passes — opposite
+    /// sides of the body, each with its own axis — but the writer applies ONE plan per mesh.
+    /// <para/>
+    /// Safe to add because both weld the same positions with <see cref="WeldByPosition"/>, so their node
+    /// numbering is identical, and because both only ever raise along their own outward axis: the regions
+    /// do not overlap, and if a body ever put them within reach of each other the sum is still the two
+    /// displacements the pair asked for rather than one silently replacing the other.
+    /// </summary>
+    private static BustBridgePlan? MergePlans(BustBridgePlan? a, BustBridgePlan? b)
+    {
+        if (a == null) return b;
+        if (b == null) return a;
+        if (a.Delta.Length != b.Delta.Length || a.NodeWeight.Length != b.NodeWeight.Length) return a;
+
+        var delta = new Vec3[a.Delta.Length];
+        for (int i = 0; i < delta.Length; i++)
+            delta[i] = new Vec3(a.Delta[i].X + b.Delta[i].X,
+                                a.Delta[i].Y + b.Delta[i].Y,
+                                a.Delta[i].Z + b.Delta[i].Z);
+
+        // Reshading is gated on this, so a node either pass touched has to report non-zero or it keeps a
+        // normal describing the surface it no longer has.
+        var weight = new float[a.NodeWeight.Length];
+        for (int n = 0; n < weight.Length; n++) weight[n] = MathF.Max(a.NodeWeight[n], b.NodeWeight[n]);
+
+        return new BustBridgePlan
+        {
+            Delta = delta, NodeOf = a.NodeOf, NodeWeight = weight, NodeNormal = a.NodeNormal,
+        };
+    }
+
+    /// <summary>
+    /// Zero the seed wherever the surface does not face backwards. Needed because <see cref="HipBone"/>
+    /// covers the front and the back of the body at the same height: without this the cleft pass would
+    /// take the crotch with it and span across both at once.
+    /// <para/>
+    /// Read off each vertex's own normal against model +Z, which is forward for every body a shell is cut
+    /// from — verified on this geometry, where the crotch sits at z &gt; 0 and the buttocks at z &lt; 0.
+    /// Deliberately a LOCAL test rather than a plane through the body: the surface curves round the hip,
+    /// so any single dividing plane either clips the cheeks or admits the thigh.
+    /// <para/>
+    /// Back only, because that is the only direction anything asks for. A front-facing twin belongs with
+    /// the pass that needs it rather than here in advance of one.
+    /// </summary>
+    private static void GateToBackFacing(float[] w, Vec3[] nrm)
+    {
+        // A band around edge-on is dropped rather than assigned to a side: a vertex on the hip's flank
+        // belongs to neither feature, and handing it to one makes that region's boundary run through a
+        // place where the surface is still turning.
+        const float Edge = 0.15f;
+        for (int i = 0; i < w.Length && i < nrm.Length; i++)
+        {
+            if (w[i] <= 0f) continue;
+            if (nrm[i].Z >= -Edge) w[i] = 0f;
+        }
+    }
+
+    /// <summary>
     /// Fewest welded nodes the region needs before a bridge is attempted. A handful of stray bust-weighted
     /// vertices — the top of a mesh that mostly holds the arms — describe no cleavage to span.
     /// </summary>
@@ -7547,9 +7745,10 @@ public static class SecondSkinWriter
     /// <param name="bust">Per-vertex region weight in 0..1, already gated on coverage.</param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
-        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f)
+        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
+        bool fillGap = true)
         => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
-                           smoothStrength);
+                           smoothStrength, fillGap);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>
@@ -7558,7 +7757,8 @@ public static class SecondSkinWriter
     /// </remarks>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
-        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f)
+        Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
+        bool fillGap = true)
     {
         int vc = pos.Length;
         if (vc == 0 || (strength <= 0f && smoothStrength <= 0f) || bust.Length < vc) return null;
@@ -7630,7 +7830,7 @@ public static class SecondSkinWriter
         // full-weight vertices sitting directly beside zeroed ones. Adjacent vertices then differed by the
         // whole displacement instead of by a fifth of it, and the garment's edge came out as a row of
         // centimetre-high spikes. Excluded first, the ramp runs down to the garment's own edge properly.
-        var nW = BustRegionWeights(seed, cut, adj, nodeCount, log);
+        var nW = BustRegionWeights(seed, cut, adj, nodeCount, log, fillGap);
 
         int region = 0;
         for (int n = 0; n < nodeCount; n++) if (nW[n] > 0f) region++;
@@ -7650,14 +7850,17 @@ public static class SecondSkinWriter
             return null;
         }
 
-        // The direction the span runs in — breast to breast. Everything is spanned ACROSS this and along
-        // nothing else, because the cleavage is a saddle and an isotropic relax settles on it unchanged.
+        // The direction the span runs in — lobe to lobe. Everything is spanned ACROSS this and along
+        // nothing else, because a cleft is a saddle and an isotropic relax settles on it unchanged.
         var across = PrincipalAcross(start, nW, nodeCount, outSeed);
         if (across is not { } lateral)
         {
             log?.Invoke("bust bridge: SKIPPED, the region has no principal direction across the chest");
             return null;
         }
+
+        var everywhere = new float[nodeCount];
+        Array.Fill(everywhere, 1f);
 
         // Up the body: the widest spread in the plane across the span direction, measured over the WHOLE
         // MESH rather than over the region.
@@ -7668,13 +7871,49 @@ public static class SecondSkinWriter
         // final axis by the same amount. The mesh it is cut from is a torso: hips to neck, unambiguously
         // taller than it is deep, and its principal direction is the body's own vertical whatever shape
         // the garment on it happens to be.
-        var everywhere = new float[nodeCount];
-        Array.Fill(everywhere, 1f);
         var upward = PrincipalAcross(start, everywhere, nodeCount, lateral);
         if (upward is not { } vertical)
         {
             log?.Invoke("bust bridge: SKIPPED, the region has no vertical extent");
             return null;
+        }
+
+        // THE TWO CAN COME BACK SWAPPED, and the region's own proportions are what say so. The span
+        // direction is taken from the REGION's principal direction, which is only lobe-to-lobe while the
+        // region is wider than it is tall. A bust is: two breasts side by side. The buttocks are not —
+        // measured on a real body that region runs 330mm from waist to thigh against 150mm across — so the
+        // PCA returned the body's vertical, the pass spanned from one HEIGHT to another, both apexes came
+        // back on the same cheek 22mm apart in y, and the cleft was left exactly as deep as it was found.
+        //
+        // Detected against MODEL +Y, which is up on every body a shell can be cut from. That is an
+        // assumption, and it is deliberately the only one here — it is the same fact <see cref="Facing"/>
+        // already rests on for +Z, and the alternatives were tried and do not work:
+        //
+        //  - comparing the region's extent along the two axes is tautological. PCA returns the longest
+        //    direction BY CONSTRUCTION, so the region is always longer along `lateral` than across it and
+        //    the test can never fire.
+        //  - the whole mesh's own principal direction is not a vertical either. On a fixture wider than it
+        //    is tall it returns the lateral, and a guard built on it swapped the axes on the BUST — eight
+        //    tests, every one of them right to fail.
+        if (MathF.Abs(lateral.Y) > 0.7f)
+        {
+            // The honest span direction is then the remaining axis: perpendicular to up and to out.
+            var side = Normalize(new Vec3(1f * outSeed.Z - 0f * outSeed.Y,
+                                          0f * outSeed.X - 0f * outSeed.Z,
+                                          0f * outSeed.Y - 1f * outSeed.X));
+            if (side is { } acrossBody)
+            {
+                log?.Invoke("bust bridge: the region's principal direction is the body's own vertical, so "
+                          + "it is taller than it is wide — spanning across the body instead");
+                lateral = acrossBody;
+                var reUp = PrincipalAcross(start, everywhere, nodeCount, lateral);
+                if (reUp is not { } v2)
+                {
+                    log?.Invoke("bust bridge: SKIPPED, no vertical remains once the axes are swapped");
+                    return null;
+                }
+                vertical = v2;
+            }
         }
 
         // THE DIRECTION CLOTH ACTUALLY MOVES: perpendicular to both, i.e. straight out from the chest.
@@ -7936,8 +8175,19 @@ public static class SecondSkinWriter
     /// comes from graph distance to the region's own edge, which is uniform across bodies and does not
     /// depend on how an author happened to paint weights.
     /// </summary>
+    /// <param name="fillGap">
+    /// Whether the region grows into the gap between its two largest lobes. TRUE for the bust, where the
+    /// two breast bones miss the sternum and that gap IS the cleavage.
+    /// <para/>
+    /// FALSE for the gluteal cleft, and the difference is a property of the skeleton rather than a
+    /// preference. One midline hip bone covers both cheeks and the cleft floor between them, so the seed
+    /// arrives already connected and there is no gap to find: measured on a real body it comes to one
+    /// component of 1473 nodes against scraps of 64 and 54, at every facing threshold from 0 to 0.75, with
+    /// 465 midline nodes already inside it. Left on, the fill picks the largest scrap as the second lobe
+    /// and bridges the region to somewhere arbitrary.
+    /// </param>
     private static float[] BustRegionWeights(bool[] seed, bool[] excluded, List<int>[] adj, int nodeCount,
-                                             Action<string>? log)
+                                             Action<string>? log, bool fillGap = true)
     {
         // The lobes: connected components of the seed.
         var comp = new int[nodeCount];
@@ -7967,7 +8217,13 @@ public static class SecondSkinWriter
         // Two lobes or more: fill between the two LARGEST. Anything smaller is a stray scrap of weighting,
         // not a breast, and bridging to one would drag the region somewhere arbitrary.
         var largest = Enumerable.Range(0, sizes.Count).OrderByDescending(i => sizes[i]).Take(2).ToList();
-        if (largest.Count == 2)
+        if (!fillGap)
+        {
+            log?.Invoke($"bust bridge: {sizes.Count} lobe(s) "
+                      + $"[{string.Join(", ", sizes.OrderByDescending(s => s).Take(4))}] — "
+                      + "seed used as the region, no gap to fill");
+        }
+        else if (largest.Count == 2)
         {
             var dA = GapDistance(comp, largest[0], seed, adj, nodeCount);
             var dB = GapDistance(comp, largest[1], seed, adj, nodeCount);
@@ -8271,12 +8527,39 @@ public static class SecondSkinWriter
             if (lat[n] < midLat) { if (h0[n] > hL[b]) { hL[b] = h0[n]; latL[b] = lat[n]; } }
             else                 { if (h0[n] > hR[b]) { hR[b] = h0[n]; latR[b] = lat[n]; } }
         }
-        int usable = 0;
+        // Is there any surface BETWEEN the two apexes? A cleft has a floor; a gap does not, and the
+        // difference is not visible from the apexes alone.
+        //
+        // Below the buttocks the body stops being one surface and becomes two legs, and a band there still
+        // has a furthest-back point on each side — one per thigh. Spanned, that lays a sheet across the
+        // gap between them: measured on a real body, 235 vertices moved by up to 68mm through the 160mm
+        // below the cleft, which is a skirt rather than a bridge. The bust never showed this because a
+        // sternum is always there between the breasts.
+        var midHole = new float[bands];
+        for (int b = 0; b < bands; b++) midHole[b] = float.MaxValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            int b = Math.Clamp((int)((ver[n] - loV) / bandH), 0, bands - 1);
+            if (hL[b] <= float.MinValue || hR[b] <= float.MinValue) continue;
+            float mid = (latL[b] + latR[b]) * 0.5f;
+            midHole[b] = MathF.Min(midHole[b], MathF.Abs(lat[n] - mid));
+        }
+
+        int usable = 0, holed = 0;
+        var hole = new bool[bands];
         for (int b = 0; b < bands; b++)
         {
             have[b] = hL[b] > float.MinValue && hR[b] > float.MinValue && latR[b] - latL[b] > 1e-6f;
+            // Measured as a fraction of THIS band's own apex separation, so it means the same thing on a
+            // cleavage and a cleft and needs no length in model units.
+            if (have[b] && midHole[b] > (latR[b] - latL[b]) * ChordMidlineGap)
+            { have[b] = false; hole[b] = true; holed++; }
             if (have[b]) usable++;
         }
+        if (holed > 0)
+            log?.Invoke($"bust bridge: {holed} band(s) have no surface between their two sides — a gap, "
+                      + "not a cleft, and nothing to span there");
         if (usable == 0)
         {
             log?.Invoke("bust bridge: no band has a forward-most point on BOTH sides — nothing to span");
@@ -8285,9 +8568,14 @@ public static class SecondSkinWriter
 
         // A band with a lobe on only one side (the very top and bottom of the region, where the cleavage
         // has run out) borrows its neighbour's, so the span tapers away instead of ending in a step.
+        //
+        // A band with a HOLE does not, and the distinction is the whole point of tracking them apart. The
+        // first is a cleft that has run out and wants a taper; the second is open space, and borrowing a
+        // chord there is what carried the span down into the gap between the legs even after those bands
+        // had been recognised.
         for (int b = 0; b < bands; b++)
         {
-            if (have[b]) continue;
+            if (have[b] || hole[b]) continue;
             int near = -1;
             for (int d = 1; d < bands && near < 0; d++)
             {
@@ -8435,7 +8723,7 @@ public static class SecondSkinWriter
 
             // Every mesh but the torso names neither bust bone and drops out for the cost of one walk
             // over a handful of names — the same early-out the shell's pass leans on.
-            var bust = MeshBustWeights(src, m, vc, decl, vbo, bs);
+            var bust = MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR]);
             if (bust == null) continue;
 
             ushort subIdx = BitConverter.ToUInt16(s, mo + 10), subCount = BitConverter.ToUInt16(s, mo + 12);

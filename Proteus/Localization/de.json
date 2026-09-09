@@ -283,6 +283,22 @@
     "message": "Aktiviere dies für Stoff über der Brust.\nProteus baut ein Kleidungsstück als Kopie des Körpers und gibt die Brustwarze daher als\nSpitze wieder — was wie Farbe statt wie Stoff wirkt. Damit wird der Stoff darüber in die\numgebende Rundung eingeglättet.\nNOCH NICHT FERTIG: Dies glättet das Kleidungsstück; der Körper darunter behält seine eigene\nForm und kann bei enger Passform durchscheinen. Das Glätten der Haut dazu folgt noch.",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "Gesäßfalte überspannen",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "Aktiviere dies für Stoff über dem Gesäß.\nProteus baut ein Kleidungsstück als Kopie des Körpers, folgt der Falte also bis ganz hinein —\ndas wirkt aufgemalt statt getragen. Damit spannt sich der Stoff darüber, so wie\nechter Stoff es tut.\nDieselbe Idee wie beim Dekolleté, aber die Falte ist viel tiefer — fange niedrig an.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "Spannstärke",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "Wie weit sich der Stoff der flachen Spannung nähert. 1.00 hebt die Falte auf die Höhe der\nBacken daneben, was meist zu viel ist — niedrigere Werte erhalten mehr davon.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Zeile kopieren",
     "description": ""

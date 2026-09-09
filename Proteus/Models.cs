@@ -140,6 +140,34 @@ public class ProteusMetadata
     public float? SmoothNipplesStrength { get; set; }
 
     /// <summary>
+    /// Whether this mod's shells should span the gluteal cleft instead of following the body into it.
+    /// Null or false = off, which is what every existing mod keeps.
+    /// <para/>
+    /// The same complaint <see cref="BustBridge"/> answers, on the other side of the body and a good deal
+    /// larger: measured on a real body the cleft dishes 43mm at its deepest against a cleavage's 11mm.
+    /// Cloth that follows it into that reads as painted on rather than worn.
+    /// <para/>
+    /// The region is found from the skeleton (<c>j_kosi</c>, bounded where the thigh bones take the vertex
+    /// over) and each shell's own coverage, so there is nothing to paint. Body surfaces only.
+    /// <para/>
+    /// Whole-mod for the same two reasons <see cref="BustBridge"/> is, and independent of it: a mod may
+    /// want either.
+    /// </summary>
+    [JsonPropertyName("CleftBridge")]
+    public bool? CleftBridge { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="CleftBridge"/> relaxes toward the flat span (0–1, default 1). Lower values
+    /// keep more of the cleft; 0 disables the pass without clearing the tick.
+    /// <para/>
+    /// Worth turning down further than the bust's. At full strength the deepest point of the cleft comes
+    /// all the way up to the chord between the two cheeks — 69mm on the body this was measured against —
+    /// which is what a bridge IS, but reads as a shelf long before it reads as cloth.
+    /// </summary>
+    [JsonPropertyName("CleftBridgeStrength")]
+    public float? CleftBridgeStrength { get; set; }
+
+    /// <summary>
     /// Geometry this pack contributes unconditionally — used when it declares no
     /// <see cref="ContentGroups"/>. See <see cref="ContentPiece"/>.
     /// </summary>

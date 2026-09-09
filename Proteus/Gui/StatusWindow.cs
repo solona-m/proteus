@@ -5757,7 +5757,8 @@ public class StatusWindow : Window
             // The fifth: this MOD's bust bridge, which is geometry for the same reason a cap is. Read off
             // the sidecar rather than the option — it is one decision about the whole pack, and the tick
             // that sets it lives in the whole-mod part of Advanced.
-            bool bridgeWanted = entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true;
+            bool bridgeWanted = entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true
+                             || entry.Metadata.CleftBridge == true;
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
                                                         needsUnmirrored, capWanted, bridgeWanted))
             {
@@ -5964,7 +5965,8 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.SmoothNipplesTip);
 
-        if (!smooth) return;
+        if (smooth)
+        {
         float smoothStrength = md.SmoothNipplesStrength ?? 1f;
         ImGui.SetNextItemWidth(150);
         if (ImGui.DragFloat($"{cs.SmoothNipplesStrength}##smoothnipplesstr_{entry.ModDirectory}",
@@ -5976,6 +5978,34 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.SmoothNipplesStrengthTip);
+        }
+
+        // The same decision as the bust bridge on the other side of the body, so it sits with it rather
+        // than anywhere near the leg controls: what the user is choosing is how this garment treats the
+        // body's two clefts, and they are one thought.
+        bool cleft = md.CleftBridge == true;
+        if (ImGui.Checkbox($"{cs.CleftBridge}##cleftbridge_{entry.ModDirectory}", ref cleft))
+        {
+            md.CleftBridge = cleft ? true : null;
+            if (!cleft) md.CleftBridgeStrength = null;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "cleft-bridge");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.CleftBridgeTip);
+
+        if (!cleft) return;
+        float cleftStrength = md.CleftBridgeStrength ?? 1f;
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat($"{cs.CleftBridgeStrength}##cleftbridgestr_{entry.ModDirectory}",
+                ref cleftStrength, 0.01f, 0f, 1f, "%.2f"))
+        {
+            md.CleftBridgeStrength = Math.Abs(cleftStrength - 1f) < 0.001f ? null : cleftStrength;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "cleft-bridge");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.CleftBridgeStrengthTip);
     }
 
     /// <summary>

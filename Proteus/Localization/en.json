@@ -283,6 +283,22 @@
     "message": "Turn this on for cloth over the chest.\nProteus builds a garment as a copy of the body, so it reproduces the nipple as a point —\nwhich reads as body paint rather than fabric. With this on, the fabric over it is smoothed\ninto the surrounding curve.\nNOT FINISHED YET: this smooths the garment, and the body underneath keeps its own shape, so\non a close fit it can still show through. Smoothing the skin to match is still to come.",
     "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.CleftBridge.Label": {
+    "message": "Span the buttocks",
+    "description": "Whole-mod authoring tick in Advanced, beside the bust bridge. Keep it short - it sits in a narrow panel."
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "Turn this on for cloth over the seat.\nProteus builds a garment as a copy of the body, so it follows the cleft all the way in —\nwhich reads as painted on rather than worn. With this on, the fabric spans across it the\nway real cloth does.\nThe same idea as spanning the cleavage, on a much deeper cleft, so start the amount low.",
+    "description": "Tooltip for the tick above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "Span amount",
+    "description": "Slider label shown only while the tick above is on. The same control as the bust bridge's, so reuse that translation."
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\ncheeks either side, which is usually too much — lower values keep more of it.",
+    "description": "Tooltip for the slider above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copy row",
     "description": "Button caption. Appears in the colour-table editor window."

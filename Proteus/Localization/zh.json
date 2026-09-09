@@ -283,6 +283,22 @@
     "message": "为覆盖胸部的布料开启此项。\nProteus 以身体的副本来构建衣物，因此会把乳头也照样做成尖点——\n这正是它看起来像彩绘而非布料的原因。开启后，其上的布料会被平滑，\n融入周围的曲面。\n尚未完成：这只平滑衣物，下方的身体仍保留原本的形状，因此贴身的衣物仍可能透出。\n配套平滑皮肤的功能将在之后加入。",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "布料横跨臀缝",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "为覆盖臀部的布料开启此项。\nProteus 以身体的副本来构建服装，因此会一直陷入臀缝——\n看起来像画上去的而不是穿上的。开启后，布料会像真实布料那样\n横跨过去。\n与横跨乳沟是同一思路，但臀缝深得多，请从较低的程度开始。",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "跨越程度",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "布料向平坦跨越靠拢的程度。1.00 会把臀缝抬到两侧臀部的高度，\n通常过头了——较低的值会保留更多。",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "复制行",
     "description": ""

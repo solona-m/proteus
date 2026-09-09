@@ -283,6 +283,22 @@
     "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에 유두도 뾰족한 그대로 재현됩니다.\n그래서 천이 아니라 칠한 것처럼 보입니다. 이 설정을 켜면 그 위의 천이 주변 곡면에\n자연스럽게 이어지도록 매끄러워집니다.\n아직 완성되지 않았습니다. 매끄러워지는 것은 의상뿐이고 아래의 몸은 원래 형태를 유지하므로,\n밀착되는 의상에서는 비쳐 보일 수 있습니다. 피부까지 맞추는 작업은 이후에 추가됩니다.",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "엉덩이 사이를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "엉덩이를 덮는 천에는 이 옵션을 켜세요.\nProteus는 의상을 신체의 복사본으로 만들기 때문에 골을 끝까지 따라갑니다 —\n입은 것이 아니라 그려 넣은 것처럼 보이죠. 켜면 실제 천처럼 그 위를\n가로질러 이어집니다.\n가슴 사이를 잇는 것과 같은 개념이지만 골이 훨씬 깊으니 낮은 값부터 시작하세요.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "잇는 정도",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "천이 평평하게 이어지는 정도. 1.00은 골을 양옆 엉덩이 높이까지 들어 올리는데,\n대개 지나칩니다 — 낮은 값일수록 원래 형태가 남습니다.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "행 복사",
     "description": ""
