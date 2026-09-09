@@ -267,6 +267,22 @@
     "message": "为覆盖胸部的布料开启此项。\nProteus 以身体的副本来构建衣物，因此默认会顺着身体陷进乳沟——\n这正是它看起来像彩绘而非布料的原因。真实的布料会横跨这段间隙：\n一条连接两侧乳房最前端的直线。\n开启后，两乳之间的布料会松弛到那条直线上。任何位置都不会被向内拉，\n因此不会切入身体，乳房本身也保持原有形状。\n若领口已把罩杯之间的布料裁掉，则没有可横跨的部分，\n此项不起作用。",
     "description": ""
   },
+  "Colors.SmoothFold.Label": {
+    "message": "抚平双腿之间",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "平滑程度",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "褶皱被抚平的程度。1.00 会让它完全融入周围的曲面；较低的值会保留更多。",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "为覆盖胯部的布料开启此项。\nProteus 以身体的副本来构建服装，因此会照搬双腿之间的褶皱——\n看起来像画在身上而不是穿上的。开启后，会先把那里的皮肤抚平到周围的\n曲面，这样从中裁出的服装也就平滑了。\n此项改动的是身体本身，因此会同时作用于身上的每一件服装。",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "平滑乳头",
     "description": ""

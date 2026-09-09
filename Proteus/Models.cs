@@ -168,6 +168,28 @@ public class ProteusMetadata
     public float? CleftBridgeStrength { get; set; }
 
     /// <summary>
+    /// Whether this mod's shells should flatten the crotch fold instead of following it in. Null or false
+    /// = off, which is what every existing mod keeps.
+    /// <para/>
+    /// A BODY pass, like <see cref="SmoothNipples"/> and unlike the two bridges: flattening lowers as well
+    /// as raises, so the body is republished and the shell cut from the result. Raising alone leaves the
+    /// ridge that runs down the middle of the fold, which is most of what shows through cloth.
+    /// <para/>
+    /// The region is found from the skeleton (<c>j_kosi</c>, bounded where the thighs take over) and
+    /// narrowed to a corridor whose width comes from the crotch's own — so nothing is painted and nothing
+    /// is a number in model units. Body surfaces only.
+    /// </summary>
+    [JsonPropertyName("SmoothFold")]
+    public bool? SmoothFold { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="SmoothFold"/> region is flattened toward the surface either side of it
+    /// (0–1, default 1). Lower values keep more of the fold; 0 disables the pass without clearing the tick.
+    /// </summary>
+    [JsonPropertyName("SmoothFoldStrength")]
+    public float? SmoothFoldStrength { get; set; }
+
+    /// <summary>
     /// Geometry this pack contributes unconditionally — used when it declares no
     /// <see cref="ContentGroups"/>. See <see cref="ContentPiece"/>.
     /// </summary>

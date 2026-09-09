@@ -267,6 +267,22 @@
     "message": "Turn this on for cloth over the chest.\nProteus builds a garment as a copy of the body, so by default it follows the body into\nthe cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\nthe gap: a straight line between the furthest-forward point of each breast.\nWith this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\npulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\nWhere a neckline has cut the cloth away between the cups there is nothing to span, and\nthis does nothing.",
     "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.SmoothFold.Label": {
+    "message": "Smooth between the legs",
+    "description": "Checkbox in the colour-table editor's Advanced section."
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "Smoothing amount",
+    "description": "Control label for the slider beside the checkbox above. The same control as the nipple smoothing's, so reuse that translation."
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "How far the fold is smoothed. 1.00 flattens it into the surrounding curve; lower values keep\nmore of it.",
+    "description": "Tooltip for the slider above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "Turn this on for cloth over the crotch.\nProteus builds a garment as a copy of the body, so it reproduces the fold between the legs —\nwhich reads as body paint rather than fabric. With this on, the skin there is smoothed out to\nthe surrounding curve first, so the garment cut from it comes out smooth too.\nThis changes the body, so it applies to every garment worn at once.",
+    "description": "Tooltip for the checkbox above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Smooth the nipple",
     "description": "Checkbox in the colour-table editor's Advanced section."

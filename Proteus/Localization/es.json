@@ -267,6 +267,22 @@
     "message": "Activa esto para tela sobre el pecho.\nProteus construye una prenda como una copia del cuerpo, así que por defecto sigue al\ncuerpo hacia el escote, que es lo que hace que se lea como pintura y no como tela. La tela\nreal tiende el hueco: una línea recta entre el punto más adelantado de cada pecho.\nCon esto activado, la tela entre los pechos se relaja hasta esa línea. Nunca se tira de\nnada hacia dentro, así que no puede cortar el cuerpo, y los pechos conservan su forma.\nDonde un escote ya ha recortado la tela entre las copas no hay nada que tender, y esto\nno hace nada.",
     "description": ""
   },
+  "Colors.SmoothFold.Label": {
+    "message": "Suavizar entre las piernas",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "Cantidad de suavizado",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "Cuánto se suaviza el pliegue. 1.00 lo funde del todo en la curva de alrededor; los valores\nbajos conservan más.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "Activa esto para tela sobre la entrepierna.\nProteus construye una prenda como una copia del cuerpo, así que reproduce el pliegue entre las piernas —\nlo que parece pintado en el cuerpo en vez de puesto. Con esto, la piel de ahí se suaviza primero hasta\nla curva de alrededor, de modo que la prenda cortada de ella también sale lisa.\nEsto cambia el cuerpo, así que se aplica a todas las prendas que lleves a la vez.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Suavizar el pezón",
     "description": ""

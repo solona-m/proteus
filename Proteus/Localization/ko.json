@@ -267,6 +267,22 @@
     "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에, 기본적으로 몸을 따라 가슴골로\n들어갑니다. 그래서 천이 아니라 칠한 것처럼 보입니다. 실제 천은 그 틈을 가로지릅니다.\n양쪽 가슴에서 가장 앞으로 나온 지점을 잇는 직선으로요.\n이 설정을 켜면 가슴 사이의 천이 그 선까지 이완됩니다. 안쪽으로 당겨지는 일은 없으므로\n몸을 파고들 수 없고, 가슴 자체의 형태도 그대로 유지됩니다.\n네크라인이 이미 컵 사이의 천을 잘라낸 곳에는 이을 것이 없으므로,\n이 설정은 아무 일도 하지 않습니다.",
     "description": ""
   },
+  "Colors.SmoothFold.Label": {
+    "message": "다리 사이를 매끄럽게",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "매끄럽게 하는 정도",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "주름을 얼마나 매끄럽게 할지. 1.00은 주변 곡면에 완전히 녹여 넣고, 낮은 값일수록 원래\n형태가 남습니다.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "사타구니를 덮는 천에는 이 옵션을 켜세요.\nProteus는 의상을 신체의 복사본으로 만들기 때문에 다리 사이의 주름까지 그대로 옮깁니다 —\n천이라기보다 몸에 그려 넣은 것처럼 보이죠. 켜면 그곳의 피부를 먼저 주변 곡면까지\n매끄럽게 펴므로, 거기서 잘라낸 의상도 매끄럽게 나옵니다.\n이 옵션은 신체 자체를 바꾸므로 동시에 착용한 모든 의상에 적용됩니다.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "유두를 매끄럽게",
     "description": ""
