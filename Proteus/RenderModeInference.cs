@@ -108,14 +108,20 @@ public static class RenderModeInference
     /// GEOMETRY: it rebuilds the toes as one rounded shape, and only a shell has geometry to rebuild.
     /// Painted into the skin the option simply does nothing, which is what it looked like — a whole
     /// composite with no second-skin phase at all, because every active overlay was a skin layer.</item>
-    /// <item><paramref name="bustBridge"/> — this overlay asks to span the cleavage, which is also
-    /// GEOMETRY, and for the same reason. Unlike <paramref name="toeCapWanted"/> this is the overlay's own
-    /// setting rather than a mod-wide Penumbra selection, so it promotes only the option that asked and
-    /// needs no scan to discover.</item>
+    /// <item><paramref name="chestGeometry"/> — this overlay's mod asks to span the cleavage or to smooth
+    /// the nipple, both of which are GEOMETRY, and for the same reason. Read off the mod's sidecar rather
+    /// than the option: each is one decision about the whole pack, and the ticks that set them live in the
+    /// whole-mod part of Advanced.</item>
     /// </list>
-    /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
-    /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
-    /// override the pin, and the two callers learn that from different places.
+    /// A hand-pinned overlay is normally never promoted — the user's choice outranks the inference — and
+    /// <paramref name="chestGeometry"/> is the one thing that overrides the pin. Pinning an overlay to Skin
+    /// and then asking for a chest pass is a contradiction rather than a preference: a skin layer is
+    /// painted into the body's textures and has no geometry to span or relax, so honouring the pin means
+    /// silently doing nothing at all. That is exactly how it presented — every flag set correctly, the mod
+    /// listed in the log as spanning, and no visible change anywhere.
+    /// <para/>
+    /// <paramref name="pinned"/> is passed in rather than read off the descriptor because a design binding
+    /// can override the pin, and the two callers learn that from different places.
     /// <para/>
     /// <paramref name="canShell"/> is the veto neither reason can override: it is false when the overlay
     /// paints something no shell can be cut from — gear, an accessory, a weapon, a mount — as opposed to the
@@ -130,17 +136,25 @@ public static class RenderModeInference
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
         IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
-        bool needsUnmirroredShell = false, bool toeCapWanted = false, bool bustBridge = false)
+        bool needsUnmirroredShell = false, bool toeCapWanted = false, bool chestGeometry = false)
         => layer == OverlayLayer.Skin
-        && !pinned
         && canShell
         // A print is never promoted: it has no coverage of its own to cut a shell from, and a shell would
         // take it away from the very layers it exists to colour — they are composited into the skin, and it
         // would no longer be there to reach them. It qualifies on every route otherwise, which is what makes
         // this load-bearing rather than defensive: toeCapWanted promotes every shellable skin overlay in the
         // look, so one toe cap would turn an opaque full-body print into a rainbow bodysuit.
+        //
+        // chestGeometry does NOT override this, unlike the pin. A pinned skin overlay that wants a chest
+        // pass is a contradiction and promoting it is what the author meant; a PRINT that wants one is a
+        // print, and giving it a shell of its own both invents a rainbow bodysuit and strips the colour
+        // from the layers it was there to tint. The chest pass still reaches the garment through whichever
+        // of the mod's layers is a real surface.
         && !IsPrint(rows ?? [])
-        && (aboveGear || needsUnmirroredShell || toeCapWanted || bustBridge || HasCloth(rows ?? []));
+        // The pin holds for every inferred route, and yields only to an explicit request for chest
+        // geometry — see the summary.
+        && (chestGeometry
+            || (!pinned && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []))));
 
     /// <summary>
     /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same
