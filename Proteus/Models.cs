@@ -33,6 +33,16 @@ public class ProteusMetadata
     public List<OverlayOptionGroup>? OptionGroups { get; set; }
 
     /// <summary>
+    /// Starter looks the author ships with the pack: named sets of option ticks, colours and layer
+    /// settings a wearer can apply in one click. A pack with a dozen groups is otherwise a blank page.
+    /// <para/>
+    /// These are read-only in the UI — editing one forks a copy into the user's own store — so a mod
+    /// update can change them without silently rewriting anything the wearer saved.
+    /// </summary>
+    [JsonPropertyName("Presets")]
+    public List<ModPreset>? Presets { get; set; }
+
+    /// <summary>
     /// Per-row color table overrides (rows 1–16, matching FFXIV colorset numbering).
     /// Written by both mod authors and the Proteus UI. Drives diffuse tint and emissive.
     /// </summary>
@@ -208,6 +218,64 @@ public enum NormalMode
     Replace,
 }
 
+/// <summary>
+/// How one colour-table row's art combines with what this mod has already painted on the material.
+/// <para/>
+/// Every mode but <see cref="Paint"/> makes the row a PRINT: it carries no coverage of its own and is
+/// clipped to what its own mod's other layers painted here, so a rainbow on a fishnet colours the threads
+/// and leaves the holes as skin. On bare skin a print paints nothing at all — there is nothing to print
+/// on — which is why selecting one on its own shows nothing.
+/// <para/>
+/// Per SUB-ROW for the same reason <see cref="ColorTableSubRowPreset.LightResponse"/> is: the index
+/// texture sends each region to its own cell, so one part of a print can multiply into the fabric's
+/// shadows while the part beside it screens over its highlights.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RowBlend
+{
+    /// <summary>
+    /// Alpha-over: lay this row's art on top of whatever is beneath, by its own alpha. The default, and
+    /// what every overlay did before blend modes existed — a row left alone composites bit for bit as it
+    /// always has.
+    /// </summary>
+    Paint,
+
+    /// <summary>
+    /// <c>dst · src</c>. Darkens: white is invisible, black is opaque. The mode a printed pattern wants,
+    /// because ink on cloth takes the cloth's own shading with it.
+    /// <para/>
+    /// It can ONLY darken, so a bright print reads as almost nothing on black fabric — that is what
+    /// <see cref="Screen"/> is for.
+    /// </summary>
+    Multiply,
+
+    /// <summary>
+    /// <c>1 − (1−dst)(1−src)</c>. Lightens: black is invisible, white is opaque. The complement of
+    /// <see cref="Multiply"/>, and the mode for a bright print on dark fabric.
+    /// </summary>
+    Screen,
+
+    /// <summary>
+    /// <see cref="Multiply"/> in the fabric's shadows, <see cref="Screen"/> in its highlights, pivoting at
+    /// mid grey. Preserves the fabric's contrast rather than flattening it toward one end, which is what
+    /// makes a print read as dyed INTO the weave instead of laid over it.
+    /// </summary>
+    Overlay,
+
+    /// <summary>
+    /// <c>min(1, dst + src)</c>. Purely additive — the mode for something emitting rather than covering,
+    /// like a sheen or a dusting of glitter. Saturates to white where the fabric is already bright.
+    /// </summary>
+    Add,
+
+    /// <summary>
+    /// Take this row's colour outright, keeping the fabric's shape. The print supplies the colour and the
+    /// fabric supplies the alpha, so the threads come out flat print-coloured and the holes stay skin.
+    /// Loses the fabric's own shading, which is the difference between this and <see cref="Multiply"/>.
+    /// </summary>
+    Replace,
+}
+
 /// <summary>Describes one set of overlay textures targeting one or more materials.</summary>
 public class OverlayDescriptor
 {
@@ -327,6 +395,30 @@ public class OverlayDescriptor
     /// </summary>
     [JsonPropertyName("SkinToneMask")]
     public float? SkinToneMask { get; set; }
+
+    /// <summary>
+    /// Sidecar-relative path to a greyscale body-UV map marking where the shell should be webbed into a
+    /// smooth cap instead of following the body contour — the toes, for hosiery. White = fully capped,
+    /// black = untouched, grey = blended, so the cap fades into the rest of the shell.
+    /// <para/>
+    /// A shell is a displaced copy of the body, so without this a stocking sleeves each toe individually
+    /// and reads as a toe sock. Real sheer hosiery bridges the gaps: the toes sit inside one rounded cap
+    /// and only show through faintly. Gear layers only — the skin layer paints, it doesn't cut geometry.
+    /// <para/>
+    /// Set this only when ONE option needs a cap and its siblings don't. The usual way is the reserved
+    /// "Toe Cap" entry in the mod's Masks group (see SidecarDiscoveryService.ToeCapOptionName): authored
+    /// as Masks/Toe Cap.png and toggled by the wearer like any other mask, applying to all of the mod's
+    /// shells. This key wins where both are present; omit (null) for no cap from this option.
+    /// </summary>
+    [JsonPropertyName("ToeCap")]
+    public string? ToeCap { get; set; }
+
+    /// <summary>
+    /// How far the <see cref="ToeCap"/> region inflates toward its smoothed envelope (0–1, default 1).
+    /// Lower values keep more of the underlying toe shape; 0 disables the pass without removing the map.
+    /// </summary>
+    [JsonPropertyName("ToeCapStrength")]
+    public float? ToeCapStrength { get; set; }
 
     /// <summary>
     /// UV space the overlay PNGs were painted for: "bibo", "gen3", or "gen2".
@@ -1087,6 +1179,8 @@ public static class ContentGlowRow
         && s.Emissive == 0f && s.Opacity == 0
         && s.SphereMap == null && s.SphereIntensity == null
         && s.Roughness == null && s.Metalness == null
+        && s.Tile == null && s.TileStrength == null
+        && s.TileScaleU == null && s.TileScaleV == null
         && s.LightResponse == null && !s.HideInLight;
 }
 
@@ -1181,6 +1275,17 @@ public class ColorTableSubRowPreset
     public int Opacity { get; set; } = 0;
 
     /// <summary>
+    /// How this region's art combines with what this mod already painted here. <see cref="RowBlend.Paint"/>
+    /// (the default) is the ordinary alpha-over every row did before this existed; anything else makes the
+    /// region a PRINT, clipped to its own mod's other layers and invisible on bare skin.
+    /// <para/>
+    /// <see cref="Opacity"/> doubles as the print's strength: it scales the coverage this row is composited
+    /// with, and that coverage is one of the two terms the clip is built from.
+    /// </summary>
+    [JsonPropertyName("Blend")]
+    public RowBlend Blend { get; set; } = RowBlend.Paint;
+
+    /// <summary>
     /// How much of this region's glow the scene's light takes away, 0–1. Zero (the default) is the
     /// unconditional glow every row had before: it emits the same in a lit street as in a cellar.
     /// One is fully light-sensitive — the emissive scales by <c>1 − LightResponse × light</c>, so it
@@ -1237,6 +1342,39 @@ public class ColorTableSubRowPreset
     [JsonPropertyName("Metalness")]
     public float? Metalness { get; set; }
 
+    /// <summary>
+    /// Gear layer only. Which fabric weave tiles over this row — a slice of the game's shared
+    /// chara/common/texture/tile_norm_array.tex (0–63). Needs no texture of our own.
+    /// <para/>
+    /// Null means no weave, which is what a second skin wants by default: the vanilla weave reads as a
+    /// grainy texture real skin doesn't have, so <see cref="Proteus.Services.GearMaterialWriter"/> switches
+    /// it off on every row it builds. Note that zero is a REAL tile here, not "none" — unlike
+    /// <see cref="SphereMap"/>, whose slice 0 is the game's own empty entry.
+    /// </summary>
+    [JsonPropertyName("Tile")]
+    public int? Tile { get; set; }
+
+    /// <summary>Gear layer only. How strongly the weave shows (0–1). Null means full strength. Has no effect
+    /// without a <see cref="Tile"/>: strength on its own would revive whatever weave the material already
+    /// names, which is nothing anyone picked.</summary>
+    [JsonPropertyName("TileStrength")]
+    public float? TileStrength { get; set; }
+
+    /// <summary>
+    /// Gear layer only. How many times the weave repeats across the surface, per UV axis — the diagonal of
+    /// the row's tile transform. Null keeps the game's default of 16; higher is finer. Like
+    /// <see cref="TileStrength"/>, it has no effect without a <see cref="Tile"/>.
+    /// <para/>
+    /// Two scalars rather than a pair or a Vector2 because System.Text.Json ignores public FIELDS, so a
+    /// ValueTuple property would serialise into metadata.json as an empty object.
+    /// </summary>
+    [JsonPropertyName("TileScaleU")]
+    public float? TileScaleU { get; set; }
+
+    /// <inheritdoc cref="TileScaleU"/>
+    [JsonPropertyName("TileScaleV")]
+    public float? TileScaleV { get; set; }
+
     /// <summary>Copy. Every member is a value type or an immutable string, so the shallow copy IS a deep
     /// one — and MemberwiseClone keeps that true automatically when a property is added later, which a
     /// hand-written field list would not.</summary>
@@ -1251,6 +1389,12 @@ public class ColorTableSubRow
     public float DiffuseB { get; set; } = 1f;
     public float Emissive { get; set; } = 0f;
     public int   Opacity  { get; set; } = 0;
+
+    /// <summary>
+    /// How this row composites. Defaults to <see cref="RowBlend.Paint"/> so a default-constructed row — the
+    /// fallback for every index cell an author never configured — keeps the old alpha-over behaviour.
+    /// </summary>
+    public RowBlend Blend { get; set; } = RowBlend.Paint;
 }
 
 /// <summary>Runtime pair of sub-rows A and B for one color table row pair.</summary>
@@ -1258,6 +1402,135 @@ public class ColorTableRowOverride
 {
     public ColorTableSubRow A { get; set; } = new();
     public ColorTableSubRow B { get; set; } = new();
+}
+
+/// <summary>Where a preset came from, which decides whether it can be edited in place.</summary>
+public enum PresetSource
+{
+    /// <summary>Saved by the wearer, in this machine's presets.json. Editable.</summary>
+    User,
+
+    /// <summary>Shipped by the mod author in the sidecar's metadata.json. Read-only — editing forks
+    /// a User copy, so a mod update is free to change what it ships.</summary>
+    Pack,
+}
+
+/// <summary>
+/// A named look for ONE mod: which of its Penumbra options are ticked, what colour every option's
+/// colorset carries, the layer/glow settings, and the overlay stacking order. Apply it, save over it,
+/// send it to someone.
+/// <para/>
+/// This is deliberately the portable subset of <see cref="Services.ProteusModBinding"/> — a design
+/// binding's per-mod slice — and nothing more. <c>Enabled</c> and <c>Priority</c> are left out because
+/// both are properties of a Penumbra collection rather than of a look: a preset that switched mods on
+/// and shuffled the composite stack would be a whole-setup tool, which is what design bindings already
+/// are.
+/// <para/>
+/// Named <c>ModPreset</c> rather than <c>Preset</c> because three neighbours already claim the shorter
+/// word — <see cref="GearSettingsPreset"/>, <see cref="ColorTableRowPreset"/>, and Penumbra's own
+/// <c>SettingPreset</c>.
+/// </summary>
+public class ModPreset
+{
+    /// <summary>
+    /// Empty until something stores this preset, and deliberately NOT a fresh Guid: a property
+    /// initializer runs on every deserialization, so a pack preset written with no id — which is how
+    /// every authored one is written — came back with a DIFFERENT random id each time its
+    /// <c>metadata.json</c> was re-read. The pin written when you picked it then pointed at an id no
+    /// listing had a frame later, and the picker fell back to "No preset" over a look that was applied
+    /// and staying applied.
+    /// <para/>
+    /// Empty is what lets <c>PresetService.PackId</c> derive the stable id instead. Nothing else needs a
+    /// default: a preset only enters the user's store through <c>PresetService.Add</c>, which mints one.
+    /// </summary>
+    [JsonPropertyName("Id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("Name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("Description")]
+    public string? Description { get; set; }
+
+    /// <summary>Not serialised for user presets — it is implied by which store the preset lives in, and
+    /// a shared file must not be able to claim it came from a pack.</summary>
+    [JsonIgnore]
+    public PresetSource Source { get; set; } = PresetSource.User;
+
+    /// <summary>
+    /// The mod this look was made for, by display name and author. Carried so an import can say "this
+    /// was made for X" instead of quietly applying a stranger's colours.
+    /// <para/>
+    /// Names, not the mod directory: a directory is a Penumbra folder name local to one machine, and the
+    /// same pack routinely sits under different ones. Penumbra's own share format drops identifiers and
+    /// keeps names for exactly this reason.
+    /// </summary>
+    [JsonPropertyName("ModName")]
+    public string? ModName { get; set; }
+
+    [JsonPropertyName("ModAuthor")]
+    public string? ModAuthor { get; set; }
+
+    [JsonPropertyName("CreatedUtc")]
+    public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+
+    [JsonPropertyName("LastEditUtc")]
+    public DateTime LastEditUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Penumbra option group name → the option names ticked in it.</summary>
+    [JsonPropertyName("Options")]
+    public Dictionary<string, List<string>> Options { get; set; } = new();
+
+    [JsonPropertyName("Colors")]
+    public OverlayColorOverride Colors { get; set; } = new();
+
+    [JsonPropertyName("Gear")]
+    public OverlayGearOverride Gear { get; set; } = new();
+
+    /// <summary>The overlay tab/stack order top-first (<see cref="Configuration.ModStackEntry"/> keys).
+    /// Empty means the preset never restacked anything, so the global order stands.</summary>
+    [JsonPropertyName("StackOrder")]
+    public List<string> StackOrder { get; set; } = new();
+
+    /// <summary>
+    /// An independent copy. Everything that hands a preset out — applying one into the live override
+    /// bag, forking a pack preset, importing — goes through here, so no two owners can ever end up
+    /// sharing a row list and editing the live look through the saved copy.
+    /// </summary>
+    public ModPreset Clone() => new()
+    {
+        Id          = Id,
+        Name        = Name,
+        Description = Description,
+        Source      = Source,
+        ModName     = ModName,
+        ModAuthor   = ModAuthor,
+        CreatedUtc  = CreatedUtc,
+        LastEditUtc = LastEditUtc,
+        Options     = Options.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value)),
+        Colors      = CloneColors(Colors),
+        Gear        = CloneGear(Gear),
+        StackOrder  = new List<string>(StackOrder),
+    };
+
+    private static OverlayColorOverride CloneColors(OverlayColorOverride o) => new()
+    {
+        Top     = o.Top?.Select(r => r.Clone()).ToList(),
+        Mask    = o.Mask?.Select(r => r.Clone()).ToList(),
+        Options = o.Options?.ToDictionary(
+            g => g.Key,
+            g => g.Value.ToDictionary(x => x.Key, x => x.Value.Select(r => r.Clone()).ToList())),
+    };
+
+    private static OverlayGearOverride CloneGear(OverlayGearOverride o) => new()
+    {
+        Top     = o.Top?.Clone(),
+        Mask    = o.Mask?.Clone(),
+        Content = o.Content?.Clone(),
+        Options = o.Options?.ToDictionary(
+            g => g.Key,
+            g => g.Value.ToDictionary(x => x.Key, x => x.Value.Clone())),
+    };
 }
 
 /// <summary>

@@ -249,6 +249,15 @@ public class CompositorService : IDisposable
         => secondSkin.UnwearableContent.TryGetValue(modDir, out var why) ? why : null;
 
     /// <summary>
+    /// Why <paramref name="modDir"/> is switched on and yet contributed nothing to the last composite, or
+    /// null when it contributed something. See <see cref="InertReason"/> — this is the tier above
+    /// <see cref="GetUnwearableContentReason"/>: that one explains a pack whose pieces cannot be worn,
+    /// this one explains a mod that never got as far as having pieces to try.
+    /// </summary>
+    public InertReason? GetInertReason(string modDir)
+        => _inertMods.TryGetValue(modDir, out var r) ? r : null;
+
+    /// <summary>
     /// What the last shell build published, split by kind, for the drawn check after the redraw — see
     /// <see cref="SchedulePostRedrawShellCheck"/>.
     ///
@@ -425,6 +434,21 @@ public class CompositorService : IDisposable
     // Same, for mods whose skin overlay WANTED a shell but has no body surface to put one on (a face
     // overlay). Separate set so the two notices don't suppress each other on a mod that does both.
     private readonly ConcurrentDictionary<string, byte> _noShellMods = new(StringComparer.OrdinalIgnoreCase);
+    // Overlay/material pairs already reported (this session) as painting nothing, keyed by the reason
+    // too so a DIFFERENT cause on the same overlay still gets said. Being erased is usually permanent —
+    // a mask that covers the art, an opacity slider at the bottom of its range — and a composite runs on
+    // every gear change, so without this one hidden overlay writes a log line every few seconds.
+    private readonly ConcurrentDictionary<string, byte> _erasureReported = new(StringComparer.Ordinal);
+    // Mods already reported (this session) as contributing nothing at all, keyed by the whole reason and
+    // not just the mod — for the reason above. Someone who ticks an option and STILL sees nothing, now
+    // because the pack is for another race, has to be told the second thing; keying on the mod alone
+    // swallows exactly the half that would have helped them.
+    private readonly ConcurrentDictionary<string, byte> _inertReported = new(StringComparer.Ordinal);
+    // Why each enabled mod contributed nothing to the last composite — see ExplainInertMods. Published as
+    // one whole-dictionary swap, the same contract SecondSkinService.UnwearableContent uses, so the UI
+    // never reads a half-built map. Normally empty.
+    private volatile IReadOnlyDictionary<string, InertReason> _inertMods =
+        new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
     // Body type and char codes that the last completed Recomposite() actually composited for.
     // Used by the post-redraw check to detect switches and trigger a corrective composite.
     private volatile string? _lastCompositedBodyType;
@@ -1828,6 +1852,75 @@ public class CompositorService : IDisposable
     public void SetActiveStackOverride(IReadOnlyDictionary<string, List<string>>? overrideByMod)
         => _stackOverride = overrideByMod;
 
+    // ── Color override (presets) ───────────────────────────────────────────────
+    //
+    // A second channel of exactly the same shape, pushed by PresetService. It is kept separate rather
+    // than merged into the design binding's because the two have different lifetimes: a preset is pinned
+    // to one mod until the user unpins it or a design supersedes it, while a binding is adopted and
+    // dropped wholesale as designs come and go.
+    //
+    // Precedence is per MOD, not per channel: a preset pinned on mod X wins for X, and every other mod
+    // still follows the design binding. That is what MergeByMod below expresses, and it is applied at the
+    // single point where the composite snapshots these — so nothing downstream has to know two channels
+    // exist.
+
+    private volatile IReadOnlyDictionary<string, OverlayColorOverride>? _presetColorOverride;
+    private volatile IReadOnlyDictionary<string, OverlayGearOverride>?  _presetGearOverride;
+    private volatile IReadOnlyDictionary<string, List<string>>?         _presetStackOverride;
+
+    public void SetPresetColorOverride(IReadOnlyDictionary<string, OverlayColorOverride>? overrideByMod)
+        => _presetColorOverride = overrideByMod;
+
+    public void SetPresetGearOverride(IReadOnlyDictionary<string, OverlayGearOverride>? overrideByMod)
+        => _presetGearOverride = overrideByMod;
+
+    public void SetPresetStackOverride(IReadOnlyDictionary<string, List<string>>? overrideByMod)
+        => _presetStackOverride = overrideByMod;
+
+    /// <summary>
+    /// One dictionary with <paramref name="top"/>'s entries winning per mod. Returns the other side
+    /// outright when either is empty, so the ordinary case — no preset pinned anywhere, or no design
+    /// bound — allocates nothing at all.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, T>? MergeByMod<T>(
+        IReadOnlyDictionary<string, T>? top, IReadOnlyDictionary<string, T>? bottom)
+    {
+        if (top == null || top.Count == 0) return bottom;
+        if (bottom == null || bottom.Count == 0) return top;
+
+        var merged = new Dictionary<string, T>(bottom, StringComparer.OrdinalIgnoreCase);
+        foreach (var (mod, value) in top) merged[mod] = value;
+        return merged;
+    }
+
+    /// <summary>
+    /// The colour override the composite would actually use for this mod — a pinned preset's if there is
+    /// one, else the active design binding's, else null for "the mod's own metadata".
+    /// <para/>
+    /// Anything that captures the current look must read through here rather than its own channel, or it
+    /// records what it happens to own instead of what the player is looking at. That is exactly how
+    /// "Update binding" would otherwise silently drop a preset applied on top of a binding.
+    /// </summary>
+    public OverlayColorOverride? EffectiveColorOverrideFor(string modDir)
+    {
+        if (_presetColorOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _colorOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
+    /// <inheritdoc cref="EffectiveColorOverrideFor"/>
+    public OverlayGearOverride? EffectiveGearOverrideFor(string modDir)
+    {
+        if (_presetGearOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _gearOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
+    /// <inheritdoc cref="EffectiveColorOverrideFor"/>
+    public IReadOnlyList<string>? EffectiveStackOverrideFor(string modDir)
+    {
+        if (_presetStackOverride is { } p && p.TryGetValue(modDir, out var preset)) return preset;
+        return _stackOverride is { } d && d.TryGetValue(modDir, out var design) ? design : null;
+    }
+
     /// <summary>
     /// Apply the plugin's enabled state, both visually and in Penumbra.
     ///
@@ -2597,6 +2690,7 @@ public class CompositorService : IDisposable
         HashSet<string> maskShellMods,
         List<string> baseKeys,
         List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        HashSet<string> toeCapMods,
         bool skinOnly = false)
     {
         var sb = new System.Text.StringBuilder();
@@ -2644,6 +2738,14 @@ public class CompositorService : IDisposable
             sb.Append("maskasset:").Append(mod).Append('=')
               .Append(string.Join(",", maskAssetsByMod[mod].Select(a => $"{a.MaskPath}|{a.NormalPath}|{a.IndexPath}")))
               .Append('\n');
+
+        // The toe cap, which BOTH lines above are blind to: ResolveMaskPaths and ResolveActiveMaskAssets
+        // strip it ("caps aren't masks"), so for a mod whose overlays are already Gear — nothing left for
+        // the cap to promote — ticking or unticking it hashed identically to the published composite and an
+        // ambient trigger skipped the rebuild. Not skinOnly-gated: a cap promotes skin overlays to gear, so
+        // it moves the skin fingerprint too.
+        foreach (var mod in toeCapMods.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            sb.Append("cap:").Append(mod).Append('\n');
 
         // Shell-only for a mask-SHELL mod: its Masks colorset paints the shell's own material and nothing
         // else. Every skin consumer of maskRowsByMod already refuses those mods by name — the fallback-rows
@@ -2697,10 +2799,19 @@ public class CompositorService : IDisposable
         //
         // `gear:` above stays in either way: gear OVERLAYS are Proteus mods, and their coverage drives the
         // skin's ambient-occlusion pass. Only the equipped FFXIV items are gear-side.
+        //
+        // _humanPartModels is folded in on BOTH sides. It was omitted entirely — this called the four-arg
+        // overload while the redraw hook called the five-arg one — so changing face or hairstyle hashed
+        // identically to the published composite and an ambient trigger took the unchanged-inputs skip. The
+        // shell is cut from those meshes and they are passed straight to SecondSkinService.Build, so it kept
+        // the geometry of the PREVIOUS face with, as EquipSignature's own doc puts it, no event anywhere in
+        // the plugin that noticed. It stays in under skinOnly too: the face is a skin surface in its own
+        // right, and its material is composited beside the body's.
         sb.Append("equip:")
           .Append(skinOnly
-              ? EquipSignature(null, null, null, _bareBodyModels)
-              : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels, _bareBodyModels))
+              ? EquipSignature(null, null, null, _bareBodyModels, _humanPartModels)
+              : EquipSignature(_equippedPartModels, _equippedAccessoryModels, _equippedMetModels,
+                               _bareBodyModels, _humanPartModels))
           .Append('\n');
         sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
         sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
@@ -3177,8 +3288,8 @@ public class CompositorService : IDisposable
 
     /// <summary>
     /// The item ids of the hosts PROTEUS put on the player, or null for each we did not. Design matching
-    /// blanks these out of the live state so it compares the player's own choices
-    /// (<see cref="DesignBindingService.NeutralizeProteusOwnedState"/>).
+    /// retires these out of the comparison so it judges a design on the player's own choices
+    /// (<see cref="DesignBindingService.StripCarriers"/>).
     /// <para/>
     /// Keyed on what we actually injected, NOT on the feature toggle. The Emperor's New Ring is the
     /// standard invisible-ring glamour and the carrier glasses are an ordinary item — plenty of people
@@ -3195,9 +3306,47 @@ public class CompositorService : IDisposable
     /// DIFFERENT item (the Emperor's New Ring, Bracelets and Necklace share a model set, not a row id), so
     /// one id could not blank them all out of the compared state.</remarks>
     public IReadOnlyList<ulong> InjectedCarrierItemIds
-        => _injectedCarrierSlots
+        => _injectedCarrierSlots.Where(OurCarrierStillWorn)
             .Select(s => InvisibleRing.ResolveFor(Plugin.DataManager, log, s)?.ItemId)
             .Where(id => id != null).Select(id => id!.Value).ToList();
+
+    /// <summary>
+    /// The GLAMOURER slot names ("RFinger", "Wrists", …) we are currently borrowing for a carrier, as
+    /// opposed to the items sitting in them.
+    /// <para/>
+    /// Design matching needs both, and for different reasons. The ITEM ids rescue a design that CAPTURED a
+    /// carrier — saved while we were hosting, so it demands our ring. The SLOT names rescue the reverse: a
+    /// design saved with the player's own jewellery in a slot we have since borrowed. Their choice for that
+    /// slot is unknowable while we hold it, so it cannot decide the match either way — see
+    /// <see cref="DesignBindingService.StripCarriers"/>.
+    /// <para/>
+    /// Config-backed like <see cref="_injectedCarrierSlots"/> itself, so this answers correctly at boot,
+    /// before any composite has run.
+    /// </summary>
+    public IReadOnlyList<string> InjectedCarrierSlots
+        => _injectedCarrierSlots.Where(OurCarrierStillWorn)
+            .Select(s => Array.Find(InvisibleRing.CarrierSlots, c => c.Slot == s).EqdpSlot)
+            .Where(s => s != null).ToList();
+
+    /// <summary>
+    /// Is the carrier we RECORDED equipping in this slot actually on the player still?
+    /// <para/>
+    /// The record alone is not enough, because it is only ever cleared by a sweep that finds our piece
+    /// worn (<see cref="SweepUnusedCarriers"/> skips a slot whose piece is gone, deliberately: clearing
+    /// there would leave a later teardown with no record and strand our ring on the player). So the record
+    /// legitimately outlives the piece — apply a design that puts a real ring on that finger and the slot
+    /// stays claimed for ever, across restarts, since it lives in the config.
+    /// <para/>
+    /// That staleness is harmless for equipping decisions, which re-check the live slot anyway, and NOT
+    /// harmless for design matching: a slot claimed but not held would be retired from every design's
+    /// comparison indefinitely, silently collapsing designs that differ only by that ring. Hence the live
+    /// check here, in the same shape <see cref="RemoveInjectedRing"/> uses — trust the record only while
+    /// the draw-object walk has nothing to say (before the first walk, when a piece we really are wearing
+    /// would otherwise read as absent).
+    /// </summary>
+    private bool OurCarrierStillWorn(string slot)
+        => InvisibleRing.ResolveFor(Plugin.DataManager, log, slot) is { } r
+        && (IsOurRingWorn(slot, r.ModelSet) || !AccessorySnapshotKnown);
 
     /// <summary>Does this ring slot hold the Emperor's ring WE equipped?</summary>
     private bool IsOurRingWorn(string slot, int modelSet)
@@ -3486,14 +3635,42 @@ public class CompositorService : IDisposable
     /// </summary>
     private int _compositesInFlight;
 
+    /// <summary>
+    /// Which composite is the newest one RUNNING. Stamped beside the in-flight increment below, so the two
+    /// share one total order and can never disagree about who started last.
+    /// <para/>
+    /// The token from <see cref="recompositeGate"/> cannot answer this question. It is cancelled at TRIGGER
+    /// time, before the replacement run exists — so a burst of four triggers cancels all four tokens, and a
+    /// late <c>ct</c> check would bail every run and publish NOTHING. It is also cancelled by triggers whose
+    /// run is then dropped in the settle waits and never composites at all. The epoch answers the question
+    /// that actually matters at the writes: "is something else going to publish after me?" The highest-epoch
+    /// STARTED run never bails on it, so exactly one run always reaches the manifest.
+    /// <para/>
+    /// Only needed BELOW the last <c>ct</c> check (the per-overlay loop). Above it <c>ct</c> strictly
+    /// dominates — it is set earlier for every run this could catch — so a check there would be dead code.
+    /// </summary>
+    private long _recompositeEpoch;
+
+    /// <summary>
+    /// True once a composite that started after this one exists. Read only below the last <c>ct</c> check;
+    /// see <see cref="_recompositeEpoch"/>.
+    /// </summary>
+    private bool Superseded(long epoch) => Volatile.Read(ref _recompositeEpoch) != epoch;
+
     // Neither bool is defaulted, deliberately: `force` never was, and defaulting only its companion would
     // let a future caller opt into skin reuse by omission. They are one decision, so they are passed together.
     private void Recomposite(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
     {
+        // Stamped HERE and not in TriggerRecomposite, and the distinction is load-bearing. Stamping at
+        // trigger time would let a trigger that never composites — dropped in a settle wait, or during
+        // teardown — orphan a run that had already done seconds of work, with nothing published and nothing
+        // scheduled to replace it. A run that has entered this method provably exists, and provably read a
+        // FRESHER draw state than the run it supersedes, which is the definition the checks below want.
+        var epoch = Interlocked.Increment(ref _recompositeEpoch);
         Interlocked.Increment(ref _compositesInFlight);
         try
         {
-            RecompositeBody(ct, force, skinFingerprintAuthoritative);
+            RecompositeBody(ct, epoch, force, skinFingerprintAuthoritative);
         }
         finally
         {
@@ -3501,7 +3678,8 @@ public class CompositorService : IDisposable
         }
     }
 
-    private void RecompositeBody(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
+    private void RecompositeBody(CancellationToken ct, long epoch, bool force,
+                                 bool skinFingerprintAuthoritative)
     {
         try
         {
@@ -3595,6 +3773,11 @@ public class CompositorService : IDisposable
                 // would otherwise publish them, so without this they keep describing the shell that was
                 // standing before the last mod was switched off.
                 ClearShellLocators();
+                // Same again for the "contributes nothing" warnings. This return also skips
+                // ExplainInertMods, which is what normally clears them — and a mod switched OFF is not a
+                // mod that contributes nothing, so leaving its amber warning up would be a lie about a row
+                // the user has already dealt with.
+                _inertMods = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
 
                 // This branch publishes an empty manifest, which no fingerprint describes — and it satisfies
                 // whatever forced work was owed, since "no enabled mods" IS the requested result.
@@ -3632,8 +3815,11 @@ public class CompositorService : IDisposable
             var byMaterial = new Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>>(
                 StringComparer.OrdinalIgnoreCase);
 
-            var colorOverride = _colorOverride; // snapshot the volatile reference for this run
-            var gearOverride  = _gearOverride;
+            // Snapshot the volatile references for this run, with any pinned preset laid over the design
+            // binding per mod. Merging here, at the one place the composite reads them, is what keeps
+            // every use below — and there are many — ignorant of there being two channels.
+            var colorOverride = MergeByMod(_presetColorOverride, _colorOverride);
+            var gearOverride  = MergeByMod(_presetGearOverride,  _gearOverride);
 
             // The mod's shared "Masks" colorset, with the active design binding's override applied when it
             // has one — so mask colours are captured/restored per-design like the overlay colorsets are
@@ -3663,7 +3849,7 @@ public class CompositorService : IDisposable
             // Mod-wide stack position of an overlay (0 = top), from the active design binding's stack
             // override when it has one, else the global config order. Mirrors the mask/colour overrides so
             // a design captures/restores its tab arrangement without mutating the global stack config.
-            var stackOverride = _stackOverride; // snapshot the volatile reference for this run
+            var stackOverride = MergeByMod(_presetStackOverride, _stackOverride);
             int ModStackIndexFor(string modDir, string group, string option)
                 => stackOverride != null && stackOverride.TryGetValue(modDir, out var order)
                     ? Configuration.ModStackIndexIn(order, group, option)
@@ -3690,6 +3876,40 @@ public class CompositorService : IDisposable
             // know whether the body being worn is the mirrored one before it can decide whether an overlay
             // needs an un-mirrored shell.
             var activeBodyTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // ── inputs to ExplainInertMods ───────────────────────────────────────────────────────────
+            // Three facts a mod that contributes NOTHING needs, each of which was previously computed and
+            // discarded. Collected here rather than recovered later because none of them survives: the
+            // resolver's empty list, the filter's removal and the worn race are all gone by the time the
+            // composite knows whether the mod ended up contributing.
+            //
+            // Why the resolved race codes rather than a bool: the message worth reading names both sides
+            // ("paints Midlander F …, and you are Roegadyn F"), and a bool cannot be turned back into that.
+            var resolution = new Dictionary<string, ResolutionDiagnostic>(StringComparer.OrdinalIgnoreCase);
+            // Mods the live-material filter took a material away from. A set and not a map: a dropped
+            // material always has a char code that does not match the wearer, or none at all — the branch
+            // that KEEPS a matching race is above every removal — so which of the three removals it was
+            // adds nothing the ladder could act on, and the wants/have pair says it better anyway.
+            var filteredOut = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // The character's own race code(s) as the filter understood them. Hoisted out of the nested
+            // block below so the explanation can name what the wearer actually is; null until the filter
+            // runs, and legitimately EMPTY mid-redraw, which the ladder has to treat as "don't know".
+            HashSet<string>? wornCharCodes = null;
+
+            // Is a toe cap selected ANYWHERE in the look? Asked once, across every mod, because a cap
+            // belongs to the foot rather than to the mod that ships the map — the same reasoning that
+            // hands the shell builder every entry rather than only those contributing a shell.
+            //
+            // It has to be known before the promotion below, because a cap is geometry and geometry needs
+            // a shell: with every overlay sitting on the skin layer the composite ran to completion with
+            // no second-skin phase at all, and the cap option silently did nothing.
+            var toeCapMods = ToeCapWanted(entries);
+            if (toeCapMods.Count > 0)
+                log.Debug("[Proteus] toe cap is selected in [{0}] — THAT MOD's skin overlays that can be cut "
+                        + "into a shell are promoted to cloth, since the cap has to rebuild geometry the skin "
+                        + "layer has none of. Other mods are left alone: a cap is a Penumbra option, and a "
+                        + "mod re-exported with its options reordered re-points every saved selection.",
+                    string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
             if (activeMtrl != null)
                 foreach (var m in activeMtrl)
                 {
@@ -3711,6 +3931,10 @@ public class CompositorService : IDisposable
             // once per mod rather than once per overlay.
             var asymmetricNotWorn = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // Same idea for the toe cap's narrowed promotion: mods already told that someone ELSE's cap no
+            // longer promotes them.
+            var capNarrowedMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             // Shared with the editor so the two can't disagree about what was composited — see the static
             // NeedsUnmirroredShell. The hoisted `wearingMirroredBody` is passed rather than re-read, so every
             // overlay in this run is judged against one reading of the worn body.
@@ -3719,9 +3943,14 @@ public class CompositorService : IDisposable
 
             foreach (var entry in entries)
             {
+                // Both halves of the pack's selection state, merged below. A pack can ship overlays and
+                // geometry at once, and a mod that resolves neither has to be explained by BOTH sets of
+                // groups — describing only the overlay half told a content pack's wearer their groups were
+                // empty when the group they had ticked was on the other side.
+                var contentDiag = ResolutionDiagnostic.None;
                 if (entry.Metadata.HasContent)
                 {
-                    var content = discovery.ResolveActiveContent(entry);
+                    var content = discovery.ResolveActiveContent(entry, out contentDiag);
                     // A restored design binding overrides the pack's colours in memory, exactly as it does
                     // for overlays below — metadata.json is never written.
                     if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var cOvr))
@@ -3738,7 +3967,8 @@ public class CompositorService : IDisposable
                     foreach (var c in content) contentLayers.Add((entry, c));
                 }
 
-                var overlays = discovery.ResolveActiveOverlays(entry);
+                var overlays = discovery.ResolveActiveOverlays(entry, out var diag);
+                resolution[entry.ModDirectory] = diag.Merge(contentDiag);
 
                 // Asymmetry is DECLARED, never measured here. It used to be probed on a null and written back
                 // to the mod, and that was wrong in a way no threshold could fix: a real skin texture is
@@ -3839,9 +4069,33 @@ public class CompositorService : IDisposable
                     else if (!canShell && !overlay.Descriptor.ManualShaderLock
                         && (aboveGear || RenderModeInference.HasCloth(overlay.ColorTableRows ?? [])))
                         NotifyNoShellSurface(entry, overlay.ColorTableRows, overlay.Descriptor);
+                    // toeCapMods.Contains, not "any cap anywhere": a cap only promotes the overlays of the mod
+                    // that ships it. See ToeCapWanted for why the wider rule was unsafe.
+                    //
+                    // The cost of narrowing it, said out loud once per mod. A cap is applied to every shell
+                    // over the toes (SecondSkinService's sharedToeCap) but now only PROMOTES its own mod, so
+                    // another mod's skin stocking over the same toes stays skin and sleeves them. That is a
+                    // real trade — it just has to be findable, because the symptom is toes that look wrong in
+                    // a mod the user never touched.
+                    else if (toeCapMods.Count > 0 && !toeCapMods.Contains(entry.ModDirectory)
+                        && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                                overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
+                                canShell, unmirrors, false)
+                        && RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
+                                overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
+                                canShell, unmirrors, true)
+                        && capNarrowedMods.Add(entry.ModDirectory))
+                    {
+                        log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
+                                      + "mod's skin overlays stay on the skin — the cap still shapes any "
+                                      + "shell over the toes, but this mod has no shell to shape. Tick the "
+                                      + "cap in this mod too if its art should follow the rebuilt toes.",
+                            entry.ModDirectory,
+                            string.Join(", ", toeCapMods.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)));
+                    }
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
-                            unmirrors))
+                            unmirrors, toeCapMods.Contains(entry.ModDirectory)))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
@@ -3917,6 +4171,18 @@ public class CompositorService : IDisposable
                         log.Debug("[Proteus] Glamourer race override: snapshot={0} → displayed={1}",
                             _lastCompositedCharCodes ?? "none", glamCode!);
 
+                    // What the wearer IS, for the benefit of anything that later has to explain why a
+                    // pack authored for other races painted nothing. The effective set, not the raw
+                    // snapshot: an overlay is judged against the race Glamourer is displaying.
+                    wornCharCodes = effectiveCharCodes;
+
+                    // Noted before the removal, because the removal is what destroys the evidence.
+                    void NoteDropped(string key)
+                    {
+                        if (!byMaterial.TryGetValue(key, out var doomed)) return;
+                        foreach (var (e, _) in doomed) filteredOut.Add(e.ModDirectory);
+                    }
+
                     foreach (var key in byMaterial.Keys.Where(k => !activeMtrl.Contains(k)).ToList())
                     {
                         var keyBodyType = UVRemapService.InferBodyType(key);
@@ -3933,6 +4199,7 @@ public class CompositorService : IDisposable
                                     continue; // keep
                                 log.Debug("[Proteus] Skipping body material (active types={0}): {1}",
                                     _lastCompositedBodyType ?? "none", key);
+                                NoteDropped(key);
                                 byMaterial.Remove(key);
                             }
                             else
@@ -3943,6 +4210,7 @@ public class CompositorService : IDisposable
                                     && !effectiveCharCodes.Contains(keyCharCode))
                                 {
                                     log.Debug("[Proteus] Skipping body material (wrong race): {0}", key);
+                                    NoteDropped(key);
                                     byMaterial.Remove(key);
                                 }
                                 // else: same race, body type absent → keep (mid body-type switch)
@@ -3973,6 +4241,7 @@ public class CompositorService : IDisposable
                                 continue;   // keep — ours, and the snapshot simply hasn't caught up
 
                             log.Debug("[Proteus] Skipping non-equipped material: {0}", key);
+                            NoteDropped(key);
                             byMaterial.Remove(key);
                         }
                     }
@@ -4217,6 +4486,14 @@ public class CompositorService : IDisposable
                     && md2.Layer == OverlayLayer.Gear)
                     maskShellMods.Add(entry.ModDirectory);
 
+            // Every mod that is switched on has now had its chance to reach one of the four destinations a
+            // mod can reach, so this is the first point at which "contributed nothing" is a settled fact —
+            // and, because the sibling pass above puts back what the race filter took, the first point at
+            // which it is a TRUE one. See ExplainInertMods; the placement is load-bearing.
+            ExplainInertMods(entries, byMaterial, gearOverlays, contentLayers, maskShellMods,
+                             maskDescByMod, resolution, filteredOut, wornCharCodes, activeBodyTypes,
+                             allOverlays);
+
             // Composite order = list order; LAST lands on top. Across mods, Penumbra priority is preserved.
             //
             // Within a mod the user's tab strip decides, via the mod-wide stack (index 0 = top, so sort
@@ -4232,10 +4509,29 @@ public class CompositorService : IDisposable
             foreach (var list in byMaterial.Values)
             {
                 var sorted = list
-                    .OrderBy(p => p.Entry.Priority)
-                    .ThenByDescending(p => ModStackIndexFor(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
-                    .ThenByDescending(p => p.Overlay.GroupOrder)
-                    .ThenByDescending(p => config.StackIndexOf(p.Entry.ModDirectory, p.Overlay.OptionGroup ?? "", p.Overlay.Option ?? ""))
+                    .Select((p, i) => (p, i))
+                    .OrderBy(x => x.p.Entry.Priority)
+                    // A print is not in the stack at all: it does not paint, it recolours what was painted,
+                    // so it has to land after everything it can reach. Below Penumbra priority, so the
+                    // cross-mod rule above still holds; ABOVE the tab strip, because the strip outranks
+                    // GroupOrder and a key underneath it would be undone by anyone who has ever restacked
+                    // their tabs. Dragging a print's tab was never going to mean anything once its whole job
+                    // is to sit on top.
+                    .ThenBy(x => AnyBlendRow(x.p.Overlay.ColorTableRows) ? 1 : 0)
+                    .ThenByDescending(x => ModStackIndexFor(x.p.Entry.ModDirectory, x.p.Overlay.OptionGroup ?? "", x.p.Overlay.Option ?? ""))
+                    .ThenByDescending(x => x.p.Overlay.GroupOrder)
+                    .ThenByDescending(x => config.StackIndexOf(x.p.Entry.ModDirectory, x.p.Overlay.OptionGroup ?? "", x.p.Overlay.Option ?? ""))
+                    // Two options in the SAME group, on a mod nobody has restacked, tie on every key above:
+                    // ModStackIndexFor and StackIndexOf are both int.MaxValue and the GroupOrder is shared.
+                    // Both sorts are stable, so the tie used to fall through to metadata order on each side —
+                    // and the two sides read it oppositely, because the tab strip lists top-first ascending
+                    // while this list is bottom-first. The strip showed the first option on top and the
+                    // composite put the last one there. Reversing the index here is what makes "leftmost tab
+                    // = on top" true for options WITHIN one group, not just across groups. It matters more
+                    // than it reads: Suppress now fades whatever sits below, so this tie decides which of two
+                    // same-group options keeps its relief where the other is opaque.
+                    .ThenByDescending(x => x.i)
+                    .Select(x => x.p)
                     .ToList();
                 list.Clear();
                 list.AddRange(sorted);
@@ -4250,7 +4546,8 @@ public class CompositorService : IDisposable
                         var g = p.Overlay.OptionGroup ?? "";
                         var o = p.Overlay.Option ?? "";
                         var mi = FmtIdx(ModStackIndexFor(p.Entry.ModDirectory, g, o));
-                        return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}]";
+                        var bl = AnyBlendRow(p.Overlay.ColorTableRows) ? ",print" : "";
+                        return $"{g}/{o}[mod={mi},grp={p.Overlay.GroupOrder}{bl}]";
                     });
                     log.Debug("[Proteus] skin stack (bottom->top): {0}", string.Join("  ->  ", parts));
                 }
@@ -4295,12 +4592,12 @@ public class CompositorService : IDisposable
             // below, so a skip leaves the previous composite's shell state intact.
             var fingerprint = BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
-                maskShellMods, baseKeys, contentLayers);
+                maskShellMods, baseKeys, contentLayers, toeCapMods);
 
             // The same inputs minus the ones only the shell reads — see the skin-reuse gate below.
             var skinFingerprint = BuildCompositeFingerprint(
                 byMaterial, gearOverlays, maskPathsByMod, maskAssetsByMod, maskRowsByMod, maskDescByMod,
-                maskShellMods, baseKeys, contentLayers, skinOnly: true);
+                maskShellMods, baseKeys, contentLayers, toeCapMods, skinOnly: true);
 
             if (!force && Volatile.Read(ref _forcePending) == 0
                 && _lastCompositeFingerprint != null && fingerprint == _lastCompositeFingerprint)
@@ -4385,7 +4682,10 @@ public class CompositorService : IDisposable
                         if (!maskAssetsByMod.TryGetValue(modDir, out var mA) || !mA.Any(a => a.IndexPath != null))
                             continue;
 
-                        var top = modGroup.Last();
+                        // A print is not the surface a mask sits on — it has no coverage of its own, and it
+                        // now always sorts last, so Last() would hand every masked mod its print's rows.
+                        var painters = modGroup.Where(p => !AnyBlendRow(p.Overlay.ColorTableRows)).ToList();
+                        var top = painters.Count > 0 ? painters[^1] : modGroup.Last();
                         // An empty/absent colorset leaves the dictionary empty, which ApplyIndexedOverlay
                         // reads as neutral white rather than skipping the pixel.
                         var inherited = BuildRowDict(top.Overlay.ColorTableRows);
@@ -4511,10 +4811,26 @@ public class CompositorService : IDisposable
 
                 // TextureLoader caches decoded PNGs across runs (keyed by path + mtime),
                 // and its Lazy wrapper dedups concurrent requests for the same file.
-                byte[]? LoadPng(string path, int w, int h) => textureLoader.LoadPngAsRgba(path, w, h);
+                // Timed even though decode-wait covers a MISS: a cache hit still costs whatever
+                // LoadPngAsRgba does to hand back a 4K buffer, and that never appeared in any counter.
+                byte[]? LoadPng(string path, int w, int h)
+                {
+                    var t0 = PhaseCounter.Begin();
+                    try { return textureLoader.LoadPngAsRgba(path, w, h); }
+                    finally { blendLoadStats.Stop(t0); }
+                }
 
                 var dstBodyType = UVRemapService.InferBodyType(mtrlGamePath);
                 byte[]? RemapIfNeeded(byte[]? png, int w, int h, string? srcType, string? overlayPath = null)
+                {
+                    // Same counter as LoadPng, and they cannot nest — LoadPng is evaluated as this
+                    // method's ARGUMENT, so it has already finished by the time this starts.
+                    var tRemap = PhaseCounter.Begin();
+                    try { return RemapIfNeededCore(png, w, h, srcType, overlayPath); }
+                    finally { blendLoadStats.Stop(tRemap); }
+                }
+
+                byte[]? RemapIfNeededCore(byte[]? png, int w, int h, string? srcType, string? overlayPath = null)
                 {
                     if (png == null || srcType == null || dstBodyType == null) return png;
                     if (string.Equals(srcType, dstBodyType, StringComparison.OrdinalIgnoreCase)) return png;
@@ -4561,6 +4877,13 @@ public class CompositorService : IDisposable
                 // "win" over whatever the mod's other overlay(s) would otherwise select there,
                 // using the exact same ColorTableRows the overlay's own Index already resolves
                 // against — no separate per-mask colorset needed.
+                // `idxmerge` times only the CLONE and the merge loops below — never the whole call. The loads
+                // this makes are already charged to `load`, and timing the outer call as well would nest the
+                // two, so subtracting both from the overlay total (see overlayGlueMs) would remove the same
+                // milliseconds twice and could clamp `glue` to zero over real work. Measuring the exclusive
+                // part directly avoids that without any subtraction arithmetic — which could not be made
+                // correct here anyway, since the counters are global and the other material's worker is
+                // adding to them concurrently.
                 byte[]? LoadIndexMerged(string idxPath, int w, int h, string? srcType, string modDir)
                 {
                     var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
@@ -4579,19 +4902,24 @@ public class CompositorService : IDisposable
                     // LoadPngAsRgba shares its cached array with read-only callers (see TextureLoader's
                     // mutation contract) — clone before writing into it, or a mask toggled off later
                     // still shows the swapped rows because the cache itself was corrupted.
+                    var tClone = PhaseCounter.Begin();
                     idx = (byte[])idx.Clone();
+                    blendIdxMergeStats.Stop(tClone);
                     foreach (var (maskPath, _, maskIndexPath) in assets)
                     {
                         if (maskIndexPath == null) continue;
                         var maskPng = RemapIfNeeded(LoadPng(maskPath, w, h), w, h, srcType, maskPath);
                         var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h), w, h, srcType, maskIndexPath);
                         if (maskPng == null || maskIdx == null) continue;
+                        // Timed per mask, excluding the two loads above — see the note on this method.
+                        var tMerge = PhaseCounter.Begin();
                         for (int i = 0; i < idx.Length; i += 4)
                         {
                             if (maskPng[i + 3] < 128) continue;
                             idx[i]     = maskIdx[i];
                             idx[i + 1] = maskIdx[i + 1];
                         }
+                        blendIdxMergeStats.Stop(tMerge);
                     }
                     return idx;
                 }
@@ -4710,6 +5038,24 @@ public class CompositorService : IDisposable
                         var img = RemapIfNeeded(LoadPng(dp, w, h), w, h, gSrc, dp);
                         if (img == null) continue;
 
+                        // A print has no silhouette of its own — it borrows the fabric's. Its art is
+                        // typically opaque edge to edge, so tracing it whole would union a full sheet over
+                        // the mod's real outline and flatten the very contact shadows the fabric casts.
+                        // Masked rather than skipped, so an option that prints in one region and paints in
+                        // another still contributes the part that is really there.
+                        // Cheap preset test first: building a row dictionary here would allocate one (plus up
+                        // to sixteen row objects) for every overlay of every mod on every silhouette build,
+                        // and almost none of them print.
+                        if (AnyBlendRow(gOverlay.ColorTableRows))
+                        {
+                            byte[]? gIdx = gd.Index != null
+                                ? LoadIndexMerged(Path.Combine(gEntry.SidecarRoot, gd.Index), w, h,
+                                                  gSrc, gEntry.ModDirectory)
+                                : null;
+                            img = PaintCoverage(img, gIdx, BuildRowDict(gOverlay.ColorTableRows), w, h,
+                                                gd.Index != null);
+                        }
+
                         sil ??= new byte[w * h];
                         var s = sil; var src = img;
                         ParallelPixels(0, w * h, 1, (from, to) =>
@@ -4804,7 +5150,7 @@ public class CompositorService : IDisposable
                     if (texPaths.Diffuse == null) { baseD = Array.Empty<byte>(); return null; }
 
                     var diffDisk = ResolveUpstream(texPaths.Diffuse);
-                    var loaded = textureLoader.LoadBaseTexture(diffDisk, texPaths.Diffuse);
+                    var loaded = TimedLoadBaseTexture(diffDisk, texPaths.Diffuse);
                     if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
                     baseD ??= Array.Empty<byte>();
 
@@ -4834,13 +5180,41 @@ public class CompositorService : IDisposable
                 // afterwards (masks are mod-level, not tied to one overlay descriptor).
                 var lastSrcBodyTypeByMod = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-                // ── Higher-priority group claims ──────────────────────────────
-                // A mod's groups are ranked by Penumbra's own numbering (group_002 beats group_003), and a
-                // higher group wins wherever it is VISIBLE: a lower one is faded by the higher one's alpha.
+                // ── What each mod has PAINTED on this material so far ──────────
+                // The clip a print is multiplied through: a print colours its own mod's fabric and nothing
+                // else, so this is per mod and accumulated as the loop runs. Built here rather than derived
+                // from ClaimAt because this is the only definition that is diffuse-only and post-seam-drop —
+                // ClaimAt would count a normal-only relief layer as paint, and would miss the texels the
+                // UV-seam pass drops.
+                //
+                // Safe unlocked for the same reason claimCache is: one of these per material task.
+                var paintedByMod = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+                // ── Claims from higher in the stack ───────────────────────────
+                // An overlay is faded by whatever composites ABOVE it — and "above" means this material's
+                // own composite order, which `pairs` is already sorted into (bottom -> top, see the sort
+                // near the top of Composite). That is the same ranking the tab strip and Rank() use:
+                // ModStackIndexFor first, then GroupOrder, then the per-group stack. Keying this on
+                // GroupOrder alone — which it used to do — made the two disagree the moment anyone
+                // rearranged their tabs: the strip put Patterns on top of Fabric, the claim still let
+                // Fabric erase it, and no amount of dragging could fix it because the two rules read
+                // different keys.
+                //
                 // Coverage drives every channel — CovAt gates the normal/mask/emissive phases — so fading
-                // the alpha is also what stops a lower group's normal COMPOUNDING through an opaque higher
-                // one (CompoundNormal is additive), which is the bug that flattened the leather cup.
-                var claimCache = new Dictionary<(string Mod, int Group, int W, int H), byte[]?>();
+                // the alpha is also what stops a lower overlay's normal COMPOUNDING through an opaque
+                // higher one (CompoundNormal is additive), which is the bug that flattened the leather cup.
+                //
+                // ACROSS groups a mod nobody has restacked is unchanged: with no ModStackIndexFor the sort
+                // falls through to GroupOrder, so list position is group order and the claim set is what the
+                // old ordinal comparison produced. WITHIN a group it is not — the old test was
+                // `GroupOrder >= mine`, which excluded same-group peers outright, and walking the list
+                // includes them. Two options ticked in one multi-select group now stack against each other
+                // like any other pair. That is the wanted behaviour rather than a side effect: the claim is
+                // a per-texel alpha union (see UnionAlphaInto), so it only reaches where the option above is
+                // actually opaque, and there the diffuse was already covered by plain alpha-over — all that
+                // changes is that the one underneath stops compounding its relief through it, which is the
+                // whole point of the mechanism.
+                var claimCache = new Dictionary<(string Mod, int Stack, int W, int H), byte[]?>();
 
                 string? SrcTypeOf(OverlayDescriptor d)
                 {
@@ -4898,42 +5272,85 @@ public class CompositorService : IDisposable
                         int op = r16?.A.Opacity ?? 0;
                         if (op != 0) cov = ScaleOverlayAlpha(cov, op);
                     }
+
+                    // Finally, take the print rows out. This is what ClaimAt goes on to union, so doing it
+                    // here is what stops a print from claiming the territory of the group beneath it — and
+                    // that is not merely tidiness: a print's art is typically opaque across the whole sheet,
+                    // so an unfiltered claim erases any lower group outright.
+                    if (AnyBlendRow(r))
+                    {
+                        byte[]? pIdx = d.Index != null
+                            ? LoadIndexMerged(Path.Combine(e.SidecarRoot, d.Index), tw, th, srcT, e.ModDirectory)
+                            : null;
+                        cov = PaintCoverage(cov, pIdx, r, tw, th, d.Index != null);
+                    }
                     return cov;
                 }
 
-                // Union alpha of every same-mod overlay in a higher-priority group.
-                byte[]? ClaimAt(string modDir, int groupOrder, int tw, int th)
+                // Union alpha of every same-mod overlay composited above this one.
+                //
+                // Built as a SUFFIX union rather than a fresh sweep per overlay: what sits above index i is
+                // what sits above i+1 plus the single overlay in between. Sweeping the whole tail each time
+                // costs O(n²) CoverageOf calls, and each of those is several full-buffer passes (mask,
+                // indexed opacity, print filter) on a 4K sheet — the recursion makes it one per overlay.
+                // The buffer is shared, not cloned, whenever the overlay in between adds nothing, so a mod
+                // holds one claim buffer per overlay that actually covers something.
+                byte[]? ClaimAt(string modDir, int stackIdx, int tw, int th)
                 {
-                    var key = (modDir, groupOrder, tw, th);
+                    var key = (modDir, stackIdx, tw, th);
                     if (claimCache.TryGetValue(key, out var hit)) return hit;
 
                     byte[]? acc = null;
-                    foreach (var (e, o) in pairs)
+                    if (stackIdx + 1 < pairs.Count)
                     {
-                        if (o.GroupOrder >= groupOrder) continue;
-                        if (!string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)) continue;
+                        var above = ClaimAt(modDir, stackIdx + 1, tw, th);
+                        acc = above;
 
-                        var cov = CoverageOf(e, o, tw, th);
-                        if (cov == null) continue;
-
-                        acc ??= new byte[tw * th];
-                        for (int i = 0, a = 3; i < acc.Length && a < cov.Length; i++, a += 4)
-                            acc[i] = (byte)(acc[i] + (255 - acc[i]) * cov[a] / 255);   // alpha-over union
+                        var (e, o) = pairs[stackIdx + 1];
+                        if (string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var cov = CoverageOf(e, o, tw, th);
+                            if (cov != null)
+                            {
+                                // Clone before mutating: `above` is the cached buffer for stackIdx + 1 and
+                                // every deeper level shares it.
+                                acc = above != null ? (byte[])above.Clone() : new byte[tw * th];
+                                UnionAlphaInto(acc, cov);   // alpha-over union
+                            }
+                        }
                     }
                     claimCache[key] = acc;
                     return acc;
                 }
 
-                // Fade a coverage buffer by what the higher groups already claim.
-                byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int tw, int th)
+                // Fade a coverage buffer by what the overlays above it in the stack already claim.
+                // `suppress` times only the clone and the serial pass at the end — never the whole call. The
+                // ClaimAt below reaches ApplyCoverageMask / ApplyIndexedOpacity / PaintCoverage, all already
+                // charged to `cov`, so timing the outer call would nest the two and overlayGlueMs would
+                // subtract the same milliseconds twice. See LoadIndexMerged for the same treatment.
+                byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int stackIdx, int tw, int th)
                 {
                     if (cov == null) return null;
-                    var claim = ClaimAt(e.ModDirectory, o.GroupOrder, tw, th);
+
+                    // A print is clipped by what its mod PAINTED, which is the exact opposite of this: it
+                    // has to survive where the fabric is, and this fades it away precisely there. Running
+                    // both leaves nothing at all — which is why authoring the weave into a print's alpha
+                    // cannot work, and why this feature had to exist.
+                    //
+                    // Whole-overlay rather than per texel: an overlay that mixes painting and printing rows
+                    // keeps its painting rows unsuppressed too. That is a real if unusual authoring case,
+                    // and erring toward showing the author's art beats erring toward deleting it.
+                    if (AnyBlendRow(o.ColorTableRows)) return cov;
+                    var claim = ClaimAt(e.ModDirectory, stackIdx, tw, th);
                     if (claim == null) return cov;
 
+                    // Timed from here, after ClaimAt: the clone and this serial pass are the part of Suppress
+                    // no other counter already covers.
+                    var tSup = PhaseCounter.Begin();
                     var dst = (byte[])cov.Clone();
                     for (int i = 0, a = 3; i < claim.Length && a < dst.Length; i++, a += 4)
                         dst[a] = (byte)(dst[a] * (255 - claim[i]) / 255);
+                    blendSuppressStats.Stop(tSup);
                     return dst;
                 }
 
@@ -4985,12 +5402,21 @@ public class CompositorService : IDisposable
                     }
                 }
 
+                // Measured as one block: the per-overlay kernels, their coverage rebuilds and every
+                // full-buffer clone underneath them. Not try/finally, matching tIslands and tAo — the only
+                // path out that skips the Stop is the cancellation check below, and a cancelled run's
+                // numbers are discarded with it.
+                var tOverlays = PhaseCounter.Begin();
                 int pairIndex = -1;
                 foreach (var (entry, resolved) in pairs)
                 {
                     if (ct.IsCancellationRequested) return;
 
                     PrefetchAhead(++pairIndex + 1);
+
+                    // This overlay's position in the composite stack, snapshotted per iteration so the
+                    // local functions below close over a value rather than the loop's shared counter.
+                    int stackIdx = pairIndex;
 
                     var desc        = resolved.Descriptor;
                     var srcBodyType = desc.SourceBodyType;
@@ -5008,6 +5434,18 @@ public class CompositorService : IDisposable
                     var rows   = BuildRowDict(resolved.ColorTableRows);
                     rows.TryGetValue(15, out var row16);
                     var row16A = row16?.A ?? new ColorTableSubRow();
+
+                    // Does any row here print? Everything below that changes behaviour for a print is gated
+                    // on this, so an overlay that has never heard of blend modes takes exactly the path it
+                    // always took — including keeping its old "composited, therefore publish" bookkeeping
+                    // even where its coverage happens to be empty.
+                    bool hasPrintRows = AnyBlendRow(rows);
+
+                    // Every cell prints, so this overlay contributes colour and nothing else: no relief, no
+                    // shadow, no skin-tone suppression. It has no surface for any of those to be about.
+                    // A strict early-out — an index cell nobody configured paints, so this is rarely true for
+                    // an indexed print, and AnyCoverage below is what actually decides for those.
+                    bool purePrint = AllRowsPrint(rows, desc.Index != null);
 
                     lastSrcBodyTypeByMod[entry.ModDirectory] = srcBodyType;
 
@@ -5105,7 +5543,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -5142,11 +5580,15 @@ public class CompositorService : IDisposable
                     // consistent. Synth/mask-only coverage isn't used directly; those gate through CovAt.
                     // Order: Masks-group mask first, then opacity — so the user's transparency slider
                     // always scales the mask result rather than the mask overriding the slider.
+                    // Each stage below returns a NEW buffer, so holding the intermediates costs a reference
+                    // apiece and lets the erasure report say which one emptied the overlay.
+                    byte[]? ovAfterArt = diffuseOv, ovAfterMask = diffuseOv, ovAfterOpacity = diffuseOv;
                     if (desc.Diffuse != null && diffuseOv != null)
                     {
                         var msk = CombinedMaskAt(entry.ModDirectory, covW, covH, srcBodyType);
                         if (msk != null)
                             diffuseOv = ApplyCoverageMask(diffuseOv, msk.Value.W, msk.Value.T, MaskAdds(entry, resolved));
+                        ovAfterMask = diffuseOv;
                         if (desc.Index != null && rows.Values.Any(r => r.A.Opacity != 0 || r.B.Opacity != 0))
                         {
                             var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
@@ -5155,11 +5597,69 @@ public class CompositorService : IDisposable
                         }
                         else if (desc.Index == null && row16A.Opacity != 0)
                             diffuseOv = ScaleOverlayAlpha(diffuseOv, row16A.Opacity);
+                        ovAfterOpacity = diffuseOv;
                     }
 
-                    // Phase A reads diffuseOv directly, so it needs the same higher-group fade CovAt
-                    // applies to every other channel. Suppress() clones, so covSrc stays raw for CovAt.
-                    diffuseOv = Suppress(diffuseOv, entry, resolved, covW, covH);
+                    // Phase A reads diffuseOv directly, so it needs the same fade from above CovAt applies
+                    // to every other channel. Suppress() clones, so covSrc stays raw for CovAt.
+                    diffuseOv = Suppress(diffuseOv, entry, resolved, stackIdx, covW, covH);
+
+                    // ── "Where did my overlay go?" ────────────────────────────
+                    // An overlay whose art loaded fine and then came out with no covered texel at all is a
+                    // silent failure: every stage did what it was told, and the result is nothing. Nothing
+                    // above logs it, and it costs an evening to find by hand — it took a hex dump of an
+                    // index texture to learn that a row's opacity slider was erasing a pattern. Walk the
+                    // stages back and name the one that emptied it. Only the failing overlay pays for the
+                    // attribution; the healthy path is one short-circuiting AnyCoverage.
+                    if (desc.Diffuse != null && ovAfterArt != null && !AnyCoverage(diffuseOv))
+                    {
+                        string why;
+                        if (!AnyCoverage(ovAfterArt))
+                            why = "its own art has no opaque texel";
+                        else if (!AnyCoverage(ovAfterMask))
+                            why = "the Masks group leaves nothing of it";
+                        else if (!AnyCoverage(ovAfterOpacity))
+                        {
+                            var neg = rows.Where(kv => kv.Value.A.Opacity < 0 || kv.Value.B.Opacity < 0)
+                                .Select(kv => $"row {kv.Key + 1}"
+                                    + (kv.Value.A.Opacity < 0 ? $" A={kv.Value.A.Opacity}" : "")
+                                    + (kv.Value.B.Opacity < 0 ? $" B={kv.Value.B.Opacity}" : ""))
+                                .ToList();
+                            why = neg.Count > 0
+                                ? $"a negative colour-row opacity fades it away ({string.Join(", ", neg)})"
+                                : "its colour-row opacity leaves nothing";
+                        }
+                        else
+                        {
+                            // Only overlays that actually CONTRIBUTED to the claim, which is not the same as
+                            // "everything above it": a pure print unions an all-zero buffer (PaintCoverage
+                            // strips its rows) and an overlay whose art failed to load contributes null.
+                            // Naming either of those sends the reader after an innocent. CoverageOf is
+                            // recomputed rather than cached, which is affordable precisely because this
+                            // branch only runs for an overlay that already came out empty.
+                            var above = new List<string>();
+                            for (int j = stackIdx + 1; j < pairs.Count; j++)
+                            {
+                                var (e2, o2) = pairs[j];
+                                if (!string.Equals(e2.ModDirectory, entry.ModDirectory,
+                                                   StringComparison.OrdinalIgnoreCase)) continue;
+                                if (!AnyCoverage(CoverageOf(e2, o2, covW, covH))) continue;
+                                above.Add(o2.OptionGroup != null && o2.Option != null
+                                    ? $"{o2.OptionGroup}/{o2.Option}"
+                                    : o2.Option ?? o2.OptionGroup ?? "an overlay with no option group");
+                            }
+                            why = above.Count > 0
+                                ? $"it is fully covered by {string.Join(", ", above)} above it in the stack"
+                                : "it was suppressed by another overlay in the same mod";
+                        }
+
+                        // Once per (overlay, material, reason) per session. The cause is normally permanent
+                        // and a composite runs on every gear change, so an unguarded line here would repeat
+                        // every few seconds; keying on the reason still lets a NEW cause be reported.
+                        if (_erasureReported.TryAdd($"{entry.ModDirectory} {optLabel} {mtrlGamePath} {why}", 0))
+                            log.Information("[Proteus] {0} ({1}) paints nothing on {2}: {3}",
+                                entry.ModDirectory, optLabel, mtrlGamePath, why);
+                    }
 
                     // Returns coverage at (tw × th): mask first, then opacity (indexed or flat).
                     // covSrc is raw — no opacity pre-baked — so the Masks-group always shapes
@@ -5202,9 +5702,24 @@ public class CompositorService : IDisposable
                         else if (cov != null && desc.Index == null && row16A.Opacity != 0)
                             cov = ScaleOverlayAlpha(cov, row16A.Opacity);
 
-                        // Finally, fade by what a higher-priority group in this mod already claims.
-                        cov = Suppress(cov, entry, resolved, tw, th);
+                        // Finally, fade by what this mod already claims above it in the stack.
+                        cov = Suppress(cov, entry, resolved, stackIdx, tw, th);
                         return cov;
+                    }
+
+                    // CovAt with the print rows taken out — the coverage that actually laid down a surface.
+                    // Phase B2 and the ambient-occlusion silhouette read this instead, because a print has no
+                    // surface: it must not bleach the wearer's skin tone out from under the fabric, and must
+                    // not cast a shadow the fabric is already casting.
+                    byte[]? PaintCovAt(int tw, int th)
+                    {
+                        var cov = CovAt(tw, th);
+                        if (cov == null || !AnyBlendRow(rows)) return cov;
+                        byte[]? pIdx = desc.Index != null
+                            ? LoadIndexMerged(Path.Combine(entry.SidecarRoot, desc.Index), tw, th,
+                                              srcBodyType, entry.ModDirectory)
+                            : null;
+                        return PaintCoverage(cov, pIdx, rows, tw, th, desc.Index != null);
                     }
 
                     // ── UV-seam bleed removal ─────────────────────────────────
@@ -5222,9 +5737,13 @@ public class CompositorService : IDisposable
                         && !string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         var decision = CovAt(covW, covH);
+                        // Timed separately: ComputeSeamDropMask builds a w*h summed-area table serially and
+                        // is NOT covered by uvRemap.RemapStats, which times only Remap itself.
+                        var tSeamDrop = PhaseCounter.Begin();
                         var dropMask = decision != null
                             ? uvRemap.ComputeSeamDropMask(decision, covW, covH, srcBodyType, dstBodyType)
                             : null;
+                        blendSeamDropStats.Stop(tSeamDrop);
                         if (dropMask != null)
                         {
                             var cov = covSrc!;
@@ -5248,36 +5767,66 @@ public class CompositorService : IDisposable
                     if (desc.Diffuse != null && diffuseOv != null && baseD is { Length: > 0 })
                     {
                         SnapshotBaseDiffuse();
-                        if (desc.Index != null)
-                        {
-                            var idxPath = Path.Combine(entry.SidecarRoot, desc.Index);
-                            var idD = LoadIndexMerged(idxPath, wD, hD, srcBodyType, entry.ModDirectory);
-                            if (idD != null)
-                            {
-                                ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD);
 
-                                // Glow recipe: which pixels resolve to each row (red/17 = pair, green≥128 =
-                                // sub-row A), gated by the SAME coverage the composite used (diffuseOv alpha),
-                                // downsampled. One byte/pixel: 0 = no glow, else 0x80 | (A?0x40) | pairIdx.
-                                int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
-                                var gmap = new byte[gw * gh];
-                                for (int my = 0; my < gh; my++)
+                        // The clip a print is multiplied through: everything THIS mod has already painted on
+                        // this material. Null until one of its layers has painted something, which is exactly
+                        // when a print should show nothing.
+                        paintedByMod.TryGetValue(entry.ModDirectory, out var clip);
+                        if (hasPrintRows && clip == null)
+                            log.Debug("[Proteus] {0} ({1}) prints onto {2}, but this mod has painted nothing "
+                                    + "here yet — a print colours its own mod's fabric, and on bare skin "
+                                    + "there is nothing to print on", entry.ModDirectory, optLabel, mtrlGamePath);
+
+                        byte[]? idD = null;
+                        if (desc.Index != null)
+                            idD = LoadIndexMerged(Path.Combine(entry.SidecarRoot, desc.Index), wD, hD,
+                                                  srcBodyType, entry.ModDirectory);
+
+                        // An indexed print whose _id did not load cannot be routed, so PaintCoverage falls
+                        // back to all-paint and the blend modes silently do nothing. Say so once, here,
+                        // rather than leaving the author to wonder why their print stopped printing.
+                        if (hasPrintRows && desc.Index != null && idD == null)
+                            log.Warning("[Proteus] {0} ({1}) declares blend rows and an index, but the index "
+                                      + "did not load for {2} — the rows fall back to painting, so nothing "
+                                      + "prints. Check the _id texture.",
+                                        entry.ModDirectory, optLabel, mtrlGamePath);
+
+                        // What this overlay PAINTS, as opposed to prints — the same buffer when nothing here
+                        // prints, so the ordinary path allocates nothing and the glow gate below is unchanged.
+                        var paintCov = PaintCoverage(diffuseOv, idD, rows, wD, hD, desc.Index != null);
+
+                        if (idD != null)
+                        {
+                            ApplyIndexedOverlay(baseD, diffuseOv, idD, rows, false, wD, hD, clip);
+
+                            // Glow recipe: which pixels resolve to each row (red/17 = pair, green≥128 =
+                            // sub-row A), gated by the coverage that actually PAINTED, downsampled. One
+                            // byte/pixel: 0 = no glow, else 0x80 | (A?0x40) | pairIdx. A print gates to
+                            // nothing — it lays down no surface of its own for a glow to come off.
+                            int gw = Math.Min(wD, glowMapCap), gh = Math.Min(hD, glowMapCap);
+                            var gmap = new byte[gw * gh];
+                            for (int my = 0; my < gh; my++)
+                            {
+                                int sy = gh == hD ? my : (int)((long)my * hD / gh);
+                                for (int mx = 0; mx < gw; mx++)
                                 {
-                                    int sy = gh == hD ? my : (int)((long)my * hD / gh);
-                                    for (int mx = 0; mx < gw; mx++)
-                                    {
-                                        int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
-                                        int si = (sy * wD + sx) * 4;
-                                        if (diffuseOv[si + 3] == 0) continue;   // outside this overlay's coverage
-                                        gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
-                                    }
+                                    int sx = gw == wD ? mx : (int)((long)mx * wD / gw);
+                                    int si = (sy * wD + sx) * 4;
+                                    if (paintCov[si + 3] == 0) continue;   // outside what this overlay painted
+                                    gmap[my * gw + mx] = (byte)(0x80 | (idD[si + 1] >= 128 ? 0x40 : 0) | ((idD[si] / 17) & 0x0F));
                                 }
-                                glowMaps.Add((entry.ModDirectory, resolved.OptionGroup, resolved.Option, gmap, gw, gh));
                             }
-                            else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                            glowMaps.Add((entry.ModDirectory, resolved.OptionGroup, resolved.Option, gmap, gw, gh));
                         }
-                        else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD);
+                        else ApplyFlatOverlay(baseD, diffuseOv, row16A, wD, hD, clip);
                         diffuseBlended = true; diffuseContributors++;
+
+                        // Hand what this overlay painted to the layers above it. A print contributes nothing,
+                        // so a second print cannot print onto the first — they both reach the fabric instead,
+                        // which is the only reading that does not depend on the order they happen to be in.
+                        if (!paintedByMod.TryGetValue(entry.ModDirectory, out var acc))
+                            paintedByMod[entry.ModDirectory] = acc = new byte[wD * hD];
+                        UnionAlphaInto(acc, paintCov);
                     }
                     else if (desc.Diffuse == null && normalOv != null)
                     {
@@ -5316,18 +5865,26 @@ public class CompositorService : IDisposable
                     */
 
                     // ── Phase B: normal composite ─────────────────────────────
+                    // PaintCovAt, not CovAt. A print recolours a surface it did not lay down, so it has no
+                    // relief of its own to contribute — and Suppress deliberately does not fade a print, so
+                    // CovAt here is now LESS filtered than it used to be: an opaque full-sheet print would
+                    // compound its slopes over the whole body, on top of the fabric's own weave.
                     if (normalOv != null && baseN is { Length: > 0 })
                     {
-                        // Replace mode is a plain alpha-over, which is exactly what a whole-skin overlay
-                        // wants: at full coverage the base is gone rather than added to (CompoundNormal
-                        // would apply the same slopes twice — see NormalMode.Replace), and RGB includes the
-                        // blue channel, so the author's skin-colour influence survives instead of being
-                        // silently inherited from whatever body mod happens to sit underneath.
-                        if (desc.NormalMode == NormalMode.Replace)
-                            AlphaComposite(baseN, normalOv, wN, hN, CovAt(wN, hN));
-                        else
-                            CompoundNormal(baseN, normalOv, wN, hN, CovAt(wN, hN));
-                        normalBlended = true; normalContributors++;
+                        var nCov = PaintCovAt(wN, hN);
+                        if (!hasPrintRows || AnyCoverage(nCov))
+                        {
+                            // Replace mode is a plain alpha-over, which is exactly what a whole-skin overlay
+                            // wants: at full coverage the base is gone rather than added to (CompoundNormal
+                            // would apply the same slopes twice — see NormalMode.Replace), and RGB includes the
+                            // blue channel, so the author's skin-colour influence survives instead of being
+                            // silently inherited from whatever body mod happens to sit underneath.
+                            if (desc.NormalMode == NormalMode.Replace)
+                                AlphaComposite(baseN, normalOv, wN, hN, nCov);
+                            else
+                                CompoundNormal(baseN, normalOv, wN, hN, nCov);
+                            normalBlended = true; normalContributors++;
+                        }
                     }
 
                     // ── Phase B2: suppress skin-color influence under the overlay ──
@@ -5341,14 +5898,23 @@ public class CompositorService : IDisposable
                     // Strength = the user's global setting × this overlay's optional SkinToneMask
                     // (author override; null = full). 0 disables it entirely (no skin masking, and
                     // no normal rewrite for diffuse-only overlays).
+                    // A pure print is excluded, and that matters more than it looks: this guard asks only
+                    // whether a diffuse was declared, and a print declares one. Its art is typically opaque
+                    // across the whole sheet, so an unfiltered print would suppress skin-colour influence
+                    // over the ENTIRE body and take the wearer's skin tone with it. The fabric beneath has
+                    // already run this pass with its own coverage, which is the coverage that is really there.
                     float skinMask = config.SkinColorSuppression * (desc.SkinToneMask ?? 1f);
-                    if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f)
+                    if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f && !purePrint)
                     {
                         baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
-                            var scMask = CovAt(wN, hN);
-                            if (scMask != null)
+                            // AnyCoverage, not a null check: AllRowsPrint is a strict early-out that an
+                            // indexed print almost never satisfies (an unconfigured index cell paints), so
+                            // for most prints the mask arrives here non-null and entirely zero. Running on
+                            // it changes nothing but still marks the normal dirty and republishes it.
+                            var scMask = PaintCovAt(wN, hN);
+                            if (scMask != null && (!hasPrintRows || AnyCoverage(scMask)))
                             {
                                 // Weight the suppression by the composited overlay colour so dark
                                 // dyes keep skin tone (and stay matte) while bright dyes get fully
@@ -5370,7 +5936,7 @@ public class CompositorService : IDisposable
                     {
                         if (baseM == null)
                         {
-                            var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
                             baseM ??= Array.Empty<byte>();
                         }
@@ -5378,15 +5944,20 @@ public class CompositorService : IDisposable
                         {
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = RemapIfNeeded(LoadPng(maskPathD, wM, hM), wM, hM, srcBodyType, maskPathD);
-                            if (ov != null)
+                            // PaintCovAt for the same reason as Phase B: gloss and specular describe a
+                            // surface, and a print does not have one.
+                            var mCov = ov != null ? PaintCovAt(wM, hM) : null;
+                            if (ov != null && (!hasPrintRows || AnyCoverage(mCov)))
                             {
-                                AlphaComposite(baseM, ov, wM, hM, CovAt(wM, hM));
+                                AlphaComposite(baseM, ov, wM, hM, mCov);
                                 maskBlended = true; maskContributors++;
                             }
                         }
                     }
                 }
+                blendOverlayStats.Stop(tOverlays);
 
+                var tMaskRelief = PhaseCounter.Begin();
                 // ── Masks-driven relief ────────────────────────────────────────
                 // Runs once per mod, after every overlay in its stack has composited, for any
                 // active "Masks" option whose export also produced a companion relief normal
@@ -5450,7 +6021,9 @@ public class CompositorService : IDisposable
                         }
                     }
                 }
+                blendMaskReliefStats.Stop(tMaskRelief);
 
+                var tMaskDiffuse = PhaseCounter.Begin();
                 // ── Masks diffuse ──────────────────────────────────────────────
                 // A mod's single "Masks" tab colours its active masks from ONE shared table, composited on
                 // top of the overlay diffuse. The mask _id selects the row, so this is the only place a mask
@@ -5569,6 +6142,7 @@ public class CompositorService : IDisposable
                     if (anyGlow)
                         glowMaps.Add((modDir, SidecarDiscoveryService.MaskGroupName, "Masks", gmap, gw, gh));
                 }
+                blendMaskDiffuseStats.Stop(tMaskDiffuse);
 
                 // ── Ambient occlusion: soft contact-shadow on skin around strap / garment edges ──
                 // Each mod spreads its silhouette into the surrounding skin and darkens the diffuse just
@@ -5759,6 +6333,13 @@ public class CompositorService : IDisposable
                         allOverlays.Any(o => string.Equals(o.Entry.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
                             && o.Overlay.Descriptor.Layer == OverlayLayer.Skin
                             && o.Overlay.Descriptor.Diffuse != null
+                            // A print satisfies all three of the above, so without this it would drag a mod
+                            // into AO that would never otherwise have qualified for it. Cheap preset test
+                            // first — this lambda is re-evaluated per mod per sweep, and building a row
+                            // dictionary for every overlay that has never printed is pure waste.
+                            && !(AnyBlendRow(o.Overlay.ColorTableRows)
+                                 && AllRowsPrint(BuildRowDict(o.Overlay.ColorTableRows),
+                                                 o.Overlay.Descriptor.Index != null))
                             && o.Overlay.Descriptor.MaterialGamePaths.Contains(mtrlGamePath, StringComparer.OrdinalIgnoreCase)));
 
                     // Union of the opaque coverage of every garment ABOVE the one being processed: a lower
@@ -6050,7 +6631,11 @@ public class CompositorService : IDisposable
             // the last real skin composite produced instead of publishing nothing: the panel would go blank
             // and the colour-table editor's Glow button would lose its targets, on a composite that changed
             // nothing about the skin.
-            _channelContributions = skinReused
+            // Into locals, published just below the supersede check. A superseded run reaches this point
+            // AFTER the winner may already have published, and assigning here would leave the two locators
+            // describing the losing run while the manifest describes the winning one — the editor's Glow
+            // locator pointing at materials the published manifest does not contain.
+            var nextChannelContributions = skinReused
                 ? lastSkin!.Contributions
                 : contributions.Values
                     .Where(c => c.Touched || c.DiffuseWanted || c.Diffuse + c.Normal + c.Mask > 0)
@@ -6059,8 +6644,8 @@ public class CompositorService : IDisposable
 
             LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
 
-            // Publish the glow recipes gathered above (empty dict if no indexed skin overlays).
-            _skinGlowTargets = skinReused
+            // The glow recipes gathered above (empty dict if no indexed skin overlays).
+            var nextSkinGlowTargets = skinReused
                 ? new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(lastSkin!.GlowTargets)
                 : new Dictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>(skinGlow);
 
@@ -6069,12 +6654,55 @@ public class CompositorService : IDisposable
             var skinRedirectsThisRun =
                 new Dictionary<string, string>(redirects, StringComparer.OrdinalIgnoreCase);
 
+            // ── Superseded: stop before the shell build ───────────────────────
+            // The last ct check is ~1200 lines up, in the per-overlay loop, so without this a run that was
+            // superseded during the blend goes on to build a second skin and republish over the run that
+            // replaced it. One click producing four ModSettingChanged events ran three overlapping
+            // composites, two of which wrote byte-identical output, for ~30 s of wall clock.
+            //
+            // HERE and not one line lower: from _needFullRedraw / _secondSkinActive below, the shell state
+            // stops describing the published manifest, and the readers of _secondSkinActive (the redraw
+            // hook's carrier reconcile, the carrier retry) would be answering off a shell this run is not
+            // going to publish. Everything written above this point is content-hashed on disk, collected by
+            // the next PruneSupersededOutput — which is where a cancelled run's output already goes.
+            //
+            // The two UI locators are published just BELOW this, out of the locals above, so a run that
+            // stops here leaves the previous composite's values standing rather than the losing run's.
+            // _skinGlowTargets in particular must not be left EMPTY mid-composite: an empty
+            // GetSkinGlowTargets is what makes the colour-table editor fire glow-warmup / mask-glow-warmup,
+            // and that one-shot is spent permanently once burned — so blanking it here would ADD a trigger
+            // to the very burst this exists to shrink. Holding the previous value does neither.
+            //
+            // This also lands ABOVE SecondSkinService.Build, which clears remapCache and UnwearableContent
+            // on a service instance shared with the run that superseded us. Bailing here stops the loser
+            // thrashing the winner's cache, not merely its own.
+            //
+            // Nothing persistent is left half-written: _forcePending / _skinForcePending, the fingerprint
+            // and _lastSkinPublish are all set at the publish below, so the run that replaced us inherits
+            // every latch it is owed and its gates behave exactly as if we had never run.
+            if (Superseded(epoch))
+            {
+                log.Information("[Proteus] recomposite superseded — a newer composite is running; dropping "
+                              + "this one before the shell build ({0:F0}ms in)",
+                    PhaseCounter.MsSince(tRunStart));
+                return;
+            }
+
+            _channelContributions = nextChannelContributions;
+            _skinGlowTargets      = nextSkinGlowTargets;
+
             // ── Second skin: one gear shell per Layer:Gear overlay ────────────
             // Built from the body model the character is CURRENTLY drawing (resolved live through
             // Penumbra) — a shell cut from any other body shape shows the body through it.
             List<object>? manipulations = null;
-            _needFullRedraw = false;
-            _secondSkinActive = false;
+            // Built into LOCALS and published below the supersede check, for the same reason the three
+            // shell locators below are: a run that gets superseded during the gear build must not leave
+            // these describing a composite it never published. They outlive the run — _appendHostModelPaths
+            // is written THROUGH TO CONFIG — so a stale one is not self-correcting the way a redraw flag is.
+            bool nextNeedFullRedraw = false;
+            bool nextSecondSkinActive = false;
+            HashSet<string>? nextShellHostPaths = null;
+            HashSet<string>? nextAppendHosts = null;
             // The three UI-facing locators are built into LOCALS and published as one step after the gear
             // phase (below), instead of being cleared here and refilled ~1.2 s later. That clear opened a
             // window in which the fields said "no shell was built" while one plainly was: the editor's Glow
@@ -6309,7 +6937,12 @@ public class CompositorService : IDisposable
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
                             InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
-                            _humanPartModels, contentLayers);
+                            _humanPartModels, contentLayers,
+                            // Skin-layer mods count too: a toe cap map is about the foot, not about
+                            // whether the mod shipping it happens to put a shell over the toes.
+                            entries.Concat(gearOverlays.Select(g => g.Entry))
+                                   .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
+                                   .Select(g => g.First()).ToList());
                         if (shells != null)
                         {
                             shellBuilt = true;
@@ -6338,7 +6971,7 @@ public class CompositorService : IDisposable
                             foreach (var (gamePath, relPath) in shells.Redirects)
                                 redirects[gamePath] = relPath;
                             manipulations = shells.Manipulations;
-                            _secondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
+                            nextSecondSkinActive = true;   // an accessory model was redirected — disable must full-redraw
 
                             // Only new GEOMETRY forces the heavy path. A colorset edit rewrites just the
                             // .mtrl, and treating that like a new model cost a character redraw — and its
@@ -6352,8 +6985,9 @@ public class CompositorService : IDisposable
                             // reload — the morph didn't show until a manual refresh. Treat a shape-set change
                             // as a redraw trigger in its own right.
                             var shapeSig = BodyShapeSignature(bodyShapes);
+                            // Compared, not stored: the publish below records the signature for every
+                            // composite, and doing it here as well was a dead store that line overwrote.
                             bool shapesChanged = !string.Equals(shapeSig, _lastCompositedBodyShapeSig, StringComparison.Ordinal);
-                            _lastCompositedBodyShapeSig = shapeSig;
 
                             // A spill host being added or (crucially) dropped as the layer count changes needs
                             // a full redraw so the vacated accessory reloads its real model — the in-place
@@ -6361,7 +6995,7 @@ public class CompositorService : IDisposable
                             // hosts; this catches a host that simply vanished from the set.
                             var hostPaths = new HashSet<string>(shells.HostModelPaths, StringComparer.OrdinalIgnoreCase);
                             bool hostsChanged = !hostPaths.SetEquals(_lastShellHostPaths);
-                            _lastShellHostPaths = hostPaths;
+                            nextShellHostPaths = hostPaths;
 
                             // A FORCED trigger that produced NO change at all is the user pressing
                             // recomposite and getting byte-identical output. That is precisely the state an
@@ -6393,8 +7027,8 @@ public class CompositorService : IDisposable
                             bool confirmedDrawn = standing != null
                                 && string.Equals(_shellConfirmedDrawnKey, ShellProbeKey(standing), StringComparison.Ordinal);
                             bool unstickShell = force && nothingChanged && !confirmedDrawn;
-                            _needFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
-                                           || unstickShell;
+                            nextNeedFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
+                                              || unstickShell;
                             if (unstickShell)
                                 log.Debug("[Proteus] second skin unchanged on a forced composite and not yet "
                                         + "confirmed drawn — redrawing anyway, since an in-place reload "
@@ -6425,27 +7059,60 @@ public class CompositorService : IDisposable
                             // tell an append host from a carrier. Written only on a real change — this runs
                             // on every composite and config.Save() is disk I/O.
                             //
-                            // LAST in this block, and under the same lock every other off-thread save takes
-                            // (see _bodyModConfigLock). Save() serializes the whole Configuration, so an
-                            // unsynchronized one can throw "collection was modified" while ClassifySurfaceMod mutates
-                            // KnownBodyMods on its own thread — and thrown from higher up this block it would
-                            // be swallowed as "second skin build failed" and skip _needFullRedraw, leaving a
-                            // changed shell model to an in-place reload that never re-fetches an accessory
-                            // .mdl. Everything load-bearing is already assigned above; this can only lose
-                            // the persisted hint, which the next composite rewrites.
-                            var appendHosts = new HashSet<string>(shells.AppendHostModelPaths, StringComparer.OrdinalIgnoreCase);
-                            if (!appendHosts.SetEquals(_appendHostModelPaths))
-                            {
-                                _appendHostModelPaths = appendHosts;
-                                lock (_bodyModConfigLock)
-                                {
-                                    config.AppendHostModelPaths = [.. appendHosts];
-                                    config.Save();
-                                }
-                            }
+                            // Captured here, compared and SAVED below the supersede check. This is the one
+                            // piece of shell state that reaches disk, and config.Save() from a run that
+                            // publishes nothing is the only damage in this block that outlives the session:
+                            // the set is seeded from config at construction, so a stale one still masks the
+                            // wrong paths from PrimeUpstreamCache after a restart.
+                            nextAppendHosts =
+                                new HashSet<string>(shells.AppendHostModelPaths, StringComparer.OrdinalIgnoreCase);
                         }
                     }
                     catch (Exception ex) { log.Error(ex, "[Proteus] second skin build failed"); }
+            }
+
+            // ── Superseded: stop before the publish ───────────────────────────
+            // The gear build above is seconds long, so a run that was current at the check before it may not
+            // be current now. This one is not an optimisation — it protects publish integrity.
+            //
+            // WriteManagedModJson is _manifestLock-guarded but replaces the manifest WHOLESALE with no
+            // version check, so a stale run finishing second does not merely waste time. It reinstates the
+            // pre-edit manifest, records its own fingerprint as "what is published" (self-consistent, so the
+            // next ambient trigger correctly skips), carries a stale skin into _lastSkinPublish, and CLEARS
+            // _forcePending — marking the newer run's forced work as satisfied while its output has just
+            // been overwritten. That is exactly the silent "my colour edit never applied" failure the latch
+            // was written to prevent, arriving through the publish race instead of through cancellation.
+            //
+            // Ahead of EVERY publish below, the shell state included. The gear phase writes no field of its
+            // own any more: _needFullRedraw, _secondSkinActive, _lastShellHostPaths and _appendHostModelPaths
+            // all come out of the next* locals below this check. A loser can reach the END of its gear build
+            // after the winner has already published, and a direct write up there would then overwrite the
+            // winner's host bookkeeping with the stale run's — _appendHostModelPaths worst of all, since it
+            // is written through to config and would survive a restart still masking the wrong paths from
+            // PrimeUpstreamCache.
+            if (Superseded(epoch))
+            {
+                log.Information("[Proteus] recomposite superseded — a newer composite is running; not "
+                              + "publishing ({0:F0}ms in)", PhaseCounter.MsSince(tRunStart));
+                return;
+            }
+
+            _needFullRedraw    = nextNeedFullRedraw;
+            _secondSkinActive  = nextSecondSkinActive;
+            if (nextShellHostPaths != null) _lastShellHostPaths = nextShellHostPaths;
+
+            // Only on a real change — this runs on every composite and config.Save() is disk I/O. Under the
+            // same lock every other off-thread save takes (see _bodyModConfigLock): Save() serializes the
+            // whole Configuration, so an unsynchronized one can throw "collection was modified" while
+            // ClassifySurfaceMod mutates KnownBodyMods on its own thread.
+            if (nextAppendHosts != null && !nextAppendHosts.SetEquals(_appendHostModelPaths))
+            {
+                _appendHostModelPaths = nextAppendHosts;
+                lock (_bodyModConfigLock)
+                {
+                    config.AppendHostModelPaths = [.. nextAppendHosts];
+                    config.Save();
+                }
             }
 
             // Publish the locators in one step, now that the gear phase has an answer. Null ⇒ no shell was
@@ -6469,10 +7136,15 @@ public class CompositorService : IDisposable
                 log.Debug("[Proteus] second skin removed — forcing a full redraw to restore host accessories");
             }
 
-            // Record the enabled-shape signature on EVERY composite — the gear phase above only sets it when
-            // a shell actually builds. Without this, a skin-only composite (no gear shell) on a character WITH
-            // shape keys leaves _lastCompositedBodyShapeSig stale, so SchedulePostRedrawBodyTypeCheck sees a
-            // permanent mismatch and recomposites forever. Same snapshot the composite ran against.
+            // Record the enabled-shape signature on EVERY composite. Without this, a skin-only composite (no
+            // gear shell) on a character WITH shape keys leaves _lastCompositedBodyShapeSig stale, so
+            // SchedulePostRedrawBodyTypeCheck sees a permanent mismatch and recomposites forever. Same
+            // snapshot the composite ran against.
+            //
+            // The ONLY write to this field on the publishing path. The gear phase used to assign it too,
+            // from its own `shapeSig` local, but that store was always overwritten by this line a moment
+            // later — so it was dead, and it is now simply gone rather than deferred. The live use of
+            // `shapeSig` is the `shapesChanged` comparison, which reads the field BEFORE writing it.
             _lastCompositedBodyShapeSig = BodyShapeSignature(_bodyShapeSnapshot);
 
             // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
@@ -6646,6 +7318,53 @@ public class CompositorService : IDisposable
     private readonly PhaseCounter blendSilhouetteStats = new();
     private readonly PhaseCounter blendBlurStats       = new();
 
+    // Splitting what was left. With AO measured at only 346ms of a 1549ms blend, `rest` held 1151ms across
+    // three unbounded regions and there was no way to tell which. These three are mutually exclusive and
+    // cover everything of size in the material task; whatever survives them is per-material setup.
+    //
+    // Measurement only — nothing is optimised off these until they have been read. Guessing where blend
+    // time goes has been wrong four times out of six on this pipeline, and the one real win (the island
+    // blur) was invisible until the sub-counters above existed.
+    private readonly PhaseCounter blendOverlayStats     = new();
+    private readonly PhaseCounter blendMaskReliefStats  = new();
+    private readonly PhaseCounter blendMaskDiffuseStats = new();
+
+    // Inside the overlay loop, which the three above measured at essentially ALL of the non-AO blend
+    // (maskrelief and maskdiffuse both came back at 0). These five split it by KERNEL rather than by
+    // region, because the expensive calls are scattered across ~470 lines and reached through local
+    // closures (CovAt, PaintCovAt, ClaimAt) that call each other — bracketing regions would double-count.
+    //
+    // Static because the kernels are static and are reached from many call sites; timing them at the
+    // definition catches every one without touching any caller. SecondSkinService calls some of them too,
+    // but the shell phase runs AFTER LogPhaseBreakdown prints, so those never land in a printed figure.
+    //
+    // EXCLUSIVITY IS THE INVARIANT HERE, and it is not free: overlayGlueMs subtracts every one of these
+    // from the overlay total, so any pair that nests would remove the same milliseconds twice and could
+    // report a `glue` of zero over real work. Two of them would nest naturally — LoadIndexMerged makes the
+    // loads that `load` counts, and Suppress reaches the kernels that `cov` counts — so each of those two
+    // times only its own exclusive region rather than its whole call. Subtracting a nested child's time
+    // instead would not work: the counters are global and the other material's worker adds to them
+    // concurrently, so a before/after delta would capture that worker's time too. Anything added here must
+    // keep the invariant the same way.
+    private static readonly PhaseCounter blendCovStats      = new();   // coverage build: clone-heavy leaves
+    private static readonly PhaseCounter blendDiffuseStats  = new();   // full-4K diffuse composites
+    private static readonly PhaseCounter blendNormalStats   = new();   // full-4K normal recombine
+    private readonly PhaseCounter blendIdxMergeStats        = new();   // index clone + serial mask merge
+    private readonly PhaseCounter blendSeamDropStats        = new();   // summed-area table, serial
+
+    // Round two. The five above accounted for 109ms of a 1628ms overlay loop — the coverage-rebuild
+    // theory measured at 21ms over 7 calls and is dead — so 93% of it was in the unnamed remainder.
+    // These four cover what the remainder is actually made of: the load path (which the decode counters
+    // do NOT cover, because a cache hit still costs a copy and LoadBaseTexture is a separate route),
+    // the two remaining local closures that touch whole buffers, and upstream resolution.
+    // CombinedMaskAt is deliberately NOT among them: it calls RemapIfNeeded internally, so timing it would
+    // double-count against `load`. Its loads land in `load` and its plane build stays in `glue`; it is
+    // memoised per (mod, w, h) anyway, so it runs a handful of times per composite.
+    private readonly PhaseCounter blendLoadStats     = new();   // LoadPng + RemapIfNeeded
+    private readonly PhaseCounter blendBaseLoadStats = new();   // LoadBaseTexture
+    private readonly PhaseCounter blendResolveStats  = new();   // ResolveUpstream
+    private readonly PhaseCounter blendSuppressStats = new();   // Suppress: clone + SERIAL full-buffer pass
+
     private void ResetBlendStats()
     {
         blendIslandStats.Reset();
@@ -6654,6 +7373,18 @@ public class CompositorService : IDisposable
         blendTagStats.Reset();
         blendSilhouetteStats.Reset();
         blendBlurStats.Reset();
+        blendOverlayStats.Reset();
+        blendMaskReliefStats.Reset();
+        blendMaskDiffuseStats.Reset();
+        blendCovStats.Reset();
+        blendDiffuseStats.Reset();
+        blendNormalStats.Reset();
+        blendIdxMergeStats.Reset();
+        blendSeamDropStats.Reset();
+        blendLoadStats.Reset();
+        blendBaseLoadStats.Reset();
+        blendResolveStats.Reset();
+        blendSuppressStats.Reset();
     }
 
     /// <summary>Time a seam-map lookup. A hit is near-free; a miss is a ~1s build, and the two are
@@ -6706,7 +7437,25 @@ public class CompositorService : IDisposable
         // under two headings. "rest" is then the per-overlay kernels and everything else unattributed:
         // the overlay blend passes, mask compositing, base clones, and whatever is genuinely left.
         var aoMs   = Math.Max(0, blendAoStats.Ms - (blendSeamStats.Ms + blendTagStats.Ms));
-        var restMs = blendMs - (blendIslandStats.Ms + blendSeamStats.Ms + aoMs + blendTagStats.Ms);
+        // The three regions that used to make up almost all of "rest": the per-overlay loop and the two
+        // post-loop Masks passes. Mutually exclusive and none of them overlaps AO, so they subtract cleanly.
+        //
+        // ONE caveat when reading them cold: decode-wait and remap are already out of blendMs, but a
+        // LoadPng or RemapIfNeeded inside the overlay loop is inside `overlay`. So on a cold run `overlay`
+        // double-counts against those two — both reported separately above — and `rest` is a floor rather
+        // than an exact remainder. Warm (the case worth optimising) both are ~0 and the split is exact.
+        var restMs = Math.Max(0, blendMs - (blendIslandStats.Ms + blendSeamStats.Ms + aoMs + blendTagStats.Ms
+                                          + blendOverlayStats.Ms + blendMaskReliefStats.Ms
+                                          + blendMaskDiffuseStats.Ms));
+        // What the five kernel counters do NOT account for inside the overlay loop: texture loads, the
+        // remaps around them, and the glue between passes. Clamped for the same reason `rest` is — the
+        // kernels are timed inside their own definitions and so include any decode-wait they trigger,
+        // which is already out of blendMs.
+        var overlayGlueMs = Math.Max(0, blendOverlayStats.Ms
+                                      - (blendCovStats.Ms + blendIdxMergeStats.Ms + blendDiffuseStats.Ms
+                                       + blendNormalStats.Ms + blendSeamDropStats.Ms
+                                       + blendLoadStats.Ms + blendBaseLoadStats.Ms + blendResolveStats.Ms
+                                       + blendSuppressStats.Ms));
         // The two measured pieces inside AO; "apply" is what remains of it (ApplyAmbientOcclusion,
         // ApplyNormalIndent, the coveredAbove merge, and the mask combine).
         var aoApplyMs = Math.Max(0, aoMs - (blendSilhouetteStats.Ms + blendBlurStats.Ms));
@@ -6715,14 +7464,25 @@ public class CompositorService : IDisposable
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit, {4} blocked) | " +
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
             "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} " +
-            "+ apply {20:F0}] | tag {21:F0}/{22} | rest {23:F0}) | " +
-            "swizzle {24:F0}ms | write {25:F0}ms ({26} files, {27:F0} MB) | composite {28:F0}ms | total {29:F0}ms | " +
-            "{30} material(s) | cache {31} entries, {32:F0} MB, {33} evicted (budget {34:F0} MB)",
+            "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
+            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} " +
+            "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
+            "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
+            "swizzle {46:F0}ms | write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
+            "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB)",
             setupMs, wait.Ms, decode.Calls, hits.Calls, blocked.Calls,
             prefetch.Ms, decode.Ms, nativeD.Calls, decode.Calls, remap.Ms, remap.Calls,
             blendMs, blendIslandStats.Ms, blendSeamStats.Ms, blendSeamStats.Calls, aoMs,
             blendSilhouetteStats.Ms, blendSilhouetteStats.Calls, blendBlurStats.Ms, blendBlurStats.Calls,
-            aoApplyMs, blendTagStats.Ms, blendTagStats.Calls, restMs,
+            aoApplyMs, blendTagStats.Ms, blendTagStats.Calls,
+            blendOverlayStats.Ms,
+            blendCovStats.Ms, blendCovStats.Calls, blendIdxMergeStats.Ms, blendIdxMergeStats.Calls,
+            blendDiffuseStats.Ms, blendDiffuseStats.Calls, blendNormalStats.Ms, blendNormalStats.Calls,
+            blendSeamDropStats.Ms, blendSeamDropStats.Calls,
+            blendLoadStats.Ms, blendLoadStats.Calls, blendBaseLoadStats.Ms, blendBaseLoadStats.Calls,
+            blendResolveStats.Ms, blendResolveStats.Calls,
+            blendSuppressStats.Ms, blendSuppressStats.Calls, overlayGlueMs,
+            blendMaskReliefStats.Ms, blendMaskDiffuseStats.Ms, restMs,
             swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
@@ -7363,7 +8123,33 @@ public class CompositorService : IDisposable
     /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
     /// upstream, which lets the loader fall through to game data as before.
     /// </summary>
+    /// <summary>
+    /// Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.
+    /// <para/>
+    /// This is called from outside the blend too (PrimeUpstreamCache, the shell's source walk). Those land
+    /// in the counter as well, but the counter is reset per run and printed before the shell phase, so the
+    /// only non-blend contribution is setup — measured at ~30 ms, and reported separately.
+    /// </summary>
     private string? ResolveUpstream(string gamePath)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ResolveUpstreamCore(gamePath); }
+        finally { blendResolveStats.Stop(t0); }
+    }
+
+    /// <summary>
+    /// Time a base-texture load into the same counter as <see cref="ResolveUpstream"/>. The two never nest:
+    /// where a call reads <c>LoadBaseTexture(ResolveUpstream(p), p)</c> the resolve is an ARGUMENT, so it
+    /// has finished before the load begins.
+    /// </summary>
+    private (byte[] rgba, int width, int height)? TimedLoadBaseTexture(string? disk, string gamePath)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return textureLoader.LoadBaseTexture(disk, gamePath); }
+        finally { blendBaseLoadStats.Stop(t0); }
+    }
+
+    private string? ResolveUpstreamCore(string gamePath)
     {
         var disk = penumbra.ResolvePlayer(gamePath);
 
@@ -7470,6 +8256,268 @@ public class CompositorService : IDisposable
     public IReadOnlyList<ChannelContribution> ChannelContributions() => _channelContributions;
 
     private volatile IReadOnlyList<ChannelContribution> _channelContributions = [];
+
+    /// <summary>
+    /// Why an enabled mod contributed nothing at all. Ordered as the ladder tests them, most specific
+    /// first — see <see cref="Explain"/>.
+    /// <para/>
+    /// A typed cause rather than a finished sentence, because the two consumers need different sentences
+    /// from the same fact: the log wants English (a log is a bug report, and a translated one cannot be
+    /// searched or pasted into an issue) and the status window wants the user's language.
+    /// </summary>
+    public enum InertCause
+    {
+        /// <summary>Not inert. Never stored; the absence of an entry is what says a mod is fine.</summary>
+        None,
+        /// <summary>Penumbra did not answer when asked which options are on, so nothing could be resolved.
+        /// Says nothing about the mod — only that we could not find out.</summary>
+        SettingsUnreadable,
+        /// <summary>Every option group the pack declares is absent from Penumbra's copy of the mod. An
+        /// authoring error: nothing in them can ever be ticked, so only the author can fix it.</summary>
+        GroupsMissing,
+        /// <summary>The groups are all there and the user has ticked nothing in any of them. By far the
+        /// most common cause, and the one a freshly installed pack lands on.</summary>
+        NothingTicked,
+        /// <summary>Options are ticked, but every material the pack paints belongs to a body or race this
+        /// character is not wearing.</summary>
+        WrongRace,
+        /// <summary>The pack's masks render as a gear shell, and a shell is built FROM a mask — so with no
+        /// mask ticked there is nothing to build, and the ticked fabric has nowhere to land.</summary>
+        MaskNeedsShell,
+        /// <summary>Options resolved and nothing was obviously wrong, but none of it reached a surface this
+        /// character has loaded. The honest "we don't know" rung.</summary>
+        NothingReached,
+    }
+
+    /// <summary>
+    /// One enabled mod's reason for contributing nothing, with the parts both formatters need already
+    /// joined into readable text — group names, race names — so the English log line and the localized
+    /// tooltip state the same facts and cannot drift apart.
+    /// </summary>
+    /// <param name="Cause">Which rung of the ladder matched.</param>
+    /// <param name="GroupCount">How many option groups the pack declares. Only set for
+    /// <see cref="InertCause.NothingTicked"/>.</param>
+    /// <param name="Groups">The groups involved, comma-joined and in the pack's own order.</param>
+    /// <param name="Wants">What the pack paints — bodies and races — for
+    /// <see cref="InertCause.WrongRace"/>.</param>
+    /// <param name="Have">What the character actually is, same shape as <paramref name="Wants"/>.</param>
+    public readonly record struct InertReason(
+        InertCause Cause, int GroupCount, string Groups, string Wants, string Have);
+
+    /// <summary>
+    /// Which rung one inert mod lands on, given everything already known about it. Pure and static so the
+    /// ladder can be tested without a compositor, a collection or a character — the impure half (deciding
+    /// WHICH mods are inert, publishing, logging) is <see cref="ExplainInertMods"/>.
+    /// <para/>
+    /// First match wins, and the order is the point: the rungs run most-specific first so a mod with two
+    /// things wrong is described by the one the user can act on. A pack whose groups were renamed on
+    /// re-export also has nothing ticked — saying "tick an option" there would send them to a Penumbra
+    /// window with nothing in it to tick.
+    /// </summary>
+    /// <param name="masksSelected">Mask options ticked, toe cap excluded — it is not a mask.</param>
+    /// <param name="maskLayerIsGear">The pack's Masks tab renders as a shell rather than onto the skin.</param>
+    /// <param name="materialsFiltered">The live-material filter dropped at least one of this mod's
+    /// materials AND the sibling pass did not put it back.</param>
+    /// <param name="wants">What the pack paints, already readable. Empty when unknown.</param>
+    /// <param name="have">What the character is, same shape. Empty when the snapshot could not say —
+    /// which is a real state mid-redraw, and must not be reported as a mismatch.</param>
+    internal static InertReason Explain(
+        ResolutionDiagnostic diag,
+        bool maskGroupPresent,
+        int masksSelected,
+        bool maskLayerIsGear,
+        bool materialsFiltered,
+        string wants,
+        string have)
+    {
+        // 1. We could not find out. Distinct from every rung below, all of which are statements about the
+        //    mod: this one is a statement about Penumbra, and it must not be dressed up as the others.
+        //    Only Unavailable — an ASKED question that went unanswered — counts. NotAsked is the healthy
+        //    state of a pack whose content none of the selection touches, and treating it as a failure
+        //    would make every unconditional pack look broken.
+        if (diag.Settings == SettingsRead.Unavailable)
+            return new InertReason(InertCause.SettingsUnreadable, 0, "", "", "");
+
+        // 2. The pack names groups Penumbra has not got. Only when ALL of them are missing — a pack with
+        //    one stale group name and three good ones is a mod the user simply hasn't ticked.
+        if (diag.GroupCount > 0 && diag.MissingGroups.Count == diag.GroupCount)
+            return new InertReason(InertCause.GroupsMissing, diag.GroupCount,
+                string.Join(", ", diag.MissingGroups), "", "");
+
+        // 3. Nothing is ticked anywhere. Masks count as a group here even though they are a convention
+        //    rather than a metadata.json entry: to the person looking at Penumbra they are one more list
+        //    with nothing selected in it, and a message that names the other two and omits the one that
+        //    builds the garment would send them back a second time.
+        int selectable = diag.GroupCount + (maskGroupPresent ? 1 : 0);
+        int untouched  = diag.EmptyGroups.Count + diag.MissingGroups.Count
+                       + (maskGroupPresent && masksSelected == 0 ? 1 : 0);
+        if (selectable > 0 && untouched == selectable)
+        {
+            var names = diag.EmptyGroups.Concat(diag.MissingGroups).ToList();
+            if (maskGroupPresent && masksSelected == 0) names.Add(SidecarDiscoveryService.MaskGroupName);
+            return new InertReason(InertCause.NothingTicked, selectable, string.Join(", ", names), "", "");
+        }
+
+        // 4. Ticked, but for a body nobody here is wearing. Requires a known wearer: mid-redraw the
+        //    snapshot legitimately reports no char code at all, and announcing a race mismatch off that
+        //    would accuse every correctly-authored pack once per race change.
+        if (materialsFiltered && have.Length > 0 && wants.Length > 0)
+            return new InertReason(InertCause.WrongRace, 0, "", wants, have);
+
+        // 5. Ticked fabric with nothing to cut it into. The masks are the garment's shape, and with the
+        //    Masks tab set to Gear the shape is also the only surface — so no mask means no shell, and the
+        //    fabric has nowhere to land.
+        if (maskLayerIsGear && masksSelected == 0)
+            return new InertReason(InertCause.MaskNeedsShell, 0,
+                SidecarDiscoveryService.MaskGroupName, "", "");
+
+        // 6. Everything resolved and none of it arrived. Says so plainly rather than guessing; a wrong
+        //    specific reason is worse than an honest vague one, because it sends the reader somewhere.
+        return new InertReason(InertCause.NothingReached, 0, "", "", "");
+    }
+
+    /// <summary>
+    /// Find every mod that is switched on and contributed nothing to this composite, work out why, publish
+    /// it for the status window and say it once in the log.
+    /// <para/>
+    /// WHERE THIS IS CALLED FROM IS PART OF THE DESIGN. It must run after sibling synthesis, which puts
+    /// back overlays the live-material filter dropped: a Bibo-authored pack on a gen3 body loses every
+    /// material to that filter and then gets every one of them back through the transfer maps, so a ladder
+    /// run any earlier would report "wrong race" about packs that are rendering perfectly. It must also run
+    /// after the second <c>maskShellMods</c> loop, because a mask shell is the fourth and last way a mod
+    /// can contribute and the set is not complete until then. Both make this the first honest moment.
+    /// <para/>
+    /// SCOPE. This answers "nothing this mod has got as far as being scheduled". A mod that DID reach the
+    /// gear phase and then lost its shell — no host with room, no cuttable surface, a race its pieces do
+    /// not fit — is not inert and is not described here; that is
+    /// <see cref="SecondSkinService.UnwearableContent"/>'s job, surfaced through
+    /// <see cref="GetUnwearableContentReason"/>. The <c>contributing</c> set below is exactly the boundary
+    /// between the two, which is why they can never both fire for the same mod.
+    /// </summary>
+    private void ExplainInertMods(
+        List<OverlayEntry> entries,
+        Dictionary<string, List<(OverlayEntry Entry, ResolvedOverlay Overlay)>> byMaterial,
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        List<(OverlayEntry Entry, ResolvedContent Content)> contentLayers,
+        HashSet<string> maskShellMods,
+        Dictionary<string, OverlayDescriptor> maskDescByMod,
+        Dictionary<string, ResolutionDiagnostic> resolution,
+        HashSet<string> filteredOut,
+        HashSet<string>? wornCharCodes,
+        HashSet<string> activeBodyTypes,
+        List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays)
+    {
+        // The four destinations a mod can reach, unioned in one pass. Walking byMaterial per mod instead
+        // would be O(mods x materials x overlays) on the composite's hot path for an answer that is almost
+        // always "everything is fine".
+        //
+        // Materials the AO top-up added carry an EMPTY overlay list, so they contribute no mod here — which
+        // is right: a shadow cast onto a material by someone ELSE's gear is not this mod contributing.
+        var contributing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in byMaterial.Values)
+            foreach (var (e, _) in list) contributing.Add(e.ModDirectory);
+        foreach (var (e, _) in gearOverlays)  contributing.Add(e.ModDirectory);
+        foreach (var (e, _) in contentLayers) contributing.Add(e.ModDirectory);
+        foreach (var m in maskShellMods)      contributing.Add(m);
+
+        var inert = entries.Where(e => !contributing.Contains(e.ModDirectory)).ToList();
+        if (inert.Count == 0)
+        {
+            // Publish the empty map rather than leaving the last one standing: a mod the user has just
+            // fixed must lose its warning, and "no entry" is how this says a mod is fine.
+            if (_inertMods.Count > 0)
+                _inertMods = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
+            return;
+        }
+
+        // Only now — and only for the handful of mods that came out empty — is it worth asking Penumbra
+        // anything extra. On the healthy path this line is never reached.
+        var collId = penumbra.GetPlayerCollectionId();
+
+        var have = wornCharCodes is { Count: > 0 }
+            ? Describe(activeBodyTypes, wornCharCodes)
+            : "";
+
+        var next = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in inert)
+        {
+            var diag = resolution.TryGetValue(entry.ModDirectory, out var d) ? d : ResolutionDiagnostic.None;
+
+            // No collection is the same failure the resolvers report as Unavailable, reached by a
+            // different door — and it has to be folded in here rather than left to them, because a pack
+            // whose overlays and content both short-circuit before the IPC hop never asked and so never
+            // found out. Without this a masks-only pack during a Penumbra outage came out as the ladder's
+            // shrug instead of naming the outage.
+            if (!collId.HasValue) diag = diag with { Settings = SettingsRead.Unavailable };
+
+            // The group names Penumbra has for this mod were parsed out of its meta.json on the way here,
+            // so the mask question is answered from that instead of re-reading the same file.
+            var (maskGroup, masksOn) = collId.HasValue
+                ? discovery.MaskSelectionState(entry, collId.Value, diag.PenumbraGroups)
+                : (false, 0);
+
+            // What this pack paints, read off its OWN descriptors rather than off what survived — the
+            // surviving set is empty, which is the thing being explained.
+            var mine = allOverlays.Where(p => string.Equals(p.Entry.ModDirectory, entry.ModDirectory,
+                                                            StringComparison.OrdinalIgnoreCase))
+                                  .SelectMany(p => p.Overlay.Descriptor.MaterialGamePaths)
+                                  .ToList();
+            var wants = mine.Count > 0
+                ? Describe(mine.Select(UVRemapService.InferBodyType).OfType<string>(),
+                           mine.Select(ExtractHumanCharCode).OfType<string>())
+                : "";
+
+            bool maskGear = maskDescByMod.TryGetValue(entry.ModDirectory, out var md)
+                         && md.Layer == OverlayLayer.Gear;
+
+            var reason = Explain(diag, maskGroup, masksOn, maskGear,
+                                 filteredOut.Contains(entry.ModDirectory), wants, have);
+            next[entry.ModDirectory] = reason;
+
+            if (_inertReported.TryAdd(
+                    $"{entry.ModDirectory}\0{reason.Cause}\0{reason.Groups}\0{reason.Wants}\0{reason.Have}", 0))
+                log.Information("[Proteus] {0} is enabled but contributes nothing: {1}",
+                    entry.ModDirectory, EnglishInert(reason));
+        }
+
+        _inertMods = next;
+    }
+
+    /// <summary>
+    /// "bibo · Midlander F, Viera F" — a body-type set and a race-code set as one phrase, deduplicated and
+    /// in the order given. Both halves matter and neither is enough alone: the same race on Bibo+ and on
+    /// gen3 are different surfaces, and the same body on two races are different files.
+    /// </summary>
+    private static string Describe(IEnumerable<string> bodyTypes, IEnumerable<string> charCodes)
+    {
+        var bodies = string.Join("+", bodyTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
+        var races  = ModelRace.DescribeAll(charCodes);
+        if (bodies.Length == 0) return races;
+        return races.Length == 0 ? bodies : $"{bodies} · {races}";
+    }
+
+    /// <summary>
+    /// One <see cref="InertReason"/> as English. The log stays English in every locale on purpose: it is
+    /// evidence, and evidence that changes language cannot be searched for, compared against another
+    /// user's, or pasted into an issue. The translated wording of the same facts lives in the status
+    /// window — see <c>Strings.Mods.Inert*</c>.
+    /// </summary>
+    private static string EnglishInert(InertReason r) => r.Cause switch
+    {
+        InertCause.SettingsUnreadable =>
+            "Penumbra did not answer when asked which of its options are on",
+        InertCause.GroupsMissing =>
+            $"its Proteus data names option group(s) [{r.Groups}] that Penumbra's copy of the mod has not "
+          + "got — renamed or dropped on re-export, so nothing in them can ever be selected",
+        InertCause.NothingTicked =>
+            $"nothing is ticked in Penumbra — its {r.GroupCount} option group(s) [{r.Groups}] are all empty",
+        InertCause.WrongRace =>
+            $"it paints {r.Wants}, and this character is {r.Have}",
+        InertCause.MaskNeedsShell =>
+            $"its masks render as gear, which needs a mask to build the shell from, and nothing is ticked "
+          + $"in its \"{r.Groups}\" group",
+        _ => "its ticked options resolved, but none of them reached a surface this character has loaded",
+    };
 
     /// <summary>
     /// What each base game path currently resolves to, as (path, mod folder, settled) — the files the
@@ -8502,7 +9550,7 @@ public class CompositorService : IDisposable
     // fingerprint of our own stale all-255 output (natural base normals avg ~5).
     private byte[] LoadBaseNormal(string gamePath, ref int w, ref int h)
     {
-        var loaded = textureLoader.LoadBaseTexture(ResolveUpstream(gamePath), gamePath);
+        var loaded = TimedLoadBaseTexture(ResolveUpstream(gamePath), gamePath);
         if (!loaded.HasValue) return Array.Empty<byte>();
 
         var rgba = loaded.Value.rgba;
@@ -8546,19 +9594,108 @@ public class CompositorService : IDisposable
         });
     }
 
-    internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h)
+    /// <summary>
+    /// Alpha-over union of an RGBA buffer's alpha channel into a single-channel accumulator.
+    /// <para/>
+    /// Shared by the higher-group claim and by the paint accumulator a print is clipped through, so the two
+    /// can never drift apart on what "already covered here" means.
+    /// </summary>
+    internal static void UnionAlphaInto(byte[] acc, byte[] rgba)
+    {
+        int n = Math.Min(acc.Length, rgba.Length / 4);
+        ParallelPixels(0, n, 1, (from, to) =>
+        {
+            for (int i = from; i < to; i++)
+                acc[i] = (byte)(acc[i] + (255 - acc[i]) * rgba[i * 4 + 3] / 255);
+        });
+    }
+
+    /// <summary>
+    /// One channel of a blend mode, on 0–1, BEFORE it is clipped to the fabric.
+    /// <para/>
+    /// <see cref="RowBlend.Paint"/> is deliberately not here: it is alpha-over, which is driven by the
+    /// overlay's own coverage rather than by the clip, so the callers apply it directly.
+    /// </summary>
+    internal static float BlendChannel(RowBlend mode, float dst, float src) => mode switch
+    {
+        RowBlend.Multiply => dst * src,
+        RowBlend.Screen   => 1f - (1f - dst) * (1f - src),
+        RowBlend.Overlay  => dst < 0.5f ? 2f * dst * src : 1f - 2f * (1f - dst) * (1f - src),
+        RowBlend.Add      => MathF.Min(1f, dst + src),
+        RowBlend.Replace  => src,
+        _                 => src,
+    };
+
+    /// <summary>
+    /// How strongly a print lands on one texel: its own alpha TIMES how much its mod painted there.
+    /// <para/>
+    /// The product, not the smaller of the two — that is what makes a print fade out along a fishnet's
+    /// antialiased thread edges instead of stopping at a hard line, and what makes it vanish entirely
+    /// where its mod painted nothing.
+    /// </summary>
+    private static float ClipStrength(float ovA, byte[]? painted, int pixel)
+        => painted == null ? 0f : ovA * (painted[pixel] / 255f);
+
+    /// <summary>
+    /// A 0–1 channel back to a byte, ROUNDED rather than truncated.
+    /// <para/>
+    /// The alpha-over path truncates and has to keep truncating, or every mod that shipped before blend
+    /// modes changes. A blend cannot afford to: multiplying by white and screening against black are meant
+    /// to be exactly identity, and truncation turns each of them into a silent one-level darkening
+    /// everywhere the print lands — measured as 120 → 119 on a screen against black.
+    /// </summary>
+    private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
+
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
+    internal static void ApplyFlatOverlay(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h,
+        byte[]? painted = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { ApplyFlatOverlayCore(baseTex, ov, row, w, h, painted); }
+        finally { blendDiffuseStats.Stop(t0); }
+    }
+
+    private static void ApplyFlatOverlayCore(byte[] baseTex, byte[] ov, ColorTableSubRow row, int w, int h,
+                                          byte[]? painted = null)
     {
         float cr = row.DiffuseR, cg = row.DiffuseG, cb = row.DiffuseB;
+        var mode = row.Blend;
+
+        // The path every overlay took before blend modes existed, kept bit for bit. Not an optimisation:
+        // it is the guarantee that adding the field changed nothing for the mods that came before it.
+        if (mode == RowBlend.Paint)
+        {
+            ParallelPixels(0, w * h * 4, 4, (from, to) =>
+            {
+                for (int i = from; i < to; i += 4)
+                {
+                    float a = ov[i + 3] / 255f;
+                    if (a <= 0f) continue;
+                    float ia = 1f - a;
+                    baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
+                    baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
+                    baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
+                }
+            });
+            return;
+        }
+
+        // A print with nothing beneath it paints nothing at all — there is nothing to print on. The
+        // length check is the same statement: a clip that does not cover the sheet cannot be trusted to
+        // say what was painted, and guessing would put colour on bare skin.
+        if (painted == null || painted.Length < w * h) return;
+
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
             {
-                float a = ov[i + 3] / 255f;
-                if (a <= 0f) continue;
-                float ia = 1f - a;
-                baseTex[i]     = (byte)(ov[i]     / 255f * cr * a * 255f + baseTex[i]     * ia);
-                baseTex[i + 1] = (byte)(ov[i + 1] / 255f * cg * a * 255f + baseTex[i + 1] * ia);
-                baseTex[i + 2] = (byte)(ov[i + 2] / 255f * cb * a * 255f + baseTex[i + 2] * ia);
+                float m = ClipStrength(ov[i + 3] / 255f, painted, i >> 2);
+                if (m <= 0f) continue;
+                float im = 1f - m;
+                float d0 = baseTex[i] / 255f, d1 = baseTex[i + 1] / 255f, d2 = baseTex[i + 2] / 255f;
+                baseTex[i]     = ToByte(d0 * im + BlendChannel(mode, d0, ov[i]     / 255f * cr) * m);
+                baseTex[i + 1] = ToByte(d1 * im + BlendChannel(mode, d1, ov[i + 1] / 255f * cg) * m);
+                baseTex[i + 2] = ToByte(d2 * im + BlendChannel(mode, d2, ov[i + 2] / 255f * cb) * m);
             }
         });
     }
@@ -8568,7 +9705,20 @@ public class CompositorService : IDisposable
     internal static void ApplyIndexedOverlay(
         byte[] baseTex, byte[] ov, byte[] idx,
         Dictionary<int, ColorTableRowOverride> rows,
-        bool isNormal, int w, int h)
+        bool isNormal, int w, int h, byte[]? painted = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        // isNormal routes emissive into the normal's alpha, so it belongs with the normal recombine
+        // rather than with the diffuse composites, even though it is the same kernel.
+        try { ApplyIndexedOverlayCore(baseTex, ov, idx, rows, isNormal, w, h, painted); }
+        finally { (isNormal ? blendNormalStats : blendDiffuseStats).Stop(t0); }
+    }
+
+    /// <summary>Body of <see cref="ApplyIndexedOverlay"/>, split out only so the call can be timed.</summary>
+    private static void ApplyIndexedOverlayCore(
+        byte[] baseTex, byte[] ov, byte[] idx,
+        Dictionary<int, ColorTableRowOverride> rows,
+        bool isNormal, int w, int h, byte[]? painted = null)
     {
         // The row pair is `red / 17`, so there are only ever SIXTEEN distinct answers — resolved once here
         // into flat arrays instead of per texel. The loop below runs w*h times (16.7M at 4K) six times per
@@ -8578,6 +9728,9 @@ public class CompositorService : IDisposable
         const int Pairs = 16;
         float[] aR = new float[Pairs], aG = new float[Pairs], aB = new float[Pairs], aE = new float[Pairs];
         float[] bR = new float[Pairs], bG = new float[Pairs], bB = new float[Pairs], bE = new float[Pairs];
+        var aBl = new RowBlend[Pairs];
+        var bBl = new RowBlend[Pairs];
+        bool anyBlend = false;
         for (int p = 0; p < Pairs; p++)
         {
             // An absent row keeps the default-constructed values, exactly as the old per-pixel
@@ -8585,7 +9738,15 @@ public class CompositorService : IDisposable
             var pair = rows.TryGetValue(p, out var r) ? r : new ColorTableRowOverride();
             aR[p] = pair.A.DiffuseR; aG[p] = pair.A.DiffuseG; aB[p] = pair.A.DiffuseB; aE[p] = pair.A.Emissive;
             bR[p] = pair.B.DiffuseR; bG[p] = pair.B.DiffuseG; bB[p] = pair.B.DiffuseB; bE[p] = pair.B.Emissive;
+            aBl[p] = pair.A.Blend;   bBl[p] = pair.B.Blend;
+            if (aBl[p] != RowBlend.Paint || bBl[p] != RowBlend.Paint) anyBlend = true;
         }
+
+        // Nothing here prints, so run the loop that always ran — bit for bit, since lerping two colours and
+        // then compositing is not float-identical to compositing twice and lerping the results. The normal
+        // path never prints either: it carries emissive, which a blend mode has nothing to say about.
+        bool plain = isNormal || !anyBlend;
+        var clip = painted != null && painted.Length >= w * h ? painted : null;
 
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -8597,24 +9758,62 @@ public class CompositorService : IDisposable
                 int   pairIdx = idx[i]     / 17;        // red → pair 0–15
                 float blendA  = idx[i + 1] / 255f;      // green → lerp B→A (1 = full A, 0 = full B)
 
-                float dr = bR[pairIdx] + (aR[pairIdx] - bR[pairIdx]) * blendA;
-                float dg = bG[pairIdx] + (aG[pairIdx] - bG[pairIdx]) * blendA;
-                float db = bB[pairIdx] + (aB[pairIdx] - bB[pairIdx]) * blendA;
-                float em = bE[pairIdx] + (aE[pairIdx] - bE[pairIdx]) * blendA;
+                // Also take the original path when THIS pair paints on both sides, even though some other
+                // pair in the table prints. Otherwise adding a blend mode to row 3 would shift row 7's
+                // output by a level, because the print path rounds where this one truncates — a table-wide
+                // change from a per-row edit.
+                if (plain || (aBl[pairIdx] == RowBlend.Paint && bBl[pairIdx] == RowBlend.Paint))
+                {
+                    float dr = bR[pairIdx] + (aR[pairIdx] - bR[pairIdx]) * blendA;
+                    float dg = bG[pairIdx] + (aG[pairIdx] - bG[pairIdx]) * blendA;
+                    float db = bB[pairIdx] + (aB[pairIdx] - bB[pairIdx]) * blendA;
+                    float em = bE[pairIdx] + (aE[pairIdx] - bE[pairIdx]) * blendA;
 
-                if (!isNormal)
-                {
-                    float ia = 1f - ovA;
-                    baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
-                    baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
-                    baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                    if (!isNormal)
+                    {
+                        float ia = 1f - ovA;
+                        baseTex[i]     = (byte)(ov[i]     / 255f * dr * ovA * 255f + baseTex[i]     * ia);
+                        baseTex[i + 1] = (byte)(ov[i + 1] / 255f * dg * ovA * 255f + baseTex[i + 1] * ia);
+                        baseTex[i + 2] = (byte)(ov[i + 2] / 255f * db * ovA * 255f + baseTex[i + 2] * ia);
+                    }
+                    else
+                    {
+                        baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
+                    }
+                    continue;
                 }
-                else
+
+                // The two sub-rows may composite by different rules, and a rule cannot be interpolated. So
+                // each sub-row is resolved to the value it would leave in the base ON ITS OWN, and THOSE are
+                // lerped by the same green channel that lerps their colours — no seam where a gradient
+                // crosses from one to the other, which picking the nearer sub-row would leave at green 128.
+                float mBlend = ClipStrength(ovA, clip, i >> 2);
+                for (int c = 0; c < 3; c++)
                 {
-                    baseTex[i + 3] = Math.Max(baseTex[i + 3], (byte)(em * 255f));
+                    float dst = baseTex[i + c] / 255f;
+                    float art = ov[i + c] / 255f;
+                    float ca  = c == 0 ? aR[pairIdx] : c == 1 ? aG[pairIdx] : aB[pairIdx];
+                    float cb  = c == 0 ? bR[pairIdx] : c == 1 ? bG[pairIdx] : bB[pairIdx];
+                    float outA = SubRowResult(aBl[pairIdx], dst, art * ca, ovA, mBlend);
+                    float outB = SubRowResult(bBl[pairIdx], dst, art * cb, ovA, mBlend);
+                    baseTex[i + c] = ToByte(outB + (outA - outB) * blendA);
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// What one sub-row alone would leave in the base at this texel, on 0–1.
+    /// <para/>
+    /// <see cref="RowBlend.Paint"/> composites by the overlay's own alpha, because it brings its own
+    /// colour; every other mode composites by the clip, because it only recolours what is already there.
+    /// That difference is the whole of what a print is, and it is why the two cannot share one strength.
+    /// </summary>
+    private static float SubRowResult(RowBlend mode, float dst, float src, float ovA, float clipped)
+    {
+        if (mode == RowBlend.Paint) return dst * (1f - ovA) + src * ovA;
+        if (clipped <= 0f) return dst;
+        return dst * (1f - clipped) + BlendChannel(mode, dst, src) * clipped;
     }
 
     // Partial-derivative linear add for normal maps: XY (tangent/bitangent) components are decoded
@@ -8696,7 +9895,15 @@ public class CompositorService : IDisposable
         }
     }
 
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void CompoundNormal(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { CompoundNormalCore(dst, src, w, h, mask); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void CompoundNormalCore(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -8720,7 +9927,15 @@ public class CompositorService : IDisposable
     // Standard alpha-over: dst = src * src.a + dst * (1 - src.a). Dst alpha unchanged.
     // mask: if provided, effective alpha = min(src alpha, mask alpha) — used so a diffuse overlay
     // silhouette gates the normal composite (invisible diffuse pixels stay at base normal).
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void AlphaComposite(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { AlphaCompositeCore(dst, src, w, h, mask); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void AlphaCompositeCore(byte[] dst, byte[] src, int w, int h, byte[]? mask = null)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -8745,7 +9960,15 @@ public class CompositorService : IDisposable
     // specular/subsurface shift that reads as extra shine). cov.alpha is the overlay opacity (sheer
     // gaps keep skin tone); `diffuse` is the composited diffuse at the normal's resolution, null →
     // luminance treated as 1 (coverage-only). `strength` is the global user multiplier.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static void SuppressSkinColorInfluence(byte[] baseN, byte[] cov, byte[]? diffuse, int w, int h, float strength = 1f)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { SuppressSkinColorInfluenceCore(baseN, cov, diffuse, w, h, strength); }
+        finally { blendNormalStats.Stop(t0); }
+    }
+
+    private static void SuppressSkinColorInfluenceCore(byte[] baseN, byte[] cov, byte[]? diffuse, int w, int h, float strength = 1f)
     {
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
@@ -9047,6 +10270,53 @@ public class CompositorService : IDisposable
     /// be promoted on vanilla is not promoted on bibo. The editor must follow that, or it shows Skin for
     /// something the compositor rendered as a shell.
     /// </summary>
+    /// <summary>
+    /// Which mods have a toe cap selected. Public for the same reason as
+    /// <see cref="NeedsUnmirroredShell"/>: the editor asks the same promotion predicate the compositor
+    /// does, and it cannot derive this one - the answer is a Penumbra selection, not anything on the
+    /// overlay being edited.
+    /// <para/>
+    /// Enabled mods only, matching the set the composite actually walks: a cap in a mod the user has
+    /// switched off must not promote anything.
+    /// <para/>
+    /// Answered PER MOD rather than as one flag for the whole look. The promotion is drastic — every
+    /// shellable skin overlay it touches stops being skin — so the blast radius has to be bounded by
+    /// something the user can see. It could not be: a Penumbra multi-select group stores its selection as a
+    /// positional bitmask over option INDEX, so re-exporting a mod with its options in a different order
+    /// silently re-points every saved selection, and the toe cap is the one option that appears in no log
+    /// line and no editor row (ResolveMaskPaths and ResolveActiveMaskAssets both strip it — "caps aren't
+    /// masks"). A stale bit in one mod then promoted every other mod's overlays too, which is how a look
+    /// with three gear layers became nine. Per-mod, a mod can still only do this to itself.
+    /// </summary>
+    public HashSet<string> ToeCapWanted(IEnumerable<OverlayEntry> allEntries)
+    {
+        var want = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // The collection is read once, not once per mod. This walk cannot stop at the first cap the way the
+        // old bool could — it needs the whole set — so without hoisting it the fix would have added a
+        // GetPlayerCollectionId round trip for every enabled mod on every composite. The answer cannot
+        // change between two entries of the same run anyway; a null one means no player, so nothing is on.
+        var collId = penumbra.GetPlayerCollectionId();
+        if (collId != null)
+            foreach (var e in allEntries)
+                if (e.Enabled && discovery.ResolveActiveToeCap(e, collId.Value) != null)
+                    want.Add(e.ModDirectory);
+        _toeCapWantedSnapshot = want;
+        return want;
+    }
+
+    /// <summary>
+    /// The last composite's answer for one mod, for the editor - which has no entry list to walk and no
+    /// composite run to inherit one from. Follows <see cref="_activeMtrlSnapshot"/>'s pattern: false until a
+    /// composite has run, which is the behaviour there was before any of this existed.
+    /// </summary>
+    public bool ToeCapWantedFor(string modDirectory) => _toeCapWantedSnapshot.Contains(modDirectory);
+
+    /// <summary>
+    /// Replaced wholesale rather than mutated, so a reader never sees a half-filled set. The composite that
+    /// builds it is the only writer; every reader is on the framework thread.
+    /// </summary>
+    private volatile HashSet<string> _toeCapWantedSnapshot = new(StringComparer.OrdinalIgnoreCase);
+
     public bool NeedsUnmirroredShell(OverlayDescriptor d)
     {
         var snapshot = _activeMtrlSnapshot;
@@ -9987,6 +11257,138 @@ public class CompositorService : IDisposable
     /// </summary>
     private static string MaskFallbackKey(string mtrlGamePath, string modDir) => mtrlGamePath + '\0' + modDir;
 
+    /// <summary>Does any row here composite as a print rather than painting?</summary>
+    internal static bool AnyBlendRow(Dictionary<int, ColorTableRowOverride> rows)
+        => rows.Values.Any(r => r.A.Blend != RowBlend.Paint || r.B.Blend != RowBlend.Paint);
+
+    /// <summary>
+    /// The same question asked of the presets, for the composite sort — which runs long before any row
+    /// dictionary is built.
+    /// </summary>
+    internal static bool AnyBlendRow(List<ColorTableRowPreset>? presets)
+        => presets != null && presets.Any(p => (p.SubRowA?.Blend ?? RowBlend.Paint) != RowBlend.Paint
+                                            || (p.SubRowB?.Blend ?? RowBlend.Paint) != RowBlend.Paint);
+
+    /// <summary>
+    /// Does EVERY cell this overlay can resolve to print? A pure print lays down no surface at all, so the
+    /// phases that describe a surface — relief, ambient occlusion, skin-tone suppression — have nothing to
+    /// describe and are skipped outright rather than run against an all-zero coverage.
+    /// <para/>
+    /// An index cell nobody configured resolves to a default row, and a default row paints, so one
+    /// unconfigured cell is enough to make this false. That is the safe direction: it keeps the surface.
+    /// </summary>
+    internal static bool AllRowsPrint(Dictionary<int, ColorTableRowOverride> rows, bool hasIndex)
+    {
+        if (!hasIndex)
+        {
+            rows.TryGetValue(15, out var r16);
+            return (r16?.A.Blend ?? RowBlend.Paint) != RowBlend.Paint;
+        }
+        for (int p = 0; p < 16; p++)
+        {
+            if (!rows.TryGetValue(p, out var r)) return false;
+            if (r.A.Blend == RowBlend.Paint || r.B.Blend == RowBlend.Paint) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// PAINT COVERAGE: the part of a coverage buffer that actually puts colour on the material, with the
+    /// print rows taken out of it.
+    /// <para/>
+    /// This one idea answers every "does this overlay contribute?" question at once. A print carries no
+    /// colour of its own — it recolours what is already there — so it must not claim territory from the
+    /// group beneath it, must not cast an ambient-occlusion shadow, must not bleach the wearer's skin tone,
+    /// and must not register a glow map. Each of those reads coverage, and each of them gets the right
+    /// answer with no special case once the coverage it reads is this one: for a pure print it is all zero.
+    /// <para/>
+    /// Fractional, not a yes/no: where an index cell lerps between a painting sub-row and a printing one,
+    /// the coverage lerps with it, exactly as the composite itself does.
+    /// <para/>
+    /// Returns the input untouched when nothing prints, so the common path allocates nothing. Never mutates
+    /// its input — the buffers come from the decode cache and are shared.
+    /// <para/>
+    /// <paramref name="hasIndex"/> says whether the overlay DECLARES an index, which is not the same as
+    /// having one in hand: an indexed overlay whose <c>_id</c> failed to load arrives here with a null
+    /// <paramref name="idx"/>, and consulting row 16 as though it were a flat overlay would be a guess about
+    /// texels the index was supposed to route. In that case this returns the coverage unchanged — the
+    /// overlay behaves exactly as it did before blend modes existed — and the caller warns.
+    /// </summary>
+    internal static byte[] PaintCoverage(byte[] cov, byte[]? idx,
+        Dictionary<int, ColorTableRowOverride> rows, int w, int h, bool hasIndex = false)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return PaintCoverageCore(cov, idx, rows, w, h, hasIndex); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    /// <summary>Body of <see cref="PaintCoverage"/>, split out only so the call can be timed.</summary>
+    private static byte[] PaintCoverageCore(byte[] cov, byte[]? idx,
+        Dictionary<int, ColorTableRowOverride> rows, int w, int h, bool hasIndex = false)
+    {
+        if (!AnyBlendRow(rows)) return cov;
+
+        if (idx == null)
+        {
+            // Declared an index but has none: say nothing rather than something wrong. All-paint is the
+            // pre-blend behaviour, so a broken _id degrades to "the print does not print" instead of to a
+            // print that claims territory or bleaches skin tone on texels nobody could route.
+            if (hasIndex) return cov;
+
+            // Genuinely flat: every texel resolves to row 16 sub-row A, so it is all or nothing.
+            rows.TryGetValue(15, out var r16);
+            if ((r16?.A.Blend ?? RowBlend.Paint) == RowBlend.Paint) return cov;
+            return new byte[cov.Length];   // a pure print paints nowhere
+        }
+
+        const int Pairs = 16;
+        var fA = new float[Pairs];
+        var fB = new float[Pairs];
+        for (int p = 0; p < Pairs; p++)
+        {
+            var pair = rows.TryGetValue(p, out var r) ? r : new ColorTableRowOverride();
+            fA[p] = pair.A.Blend == RowBlend.Paint ? 1f : 0f;
+            fB[p] = pair.B.Blend == RowBlend.Paint ? 1f : 0f;
+        }
+
+        var dst = (byte[])cov.Clone();
+        // Floored to a whole number of texels: the body reads idx[i + 1], so a buffer that is not a
+        // multiple of four would otherwise let the last iteration read one past the end. Every buffer here
+        // is RGBA today, which is exactly why this is worth pinning rather than assuming.
+        int n = Math.Min(Math.Min(dst.Length, idx.Length), w * h * 4) / 4 * 4;
+        ParallelPixels(0, n, 4, (from, to) =>
+        {
+            for (int i = from; i < to; i += 4)
+            {
+                int   pairIdx = idx[i] / 17;
+                float blendA  = idx[i + 1] / 255f;
+                float frac    = fB[pairIdx] + (fA[pairIdx] - fB[pairIdx]) * blendA;
+                dst[i + 3] = (byte)(dst[i + 3] * frac);
+            }
+        });
+        return dst;
+    }
+
+    /// <summary>
+    /// Does this coverage buffer cover anything at all?
+    /// <para/>
+    /// <see cref="AllRowsPrint"/> is a fast early-out and is deliberately strict — an index cell nobody
+    /// configured paints, so it is rarely true for an indexed overlay. That leaves the per-texel
+    /// <see cref="PaintCoverage"/> as the thing actually deciding, and this is how the surface phases ask it
+    /// whether there is any surface left: without it they run against an all-zero mask, changing nothing but
+    /// still loading the base normal and flagging it dirty for republication.
+    /// <para/>
+    /// Serial and short-circuiting: it returns on the first covered texel, so the ordinary case — an overlay
+    /// that covers something — costs almost nothing.
+    /// </summary>
+    internal static bool AnyCoverage(byte[]? cov)
+    {
+        if (cov == null) return false;
+        for (int a = 3; a < cov.Length; a += 4)
+            if (cov[a] != 0) return true;
+        return false;
+    }
+
     internal static Dictionary<int, ColorTableRowOverride> BuildRowDict(List<ColorTableRowPreset>? presets)
     {
         var dict = new Dictionary<int, ColorTableRowOverride>();
@@ -9999,12 +11401,14 @@ public class CompositorService : IDisposable
                 if (a.Diffuse != null) (row.A.DiffuseR, row.A.DiffuseG, row.A.DiffuseB) = ParseHex(a.Diffuse);
                 row.A.Emissive = a.Emissive;
                 row.A.Opacity  = a.Opacity;
+                row.A.Blend    = a.Blend;
             }
             if (p.SubRowB is { } b)
             {
                 if (b.Diffuse != null) (row.B.DiffuseR, row.B.DiffuseG, row.B.DiffuseB) = ParseHex(b.Diffuse);
                 row.B.Emissive = b.Emissive;
                 row.B.Opacity  = b.Opacity;
+                row.B.Blend    = b.Blend;
             }
             dict[p.Row - 1] = row; // 1-based JSON → 0-based internal
         }
@@ -10042,7 +11446,15 @@ public class CompositorService : IDisposable
 
     // Apply per-pixel opacity from the index texture, blending sub-row A/B values just
     // like diffuse color and emissive. Returns a new array; src and pngCache are not mutated.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ApplyIndexedOpacity(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ApplyIndexedOpacityCore(src, idx, rows); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ApplyIndexedOpacityCore(byte[] src, byte[] idx, Dictionary<int, ColorTableRowOverride> rows)
     {
         var dst = (byte[])src.Clone();
 
@@ -10079,7 +11491,15 @@ public class CompositorService : IDisposable
         return dst;
     }
 
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ScaleOverlayAlpha(byte[] src, int opacity)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ScaleOverlayAlphaCore(src, opacity); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ScaleOverlayAlphaCore(byte[] src, int opacity)
     {
         var dst = (byte[])src.Clone();
         ParallelPixels(3, dst.Length, 4, (from, to) =>
@@ -10112,7 +11532,15 @@ public class CompositorService : IDisposable
     // so only the mod's HIGHEST-priority group is granted the forced opacity. Lower groups see W alone,
     // which is 0 wherever the mask is opaque, erasing them from the mask's territory instead of letting
     // them paint over it.
+    /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
     internal static byte[] ApplyCoverageMask(byte[] coverageRgba, byte[]? w, byte[]? t, bool additive = true)
+    {
+        var t0 = PhaseCounter.Begin();
+        try { return ApplyCoverageMaskCore(coverageRgba, w, t, additive); }
+        finally { blendCovStats.Stop(t0); }
+    }
+
+    private static byte[] ApplyCoverageMaskCore(byte[] coverageRgba, byte[]? w, byte[]? t, bool additive = true)
     {
         if (w == null || t == null) return coverageRgba;
         var dst = (byte[])coverageRgba.Clone();

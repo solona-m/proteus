@@ -191,6 +191,38 @@
     "message": "Couleurs de base inchangées — sauf dans Avancé, où « Rétablir les valeurs par défaut » les réécrit et où « Corps » est un réglage global qu'aucune liaison ne capture.",
     "description": ""
   },
+  "Colors.Blend.Add": {
+    "message": "Ajouter",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "Fusion",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiplier",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Incrustation",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "Peindre",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "Remplacer",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "Écran",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
+    "description": ""
+  },
   "Colors.Bodies.All": {
     "message": "Tous les corps",
     "description": ""
@@ -327,6 +359,14 @@
     "message": "Une autre option active de ce mod est rendue comme de l'équipement, le masque doit donc\nse poser sur cette coque — il ne peut pas être peint dans la peau en dessous. Passez ces\noptions sur Skin (Avancé dans leurs onglets) et le masque retrouvera son propre choix\nde mode.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap est activé",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "L'option « Toe Cap » est cochée dans le groupe Masks de ce mod dans Penumbra. Elle\nreconstruit les orteils en une seule forme arrondie, donc les calques Skin de ce mod sont\npromus en tissu — il leur faut une géométrie que la couche peau n'a pas. Cela coûte une\nreconstruction de coque.\n\nSi vous ne l'avez pas cochée : Penumbra enregistre la sélection de ce groupe par INDEX\nd'option. Un mod réexporté avec ses options dans un autre ordre redirige donc en silence\ntoute sélection enregistrée. Recochez le groupe dans Penumbra pour le resynchroniser.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "Masques",
     "description": ""
@@ -451,6 +491,10 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "Lueur",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "Physique",
     "description": ""
@@ -485,6 +529,38 @@
   },
   "Colors.Sphere.Intensity.Label": {
     "message": "Intensité",
+    "description": ""
+  },
+  "Colors.Section.Tile": {
+    "message": "Tissage",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Motif",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Aucun",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Intensité",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Échelle U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Échelle V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Un tissage répété sur cette région — l'un des 64 motifs du jeu, il ne coûte donc aucune texture.\nC'est ce qui fait qu'une seconde peau ressemble à du tissu plutôt qu'à de la peau ; Proteus le laisse\ndésactivé par défaut, car un tissage sur la peau nue ressemble à du grain. Nécessite le shader\nd'équipement : en choisir un déplace un calque de peau vers une coque de tissu.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Combien de fois le tissage se répète sur la surface. Plus la valeur est élevée, plus le motif est fin ;\n16 est la valeur par défaut du jeu. U et V sont les deux directions de la texture : les régler\ndifféremment étire le tissage dans un sens.",
     "description": ""
   },
   "Colors.Sphere.Tip": {
@@ -1691,6 +1767,30 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Les données Proteus de ce mod nomment le ou les groupes d'options {0}, que la copie du mod dans Penumbra ne possède pas : renommés ou supprimés lors d'un réexport. Seule la personne qui l'a créé peut corriger cela.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Ses masques sont rendus comme de l'équipement, ce qui nécessite un masque pour construire le vêtement — et rien n'est coché dans son groupe « {0} » dans Penumbra.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Ses options cochées ont bien été résolues, mais aucune n'a atteint une surface chargée par ce personnage.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Rien n'est coché dans Penumbra. Les {0} groupe(s) d'options de ce mod — {1} — sont tous vides, il ne peint donc rien. Ouvrez-le dans Penumbra et cochez une option dans chacun.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra n'a pas répondu lorsque Proteus a demandé quelles options de ce mod sont activées.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Ce mod peint {0}, et vous êtes {1}. Rien de ce qu'il fournit ne correspond au corps que vous portez.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Aucun mod avec fichier Proteus détecté.",
     "description": ""
@@ -2142,5 +2242,241 @@
   "Tab.Settings": {
     "message": "Paramètres",
     "description": ""
+  },
+  "Presets.Header": {
+    "message": "Presets",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None": {
+    "message": "No preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None.Tip": {
+    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackMarker": {
+    "message": "* ",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ModifiedMarker": {
+    "message": "●",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew": {
+    "message": "+ Save…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew.Tip": {
+    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Save": {
+    "message": "Save",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.RenameConfirm": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Cancel": {
+    "message": "Cancel",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NeedsAName": {
+    "message": "Give it a name first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoCollection": {
+    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FirstName": {
+    "message": "My look",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NthName.Fmt": {
+    "message": "My look {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Selected.Fmt": {
+    "message": "{0} · {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FromPack": {
+    "message": "from the mod",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackReadOnly": {
+    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update": {
+    "message": "Update",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update.Tip": {
+    "message": "Fold everything on screen back into this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NothingChanged": {
+    "message": "Nothing has changed since this preset was saved.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Rename": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Duplicate": {
+    "message": "Duplicate",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Fork.Tip": {
+    "message": "Make an editable copy of the mod's preset and wear it.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CopyCode.Tip": {
+    "message": "Copy this preset as a share code to paste to someone.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CodeCopied": {
+    "message": "Share code copied to the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Export.Tip": {
+    "message": "Save this preset as a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Delete.Tip": {
+    "message": "Hold Ctrl and click to delete this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode": {
+    "message": "Paste code",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode.Tip": {
+    "message": "Read a preset share code from the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import": {
+    "message": "Import…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import.Tip": {
+    "message": "Load a preset from a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Staged.Fmt": {
+    "message": "\"{0}\" is ready to add.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.StagedOtherMod.Fmt": {
+    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddStaged": {
+    "message": "Add",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Discard": {
+    "message": "Discard",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Added.Fmt": {
+    "message": "Added \"{0}\".",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportDialog.Title": {
+    "message": "Save preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportDialog.Title": {
+    "message": "Open preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Dialog.Filter": {
+    "message": "Proteus preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Exported.Fmt": {
+    "message": "Saved to {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportFailed.Fmt": {
+    "message": "Couldn't save it: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PartialApply.Fmt": {
+    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingGroups.Fmt": {
+    "message": "The mod no longer has these option groups: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingOptions.Fmt": {
+    "message": "These options are gone: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.JustNow": {
+    "message": "just now",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MinutesAgo.Fmt": {
+    "message": "{0} m ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HoursAgo.Fmt": {
+    "message": "{0} h ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.DaysAgo.Fmt": {
+    "message": "{0} d ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Header": {
+    "message": "Preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.None": {
+    "message": "—",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Tip": {
+    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HeaderApplied.Fmt": {
+    "message": "Presets — {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportFailed.Fmt": {
+    "message": "That isn't a preset Proteus can read: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportedFrom.Fmt": {
+    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoMatchingMod": {
+    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo": {
+    "message": "Add to",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PickAMod": {
+    "message": "Pick a mod…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo.Tip": {
+    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddedTo.Fmt": {
+    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   }
 }
