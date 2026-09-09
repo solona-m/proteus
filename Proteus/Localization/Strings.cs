@@ -1261,6 +1261,23 @@ public sealed class ColorsStrings
         "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
       + "cheeks either side, which is usually too much — lower values keep more of it.");
 
+    public readonly string SmoothFold = Loc.Localize("Colors.SmoothFold.Label",
+        "Smooth between the legs");
+
+    public readonly string SmoothFoldTip = Loc.Localize("Colors.SmoothFold.Tip",
+        "Turn this on for cloth over the crotch.\n"
+      + "Proteus builds a garment as a copy of the body, so it reproduces the fold between the legs —\n"
+      + "which reads as body paint rather than fabric. With this on, the skin there is smoothed out to\n"
+      + "the surrounding curve first, so the garment cut from it comes out smooth too.\n"
+      + "This changes the body, so it applies to every garment worn at once.");
+
+    public readonly string SmoothFoldStrength = Loc.Localize("Colors.SmoothFold.Strength.Label",
+        "Smoothing amount");
+
+    public readonly string SmoothFoldStrengthTip = Loc.Localize("Colors.SmoothFold.Strength.Tip",
+        "How far the fold is smoothed. 1.00 flattens it into the surrounding curve; lower values keep\n"
+      + "more of it.");
+
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"

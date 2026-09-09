@@ -267,6 +267,22 @@
     "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : par défaut, il suit donc le corps\njusque dans le décolleté — c'est ce qui le fait lire comme de la peinture plutôt que du\ntissu. Le vrai tissu tend l'écart : une ligne droite entre le point le plus avancé de chaque sein.\nAvec ceci, le tissu entre les seins est détendu jusqu'à cette ligne. Rien n'est jamais tiré\nvers l'intérieur : cela ne peut donc pas entrer dans le corps, et les seins gardent leur forme.\nLà où une encolure a déjà découpé le tissu entre les bonnets, il n'y a rien à tendre, et\nceci ne fait rien.",
     "description": ""
   },
+  "Colors.SmoothFold.Label": {
+    "message": "Adoucir l'entrejambe",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "Intensité de l'adoucissement",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "À quel point le pli est adouci. 1.00 le fond entièrement dans la courbe environnante ; les\nvaleurs basses en conservent davantage.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "Activez ceci pour du tissu sur l'entrejambe.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le pli entre les jambes —\nce qui semble peint sur le corps plutôt que porté. Avec ceci, la peau y est d'abord adoucie jusqu'à\nla courbe environnante, si bien que le vêtement qui en est tiré ressort lisse lui aussi.\nCeci modifie le corps : l'effet s'applique donc à tous les vêtements portés à la fois.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Adoucir le téton",
     "description": ""

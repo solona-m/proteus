@@ -663,6 +663,20 @@ public sealed class SecondSkinService
     /// Salted away from <see cref="Hash"/>'s space so a stamp can never coincidentally equal a content hash
     /// for the same path — the two share one dictionary, and a false match there is a skipped write.
     /// </summary>
+    /// <summary>
+    /// Where a smoothed body is published — CONTENT-ADDRESSED, with the hash of the bytes in the name.
+    /// <para/>
+    /// The same thing the shell does (models/secondskin_{hash}.mdl) and for the same reason, which this
+    /// path had simply never been given: the game caches models by RESOLVED PATH. Publishing every
+    /// revision of a body to one fixed name means the path never changes, so the cache is never invalidated
+    /// and the character keeps whichever version the game happened to load first. Every symptom of that is
+    /// a symptom of the feature not working — the nipple still standing after the smoothing pass has
+    /// demonstrably flattened it on disk, and a settings change or a manual redraw doing nothing at all.
+    /// </summary>
+    private static string SmoothedBodyPath(string modelsDir, string gamePath, byte[] content)
+        => Path.Combine(modelsDir,
+                        $"smoothed_{CompositorService.SanitizeName(gamePath)}_{Hash(content):x16}.mdl");
+
     private static ulong StampHash(string src, long ticks, long length)
     {
         ulong h = 14695981039346656037;   // FNV-1a, as Hash
@@ -1226,6 +1240,12 @@ public sealed class SecondSkinService
         // was cut from — the path's race code is what decides how the game deforms this geometry, and the
         // shell has to be hosted in that same space (see cutCode below).
         var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes, string Path, string? Uv)>();
+
+        // Body paths whose bytes are ALREADY our own published, smoothed body — read back because our
+        // redirect masks the original and we have not seen it unmasked this session. The shell is cut from
+        // them normally; the smoothing pass must hold what it has rather than run again. See the block
+        // that fills this.
+        var bodySettled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? modelType = null;   // UV space of the first kept part, from its own skin material
         // Bare-body slots attempted vs. missing — the whole-body fallback below fires only when EVERY one
         // of them came back missing (see there for why "any one missing" is the wrong trigger).
@@ -1256,6 +1276,20 @@ public sealed class SecondSkinService
             // ResolvePlayer only yields a real file for MODDED models; a vanilla piece resolves to the
             // game path unchanged, so read from the game data in that case. The transcoder reads each
             // model's own vertex declaration, so vanilla and modded models both skin correctly.
+            // A PLAIN RESOLVE, deliberately, and NOT through resolveUpstream the way the append host does.
+            //
+            // Routing this through the shared upstream resolver looks obviously right — it exists to see
+            // past our own redirect — and it published someone else's body. The resolver remembers the
+            // last non-ours answer for a path, and a body path is CONTESTED: two installed body mods can
+            // both provide c0201e0000_top.mdl. The composite clears our redirects and waits for Penumbra
+            // to rebuild, and inside that window the path transiently resolves to whichever contributor
+            // has been applied so far. One such answer got remembered and stuck: the character's chest
+            // silently changed mod, size and piercings mid-session, from Neolithe's 7164-vertex model to
+            // Yet Another Body's 8164-vertex "buff - large".
+            //
+            // The plain resolve plus the byte cache below does not have that failure. It only ever
+            // remembers bytes it read when the path was NOT masked by us — a settled, uncontested moment —
+            // and when it has nothing remembered it declines to publish rather than guessing.
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
             // THE BODY MAY NOW BE ONE OF OUR OWN PUBLICATIONS. The nipple smooth republishes the body with
             // its chest relaxed, so from the next composite onward this path resolves to that file — and
@@ -1266,12 +1300,85 @@ public sealed class SecondSkinService
             // Falling back to the game's own data (what the host loader does in this situation) is wrong
             // here: that is VANILLA, and a character wearing a Bibo body would have its shell cut from a
             // body it is not wearing.
-            var bytes = bodyDisk != null && IsInsideOutputRoot(bodyDisk, outputRoot)
-                     && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered)
-                ? remembered
-                : textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
-            if (bytes != null && (bodyDisk == null || !IsInsideOutputRoot(bodyDisk, outputRoot)))
+            bool bodyIsOurs = bodyDisk != null && IsInsideOutputRoot(bodyDisk, outputRoot);
+
+            // SMOOTHING OUR OWN OUTPUT AGAIN is the thing that must never happen, and it is not merely
+            // wrong once — it COMPOUNDS. The composite runs on every appearance change, so the deformation
+            // grows without bound. Observed over six minutes of ordinary play: the crotch corridor is a
+            // fixed 45.4mm wide and the vertex count inside it climbed 865 -> 913 as the surface migrated
+            // into it, and the character finished with holes through the stomach and crotch. Each round of
+            // that looks like a fresh bug in whichever pass ran last, which is exactly how it hid.
+            //
+            // The part is still READ, though, and that distinction cost a round of its own. This list is
+            // what the SHELL is cut from as well as what the smoothing passes run on, so dropping a part
+            // here does not decline to smooth it — it deletes it from the garment. Skipping top and dwn
+            // published a bodysuit with no chest and no lower body (2 meshes and 388 KB against 6 and
+            // 1370), alternating with a good one composite by composite.
+            //
+            // So: read it either way, and mark it. bodySettled below carries "these bytes are already our
+            // own published body" to the smoothing pass, which then holds the file it has instead of
+            // recomputing from it. The shell keeps every part; the body stops eating itself.
+            //
+            // Falling back to the game's own data is NOT the alternative. That is VANILLA, and a character
+            // wearing a Bibo body would have its shell cut from a body it is not wearing.
+            // The upstream body KEPT ON DISK, beside the smoothed one. In memory alone is not enough: our
+            // own redirect masks the path from the moment we first publish, and nothing afterwards
+            // unmasks it — CompositorService.PrimeUpstreamCache's IsReadableBase excludes
+            // chara/equipment/, so a body path is never primed. So a session that starts with our
+            // redirect in the persisted manifest would never see the real body again, and holding the
+            // file we published instead froze the character: toggling nipple or fold smoothing changed
+            // nothing, because nothing recomputed.
+            //
+            // Written whenever the path IS unmasked, which is the settled, uncontested moment — the same
+            // condition that makes the in-memory copy trustworthy. Read back when it is masked. The
+            // smoothing then always runs on the body the user installed, every composite, and responds to
+            // their settings.
+            // In a SUBFOLDER of models/, and that detail is load-bearing. PruneManagedOutput deletes every
+            // file directly under models/ that the manifest about to be published does not name, and these
+            // are never published — so kept beside the smoothed bodies they lasted exactly one composite.
+            // The prune uses Directory.GetFiles, which does not recurse, so a subfolder is untouched.
+            var upstreamDir = Path.Combine(modelsDir, "upstream");
+            var upstreamDisk = Path.Combine(upstreamDir, CompositorService.SanitizeName(bodyGamePath) + ".mdl");
+
+            byte[]? bytes;
+            if (bodyIsOurs && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
+            {
+                bytes = remembered;
+            }
+            else if (bodyIsOurs && File.Exists(upstreamDisk))
+            {
+                bytes = File.ReadAllBytes(upstreamDisk);
                 _upstreamBodies[bodyGamePath] = bytes;
+                log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
+                        + "kept at {1}", bodyGamePath, upstreamDisk);
+            }
+            else if (bodyIsOurs)
+            {
+                // Nothing remembered anywhere. Cut the shell from what we published — it IS the body the
+                // character draws — but do not run the passes over it again; that is the compounding bug.
+                // Never DROP the part: this list feeds the shell, and skipping one publishes a garment
+                // with no chest and no lower body.
+                bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+                bodySettled.Add(bodyGamePath);
+                log.Debug("[Proteus] second skin: {0} still resolves to our own output ({1}) and no "
+                        + "upstream is remembered — cutting the shell from it, and holding the body we "
+                        + "already published rather than smoothing it again", bodyGamePath, bodyDisk ?? "(null)");
+            }
+            else
+            {
+                bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+                if (bytes != null)
+                {
+                    _upstreamBodies[bodyGamePath] = bytes;
+                    try
+                    {
+                        Directory.CreateDirectory(upstreamDir);
+                        WriteIfChanged(upstreamDisk, bytes);
+                    }
+                    catch (Exception ex)
+                    { log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
+                }
+            }
 
             if (bytes == null)
             {
@@ -2700,6 +2807,7 @@ public sealed class SecondSkinService
         var bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         var smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         var cleftByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var foldByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
                      .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
         {
@@ -2718,10 +2826,18 @@ public sealed class SecondSkinService
                 float s = Math.Clamp(bEntry.Metadata.CleftBridgeStrength ?? 1f, 0f, 1f);
                 if (s > 0f) cleftByMod[bEntry.ModDirectory] = s;
             }
+            if (bEntry.Metadata.SmoothFold == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.SmoothFoldStrength ?? 1f, 0f, 1f);
+                if (s > 0f) foldByMod[bEntry.ModDirectory] = s;
+            }
         }
         foreach (var (cMod, cStrength) in cleftByMod)
             log.Information("[Proteus] second skin: cleft bridge at {0:0.##} applies to every shell of \"{1}\"",
                 cStrength, cMod);
+        foreach (var (fMod, fStrength) in foldByMod)
+            log.Information("[Proteus] second skin: fold smoothing at {0:0.##} applies to every shell of \"{1}\"",
+                fStrength, fMod);
         foreach (var (sMod, sStrength) in smoothByMod)
             log.Information("[Proteus] second skin: nipple smoothing at {0:0.##} applies to every shell of \"{1}\"",
                 sStrength, sMod);
@@ -2920,6 +3036,10 @@ public sealed class SecondSkinService
                 CleftBridgeStrength = layerSurf.Key.IsBody
                                    && cleftByMod.TryGetValue(entry.ModDirectory, out var cleftS)
                     ? cleftS
+                    : 0f,
+                FoldSmoothStrength = layerSurf.Key.IsBody
+                                  && foldByMod.TryGetValue(entry.ModDirectory, out var foldS)
+                    ? foldS
                     : 0f,
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
@@ -3265,14 +3385,18 @@ public sealed class SecondSkinService
         // it, so it cannot be pierced by it — instead of trying to keep two surfaces in step by hand.
         //
         // Only where a garment that asked for it COVERS, so an uncovered breast keeps its own shape.
-        if (smoothByMod.Count > 0)
+        if (smoothByMod.Count > 0 || foldByMod.Count > 0)
         {
-            float smoothMax = smoothByMod.Values.Max();
+            float smoothMax = smoothByMod.Count == 0 ? 0f : smoothByMod.Values.Max();
+            float foldMax = foldByMod.Count == 0 ? 0f : foldByMod.Values.Max();
+            // ONE coverage union for both. They are two regions of one body and the gate answers the same
+            // question for each — is this skin under cloth that asked — so a layer that asked for either
+            // contributes to it.
             byte[]? union = null;
             int uw = 0, uh = 0;
             foreach (var l in perHostLayers.SelectMany(x => x))
             {
-                if (l.NippleSmoothStrength <= 0f || l.Coverage == null
+                if ((l.NippleSmoothStrength <= 0f && l.FoldSmoothStrength <= 0f) || l.Coverage == null
                  || l.CoverageWidth <= 0 || l.CoverageHeight <= 0) continue;
                 if (union == null) { uw = l.CoverageWidth; uh = l.CoverageHeight; union = (byte[])l.Coverage.Clone(); }
                 else if (l.CoverageWidth == uw && l.CoverageHeight == uh && l.Coverage.Length >= uw * uh)
@@ -3289,11 +3413,26 @@ public sealed class SecondSkinService
             var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             foreach (var (bBytes, _, bPath, _) in bodies)
             {
+                // Already ours: these bytes ARE the body we published last time. Re-running the passes on
+                // them is the compounding bug, and dropping the redirect instead would put the untouched
+                // body back on screen — the nipple popping out again every other composite. So keep the
+                // file exactly as it stands and say nothing changed.
+                if (bodySettled.Contains(bPath))
+                {
+                    var held = SmoothedBodyPath(modelsDir, bPath, bBytes);
+                    if (File.Exists(held))
+                    {
+                        redirects[bPath] = Rel(outputRoot, held);
+                        smoothedBody[bPath] = bBytes;
+                    }
+                    continue;
+                }
+
                 byte[]? smoothed;
                 try
                 {
                     smoothed = SecondSkinWriter.SmoothBodyNipples(bBytes, gate, smoothMax,
-                        msg => log.Debug("[Proteus] second skin: {0}", msg));
+                        msg => log.Debug("[Proteus] second skin: {0}", msg), foldMax);
                 }
                 catch (Exception ex)
                 {
@@ -3302,13 +3441,14 @@ public sealed class SecondSkinService
                 }
                 if (smoothed == null) continue;   // no bust bones, or nothing covered — most parts
 
-                var disk = Path.Combine(modelsDir, "smoothed_" + CompositorService.SanitizeName(bPath) + ".mdl");
+                var disk = SmoothedBodyPath(modelsDir, bPath, smoothed);
                 bool changed = WriteIfChanged(disk, smoothed);
                 redirects[bPath] = Rel(outputRoot, disk);
                 modelChangedAny |= changed;
                 smoothedBody[bPath] = smoothed;
                 if (changed)
-                    log.Information("[Proteus] second skin: republished {0} with the chest relaxed", bPath);
+                    log.Information("[Proteus] second skin: republished {0} with the chest relaxed -> {1}",
+                                    bPath, Path.GetFileName(disk));
             }
 
             if (smoothedBody.Count > 0)
@@ -3749,7 +3889,11 @@ public sealed class SecondSkinService
                 sb.AppendLine($"layer[{i}] material={l.MaterialName} "
                             + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
                             + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
-                            + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength}");
+                            + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength} "
+                            // The two body passes were missing here, and their absence cost a diagnosis:
+                            // a report of holes came in against a dump that recorded only the shell's own
+                            // settings, so there was no way to tell from it whether the fold had even run.
+                            + $"cleftBridge={l.CleftBridgeStrength} smoothFold={l.FoldSmoothStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }

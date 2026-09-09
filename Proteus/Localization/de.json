@@ -267,6 +267,22 @@
     "message": "Aktiviere dies für Stoff über der Brust.\nProteus baut ein Kleidungsstück als Kopie des Körpers, folgt also standardmäßig dem\nKörper ins Dekolleté — und genau das lässt es wie Farbe statt wie Stoff wirken. Echter\nStoff überspannt die Lücke: eine gerade Linie zwischen den vordersten Punkten beider Brüste.\nDamit wird der Stoff zwischen den Brüsten auf diese Linie hinaus entspannt. Nichts wird je\nnach innen gezogen, es kann also nicht in den Körper schneiden, und die Brüste behalten ihre Form.\nWo ein Ausschnitt den Stoff zwischen den Körbchen weggeschnitten hat, gibt es nichts zu\nüberspannen, und dies bewirkt nichts.",
     "description": ""
   },
+  "Colors.SmoothFold.Label": {
+    "message": "Zwischen den Beinen glätten",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "Glättungsgrad",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "Wie weit die Falte geglättet wird. 1.00 lässt sie ganz in der umgebenden Rundung aufgehen;\nniedrigere Werte erhalten mehr davon.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "Aktiviere dies für Stoff über dem Schritt.\nProteus baut ein Kleidungsstück als Kopie des Körpers, bildet also die Falte zwischen den Beinen nach —\ndas wirkt aufgemalt statt getragen. Damit wird zuerst die Haut dort in die umgebende Rundung\ngeglättet, sodass auch das daraus geschnittene Kleidungsstück glatt herauskommt.\nDies verändert den Körper und wirkt daher auf alle gleichzeitig getragenen Kleidungsstücke.",
+    "description": ""
+  },
   "Colors.SmoothNipples.Label": {
     "message": "Brustwarze glätten",
     "description": ""

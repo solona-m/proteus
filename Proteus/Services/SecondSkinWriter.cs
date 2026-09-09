@@ -70,6 +70,15 @@ public sealed class SecondSkinLayer
     public float CleftBridgeStrength { get; init; }
 
     /// <summary>
+    /// How far this layer's shell flattens the crotch fold (0 = off, the default; 1 = flat onto the
+    /// surface either side).
+    /// <para/>
+    /// Carried here only as the DECLARATION, like <see cref="NippleSmoothStrength"/>: the flattening is a
+    /// body pass, and this is what the coverage union it runs under is built from.
+    /// </summary>
+    public float FoldSmoothStrength { get; init; }
+
+    /// <summary>
     /// When non-empty, this layer IS geometry rather than a copy of the character's: the named meshes of
     /// each <see cref="ContentGeometry.Model"/> are emitted verbatim — unpushed, untrimmed, at their
     /// authored vertices, UVs and skinning — under this layer's single material. Empty for an ordinary
@@ -7743,12 +7752,34 @@ public static class SecondSkinWriter
     /// what it would have without this feature.
     /// </summary>
     /// <param name="bust">Per-vertex region weight in 0..1, already gated on coverage.</param>
+    /// <param name="ramp">
+    /// Optional per-vertex 0..1 multiplied into the finished region weight — a geometric feather the
+    /// caller supplies on top of the one the coverage boundary gets.
+    /// <para/>
+    /// It exists because <paramref name="bust"/> is read as a BOOLEAN seed: any positive value marks a
+    /// node and <see cref="BustRegionWeights"/> then builds its own ramp, one ring wide. One ring is right
+    /// for a coverage edge, where the shell is pinned to cloth that must not move at all, and wrong for a
+    /// region whose edge is a line drawn through open skin — there the displacement has to die over
+    /// centimetres or the boundary reads as a crease. Measured on the crotch fold: a 4.8mm lift ending at
+    /// the region's ceiling, clipped by <see cref="BustMaxSlope"/> to die in 6mm, which is a 39° kink and
+    /// showed in game as a break straight across the front.
+    /// </param>
+    /// <param name="relaxSeed">
+    /// Optional per-vertex 0..1 region for the finishing 3-D relax, separate from the height field's own.
+    /// <para/>
+    /// Separate because the two operators can work where the other cannot. A height field along one axis
+    /// has no leverage on surface that faces across it — under the crotch the skin turns to face DOWN, and
+    /// pushing it along +Z slides it sideways rather than smoothing it — while a Laplacian is indifferent
+    /// to which way a surface points and simply has no opinion about shape. So the span is gated to the
+    /// front and the relax is allowed to wrap underneath.
+    /// </param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
-        bool fillGap = true)
+        bool fillGap = true, Vec3? outward = null, bool envelope = false,
+        float[]? ramp = null, float[]? relaxSeed = null)
         => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
-                           smoothStrength, fillGap);
+                           smoothStrength, fillGap, outward, envelope, ramp, relaxSeed);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>
@@ -7758,7 +7789,8 @@ public static class SecondSkinWriter
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
-        bool fillGap = true)
+        bool fillGap = true, Vec3? outward = null, bool envelope = false,
+        float[]? ramp = null, float[]? relaxSeed = null)
     {
         int vc = pos.Length;
         if (vc == 0 || (strength <= 0f && smoothStrength <= 0f) || bust.Length < vc) return null;
@@ -7832,6 +7864,28 @@ public static class SecondSkinWriter
         // centimetre-high spikes. Excluded first, the ramp runs down to the garment's own edge properly.
         var nW = BustRegionWeights(seed, cut, adj, nodeCount, log, fillGap);
 
+        // The caller's own feather, welded to nodes the same way the geometry was. Averaged over the
+        // welded copies rather than maxed: a node is one place on the surface, and its copies differ only
+        // by which UV chart they belong to, so they cannot honestly disagree about how far into the region
+        // it sits.
+        var relaxW = new float[nodeCount];
+        if (ramp != null || relaxSeed != null)
+        {
+            var rampN = new float[nodeCount];
+            for (int i = 0; i < vc && i < pos.Length; i++)
+            {
+                int n = nodeOf[i];
+                if (ramp != null && i < ramp.Length) rampN[n] += ramp[i];
+                if (relaxSeed != null && i < relaxSeed.Length) relaxW[n] += relaxSeed[i];
+            }
+            for (int n = 0; n < nodeCount; n++)
+            {
+                float inv = 1f / members[n];
+                relaxW[n] *= inv;
+                if (ramp != null) nW[n] *= rampN[n] * inv;
+            }
+        }
+
         int region = 0;
         for (int n = 0; n < nodeCount; n++) if (nW[n] > 0f) region++;
         if (region < MinBustBridgeNodes)
@@ -7843,7 +7897,13 @@ public static class SecondSkinWriter
         // A rough outward direction to get started — the region's own weighted mean normal. Only used to
         // find the other two axes and to settle the final one's sign; it is NOT the direction anything
         // moves in. See below for why that distinction is the difference between a span and a mess.
-        var seedOut = Normalize(WeightedMean(nNorm, nW, nodeCount));
+        //
+        // A CALLER MAY SUPPLY IT, because the mean normal is only outward while the region is a surface
+        // facing outward. Inside a crease it is not: measured across the crotch fold the mean normal's
+        // forward component is 0.001, the walls facing each other across ±X instead, and the derivation
+        // built on it returned an axis of (-1,0,0) — sideways. Everything downstream was then solving a
+        // different problem competently. A region that cannot say which way is out has to be told.
+        var seedOut = outward ?? Normalize(WeightedMean(nNorm, nW, nodeCount));
         if (seedOut is not { } outSeed)
         {
             log?.Invoke("bust bridge: SKIPPED, the region's normals cancel out — no outward axis");
@@ -7946,7 +8006,9 @@ public static class SecondSkinWriter
             ver[n] = p.X * vertical.X + p.Y * vertical.Y + p.Z * vertical.Z;
         }
 
-        var h = strength > 0f ? ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log) : h0;
+        var h = strength <= 0f ? h0
+              : envelope ? EnvelopeTarget(h0, lat, ver, nW, nodeCount, adj, start, log)
+                         : ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log);
 
         // How far of the way to the chord each node actually goes: the region ramp fades the effect into
         // the untouched shell at the region's edge, and the strength is the user's "how much of this do I
@@ -8057,6 +8119,88 @@ public static class SecondSkinWriter
             }
         }
 
+        // ── THE FINISHING RELAX ─────────────────────────────────────────────────────────────────────
+        //
+        // A plain Laplacian over the region, run on the surface everything above has already produced. It
+        // is the same operator as the nipple's finish and it is here for the second of the two reasons
+        // given there: the height field only ever moves a node ALONG one axis, so wherever the surface
+        // turns to face across that axis the span has no purchase on it at all. Under the crotch it turns
+        // to face down. The span cleaned the front and left the underside exactly as rough as it found it,
+        // which is what "the front is smooth now, underneath is still bumpy" looks like from the geometry
+        // side.
+        //
+        // Plain rather than Taubin, for the reason set out at NippleFinishPasses: the negative step that
+        // protects shape is the same one that undoes the redistribution this exists for, and it stalls
+        // well short.
+        //
+        // Neighbours OUTSIDE the relax region are read but never written, so they pin the boundary, and
+        // relaxW fades the result on top of that. The pass therefore cannot step at its own edge however
+        // ragged that edge is.
+        if (relaxSeed != null && strength > 0f && FoldRelaxPasses > 0)
+        {
+            var cur = new Vec3[nodeCount];
+            for (int n = 0; n < nodeCount; n++)
+            {
+                float d = scale[n];
+                cur[n] = new Vec3(start[n].X + ax.X * d, start[n].Y + ax.Y * d, start[n].Z + ax.Z * d);
+                if (nipple is { } q)
+                    cur[n] = new Vec3(cur[n].X + q[n].X, cur[n].Y + q[n].Y, cur[n].Z + q[n].Z);
+            }
+            var basis = (Vec3[])cur.Clone();
+            var next = (Vec3[])cur.Clone();
+
+            var relaxNodes = new List<int>();
+            for (int n = 0; n < nodeCount; n++) if (relaxW[n] > 0f && adj[n].Count > 0) relaxNodes.Add(n);
+
+            for (int pass = 0; pass < FoldRelaxPasses; pass++)
+            {
+                foreach (int n in relaxNodes)
+                {
+                    var near = adj[n];
+                    float sx = 0f, sy = 0f, sz = 0f;
+                    foreach (int j in near) { sx += cur[j].X; sy += cur[j].Y; sz += cur[j].Z; }
+                    float inv = 1f / near.Count;
+                    next[n] = new Vec3(cur[n].X + (sx * inv - cur[n].X) * FoldRelaxLambda,
+                                       cur[n].Y + (sy * inv - cur[n].Y) * FoldRelaxLambda,
+                                       cur[n].Z + (sz * inv - cur[n].Z) * FoldRelaxLambda);
+                }
+                foreach (int n in relaxNodes) cur[n] = next[n];
+            }
+
+            var free = nipple ?? new Vec3[nodeCount];
+            float mostRelax = 0f;
+            foreach (int n in relaxNodes)
+            {
+                float a = relaxW[n] * strength;
+                if (a <= 0f) continue;
+                var d = new Vec3((cur[n].X - basis[n].X) * a,
+                                 (cur[n].Y - basis[n].Y) * a,
+                                 (cur[n].Z - basis[n].Z) * a);
+                free[n] = new Vec3(free[n].X + d.X, free[n].Y + d.Y, free[n].Z + d.Z);
+                mostRelax = MathF.Max(mostRelax, Len(d));
+            }
+
+            // Limited as a VECTOR, and tighter than the span's own limit. Both differences are load-bearing
+            // and the mesh said so: at BustMaxSlope per component this tore 12 triangles inside out and
+            // collapsed 2 more, all of them in the two millimetres just above the crotch.
+            //
+            // Per component is right for the span because every node there moves along ONE axis, so a
+            // slope limit tilts a triangle and can never fold it. This channel moves freely in 3-D, where
+            // the same limit applied three times over allows neighbours to differ by root-three times as
+            // much, in any direction — including straight through each other. The crotch is the densest
+            // part of the body's mesh, with edges around a millimetre, so a limit that permits 1.39mm of
+            // difference across a 1mm edge is not a limit at all.
+            //
+            // The constant then has to be well under a half: a triangle inverts once one corner's
+            // displacement exceeds its distance to the opposite edge, and a third of the shortest edge is
+            // comfortably inside that for any triangle that is not already degenerate.
+            LimitSlopeVector(free, start, adj, nodeCount, FoldRelaxMaxSlope);
+            nipple = free;
+
+            log?.Invoke($"bust bridge: relax {FoldRelaxPasses} pass(es) over {relaxNodes.Count} node(s), "
+                      + $"moving them by up to {mostRelax:0.#####}");
+        }
+
         var delta = new Vec3[vc];
         int moved = 0;
         float maxMove = 0f;
@@ -8079,8 +8223,22 @@ public static class SecondSkinWriter
             float mag = Len(v);
             if (mag <= BustBridgeEpsilon) continue;
             delta[i] = v;
-            if (mag > maxMove) maxMove = mag;
         }
+
+        // THE MESH HAS TO STILL BE A MESH — but only the FOLD gets this, and that scoping is not caution,
+        // it is a bug fixed.
+        //
+        // Run over every pass it wrecked the nipple. Flattening a point legitimately shrinks the triangles
+        // at the tip, so they trip the area test, their three vertices get halved, that distorts the
+        // triangles around them until those trip it too, and eight rounds of the cascade leave a spiked
+        // mess where the nipple was — far worse than the point it set out to remove.
+        //
+        // The tearing it exists for was measured in one place: the crotch, where the span's axis lies
+        // along the surface and slides neighbours past each other. That is the pass that needs it.
+        if (relaxSeed != null)
+            UnfoldTriangles(pos, delta, tris, log);
+
+        foreach (var v in delta) maxMove = MathF.Max(maxMove, Len(v));
         // Counted per NODE, not per vertex, so the number means "how much of the chest moved" rather than
         // how many UV-seam copies the mesh happens to carry.
         for (int n = 0; n < nodeCount; n++) if (NodeMove(n) > BustBridgeEpsilon) moved++;
@@ -8098,6 +8256,49 @@ public static class SecondSkinWriter
         var hFinal = new float[nodeCount];
         for (int n = 0; n < nodeCount; n++) hFinal[n] = h0[n] + scale[n];
         var chord = ChordReport(start, h0, hFinal, nW, nodeCount, ax, lateral);
+
+        // The finishing relax reaches past the height field's own region — that is the point of it having
+        // a separate one — so nodes it alone moved carry nW of zero and would be written at their new
+        // positions while still shaded from their old ones. Admit them here, after the report above has
+        // measured the span on the weights the span actually used.
+        //
+        // BY HOW FAR EACH NODE MOVED, not by whether it is in the region. nW is not a gate: RelaxedNormals
+        // uses it to blend between the body's AUTHORED normal and one recomputed from the faces, and at 1
+        // the authored normal is discarded outright. Admitting the whole region at full weight therefore
+        // rewrote the normals of every node in it, including the ones that had barely moved and whose
+        // authored normal was still perfectly good.
+        //
+        // That is not a cosmetic difference, because a shell is built as `position + normal * BaseOffset`.
+        // Changing the normal changes which way the garment is pushed, and where the relax region crossed
+        // the leg opening the fabric lifted off the skin and opened a gap along its own hem — bright
+        // slivers of the cut edge between the trim and the leg, with the hem going wobbly along the line
+        // where the blend fell back to zero.
+        //
+        // Movement measured against the node's own edge length, so it means "how much did the surface
+        // here actually change" on any mesh density. A node that moved a good fraction of the distance to
+        // its neighbours has a genuinely new surface and needs the new normal; one that moved a hundredth
+        // of that keeps what the artist gave it.
+        if (relaxSeed != null)
+        {
+            int full = 0, token = 0;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (relaxW[n] <= 0f || adj[n].Count == 0) continue;
+                float edge = 0f;
+                foreach (int k in adj[n])
+                {
+                    float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
+                    edge += MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                }
+                edge /= adj[n].Count;
+                if (edge <= 1e-9f) continue;
+                float need = Math.Clamp(NodeMove(n) / (edge * NormalReshadeSpan), 0f, 1f);
+                nW[n] = MathF.Max(nW[n], relaxW[n] * strength * need);
+                if (nW[n] >= 0.5f) full++; else if (nW[n] > 0f) token++;
+            }
+            log?.Invoke($"bust bridge: {full} node(s) reshaded from the new surface, {token} keeping most "
+                      + "of the normal they arrived with");
+        }
 
         // Nodes the bridge never moved report zero weight, so the normal pass leaves their bytes exactly
         // as they were and an untouched shell stays byte-identical. It has to count the relax as well as
@@ -8639,7 +8840,18 @@ public static class SecondSkinWriter
                 (null, { } b)  => h0[n] + (b - h0[n]) * mix,
                 _              => float.MinValue,
             };
-            if (want <= h0[n]) continue;   // already at or in front of the chord — a breast, or its flank
+            // No chord at this lateral position in EITHER band — past both sets of apexes. Guarded on its
+            // own rather than left to the clamp below, which caught it only by accident: the sentinel is
+            // float.MinValue, so `want <= h0` swallowed it silently. That held while this was the only
+            // target; a two-sided variant tried here let it straight through and the displacement came
+            // out infinite.
+            if (c0 == null && c1 == null) continue;
+
+            // RAISE-ONLY, and that clamp is the no-clip guarantee itself: a node only ever leaves the
+            // skin, so it can never be driven into it. It is also what keeps this a bridge across the gap
+            // rather than a flattening of the lobes either side. A pass that needs to lower wants
+            // EnvelopeTarget instead — relaxing this is not the way to get there.
+            if (want <= h0[n]) continue;
             target[n] = want;
             lifted++;
         }
@@ -8647,6 +8859,728 @@ public static class SecondSkinWriter
         log?.Invoke($"bust bridge: {bands} band(s) of {bandH:0.#####} ({usable} with a lobe either side), "
                   + $"{lifted} node(s) lifted to the chord");
         return target;
+    }
+
+    /// <summary>
+    /// The crotch fold, flattened to the surface either side of it. A body pass, for the same reason the
+    /// nipple's is: it lowers as well as raises, so the shell has to be cut from the result.
+    /// <para/>
+    /// Three things make this the chord rather than the nipple's relax, and each was measured before it
+    /// was believed:
+    /// <list type="bullet">
+    /// <item>A plain 3-D relax cannot close it. The fold is an invagination — 51.5mm of relief across the
+    /// middle 12mm at one height — and a Laplacian dragged the region 73mm while taking that only to 44mm.
+    /// It would destroy the surroundings long before it closed the fold.</item>
+    /// <item>The chord over the whole hip front finds the two THIGHS as its lobes. They sit 40mm further
+    /// forward than the crotch, so it spans between them and webs the legs together. Hence the CORRIDOR:
+    /// a band either side of the midline, so the apexes it finds are the fold's own shoulders.</item>
+    /// <item>Inside the corridor the surface cannot say which way is out. A crease's walls face each other
+    /// across the midline, and the region's mean normal came to 0.001 forward — the axis derived from it
+    /// was (-1,0,0), sideways, and everything downstream then solved a different problem competently. So
+    /// the outward direction is SUPPLIED.</item>
+    /// </list>
+    /// Two-sided, because the fold's cross-section is a W: shoulders at ±10mm, grooves at ±6mm, and a
+    /// ridge on the midline standing proud of the shoulders. Raising alone fills the grooves and leaves
+    /// the ridge, which is most of what still shows.
+    /// </summary>
+    /// <param name="hip">
+    /// The hip bone's influence with the thigh rivalry applied — where the legs outweigh the hip the
+    /// vertex is on a leg. This is the SPAN's region, and the veto has to be there: spanning between two
+    /// surfaces that belong to different legs is what webs them together.
+    /// </param>
+    /// <param name="near">
+    /// The same influence WITHOUT that veto — hip and thighs together. This is the relax's region, and the
+    /// veto has to be gone: measured on a real body, only 65 vertices behind the mid-plane survive it and
+    /// another 266 in the same box do not, so four fifths of the surface directly under the crotch was
+    /// excluded and the underside came back as rough as it went in.
+    /// <para/>
+    /// Safe here for the reason it is not safe for the span. A Laplacian moves a node toward its own
+    /// neighbours along mesh EDGES, and below the crotch the two legs share none, so there is no path by
+    /// which it could pull them together. Above the crotch they do share edges, and smoothing across those
+    /// is the entire point. What has to bound it instead is geometry, which is what the box below is.
+    /// </param>
+    private static BustBridgePlan? FoldPlan(Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] hip, float[] near,
+                                            bool[]? covered, float strength, Action<string>? log)
+    {
+        int vc = pos.Length;
+
+        // The front of the body, by POSITION rather than by facing. The cleft could use the surface's own
+        // normals to tell front from back; here it cannot, for the reason in the summary.
+        //
+        // Model +Z is forward on every body a shell is cut from, the same fact GateToBackFacing rests on.
+        float lo = float.MaxValue, hi = float.MinValue;
+        for (int i = 0; i < vc; i++)
+        {
+            if (hip[i] <= 0f || pos[i].Z <= 0f) continue;
+            lo = MathF.Min(lo, pos[i].X); hi = MathF.Max(hi, pos[i].X);
+        }
+        if (hi <= lo) { log?.Invoke("crotch fold: no hip-owned surface on the front"); return null; }
+
+        // The corridor's width comes from the CROTCH, not from the whole region. The hip owns the waist
+        // too, so the region runs ±154mm on a real body and a fraction of that is a corridor 100mm wide —
+        // wide enough to take the inner thighs back in, which is the thing the corridor exists to exclude.
+        //
+        // The crotch is where the legs meet: the LOWEST height at which the body still has surface on the
+        // midline at all. Below that the two legs are separate and there is nothing spanning between them,
+        // which is the same fact the chord's own hole test rests on. Measured there, the region's width is
+        // the fold's own scale on any body.
+        float mid = (lo + hi) * 0.5f;
+        float half = (hi - lo) * 0.5f;
+
+        float lowest = float.MaxValue;
+        for (int i = 0; i < vc; i++)
+        {
+            if (hip[i] <= 0f || pos[i].Z <= 0f) continue;
+            if (MathF.Abs(pos[i].X - mid) > half * FoldMidlineProbe) continue;
+            lowest = MathF.Min(lowest, pos[i].Y);
+        }
+        if (lowest == float.MaxValue)
+        {
+            log?.Invoke("crotch fold: the body has no surface on the front midline — nothing to flatten");
+            return null;
+        }
+
+        float wLo = float.MaxValue, wHi = float.MinValue;
+        for (int i = 0; i < vc; i++)
+        {
+            if (hip[i] <= 0f || pos[i].Z <= 0f) continue;
+            if (pos[i].Y > lowest + half * FoldCrotchBand) continue;
+            wLo = MathF.Min(wLo, pos[i].X); wHi = MathF.Max(wHi, pos[i].X);
+        }
+        float crotchHalf = wHi > wLo ? (wHi - wLo) * 0.5f : half;
+
+        // IS THAT ACTUALLY A CROTCH? Everything from here down is scaled by it, so if the answer is no the
+        // pass does not merely underperform, it reshapes whatever it found instead — and it found it on a
+        // real body. A skin mesh that stops at the hips has its lowest midline surface at its own bottom
+        // EDGE, and measured there the "crotch" came out 183.5mm across at y=1.031 against a hip region
+        // 222.3mm wide. That is a waist. The pass then moved the belly by up to 9.5mm and published a hole
+        // through the stomach.
+        //
+        // Two independent things are wrong with a boundary pretending to be a crotch, and both are worth
+        // testing because a mesh could fail either alone:
+        //
+        // A crotch is NARROW. It is the last place the two legs still meet, so it is a small fraction of
+        // the pelvis around it — a fifth on the body that works, against five sixths on the one that does
+        // not. Nothing near half is a crotch.
+        //
+        // And a crotch has LEGS below it. Surface continues past it for the length of a limb, where a
+        // boundary has nothing underneath at all.
+        // Measured on `near` and NOT on `hip`, which would make the test vacuous: the thigh veto zeroes the
+        // hip's weight exactly where the legs begin, so asking it how far the legs reach can only ever
+        // answer "barely". It said 18.8mm on a body whose legs run the length of the model.
+        float bottom = float.MaxValue;
+        for (int i = 0; i < vc; i++)
+            if (near[i] > 0f && pos[i].Z > 0f) bottom = MathF.Min(bottom, pos[i].Y);
+
+        if (crotchHalf > half * FoldCrotchMaxWidth)
+        {
+            log?.Invoke($"crotch fold: SKIPPED, what the midline found at y={lowest:0.###} is "
+                      + $"{crotchHalf * 2000:0.#}mm across against a hip region {half * 2000:0.#}mm wide — "
+                      + "that is a waist, not a crotch, and this mesh most likely stops at the hips");
+            return null;
+        }
+        if (bottom == float.MaxValue || lowest - bottom < crotchHalf * FoldLegsBelow)
+        {
+            log?.Invoke($"crotch fold: SKIPPED, the body reaches only {(lowest - bottom) * 1000:0.#}mm "
+                      + $"below y={lowest:0.###} — there are no legs under it, so that is the edge of the "
+                      + "mesh rather than the place they meet");
+            return null;
+        }
+
+        float corridor = crotchHalf * FoldCorridor;
+
+        // Bounded ABOVE as well. The hip owns the belly, and the corridor is a vertical strip, so without
+        // this the pass reaches the waist — measured, it moved rows at y 0.94-1.00 by up to 17mm, which is
+        // a stomach being reshaped by a setting about the crotch. The fold lives just above where the legs
+        // meet, so its own scale bounds it: the crotch's width is the right ruler and needs no per-body
+        // number.
+        float ceiling = lowest + crotchHalf * 2f * FoldHeight;
+
+        // EVERY edge of this region is a line drawn through open skin, not a garment's hem, so every one of
+        // them has to be feathered by hand. The one-ring ramp BustRegionWeights builds is for a coverage
+        // boundary, where the neighbouring cloth genuinely must not move; here it left a 4.8mm lift dying
+        // over about 6mm at the ceiling, and that showed in game as a break across the front.
+        //
+        // Three edges, three fades, each measured in the crotch's own width so no body needs a number:
+        //  - SIDEWAYS, out toward the inner thigh, which is the direction the corridor exists to stop.
+        //  - UPWARD past the ceiling, into the belly.
+        //  - FORWARD from the body's mid-plane, where the height field's axis becomes tangent to the
+        //    surface and it stops meaning anything. This one fades IN rather than out.
+        float feather = corridor * (FoldFeather - 1f);
+        float roof = (ceiling - lowest) * (FoldFeather - 1f);
+        float frontFade = crotchHalf * FoldFrontFade;
+        float back = crotchHalf * FoldBack;
+
+        float Fade(float x, float width) => width <= 1e-9f ? 1f : 1f - Smoothstep(Math.Clamp(x / width, 0f, 1f));
+
+        var w = new float[vc];
+        var ramp = new float[vc];
+        var relax = new float[vc];
+        // A FLOOR as well, and it only becomes necessary once the relax stops asking the thigh bones for
+        // permission: without it the relax region runs on down the two inner thighs for as long as the
+        // corridor is narrow enough to hold them, and a strip of smoothed skin down the inside of each leg
+        // is a seam, not a fix. The fold is done a short way below where the legs meet, so the crotch's own
+        // width bounds it from below exactly as it does from above.
+        float floorY = lowest - crotchHalf * FoldDrop;
+        float drop = crotchHalf * FoldDropFeather;
+
+        int seeded = 0, relaxed = 0, under = 0;
+        for (int i = 0; i < vc; i++)
+        {
+            float side = MathF.Abs(pos[i].X - mid);
+            if (side > corridor + feather) continue;
+            float above = pos[i].Y - ceiling;
+            if (above > roof) continue;
+            float below = floorY - pos[i].Y;
+            if (below > drop) continue;
+
+            float box = Fade(side - corridor, feather) * Fade(above, roof) * Fade(below, drop);
+            if (box <= 0f) continue;
+
+            // The height field: front-facing only, faded in from the mid-plane, and still subject to the
+            // thigh veto because spanning between two legs is what webs them together.
+            //
+            // FADED BY FACING as well, and that is the one that stops it tearing the mesh. A height field
+            // pushes every node along one axis; where the surface is square to that axis it lifts, and
+            // where the surface has turned to lie ALONG it the same push slides the skin sideways instead.
+            // Two adjacent vertices sliding at a slope of BustMaxSlope across a one-millimetre edge — and
+            // the crotch is the densest millimetre-edged part of the body — simply pass through each
+            // other. Measured: 12 triangles inside out and 2 collapsed, every one of them in the two
+            // millimetres just above the crotch, which is exactly where the surface turns under.
+            //
+            // The z ramp above is the same idea done badly: position is only a proxy for orientation, and
+            // eight millimetres forward of the mid-plane the surface can still be raked hard. The normal
+            // says it directly.
+            if (hip[i] > 0f && pos[i].Z > 0f)
+            {
+                float square = Smoothstep(Math.Clamp(nrm[i].Z / FoldFacing, 0f, 1f));
+                float f = box * Smoothstep(Math.Clamp(pos[i].Z / frontFade, 0f, 1f)) * square;
+                if (f > 0f) { w[i] = hip[i]; ramp[i] = f; seeded++; }
+            }
+
+            // The relax: the same box, carried on round underneath and taking the thighs in with it. This
+            // is the half of the region the span can never help — see the relaxSeed parameter on
+            // BustBridgeSolve, and the `near` parameter above for why the veto is lifted here.
+            if (near[i] > 0f)
+            {
+                float b = Fade(-pos[i].Z, back);
+                if (b > 0f) { relax[i] = box * b; relaxed++; if (pos[i].Z <= 0f) under++; }
+            }
+        }
+        if (seeded < MinBustBridgeNodes)
+        {
+            log?.Invoke($"crotch fold: {seeded} vertex(es) in the corridor — too few to describe a fold");
+            return null;
+        }
+        log?.Invoke($"crotch fold: {seeded} vertex(es) in a corridor {corridor * 2000:0.#}mm wide about "
+                  + $"x={mid:0.####} (feathered out to {(corridor + feather) * 2000:0.#}mm), {relaxed} "
+                  + $"in the relax region ({under} of them behind the mid-plane), reaching "
+                  + $"{back * 1000:0.#}mm behind it and down to y={floorY:0.###}, from a crotch "
+                  + $"{crotchHalf * 2000:0.#}mm across at y={lowest:0.###} (the hip region itself is "
+                  + $"{half * 2000:0.#}mm across)");
+
+        return BustBridgeSolve(pos, nrm, tris, w, strength, log, covered,
+                               smoothStrength: 0f, fillGap: false,
+                               outward: new Vec3(0, 0, 1), envelope: true,
+                               ramp: ramp, relaxSeed: relax);
+    }
+
+    /// <summary>
+    /// How wide the fold's corridor is, as a fraction of the CROTCH's width where the legs meet. Wide
+    /// enough to contain the fold's shoulders — measured at ±10mm — and no wider, because everything past
+    /// them is the inner thigh and spanning to THAT is what webs the legs together.
+    /// </summary>
+    private const float FoldCorridor = 0.5f;
+
+    /// <summary>
+    /// Flatten each row of the region onto a straight line fitted across its own OUTER surface — the
+    /// target for the crotch fold, where the chord cannot work.
+    /// <para/>
+    /// <see cref="ChordTarget"/> spans a valley between two peaks: it takes the highest point either side
+    /// of the midline and lifts everything between them. The fold is the other shape — a peak between two
+    /// valleys. Measured per band, the "apexes" it found sat at ±3 to ±6mm, because the highest point on
+    /// each side IS the midline ridge, so the chord hopped across the ridge and left the grooves either
+    /// side of it untouched. That is not a tuning problem; the construction assumes the middle is down.
+    /// <para/>
+    /// So this fits a LINE instead and moves the surface onto it in both directions, which flattens a W as
+    /// readily as a V and needs no opinion about which way the middle goes.
+    /// <para/>
+    /// Fitted to the ENVELOPE, not to the region's nodes. A fold is an invagination — 51mm of relief
+    /// across the middle 12mm on a real body — so its interior walls are in the region too, sitting far
+    /// behind the surface anyone can see. Least squares over all of them drags the line back into the body
+    /// and "flattening" then pulls the outer surface in to meet it. Binning by lateral position and taking
+    /// each bin's frontmost node gives the silhouette, which is the thing a garment lies on.
+    /// </summary>
+    private static float[] EnvelopeTarget(float[] h0, float[] lat, float[] ver, float[] w, int count,
+                                          List<int>[] adj, Vec3[] pos, Action<string>? log)
+    {
+        var target = (float[])h0.Clone();
+
+        float loV = float.MaxValue, hiV = float.MinValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            loV = MathF.Min(loV, ver[n]); hiV = MathF.Max(hiV, ver[n]);
+        }
+        if (hiV <= loV) return target;
+
+        // One band per edge of mesh, as the chord does — a band as fine as the geometry can express.
+        float edge = 0f; int edges = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f || adj[n] == null) continue;
+            foreach (int k in adj[n])
+            {
+                float dx = pos[k].X - pos[n].X, dy = pos[k].Y - pos[n].Y, dz = pos[k].Z - pos[n].Z;
+                edge += MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                edges++;
+            }
+        }
+        edge = edges > 0 ? edge / edges : 0f;
+        int bands = edge > 1e-6f ? (int)MathF.Round((hiV - loV) / edge) : 0;
+        bands = Math.Clamp(bands, 3, 512);
+        float bandH = (hiV - loV) / bands;
+        if (bandH <= 1e-9f) return target;
+
+        // The envelope, per band: the frontmost node in each lateral bin.
+        var binMax = new float[bands, EnvelopeBins];
+        var binLat = new float[bands, EnvelopeBins];
+        for (int b = 0; b < bands; b++)
+            for (int q = 0; q < EnvelopeBins; q++) binMax[b, q] = float.MinValue;
+
+        float loL = float.MaxValue, hiL = float.MinValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            loL = MathF.Min(loL, lat[n]); hiL = MathF.Max(hiL, lat[n]);
+        }
+        if (hiL <= loL) return target;
+        float latW = hiL - loL;
+
+        int Bin(float u) => Math.Clamp((int)((u - loL) / latW * EnvelopeBins), 0, EnvelopeBins - 1);
+
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            int b = Math.Clamp((int)((ver[n] - loV) / bandH), 0, bands - 1);
+            int q = Bin(lat[n]);
+            if (h0[n] > binMax[b, q]) { binMax[b, q] = h0[n]; binLat[b, q] = lat[n]; }
+        }
+
+        // A PARABOLA through each band's envelope samples, not a straight line. The corridor is 33mm of a
+        // round body, so a line fitted across it is a chord of the body's own curvature: snapping the
+        // surface onto one flattens the hip as well as the fold, which showed up as 17mm of movement in
+        // rows that have no fold in them at all. A quadratic carries the curvature and leaves the fold as
+        // the part that deviates from it.
+        var fitA = new float[bands];
+        var fitB = new float[bands];
+        var fitC = new float[bands];
+        var fitOk = new bool[bands];
+        for (int b = 0; b < bands; b++)
+        {
+            // Normal equations for h = a + b*u + c*u^2, solved by Gaussian elimination on a 3x3.
+            var mm = new double[3, 4];
+            int n = 0;
+            for (int q = 0; q < EnvelopeBins; q++)
+            {
+                if (binMax[b, q] == float.MinValue) continue;
+                double u = binLat[b, q], h = binMax[b, q];
+                double[] t = [1, u, u * u];
+                for (int i = 0; i < 3; i++)
+                {
+                    for (int j = 0; j < 3; j++) mm[i, j] += t[i] * t[j];
+                    mm[i, 3] += t[i] * h;
+                }
+                n++;
+            }
+            if (n < EnvelopeMinBins) continue;
+
+            bool ok = true;
+            for (int c = 0; c < 3 && ok; c++)
+            {
+                int piv = c;
+                for (int r = c + 1; r < 3; r++) if (Math.Abs(mm[r, c]) > Math.Abs(mm[piv, c])) piv = r;
+                if (Math.Abs(mm[piv, c]) < 1e-20) { ok = false; break; }
+                if (piv != c) for (int j = 0; j <= 3; j++) (mm[c, j], mm[piv, j]) = (mm[piv, j], mm[c, j]);
+                for (int r = 0; r < 3; r++)
+                {
+                    if (r == c) continue;
+                    double f2 = mm[r, c] / mm[c, c];
+                    for (int j = c; j <= 3; j++) mm[r, j] -= f2 * mm[c, j];
+                }
+            }
+            if (!ok) continue;
+            fitA[b] = (float)(mm[0, 3] / mm[0, 0]);
+            fitB[b] = (float)(mm[1, 3] / mm[1, 1]);
+            fitC[b] = (float)(mm[2, 3] / mm[2, 2]);
+            fitOk[b] = true;
+        }
+
+        // How much the envelope actually rises and falls across each band — the size of whatever feature
+        // that row contains. Everything below is measured in it; see the block at the clamp for why.
+        var bandRelief = new float[bands];
+        for (int b = 0; b < bands; b++)
+        {
+            float lo2 = float.MaxValue, hi2 = float.MinValue;
+            for (int q = 0; q < EnvelopeBins; q++)
+            {
+                if (binMax[b, q] == float.MinValue) continue;
+                lo2 = MathF.Min(lo2, binMax[b, q]); hi2 = MathF.Max(hi2, binMax[b, q]);
+            }
+            bandRelief[b] = hi2 > lo2 ? hi2 - lo2 : 0f;
+        }
+
+        // Smoothed down the bands for the same reason the chord smooths its apex line: each band takes its
+        // samples from whichever vertices fall in it, and that wobbles by a fraction of an edge from one
+        // row to the next.
+        for (int pass = 0; pass < BustBandSmoothing; pass++)
+        { Smooth1D(fitA, bands); Smooth1D(fitB, bands); Smooth1D(fitC, bands); Smooth1D(bandRelief, bands); }
+
+        int flattened = 0;
+        double askSum = 0, gotSum = 0, fadeSum = 0; int deep = 0;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            int b = Math.Clamp((int)((ver[n] - loV) / bandH), 0, bands - 1);
+            if (!fitOk[b]) continue;
+
+            // ONLY the outer surface. A node well behind its own bin's frontmost is inside the fold, and
+            // moving it onto the silhouette would drag the invagination's walls out through the skin.
+            //
+            // FADED rather than cut. A hard threshold has to sit somewhere, and anywhere near the fold's
+            // own amplitude it runs through the middle of the feature: neighbouring nodes either side of
+            // it then get snapped and not-snapped, and the row comes out MORE irregular than it started —
+            // measured at y 0.880, 4.75mm of spread becoming 7.06mm. The interior is tens of millimetres
+            // back and the surface relief is single digits, so there is plenty of room for a ramp between
+            // them that never lands on a real edge.
+            int q = Bin(lat[n]);
+            if (binMax[b, q] == float.MinValue) continue;
+
+            // BOTH thresholds are measured against the band's OWN relief — how far its envelope rises and
+            // falls across the corridor — and not against the region's width.
+            //
+            // The width is the wrong ruler and it failed hard. It says nothing about how deep the feature
+            // in front of it is, so widening the region widened the threshold with it: feathering the
+            // region's edges took the corridor from 33mm to 60mm, the skin threshold went to 30mm with it,
+            // and nodes half an inch inside the belly were suddenly counted as its outer surface and
+            // snapped onto a fitted curve that does not describe them. That published as a 23.6mm hole
+            // through the stomach.
+            //
+            // Relief is the honest scale: on a flat band it is small, so almost nothing counts as surface
+            // and almost nothing moves; across the fold it is the fold's own depth. The clamp then says a
+            // node may never travel further than the feature it is part of is tall, which bounds this pass
+            // by construction rather than by a constant that has to be right on every body.
+            float relief = bandRelief[b];
+            if (relief <= 1e-6f) continue;
+            float behind = binMax[b, q] - h0[n];
+            float skin = relief * EnvelopeSkin;
+            if (behind >= skin) { deep++; continue; }
+            float onSurface = 1f - Smoothstep(behind / skin);
+
+            float u2 = lat[n];
+            float want = fitA[b] + fitB[b] * u2 + fitC[b] * u2 * u2;
+            float move = Math.Clamp((want - h0[n]) * onSurface, -relief, relief);
+            target[n] = h0[n] + move;
+            askSum += Math.Abs(want - h0[n]);
+            gotSum += Math.Abs(target[n] - h0[n]);
+            fadeSum += onSurface;
+            flattened++;
+        }
+
+        double resid = 0; int rn = 0;
+        for (int b = 0; b < bands; b++)
+        {
+            if (!fitOk[b]) continue;
+            for (int q = 0; q < EnvelopeBins; q++)
+            {
+                if (binMax[b, q] == float.MinValue) continue;
+                double u = binLat[b, q];
+                double d = binMax[b, q] - (fitA[b] + fitB[b] * u + fitC[b] * u * u);
+                resid += d * d; rn++;
+            }
+        }
+
+        log?.Invoke($"crotch fold: {bands} band(s) of {bandH:0.#####}, {fitOk.Count(x => x)} fitted, "
+                  + $"{flattened} node(s) flattened onto the envelope");
+        if (flattened > 0)
+            log?.Invoke($"crotch fold: ask {askSum / flattened * 1000:0.###}mm, applied "
+                      + $"{gotSum / flattened * 1000:0.###}mm, mean fade {fadeSum / flattened:0.###}, "
+                      + $"{deep} node(s) judged interior; fit leaves "
+                      + $"{(rn > 0 ? Math.Sqrt(resid / rn) * 1000 : 0):0.###}mm rms on the envelope");
+        return target;
+    }
+
+    /// <summary>Lateral bins the envelope is sampled in, across the region's width.</summary>
+    private const int EnvelopeBins = 16;
+
+    /// <summary>Fitted samples a band needs before its line is trusted.</summary>
+    private const int EnvelopeMinBins = 4;
+
+    /// <summary>
+    /// How far behind its bin's frontmost node a node may sit and still count as the outer surface, as a
+    /// multiple of its own band's RELIEF. Past this it is inside the fold, and flattening it would pull the
+    /// invagination's walls out through the skin.
+    /// <para/>
+    /// Above 1 so the threshold always sits clear of the feature it is separating. Anywhere inside the
+    /// relief it runs through the middle of the fold, and neighbouring nodes either side of it get snapped
+    /// and not-snapped: the row then comes out MORE irregular than it started, measured at y 0.880 as
+    /// 4.75mm of spread becoming 7.06mm. The interior of an invagination sits tens of millimetres back
+    /// while its surface relief is single digits, so there is room for the ramp between them.
+    /// <para/>
+    /// A fraction of the REGION'S WIDTH is what this used to be, and that is the bug recorded at the clamp:
+    /// the ruler has to be the feature, not the frame around it.
+    /// </summary>
+    private const float EnvelopeSkin = 1.5f;
+
+    /// <summary>How close to the midline a vertex counts as being ON it, when looking for the lowest place
+    /// the body still spans between the legs. A fraction of the hip region's half-width.</summary>
+    private const float FoldMidlineProbe = 0.06f;
+
+    /// <summary>
+    /// How far above the crotch the fold's region reaches, as a multiple of the crotch's own width. The
+    /// fold sits directly above where the legs meet and is done well before the belly starts; the hip bone
+    /// is not, so something has to say where to stop.
+    /// </summary>
+    private const float FoldHeight = 0.5f;
+
+    /// <summary>How tall a slice above that lowest point the crotch's width is measured over, as a
+    /// fraction of the hip region's half-width. Enough rows to average out one ragged one.</summary>
+    private const float FoldCrotchBand = 0.10f;
+
+    /// <summary>
+    /// The widest a crotch may be as a fraction of the hip region around it. Measured: 0.22 on a body
+    /// whose legs meet where they should, 0.83 on a skin mesh that simply stops at the hips. Set between
+    /// them with room on both sides, because the consequence of getting this wrong is not a weak result
+    /// but a hole in someone's stomach.
+    /// </summary>
+    private const float FoldCrotchMaxWidth = 0.45f;
+
+    /// <summary>How far the body must continue below the crotch before it counts as having legs, as a
+    /// multiple of the crotch's own half-width. A limb goes on for many; a mesh boundary for none.</summary>
+    private const float FoldLegsBelow = 1.0f;
+
+    /// <summary>
+    /// How far past the corridor and the ceiling the region fades to nothing, as a multiple of each. The
+    /// displacement at those edges runs to about 5mm, and the eye reads a step of that size over anything
+    /// under a centimetre or so; at 1.8 the fade has 13mm sideways and 27mm upward to spend, which puts
+    /// the worst slope well under a twentieth and takes it below what a highlight can pick out.
+    /// </summary>
+    private const float FoldFeather = 1.8f;
+
+    /// <summary>
+    /// How far forward of the body's mid-plane the height field reaches full strength, as a fraction of
+    /// the crotch's half-width. Its axis is +Z, so at z=0 that axis lies IN the surface and moving a node
+    /// along it slides the skin sideways instead of raising it. Fading in over this leaves the mid-plane
+    /// to the relax, which does not care which way a surface points.
+    /// </summary>
+    private const float FoldFrontFade = 0.25f;
+
+    /// <summary>
+    /// How far BELOW the crotch the region reaches at full strength, as a fraction of the crotch's own
+    /// half-width. Load-bearing only for the relax: the span's thigh veto used to end the region down here
+    /// on its own, and the relax does not have one.
+    /// <para/>
+    /// SMALL, and much smaller than the ceiling above, because the two directions are not symmetric. The
+    /// fold sits at and above the line where the legs meet; BELOW it there is no fold to smooth, only the
+    /// fillet where the two thighs part — and that is anatomy. Smoothing a concave fillet necessarily
+    /// pushes it OUT, so reaching down there does not merely waste effort, it inflates the leg. Measured
+    /// against the real upstream body at 0.5: 80 vertices in the y 0.80-0.85 band moved a mean of 2.5mm
+    /// outward and up to 7.6mm, which reads in game as the thigh bowing.
+    /// </summary>
+    private const float FoldDrop = 0.1f;
+
+    /// <summary>How far past <see cref="FoldDrop"/> the region fades to nothing, as a fraction of the
+    /// crotch's half-width. Its own constant rather than the ceiling's feather, for the asymmetry set out
+    /// above: there is nothing below the crotch this pass wants, so it only needs enough room to land
+    /// softly.</summary>
+    private const float FoldDropFeather = 0.3f;
+
+    /// <summary>
+    /// How far BEHIND the mid-plane the finishing relax reaches, as a fraction of the crotch's half-width.
+    /// Far enough to take in the surface directly under the crotch, which turns to face down and which the
+    /// span therefore cannot touch at all; not so far as to meet the seat, which is the cleft's business.
+    /// <para/>
+    /// Measured back along the underside, roughness runs 0.66mm at the mid-plane and 0.54mm ten to twenty
+    /// millimetres behind it, then drops to 0.37mm and stays there — so the rough part of the underside is
+    /// the first thirty millimetres and the fade belongs past them. At half a crotch-width it ended at
+    /// -17mm, which put the fade through the middle of the rough band and left it MORE irregular than it
+    /// started (0.54mm becoming 0.78mm), the same way a threshold through the middle of any feature does.
+    /// A full width clears it and still stops well short of the buttocks.
+    /// </summary>
+    private const float FoldBack = 1.0f;
+
+    /// <summary>
+    /// Rounds of the finishing Laplacian. Longer than the nipple's six because it is doing more than
+    /// de-jaggying here: under the crotch it is the only operator acting at all, so it has to take out the
+    /// fold's own relief and not merely the vertex noise on top of it.
+    /// <para/>
+    /// A Laplacian pulls a feature of radius R in by about λh²/4R per pass. On the flanks, where R is the
+    /// thigh's own 40mm and edges run 2.5mm, that is two hundredths of a millimetre a pass and twelve of
+    /// them cost a quarter of a millimetre of leg. In the crease, where R is nearer 5mm, the same figure is
+    /// 0.16mm a pass — which is not a cost but the entire purpose.
+    /// <para/>
+    /// TWELVE AND NOT MORE, measured rather than reasoned. Roughness is a converging quantity and it has
+    /// converged by here; past it the pass stops buying smoothness and starts spending shape. At 28 the
+    /// front got WORSE (0.243mm to 0.253mm) and so did the underside (0.671 to 0.693) and both fade edges
+    /// with them, while the largest displacement grew from 8.6mm to 12.9mm — which is not the fold going
+    /// anywhere, it is the legs pulling in. Twelve dominates it on every measure at once.
+    /// </summary>
+    private const int FoldRelaxPasses = 12;
+
+    /// <summary>How far each relax pass moves a node toward its neighbours' centroid. Under-relaxed for
+    /// the reason every other relaxation here is: at 1 a Jacobi step has eigenvalue -1 on the checkerboard
+    /// mode and oscillates instead of converging.</summary>
+    private const float FoldRelaxLambda = 0.5f;
+
+    /// <summary>
+    /// How far a node must move before its normal is fully recomputed rather than kept, as a fraction of
+    /// the distance to its own neighbours. Half an edge is a genuinely different surface; a hundredth of
+    /// one is the same surface with the artist's normal still describing it correctly. See the block that
+    /// uses it for why handing every node in the region a fresh normal tore the garment's hem open.
+    /// </summary>
+    private const float NormalReshadeSpan = 0.5f;
+
+    /// <summary>
+    /// The most two neighbouring nodes' free 3-D displacements may differ, per unit of the edge between
+    /// them.
+    /// <para/>
+    /// This is a SMOOTHNESS setting, not a safety one — <see cref="UnfoldTriangles"/> owns safety, and it
+    /// owns it by checking rather than by bounding. Tuned as such: a relax works by making neighbouring
+    /// displacements differ, so limiting exactly that fights the operator, and at 0.3 it ate the pass
+    /// outright and left the front rougher than it found it (0.548mm becoming 0.558mm against 0.223mm
+    /// unconstrained). Loose enough to let the relax work, tight enough that the unfolder rarely has
+    /// anything to do.
+    /// </summary>
+    private const float FoldRelaxMaxSlope = 1.0f;
+
+    /// <summary>
+    /// How square to the span's axis a surface has to be before the span acts on it at full strength — the
+    /// forward component of its normal, faded in from zero. Half is about sixty degrees off axis, which
+    /// keeps the mons and the front of the fold and drops the surface where it turns under.
+    /// </summary>
+    private const float FoldFacing = 0.5f;
+
+    /// <summary>
+    /// Back off the displacement wherever it would turn a triangle inside out or collapse it flat, until
+    /// none does. The guarantee that this pass cannot punch a hole through the character.
+    /// <para/>
+    /// A halving sweep rather than a solve. Each round finds the triangles that have folded under the
+    /// displacement so far and halves it on their three vertices, which is enough because the test is
+    /// monotone: scaling a vertex's displacement toward zero moves its triangles back toward the shape
+    /// they started at, and at zero every one of them is valid by definition. Eight rounds take the worst
+    /// offender to a two-hundred-and-fifty-sixth of what it asked for, and in practice one or two rounds
+    /// on a handful of vertices is the whole story.
+    /// <para/>
+    /// It is deliberately the LAST thing that touches the displacement. Every bound above it — the region
+    /// ramp, the strength, both slope limits — is a number chosen against the bodies that happened to be
+    /// available, and a fold is not a matter of degree: the surface either renders or the player sees the
+    /// scenery through their character. So the constants stay tuned for how the result LOOKS, and this
+    /// stays responsible for whether it exists.
+    /// </summary>
+    private static void UnfoldTriangles(Vec3[] pos, Vec3[] delta, int[] tris, Action<string>? log)
+    {
+        int vc = pos.Length;
+        var keep = new float[vc];
+        Array.Fill(keep, 1f);
+
+        Vec3 At(int i) => new(pos[i].X + delta[i].X * keep[i],
+                              pos[i].Y + delta[i].Y * keep[i],
+                              pos[i].Z + delta[i].Z * keep[i]);
+
+        int touched = 0;
+        for (int pass = 0; pass < UnfoldPasses; pass++)
+        {
+            int bad = 0;
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                int a = tris[t], b = tris[t + 1], c = tris[t + 2];
+                if (a >= vc || b >= vc || c >= vc) continue;
+                if (keep[a] == 0f && keep[b] == 0f && keep[c] == 0f) continue;
+
+                var n0 = TriNormal(pos[a], pos[b], pos[c]);
+                float area0 = Len(n0);
+                if (area0 <= 1e-12f) continue;      // already degenerate; not this pass's doing
+
+                var n1 = TriNormal(At(a), At(b), At(c));
+                bool folded = n0.X * n1.X + n0.Y * n1.Y + n0.Z * n1.Z <= 0f
+                           || Len(n1) < area0 * UnfoldMinArea;
+                if (!folded) continue;
+
+                keep[a] *= 0.5f; keep[b] *= 0.5f; keep[c] *= 0.5f;
+                bad++;
+            }
+            if (bad == 0) break;
+            touched = Math.Max(touched, bad);
+        }
+
+        if (touched == 0) return;
+        int held = 0;
+        for (int i = 0; i < vc; i++)
+        {
+            if (keep[i] >= 1f) continue;
+            delta[i] = new Vec3(delta[i].X * keep[i], delta[i].Y * keep[i], delta[i].Z * keep[i]);
+            held++;
+        }
+        log?.Invoke($"bust bridge: held {held} vertex(es) back to keep {touched} triangle(s) from folding");
+    }
+
+    /// <summary>A triangle's un-normalised normal: the cross product of two of its edges, whose direction
+    /// says which way it faces and whose length is twice its area.</summary>
+    private static Vec3 TriNormal(Vec3 a, Vec3 b, Vec3 c)
+    {
+        float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
+        float vx = c.X - a.X, vy = c.Y - a.Y, vz = c.Z - a.Z;
+        return new Vec3(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+    }
+
+    /// <summary>Rounds of halving <see cref="UnfoldTriangles"/> gets. Each one quarters the worst case, so
+    /// eight is a factor of 256 — past any displacement this file can produce.</summary>
+    private const int UnfoldPasses = 8;
+
+    /// <summary>How much of its original area a triangle may lose before it counts as collapsed. A sliver
+    /// this thin is already invisible; the point is that it must not go through zero and come out the
+    /// other side.</summary>
+    private const float UnfoldMinArea = 0.02f;
+
+    /// <summary>
+    /// <see cref="BustMaxSlope"/>'s sweep for a displacement that is a VECTOR rather than a height: pull
+    /// each node's displacement toward its neighbours' until no edge carries more difference than its own
+    /// length allows, repeated because one pass propagates one edge.
+    /// <para/>
+    /// Only ever TOWARD ZERO, the same restriction the scalar sweep carries and for the same reason. A
+    /// plain "clamp into the neighbour's window" also drags an untouched node along with a displaced one,
+    /// which invents displacement where the region deliberately has none and unpins the boundary.
+    /// </summary>
+    private static void LimitSlopeVector(Vec3[] v, Vec3[] pos, List<int>[] adj, int count, float maxSlope)
+    {
+        for (int pass = 0; pass < BustSlopePasses; pass++)
+        {
+            float worst = 0f;
+            for (int n = 0; n < count; n++)
+            {
+                float here = Len(v[n]);
+                if (here <= 0f) continue;
+                foreach (int k in adj[n])
+                {
+                    float dx = pos[k].X - pos[n].X, dy = pos[k].Y - pos[n].Y, dz = pos[k].Z - pos[n].Z;
+                    float room = maxSlope * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                    var diff = new Vec3(v[n].X - v[k].X, v[n].Y - v[k].Y, v[n].Z - v[k].Z);
+                    float gap = Len(diff);
+                    if (gap <= room || gap <= 1e-12f) continue;
+
+                    float back = (gap - room) / gap;
+                    var cand = new Vec3(v[n].X - diff.X * back,
+                                        v[n].Y - diff.Y * back,
+                                        v[n].Z - diff.Z * back);
+                    float after = Len(cand);
+                    if (after >= here) continue;          // never grow a displacement to satisfy a slope
+                    worst = MathF.Max(worst, gap - room);
+                    v[n] = cand;
+                    here = after;
+                }
+            }
+            if (worst <= BustBridgeEpsilon) break;
+        }
     }
 
     /// <summary>
@@ -8672,10 +9606,16 @@ public static class SecondSkinWriter
     /// moves and none of <c>ModelAttributeWriter</c>'s splice-and-shift machinery is needed — the bytes are
     /// copied and overwritten where they sit.
     /// </summary>
-    internal static byte[]? SmoothBodyNipples(byte[] mdl, SecondSkinLayer gate, float strength,
-                                              Action<string>? log = null)
+    /// <param name="nippleStrength">The nipple relax, on the torso. 0 leaves it alone.</param>
+    /// <param name="foldStrength">
+    /// The crotch fold, on the legs part. 0 leaves it alone. Both live here rather than in two passes
+    /// because they are two regions of one body: a second pass would parse the model again, walk the same
+    /// meshes, and rewrite the same bytes to touch a part the first one never reached.
+    /// </param>
+    internal static byte[]? SmoothBodyNipples(byte[] mdl, SecondSkinLayer gate, float nippleStrength,
+                                              Action<string>? log = null, float foldStrength = 0f)
     {
-        if (mdl is not { Length: > 0 } || strength <= 0f) return null;
+        if (mdl is not { Length: > 0 } || (nippleStrength <= 0f && foldStrength <= 0f)) return null;
 
         Source src;
         try { src = Parse(mdl); }
@@ -8722,9 +9662,20 @@ public static class SecondSkinWriter
             if (bs[pos.Stream] == 0) continue;
 
             // Every mesh but the torso names neither bust bone and drops out for the cost of one walk
-            // over a handful of names — the same early-out the shell's pass leans on.
-            var bust = MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR]);
-            if (bust == null) continue;
+            // over a handful of names — the same early-out the shell's pass leans on. The fold rides the
+            // LEGS part rather than the torso, so on a real body the two never meet; asking for both here
+            // costs one more walk over the same names and keeps one traversal and one rewrite.
+            var bust = nippleStrength > 0f
+                ? MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR])
+                : null;
+            var fold = foldStrength > 0f
+                ? MeshRegionWeights(src, m, vc, decl, vbo, bs, [HipBone], [ThighBoneL, ThighBoneR])
+                : null;
+            // The same region without the thigh veto, for the fold's relax. See FoldPlan's `near`.
+            var foldNear = fold != null
+                ? MeshRegionWeights(src, m, vc, decl, vbo, bs, [HipBone, ThighBoneL, ThighBoneR])
+                : null;
+            if (bust == null && fold == null) continue;
 
             ushort subIdx = BitConverter.ToUInt16(s, mo + 10), subCount = BitConverter.ToUInt16(s, mo + 12);
             var tris = MeshTriangles(src, subIdx, subCount);
@@ -8751,7 +9702,12 @@ public static class SecondSkinWriter
             // mesh on row 0.
             var covered = CoveredVertices(uv, gate, vc);
 
-            var plan = BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, strength);
+            var plan = bust == null ? null
+                : BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, nippleStrength);
+
+            if (fold != null && foldNear != null)
+                plan = MergePlans(plan, FoldPlan(p3, n3, tris, fold, foldNear, covered, foldStrength, log));
+
             if (plan == null) continue;
 
             // RESHADE, for the same reason the shell does: a flattened nipple still carrying the nipple's

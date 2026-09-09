@@ -5994,7 +5994,8 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.CleftBridgeTip);
 
-        if (!cleft) return;
+        if (cleft)
+        {
         float cleftStrength = md.CleftBridgeStrength ?? 1f;
         ImGui.SetNextItemWidth(150);
         if (ImGui.DragFloat($"{cs.CleftBridgeStrength}##cleftbridgestr_{entry.ModDirectory}",
@@ -6006,6 +6007,32 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.CleftBridgeStrengthTip);
+        }
+
+        // The fourth of the same kind of decision, and the last of the body's own creases.
+        bool foldSmooth = md.SmoothFold == true;
+        if (ImGui.Checkbox($"{cs.SmoothFold}##smoothfold_{entry.ModDirectory}", ref foldSmooth))
+        {
+            md.SmoothFold = foldSmooth ? true : null;
+            if (!foldSmooth) md.SmoothFoldStrength = null;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "smooth-fold");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.SmoothFoldTip);
+
+        if (!foldSmooth) return;
+        float foldStrength = md.SmoothFoldStrength ?? 1f;
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.DragFloat($"{cs.SmoothFoldStrength}##smoothfoldstr_{entry.ModDirectory}",
+                ref foldStrength, 0.01f, 0f, 1f, "%.2f"))
+        {
+            md.SmoothFoldStrength = Math.Abs(foldStrength - 1f) < 0.001f ? null : foldStrength;
+            discovery.SaveMetadata(entry);
+            RecompositeForOverlay(entry, "smooth-fold");
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.SmoothFoldStrengthTip);
     }
 
     /// <summary>
