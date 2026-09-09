@@ -1244,6 +1244,23 @@ public sealed class ColorsStrings
         "How far the fabric is smoothed. 1.00 smooths it fully; lower values keep more of the\n"
       + "shape underneath.");
 
+    public readonly string CleftBridge = Loc.Localize("Colors.CleftBridge.Label",
+        "Span the buttocks");
+
+    public readonly string CleftBridgeTip = Loc.Localize("Colors.CleftBridge.Tip",
+        "Turn this on for cloth over the seat.\n"
+      + "Proteus builds a garment as a copy of the body, so it follows the cleft all the way in —\n"
+      + "which reads as painted on rather than worn. With this on, the fabric spans across it the\n"
+      + "way real cloth does.\n"
+      + "The same idea as spanning the cleavage, on a much deeper cleft, so start the amount low.");
+
+    public readonly string CleftBridgeStrength = Loc.Localize("Colors.CleftBridge.Strength.Label",
+        "Span amount");
+
+    public readonly string CleftBridgeStrengthTip = Loc.Localize("Colors.CleftBridge.Strength.Tip",
+        "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
+      + "cheeks either side, which is usually too much — lower values keep more of it.");
+
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
       + "It moves two settings together, and they only work as a pair.\n"

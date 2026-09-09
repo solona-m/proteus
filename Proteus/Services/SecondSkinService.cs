@@ -2699,6 +2699,7 @@ public sealed class SecondSkinService
         // one garment smoothing by different amounts would cross exactly as two spanning differently do.
         var bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         var smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var cleftByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
                      .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
         {
@@ -2712,7 +2713,15 @@ public sealed class SecondSkinService
                 float s = Math.Clamp(bEntry.Metadata.SmoothNipplesStrength ?? 1f, 0f, 1f);
                 if (s > 0f) smoothByMod[bEntry.ModDirectory] = s;
             }
+            if (bEntry.Metadata.CleftBridge == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.CleftBridgeStrength ?? 1f, 0f, 1f);
+                if (s > 0f) cleftByMod[bEntry.ModDirectory] = s;
+            }
         }
+        foreach (var (cMod, cStrength) in cleftByMod)
+            log.Information("[Proteus] second skin: cleft bridge at {0:0.##} applies to every shell of \"{1}\"",
+                cStrength, cMod);
         foreach (var (sMod, sStrength) in smoothByMod)
             log.Information("[Proteus] second skin: nipple smoothing at {0:0.##} applies to every shell of \"{1}\"",
                 sStrength, sMod);
@@ -2907,6 +2916,10 @@ public sealed class SecondSkinService
                 NippleSmoothStrength = layerSurf.Key.IsBody
                                     && smoothByMod.TryGetValue(entry.ModDirectory, out var smoothS)
                     ? smoothS
+                    : 0f,
+                CleftBridgeStrength = layerSurf.Key.IsBody
+                                   && cleftByMod.TryGetValue(entry.ModDirectory, out var cleftS)
+                    ? cleftS
                     : 0f,
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed

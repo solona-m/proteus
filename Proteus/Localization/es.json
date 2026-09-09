@@ -283,6 +283,22 @@
     "message": "Activa esto para tela sobre el pecho.\nProteus construye una prenda como una copia del cuerpo, así que reproduce el pezón como una\npunta, lo que se lee como pintura y no como tela. Con esto activado, la tela que lo cubre se\nsuaviza hasta fundirse con la curva de alrededor.\nAÚN SIN TERMINAR: esto suaviza la prenda, y el cuerpo de debajo conserva su forma, así que\ncon un ajuste ceñido aún puede notarse. Suavizar la piel a juego está por llegar.",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "Tensar la tela sobre los glúteos",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "Activa esto para tela sobre el trasero.\nProteus construye una prenda como una copia del cuerpo, así que sigue el surco hasta el fondo —\nlo que parece pintado en vez de puesto. Con esto, la tela se tensa por encima como\nlo haría la tela real.\nLa misma idea que tensar sobre el escote, pero el surco es mucho más profundo: empieza bajo.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "Cantidad de tensado",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "Cuánto se acerca la tela al tensado plano. 1.00 eleva el surco al nivel de los glúteos\nde ambos lados, lo que suele ser demasiado — los valores bajos conservan más.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copiar fila",
     "description": ""

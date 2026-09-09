@@ -552,13 +552,19 @@ public class BustBridgeTests
         // The shells are separated by a push along the normal AFTER this, so the ONLY thing that keeps the
         // stack in order is the two displacements being equal. This asserts that directly, against the two
         // coverages the writer would otherwise have used one each.
+        // The two coverages differ in HEIGHT, not width, and that matters. Narrowing to |x| < 0.13 was the
+        // original pair and no longer separates them: it leaves a region 0.26 across against 0.30 tall, so
+        // the solve now recognises a region taller than it is wide and spans across the body rather than
+        // along its own principal direction — correctly, and identically to the wide one. The two used to
+        // differ partly because the narrow one was being spanned the WRONG WAY, which is not a difference
+        // worth building a test on. Different heights give different bands, so the spans still differ.
         var wide = new bool[pos.Length];
         var narrow = new bool[pos.Length];
         for (int i = 0; i < pos.Length; i++)
         {
             float ax = MathF.Abs(pos[i].X);
             wide[i] = ax < 0.18f;
-            narrow[i] = ax < 0.13f;
+            narrow[i] = ax < 0.18f && pos[i].Y > 0.06f && pos[i].Y < 0.24f;
         }
 
         // The union is what the host solves once with — the writer builds it in Build().

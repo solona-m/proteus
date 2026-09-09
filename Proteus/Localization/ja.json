@@ -283,6 +283,22 @@
     "message": "胸元にかかる布に対して有効にしてください。\nProteus は衣服を体のコピーとして作るため、乳首も尖ったまま再現されます。それが、布ではなく\n塗りに見える原因です。これを有効にすると、その上の布が周囲の曲面に\nなじむようになめらかにされます。\nまだ未完成です。なめらかになるのは衣服だけで、下にある体は元の形のままなので、\n体に沿う衣装では透けて見えることがあります。肌側の対応は今後追加されます。",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "尻の割れ目を布で渡す",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "尻を覆う布にはこれを有効にしてください。\nProteus は衣装を身体の複製として作るため、割れ目の奥までなぞってしまい——\n着ているというより描かれているように見えます。有効にすると、実際の布のように\nその上を渡します。\n谷間を渡すのと同じ考え方ですが割れ目はずっと深いので、量は低めから始めてください。",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "渡す量",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "布が平らな渡しにどこまで近づくか。1.00 は割れ目を両側の高さまで持ち上げますが、\nたいてい強すぎます——低い値ほど元の形が残ります。",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "行をコピー",
     "description": ""

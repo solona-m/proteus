@@ -283,6 +283,22 @@
     "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le téton en\npointe, ce qui se lit comme de la peinture plutôt que du tissu. Avec ceci, le tissu par-dessus\nest fondu dans la courbe environnante.\nPAS ENCORE TERMINÉ : ceci adoucit le vêtement, et le corps en dessous garde sa propre forme,\ndonc il peut encore transparaître sur une coupe près du corps. Adoucir la peau viendra ensuite.",
     "description": ""
   },
+  "Colors.CleftBridge.Label": {
+    "message": "Tendre le tissu sur les fesses",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "Activez ceci pour du tissu sur le fessier.\nProteus construit un vêtement comme une copie du corps : il suit donc le sillon jusqu'au fond —\nce qui semble peint plutôt que porté. Avec ceci, le tissu se tend par-dessus comme\nle ferait du vrai tissu.\nMême idée que pour le décolleté, mais le sillon est bien plus profond : commencez bas.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "Intensité du tendu",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "À quel point le tissu se tend à plat. 1.00 relève le sillon au niveau des fesses de\npart et d'autre, ce qui est souvent trop — les valeurs basses en conservent davantage.",
+    "description": ""
+  },
   "Colors.CopyRow.Btn": {
     "message": "Copier la ligne",
     "description": ""
