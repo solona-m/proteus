@@ -1235,6 +1235,10 @@
     "message": "Lässt zusätzlich die Teile, die kein Hut verdecken kann — Pferdeschwänze,\nseitliche Zöpfe, langes Haar im Nacken — verschwinden, solange ein Hut\ngetragen wird, statt sie darunter hervorhängen zu lassen.\n\nStandardmäßig aus. Zu festes Andrücken bleibt unsichtbar, weil der Hut es\nverdeckt; Ausblenden ist alles oder nichts, und ein falsch beurteilter Teil\nverschwindet einfach.",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} Strähne(n) stehen zu weit vom Kopf ab, um unter einen Hut zu passen, und werden ausgeblendet, solange einer getragen wird.",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "Diese Frisur wird geprüft ...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "Diese Frisur unterstützt Hüte bereits — ihr Autor hat es eingebaut. Nichts zu tun.",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "Diese Teile stehen zu weit vom Kopf ab, um unter einen Hut zu passen, und würden ausgeblendet, solange einer getragen wird. Entferne den Haken bei allem, was bleiben soll.",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "Du trägst Haar aus dem Spiel selbst, das bereits unter Hüten funktioniert. Dies hat etwas zu tun, sobald du einen Haar-Mod trägst.",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "{0} Punkte lassen sich nicht bewegen: Diese Frisur ist zu großen Teilen verschmolzen, als dass das Formformat des Spiels sie ansprechen könnte. Sie behalten ihre Form, ein Hut kann dort also weiterhin durchschneiden.",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} Dreiecke)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {

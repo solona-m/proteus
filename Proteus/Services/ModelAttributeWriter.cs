@@ -227,6 +227,197 @@ public static class ModelAttributeWriter
         return (o, byGroup);
     }
 
+    /// <summary>
+    /// Cut a submesh by label like <see cref="SplitSubmesh(byte[], int, int, Func{int, int})"/>, but REORDER
+    /// its triangles first so that each label ends up contiguous.
+    /// <para/>
+    /// The plain split can only cut where the labels already change, because it describes the geometry
+    /// differently without moving any of it. That is the right contract for a mesh toggle, where the pieces
+    /// being separated are islands an author modelled as units and are laid out together. It is the wrong
+    /// one for a set chosen by GEOMETRY: "every triangle above the hat line" cuts across the author's layout
+    /// completely, and on a real hairstyle it came out as 264 interleaved runs — refused as too fragmented,
+    /// which is why hiding ponytails could not be applied at all.
+    /// <para/>
+    /// Reordering is safe because a submesh is drawn as a triangle LIST: each triple stands alone, so
+    /// permuting whole triples changes nothing about what is drawn. No vertex moves and no index value
+    /// changes — only the order the triples sit in. Relative order WITHIN a label is preserved, so a model
+    /// whose labels are already contiguous comes back byte-identical and this costs nothing.
+    /// <para/>
+    /// The one thing that does care about index ORDER is a shape: a <c>ShapeValue</c> names an index-buffer
+    /// slot. Existing shapes are remapped through the same permutation below, which is exact — but note that
+    /// this must run BEFORE <see cref="AddShape"/>, never after, since a shape written against the old order
+    /// would be silently rewired to the wrong corners.
+    /// </summary>
+    /// <returns>The new file, and, per label, the submesh indices now holding its triangles.</returns>
+    public static (byte[] Model, Dictionary<int, List<int>> ByGroup) RegroupSubmesh(
+        byte[] mdl, int mesh, int submesh, Func<int, int> groupOf)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int mo = src.MeshStart + mesh * 36;
+        ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
+        if (submesh < 0 || submesh >= subCount)
+            throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+
+        int ss = src.SubmeshStart + (subIdx + submesh) * 16;
+        uint so = BitConverter.ToUInt32(mdl, ss), sc = BitConverter.ToUInt32(mdl, ss + 4);
+        int tris = (int)(sc / 3);
+        if (tris == 0) throw new ModelEditException("that submesh has no triangles");
+        if ((long)src.Ib + (so + sc) * 2 > mdl.Length)
+            throw new ModelEditException($"mesh {mesh}'s index range runs past the end of the file");
+
+        // Labels in FIRST-APPEARANCE order, and original order kept within each. Stable on purpose: it is
+        // what makes an already-grouped submesh a no-op, and it keeps an author's own ordering intact
+        // inside each piece rather than shuffling geometry that had no reason to move.
+        var labels = new int[tris];
+        var seen = new List<int>();
+        for (int t = 0; t < tris; t++)
+        {
+            labels[t] = groupOf(t);
+            if (!seen.Contains(labels[t])) seen.Add(labels[t]);
+        }
+
+        var order = new int[tris];       // order[newTriangle] = old triangle
+        int at = 0;
+        foreach (var label in seen)
+            for (int t = 0; t < tris; t++)
+                if (labels[t] == label) order[at++] = t;
+
+        bool moved = false;
+        for (int t = 0; t < tris && !moved; t++) moved = order[t] != t;
+
+        var regrouped = mdl;
+        if (moved)
+        {
+            regrouped = (byte[])mdl.Clone();
+            int at0 = src.Ib + (int)so * 2;
+            for (int t = 0; t < tris; t++)
+                Buffer.BlockCopy(mdl, at0 + order[t] * 6, regrouped, at0 + t * 6, 6);
+
+            var newOf = new int[tris];   // the inverse, for the shape remap
+            for (int t = 0; t < tris; t++) newOf[order[t]] = t;
+            RemapShapeValues(regrouped, src, so, sc, newOf);
+        }
+
+        // The labels are contiguous now, so the plain split finds exactly one run per label.
+        var byNewOrdinal = new int[tris];
+        for (int t = 0; t < tris; t++) byNewOrdinal[t] = labels[order[t]];
+        return SplitSubmesh(regrouped, mesh, submesh, t => byNewOrdinal[t]);
+    }
+
+    /// <summary>
+    /// Follow every existing <c>ShapeValue</c> that names a slot inside <paramref name="so"/>..+<paramref
+    /// name="sc"/> through a triangle permutation, so shapes already on the model keep deforming the same
+    /// corners after <see cref="RegroupSubmesh"/> has moved the triples around.
+    /// <para/>
+    /// A value's slot is its record's <c>MeshIndexOffset</c> plus its own <c>BaseIndicesIndex</c>, and the
+    /// latter is a u16 — so a remap that would push a value past its window's 65536 slots cannot be
+    /// expressed without also re-cutting the <c>ShapeMesh</c> records. That is refused rather than written
+    /// wrong. It needs a hairstyle that both carries a shape already and is over 65k indices long, which is
+    /// not something the hat path ever reaches: it declines a model that already has a hat shape, and hair
+    /// with some OTHER shape is rare.
+    /// </summary>
+    private static void RemapShapeValues(byte[] o, SecondSkinWriter.Source src, uint so, uint sc, int[] newOf)
+    {
+        ushort shapeCount = BitConverter.ToUInt16(o, src.Mh + 16);
+        ushort shapeMeshCount = BitConverter.ToUInt16(o, src.Mh + 18);
+        ushort shapeValueCount = BitConverter.ToUInt16(o, src.Mh + 20);
+        if (shapeMeshCount == 0 || shapeValueCount == 0) return;
+
+        int shapeMeshBlock = src.ShapeBlock + shapeCount * 16;
+        int shapeValBlock = shapeMeshBlock + shapeMeshCount * 12;
+        if (shapeValBlock + shapeValueCount * 4 > o.Length)
+            throw new ModelEditException("this model's shape block runs past the end of the file");
+
+        for (int m = 0; m < shapeMeshCount; m++)
+        {
+            uint windowBase = BitConverter.ToUInt32(o, shapeMeshBlock + m * 12);
+            uint count = BitConverter.ToUInt32(o, shapeMeshBlock + m * 12 + 4);
+            uint start = BitConverter.ToUInt32(o, shapeMeshBlock + m * 12 + 8);
+            if (start + count > shapeValueCount) continue;
+
+            for (uint v = start; v < start + count; v++)
+            {
+                int vo = shapeValBlock + (int)v * 4;
+                long slot = windowBase + BitConverter.ToUInt16(o, vo);
+                if (slot < so || slot >= so + sc) continue;
+
+                long within = slot - so;
+                long moved = (long)newOf[within / 3] * 3 + within % 3;
+                long rebased = so + moved - windowBase;
+                if (rebased < 0 || rebased > ushort.MaxValue)
+                    throw new ModelEditException(
+                        "this model's existing shape addresses this submesh from too far away to follow a "
+                      + "reorder — it cannot be split by geometry");
+                W16(o, vo, (ushort)rebased);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cut <paramref name="parts"/> out of whatever submeshes they share with other geometry, so they can
+    /// be tagged without taking that geometry with them.
+    /// <para/>
+    /// The need is not hypothetical and not rare: a hairstyle routinely keeps its scalp cap and every one
+    /// of its ponytail strands in ONE submesh, and an attribute is carried by a submesh record. Tagging at
+    /// that granularity to hide the tails hides the scalp too, which in game is being bald.
+    /// <para/>
+    /// A part that already IS a whole submesh is passed through untouched — there is nothing to cut, and
+    /// splitting it would only add records.
+    /// <para/>
+    /// Cuts through <see cref="RegroupSubmesh"/>, so a part's triangles are gathered together first and this
+    /// DOES reorder them. That is what lets a part chosen by geometry be isolated at all, and it also bounds
+    /// the result at two records per submesh however scattered the part was. Read that method for why
+    /// reordering is safe and for the one ordering thing that is not — it must run before any shape is
+    /// written, never after.
+    /// </summary>
+    /// <returns>The new model, and the submeshes now holding exactly those parts.</returns>
+    public static (byte[] Model, List<(int Mesh, int Submesh)> Targets) IsolateParts(
+        byte[] mdl, IReadOnlyList<ModelPart> parts)
+    {
+        var targets = new List<(int Mesh, int Submesh)>();
+        if (parts.Count == 0) return (mdl, targets);
+
+        // Which triangles are claimed within each submesh, and which submeshes are claimed entire.
+        var byOrdinal = new Dictionary<(int Mesh, int Submesh), HashSet<int>>();
+        var whole = new HashSet<(int Mesh, int Submesh)>();
+        foreach (var part in parts)
+        {
+            var key = (part.Mesh, part.Submesh);
+            if (part.Island < 0) { whole.Add(key); continue; }
+            if (!byOrdinal.TryGetValue(key, out var set)) byOrdinal[key] = set = [];
+            foreach (var t in part.Ordinals) set.Add(t);
+        }
+        // Claiming a submesh whole makes any island claim on it redundant.
+        foreach (var key in whole) byOrdinal.Remove(key);
+
+        var edited = mdl;
+        foreach (var mesh in byOrdinal.Keys.Concat(whole).Select(k => k.Mesh).Distinct().OrderBy(m => m))
+        {
+            // Ascending, with a running shift: a split inserts its extra records straight after the submesh
+            // it cut, so every submesh later in the same mesh has moved along by that many places.
+            int shift = 0;
+            var here = byOrdinal.Keys.Concat(whole).Where(k => k.Mesh == mesh)
+                .Select(k => k.Submesh).Distinct().OrderBy(s => s);
+
+            foreach (var submesh in here)
+            {
+                if (whole.Contains((mesh, submesh))) { targets.Add((mesh, submesh + shift)); continue; }
+
+                var claimed = byOrdinal[(mesh, submesh)];
+                // Regroup rather than split: the parts sent here are chosen by geometry, so their triangles
+                // are scattered through the author's layout and a describe-only split refuses them.
+                var (next, groups) = RegroupSubmesh(
+                    edited, mesh, submesh + shift, t => claimed.Contains(t) ? 0 : -1);
+                edited = next;
+
+                if (groups.TryGetValue(0, out var mine))
+                    targets.AddRange(mine.Select(s => (mesh, s)));
+                shift += groups.Values.Sum(v => v.Count) - 1;
+            }
+        }
+        return (edited, targets);
+    }
+
     // ── shapes ──────────────────────────────────────────────────────────────
 
     /// <summary>

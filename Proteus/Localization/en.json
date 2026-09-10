@@ -1235,6 +1235,10 @@
     "message": "Also make the parts that no hat could cover — ponytails, side tails, a long\nfall at the back — disappear while a hat is worn, instead of leaving them\nhanging out from under it.\n\nOff by default. Pressing hair is invisible when it overshoots, because the hat\ncovers it; hiding is all or nothing, so a part judged wrongly simply vanishes.",
     "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.",
+    "description": "{0} is a count of hair strands. Shown instead of a list of them; can be 0."
+  },
   "HatCompat.Working": {
     "message": "Looking at this hairstyle...",
     "description": "Shown while Proteus examines the hairstyle. Brief."
@@ -1255,10 +1259,6 @@
     "message": "This hairstyle already supports hats — its author added it. Nothing to do.",
     "description": "Status line. The mod ships its own hat shape, so Proteus leaves it alone."
   },
-  "HatCompat.HidePrompt": {
-    "message": "These parts stand too far off your head to fit under a hat, so they would be hidden while one is worn. Untick anything that should stay.",
-    "description": "Introduces the checkbox list of parts Proteus proposes to hide."
-  },
   "HatCompat.NoModdedHair": {
     "message": "You are wearing hair that came with the game, which already works under hats. This has something to do when you wear a hair mod.",
     "description": "Shown when there is nothing to act on."
@@ -1274,10 +1274,6 @@
   "HatCompat.TooWelded.Fmt": {
     "message": "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape format to address. They will keep their shape, so a hat may still clip there.",
     "description": "Warning. {0} is a count of vertices the format cannot address."
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} triangles)",
-    "description": "Dimmed size, shown after each part's name. {0} is a count. Very tight space."
   },
   "HatCompat.Undo.Btn": {
     "message": "Undo",

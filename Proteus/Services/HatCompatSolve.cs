@@ -23,6 +23,18 @@ namespace Proteus.Services;
 public static class HatCompatSolve
 {
     /// <summary>
+    /// Which generation of this solve produced a patch. BUMP IT whenever a constant below changes, or when
+    /// the press or the classifier starts producing different geometry.
+    /// <para/>
+    /// A patch is a one-time write into someone's mod, so nothing ever looks at a hairstyle that already
+    /// carries one — which meant that every improvement to the numbers here reached only hairstyles nobody
+    /// had worn yet. Every already-fitted hairstyle kept whatever the build that fitted it decided, and the
+    /// only way back was to undo and re-fit each one by hand. Stamping the record makes the watcher able to
+    /// tell a current patch from a stale one, so it can redo the stale one by itself.
+    /// </summary>
+    public const int Version = 5;
+
+    /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
     /// <para/>
     /// This is the only boundary that matters, and everything else here follows from it. Above it a hat
@@ -30,16 +42,24 @@ public static class HatCompatSolve
     /// inside it — and nothing shows. Below it the hat is simply not there, and moving a single vertex is a
     /// visible defect on a part of the hairstyle the wearer chose.
     /// <para/>
-    /// Measured off the reference hat by slicing it horizontally and finding where it comes closest to the
-    /// head's own vertical axis: the brim's outer edge reaches 235 mm out at the bottom and narrows steadily
-    /// to a wall about 80 mm out from y = 1.540 upwards, which is the opening the head goes through. That is
-    /// 13 mm above the head centre; 12 is used, a whisker lower, so the crushed region ends just inside what
-    /// the hat covers rather than just outside it.
+    /// Measured by ray-casting every reference hat against the wearer's own head and keeping the directions
+    /// where the hat's surface sits within 80 mm of the scalp — which is what tells a hat wrapping a head
+    /// from a brim flaring away into the air. Across four real hats the lowest covered point lands between
+    /// 7 and 23 mm BELOW the head centre, and the line has to be the least generous of them: -7 mm, from
+    /// the Battlemage's and Wrangler's hats.
     /// <para/>
-    /// The brim's LOWEST point is not the line and using it would be a bad mistake — a brim flares far away
-    /// from the head, so that would have licensed crushing hair a hand's width below anything a hat touches.
+    /// Set 12 mm ABOVE that measured worst case, deliberately, because the two errors are not equally bad.
+    /// Hair inside a hat is invisible whatever is done with it — the hat is opaque — so declining to hide
+    /// some of it near the band costs nothing. Hiding too far down is what shows, as hair cut away below
+    /// where a hat actually reaches. The ray measurement finds where the hat's surface comes near the
+    /// scalp, which runs slightly below its visible edge, and this makes up for that.
+    /// <para/>
+    /// Two earlier attempts at this number were wrong in instructive ways. Taking the brim's lowest point
+    /// licensed crushing hair a hand's width below anything a hat touches. Taking the height at which the
+    /// hat comes closest to the head's vertical AXIS found the pointed tip of a witch's hat and called it
+    /// the band. Only measuring against the head itself distinguishes the two.
     /// </summary>
-    public const float HatLine = 0.012f;
+    public const float HatLine = 0.005f;
 
     /// <summary>
     /// Where the covered hair is driven to, as a FRACTION of the scalp's own radius in that direction.
@@ -57,29 +77,71 @@ public static class HatCompatSolve
     public const float ScalpFraction = 0.75f;
 
     /// <summary>
-    /// How far below the hat line a connected strand must hang to count as hair that falls, in model units.
+    /// How far below the hat line a strand may dip and still count as wholly covered by a hat.
     /// <para/>
-    /// A ponytail's ROOT is above the hat line, so a press that judges vertex by vertex drives the root
-    /// into the skull and leaves the length where it was — and the tail splays out into a flat sheet behind
-    /// the hat. Nothing about the per-vertex rule is wrong; the mistake is treating a strand as a bag of
-    /// vertices when it is one object that has to move, or not move, as a whole.
+    /// Reported, not enforced. It used to gate the press: a strand reaching further than this below the line
+    /// was refused entirely, because the press moves vertices rather than strands and a half-pressed strand
+    /// grows triangles bridging from inside the skull out to wherever the hair still is — the flat ribbons
+    /// seen slicing through a hat. That was true, but refusing the whole strand was far too blunt a way to
+    /// avoid it, and left the tops of ordinary locks standing outside the hat.
+    /// <para/>
+    /// The bridge is now prevented exactly where it forms, by freezing the corners of any triangle that
+    /// reaches below the line — see FrozenVertices. That is the same guarantee at triangle granularity, so
+    /// this survives only as a measurement the diagnostics report.
     /// </summary>
-    public const float TailDrop = 0.15f;
+    public const float PressDip = 0.005f;
 
     /// <summary>
-    /// How far from the scalp that same strand must reach, in model units, before it is left alone.
+    /// How far below the hat line a strand must hang before it counts as a TAIL — something a hat cannot
+    /// cover, offered for hiding.
     /// <para/>
-    /// The second half of the test, and the half that does the real work. Hanging far below the hat line
-    /// is not enough on its own: hair at the nape hangs 170 mm below it while lying flat on the neck, and
-    /// leaving that alone would give up pressing a good part of the hairstyle for nothing. What separates
-    /// a tail from hair lying against the head is how far off the skull it stands.
+    /// A separate question from <see cref="PressDip"/>, and keeping them separate matters. Pressing asks
+    /// "is this certainly hidden?", so it must be strict and refuses almost everything. Hiding asks "is
+    /// this a ponytail?", and taking it as the complement of the first made a hide candidate of every lock
+    /// that dips below the hat — which is nearly all of a hairstyle, and ticking the box went bald.
     /// <para/>
-    /// Measured across the hairstyle that showed the defect, at the moment its ponytail's outer edges were
-    /// still being flattened: its scalp cap reaches 80 mm from the scalp, its nape hair 111–115 mm, the
-    /// ponytail edges that were being wrecked 229–372 mm, and the body of the tail 700–800 mm. 180 mm sits
-    /// between the second and third of those with room on both sides.
+    /// A floor, not the working test — see <see cref="TailReach"/>, which does the separating. This only
+    /// keeps something sitting ON the head from being called a tail because it happens to stand out.
     /// </summary>
-    public const float TailReach = 0.18f;
+    public const float TailDrop = 0.05f;
+
+    /// <summary>
+    /// How far off the scalp a strand must reach to count as a tail, in model units.
+    /// <para/>
+    /// The test that actually separates the two, and reach does it where depth could not. Sweeping the cut
+    /// over the hairstyle measured, everything between 100 mm and 250 mm accounts for 2.4% of the model —
+    /// a plateau, meaning almost nothing lives there — while above 250 mm the share falls away steadily as
+    /// the cut rises, which is the signature of cutting through a population rather than between two.
+    /// So the tail begins at 250 mm and spreads upward from it, and any threshold higher than that leaves
+    /// part of the tail behind.
+    /// <para/>
+    /// That is exactly how this went wrong three times. At 500 mm only a third of a ponytail was tagged and
+    /// the rest stayed on show; at 400 mm, half of it; at 250 mm, a handful of stray strands. Since the
+    /// whole 100–250 band is worth 2.4% of the model, taking the bottom of the plateau rather than the top
+    /// costs almost nothing and catches the strays — the cheapest end of the range to be wrong at.
+    /// </summary>
+    public const float TailReach = 0.10f;
+
+
+    /// <summary>
+    /// How many edge-rings the press takes to reach full strength, counting in from the last vertex it is
+    /// not allowed to move.
+    /// <para/>
+    /// Without this the press is all-or-nothing across one edge: a vertex driven inside the skull sits next
+    /// to a frozen one still out at the hair's surface, and the surface turns a near right angle between
+    /// them. That corner is visible under a brim even though both its ends are legal, and it is what makes a
+    /// correctly-fitted hairstyle look broken.
+    /// <para/>
+    /// Measured in RINGS, along the mesh's own edges — not in millimetres of height. An earlier attempt
+    /// faded by height, over a band above the hat line, and it read as crunchy for a reason worth keeping:
+    /// height cuts across every strand at once, at an angle that has nothing to do with how any of them run,
+    /// so a lock passing through the band is squeezed in its middle. Edge distance follows the hair, so each
+    /// strand eases off along its OWN length, which is the direction it was modelled in.
+    /// <para/>
+    /// Four rings is a couple of centimetres on a typical hair mesh — long enough to read as a bend rather
+    /// than a crease, short enough that the full press still reaches everything deep under the hat.
+    /// </summary>
+    public const int PressRamp = 4;
 
     /// <summary>
     /// The most shape values one model may carry: <c>ShapeValueCount</c> in the model header is a u16.
@@ -89,22 +151,6 @@ public static class HatCompatSolve
     /// of a candidate hard to eyeball and easy to under-estimate.
     /// </summary>
     public const int MaxShapeValues = 60000;
-
-    /// <summary>
-    /// How far off the scalp a part may still sit AFTER the press before it is offered for hiding.
-    /// <para/>
-    /// After, not before, and that distinction is the whole criterion. Judged on where a part starts, this
-    /// condemns the entire hairstyle — ordinary hair is three or four centimetres thick, so on raw standoff
-    /// every part of every model clears any threshold worth setting, and the first version of this offered
-    /// to hide between 82% and 100% of twelve real hairstyles, which in game made the wearer bald.
-    /// <para/>
-    /// Now that everything above <see cref="HatLine"/> is driven inside the skull, almost nothing survives
-    /// this test, and that is the correct answer rather than a broken one: hair the press could not deal
-    /// with is hair BELOW the line, which hangs out from under a hat exactly as real hair does and must not
-    /// be hidden. The list is kept for the genuine exception — a part that reaches above the line and still
-    /// stands proud because the budget ran out before it.
-    /// </summary>
-    public const float HideThreshold = 0.03f;
 
     /// <summary>Directional bins over the sphere. 32 around by 16 up — about 11 degrees, which is finer than
     /// the features of a skull and coarse enough that every bin a hair covers holds several vertices.</summary>
@@ -422,10 +468,34 @@ public static class HatCompatSolve
         // What each vertex would cost to shape: one value per index slot naming it.
         var parsed = SecondSkinWriter.Parse(mdl);
         var valence = Valence(mdl, parsed, meshes);
-        var hanging = HangingStrands(mdl, parsed, parts, meshes, hatLine, centre, radius);
+        // Only hair a hat actually covers may be pressed; everything else is left exactly as its author
+        // made it, and offered for hiding instead.
+        var strands = Strands(mdl, parsed, parts, meshes, hatLine, centre, floor);
+
+        // ONLY a tail is hidden. Nothing else gives up any geometry at all.
+        //
+        // Cutting the above-the-line triangles out of every other strand did fit under a hat, and it looked
+        // wrong doing it: hair ended along a hard horizontal line under the brim, with the cut edge in plain
+        // view. That is not a matter of picking a better line. A deletion leaves a visible boundary wherever
+        // the hat's real silhouette differs from the measured hat line, the two differ somewhere on every
+        // hat, and a brim is exactly the place a player looks up under. It is why the guide reaches for a
+        // shape key and not the delete key: a pressed vertex that guessed wrong is hair in a slightly odd
+        // place, while a deleted one is a hole.
+        var tails = strands.Where(s => s.Tail).Select(s => s.Part).ToList();
+
+        // A tail is never pressed either — the press moves vertices, not strands, so pressing the root of a
+        // ponytail while its length stays put is what flattened one against the back of the head.
+        var hanging = new HashSet<long>();
+        foreach (var s in strands.Where(s => s.Tail))
+            foreach (var v in VerticesOf(mdl, parsed, s.Part)) hanging.Add(VertexKey(s.Part.Mesh, v));
+
+        // And the rule that lets the press take over what the cut used to do — see FrozenVertices. It
+        // replaces the old strand-level gate, which refused a whole strand the moment any part of it hung
+        // below the line and so left the top of an ordinary lock standing outside the hat.
+        var frozen = FrozenVertices(mdl, parsed, meshes, hatLine);
 
         // Every vertex poking out through the ceiling, with what it costs and how far out it is.
-        var candidates = new List<(int Mesh, int Vertex, Vector3 To, float Press, int Cost)>();
+        var candidates = new List<Candidate>();
         foreach (var mv in meshes)
         {
             valence.TryGetValue(mv.Mesh, out var cost);
@@ -433,7 +503,8 @@ public static class HatCompatSolve
             {
                 var p = mv.Positions[v];
                 if (p.Y < hatLine) continue;                        // below the hat: never touched
-                if (hanging.Contains(VertexKey(mv.Mesh, v))) continue;   // part of a strand that hangs
+                if (hanging.Contains(VertexKey(mv.Mesh, v))) continue;   // part of a tail
+                if (frozen.Contains(VertexKey(mv.Mesh, v))) continue;    // would stretch a triangle into view
 
                 var d = p - centre;
                 float len = d.Length();
@@ -452,8 +523,22 @@ public static class HatCompatSolve
 
                 int slots = cost != null && v < cost.Length ? cost[v] : 0;
                 if (slots == 0) continue;                           // drawn by nothing; a spare would do nothing
-                candidates.Add((mv.Mesh, v, centre + d * (target / len), len - target, slots));
+                candidates.Add(new Candidate(mv.Mesh, v, p, centre + d * (target / len), len - target, slots));
             }
+        }
+
+        // Ease the press in from its own edge, so the surface bends into the skull instead of breaking into
+        // it. Everything the press is not touching — frozen, tailed, or below the line — is the boundary,
+        // and depth is the number of edges in from it.
+        var free = new HashSet<long>();
+        foreach (var c in candidates) free.Add(VertexKey(c.Mesh, c.Vertex));
+        var ringsFromEdge = PressDepth(mdl, parsed, meshes, free);
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            int rings = ringsFromEdge.TryGetValue(VertexKey(c.Mesh, c.Vertex), out var d) ? d : PressRamp;
+            float w = MathF.Min(rings / (float)PressRamp, 1f);
+            candidates[i] = c with { To = Vector3.Lerp(c.From, c.To, w), Press = c.Press * w };
         }
 
         // Under the budget, everything goes. Over it, the ones poking out FURTHEST go first — so what gets
@@ -478,13 +563,135 @@ public static class HatCompatSolve
         }
 
         presses.Sort();
+        // The SAME strands the press refused to touch. That is the whole coherence of the two settings:
+        // hair that hangs off the head is either hidden under a hat or left exactly as its author made it,
+        // and never something in between. The earlier list was computed separately, from how far a whole
+        // submesh still stood proud afterwards — which on a hairstyle keeping its scalp and its tails in
+        // one submesh nominated that submesh, and hiding it made the wearer bald.
         return new Result(
             moved,
-            HideList(mdl, parts, centre, floor, moved, hatLine),
+            tails,
             centre, radius,
             presses.Count > 0 ? presses[presses.Count / 2] : 0f,
             presses.Count > 0 ? presses[^1] : 0f,
             presses.Count);
+    }
+
+    /// <summary>One vertex the press wants to move, and how far.</summary>
+    /// <param name="From">Where its author put it — kept so the ramp can interpolate rather than recompute.</param>
+    /// <param name="Cost">Shape values it would spend: one per index slot naming it.</param>
+    private readonly record struct Candidate(
+        int Mesh, int Vertex, Vector3 From, Vector3 To, float Press, int Cost);
+
+    /// <summary>
+    /// How far each pressed vertex sits, in mesh edges, from the nearest vertex the press may not move.
+    /// <para/>
+    /// A multi-source breadth-first walk out from everything the press is leaving alone, over the mesh's own
+    /// edges. That is what makes the falloff follow the hair: distance along the surface is distance along a
+    /// strand, so a lock eases off from the point it stops being safe to move and does it in the direction
+    /// it was modelled in. See <see cref="PressRamp"/> for why the obvious alternative — fading by height —
+    /// does not work.
+    /// <para/>
+    /// A vertex whose whole connected piece is free never reaches the walk and is absent from the result;
+    /// the caller reads that as full press, which is right — it is a strand wholly inside the hat, with no
+    /// boundary to ease towards.
+    /// </summary>
+    private static Dictionary<long, int> PressDepth(
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, HashSet<long> free)
+    {
+        var found = new Dictionary<long, int>();
+        foreach (var mv in meshes)
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            if (mo + 36 > mdl.Length) continue;
+            uint ic = BitConverter.ToUInt32(mdl, mo + 4), start = BitConverter.ToUInt32(mdl, mo + 16);
+            if ((long)src.Ib + (start + ic) * 2 > mdl.Length) continue;
+
+            int n = mv.Positions.Length;
+            var adj = new List<int>[n];
+            void Link(int a, int b)
+            {
+                if (a >= n || b >= n || a == b) return;
+                (adj[a] ??= []).Add(b);
+                (adj[b] ??= []).Add(a);
+            }
+            for (uint t = 0; t + 3 <= ic; t += 3)
+            {
+                int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t) * 2);
+                int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 1) * 2);
+                int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 2) * 2);
+                Link(a, b);
+                Link(b, c);
+                Link(c, a);
+            }
+
+            var dist = new int[n];
+            var q = new Queue<int>();
+            for (int v = 0; v < n; v++)
+            {
+                bool moving = free.Contains(VertexKey(mv.Mesh, v));
+                dist[v] = moving ? int.MaxValue : 0;
+                if (!moving) q.Enqueue(v);
+            }
+            while (q.Count > 0)
+            {
+                int v = q.Dequeue();
+                if (adj[v] == null) continue;
+                foreach (var w in adj[v])
+                    if (dist[w] == int.MaxValue) { dist[w] = dist[v] + 1; q.Enqueue(w); }
+            }
+            for (int v = 0; v < n; v++)
+                if (dist[v] != int.MaxValue && dist[v] > 0) found[VertexKey(mv.Mesh, v)] = dist[v];
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// Every vertex the press must leave alone: the corners of any triangle that reaches below the hat line.
+    /// <para/>
+    /// This one rule is what lets the press cover hair the old cut had to delete, and it is worth stating why
+    /// it is safe. Move a corner of a triangle that dips below the line and the triangle stretches from
+    /// wherever the hair still is up into the skull — those are the flat ribbons seen slicing through a hat,
+    /// and they are visible precisely because part of that triangle is outside it. Move only vertices whose
+    /// every triangle sits ENTIRELY above the line and none of that can happen: each such triangle has its
+    /// corners either driven inside the skull or left above the line, so however badly it is distorted it
+    /// stays inside the hat, where nothing is visible at all.
+    /// <para/>
+    /// Per VERTEX and per TRIANGLE, which is what makes it better than the strand-level gate it replaces.
+    /// That gate asked whether a whole connected strand hung below the line and refused all of it if any did
+    /// — so an ordinary lock running from the crown down past the ear was left entirely untouched, with its
+    /// top standing outside the hat. Here the same lock is pressed down to the last triangle that clears the
+    /// line and left alone below it, with no cut and no ribbon.
+    /// </summary>
+    private static HashSet<long> FrozenVertices(
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine)
+    {
+        var frozen = new HashSet<long>();
+        foreach (var mv in meshes)
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            if (mo + 36 > mdl.Length) continue;
+            uint ic = BitConverter.ToUInt32(mdl, mo + 4), start = BitConverter.ToUInt32(mdl, mo + 16);
+            if ((long)src.Ib + (start + ic) * 2 > mdl.Length) continue;
+
+            var pos = mv.Positions;
+            for (uint t = 0; t + 3 <= ic; t += 3)
+            {
+                int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t) * 2);
+                int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 1) * 2);
+                int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 2) * 2);
+
+                // An index past the end of the mesh is a model this cannot read correctly, so freeze rather
+                // than guess: a vertex left unpressed is hair slightly proud of the skull, under a hat.
+                static bool Low(Vector3[] p, int v, float line) => v >= p.Length || p[v].Y < line;
+                if (!Low(pos, a, hatLine) && !Low(pos, b, hatLine) && !Low(pos, c, hatLine)) continue;
+
+                frozen.Add(VertexKey(mv.Mesh, a));
+                frozen.Add(VertexKey(mv.Mesh, b));
+                frozen.Add(VertexKey(mv.Mesh, c));
+            }
+        }
+        return frozen;
     }
 
     /// <summary>One vertex of one mesh, as a single value for a set.</summary>
@@ -501,11 +708,45 @@ public static class HatCompatSolve
     /// hairstyle that showed this defect keeps its scalp cap and all six of its ponytail strands in one
     /// submesh, so a submesh-level test would either spare the tails or condemn the scalp with them.
     /// </summary>
-    private static HashSet<long> HangingStrands(
-        byte[] mdl, SecondSkinWriter.Source src, ModelParts parts,
-        IReadOnlyList<MeshVerts> meshes, float hatLine, Vector3 centre, float radius)
+    /// <summary>
+    /// One connected strand, measured the way the press judges it.
+    /// </summary>
+    /// <param name="Below">Vertices below the hat line — geometry a hat does not cover.</param>
+    /// <param name="Reach">The furthest any of its vertices stands off the SCALP in its own direction.
+    /// Directional, not against an average radius: a head is nothing like a sphere, and measuring against
+    /// one calls the crown a tail.</param>
+    /// <param name="Covered">Every measured hat hides all of it. Reported only — what the press may touch is
+    /// decided per triangle now, not per strand.</param>
+    /// <param name="Tail">It hangs far enough off the head that no hat could cover it — a ponytail, a side
+    /// tail. Not the opposite of <paramref name="Covered"/>: most of a hairstyle is neither.</param>
+    internal readonly record struct Strand(
+        ModelPart Part, int Verts, int Below, float Drop, float Reach, bool Covered, bool Tail);
+
+    /// <summary>
+    /// Every strand of a hairstyle, and whether a hat covers it — which is the only question the press
+    /// needs answered.
+    /// <para/>
+    /// Shared by the solve and by the diagnostics on purpose. Measuring "how far off the scalp" two
+    /// slightly different ways in two places is how a gate ends up tuned against numbers it never sees;
+    /// that happened twice here before this existed.
+    /// </summary>
+    internal static List<Strand> Strands(byte[] mdl, ModelParts parts, byte[]? head)
     {
-        var hanging = new HashSet<long>();
+        var meshes = ReadLod0Meshes(mdl);
+        if (meshes.Count == 0) return [];
+        var frame = head != null ? HeadFrameFrom(head) : null;
+        var (centre, radius) = frame ?? HeadFrame(meshes);
+        var floor = frame != null
+            ? HeadFloor(ReadLod0Meshes(head!), centre, radius, centre.Y + HatLine)
+            : ScalpFloor(meshes, centre, radius);
+        return Strands(mdl, SecondSkinWriter.Parse(mdl), parts, meshes, centre.Y + HatLine, centre, floor);
+    }
+
+    private static List<Strand> Strands(
+        byte[] mdl, SecondSkinWriter.Source src, ModelParts parts,
+        IReadOnlyList<MeshVerts> meshes, float hatLine, Vector3 centre, float[] floor)
+    {
+        var found = new List<Strand>();
         var verts = meshes.ToDictionary(m => m.Mesh, m => m.Positions);
 
         // Islands where a submesh was split into them, the whole submesh where it was not — so every
@@ -517,26 +758,33 @@ public static class HatCompatSolve
             if (!verts.TryGetValue(part.Mesh, out var pos)) continue;
 
             float lowest = float.MaxValue, reach = 0f;
-            var mine = new List<int>();
+            int n = 0, below = 0;
             foreach (var v in VerticesOf(mdl, src, part))
             {
                 if (v >= pos.Length) continue;
-                mine.Add(v);
+                n++;
                 var p = pos[v];
                 if (p.Y < lowest) lowest = p.Y;
+                if (p.Y < hatLine) below++;
 
-                // Distance from the head's centre, less its median radius. Deliberately the crude measure
-                // rather than the directional scalp used by the press: the thresholds either side of this
-                // were read off real hairstyles measured exactly this way, and a more refined yardstick
-                // here would shift every one of those numbers by a couple of centimetres while the
-                // constants stayed put.
-                reach = MathF.Max(reach, (p - centre).Length() - radius);
+                var d = p - centre;
+                float len = d.Length();
+                if (len > 1e-5f) reach = MathF.Max(reach, len - floor[BinOf(d / len)]);
             }
-            if (mine.Count == 0) continue;
-            if (hatLine - lowest <= TailDrop || reach <= TailReach) continue;
-            foreach (var v in mine) hanging.Add(VertexKey(part.Mesh, v));
+            if (n == 0) continue;
+
+            // COVERED means every hat measured hides the whole strand, so pressing it cannot show anywhere.
+            // Reach does not enter into it: a strand wholly above the line is driven INSIDE the skull, so
+            // however far out it started it ends up hidden. What matters is only whether the line cuts it.
+            float drop = hatLine - lowest;
+            bool covered = drop <= PressDip;
+
+            // A TAIL is a much narrower thing, and the two are not complements — the great bulk of a
+            // hairstyle is neither pressed nor hidden, but left exactly as its author made it.
+            bool tail = drop > TailDrop && reach > TailReach;
+            found.Add(new Strand(part, n, below, drop, reach, covered, tail));
         }
-        return hanging;
+        return found;
     }
 
     /// <summary>
@@ -566,62 +814,6 @@ public static class HatCompatSolve
             result[mv.Mesh] = count;
         }
         return result;
-    }
-
-    /// <summary>
-    /// Parts that stand so far off the scalp that pressing them is pointless — ponytails, side tails, the
-    /// long fall at the back — which the guide tags <c>atr_kam</c> so the game drops them under a hat.
-    /// <para/>
-    /// Judged on the part's MEDIAN standoff rather than its worst vertex: every hairstyle has a few strands
-    /// flying, and one of them should not condemn the whole scalp. And only whole parts are offered, because
-    /// hiding half an island leaves a cut edge showing.
-    /// </summary>
-    private static List<ModelPart> HideList(
-        byte[] mdl, ModelParts parts, Vector3 centre, float[] floor,
-        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved, float hatLine)
-    {
-        var src = SecondSkinWriter.Parse(mdl);
-        var meshes = ReadLod0Meshes(mdl).ToDictionary(m => m.Mesh, m => m.Positions);
-        var hide = new List<ModelPart>();
-
-        foreach (var part in parts.Parts)
-        {
-            // WHOLE SUBMESHES ONLY. An attribute is carried by a submesh record, so hiding an island means
-            // first cutting it out into its own submesh — and none of that is needed here, because this is
-            // how the hairstyles that ship hat compatibility are already built: every hand-made one
-            // inspected tags whole submeshes, the author having separated the ponytail in Blender before
-            // export exactly as the guide says to. Offering islands would add a splitting step to serve a
-            // case real hair does not present.
-            if (part.Island >= 0) continue;
-            if (!meshes.TryGetValue(part.Mesh, out var pos)) continue;
-            moved.TryGetValue(part.Mesh, out var disp);
-
-            var stand = new List<float>();
-            foreach (var v in VerticesOf(mdl, src, part))
-            {
-                if (v >= pos.Length) continue;
-                // WHERE THE PRESS LEAVES IT, not where the author put it.
-                var p = disp != null && disp.TryGetValue(v, out var np) ? np : pos[v];
-
-                // ONLY WHERE THE HAT IS. Hair below the brim is not something a hat collides with — it
-                // hangs out underneath one, which is what hair does. Judging a part on all of its
-                // geometry condemned every long hairstyle: the press deliberately fades out below the
-                // brim, so that hair keeps its full standoff, and the test then read a fringe and a
-                // waist-length fall as equally impossible. In game that offered to hide everything and
-                // made the wearer bald.
-                if (p.Y < hatLine) continue;
-
-                var d = p - centre;
-                float len = d.Length();
-                if (len < 1e-5f) continue;
-                stand.Add(len - floor[BinOf(d / len)]);
-            }
-            // Nothing of this part is up where a hat is, so a hat cannot be clipping through it.
-            if (stand.Count == 0) continue;
-            stand.Sort();
-            if (stand[stand.Count / 2] > HideThreshold) hide.Add(part);
-        }
-        return hide;
     }
 
     /// <summary>

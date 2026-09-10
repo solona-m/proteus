@@ -1235,6 +1235,10 @@
     "message": "どんな帽子でも隠せない部分——ポニーテール、サイドテール、背中に流れる長い髪\n——も、帽子をかぶっている間は下からはみ出させずに非表示にします。\n\n既定ではオフです。押し込みすぎても帽子が覆うので見えませんが、非表示は全か無\nかで、判定を誤った部分はそのまま消えてしまいます。",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} 本の毛束が頭から離れすぎていて帽子に収まらないため、帽子の着用中は非表示になります。",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "この髪型を確認しています...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "この髪型は既に帽子に対応しています — 作者が組み込んでいます。することはありません。",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "これらのパーツは頭から離れすぎていて帽子に収まらないため、帽子の着用中は非表示になります。残したいものはチェックを外してください。",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "ゲーム標準の髪を着用しています。これは元から帽子に対応しています。髪Modを着用すると、ここで操作できるようになります。",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "{0} 個の頂点は動かせません。この髪型はゲームのシェイプ形式で扱うには大きすぎるまとまりに結合されています。形状はそのままのため、帽子が突き抜ける場合があります。",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} 三角形)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {

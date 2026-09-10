@@ -1235,6 +1235,10 @@
     "message": "어떤 모자로도 가릴 수 없는 부분 — 포니테일, 옆으로 묶은 머리, 등 뒤로\n흐르는 긴 머리 — 도 모자를 쓰는 동안 아래로 삐져나오게 두지 않고 숨깁니다.\n\n기본값은 꺼짐입니다. 지나치게 밀착시켜도 모자가 덮어 보이지 않지만, 숨기기는\n전부 아니면 전무여서 잘못 판단된 부분은 그대로 사라집니다.",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0}개의 머리 가닥이 머리에서 너무 멀리 떨어져 있어 모자에 들어가지 않으므로, 모자를 쓰는 동안 숨겨집니다.",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "이 헤어스타일을 확인하는 중...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "이 헤어스타일은 이미 모자를 지원합니다 — 제작자가 넣어 두었습니다. 할 일이 없습니다.",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "이 부위들은 머리에서 너무 멀리 떨어져 있어 모자 안에 들어가지 않으므로, 모자를 쓰는 동안 숨겨집니다. 남겨야 할 항목은 체크를 해제하세요.",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "게임 기본 헤어를 착용 중이며, 이미 모자와 함께 작동합니다. 헤어 모드를 착용하면 여기서 할 일이 생깁니다.",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "정점 {0}개는 옮길 수 없습니다. 이 헤어스타일은 게임의 셰이프 형식이 다루기에 너무 큰 덩어리로 합쳐져 있습니다. 형태가 그대로 남으므로 모자가 뚫고 나올 수 있습니다.",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "(삼각형 {0}개)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {

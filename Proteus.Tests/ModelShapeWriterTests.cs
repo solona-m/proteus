@@ -350,6 +350,77 @@ public class ModelShapeWriterTests
         Assert.Equal(2u, U32(after, ss + 8));
     }
 
+    // ── isolating parts so they can be tagged ───────────────────────────────
+
+    /// <summary>
+    /// An island sharing a submesh with other geometry is cut out, so tagging it leaves the rest alone.
+    /// <para/>
+    /// The case that matters and the one that went wrong in game: a hairstyle keeps its scalp cap and its
+    /// ponytail strands in ONE submesh, so tagging by submesh number to hide the tails hid the scalp too.
+    /// </summary>
+    [Fact]
+    public void IsolatesAnIslandFromTheSubmeshItSharesWithOtherGeometry()
+    {
+        // One submesh, three islands of one triangle each.
+        var mdl = SyntheticModel.Build(
+            ["atr_top"],
+            [new SyntheticModel.Mesh(Mat, new SyntheticModel.Sub(0, Islands: 3, TrianglesPerIsland: 1))],
+            SyntheticModel.V6, null);
+
+        var parts = ModelPartReader.Read(mdl)!;
+        var islands = parts.Parts.Where(p => p.Island >= 0).OrderBy(p => p.Island).ToList();
+        Assert.Equal(3, islands.Count);
+
+        var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, [islands[1]]);
+        var tagged = ModelAttributeWriter.AddAttribute(split, "atr_kam", targets);
+
+        var src = SecondSkinWriter.Parse(tagged);
+        int bit = Array.IndexOf(src.AttrNames, "atr_kam");
+        Assert.True(bit >= 0);
+
+        // Two records, not three: the isolation groups the triangles rather than only describing the runs
+        // they happen to fall in, so the middle island comes out as one record and the other two as the
+        // other. Exactly one record carries the tag, and it is the one holding a single triangle.
+        int mo = src.MeshStart + 0 * 36;
+        int subIdx = U16(tagged, mo + 10), subCount = U16(tagged, mo + 12);
+        Assert.Equal(2, subCount);
+
+        var masks = Enumerable.Range(0, subCount)
+            .Select(k => U32(tagged, src.SubmeshStart + (subIdx + k) * 16 + 8) & (1u << bit)).ToArray();
+        int mine = Assert.Single(Enumerable.Range(0, subCount), k => masks[k] != 0);
+        Assert.Equal(3u, U32(tagged, src.SubmeshStart + (subIdx + mine) * 16 + 4));   // one triangle
+
+        // The geometry itself is untouched: not one vertex moves and not one triangle is lost or gained.
+        // Only the ORDER of the triples changes, which a triangle list does not care about — and which is
+        // the whole reason a set chosen by geometry can be isolated at all.
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(tagged, out var pos, out _, out var tris));
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(mdl, out var pos0, out _, out var tris0));
+        Assert.Equal(pos0, pos);
+        Assert.Equal(Triples(tris0), Triples(tris));
+    }
+
+    /// <summary>A triangle list as a sorted multiset of triples, for comparing across a reorder.</summary>
+    private static (int, int, int)[] Triples(int[] tris)
+    {
+        var found = new (int, int, int)[tris.Length / 3];
+        for (int i = 0; i < found.Length; i++) found[i] = (tris[i * 3], tris[i * 3 + 1], tris[i * 3 + 2]);
+        Array.Sort(found);
+        return found;
+    }
+
+    /// <summary>A part that already is a whole submesh needs no cutting, and gets none.</summary>
+    [Fact]
+    public void LeavesAWholeSubmeshAlone()
+    {
+        var mdl = TwoMesh();
+        var parts = ModelPartReader.Read(mdl)!;
+        var whole = parts.Parts.First(p => p.Mesh == 1 && p.Island < 0);
+
+        var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, [whole]);
+        Assert.Same(mdl, split);
+        Assert.Equal([(1, 0)], targets);
+    }
+
     // ── refusals ────────────────────────────────────────────────────────────
 
     [Fact]

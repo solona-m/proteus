@@ -1235,6 +1235,10 @@
     "message": "Fait également disparaître, tant qu'un chapeau est porté, les parties qu'aucun\nchapeau ne peut couvrir — queues de cheval, couettes, longueurs dans le dos —\nau lieu de les laisser dépasser en dessous.\n\nDésactivé par défaut. Un plaquage trop fort reste invisible, puisque le chapeau\nle recouvre ; le masquage est tout ou rien, et une partie mal jugée disparaît\npurement et simplement.",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} mèche(s) dépassent trop de la tête pour tenir sous un chapeau et seront masquées tant qu'on en porte un.",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "Analyse de cette coiffure...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "Cette coiffure gère déjà les chapeaux — son auteur l'a prévu. Rien à faire.",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "Ces parties dépassent trop de la tête pour tenir sous un chapeau : elles seraient masquées tant qu'on en porte un. Décochez tout ce qui doit rester.",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "Vous portez une coiffure d'origine du jeu, qui fonctionne déjà sous les chapeaux. Ceci aura quelque chose à faire lorsque vous porterez un mod de coiffure.",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "{0} points ne peuvent pas être déplacés : cette coiffure est fusionnée en morceaux trop grands pour le format de formes du jeu. Ils garderont leur forme, un chapeau peut donc encore les traverser.",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} triangles)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {

@@ -1235,6 +1235,10 @@
     "message": "同时让任何帽子都遮不住的部分——马尾、双马尾、垂在背后的长发——在戴帽子时\n直接隐藏，而不是从帽子下面露出来。\n\n默认关闭。压得过头也看不出来，因为有帽子遮着；但隐藏是全有或全无，判断错的\n部分就会直接消失。",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "有 {0} 缕头发离头部太远，无法塞进帽子里，戴帽子时会被隐藏。",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "正在检查该发型...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "这个发型已经支持帽子了 — 是作者做的。无需处理。",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "这些部件离头部太远，无法塞进帽子里，因此戴帽子时会被隐藏。取消勾选任何需要保留的部件。",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "你正戴着游戏自带的头发，它本来就能配合帽子。当你戴上发型模组时，这里才有事可做。",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "有 {0} 个顶点无法移动：这个发型被合并成了对游戏形态格式而言过大的整块。它们会保持原状，因此帽子仍可能在那里穿模。",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} 个三角形)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {
