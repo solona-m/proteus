@@ -383,6 +383,151 @@ public class CrotchHoleDiagTests
         return nodeOf;
     }
 
+    /// <summary>
+    /// How flat the front of the crotch actually is, before and after the pass — the thing being asked
+    /// for, measured the way the eye sees it.
+    /// <para/>
+    /// The visible surface is the SILHOUETTE: for each lateral bin across the corridor, the frontmost
+    /// vertex (+Z is forward). Flatness is then how far that outline departs from a straight line across
+    /// the corridor. Peak-to-trough is reported alongside it because a bowed-but-smooth cross-section and
+    /// a ridged one can share an rms, and only the second reads as a fold.
+    /// <para/>
+    /// Deliberately NOT the "fit leaves N mm rms on the envelope" the pass already logs: that is the
+    /// residual of the fit against the surface it started from, so it says how well the target was
+    /// described, not how flat anything ended up.
+    /// </summary>
+    [Fact]
+    public void HowFlatIsItBetweenTheLegs()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_DIAG_MODEL")
+                  ?? @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\GEN C Small.mdl";
+        if (!File.Exists(target)) { o.WriteLine($"skipped — no model at {target}"); return; }
+
+        var before = File.ReadAllBytes(target);
+        var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
+        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        if (after == null) { o.WriteLine("the pass declined this model"); return; }
+
+        var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
+        var b = ReadMeshes(after, SecondSkinWriter.Parse(after)).Single(m => m.Skin);
+
+        // The pass's own numbers for this body, read off its log above: the crotch sits at y=0.858 and is
+        // 66.3mm across, so the corridor is half of that.
+        const float Lowest = 0.858f, CrotchHalf = 0.0331f;
+        float corridor = CrotchHalf * 0.5f;
+        float top = Lowest + CrotchHalf * 2f * 0.5f;
+
+        o.WriteLine($"corridor +/-{corridor * 1000:F1}mm about x=0, bands y {Lowest:F3}..{top:F3}");
+        o.WriteLine("  band      before rms    after rms    before p2t     after p2t");
+
+        double sumA = 0, sumB = 0; int n = 0;
+        for (float y = Lowest; y < top; y += 0.003f)
+        {
+            var pa = Silhouette(a, y, y + 0.003f, corridor);
+            var pb = Silhouette(b, y, y + 0.003f, corridor);
+            if (pa.Count < 6 || pb.Count < 6) continue;
+            var (rmsA, p2tA) = Flatness(pa);
+            var (rmsB, p2tB) = Flatness(pb);
+            sumA += rmsA; sumB += rmsB; n++;
+            o.WriteLine($"  y {y:F3}  {rmsA * 1000,9:F3}mm {rmsB * 1000,9:F3}mm  "
+                      + $"{p2tA * 1000,9:F3}mm {p2tB * 1000,9:F3}mm");
+        }
+        if (n == 0) { o.WriteLine("no band had enough surface to measure"); return; }
+        o.WriteLine($"MEAN over {n} band(s): {sumA / n * 1000:F3}mm -> {sumB / n * 1000:F3}mm "
+                  + $"({(sumA > 0 ? (1 - sumB / sumA) * 100 : 0):F1}% flatter)");
+    }
+
+    /// <summary>
+    /// How far sideways the fold actually reaches, and how evenly it dies out.
+    /// <para/>
+    /// The complaint this answers is the garment's trim wobbling: the trim runs down the side of the
+    /// crotch, so anything the pass does to the body out there is inherited by the shell cut from it. A
+    /// displacement that merely REACHES the trim is not the problem — one that reaches it unevenly is,
+    /// because a fixed lift moves the trim and a ragged one makes it wander.
+    /// <para/>
+    /// So both are reported per lateral bin: the mean move (how much) and the spread within the bin (how
+    /// even). A bin where the spread rivals the mean is a bin where the edge wobbles.
+    /// </summary>
+    [Fact]
+    public void HowFarSidewaysDoesTheFoldReach()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_DIAG_MODEL")
+                  ?? @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\GEN C Small.mdl";
+        if (!File.Exists(target)) { o.WriteLine($"skipped — no model at {target}"); return; }
+
+        var before = File.ReadAllBytes(target);
+        var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
+        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        if (after == null) { o.WriteLine("the pass declined this model"); return; }
+
+        var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
+        var b = ReadMeshes(after, SecondSkinWriter.Parse(after)).Single(m => m.Skin);
+
+        const int Bins = 20;
+        const float Reach = 0.060f;               // 60mm each side, well past the feathered corridor
+        var n = new int[Bins]; var sum = new double[Bins]; var max = new float[Bins];
+        var lo = new float[Bins]; var hi = new float[Bins];
+        for (int i = 0; i < Bins; i++) { lo[i] = float.MaxValue; hi[i] = float.MinValue; }
+        float furthest = 0f;
+
+        for (int v = 0; v < a.Pos.Length && v < b.Pos.Length; v++)
+        {
+            float d = Vector3.Distance(a.Pos[v], b.Pos[v]);
+            if (d <= 1e-6f) continue;
+            float ax = MathF.Abs(a.Pos[v].X);
+            furthest = MathF.Max(furthest, ax);
+            int q = (int)(ax / Reach * Bins);
+            if (q >= Bins) continue;
+            n[q]++; sum[q] += d; max[q] = MathF.Max(max[q], d);
+            lo[q] = MathF.Min(lo[q], d); hi[q] = MathF.Max(hi[q], d);
+        }
+
+        o.WriteLine($"furthest moved vertex sits {furthest * 1000:F1}mm from the midline");
+        o.WriteLine("   |x| band      moved     mean       max     spread within the band");
+        for (int q = 0; q < Bins; q++)
+        {
+            if (n[q] == 0) continue;
+            o.WriteLine($"  {q * Reach / Bins * 1000,5:F1}-{(q + 1) * Reach / Bins * 1000,-5:F1}mm "
+                      + $"{n[q],6} {sum[q] / n[q] * 1000,8:F3}mm {max[q] * 1000,8:F3}mm "
+                      + $"{(hi[q] - lo[q]) * 1000,8:F3}mm");
+        }
+    }
+
+    /// <summary>Frontmost vertex per lateral bin — the outline the eye actually sees.</summary>
+    private static List<(float X, float Z)> Silhouette(Mesh me, float yLo, float yHi, float corridor)
+    {
+        const int Bins = 16;
+        var best = new float[Bins]; var at = new float[Bins]; var has = new bool[Bins];
+        for (int i = 0; i < me.Pos.Length; i++)
+        {
+            var p = me.Pos[i];
+            if (p.Y < yLo || p.Y >= yHi || p.Z <= 0f) continue;
+            if (MathF.Abs(p.X) > corridor) continue;
+            int q = Math.Clamp((int)((p.X + corridor) / (2 * corridor) * Bins), 0, Bins - 1);
+            if (!has[q] || p.Z > best[q]) { best[q] = p.Z; at[q] = p.X; has[q] = true; }
+        }
+        var outp = new List<(float, float)>();
+        for (int q = 0; q < Bins; q++) if (has[q]) outp.Add((at[q], best[q]));
+        return outp;
+    }
+
+    /// <summary>Departure from the straight line fitted across the outline: rms, and peak-to-trough.</summary>
+    private static (float Rms, float P2T) Flatness(List<(float X, float Z)> p)
+    {
+        double sx = 0, sz = 0, sxx = 0, sxz = 0;
+        foreach (var (x, z) in p) { sx += x; sz += z; sxx += x * x; sxz += x * z; }
+        double d = p.Count * sxx - sx * sx;
+        double m = Math.Abs(d) < 1e-12 ? 0 : (p.Count * sxz - sx * sz) / d;
+        double c = (sz - m * sx) / p.Count;
+        double acc = 0, lo = double.MaxValue, hi = double.MinValue;
+        foreach (var (x, z) in p)
+        {
+            double e = z - (m * x + c);
+            acc += e * e; lo = Math.Min(lo, e); hi = Math.Max(hi, e);
+        }
+        return ((float)Math.Sqrt(acc / p.Count), (float)(hi - lo));
+    }
+
     private static List<(Vector3 A, Vector3 B)> OpenEdges(Mesh me)
     {
         var count = new Dictionary<(int, int), int>();
