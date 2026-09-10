@@ -4084,10 +4084,10 @@ public class CompositorService : IDisposable
                         // alone decides, and an overlay that would be promoted anyway is not being narrowed.
                         && !RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                                 overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
-                                canShell, unmirrors, false, (entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true || entry.Metadata.CleftBridge == true))
+                                canShell, unmirrors, false, RenderModeInference.WantsGeometry(entry.Metadata))
                         && RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                                 overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear,
-                                canShell, unmirrors, true, (entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true || entry.Metadata.CleftBridge == true))
+                                canShell, unmirrors, true, RenderModeInference.WantsGeometry(entry.Metadata))
                         && capNarrowedMods.Add(entry.ModDirectory))
                     {
                         log.Information("[Proteus] {0}: a toe cap is selected in [{1}], not here, so this "
@@ -4100,7 +4100,7 @@ public class CompositorService : IDisposable
                     else if (RenderModeInference.ShouldPromoteToGear(overlay.Descriptor.Layer,
                             overlay.Descriptor.ManualShaderLock, overlay.ColorTableRows, aboveGear, canShell,
                             unmirrors, toeCapMods.Contains(entry.ModDirectory),
-                            (entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true || entry.Metadata.CleftBridge == true)))
+                            RenderModeInference.WantsGeometry(entry.Metadata)))
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk

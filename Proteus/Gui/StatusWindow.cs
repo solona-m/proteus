@@ -5208,7 +5208,6 @@ public class StatusWindow : Window
         // Scroll maps a gear overlay can pick from: the mod's own Effects/ folder, then the user's.
         var effects = discovery.ResolveAvailableEffects(entry, discovery.EffectsLibraryPath());
 
-
         // ── content packs: the pack's OWN material, one tab per selected option ────
         // Drawn first and separately from the overlay paths below, because a content option has no overlay
         // descriptor at all — no art, no coverage, no index texture of ours. Its colours go into the
@@ -5756,7 +5755,8 @@ public class StatusWindow : Window
                     out var maskFooterEdit, onReset: null,
                     drawExtraAdvanced: null,
                     drawBelowGlow: () => DrawGeometrySection(entry),
-                    modeForced: modHasGear ? Strings.ColorPanel.ForcedTip : null,
+                    modeForced: modHasGear ? Strings.ColorPanel.Forced : null,
+                    modeForcedTip: modHasGear ? Strings.ColorPanel.ForcedTip : null,
                     // Shows the badge as Cloth without persisting it, which is what "forced" means here.
                     promotedToGear: modHasGear,
                     // Nothing reads MaskDescriptor.SkinToneMask — the mask paints into the diffuse in its
@@ -5764,13 +5764,28 @@ public class StatusWindow : Window
                     // slider would be a control that saves and does nothing.
                     skinTintApplies: false,
                     overrideActive: overrideActive);
-                // Not when the mode is forced: re-inferring would fight the force every frame.
-                if (!modHasGear)
-                {
-                    maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
-                        maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
-                    ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
-                }
+                var maskEdit = maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit;
+
+                // While the mode is FORCED, only an explicit glow pick may move it — not the general
+                // inference. Both halves of that are load-bearing and each was got wrong once.
+                //
+                // Inference must not run: this tab presents the mode as decided elsewhere, so a user who
+                // clears the last sphere map off a mask row is not asking for a mode change. But Infer
+                // would return Skin for the now-plain rows and ApplyMode would write it, silently replacing
+                // a recorded MaskDescriptor.Layer of Gear. Nothing looks different while the gear option is
+                // on — the mask rides its shell either way — and then switching that option off reveals a
+                // mask that has lost its mode. Rewriting a user's recorded settings because we currently
+                // happen to be overriding them is the hazard ReconcileMode's own comment describes.
+                //
+                // A glow pick must still run: characterscroll.shpk is the only shader that emits, so a mask
+                // left on Skin with an effect selected renders NO glow rather than a dim one, while the
+                // picker keeps looking applied. That is the whole reason the forced tab shows the picker.
+                if (!modHasGear || maskEdit == FeatureEdit.Glow)
+                    maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows, maskEdit);
+
+                // ALWAYS, forced or not: this is what defaults every row to 150%/white on entering Glow and
+                // zeroes it on leaving. Skipped, an effect picked on a forced mask renders black.
+                ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
             }
 
             if (maskChanged || maskFooterChanged || maskModeChanged)
@@ -5849,13 +5864,13 @@ public class StatusWindow : Window
             // for the same reason as the un-mirroring above - the answer is a Penumbra selection in a group
             // the editor does not own, so it cannot work it out from what is selected here.
             bool capWanted = compositor.ToeCapWantedFor(entry.ModDirectory);
-            // The fifth: this MOD's bust bridge, which is geometry for the same reason a cap is. Read off
-            // the sidecar rather than the option — it is one decision about the whole pack, and the tick
-            // that sets it lives in the whole-mod part of Advanced.
-            bool bridgeWanted = entry.Metadata.BustBridge == true || entry.Metadata.SmoothNipples == true
-                             || entry.Metadata.CleftBridge == true;
+            // The fifth: this MOD's geometry passes, which are geometry for the same reason a cap is. Read
+            // off the sidecar rather than the option — each is one decision about the whole pack, and the
+            // ticks that set them live in the mod-wide Geometry section. Through the shared predicate, so
+            // this and the compositor cannot disagree about which features count.
+            bool geometryWanted = RenderModeInference.WantsGeometry(entry.Metadata);
             if (RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned, editRows, aboveGear, canShell,
-                                                        needsUnmirrored, capWanted, bridgeWanted))
+                                                        needsUnmirrored, capWanted, geometryWanted))
             {
                 // The shader comes from the shared predicate too, not a hardcoded character.shpk: a promoted
                 // whole-skin overlay actually renders on skin.shpk, and showing it as cloth here offered the
@@ -6010,9 +6025,11 @@ public class StatusWindow : Window
     /// under a heading whose every other control IS per-option. With a heading of their own, between the
     /// glow controls and Advanced, they are neither buried in the per-option section nor repeated.
     /// <para/>
-    /// NOT drawn on the Masks tab. The two paths that have no glow footer at all — a pure content pack, and
-    /// a mod with no active option — draw it directly above their Advanced disclosure instead, which is the
-    /// same position relative to Advanced; on the second of those it is the only place it can be reached.
+    /// Drawn on EVERY tab, Masks included — the value is the mod's, so it reads the same wherever it is
+    /// opened from, and Masks is a tab an author may never leave. The two paths that have no glow footer at
+    /// all — a pure content pack, and a mod with no active option — draw it directly above their Advanced
+    /// disclosure instead, which is the same position relative to Advanced; on the second of those it is
+    /// the only place it can be reached.
     /// </summary>
     private void DrawGeometrySection(OverlayEntry entry)
     {
@@ -6023,19 +6040,21 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The mod-wide bust bridge, drawn in the whole-mod part of Advanced beside Bodies — so it appears on
-    /// the option tabs, and on Masks ONLY when Masks is the only tab there is.
+    /// The four mod-wide geometry passes, drawn inside the Geometry section (see
+    /// <see cref="DrawGeometrySection"/>) rather than in Advanced, which is where the per-OPTION settings
+    /// live. Bodies stays in Advanced: it picks which body the art bakes onto, which is not geometry.
     /// <para/>
-    /// It used to be drawn on Masks unconditionally, for a reason worth keeping: on the common mod shape
-    /// (every fabric on the Skin layer, the Masks descriptor carrying the only geometry) the mask shell IS
-    /// the garment, so a control that skipped that tab could be out of reach altogether. That case is now
-    /// tested for directly at the call site instead of covered by always drawing it, because "mod-wide
-    /// setting repeated on every tab" reads as "this tab has its own copy" — most of all on Masks, which
-    /// is pinned to the top and is the first tab seen.
+    /// Every one of them must be reachable from any tab a mod can present. On the common mod shape — every
+    /// fabric on the Skin layer, the Masks descriptor carrying the only geometry — the mask shell IS the
+    /// garment, so a control that skipped the Masks tab would be out of reach altogether.
     /// <para/>
-    /// Written to the sidecar rather than to <see cref="Configuration"/> like Bodies above, because this is
-    /// an AUTHORING decision that should ship with the pack: whether a garment lifts off the sternum is
-    /// part of how the piece is meant to look, not a preference of whoever is wearing it.
+    /// Written to the sidecar rather than to <see cref="Configuration"/> like Bodies, because this is an
+    /// AUTHORING decision that should ship with the pack: whether a garment lifts off the sternum is part
+    /// of how the piece is meant to look, not a preference of whoever is wearing it.
+    /// <para/>
+    /// Ticking any of them also PROMOTES the mod's skin overlays to a shell — see
+    /// <see cref="RenderModeInference.WantsGeometry"/>, which must list every feature drawn here or the
+    /// tick does nothing at all.
     /// </summary>
     private void DrawBustBridgeAdvanced(OverlayEntry entry)
     {

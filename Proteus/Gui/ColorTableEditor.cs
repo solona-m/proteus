@@ -82,9 +82,15 @@ public static class ColorTableEditor
         // Mod-wide sections drawn between the glow controls and Advanced. Like drawExtraAdvanced this
         // commits for itself; unlike it, callers pass null on tabs that should not show it at all.
         Action? drawBelowGlow = null,
-        // Non-null when this option's render mode is decided for it — its text replaces the force-mode
-        // radios inside Advanced and explains why. Everything else in the footer is still drawn.
+        // Non-null when this option's render mode is decided for it rather than inferred or pinned. A SHORT
+        // marker — "(forced)" — shown beside the "Rendering as" badge in place of the (auto)/(pinned)
+        // suffix, which would otherwise credit the inference with a decision taken elsewhere. It also
+        // suppresses "Back to auto": there is no pin here to release.
         string? modeForced = null,
+        // The full explanation behind modeForced: the badge's tooltip, and the text drawn in place of the
+        // force-mode radios inside Advanced. Kept separate because those two positions want opposite
+        // lengths — a parenthetical beside the badge, a sentence where the radios' own hint would be.
+        string? modeForcedTip = null,
         // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
         // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
         bool promotedToGear = false,
@@ -222,10 +228,16 @@ public static class ColorTableEditor
         ImGui.SameLine(0f, 24f);
         DrawRenderingAsBadge(mode);
         ImGui.SameLine();
-        ImGui.TextDisabled(curLock ? cs.Pinned : cs.Auto);
+        // The suffix says where this mode came from, so a FORCED mode has to say so HERE — beside the badge
+        // it qualifies — rather than only inside Advanced. Reading "(auto)" next to a mode nothing about
+        // this option chose is worse than saying nothing: it credits the inference with a decision that was
+        // taken elsewhere, and it contradicted the "(forced)" note further down the same panel.
+        ImGui.TextDisabled(modeForced ?? (curLock ? cs.Pinned : cs.Auto));
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(curLock ? cs.PinnedTip : cs.AutoTip);
-        if (curLock)
+            ImGui.SetTooltip(modeForced != null ? (modeForcedTip ?? modeForced)
+                                                : (curLock ? cs.PinnedTip : cs.AutoTip));
+        // No "Back to auto" when the mode is not this option's to release.
+        if (curLock && modeForced == null)
         {
             ImGui.SameLine();
             if (ImGui.SmallButton($"{cs.BackToAuto}##{idScope}")) { SetLock(false); changed = true; }
@@ -251,7 +263,10 @@ public static class ColorTableEditor
             // mask carries a glow effect perfectly well.
             if (modeForced != null)
             {
-                ImGui.TextDisabled(modeForced);
+                // The EXPLANATION here, not the badge marker. This sits exactly where ForceModeHint would
+                // have been — a full sentence introducing the radios — so the short "(forced)" that reads
+                // correctly beside the badge reads as nothing at all on its own line.
+                ImGui.TextDisabled(modeForcedTip ?? modeForced);
             }
             else
             {
@@ -346,7 +361,8 @@ public static class ColorTableEditor
                     ImGui.SetTooltip(cs.OneSidedTip);
             }
 
-            // Whole-mod settings the caller owns (which bodies to bake onto, and the bust bridge).
+            // Whole-mod settings the caller owns (currently which bodies to bake onto — the geometry passes
+            // moved out to drawBelowGlow, which draws them above this whole disclosure).
             // Separated because everything above this line is per-option and everything below it is not.
             if (drawExtraAdvanced != null)
             {
