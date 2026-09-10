@@ -59,15 +59,19 @@ public sealed class SecondSkinService
     /// </summary>
     internal const int TexSizeCap = 4096;
 
-    /// <summary>
-    /// The sheet this build bakes at. Textures are authored in BODY UV (the shell inherits the body's UVs).
-    /// <para/>
-    /// ONE size for the whole build, not one per layer. A layer's relief is compounded element-wise into
-    /// its same-mod siblings' normals (see the sibling-relief pre-pass and CompoundNormal), and the mask
-    /// merges do the same — so two layers at different sizes would index each other's buffers out of
-    /// step. Set at the top of <see cref="Build"/> and read everywhere below.
-    /// </summary>
-    private int texSize = TexSizeFloor;
+    // The sheet a build bakes at is a LOCAL of Build, passed down by parameter — never a field.
+    //
+    // ONE size for the whole build, not one per layer: a layer's relief is compounded element-wise into its
+    // same-mod siblings' normals (the sibling-relief pre-pass and CompoundNormal), and the mask merges do
+    // the same, so two layers at different sizes would index each other's buffers out of step.
+    //
+    // But "one per build" must not become "one per SERVICE". Composites genuinely overlap — see
+    // CompositorService's _compositesInFlight, and the measurement quoted above remapCache — this instance
+    // is shared, and Build takes no lock. A field would let one build store 2048 while another is midway
+    // through a 4096 sheet, and this value is a buffer DIMENSION: the loser reads a 4.19M-element array
+    // with 16.7M indices and throws, or reads a 16.7M-element one with 4.19M and silently bakes a quarter
+    // of the sheet. Every other per-build field here (remapCache, UnwearableContent) merely repeats work
+    // when it races; this one would not.
 
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
@@ -121,10 +125,11 @@ public sealed class SecondSkinService
 
     /// <inheritdoc cref="ChooseTexSize(IEnumerable{string})"/>
     /// <param name="largestArt">
-    /// The largest dimension actually found, before the floor and cap are applied — 0 when nothing could be
-    /// probed. Reported alongside the chosen size so a log line says WHY it landed where it did: "4096
-    /// (largest art 4096)" and "2048 (largest art 1024)" are very different situations that a bare size
-    /// cannot tell apart.
+    /// The largest dimension found before the floor and cap were applied — 0 when nothing could be probed.
+    /// Reported alongside the chosen size so a log line says WHY it landed where it did: "4096 (largest art
+    /// 4096)" and "2048 (largest art 1024)" are very different situations that a bare size cannot tell
+    /// apart. Once the cap is reached the scan stops, so this is "at least this big", not a true maximum —
+    /// which is all the log needs and all any caller should read it as.
     /// </param>
     internal static int ChooseTexSize(IEnumerable<string?> artPaths, out int largestArt)
     {
@@ -134,6 +139,10 @@ public sealed class SecondSkinService
             if (string.IsNullOrEmpty(p)) continue;
             if (TextureLoader.ProbeSize(p) is not { } s) continue;
             largestArt = Math.Max(largestArt, Math.Max(s.Width, s.Height));
+            // Nothing further can raise the answer, and each remaining probe is a File.Exists plus an
+            // OpenRead on the composite thread. A mod with a dozen masks pays that list twice a composite
+            // (here and in the prefetch), so stop as soon as the answer is settled.
+            if (largestArt >= TexSizeCap) break;
         }
         if (largestArt <= TexSizeFloor) return TexSizeFloor;
         if (largestArt >= TexSizeCap) return TexSizeCap;
@@ -1008,7 +1017,15 @@ public sealed class SecondSkinService
         // appended into the carrier verbatim rather than cut from the character. Allocated to hosts AFTER
         // the gear shells above, from whatever material capacity they leave, so a character with no content
         // packs gets a bit-identical shell allocation to before this existed.
-        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
+        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null,
+        // The sheet size this build should bake at, when the caller has already worked it out. The
+        // compositor has: it warms this phase's art in the background and the decode cache keys on the
+        // target size, so a warm at any other size is not a cheaper warm, it is a wasted one. Passing the
+        // number it warmed at is the only way the two are guaranteed to agree — recomputing here would
+        // re-probe the same files against a tree that may have moved underneath (a mask toggled, a file
+        // replaced), and a disagreement puts every decode back on the composite thread. Null recomputes,
+        // which is right for tests and any caller with no prefetch to keep in step with.
+        int? shellTexSize = null)
     {
         int contentIn = contentLayers?.Count ?? 0;
 
@@ -1017,16 +1034,17 @@ public sealed class SecondSkinService
         // TextureLoader's cache anyway, and only the repetition WITHIN one build is worth avoiding.
         remapCache.Clear();
 
-        // The sheet size for THIS build, chosen from the art before any of it is decoded — every load
-        // below is keyed on it, so it has to be settled first. See ChooseTexSize and texSize.
-        var prevTexSize = texSize;
-        texSize = ChooseTexSize(ShellArtPaths(gearOverlays, discovery), out var largestArt);
-        // Quiet on the ordinary case — a build that stays at the floor, having stayed there last time, has
-        // nothing to say. Anything above the floor keeps reporting, because that is the line to grep when a
-        // shell looks softer or a composite got slower.
-        if (texSize != prevTexSize || texSize != TexSizeFloor)
+        // The sheet size for THIS build, chosen from the art before any of it is decoded — every load below
+        // is keyed on it, so it has to be settled first. A LOCAL, passed down by parameter: see the note
+        // where CoverageSize is declared for why this must never become a field.
+        int largestArt = 0;
+        int texSize = shellTexSize ?? ChooseTexSize(ShellArtPaths(gearOverlays, discovery), out largestArt);
+        // Anything above the floor is worth a line — it is what to grep when a shell looks softer than its
+        // art or a composite got slower — while the ordinary floor case stays quiet.
+        if (texSize != TexSizeFloor)
             log.Information("[Proteus] second skin: shell textures at {0} (largest art {1}, floor {2}, cap {3})",
-                $"{texSize}x{texSize}", largestArt == 0 ? "none probed" : $"{largestArt}px",
+                $"{texSize}x{texSize}",
+                largestArt == 0 ? "as given by the caller" : $"{largestArt}px",
                 TexSizeFloor, TexSizeCap);
 
         // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
@@ -2785,8 +2803,8 @@ public sealed class SecondSkinService
             if (template == null) { log.Error("[Proteus] second skin: missing template material for {0}", shader); continue; }
 
             var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs,
-                GearMaterialWriter.TextureNames(template));
+                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, texSize, ref shellChanged, mergeMasks,
+                siblingReliefs, GearMaterialWriter.TextureNames(template));
             if (texPaths == null) continue;
 
             var scroll = new ScrollSettings(
@@ -2799,17 +2817,26 @@ public sealed class SecondSkinService
             // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
             // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
             // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
-            // An overlay AUTO-PROMOTED from Skin takes the neutral baseline too, for the same reason a mask
-            // shell does: nobody chose gear and nobody chose colours, so there is no "look being worn" whose
-            // template table should show through. Inheriting it multiplies the author's art by a vanilla
-            // top's palette — e0041 ships pink, olive and brown rows — which renders a skin overlay as dark
-            // patches wherever the _id happens to select one of them.
+            //
+            // NEUTRAL WHENEVER THE AUTHOR SET NO ROWS, however the overlay reached this layer. The
+            // alternative — null, i.e. keep the cloned template's own table — sounds like inheriting "the
+            // look being worn", and it is not: the template is a FIXED vanilla top (e0041), unrelated to
+            // anything the character has on, and it ships pink, olive and brown rows. Its pair 16 is very
+            // nearly black. So an overlay whose _id selects pair 16 — which is Proteus's own convention for
+            // an unclaimed texel, and what a tattoo's index usually says — got multiplied down to about a
+            // tenth of its authored brightness, while the identical art on the SKIN layer rendered
+            // untinted (BuildRowDict returns an empty dict for empty presets, so nothing tints it there).
+            // That is the whole "cloth looks a lot darker than skin" report, and nobody can have designed
+            // against a palette they cannot see and did not choose.
+            //
+            // Narrow, despite reading broad: BuildRows only consults this when the preset list is EMPTY.
+            // An author who set even one row already starts from NeutralRows, so their unset pairs are
+            // white today and stay white.
             //
             // Only the BASELINE, though — not the mask shell's half-pair mirroring, which is why this is a
-            // separate argument. A promoted overlay still carries its own art, so mirroring would tint and
-            // light it at every green < 255 texel; see BuildRows.
-            bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            // separate argument. An ordinary shell carries its own art, so mirroring would tint and light
+            // it at every green < 255 texel; see BuildRows.
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: true), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
@@ -2865,7 +2892,7 @@ public sealed class SecondSkinService
             if (unit.Glow != null)
             {
                 mtrl = BuildContentGlowMaterial(unit, texPrefix, texturesDir, diskChar, effectsFolder,
-                    redirects, ref shellChanged);
+                    texSize, redirects, ref shellChanged);
                 glowBuilt = mtrl != null;
                 // The pack's own material rather than nothing: an effect file that has gone missing, or a
                 // template the game could not hand us, must not take the piece off the character.
@@ -3542,13 +3569,16 @@ public sealed class SecondSkinService
     /// </summary>
     private const string VanillaSkinMask = "chara/common/texture/skin_mask.tex";
 
-    /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
-    /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
-    // Instance, not static, because the sheet size is now per-build (see texSize) and a solid has to be
-    // conformant with every other slot in the same material or the write goes out at the wrong stride.
-    private byte[] Solid(byte r, byte g, byte b, byte a)
+    /// <summary>A flat RGBA texture at <paramref name="size"/> square. The fallback for a slot the source
+    /// doesn't fill — see the callers for what each colour means, since a wrong one is never blank, it
+    /// renders.</summary>
+    // The size is a parameter, not a field read: some of these go straight to a slot (where WriteTex's
+    // flat-colour shrink makes the dimensions moot) but others are the BUFFER a later pass writes into —
+    // CombineMaskReliefs and CompoundNormal both take a normal that may have started here — so it has to be
+    // conformant with the rest of the build's sheet.
+    private static byte[] Solid(byte r, byte g, byte b, byte a, int size)
     {
-        var t = new byte[texSize * texSize * 4];
+        var t = new byte[size * size * 4];
         for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
         return t;
     }
@@ -3557,6 +3587,9 @@ public sealed class SecondSkinService
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
+        // The build's sheet size — see Build, which owns it. Every buffer this method allocates or combines
+        // is square at this, and the caller's `alpha`/`siblingReliefs` already are.
+        int texSize,
         ref bool texturesChanged, bool mergeMasks = true,
         IReadOnlyList<byte[]>? siblingReliefs = null,   // each: a normal RGBA with coverage in its alpha lane
         // The template's own texture paths, in slot order. A slot the overlay doesn't supply and cannot be
@@ -3579,15 +3612,31 @@ public sealed class SecondSkinService
         // The scroll map is NOT body-UV art — it's a tiling pattern the shader samples with uv1, so it
         // must NOT be UV-remapped (that would tear the pattern apart). It also lives in an effects
         // folder, not the sidecar tree, so resolve it separately.
+        //
+        // And it keeps its OWN size. ChooseTexSize already excludes scroll maps, because a tiling pattern's
+        // resolution says nothing about the sheet it tiles over — but the exclusion has to run both ways or
+        // it is only half a rule. Loaded at the sheet size, a 512² tile on a 4K shell was upscaled 8x into
+        // a 64 MB texture carrying no more detail than the 1 MB source, and on characterscroll (slots norm,
+        // mask, id, catc — no base) that is a quarter of the material's footprint spent on an upscale.
         byte[]? scroll = null;
+        int scrollW = texSize, scrollH = texSize;
         if (d.Scroll != null)
         {
             var effectPath = SidecarDiscoveryService.ResolveEffectPath(entry, effectsFolder, d.Scroll);
             if (effectPath != null)
-                scroll = textureLoader.LoadPngAsRgba(effectPath, texSize, texSize);
+            {
+                // Probe then request that exact size, rather than LoadImageAsRgba: this goes through the
+                // decode cache (LoadImageAsRgba is deliberately uncached, for once-per-mod-creation use)
+                // and asking for the native size makes the resample a no-op rather than skipping it.
+                var native = TextureLoader.ProbeSize(effectPath);
+                scrollW = native?.Width  ?? texSize;
+                scrollH = native?.Height ?? texSize;
+                scroll = textureLoader.LoadPngAsRgba(effectPath, scrollW, scrollH);
+            }
             else
                 log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
         }
+        if (scroll == null) { scrollW = texSize; scrollH = texSize; }   // the flat fallback below is sheet-sized
 
         // ── Proteus "Masks" options ──────────────────────────────────────────
         // A mask isn't only coverage: its export can also ship its OWN row assignment (Masks/<x>_id.png)
@@ -3629,7 +3678,7 @@ public sealed class SecondSkinService
                 // slot table below and the skin layer's flat-tint fallback. This used to be Solid(0,0,0,255),
                 // i.e. row 1 sub-row B — a pair most colorsets never configure, and whose B half is white
                 // when only A was authored, which painted the unclaimed band white.
-                index = Solid(255, 255, 0, 255);
+                index = Solid(255, 255, 0, 255, texSize);
                 idAuthored = new bool[texSize * texSize];
             }
             var idxBuf = index; var mp = maskPng; var mi = maskIdx; var claimed = idAuthored;
@@ -3659,7 +3708,7 @@ public sealed class SecondSkinService
         }
         if (reliefMasks.Count > 0)
         {
-            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
             CompositorService.CombineMaskReliefs(normal, texSize, texSize, reliefMasks);
         }
 
@@ -3670,7 +3719,7 @@ public sealed class SecondSkinService
         // that sibling is visible. R/G only — blue stays this shell's coverage gate, so it rides this fabric.
         if (siblingReliefs is { Count: > 0 })
         {
-            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
             foreach (var sib in siblingReliefs)
                 CompositorService.CompoundNormal(normal, sib, texSize, texSize);
         }
@@ -3783,7 +3832,7 @@ public sealed class SecondSkinService
         // two uses of blue are mutually exclusive, so a skin shell keeps the overlay's authored value and
         // takes its coverage from the triangle trim instead: hard edges, and the wearer's tone.
         bool skinShell = string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
-        var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+        var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
         if (!skinShell)
         {
             var nrm = norm; var al = alpha;
@@ -3805,16 +3854,24 @@ public sealed class SecondSkinService
             // maximum — which renders the skin flat and glossy. Substituted below by naming the TEMPLATE's
             // own path rather than writing a file, so a body shell inherits the shared skin mask and a face
             // shell inherits that face's, without either being hardcoded here.
-            ["mask"] = mask ?? (skinShell ? null! : Solid(255, 255, 255, 255)),
+            ["mask"] = mask ?? (skinShell ? null! : Solid(255, 255, 255, 255, texSize)),
             // No index texture → select Row 16 sub-row A everywhere, matching the SKIN layer's fallback
             // (it applies row16A as a flat tint when desc.Index == null). red 255 → row pair 16, green 255
             // → sub-row A. Defaulting to black (row 1) instead picked up the template's default row — which
             // renders the shell a flat red — and ignored the Row 16 tint the overlay actually carries.
-            ["id"]   = shaderIndex ?? Solid(255, 255, 0, 255),
+            ["id"]   = shaderIndex ?? Solid(255, 255, 0, 255, texSize),
 
-            ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
-            ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
+            ["base"] = diffuse ?? Solid(255, 255, 255, 255, texSize),  // tint also comes from the color table
+            ["catc"] = scroll ?? Solid(0, 0, 0, 255, texSize),         // black = no glow
         };
+
+        // Every slot is the build's square sheet EXCEPT the scroll, which is a uv1-tiled pattern at its own
+        // resolution (see where it is loaded). A .tex header is self-describing and the shader samples by
+        // UV, so slots in one material are free to differ — the mask slot has always shipped at 16x16 when
+        // it is a flat colour, via WriteTex's shrink.
+        (int W, int H) SizeOf(string slot)
+            => string.Equals(slot, "catc", StringComparison.OrdinalIgnoreCase) ? (scrollW, scrollH)
+                                                                              : (texSize, texSize);
 
         var order = GearMaterialWriter.TextureOrder(shader);
         var paths = new List<string>(order.Count);
@@ -3855,13 +3912,15 @@ public sealed class SecondSkinService
             // recomposite would look like a change and force a redraw. The encoding is folded into the hash
             // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
             // same reason: a build that grows the sheet must not be able to skip past the file it grew.
+            var (sw, sh) = SizeOf(slot);
             var hash = Hash(slots[slot])
                      ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
-                     ^ ((ulong)texSize * 0xBF58476D1CE4E5B9ul);
+                     ^ ((ulong)sw * 0xBF58476D1CE4E5B9ul)
+                     ^ ((ulong)sh * 0x94D049BB133111EBul);
             bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
             if (!same)
             {
-                if (!textureLoader.WriteTex(slots[slot], texSize, texSize, disk, encoding))
+                if (!textureLoader.WriteTex(slots[slot], sw, sh, disk, encoding))
                 {
                     log.Error("[Proteus] second skin: failed to write {0}", disk);
                     return null;
@@ -3895,6 +3954,9 @@ public sealed class SecondSkinService
     /// </summary>
     private byte[]? BuildContentGlowMaterial(
         ContentUnit unit, string texPrefix, string texturesDir, char letter, string? effectsFolder,
+        // The build's sheet size — see Build. Only the flat fallbacks below are sized by it; the pack's own
+        // textures are byte-copied at whatever the author shipped, and the scroll map keeps its own size.
+        int texSize,
         Dictionary<string, string> redirects, ref bool texturesChanged)
     {
         var glow = unit.Glow;
@@ -3916,7 +3978,11 @@ public sealed class SecondSkinService
                 unit.Entry.ModDirectory, effectName, effectsFolder ?? "(library unavailable)");
             return null;
         }
-        var scroll = textureLoader.LoadPngAsRgba(effectPath, texSize, texSize);
+        // At its OWN resolution, for the same reason the shell's is — a uv1-tiled pattern has no business
+        // being upscaled to the body sheet's size. See WriteTextures.
+        var scrollNative = TextureLoader.ProbeSize(effectPath);
+        int scrollW = scrollNative?.Width ?? texSize, scrollH = scrollNative?.Height ?? texSize;
+        var scroll = textureLoader.LoadPngAsRgba(effectPath, scrollW, scrollH);
         if (scroll == null)
         {
             log.Warning("[Proteus] content: effect \"{0}\" could not be decoded ({1})", effectName, effectPath);
@@ -3937,7 +4003,7 @@ public sealed class SecondSkinService
         // A ref parameter can't be captured by a local function; folded back into the caller's flag below.
         bool wroteAnything = false;
 
-        string? Publish(string slot, byte[] rgba)
+        string? Publish(string slot, byte[] rgba, int w, int h)
         {
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
@@ -3949,10 +4015,11 @@ public sealed class SecondSkinService
 
             var hash = Hash(rgba)
                      ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
-                     ^ ((ulong)texSize * 0xBF58476D1CE4E5B9ul);
+                     ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
+                     ^ ((ulong)h * 0x94D049BB133111EBul);
             if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
             {
-                if (!textureLoader.WriteTex(rgba, texSize, texSize, disk, encoding))
+                if (!textureLoader.WriteTex(rgba, w, h, disk, encoding))
                 {
                     log.Error("[Proteus] content: failed to write {0}", disk);
                     return null;
@@ -3980,7 +4047,7 @@ public sealed class SecondSkinService
         string? Republish(string slot, string? packPath, byte[] fallback)
         {
             // Nothing named at all: the shell's own fallback for an empty slot.
-            if (packPath == null) return Publish(slot, fallback);
+            if (packPath == null) return Publish(slot, fallback, texSize, texSize);
 
             // The pack's OWN selection first, exactly as the non-glow path resolves it — see
             // SelectedTextureFiles. This used to go straight to ContentTextureFile, which asks Penumbra who
@@ -4018,10 +4085,10 @@ public sealed class SecondSkinService
 
         // Fallbacks match the shell path exactly, so the two can't disagree about what "no texture" means:
         // a white mask (a grey one halves the lighting everywhere) and a row-16-A index.
-        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255));
-        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255));
-        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255));
-        var catc = Publish("catc", scroll);
+        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255, texSize));
+        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255, texSize));
+        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255, texSize));
+        var catc = Publish("catc", scroll, scrollW, scrollH);
         texturesChanged |= wroteAnything;
         if (norm == null || mask == null || id == null || catc == null) return null;
 
@@ -4234,20 +4301,44 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
-    /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
-    /// colour. The index texture can select ANY pair, including one the colorset never defined, and that
-    /// row must not paint something the author never chose. (16 pairs = 32 sub-rows.)
+    /// Every colour-table row neutral, so no row keeps the gear template's own values. The index texture can
+    /// select ANY pair, including one the colorset never defined, and that row must not render something the
+    /// author never chose. (16 pairs = 32 sub-rows.)
+    /// <para/>
+    /// EVERY field <see cref="GearMaterialWriter.PatchColorTable"/> can write, not only the colour. It skips
+    /// null fields by design, so anything left null here is silently the template's — and the template is a
+    /// FIXED vanilla top (e0041), not the look being worn. Measured off a written shell: its pair 16, which
+    /// is Proteus's own convention for an unclaimed texel, ships specular 0.64/0.36, and rows elsewhere in
+    /// the same table carry metalness up to 1.0 and specular 1.44. Neutralising the diffuse alone left the
+    /// art un-tinted but still rendered through a duller, and sometimes metallic, surface response.
+    /// <para/>
+    /// Roughness 0.5 is the mid default the templates themselves ship on every row; the rest are the
+    /// identity for what they scale. Sphere maps are switched OFF rather than dialled down — an index with a
+    /// zero mask does nothing, and both halves are set so neither can be inherited on its own.
     /// <para/>
     /// White is the baseline for a pair the author never listed AT ALL. On a MASK shell it is not the right
     /// answer for the unset half of a pair they did list — see <see cref="BuildRows"/>, which mirrors there.
     /// The difference is what white MEANS: over an ordinary shell's own art (and on the skin layer) it is a
     /// (1,1,1) multiply, i.e. no tint; over a mask shell's white base it is paint.
     /// </summary>
+    internal static readonly GearColorRow NeutralRow = new()
+    {
+        Diffuse        = (1f, 1f, 1f),   // a no-op multiply over art that carries its own colour
+        Emissive       = (0f, 0f, 0f),   // nothing glows unless the author says so
+        Specular       = (1f, 1f, 1f),   // full, undimmed highlight response
+        Roughness      = 0.5f,
+        Metalness      = 0f,
+        SphereMapIndex = 0,              // an index with a zero mask does nothing; both halves are pinned
+        SphereMapMask  = 0f,
+    };
+
+    /// <inheritdoc cref="NeutralRow"/>
+    // Shared instance across all 32 entries: GearColorRow is init-only, so nothing can mutate one row's
+    // copy out from under another's.
     internal static Dictionary<int, GearColorRow> NeutralRows()
     {
         var rows = new Dictionary<int, GearColorRow>();
-        for (int r = 0; r < 32; r++)
-            rows[r] = new GearColorRow { Diffuse = (1f, 1f, 1f), Emissive = (0f, 0f, 0f) };
+        for (int r = 0; r < 32; r++) rows[r] = NeutralRow;
         return rows;
     }
 
@@ -4301,12 +4392,29 @@ public sealed class SecondSkinService
 
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
-            if (sub == null) return;   // neither sub-row set — leaves the neutral-white row from the init above
-            // Assigning REPLACES the neutral entry, so a preset that exists but carries no colour would hand
-            // the row a null diffuse — and PatchColorTable skips null fields, leaving the vanilla template's
-            // (often dark) colour, the exact thing NeutralRows exists to prevent. The editor materialises a
-            // blank preset the moment any non-colour field is touched, so this is reachable from the UI.
-            rows[rowIndex] = RowFrom(sub, diffuseWhenUnset: (1f, 1f, 1f));
+            if (sub == null) return;   // neither sub-row set — leaves the neutral row from the init above
+            // MERGED over the neutral row, not assigned over it. Assigning would replace the whole entry,
+            // and RowFrom leaves every field the author did not fill as null — PatchColorTable skips nulls,
+            // so each one silently falls back to the vanilla template's value. That is the same defect
+            // NeutralRows exists to prevent, one level down: an author who set a colour and nothing else
+            // still got e0041's specular, roughness, metalness and sphere map on the row they authored.
+            // The editor materialises a blank preset the moment any field is touched, so a preset carrying
+            // almost nothing is reachable straight from the UI.
+            var authored = RowFrom(sub, diffuseWhenUnset: NeutralRow.Diffuse);
+            rows[rowIndex] = new GearColorRow
+            {
+                Diffuse          = authored.Diffuse          ?? NeutralRow.Diffuse,
+                Emissive         = authored.Emissive         ?? NeutralRow.Emissive,
+                Specular         = authored.Specular         ?? NeutralRow.Specular,
+                Roughness        = authored.Roughness        ?? NeutralRow.Roughness,
+                Metalness        = authored.Metalness        ?? NeutralRow.Metalness,
+                SphereMapIndex   = authored.SphereMapIndex   ?? NeutralRow.SphereMapIndex,
+                SphereMapMask    = authored.SphereMapMask    ?? NeutralRow.SphereMapMask,
+                // Not defaulted: the glow DIAL is a characterscroll input, and PatchColorTable arms the
+                // scrolling effect only on a positive one. NeutralRow carries no dial by design, so
+                // falling back to it would be falling back to null anyway.
+                EmissiveStrength = authored.EmissiveStrength,
+            };
         }
     }
 

@@ -796,7 +796,12 @@ public class UVRemapService
     public static byte[] ResizeBox(byte[] src, int srcW, int srcH, int dstW, int dstH)
     {
         if (srcW == dstW && srcH == dstH) return src;
-        var dst = new byte[dstW * dstH * 4];
+        var dst = new byte[Math.Max(0, dstW) * Math.Max(0, dstH) * 4];
+        // A zero-dimension SOURCE would leave the per-texel span empty, and the average below divides by the
+        // number of texels it summed — an integer divide, so that is a hard DivideByZeroException rather
+        // than a NaN. Nothing upstream should produce one (ProbeSize requires both dimensions positive, and
+        // the decoders throw on a corrupt file), which is exactly why it would be a confusing way to fail.
+        if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return dst;
 
         void Row(int dy)
         {
