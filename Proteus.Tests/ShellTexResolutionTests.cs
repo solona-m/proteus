@@ -199,6 +199,32 @@ public class ShellTexResolutionTests
         Assert.Equal(0, largest);
     }
 
+    /// <summary>
+    /// The scan stops once the cap is reached — each further probe is a File.Exists plus an OpenRead on the
+    /// composite thread, and a mod with a dozen masks pays the list twice a composite. The chosen size must
+    /// not depend on where in the list the deciding file sits.
+    /// </summary>
+    [Fact]
+    public void The_scan_stops_at_the_cap_without_changing_the_answer()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var atCap = Path.Combine(dir, "atcap.png");  WritePngHeader(atCap, 4096, 4096);
+            var over  = Path.Combine(dir, "over.png");   WritePngHeader(over, 8192, 8192);
+            var small = Path.Combine(dir, "small.png");  WritePngHeader(small, 512, 512);
+
+            // Whichever order they arrive in, and whether or not the loop ran to the end.
+            Assert.Equal(4096, SecondSkinService.ChooseTexSize([atCap, over, small]));
+            Assert.Equal(4096, SecondSkinService.ChooseTexSize([small, over, atCap]));
+            Assert.Equal(4096, SecondSkinService.ChooseTexSize([over, small, atCap]));
+
+            // A path AFTER the deciding one is never probed, so it cannot fail the run either.
+            Assert.Equal(4096, SecondSkinService.ChooseTexSize([atCap, @"Z:\does\not\exist.png"]));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     // ── Resampling ───────────────────────────────────────────────────────────
 
     /// <summary>A 2x2 checker of pure black and white, tiled to (w, h).</summary>
@@ -302,6 +328,23 @@ public class ShellTexResolutionTests
         // ...and the Auto filter is what it has to be protected FROM.
         var auto = TextureLoader.Resample(src, 8, 8, 4, 4, ResampleFilter.Auto);
         Assert.Contains(auto[0], (byte[])[127, 128]);
+    }
+
+    /// <summary>
+    /// A zero-dimension source leaves the per-texel span empty, and the average divides by the number of
+    /// texels it summed — an integer divide, so it would be a hard DivideByZeroException rather than a NaN.
+    /// Nothing upstream should produce one, which is exactly why it would be a baffling way to fail.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 4, 2, 2)]
+    [InlineData(4, 0, 2, 2)]
+    [InlineData(4, 4, 0, 2)]
+    [InlineData(4, 4, 2, 0)]
+    public void A_zero_dimension_resize_returns_empty_rather_than_dividing_by_zero(int sw, int sh, int dw, int dh)
+    {
+        var src = new byte[16 * 4];
+        var dst = UVRemapService.ResizeBox(src, sw, sh, dw, dh);
+        Assert.Equal(Math.Max(0, dw) * Math.Max(0, dh) * 4, dst.Length);
     }
 
     [Fact]

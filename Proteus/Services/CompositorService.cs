@@ -3845,9 +3845,6 @@ public class CompositorService : IDisposable
                     {
                         var promoted = CloneDescriptor(overlay.Descriptor);
                         promoted.Layer = OverlayLayer.Gear;   // ShaderPackage → character.shpk
-                        // Set AFTER the clone on purpose — CloneDescriptor round-trips through JSON and this
-                        // is [JsonIgnore], so it would not survive being set on the original.
-                        promoted.PromotedFromSkin = true;
 
                         // Which shader it lands on — through the SAME predicate the editor asks, so the two
                         // cannot disagree about what was composited (see RenderModeInference.PromotedShader).
@@ -6206,8 +6203,12 @@ public class CompositorService : IDisposable
                 // The size has to be the one the build will actually ASK for, not a constant: the sheet is
                 // sized from the art now (SecondSkinService.ChooseTexSize), and a warm at the wrong size is
                 // not a cheaper warm, it is a wasted one — the decode cache keys on the target size, so the
-                // build would miss every entry and re-decode the lot on its own thread. Both callers read the
-                // same path list and the same chooser so they cannot drift apart.
+                // build would miss every entry and re-decode the lot on its own thread.
+                //
+                // Decided ONCE, here, and handed to Build as shellTexSize. Calling the chooser in both
+                // places would re-probe the same files a moment later against a tree that can have moved
+                // underneath — a mask toggled, a file replaced — and the two answers only have to disagree
+                // once for the whole prefetch to be thrown away.
                 int gs = SecondSkinService.ChooseTexSize(
                     SecondSkinService.ShellArtPaths(gearOverlays, discovery));
                 foreach (var (gEntry, gOverlay) in gearOverlays)
@@ -6332,7 +6333,9 @@ public class CompositorService : IDisposable
                             _drawnRaceCode, activeMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
                             InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
-                            _humanPartModels, contentLayers);
+                            _humanPartModels, contentLayers,
+                            // The size the prefetch above warmed at — see `gs`.
+                            shellTexSize: gs);
                         if (shells != null)
                         {
                             shellBuilt = true;
