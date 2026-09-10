@@ -92,14 +92,8 @@ public static class HatCompatService
     public static Target? FindEquippedHair(
         IReadOnlyList<string>? humanPartModels, Func<string, string?> resolve, string? modsRoot)
     {
-        if (humanPartModels == null || modsRoot is not { Length: > 0 }) return null;
-
-        var hair = humanPartModels.FirstOrDefault(p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase));
-        if (hair == null) return null;
-
-        var file = resolve(hair);
-        if (file == null || !File.Exists(file)) return null;
-        if (!InMods(file, modsRoot, out var modRoot, out var rel)) return null;   // vanilla, or another source
+        if (Locate(humanPartModels, resolve, modsRoot) is not { } at) return null;
+        var (hair, file, modRoot, rel) = at;
 
         byte[] model;
         try { model = File.ReadAllBytes(file); } catch (IOException) { return null; }
@@ -108,11 +102,50 @@ public static class HatCompatService
         // optional — a wearer with vanilla eyebrows still has a head, and reading it from the game's own
         // data is not something this can do, so a miss simply falls back.
         byte[]? head = null;
-        var facePath = humanPartModels.FirstOrDefault(p => p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
+        var facePath = humanPartModels?.FirstOrDefault(
+            p => p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
         if (facePath != null && resolve(facePath) is { } faceFile && File.Exists(faceFile))
             try { head = File.ReadAllBytes(faceFile); } catch (IOException) { /* press falls back */ }
 
         return new Target(hair, modRoot, rel, model, head);
+    }
+
+    /// <summary>Which file currently serves the equipped hairstyle, without reading it.</summary>
+    private static (string GamePath, string File, string ModRoot, string Rel)? Locate(
+        IReadOnlyList<string>? humanPartModels, Func<string, string?> resolve, string? modsRoot)
+    {
+        if (humanPartModels == null || modsRoot is not { Length: > 0 }) return null;
+
+        var hair = humanPartModels.FirstOrDefault(p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase));
+        if (hair == null) return null;
+
+        var file = resolve(hair);
+        if (file == null || !File.Exists(file)) return null;
+        if (!InMods(file, modsRoot, out var modRoot, out var rel)) return null;   // vanilla, or another source
+        return (hair, file, modRoot, rel);
+    }
+
+    /// <summary>
+    /// A cheap identity for the hairstyle on the character — everything that has to stay the same for a
+    /// previous examination to still be valid.
+    /// <para/>
+    /// The game path is NOT enough, and that was a real bug: switching hairstyle in Glamourer changes it,
+    /// but switching which MOD supplies a hairstyle — right-clicking in Penumbra — leaves the path
+    /// identical and swaps the file behind it. Keyed on the path alone, Proteus saw no change at all and
+    /// went on describing the hair that had just been replaced. The resolved file, its length and its
+    /// timestamp cover both, and the timestamp additionally notices Proteus's own patch landing.
+    /// </summary>
+    public static string? EquippedHairKey(
+        IReadOnlyList<string>? humanPartModels, Func<string, string?> resolve, string? modsRoot)
+    {
+        if (Locate(humanPartModels, resolve, modsRoot) is not { } at) return null;
+        try
+        {
+            var info = new FileInfo(at.File);
+            return $"{at.GamePath}|{at.File}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>

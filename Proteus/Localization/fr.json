@@ -1219,6 +1219,26 @@
     "message": "erreur inconnue",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Adapter les coiffures aux chapeaux",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine chaque\ncoiffure que vous mettez et plaque contre la tête les cheveux qu'un chapeau\nrecouvrirait.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée ici.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Masquer les queues de cheval",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Fait également disparaître, tant qu'un chapeau est porté, les parties qu'aucun\nchapeau ne peut couvrir — queues de cheval, couettes, longueurs dans le dos —\nau lieu de les laisser dépasser en dessous.\n\nDésactivé par défaut. Un plaquage trop fort reste invisible, puisque le chapeau\nle recouvre ; le masquage est tout ou rien, et une partie mal jugée disparaît\npurement et simplement.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Analyse de cette coiffure...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus a déjà adapté cette coiffure aux chapeaux.",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "Cette coiffure gère déjà les chapeaux — son auteur l'a prévu. Rien à faire.",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "Terminé — la coiffure se plaque désormais sous un chapeau, avec {0} partie(s) masquée(s).",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — diffuse {1}, normale {2}, masque {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "Adapter les coiffures aux chapeaux",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine la\ncoiffure que vous portez et propose de l'adapter : les cheveux se plaquent sur\nla tête tant qu'un chapeau est porté, et les parties qu'aucun chapeau ne peut\ncouvrir sont masquées.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée. Rien n'est écrit\navant votre confirmation.",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {

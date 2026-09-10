@@ -1219,6 +1219,26 @@
     "message": "unbekannter Fehler",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Frisuren unter Hüte passen lassen",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Die meisten Haar-Mods unterstützen keine Hüte, sodass ein Hut einfach\nhindurchgeht. Ist dies aktiv, prüft Proteus jede Frisur beim Aufsetzen und\ndrückt das Haar, das ein Hut verdecken würde, flach an den Kopf.\n\nDies bearbeitet die Dateien des Haar-Mods selbst, funktioniert also auch bei\nabgeschaltetem Proteus und bleibt beim Exportieren erhalten. Die Originale\nwerden aufbewahrt und die Änderung lässt sich hier rückgängig machen.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Zöpfe ausblenden",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Lässt zusätzlich die Teile, die kein Hut verdecken kann — Pferdeschwänze,\nseitliche Zöpfe, langes Haar im Nacken — verschwinden, solange ein Hut\ngetragen wird, statt sie darunter hervorhängen zu lassen.\n\nStandardmäßig aus. Zu festes Andrücken bleibt unsichtbar, weil der Hut es\nverdeckt; Ausblenden ist alles oder nichts, und ein falsch beurteilter Teil\nverschwindet einfach.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Diese Frisur wird geprüft ...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus hat diese Frisur bereits huttauglich gemacht.",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "Diese Frisur unterstützt Hüte bereits — ihr Autor hat es eingebaut. Nichts zu tun.",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "Fertig — die Frisur legt sich nun unter einem Hut an, {0} Teil(e) werden ausgeblendet.",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — Diffuse {1}, Normal {2}, Maske {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "Frisuren unter Hüte passen lassen",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "Die meisten Haar-Mods unterstützen keine Hüte, sodass ein Hut einfach\nhindurchgeht. Ist dies aktiv, prüft Proteus deine getragene Frisur und bietet\nan, die Unterstützung hinzuzufügen: Das Haar legt sich an den Kopf an, solange\nein Hut getragen wird, und Teile, die kein Hut verdecken kann, werden\nausgeblendet.\n\nDies bearbeitet die Dateien des Haar-Mods selbst, funktioniert also auch bei\nabgeschaltetem Proteus und bleibt beim Exportieren erhalten. Die Originale\nwerden aufbewahrt und die Änderung lässt sich rückgängig machen. Es wird nichts\ngeschrieben, bevor du es bestätigst.",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {

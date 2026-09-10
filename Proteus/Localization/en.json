@@ -1219,6 +1219,26 @@
     "message": "unknown error",
     "description": "Appears in the composite-result line under the tab content."
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Make hairstyles fit under hats",
+    "description": "Checkbox, first control in Settings > Hats."
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus checks each hairstyle as you put it on and presses\nthe hair that a hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Hide ponytails",
+    "description": "Checkbox under the one above, in Settings > Hats."
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Also make the parts that no hat could cover — ponytails, side tails, a long\nfall at the back — disappear while a hat is worn, instead of leaving them\nhanging out from under it.\n\nOff by default. Pressing hair is invisible when it overshoots, because the hat\ncovers it; hiding is all or nothing, so a part judged wrongly simply vanishes.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.Working": {
+    "message": "Looking at this hairstyle...",
+    "description": "Shown while Proteus examines the hairstyle. Brief."
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus has already made this hairstyle fit under hats.",
     "description": "Status line in Settings > Hats, above the Undo button."
@@ -1234,10 +1254,6 @@
   "HatCompat.AuthorDidIt": {
     "message": "This hairstyle already supports hats — its author added it. Nothing to do.",
     "description": "Status line. The mod ships its own hat shape, so Proteus leaves it alone."
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "Done — the hairstyle now presses down under a hat, with {0} part(s) hidden.",
-    "description": "Success line. {0} is how many parts will vanish under a hat, and can be 0."
   },
   "HatCompat.HidePrompt": {
     "message": "These parts stand too far off your head to fit under a hat, so they would be hidden while one is worn. Untick anything that should stay.",
@@ -2122,14 +2138,6 @@
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — diffuse {1}, normal {2}, mask {3}",
     "description": "Overlay reach row. {0} material name; {1}-{3} pixel counts per channel."
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "Make hairstyles fit under hats",
-    "description": "Checkbox in Settings > General."
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus checks the hairstyle you are wearing and offers to\nadd it: the hair presses against your head while a hat is on, and the parts no\nhat could cover are hidden.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone. Nothing is written until you confirm it.",
-    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
   },
   "Settings.General.AutoRaise.Label": {
     "message": "Auto-raise mod priority",
