@@ -61,7 +61,10 @@ public static class HatCompatService
     public const string ScalpAttribute = "atr_kam";
 
     /// <param name="FilesPatched">How many model files were changed.</param>
-    public sealed record Outcome(bool Ok, string Message, int FilesPatched);
+    /// <param name="Unaddressable">Vertices the press wanted to move that no shape value could name — see
+    /// <see cref="ModelAttributeWriter.AddShape"/>. Reported rather than discarded: it is hair left standing
+    /// exactly where the format ran out, and it looks identical to the press deciding that hair was fine.</param>
+    public sealed record Outcome(bool Ok, string Message, int FilesPatched, int Unaddressable = 0);
 
     /// <summary>
     /// What Proteus proposes to do to one hair model, before anything is written.
@@ -275,6 +278,7 @@ public static class HatCompatService
                 "There is nothing to change: no hair stands proud of the scalp and no part needs hiding."), 0);
 
         byte[] patched;
+        int unaddressable = 0;
         try
         {
             patched = mdl;
@@ -292,7 +296,8 @@ public static class HatCompatService
                 patched = ModelAttributeWriter.AddAttribute(split, ScalpAttribute, targets);
             }
             if (proposal.Solve.Moved.Count > 0)
-                patched = ModelAttributeWriter.AddShape(patched, HatShape, proposal.Solve.Moved, out _);
+                patched = ModelAttributeWriter.AddShape(
+                    patched, HatShape, proposal.Solve.Moved, out unaddressable);
         }
         catch (ModelAttributeWriter.ModelEditException ex)
         {
@@ -320,7 +325,7 @@ public static class HatCompatService
                 Loc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
         }
 
-        return new Outcome(true, "", 1);
+        return new Outcome(true, "", 1, unaddressable);
     }
 
     /// <summary>

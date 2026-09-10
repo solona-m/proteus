@@ -646,6 +646,535 @@ public class HatCompatDiagTests(ITestOutputHelper o)
     }
 
     /// <summary>
+    /// For every vertex still outside a hat after the press, WHY was it left there?
+    /// <para/>
+    /// The sweep says how much comes through and this says what to do about it, which are different
+    /// questions with different answers. Each remaining vertex falls into exactly one bucket, and each
+    /// bucket has its own fix: "tail" is the hide setting doing its job, "frozen" means a triangle straddling
+    /// the hat line pinned it, "ramped" means the falloff reached it before the press did, and "full press"
+    /// means it was pressed as hard as the solve allows and is STILL outside — which would mean the target
+    /// depth is wrong, not the gating.
+    /// <para/>
+    /// Written because two strands came through the crown of a hat on a hairstyle the numbers called fitted,
+    /// and every candidate explanation for it was equally plausible from reading the code.
+    /// </summary>
+    [Fact]
+    public void WhyIsAnyHairStillOutsideTheHat()
+    {
+        var hats = Hats();
+        if (hats.Count == 0) return;
+        var head = HeadModel();
+
+        // The hairstyle that prompted this, if it is installed; otherwise a spread of whatever is.
+        var all = HairModels().Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+                              .OrderBy(f => new FileInfo(f).Length).ToArray();
+        var named = all.Where(f => f.Contains("Locksley", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var files = named.Length > 0 ? named : all.Where((_, i) => i % Math.Max(1, all.Length / 4) == 0).Take(4).ToArray();
+        if (files.Length == 0) return;
+
+        foreach (var (hatName, hatPath) in hats)
+        {
+            var hat = FbxMesh.Load(hatPath);
+            if (hat == null) continue;
+
+            // Two views, because they answer different complaints. Up through the CROWN is what a strand
+            // standing off the top of the head does, and it is the sweep's own cut-off. Sideways as well
+            // catches a strand standing out of the BACK, which leaves along a near-level ray and which the
+            // crown view cannot see at all. Relaxing the cut-off is safe because the hit test takes the
+            // FARTHEST surface: a level ray crosses the brim and comes back with the brim's outer edge, so
+            // only hair genuinely past it counts.
+            foreach (var (view, minDir) in new[] { ("crown", 0.25f), ("crown+sides", -0.1f) })
+            {
+            o.WriteLine($"── {hatName} ({view}) ──");
+            o.WriteLine($"{"hair",-34} {"out",5} {"tail",5} {"frozen",6} {"ramped",6} {"full",5} "
+                      + $"{"below",5} {"inhead",7} {"skipped",7}");
+
+            foreach (var f in files)
+            {
+                byte[] mdl;
+                ModelParts? parts;
+                HatCompatSolve.Result solved;
+                try
+                {
+                    mdl = File.ReadAllBytes(f);
+                    parts = ModelPartReader.Read(mdl);
+                    if (parts == null) continue;
+                    solved = HatCompatSolve.Solve(mdl, parts, head);
+                }
+                catch (Exception) { continue; }
+
+                var meshes = HatCompatSolve.ReadLod0Meshes(mdl);
+                var src = SecondSkinWriter.Parse(mdl);
+                float hatLine = solved.Centre.Y + HatCompatSolve.HatLine;
+
+                // The three gates, recomputed here from the same public facts the solve used, so this
+                // measures the shipped rule rather than a second copy of it that could drift.
+                var tail = new HashSet<(int, int)>();
+                foreach (var s in HatCompatSolve.Strands(mdl, parts, head).Where(s => s.Tail))
+                    foreach (var v in HatCompatSolve.VerticesOf(mdl, src, s.Part)) tail.Add((s.Part.Mesh, v));
+                var frozen = FrozenIn(mdl, src, meshes, hatLine);
+
+                var ff = HatCompatSolve.FrameAndFloor(mdl, head);
+                int outside = 0, nTail = 0, nFrozen = 0, nRamped = 0, nFull = 0, nBelow = 0, nSkipped = 0;
+                int nInsideScalp = 0;
+                foreach (var mv in meshes)
+                {
+                    solved.Moved.TryGetValue(mv.Mesh, out var movedHere);
+                    for (int v = 0; v < mv.Positions.Length; v++)
+                    {
+                        var p = mv.Positions[v];
+                        bool wasMoved = movedHere != null && movedHere.TryGetValue(v, out var to);
+                        var now = wasMoved ? movedHere![v] : p;
+
+                        var d = now - solved.Centre;
+                        float len = d.Length();
+                        if (len < 1e-5f) continue;
+                        var dir = d / len;
+                        if (dir.Y < minDir) continue;
+                        float tHat = FirstHit(hat, solved.Centre, dir);
+                        if (tHat <= 0f || len <= tHat) continue;
+
+                        outside++;
+                        if (tail.Contains((mv.Mesh, v))) nTail++;
+                        else if (p.Y < hatLine) nBelow++;         // below the line: never eligible, by design
+                        else if (frozen.Contains((mv.Mesh, v))) nFrozen++;
+                        else if (!wasMoved)
+                        {
+                            // The press had its chance at this one and passed. Which of its reasons was it?
+                            // "inside the scalp" is the interesting answer, because it means the floor —
+                            // read off the FACE model, ears and all — claims the head reaches further out
+                            // in this direction than it really does.
+                            var od = p - solved.Centre;
+                            float olen = od.Length();
+                            if (olen > 1e-5f && ff != null
+                             && olen <= ff.Value.Floor[HatCompatSolve.BinFor(od / olen)]) nInsideScalp++;
+                            else nSkipped++;
+                        }
+                        else if ((now - p).Length() < (p - solved.Centre).Length() * 0.2f) nRamped++;
+                        else nFull++;
+                    }
+                }
+                o.WriteLine($"{Trim(f),-34} {outside,5} {nTail,5} {nFrozen,6} {nRamped,6} {nFull,5} "
+                          + $"{nBelow,5} {nInsideScalp,7} {nSkipped,7}   (solve pressed {solved.Considered}, "
+                          + $"dropped {solved.Dropped} for budget)");
+            }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The same question asked of the FILE THAT SHIPS, rather than of the solve's intentions.
+    /// <para/>
+    /// Everything else here measures <c>Result.Moved</c> — what the press decided to do. The game never sees
+    /// that. It sees a patched <c>.mdl</c>, and between the two sits <see cref="ModelAttributeWriter.AddShape"/>,
+    /// which can decline a vertex it cannot address and reports that through an <c>unaddressable</c> count
+    /// that <c>HatCompatService.Inspect</c> hard-codes to zero and <c>Apply</c> discards. So a vertex can be
+    /// pressed in every measurement taken so far and still stand untouched in game, and nothing above would
+    /// show it.
+    /// <para/>
+    /// This patches the model for real, reads <c>shp_hib</c> back out of the result, rebuilds the geometry
+    /// the game would draw with the shape at full strength and the scalp-tagged submeshes dropped, and only
+    /// then asks what is outside the hat.
+    /// </summary>
+    [Fact]
+    public void WhatDoesTheShippedFileActuallyLookLikeUnderAHat()
+    {
+        var hats = Hats();
+        if (hats.Count == 0) return;
+        var head = HeadModel();
+        var all = HairModels().Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+                              .OrderBy(f => new FileInfo(f).Length).ToArray();
+        var named = all.Where(f => f.Contains("Locksley", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var files = named.Length > 0 ? named
+                                     : all.Where((_, i) => i % Math.Max(1, all.Length / 3) == 0).Take(3).ToArray();
+        if (files.Length == 0) return;
+
+        foreach (var f in files)
+        {
+            // THE AUTHOR'S FILE, not the one on disk, wherever Proteus has already patched this hairstyle.
+            // Solving a patched model presses hair that is already pressed and tags parts that are already
+            // tagged, so every number that comes out of it describes a hairstyle nobody is wearing. It is the
+            // same trap as feeding a smoothing pass its own output, and it silently invalidated a round of
+            // measurement here before it was noticed.
+            var pristine = Pristine(f);
+            var mdl = File.ReadAllBytes(pristine ?? f);
+            if (pristine != null) o.WriteLine($"  (using the backup of {Trim(f)} — the live file is patched)");
+            var parts = ModelPartReader.Read(mdl);
+            if (parts == null) continue;
+            HatCompatSolve.Result solve;
+            try { solve = HatCompatSolve.Solve(mdl, parts, head); } catch { continue; }
+            if (solve.Moved.Count == 0) continue;
+
+            // Exactly what HatCompatService.Apply does, in the order it does it.
+            byte[] patched;
+            int stuck;
+            try
+            {
+                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, solve.Hide);
+                patched = solve.Hide.Count > 0
+                    ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
+                patched = ModelAttributeWriter.AddShape(patched, HatShape, solve.Moved, out stuck);
+            }
+            catch (Exception ex) { o.WriteLine($"{Trim(f)}: {ex.Message}"); continue; }
+
+            var src = SecondSkinWriter.Parse(patched);
+            int kamBit = Array.IndexOf(src.AttrNames, "atr_kam");
+            var meshes = HatCompatSolve.ReadLod0Meshes(patched);
+
+            // Deform: a shape value redirects one index SLOT to a spare vertex, so the drawn position of a
+            // corner is the spare's, not the original's. Keyed by slot for that reason — the same vertex can
+            // be redirected in one triangle and not another.
+            var swap = new Dictionary<uint, ushort>();
+            if (src.Shapes.TryGetValue(HatShape, out var entries))
+                foreach (var e in entries)
+                    foreach (var (b, rep) in e.Values) swap[e.MeshIndexOffset + b] = rep;
+
+            o.WriteLine($"{Trim(f)}: solve wanted {solve.Considered} moved "
+                      + $"({solve.Dropped} dropped for budget), file carries {swap.Count} shape values "
+                      + $"over {swap.Values.Distinct().Count()} spares, {stuck} unaddressable");
+
+            foreach (var (hatName, hatPath) in hats)
+            {
+                var hat = FbxMesh.Load(hatPath);
+                if (hat == null) continue;
+
+                // THE VIEW FROM ABOVE, which is the one the defect was actually reported from and the one a
+                // ray out of the head centre cannot take. Hair lying ON the brim sits well inside the brim's
+                // outer edge, so a centre-out ray passes it, carries on, and hits the rim further out —
+                // reporting the hair as safely inside the hat while it is plainly sitting on top of it.
+                // Straight up from the vertex answers the real question: is there any hat between this piece
+                // of hair and the sky? Asked only of hair above the hat line, since hair below it is meant
+                // to be seen.
+                int upMiss = 0, upMissPressed = 0, upSeen = 0, belowBandMiss = 0;
+                float hatLineY = solve.Centre.Y + HatCompatSolve.HatLine;
+
+                // And for the ones with nothing over them that the press never touched: which of its gates
+                // turned them away. Computed from the AUTHOR'S model, whose vertex numbering the patched
+                // file preserves — spares are appended past the original count, so an original index still
+                // means the same vertex.
+                var why = new Dictionary<string, int>(StringComparer.Ordinal);
+                var srcPre = SecondSkinWriter.Parse(mdl);
+                var pre = HatCompatSolve.ReadLod0Meshes(mdl);
+                var ff = HatCompatSolve.FrameAndFloor(mdl, head);
+                var tailV = new HashSet<(int, int)>();
+                foreach (var st in HatCompatSolve.Strands(mdl, parts, head).Where(st => st.Tail))
+                    foreach (var vv in HatCompatSolve.VerticesOf(mdl, srcPre, st.Part))
+                        tailV.Add((st.Part.Mesh, vv));
+                var frozenV = FrozenIn(mdl, srcPre, pre, hatLineY);
+
+                int outside = 0, seen = 0, outSide2 = 0, seen2 = 0;
+                foreach (var mv in meshes)
+                {
+                    int mo = src.MeshStart + mv.Mesh * 36;
+                    ushort subIdx = BitConverter.ToUInt16(patched, mo + 10);
+                    ushort subCount = BitConverter.ToUInt16(patched, mo + 12);
+                    for (int s = 0; s < subCount; s++)
+                    {
+                        int ss = src.SubmeshStart + (subIdx + s) * 16;
+                        uint io = BitConverter.ToUInt32(patched, ss), ic = BitConverter.ToUInt32(patched, ss + 4);
+                        // Tagged to vanish under a hat: the game does not draw it, so neither does this.
+                        if (kamBit >= 0 && (BitConverter.ToUInt32(patched, ss + 8) & (1u << kamBit)) != 0) continue;
+
+                        for (uint k = 0; k < ic; k++)
+                        {
+                            int at = src.Ib + (int)(io + k) * 2;
+                            if (at + 2 > patched.Length) break;
+                            int v = BitConverter.ToUInt16(patched, at);
+                            bool pressed = swap.TryGetValue(io + k, out var rep);
+                            if (pressed) v = rep;
+                            if (v >= mv.Positions.Length) continue;
+
+                            // Also the band BELOW the line, which the press never touches. Hair there with
+                            // nothing over it is hair standing up through the brim — invisible to every
+                            // measurement so far, all of which stop at the hat line.
+                            float rel = mv.Positions[v].Y - hatLineY;
+                            if (rel < 0f && rel > -0.08f
+                             && FirstHit(hat, mv.Positions[v], Vector3.UnitY) <= 0f) belowBandMiss++;
+
+                            if (mv.Positions[v].Y >= hatLineY)
+                            {
+                                upSeen++;
+                                if (FirstHit(hat, mv.Positions[v], Vector3.UnitY) <= 0f)
+                                {
+                                    upMiss++;
+                                    if (pressed) upMissPressed++;
+                                    else why[Gate(v)] = why.GetValueOrDefault(Gate(v)) + 1;
+
+                                    string Gate(int vv)
+                                    {
+                                        var pos = pre.FirstOrDefault(m => m.Mesh == mv.Mesh)?.Positions;
+                                        if (pos == null || vv >= pos.Length) return "a spare, or a mesh not read";
+                                        if (tailV.Contains((mv.Mesh, vv))) return "tail, but its submesh is not tagged";
+                                        if (frozenV.Contains((mv.Mesh, vv))) return "frozen by a straddling triangle";
+                                        var dd = pos[vv] - solve.Centre;
+                                        float ll = dd.Length();
+                                        if (ll > 1e-5f && ff != null
+                                         && ll <= ff.Value.Floor[HatCompatSolve.BinFor(dd / ll)])
+                                            return "judged already inside the head";
+                                        return "eligible but never moved";
+                                    }
+                                }
+                            }
+
+                            var d = mv.Positions[v] - solve.Centre;
+                            float len = d.Length();
+                            if (len < 1e-5f) continue;
+                            var dir = d / len;
+                            // Two views: up through the crown, and out through the brim as well. A strand
+                            // standing off the BACK of the head leaves along a near-level ray, so the crown
+                            // view alone reports it as fitting perfectly — which it did, while two of them
+                            // were plainly visible in game.
+                            if (dir.Y < -0.1f) continue;
+                            float tHat = FirstHit(hat, solve.Centre, dir);
+                            if (tHat <= 0f) continue;
+                            seen2++;
+                            if (len > tHat) outSide2++;
+                            if (dir.Y < 0.25f) continue;
+                            seen++;
+                            if (len > tHat) outside++;
+                        }
+                    }
+                }
+                o.WriteLine($"    {hatName,-28} crown {outside,5}/{seen,6}   crown+sides {outSide2,5}/{seen2,6}"
+                          + $"   nothing overhead {upMiss,5}/{upSeen,6} ({upMissPressed} pressed)"
+                          + $"   in the 80mm below the line {belowBandMiss,5}");
+                foreach (var (reason, n) in why.OrderByDescending(kv => kv.Value))
+                    o.WriteLine($"        {n,5} × {reason}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// How much freeze slack does it take to stop leaving strands on top of the brim, and what does it cost?
+    /// <para/>
+    /// The press pins the corners of any triangle reaching below the hat line, because pressing one drags a
+    /// ribbon out of it. Pinning is what left two strands lying across a Wrangler's brim: their triangles
+    /// crossed the line, so nothing about them could move. Slack buys those strands back at the price of a
+    /// ribbon no taller than the slack itself.
+    /// <para/>
+    /// Two numbers per setting, and they pull opposite ways: hair with NOTHING OVERHEAD is the defect being
+    /// chased, and hair pressed BELOW THE LINE is the ribbon being paid for it.
+    /// </summary>
+    [Fact]
+    public void HowMuchFreezeSlackDoesTheBrimNeed()
+    {
+        var hats = Hats().Where(h => h.Name.Contains("Wrangler", StringComparison.OrdinalIgnoreCase)
+                                  || h.Name.Contains("Battlemage", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (hats.Count == 0) return;
+        var head = HeadModel();
+        var files = HairModels()
+            .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+            .Select(f => Pristine(f) ?? f)
+            .Where(f => f.Contains("Locksley", StringComparison.OrdinalIgnoreCase))
+            .Take(2).ToArray();
+        if (files.Length == 0) return;
+
+        o.WriteLine($"{"fan",6} {"hat",-22} {"overhead-free",14} {"pressed below line",19} {"pressed",8}");
+        foreach (float slack in new[] { 0f, 0.020f, 0.040f, 0.080f, 0.120f })
+        {
+            foreach (var f in files)
+            {
+                var mdl = File.ReadAllBytes(f);
+                var parts = ModelPartReader.Read(mdl);
+                if (parts == null) continue;
+                HatCompatSolve.Result solve;
+                try { solve = HatCompatSolve.Solve(mdl, parts, head, fan: slack); } catch { continue; }
+
+                float hatLineY = solve.Centre.Y + HatCompatSolve.HatLine;
+                var meshes = HatCompatSolve.ReadLod0Meshes(mdl);
+
+                // The ribbon's price: how far below the line the press is now willing to drag geometry. Not
+                // vertices it MOVED — it never moves one below the line — but the reach of the triangles it
+                // is now willing to distort, which is what actually shows.
+                float worstDip = 0f;
+                foreach (var mv in meshes)
+                {
+                    if (!solve.Moved.TryGetValue(mv.Mesh, out var here)) continue;
+                    foreach (var v in here.Keys)
+                        if (v < mv.Positions.Length)
+                            worstDip = MathF.Max(worstDip, hatLineY - LowestNeighbourY(mdl, mv, v, hatLineY));
+                }
+
+                foreach (var (hatName, hatPath) in hats)
+                {
+                    var hat = FbxMesh.Load(hatPath);
+                    if (hat == null) continue;
+
+                    var moved = solve.Moved.TryGetValue(0, out _) ? solve.Moved : solve.Moved;
+                    // Everything from 120 mm below the line upward, so the fan's own working range is inside
+                    // the window. Counting only above the line — as every earlier metric did — cannot see
+                    // the hair the fan exists to reach.
+                    int miss = 0, seen = 0;
+                    foreach (var mv in meshes)
+                    {
+                        moved.TryGetValue(mv.Mesh, out var here);
+                        for (int v = 0; v < mv.Positions.Length; v++)
+                        {
+                            var p = here != null && here.TryGetValue(v, out var to) ? to : mv.Positions[v];
+                            if (p.Y < hatLineY - 0.12f) continue;
+                            seen++;
+                            if (FirstHit(hat, p, Vector3.UnitY) <= 0f) miss++;
+                        }
+                    }
+                    o.WriteLine($"{slack * 1000,4:F0}mm {hatName,-22} {miss,6}/{seen,-7} "
+                              + $"{worstDip * 1000,17:F0}mm {solve.Considered,8}   {Trim(f)}");
+                }
+            }
+        }
+    }
+
+    /// <summary>The lowest corner of any triangle this vertex belongs to — how far a press on it can reach.</summary>
+    private static float LowestNeighbourY(byte[] mdl, HatCompatSolve.MeshVerts mv, int vertex, float cap)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int mo = src.MeshStart + mv.Mesh * 36;
+        uint ic = BitConverter.ToUInt32(mdl, mo + 4), start = BitConverter.ToUInt32(mdl, mo + 16);
+        float lowest = cap;
+        for (uint t = 0; t + 3 <= ic; t += 3)
+        {
+            int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t) * 2);
+            int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 1) * 2);
+            int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 2) * 2);
+            if (a != vertex && b != vertex && c != vertex) continue;
+            foreach (var k in new[] { a, b, c })
+                if (k < mv.Positions.Length) lowest = MathF.Min(lowest, mv.Positions[k].Y);
+        }
+        return lowest;
+    }
+
+    /// <summary>
+    /// Do hats actually grip the head along one consistent line?
+    /// <para/>
+    /// The premise behind a much better shape than the one built here: if every hat hugs the skull at the
+    /// same height, then above that height a hat is CLAMPED to the head and hair there can go anywhere at
+    /// all — deleted, even — while below it the hat lifts away and the hair must simply be left alone. The
+    /// current design has no such line. It has a single hat-line height taken from the worst hat measured,
+    /// and above it presses everything the same distance towards the skull, which is why tuning it has been
+    /// a running battle between hair standing proud and hair squashed where a hat does not reach.
+    /// <para/>
+    /// Measured per DIRECTION, not per height, because that is the only way to tell a hat gripping a skull
+    /// from a brim sailing past it: cast out from the head centre, take the hat's outermost surface and the
+    /// head's own, and the difference is the gap between hat and scalp along that line. Then, for each ring
+    /// of latitude, report the gap. A grip line shows up as a latitude where the gap collapses to near zero
+    /// across most of the compass, and it is only real if every hat picks the same one.
+    /// </summary>
+    [Fact]
+    public void DoHatsGripTheHeadAtOneConsistentLine()
+    {
+        var hats = Hats();
+        var head = HeadModel();
+        if (hats.Count == 0 || head == null) return;
+
+        var frame = HatCompatSolve.FrameAndFloor(head, head);
+        if (frame is not { } f) return;
+        var (centre, radius, _) = f;
+        var headMesh = HatCompatSolve.ReadLod0Meshes(head);
+        o.WriteLine($"head centre {F(centre)} r {radius:F4};  gap = hat surface − head surface, in mm");
+        o.WriteLine($"{"hat",-26} {"+60°",7} {"+45°",7} {"+30°",7} {"+15°",7} {"0°",7} {"-15°",7} {"-30°",7}");
+
+        // Rings of latitude, sampled all the way round. Only directions where BOTH surfaces answer count —
+        // a ray that misses the hat says nothing about how tightly that hat fits.
+        float[] lats = [60f, 45f, 30f, 15f, 0f, -15f, -30f];
+        foreach (var (name, path) in hats)
+        {
+            var hat = FbxMesh.Load(path);
+            if (hat == null) continue;
+
+            var cells = new List<string>();
+            foreach (var lat in lats)
+            {
+                var gaps = new List<float>();
+                for (int a = 0; a < 48; a++)
+                {
+                    float az = a * MathF.PI * 2f / 48f, el = lat * MathF.PI / 180f;
+                    var dir = Vector3.Normalize(new Vector3(
+                        MathF.Cos(el) * MathF.Cos(az), MathF.Sin(el), MathF.Cos(el) * MathF.Sin(az)));
+                    float tHat = FirstHit(hat, centre, dir);
+                    if (tHat <= 0f) continue;
+                    float tHead = FarthestVertexAlong(headMesh, centre, dir);
+                    if (tHead <= 0f) continue;
+                    gaps.Add(tHat - tHead);
+                }
+                if (gaps.Count == 0) { cells.Add($"{"-",7}"); continue; }
+                gaps.Sort();
+                cells.Add($"{gaps[gaps.Count / 2] * 1000,6:F0} ");
+            }
+            o.WriteLine($"{name,-26} {string.Concat(cells)}");
+        }
+    }
+
+    /// <summary>
+    /// How far the head reaches along one direction, as the farthest vertex within a narrow cone about it.
+    /// <para/>
+    /// A cone rather than a ray-triangle hit, because a head model is not a closed shell in every direction
+    /// and a ray can slip between its triangles. Farthest, not nearest, for the reason
+    /// <see cref="FirstHit"/> gives: the nearest surface is a lash or the inside of a mouth.
+    /// </summary>
+    private static float FarthestVertexAlong(
+        IReadOnlyList<HatCompatSolve.MeshVerts> head, Vector3 centre, Vector3 dir)
+    {
+        float best = 0f;
+        foreach (var mv in head)
+            foreach (var p in mv.Positions)
+            {
+                var d = p - centre;
+                float len = d.Length();
+                if (len < 1e-5f) continue;
+                if (Vector3.Dot(d / len, dir) < 0.985f) continue;    // within ~10°
+                if (len > best) best = len;
+            }
+        return best;
+    }
+
+    /// <summary>
+    /// The backup Proteus took of this model before patching it, if there is one — the author's own bytes.
+    /// <para/>
+    /// Walks up to the mod root and looks for the same relative path under the backup folder, which is how
+    /// <see cref="HatCompatService"/> stores it.
+    /// </summary>
+    private static string? Pristine(string file)
+    {
+        try
+        {
+            var full = Path.GetFullPath(file);
+            if (!HatCompatService.InMods(full, Mods, out var modRoot, out var rel)) return null;
+            var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir,
+                                      HatCompatService.BackupSubdir,
+                                      rel.Replace('/', Path.DirectorySeparatorChar));
+            return File.Exists(backup) ? backup : null;
+        }
+        catch (IOException) { return null; }
+        catch (ArgumentException) { return null; }
+    }
+
+    /// <summary>The press's own freeze rule, recomputed: every corner of a triangle reaching below the line.</summary>
+    private static HashSet<(int, int)> FrozenIn(
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<HatCompatSolve.MeshVerts> meshes, float hatLine)
+    {
+        var frozen = new HashSet<(int, int)>();
+        foreach (var mv in meshes)
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            if (mo + 36 > mdl.Length) continue;
+            uint ic = BitConverter.ToUInt32(mdl, mo + 4), start = BitConverter.ToUInt32(mdl, mo + 16);
+            if ((long)src.Ib + (start + ic) * 2 > mdl.Length) continue;
+            for (uint t = 0; t + 3 <= ic; t += 3)
+            {
+                int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t) * 2);
+                int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 1) * 2);
+                int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 2) * 2);
+                bool low = Low(mv.Positions, a) || Low(mv.Positions, b) || Low(mv.Positions, c);
+                if (!low) continue;
+                frozen.Add((mv.Mesh, a));
+                frozen.Add((mv.Mesh, b));
+                frozen.Add((mv.Mesh, c));
+            }
+            bool Low(Vector3[] p, int v) => v >= p.Length || p[v].Y < hatLine - HatCompatSolve.FanBelow;
+        }
+        return frozen;
+    }
+
+    /// <summary>
     /// Is the head in the FACE model, and where?
     /// <para/>
     /// The press needs to know where the skull is. Inferring it from the hair's own inner surface works

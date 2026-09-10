@@ -306,8 +306,14 @@ public sealed class HatCompatWatcher : IDisposable
     private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal,
                        IReadOnlyList<ModelPart> hide)
     {
-        log.Information("hat compat: fitting {0} — pressing {1} vertices, hiding {2} part(s)",
-                        target.Rel, proposal.Solve.Considered, hide.Count);
+        log.Information("hat compat: fitting {0} — pressing {1} vertices, hiding {2} part(s){3}",
+                        target.Rel, proposal.Solve.Considered, hide.Count,
+                        // Only when it happened. A shape that had to be cut short leaves hair standing
+                        // exactly where the budget ran out, which looks identical to the press deciding that
+                        // hair was fine — and telling those apart from a screenshot alone is impossible.
+                        proposal.Solve.Dropped > 0
+                            ? $", {proposal.Solve.Dropped} left unpressed for want of shape budget"
+                            : "");
         var outcome = HatCompatService.Apply(target.ModRoot, target.Model, proposal, hide);
         if (!outcome.Ok)
         {
@@ -315,6 +321,10 @@ public sealed class HatCompatWatcher : IDisposable
             current = current with { Message = outcome.Message, Failed = true };
             return;
         }
+        if (outcome.Unaddressable > 0)
+            log.Warning("hat compat: {0} — {1} vertices could not be given a shape value at all; this hair is "
+                      + "welded into meshes too large for the format to address", target.Rel,
+                        outcome.Unaddressable);
 
         // The same hairstyle again, from every other option that supplies it. Each gets its own solve —
         // a long version and a short one are different geometry and the tails are not in the same places.
