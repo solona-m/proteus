@@ -1626,10 +1626,19 @@ public static class SecondSkinWriter
                             // a seed the first had already cut down.
                             var backOnly = (float[])cw.Clone();
                             GateToBackFacing(backOnly, bNrm);
+                            // The seed doubles as the RAMP. BustRegionWeights reads it as a boolean and
+                            // builds its own one-ring fade, which is right against a coverage edge — cloth
+                            // that must not move at all — and wrong at this region's own two boundaries,
+                            // which are lines through open skin: the hip bone's taper at the waist, and
+                            // the turn of the flank. Left to the one-ring fade the span died over a single
+                            // edge at the waist and drew a seam across the small of the back. These weights
+                            // already describe both boundaries smoothly, so hand them over rather than
+                            // inventing a feather.
                             plan = MergePlans(plan,
                                 BustBridgeSolve(bPos, bNrm, bTris, backOnly, cleftStrength, diag,
                                                 CoveredVertices(bUv, cDef, bPos.Length),
-                                                smoothStrength: 0f, fillGap: false));
+                                                smoothStrength: 0f, fillGap: false,
+                                                ramp: backOnly));
                         }
 
                         bridgePlans[key] = plan;
@@ -7615,13 +7624,34 @@ public static class SecondSkinWriter
         // A band around edge-on is dropped rather than assigned to a side: a vertex on the hip's flank
         // belongs to neither feature, and handing it to one makes that region's boundary run through a
         // place where the surface is still turning.
+        //
+        // FADED across that band, not cut at it. The caller passes this on as the region's ramp, and a
+        // step there is a step in the displacement: the span reaches its full height on one vertex and
+        // nothing on its neighbour, which the slope limit can only soften to BustMaxSlope — a 39° kink,
+        // and a kink in a garment reads as a seam. Same defect as the crotch fold's, whose region ended
+        // at a hard ceiling and drew a line straight across the front.
         const float Edge = 0.15f;
         for (int i = 0; i < w.Length && i < nrm.Length; i++)
         {
             if (w[i] <= 0f) continue;
-            if (nrm[i].Z >= -Edge) w[i] = 0f;
+            w[i] *= Smoothstep(Math.Clamp((-nrm[i].Z - Edge) / Edge, 0f, 1f));
         }
     }
+
+    /// <summary>
+    /// How many bands past the last one with a cleft of its own a borrowed chord survives, fading to
+    /// nothing across them. Three bands is a few millimetres of body — long enough that the span dies
+    /// gradually, short enough that it cannot carry the buttocks' chord up onto the waist.
+    /// </summary>
+    private const float ChordBorrowBands = 3f;
+
+    /// <summary>
+    /// Passes of Jacobi smoothing over a caller-supplied region ramp. A diffusion spreads about the square
+    /// root of its pass count in rings, so sixteen reaches four rings — roughly a centimetre on a body mesh,
+    /// which is the distance over which a few millimetres of displacement has to die to stop reading as a
+    /// line. Costs a little strength at the region's rim, which is the rim's job.
+    /// </summary>
+    private const int RampSmoothPasses = 16;
 
     /// <summary>
     /// Fewest welded nodes the region needs before a bridge is attempted. A handful of stray bust-weighted
@@ -7782,25 +7812,90 @@ public static class SecondSkinWriter
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
-        float[]? ramp = null, float[]? relaxSeed = null)
+        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false)
         => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
-                           smoothStrength, fillGap, outward, envelope, ramp, relaxSeed);
+                           smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>
     /// Int indices, because a caller working on the WHOLE body rather than one mesh — the standoff map
     /// does — concatenates every skin mesh and runs past what a ushort can address.
     /// </remarks>
+    /// <param name="pinBoundary">
+    /// Hold every vertex on an open boundary — the rim of a hole — exactly where it is.
+    /// <para/>
+    /// FOR THE BODY PASSES ONLY, and the scoping is the whole of the design. On a body an open edge is
+    /// somewhere another surface has to meet: the waist ring the legs model shares with the torso, or an
+    /// authored socket. Nothing on the far side of it is solved here, so moving it tears the join.
+    /// <para/>
+    /// A SHELL is the opposite case and must NOT pass this. A shell is a cut patch, so its hem is open
+    /// edge along its entire perimeter, and pinning that pins the garment itself — which is what the
+    /// span's own fixture demonstrates: a finite grid whose whole border is boundary, where turning this
+    /// on left the chord completely undisplaced (0.088 off a valley 0.088 deep, i.e. nothing moved). A
+    /// shell's hem is already held by <paramref name="covered"/>, which is the right tool for it, because
+    /// a hem is pinned where it LIES ON the body rather than because it is an edge.
+    /// </param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
-        float[]? ramp = null, float[]? relaxSeed = null)
+        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false)
     {
         int vc = pos.Length;
         if (vc == 0 || (strength <= 0f && smoothStrength <= 0f) || bust.Length < vc) return null;
 
         var nodeOf = WeldByPosition(pos, out int nodeCount);
+
+        // THE RIM OF A HOLE NEVER MOVES.
+        //
+        // An edge used by exactly one triangle is a boundary: the surface simply stops there. Welding
+        // cannot help — there is nothing on the other side of it to weld TO, in this mesh. Two different
+        // things are on the far side of such an edge and both break if it moves:
+        //
+        // The next PART. A body arrives as several models (torso, legs, arms, feet), each parsed and
+        // solved on its own, so WeldByPosition never sees across the join. Torso and legs share a
+        // 54-point ring at the waist, and it is coincident today only because nothing has moved it.
+        //
+        // Or an AUTHORED HOLE, whose far side is not geometry we own at all. Neolithe's legs carry an
+        // 8-edge socket at the crotch where the genital mesh plugs in — a gap of about 3mm that normally
+        // sits hidden between the legs. Measured on that body, the crotch fold moved 14 rim vertices by
+        // up to 4.97mm and collapsed 8 triangles into slivers, prising the socket open into a visible
+        // gash. The relax was working correctly: evening out vertex spacing is what a relax does, and
+        // nothing told it that some of those vertices were the lip of a hole.
+        //
+        // Fed in through `cut`, NOT zeroed afterwards, for exactly the reason `cut` documents below:
+        // subtracting after the ramp is built leaves full-weight nodes sitting beside zeroed ones, which
+        // is what turned a garment's edge into a row of centimetre-high spikes. Excluded up front, the
+        // ramp runs down to the rim properly.
+        //
+        // One caveat, and it is deliberate: the gap fill between two lobes ignores exclusions (see
+        // BustRegionWeights), so a rim node lying inside the sternum gap can still be pulled back into
+        // the region. That gap is the cleavage, which no body boundary crosses.
+        bool[]? rimNode = null;
+        if (pinBoundary)
+        {
+            var use = new Dictionary<(int, int), int>();
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+                int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+                Count(a, b); Count(b, c); Count(c, a);
+            }
+            foreach (var (e, n) in use)
+            {
+                if (n != 1) continue;
+                rimNode ??= new bool[nodeCount];
+                rimNode[e.Item1] = true;
+                rimNode[e.Item2] = true;
+            }
+
+            void Count(int a, int b)
+            {
+                if (a == b) return;
+                var k = a < b ? (a, b) : (b, a);
+                use[k] = use.TryGetValue(k, out int c) ? c + 1 : 1;
+            }
+        }
 
         var start = new Vec3[nodeCount];
         var nNorm = new Vec3[nodeCount];
@@ -7823,15 +7918,20 @@ public static class SecondSkinWriter
             if (covered != null && i < covered.Length && !covered[i]) cut[n] = true;
             members[n]++;
         }
-        int seeded = 0;
+        int seeded = 0, pinned = 0;
         for (int n = 0; n < nodeCount; n++)
         {
             float inv = 1f / members[n];
             start[n] = new Vec3(start[n].X * inv, start[n].Y * inv, start[n].Z * inv);
             nNorm[n] = Normalize(nNorm[n]) ?? default;
+            // Counted only where it BITES — a rim node the region never reached is not a pin, and
+            // reporting every boundary in the mesh would bury the ones that mattered.
+            if (rimNode != null && rimNode[n]) { if (seed[n]) pinned++; cut[n] = true; }
             if (cut[n]) seed[n] = false;
             if (seed[n]) seeded++;
         }
+        if (pinned > 0)
+            log?.Invoke($"bust bridge: {pinned} seeded node(s) pinned for sitting on the rim of a hole");
         if (seeded < MinBustBridgeNodes)
         {
             if (seeded > 0)
@@ -7887,9 +7987,54 @@ public static class SecondSkinWriter
             {
                 float inv = 1f / members[n];
                 relaxW[n] *= inv;
-                if (ramp != null) nW[n] *= rampN[n] * inv;
+                rampN[n] *= inv;
             }
+
+            // SMOOTHED over the mesh before it is used, because a caller's ramp can be RAGGED even when
+            // the quantity behind it is smooth. The cleft hands over bone weights, and skinning weights
+            // are quantized: a vertex either carries j_kosi among its four influences or it carries none
+            // of it, so at the waist one vertex holds 0.02 and its neighbour holds nothing at all. Used
+            // raw that is not a taper, it is a jagged edge — and a jagged edge in the displacement draws a
+            // BROKEN line across the small of the back rather than a continuous one, which is exactly how
+            // it looked in game.
+            //
+            // Jacobi over the welded graph, reading neighbours regardless of their own weight so the
+            // outside pulls the boundary down to nothing instead of holding it up.
+            if (ramp != null && RampSmoothPasses > 0)
+            {
+                var next = new float[nodeCount];
+                for (int pass = 0; pass < RampSmoothPasses; pass++)
+                {
+                    for (int n = 0; n < nodeCount; n++)
+                    {
+                        if (adj[n] is not { Count: > 0 } near) { next[n] = rampN[n]; continue; }
+                        float s = 0f;
+                        foreach (int k in near) s += rampN[k];
+                        next[n] = rampN[n] + (s / near.Count - rampN[n]) * 0.5f;
+                    }
+                    (rampN, next) = (next, rampN);
+                }
+            }
+
+            if (ramp != null)
+                for (int n = 0; n < nodeCount; n++) nW[n] *= rampN[n];
         }
+
+        // The rim again, on the OTHER channel. Pinning it out of the seed above is not enough: the relax
+        // does not run on the region, it runs on every node with relaxW > 0, so a boundary node kept its
+        // full share of the Laplacian and moved anyway. Measured on the crotch socket, pinning the seed
+        // alone took the worst rim move from 4.97mm to 4.57mm — which is to say it did nothing.
+        //
+        // Zeroed here rather than skipped at the loop, so the rim keeps behaving the way every other node
+        // outside the relax region already does: READ by its neighbours, never written. That is the
+        // mechanism the relax already relies on to avoid stepping at its own edge, so the surface still
+        // smooths right up to the hole; only the lip of it stays put.
+        //
+        // Deliberately after the ramp smoothing, not folded into the averaging loop above: relaxW is not
+        // smoothed today, and a pin that a later Jacobi pass could bleed back into is not a pin.
+        if (rimNode != null)
+            for (int n = 0; n < nodeCount; n++)
+                if (rimNode[n]) relaxW[n] = 0f;
 
         int region = 0;
         for (int n = 0; n < nodeCount; n++) if (nW[n] > 0f) region++;
@@ -8779,18 +8924,30 @@ public static class SecondSkinWriter
         // first is a cleft that has run out and wants a taper; the second is open space, and borrowing a
         // chord there is what carried the span down into the gap between the legs even after those bands
         // had been recognised.
+        // How much of the chord each band is entitled to. A band that found its own apexes gets all of it;
+        // a band that BORROWED gets less the further it had to reach, and nothing past ChordBorrowBands.
+        //
+        // Borrowing alone does not taper, which is what the note here used to claim. A copied chord is the
+        // chord of a band that HAD a cleft, applied to one that does not — above the buttocks the surface
+        // has fallen away, so the same chord sits further and further in front of it and the lift GROWS
+        // with height until the region weight cuts it off. That is an extrapolation with a hard end, and
+        // it drew a horizontal line across the small of the back that survived both a smooth region ramp
+        // and a feathered facing gate, because neither was where the step lived.
+        var bandFade = new float[bands];
         for (int b = 0; b < bands; b++)
         {
-            if (have[b] || hole[b]) continue;
-            int near = -1;
+            if (have[b]) { bandFade[b] = 1f; continue; }
+            if (hole[b]) continue;
+            int near = -1, reach = 0;
             for (int d = 1; d < bands && near < 0; d++)
             {
-                if (b - d >= 0 && have[b - d]) near = b - d;
-                else if (b + d < bands && have[b + d]) near = b + d;
+                if (b - d >= 0 && have[b - d]) { near = b - d; reach = d; }
+                else if (b + d < bands && have[b + d]) { near = b + d; reach = d; }
             }
             if (near < 0) continue;
             latL[b] = latL[near]; hL[b] = hL[near];
             latR[b] = latR[near]; hR[b] = hR[near];
+            bandFade[b] = 1f - Smoothstep(Math.Clamp((reach - 1f) / ChordBorrowBands, 0f, 1f));
         }
 
         // Smooth the apex LINE down each breast before spanning between the two of them. Each band takes
@@ -8851,6 +9008,13 @@ public static class SecondSkinWriter
             // target; a two-sided variant tried here let it straight through and the displacement came
             // out infinite.
             if (c0 == null && c1 == null) continue;
+
+            // Faded by how far each band had to reach for its chord, blended between the two the same way
+            // the heights are. This is what makes the span die out at the top and bottom of the cleft
+            // instead of holding a borrowed lift right up to the region's edge.
+            float fade = bandFade[b0] + (bandFade[b1] - bandFade[b0]) * mix;
+            if (fade <= 0f) continue;
+            want = h0[n] + (want - h0[n]) * fade;
 
             // RAISE-ONLY, and that clamp is the no-clip guarantee itself: a node only ever leaves the
             // skin, so it can never be driven into it. It is also what keeps this a bridge across the gap
@@ -9084,10 +9248,12 @@ public static class SecondSkinWriter
                   + $"{crotchHalf * 2000:0.#}mm across at y={lowest:0.###} (the hip region itself is "
                   + $"{half * 2000:0.#}mm across)");
 
+        // pinBoundary: this runs on the BODY, and the crotch is where a body is most likely to have one —
+        // a socket for a genital mesh, or simply where the legs model ends. See the parameter's own note.
         return BustBridgeSolve(pos, nrm, tris, w, strength, log, covered,
                                smoothStrength: 0f, fillGap: false,
                                outward: new Vec3(0, 0, 1), envelope: true,
-                               ramp: ramp, relaxSeed: relax);
+                               ramp: ramp, relaxSeed: relax, pinBoundary: true);
     }
 
     /// <summary>
@@ -9189,6 +9355,18 @@ public static class SecondSkinWriter
             for (int q = 0; q < EnvelopeBins; q++)
             {
                 if (binMax[b, q] == float.MinValue) continue;
+
+                // EVERY BIN, INCLUDING THE VALLEY'S OWN. Excluding the middle — fitting only the shoulders
+                // and letting the parabola interpolate across, the way the chord is anchored on the ground
+                // either side of a gap — is the obvious idea and it measured WORSE. Starved of the middle,
+                // barely half the bands could fit at all (9 of 19 against 13), the residual tripled to
+                // 16.9mm, and the rows it was meant to flatten came out rougher: y 0.872 went 4.63mm to
+                // 5.55mm and y 0.880 went 4.16mm to 5.23mm.
+                //
+                // The lesson is about the MODEL, not the samples. A parabola cannot describe a W, so no
+                // choice of which points to feed it produces a curve the fold deviates from — starving it
+                // only makes it extrapolate. Fixing this properly means a different construction here, not
+                // a better-chosen subset.
                 double u = binLat[b, q], h = binMax[b, q];
                 double[] t = [1, u, u * u];
                 for (int i = 0; i < 3; i++)
@@ -9320,6 +9498,7 @@ public static class SecondSkinWriter
 
     /// <summary>Fitted samples a band needs before its line is trusted.</summary>
     private const int EnvelopeMinBins = 4;
+
 
     /// <summary>
     /// How far behind its bin's frontmost node a node may sit and still count as the outer surface, as a
@@ -9708,7 +9887,11 @@ public static class SecondSkinWriter
             var covered = CoveredVertices(uv, gate, vc);
 
             var plan = bust == null ? null
-                : BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, nippleStrength);
+                  // pinBoundary: the body again — see the parameter's note. The bust is nowhere near a
+                  // part seam on a real torso, so this is insurance rather than a fix, but it is the same
+                  // surface the fold runs on and the two should not disagree about whether a rim moves.
+                : BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, nippleStrength,
+                                  pinBoundary: true);
 
             if (fold != null && foldNear != null)
                 plan = MergePlans(plan, FoldPlan(p3, n3, tris, fold, foldNear, covered, foldStrength, log));
