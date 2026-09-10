@@ -4427,9 +4427,12 @@ public class CompositorService : IDisposable
             // queued warm holds no thread while it waits.
             var prefetchIssued = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
             var prefetchGate = new SemaphoreSlim(Math.Max(2, Environment.ProcessorCount / 2));
-            void WarmBg(string path, int w, int h)
+            // The FILTER is part of what gets warmed, because it is part of the decode-cache key: warming an
+            // index map under Auto leaves the build's Nearest request a miss, i.e. a decode paid twice and
+            // prefetched never.
+            void WarmBg(string path, int w, int h, ResampleFilter filter = ResampleFilter.Auto)
             {
-                var warmKey = $"{path}|{w}x{h}";
+                var warmKey = $"{path}|{w}x{h}|{filter}";
                 if (!prefetchIssued.TryAdd(warmKey, 0)) return;
                 _ = Task.Run(async () =>
                 {
@@ -4441,7 +4444,7 @@ public class CompositorService : IDisposable
                         // Set AFTER the await: the flag is [ThreadStatic], so it has to be stamped on the
                         // thread that actually runs the decode, not the one that queued the wait.
                         TextureLoader.BackgroundPrefetch = true;
-                        textureLoader.LoadPngAsRgba(path, w, h);
+                        textureLoader.LoadPngAsRgba(path, w, h, filter);
                     }
                     catch { }
                     finally
@@ -4471,7 +4474,8 @@ public class CompositorService : IDisposable
                     var cd = cOverlay.Descriptor;
                     if (cd.Diffuse != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Diffuse), coldSize, coldSize);
                     if (cd.Normal  != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Normal),  coldSize, coldSize);
-                    if (cd.Index   != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Index),   coldSize, coldSize);
+                    if (cd.Index   != null) WarmBg(Path.Combine(cEntry.SidecarRoot, cd.Index),   coldSize, coldSize,
+                                                   ResampleFilter.Nearest);
                 }
 
             var tSetupEnd = PhaseCounter.Begin();
@@ -4511,10 +4515,12 @@ public class CompositorService : IDisposable
 
                 // TextureLoader caches decoded PNGs across runs (keyed by path + mtime),
                 // and its Lazy wrapper dedups concurrent requests for the same file.
-                byte[]? LoadPng(string path, int w, int h) => textureLoader.LoadPngAsRgba(path, w, h);
+                byte[]? LoadPng(string path, int w, int h, ResampleFilter filter = ResampleFilter.Auto)
+                    => textureLoader.LoadPngAsRgba(path, w, h, filter);
 
                 var dstBodyType = UVRemapService.InferBodyType(mtrlGamePath);
-                byte[]? RemapIfNeeded(byte[]? png, int w, int h, string? srcType, string? overlayPath = null)
+                byte[]? RemapIfNeeded(byte[]? png, int w, int h, string? srcType, string? overlayPath = null,
+                                      ResampleFilter filter = ResampleFilter.Auto)
                 {
                     if (png == null || srcType == null || dstBodyType == null) return png;
                     if (string.Equals(srcType, dstBodyType, StringComparison.OrdinalIgnoreCase)) return png;
@@ -4523,7 +4529,7 @@ public class CompositorService : IDisposable
                     if (string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         if (overlayPath == null) return png;
-                        var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096);
+                        var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
                         if (native == null) return png;
                         byte[] biboSpace;
                         if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
@@ -4537,18 +4543,20 @@ public class CompositorService : IDisposable
                             biboSpace = converted;
                         }
                         var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
-                        return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
+                        // Honour the caller's filter on the tail: this used to be bilinear whatever the
+                        // texture meant, which interpolated the row selectors of any cross-UV index map.
+                        return TextureLoader.Resample(rightHalf, 2048, 4096, w, h, filter);
                     }
                     // Transfer-map paths operate at 4096×4096. If the overlay was loaded at a
                     // smaller size (e.g. base texture is 2048), reload at full res, remap, resize.
                     if (w != 4096 || h != 4096)
                     {
                         if (overlayPath == null) return png;
-                        var native4k = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096);
+                        var native4k = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
                         if (native4k == null) return png;
                         var remapped4k = uvRemap.Remap(native4k, 4096, 4096, srcType, dstBodyType);
                         if (ReferenceEquals(remapped4k, native4k)) return png;
-                        return UVRemapService.ResizeBilinear(remapped4k, 4096, 4096, w, h);
+                        return TextureLoader.Resample(remapped4k, 4096, 4096, w, h, filter);
                     }
                     return uvRemap.Remap(png, w, h, srcType, dstBodyType);
                 }
@@ -4563,7 +4571,12 @@ public class CompositorService : IDisposable
                 // against — no separate per-mask colorset needed.
                 byte[]? LoadIndexMerged(string idxPath, int w, int h, string? srcType, string modDir)
                 {
-                    var idx = RemapIfNeeded(LoadPng(idxPath, w, h), w, h, srcType, idxPath);
+                    // NEAREST end to end. R encodes a row *id*, which is exactly why the merge below is a
+                    // hard swap rather than a blend — the same reasoning has to reach the RESIZE, or an
+                    // overlay whose art does not match the base's size gets its rows interpolated on the
+                    // way in and the hard swap defends nothing. See ResampleFilter.
+                    var idx = RemapIfNeeded(LoadPng(idxPath, w, h, ResampleFilter.Nearest),
+                                            w, h, srcType, idxPath, ResampleFilter.Nearest);
                     if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
 
                     // This mod's masks are handled elsewhere, NOT merged into the overlay index here (merging
@@ -4584,7 +4597,8 @@ public class CompositorService : IDisposable
                     {
                         if (maskIndexPath == null) continue;
                         var maskPng = RemapIfNeeded(LoadPng(maskPath, w, h), w, h, srcType, maskPath);
-                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h), w, h, srcType, maskIndexPath);
+                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h, ResampleFilter.Nearest),
+                                                    w, h, srcType, maskIndexPath, ResampleFilter.Nearest);
                         if (maskPng == null || maskIdx == null) continue;
                         for (int i = 0; i < idx.Length; i += 4)
                         {
@@ -4965,7 +4979,8 @@ public class CompositorService : IDisposable
                         if (pd.Diffuse != null && wD > 0) WarmBg(Path.Combine(root, pd.Diffuse), wD, hD);
                         if (pd.Normal  != null && wN > 0) WarmBg(Path.Combine(root, pd.Normal),  wN, hN);
                         // The colour-row index map — measured at ~125 ms each and decoded once per overlay.
-                        if (pd.Index   != null && wD > 0) WarmBg(Path.Combine(root, pd.Index),   wD, hD);
+                        if (pd.Index   != null && wD > 0) WarmBg(Path.Combine(root, pd.Index),   wD, hD,
+                                                                ResampleFilter.Nearest);
 
                         // The Masks group is read per mod by CombinedMaskAt, at the diffuse size.
                         // Several overlays usually share one mod's masks, so the cache dedups these.
@@ -4980,7 +4995,7 @@ public class CompositorService : IDisposable
                             foreach (var a in mAssets)
                             {
                                 if (a.NormalPath != null) WarmBg(a.NormalPath, wD, hD);
-                                if (a.IndexPath  != null) WarmBg(a.IndexPath,  wD, hD);
+                                if (a.IndexPath  != null) WarmBg(a.IndexPath,  wD, hD, ResampleFilter.Nearest);
                             }
                     }
                 }
@@ -6187,20 +6202,28 @@ public class CompositorService : IDisposable
                 // Warming these back at composite start does NOT work: the skin composite decodes over a
                 // gigabyte of 4K art in between and LRU-evicts every one of them before this phase starts.
                 // Issue them here, next to their consumer, where nothing can evict them first.
+                //
+                // The size has to be the one the build will actually ASK for, not a constant: the sheet is
+                // sized from the art now (SecondSkinService.ChooseTexSize), and a warm at the wrong size is
+                // not a cheaper warm, it is a wasted one — the decode cache keys on the target size, so the
+                // build would miss every entry and re-decode the lot on its own thread. Both callers read the
+                // same path list and the same chooser so they cannot drift apart.
+                int gs = SecondSkinService.ChooseTexSize(
+                    SecondSkinService.ShellArtPaths(gearOverlays, discovery));
                 foreach (var (gEntry, gOverlay) in gearOverlays)
                 {
                     var gd = gOverlay.Descriptor;
-                    const int gs = SecondSkinService.TexSize;
                     if (gd.Diffuse != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Diffuse), gs, gs);
                     if (gd.Normal  != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Normal),  gs, gs);
-                    if (gd.Index   != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Index),   gs, gs);
+                    if (gd.Index   != null) WarmBg(Path.Combine(gEntry.SidecarRoot, gd.Index),   gs, gs,
+                                                   ResampleFilter.Nearest);
                     if (maskPathsByMod.TryGetValue(gEntry.ModDirectory, out var gMasks))
                         foreach (var mp in gMasks) WarmBg(mp, gs, gs);
                     if (maskAssetsByMod.TryGetValue(gEntry.ModDirectory, out var gAssets))
                         foreach (var a in gAssets)
                         {
                             if (a.NormalPath != null) WarmBg(a.NormalPath, gs, gs);
-                            if (a.IndexPath  != null) WarmBg(a.IndexPath,  gs, gs);
+                            if (a.IndexPath  != null) WarmBg(a.IndexPath,  gs, gs, ResampleFilter.Nearest);
                         }
                 }
 

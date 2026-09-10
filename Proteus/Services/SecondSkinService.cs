@@ -39,12 +39,112 @@ public sealed class SecondSkinService
     /// </summary>
     private readonly Func<string, string?>? resolveUpstream;
 
-    /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
-    // internal so the compositor can prefetch this phase's art at the right size; see PrefetchAhead.
-    internal const int TexSize = 2048;
+    /// <summary>
+    /// The smallest sheet a shell is ever baked at, and what it stays at unless the art asks for more.
+    /// Everything shipped before shells could grow was written at exactly this, so a 1K- or 2K-authored
+    /// overlay produces byte-identical output to before.
+    /// </summary>
+    internal const int TexSizeFloor = 2048;
+
+    /// <summary>
+    /// The largest sheet a shell is baked at — the same ceiling the skin path runs at
+    /// (<see cref="TextureLoader.BaseTargetSize"/>), which is the point: a cloth-layer overlay and a
+    /// skin-layer one should resolve the same art identically, and until this existed the shell was
+    /// fixed at <see cref="TexSizeFloor"/> while the skin path was always 4096. A 4K tattoo therefore
+    /// looked clean on skin and came out speckled on cloth, which reads as compression damage and is
+    /// not — see <see cref="ResampleFilter"/>.
+    /// <para/>
+    /// A 4K sheet is 64 MB uncompressed against 16 MB, per slot, per layer, so this is a ceiling and not
+    /// a target: <see cref="ChooseTexSize"/> only reaches it for art that actually carries the detail.
+    /// </summary>
+    internal const int TexSizeCap = 4096;
+
+    /// <summary>
+    /// The sheet this build bakes at. Textures are authored in BODY UV (the shell inherits the body's UVs).
+    /// <para/>
+    /// ONE size for the whole build, not one per layer. A layer's relief is compounded element-wise into
+    /// its same-mod siblings' normals (see the sibling-relief pre-pass and CompoundNormal), and the mask
+    /// merges do the same — so two layers at different sizes would index each other's buffers out of
+    /// step. Set at the top of <see cref="Build"/> and read everywhere below.
+    /// </summary>
+    private int texSize = TexSizeFloor;
 
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
+
+    /// <summary>
+    /// Every body-UV image a shell build will load, across all its layers — the input both to
+    /// <see cref="ChooseTexSize"/> and to the compositor's prefetch, which must warm at the size the
+    /// build will actually ask for or warm nothing useful at all. One definition so they cannot drift.
+    /// <para/>
+    /// Masks are included because they are remapped onto the same sheet (coverage, <c>_id</c> merge and
+    /// relief all go through it). Scroll maps are NOT — see ChooseTexSize.
+    /// </summary>
+    internal static IEnumerable<string?> ShellArtPaths(
+        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        SidecarDiscoveryService discovery)
+    {
+        foreach (var (entry, overlay) in gearOverlays)
+        {
+            var d = overlay.Descriptor;
+            if (d.Diffuse != null) yield return Path.Combine(entry.SidecarRoot, d.Diffuse);
+            if (d.Normal  != null) yield return Path.Combine(entry.SidecarRoot, d.Normal);
+            if (d.Mask    != null) yield return Path.Combine(entry.SidecarRoot, d.Mask);
+            if (d.Index   != null) yield return Path.Combine(entry.SidecarRoot, d.Index);
+
+            // Already absolute — ResolveActiveMaskAssets resolves against the mod folder itself.
+            foreach (var (maskPath, normalPath, indexPath) in discovery.ResolveActiveMaskAssets(entry))
+            {
+                yield return maskPath;
+                yield return normalPath;
+                yield return indexPath;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The sheet size a build should bake at, given the art it is about to load: the largest dimension any
+    /// of it actually carries, rounded up to a power of two and clamped to
+    /// [<see cref="TexSizeFloor"/>, <see cref="TexSizeCap"/>].
+    /// <para/>
+    /// Never downsample below what the author supplied — that was the whole defect. Never upsample past
+    /// it either: inventing texels a 1K overlay does not have costs 16x the memory to say nothing new.
+    /// <para/>
+    /// Sizing is by HEADER probe, not by decoding: the decision has to be made before any of this art is
+    /// loaded, because the size is what the loads are keyed on. A path that cannot be probed simply gets
+    /// no vote — the real load will report the failure with a message worth reading.
+    /// <para/>
+    /// Scroll maps are excluded by every caller and must stay excluded: a scroll is a TILING pattern
+    /// sampled through uv1, not body-UV art, so its resolution says nothing about the sheet it tiles over.
+    /// </summary>
+    internal static int ChooseTexSize(IEnumerable<string?> artPaths) => ChooseTexSize(artPaths, out _);
+
+    /// <inheritdoc cref="ChooseTexSize(IEnumerable{string})"/>
+    /// <param name="largestArt">
+    /// The largest dimension actually found, before the floor and cap are applied — 0 when nothing could be
+    /// probed. Reported alongside the chosen size so a log line says WHY it landed where it did: "4096
+    /// (largest art 4096)" and "2048 (largest art 1024)" are very different situations that a bare size
+    /// cannot tell apart.
+    /// </param>
+    internal static int ChooseTexSize(IEnumerable<string?> artPaths, out int largestArt)
+    {
+        largestArt = 0;
+        foreach (var p in artPaths)
+        {
+            if (string.IsNullOrEmpty(p)) continue;
+            if (TextureLoader.ProbeSize(p) is not { } s) continue;
+            largestArt = Math.Max(largestArt, Math.Max(s.Width, s.Height));
+        }
+        if (largestArt <= TexSizeFloor) return TexSizeFloor;
+        if (largestArt >= TexSizeCap) return TexSizeCap;
+
+        // Round UP to a power of two. Not cosmetic: block compression needs 4-aligned dimensions (see
+        // WriteTex's fallback to uncompressed), the coverage grid divides the sheet by a fixed power of
+        // two, and an odd sheet size would make every one of those a special case.
+        int pow = TexSizeFloor;
+        while (pow < largestArt) pow <<= 1;
+        return Math.Min(pow, TexSizeCap);
+    }
 
     /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
     /// so an id never runs past 'z'.</summary>
@@ -737,13 +837,14 @@ public sealed class SecondSkinService
     /// body's UV space. The shell INHERITS the body's UVs, so the destination is the character's body UV
     /// type — not the accessory material's. Mirrors CompositorService.RemapIfNeeded; keep them in step.
     /// </summary>
-    private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h)
+    private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h,
+                                 ResampleFilter filter = ResampleFilter.Auto)
     {
         if (rel == null) return null;
         // Extension tolerance (metadata says diffuse.dds but the file is diffuse.png, etc.) is handled
         // centrally in TextureLoader.LoadPngAsRgba, so skin and gear resolve identically.
         var path = Path.Combine(sidecarRoot, rel);
-        return RemapPath(path, srcType, dstType, w, h);
+        return RemapPath(path, srcType, dstType, w, h, filter);
     }
 
     /// <summary>
@@ -770,31 +871,42 @@ public sealed class SecondSkinService
     /// of work: the key names every input the result depends on, so an entry another build put there is
     /// exactly what this one would have computed.
     /// </summary>
-    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H), byte[]?> remapCache = new();
+    // The FILTER is part of the key for the same reason it is part of TextureLoader's decode key: an index
+    // map and a mask can be the same file, and the two must not be able to hand each other their result.
+    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
 
-    private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h)
+    private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h,
+                              ResampleFilter filter = ResampleFilter.Auto)
     {
-        var png = textureLoader.LoadPngAsRgba(path, w, h);
+        var png = textureLoader.LoadPngAsRgba(path, w, h, filter);
         if (png == null || srcType == null || dstType == null) return png;
         if (string.Equals(srcType, dstType, StringComparison.OrdinalIgnoreCase)) return png;
 
         // Only the REMAPPING path is memoized. The two returns above are already cheap — LoadPngAsRgba has
         // its own decode cache — and caching them would duplicate that for nothing.
-        var key = (path, srcType, dstType, w, h);
+        var key = (path, srcType, dstType, w, h, filter);
         if (remapCache.TryGetValue(key, out var hit)) return hit;
-        var result = RemapPathCore(path, png, srcType, dstType, w, h);
+        var result = RemapPathCore(path, png, srcType, dstType, w, h, filter);
         remapCache[key] = result;
         return result;
     }
 
-    private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h)
+    private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h,
+                                  ResampleFilter filter = ResampleFilter.Auto)
     {
+        // Every branch below finishes by bringing a 4096² intermediate back to (w, h), and until this
+        // existed they all did it with ResizeBilinear regardless of what the texture MEANT — so a
+        // cross-UV index map has had its row selectors interpolated all along. SnapIndexRowsToDefined
+        // repairs some of that downstream, but only by guessing at a value that should never have been
+        // invented. Honour the caller's filter on those tails instead.
+        byte[] ToTarget(byte[] src, int sw, int sh)
+            => TextureLoader.Resample(src, sw, sh, w, h, filter);
 
         // Any source -> gen2 (vanilla): vanilla UV is the RIGHT HALF of bibo UV space, so convert to
         // bibo first (via transfer map when needed), crop, then resize.
         if (string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase))
         {
-            var native = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            var native = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
             if (native == null) return png;
             byte[] biboSpace;
             if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
@@ -808,7 +920,7 @@ public sealed class SecondSkinService
                 biboSpace = converted;
             }
             var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
-            return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
+            return ToTarget(rightHalf, 2048, 4096);
         }
 
         // gen2 -> an asymmetric space: the inverse of the crop above. Reached whenever a gen2-native layer
@@ -833,17 +945,19 @@ public sealed class SecondSkinService
             var expanded = UVRemapService.ExpandMirrored(png, w, h, 4096, 4096);
             var moved = uvRemap.Remap(expanded, 4096, 4096, srcDoubled, dstType);
             if (ReferenceEquals(moved, expanded)) return png;   // no transfer map — leave it alone
-            return UVRemapService.ResizeBilinear(moved, 4096, 4096, w, h);
+            return ToTarget(moved, 4096, 4096);
         }
 
         // Transfer maps operate at 4096x4096; our textures are smaller, so remap at full res then resize.
+        // A shell sized at the cap skips the round trip entirely — Resample returns the buffer untouched
+        // when the sizes already agree, so a 4K sheet stops paying the squash this branch used to force.
         if (w != 4096 || h != 4096)
         {
-            var native4k = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            var native4k = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
             if (native4k == null) return png;
             var remapped = uvRemap.Remap(native4k, 4096, 4096, srcType, dstType);
             if (ReferenceEquals(remapped, native4k)) return png;
-            return UVRemapService.ResizeBilinear(remapped, 4096, 4096, w, h);
+            return ToTarget(remapped, 4096, 4096);
         }
         return uvRemap.Remap(png, w, h, srcType, dstType);
     }
@@ -902,6 +1016,18 @@ public sealed class SecondSkinService
         // them across composites would dwarf the decode cache for no benefit — the inputs are re-read from
         // TextureLoader's cache anyway, and only the repetition WITHIN one build is worth avoiding.
         remapCache.Clear();
+
+        // The sheet size for THIS build, chosen from the art before any of it is decoded — every load
+        // below is keyed on it, so it has to be settled first. See ChooseTexSize and texSize.
+        var prevTexSize = texSize;
+        texSize = ChooseTexSize(ShellArtPaths(gearOverlays, discovery), out var largestArt);
+        // Quiet on the ordinary case — a build that stays at the floor, having stayed there last time, has
+        // nothing to say. Anything above the floor keeps reporting, because that is the line to grep when a
+        // shell looks softer or a composite got slower.
+        if (texSize != prevTexSize || texSize != TexSizeFloor)
+            log.Information("[Proteus] second skin: shell textures at {0} (largest art {1}, floor {2}, cap {3})",
+                $"{texSize}x{texSize}", largestArt == 0 ? "none probed" : $"{largestArt}px",
+                TexSizeFloor, TexSizeCap);
 
         // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
         // resets it, and several paths below return before the content loop runs — turn off the pack that
@@ -2556,10 +2682,10 @@ public sealed class SecondSkinService
             if (rd.IsMaskShell) continue;   // mask coverage/relief is handled by BuildMaskCoverage
             if (layerSurface[i] < 0) continue;   // surface unresolved — the layer is not being built
             var (rSrc, rDst) = UvFor(i, rd);
-            var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, TexSize, TexSize, MaskAdds(rEntry, rOv));
+            var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, texSize, texSize, MaskAdds(rEntry, rOv));
             alphaByLayer[i] = rAlpha;
             if (rd.Normal == null || rAlpha == null) continue;
-            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, TexSize, TexSize);
+            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, texSize, texSize);
             if (rNormal == null) continue;
             rNormal = (byte[])rNormal.Clone();   // LoadRemapped may hand back a shared cached buffer
             int nn = Math.Min(rAlpha.Length, rNormal.Length / 4);
@@ -2607,7 +2733,7 @@ public sealed class SecondSkinService
             // The mask shell's coverage IS the mask; other shells' coverage is the overlay's art shaped by masks.
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
             var alpha = isMaskShell
-                ? BuildMaskCoverage(entry, srcType, dstType, TexSize, TexSize)
+                ? BuildMaskCoverage(entry, srcType, dstType, texSize, texSize)
                 : alphaByLayer[i];   // computed once in the sibling-relief pre-pass above
 
             // Error-drops (below) don't consume a host slot — inHost/diskLetter only advance on a full success.
@@ -2615,7 +2741,7 @@ public sealed class SecondSkinService
             // Drop the shell rather than render it fully opaque — a fabric with no coverage gate covers the
             // WHOLE body and the masks never carve it (this masked a diffuse.dds/.png extension mismatch).
             if (alpha == null) continue;
-            var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
+            var coverage = Downsample(alpha, texSize, texSize, CoverageSize);
 
             // Same-mod siblings' relief compounds into this fabric shell (never into a mask shell — its normal
             // IS the mask relief). Self is excluded so a shell doesn't double-stamp its own normal.
@@ -3281,7 +3407,7 @@ public sealed class SecondSkinService
                 return null;
             }
             // Every pass below is per-texel with no carried state, so partitioning them cannot change a
-            // byte — and at TexSize each is 4.19M iterations, run once per mask per layer.
+            // byte — and each is 4.19M iterations at a 2K sheet (16.7M at 4K), run once per mask per layer.
             var al = alpha; var ar = art;
             CompositorService.ParallelPixels(0, n, 1, (from, to) =>
             { for (int i = from; i < to; i++) al[i] = ar[i * 4 + 3]; });
@@ -3418,9 +3544,11 @@ public sealed class SecondSkinService
 
     /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
     /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
-    private static byte[] Solid(byte r, byte g, byte b, byte a)
+    // Instance, not static, because the sheet size is now per-build (see texSize) and a solid has to be
+    // conformant with every other slot in the same material or the write goes out at the wrong stride.
+    private byte[] Solid(byte r, byte g, byte b, byte a)
     {
-        var t = new byte[TexSize * TexSize * 4];
+        var t = new byte[texSize * texSize * 4];
         for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
         return t;
     }
@@ -3438,12 +3566,15 @@ public sealed class SecondSkinService
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
 
-        byte[]? Png(string? rel) => LoadRemapped(rel, sidecarRoot, srcType, dstType, TexSize, TexSize);
+        byte[]? Png(string? rel, ResampleFilter filter = ResampleFilter.Auto)
+            => LoadRemapped(rel, sidecarRoot, srcType, dstType, texSize, texSize, filter);
 
         var diffuse = Png(d.Diffuse);
         var normal = Png(d.Normal);
         var mask = Png(d.Mask);
-        var index = Png(d.Index);
+        // NEAREST, always — the index's red/green are discrete colour-table row selectors, so a filtered
+        // texel is a row nobody assigned rather than a softer edge. See ResampleFilter.
+        var index = Png(d.Index, ResampleFilter.Nearest);
 
         // The scroll map is NOT body-UV art — it's a tiling pattern the shader samples with uv1, so it
         // must NOT be UV-remapped (that would tear the pattern apart). It also lives in an effects
@@ -3453,7 +3584,7 @@ public sealed class SecondSkinService
         {
             var effectPath = SidecarDiscoveryService.ResolveEffectPath(entry, effectsFolder, d.Scroll);
             if (effectPath != null)
-                scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+                scroll = textureLoader.LoadPngAsRgba(effectPath, texSize, texSize);
             else
                 log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
         }
@@ -3483,8 +3614,9 @@ public sealed class SecondSkinService
         foreach (var (maskPath, maskNormalPath, maskIndexPath) in Enumerable.Reverse(mergeTopFirst))
         {
             if (maskIndexPath == null) continue;
-            var maskPng = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
-            var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
+            var maskPng = RemapPath(maskPath, srcType, dstType, texSize, texSize);
+            // A mask's _id is an index map like any other — nearest, for the same reason.
+            var maskIdx = RemapPath(maskIndexPath, srcType, dstType, texSize, texSize, ResampleFilter.Nearest);
             if (maskPng == null || maskIdx == null) continue;
             // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
             if (index != null)
@@ -3498,7 +3630,7 @@ public sealed class SecondSkinService
                 // i.e. row 1 sub-row B — a pair most colorsets never configure, and whose B half is white
                 // when only A was authored, which painted the unclaimed band white.
                 index = Solid(255, 255, 0, 255);
-                idAuthored = new bool[TexSize * TexSize];
+                idAuthored = new bool[texSize * texSize];
             }
             var idxBuf = index; var mp = maskPng; var mi = maskIdx; var claimed = idAuthored;
             // Per texel, reading and writing only its own index, so partitioning is byte-identical.
@@ -3520,15 +3652,15 @@ public sealed class SecondSkinService
         foreach (var (maskPath, maskNormalPath, _) in mergeTopFirst)
         {
             if (maskNormalPath == null) continue;
-            var maskPng    = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
-            var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
+            var maskPng    = RemapPath(maskPath, srcType, dstType, texSize, texSize);
+            var maskNormal = RemapPath(maskNormalPath, srcType, dstType, texSize, texSize);
             if (maskPng != null && maskNormal != null)
                 reliefMasks.Add((maskNormal, maskPng));
         }
         if (reliefMasks.Count > 0)
         {
             normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
-            CompositorService.CombineMaskReliefs(normal, TexSize, TexSize, reliefMasks);
+            CompositorService.CombineMaskReliefs(normal, texSize, texSize, reliefMasks);
         }
 
         // Sibling relief: additively fold each same-mod sibling overlay's normal into this shell's normal so a
@@ -3540,7 +3672,7 @@ public sealed class SecondSkinService
         {
             normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
             foreach (var sib in siblingReliefs)
-                CompositorService.CompoundNormal(normal, sib, TexSize, TexSize);
+                CompositorService.CompoundNormal(normal, sib, texSize, texSize);
         }
 
         // ── row-selector repair ──────────────────────────────────────────────
@@ -3563,7 +3695,7 @@ public sealed class SecondSkinService
             // LoadPngAsRgba hands back a shared cached array; the mask merge above clones only when it
             // actually merged, so clone here too rather than writing through to the cache.
             shaderIndex = (byte[])index.Clone();
-            CompositorService.SnapIndexRowsToDefined(shaderIndex, TexSize, TexSize,
+            CompositorService.SnapIndexRowsToDefined(shaderIndex, texSize, texSize,
                 rows.Select(p => p.Row).ToList(), authored: idAuthored);
         }
 
@@ -3575,7 +3707,7 @@ public sealed class SecondSkinService
         if (alpha != null && index != null && rows is { Count: > 0 })
         {
             // The row's two opacities, indexed by the 1-based row pair the index texture names, resolved
-            // ONCE up front. This loop runs per texel — 4.19M times at TexSize — and it used to do
+            // ONCE up front. This loop runs per texel — 4.19M times at a 2K sheet, 16.7M at 4K — and it used to do
             // `rows.FirstOrDefault(p => p.Row == pair)` inside, which allocates a closure capturing `pair`
             // and linearly scans the row list on every one of them. The red channel is a /17 bucket, so
             // there are only ever 16 distinct answers.
@@ -3655,7 +3787,7 @@ public sealed class SecondSkinService
         if (!skinShell)
         {
             var nrm = norm; var al = alpha;
-            CompositorService.ParallelPixels(0, TexSize * TexSize, 1, (from, to) =>
+            CompositorService.ParallelPixels(0, texSize * texSize, 1, (from, to) =>
             {
                 for (int i = from; i < to; i++)
                     nrm[i * 4 + 2] = al?[i] ?? 255;   // blue is the gate; alpha is not used
@@ -3721,12 +3853,15 @@ public sealed class SecondSkinService
 
             // Skip the write when the content AND its encoding match what we last wrote — otherwise every
             // recomposite would look like a change and force a redraw. The encoding is folded into the hash
-            // so toggling compression forces a rewrite instead of a stale skip.
-            var hash = Hash(slots[slot]) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
+            // same reason: a build that grows the sheet must not be able to skip past the file it grew.
+            var hash = Hash(slots[slot])
+                     ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
+                     ^ ((ulong)texSize * 0xBF58476D1CE4E5B9ul);
             bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
             if (!same)
             {
-                if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk, encoding))
+                if (!textureLoader.WriteTex(slots[slot], texSize, texSize, disk, encoding))
                 {
                     log.Error("[Proteus] second skin: failed to write {0}", disk);
                     return null;
@@ -3781,7 +3916,7 @@ public sealed class SecondSkinService
                 unit.Entry.ModDirectory, effectName, effectsFolder ?? "(library unavailable)");
             return null;
         }
-        var scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+        var scroll = textureLoader.LoadPngAsRgba(effectPath, texSize, texSize);
         if (scroll == null)
         {
             log.Warning("[Proteus] content: effect \"{0}\" could not be decoded ({1})", effectName, effectPath);
@@ -3812,10 +3947,12 @@ public sealed class SecondSkinService
                 ? TexEncoding.Bc7
                 : TexEncoding.Uncompressed;
 
-            var hash = Hash(rgba) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            var hash = Hash(rgba)
+                     ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
+                     ^ ((ulong)texSize * 0xBF58476D1CE4E5B9ul);
             if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
             {
-                if (!textureLoader.WriteTex(rgba, TexSize, TexSize, disk, encoding))
+                if (!textureLoader.WriteTex(rgba, texSize, texSize, disk, encoding))
                 {
                     log.Error("[Proteus] content: failed to write {0}", disk);
                     return null;
