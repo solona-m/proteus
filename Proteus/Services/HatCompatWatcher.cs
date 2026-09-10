@@ -147,7 +147,11 @@ public sealed class HatCompatWatcher : IDisposable
     /// </summary>
     private void OnFrameworkUpdate(IFramework framework)
     {
-        if (disposed || Volatile.Read(ref busy) != 0) return;
+        // Proteus switched off means Proteus does nothing, and this had been reading that as "nothing except
+        // keep editing people's mod folders once a second". A patched hairstyle still works with the plugin
+        // off — that is the point of writing into the mod rather than into a redirect — but continuing to
+        // WRITE while switched off is not the same promise at all.
+        if (disposed || !config.PluginEnabled || Volatile.Read(ref busy) != 0) return;
         var now = Environment.TickCount64;
         if (now < nextPoll) return;
         nextPoll = now + PollMs;
@@ -262,7 +266,7 @@ public sealed class HatCompatWatcher : IDisposable
             // and a hairstyle fitted by an older Proteus kept that older Proteus's idea of where a hat sits
             // for good. Redo it from the author's own backup, which is what the setting already promises:
             // it says Proteus checks each hairstyle as you put it on, not each hairstyle once ever.
-            if (!(stale && mayApply && config.AutoHatCompat))
+            if (!(stale && mayApply && config.PluginEnabled && config.AutoHatCompat))
             {
                 current = new View(target, null, Patched: true, Busy: true);
                 return;
@@ -299,7 +303,9 @@ public sealed class HatCompatWatcher : IDisposable
         // the file looks unfitted, and the next examination fits it again within the second.
         if (undone == Identity(target)) return;
 
-        if (mayApply && config.AutoHatCompat && !proposal.AlreadyCompatible)
+        // PluginEnabled as well as the setting: the events this also listens to reach it whether or not the
+        // poll is running, so gating the poll alone would still let a Penumbra change trigger a write.
+        if (mayApply && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
             Write(target, proposal);
     }
 
@@ -334,6 +340,18 @@ public sealed class HatCompatWatcher : IDisposable
 
     private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal)
     {
+        // WHERE IT THINKS THE HEAD IS, every time. The hat line is an offset from that centre and every
+        // other decision is measured from it, so a cut landing somewhere absurd is either a bad centre or
+        // is not the cut at all — and those two look identical in a screenshot. Reading it out of the log
+        // settles in one line what has otherwise taken a build apiece to guess at. The source matters too:
+        // a wearer whose face is vanilla has no model to read, and the skull is guessed from the hair.
+        log.Information("hat compat: head centre y={0:F4} r={1:F4} ({2}), hat line y={3:F4}, "
+                      + "press fades out by y={4:F4}",
+                        proposal.Solve.Centre.Y, proposal.Solve.Radius,
+                        target.Head != null ? "from the face model" : "GUESSED from the hair",
+                        proposal.Solve.Centre.Y + HatCompatSolve.HatLine,
+                        proposal.Solve.Centre.Y + HatCompatSolve.HatLine - HatCompatSolve.FanBelow);
+
         log.Information("hat compat: fitting {0} — pressing {1} vertices, cutting {2} piece(s){3}",
                         target.Rel, proposal.Solve.Considered, proposal.Solve.Cut.Count,
                         // Only when it happened. A shape that had to be cut short leaves hair standing

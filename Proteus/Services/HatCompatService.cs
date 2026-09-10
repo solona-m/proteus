@@ -283,6 +283,22 @@ public static class HatCompatService
             patched = mdl;
             if (tag.Count > 0)
             {
+                // Whatever the author tagged to vanish under a hat, forget it and say it ourselves. A hair
+                // mod carrying atr_kam without a hat shape has almost always inherited the flag from the
+                // vanilla hair it was built on rather than chosen it — one of the models measured here drops
+                // 51% of its geometry that way, down to 70 mm below the chin, and another drops all of it.
+                // That happens with or without Proteus, and it is exactly the "cut far too low" it gets
+                // blamed for. The cut this pass computed is the whole answer, so it starts from a clean mask.
+                //
+                // Inside this branch on purpose: clearing is only defensible because something replaces it.
+                // With nothing to tag — a hairstyle whose geometry above the line all sits outside the hat —
+                // clearing would take away the author's answer and put none of its own back, leaving hair
+                // that used to vanish under a hat clipping through it instead.
+                //
+                // The author's file is untouched on disk and the backup restores it, so this is undoable
+                // like everything else here.
+                patched = ModelAttributeWriter.ClearAttribute(patched, ScalpAttribute);
+
                 // Cut the tails out of whatever they share a submesh with FIRST. An attribute is carried by
                 // a submesh record, and a hairstyle routinely keeps its scalp cap and every one of its
                 // ponytail strands in one — so tagging by submesh number hid the scalp along with the

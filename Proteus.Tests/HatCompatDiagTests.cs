@@ -390,6 +390,258 @@ public class HatCompatDiagTests(ITestOutputHelper o)
     }
 
     /// <summary>An installed c0201 head, standing in for the one the player would actually be wearing.</summary>
+    /// <summary>
+    /// The hairstyles testers reported as broken, measured rather than looked at.
+    /// <para/>
+    /// Point <c>PROTEUS_BADHAIR</c> at a folder of <c>c0201*_hir.mdl</c> files — extracted straight out of
+    /// the <c>.pmp</c> packs they were reported in, so these are the authors' own bytes and not something
+    /// Proteus has already patched.
+    /// <para/>
+    /// The report leads with the head frame, because everything else is measured from it. The hat line is an
+    /// offset from the head's CENTRE, so a centre in the wrong place moves the cut with it and the hairstyle
+    /// loses geometry nowhere near a hat. The centre comes from the wearer's face model when one can be
+    /// resolved and is otherwise guessed from the hair's own bounding box — and that guess is a different
+    /// number for a hairstyle that hangs to the waist than for a bob, which would explain a defect that
+    /// strikes some hairstyles and not others.
+    /// </summary>
+    [Fact]
+    public void MeasureTheHairstylesTestersReportedAsBroken()
+    {
+        var dir = Environment.GetEnvironmentVariable("PROTEUS_BADHAIR")
+               ?? @"C:\Users\solon\AppData\Local\Temp\badhair-mdl";
+        if (!Directory.Exists(dir)) return;
+        var files = Directory.GetFiles(dir, "*_hir.mdl").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (files.Length == 0) return;
+
+        var head = HeadModel();
+        var headFrame = head != null ? HatCompatSolve.FrameAndFloor(head, head) : null;
+        o.WriteLine(headFrame is { } hf
+            ? $"wearer's head: centre y {hf.Centre.Y:F4}, radius {hf.Radius:F4}  ->  hat line "
+            + $"{hf.Centre.Y + HatCompatSolve.HatLine:F4}"
+            : "NO FACE MODEL FOUND - every hairstyle below falls back to guessing the skull from the hair");
+        o.WriteLine("");
+        // WITH the face model and WITHOUT it. In game the face comes from the live model list, and a player
+        // wearing a VANILLA face resolves to a game path that is not a file on disk — so head is null and
+        // the solve falls back to guessing the skull from the hair's own bounding box. That fallback has
+        // never been measured against a long hairstyle, and it is the one thing that differs between a
+        // tester's character and this harness, which always finds a modded face.
+        o.WriteLine($"{"hairstyle",-34} {"centre y",9} {"hat line",9} {"hair y range",16} "
+                  + $"{"cut",6} {"of",6} {"press",6}");
+        o.WriteLine("");
+        o.WriteLine("--- with the wearer's face model (what this harness has always measured) ---");
+
+        // WHAT THE AUTHOR ALREADY DID. IsHatCompatible only asks about shp_hib, so a model that ships
+        // atr_kam without a shape reads as untouched — Proteus then tries to patch it, AddAttribute refuses
+        // because the attribute is already there, and nothing is written. The hairstyle still loses whatever
+        // the author tagged the moment a hat goes on, which looks exactly like a Proteus cut in the wrong
+        // place and is not one.
+        o.WriteLine("--- what the author already shipped ---");
+        foreach (var f in files)
+        {
+            byte[] mdl;
+            try { mdl = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            SecondSkinWriter.Source src;
+            try { src = SecondSkinWriter.Parse(mdl); } catch { o.WriteLine($"{Path.GetFileName(f),-46} unparsable"); continue; }
+
+            bool shape = ModelAttributeWriter.DeclaresShape(mdl, HatShape);
+            int kam = Array.IndexOf(src.AttrNames, "atr_kam");
+
+            // How much geometry the author's own atr_kam takes away, and how far down it reaches.
+            int tagged = 0, total = 0;
+            float lowest = float.MaxValue;
+            var meshes = HatCompatSolve.ReadLod0Meshes(mdl);
+            foreach (var mv in meshes)
+            {
+                int mo = src.MeshStart + mv.Mesh * 36;
+                ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
+                for (int s = 0; s < subCount; s++)
+                {
+                    int ss = src.SubmeshStart + (subIdx + s) * 16;
+                    uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                    total += (int)(ic / 3);
+                    if (kam < 0 || (BitConverter.ToUInt32(mdl, ss + 8) & (1u << kam)) == 0) continue;
+                    tagged += (int)(ic / 3);
+                    for (uint k = 0; k < ic; k++)
+                    {
+                        int v = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + k) * 2);
+                        if (v < mv.Positions.Length) lowest = MathF.Min(lowest, mv.Positions[v].Y);
+                    }
+                }
+            }
+
+            // And whether the patch actually goes through, end to end, on the author's own bytes. This is
+            // the step that used to throw on every model carrying atr_kam, so asserting it rather than
+            // describing it is the point: a hairstyle that cannot be written is not fitted at all.
+            string outcome;
+            try
+            {
+                var parts = ModelPartReader.Read(mdl);
+                var solve = HatCompatSolve.Solve(mdl, parts!, head);
+                var cleared = ModelAttributeWriter.ClearAttribute(mdl, "atr_kam");
+                var (split, targets) = ModelAttributeWriter.IsolateParts(cleared, solve.Cut);
+                var withAttr = solve.Cut.Count > 0
+                    ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
+                var final = solve.Moved.Count > 0
+                    ? ModelAttributeWriter.AddShape(withAttr, HatShape, solve.Moved, out _) : withAttr;
+
+                // Whatever the author hid must be gone from the mask, replaced by the cut's own answer.
+                var after = SecondSkinWriter.Parse(final);
+                int bitAfter = Array.IndexOf(after.AttrNames, "atr_kam");
+                int nowTagged = 0, nowAll = 0;
+                foreach (var mv in HatCompatSolve.ReadLod0Meshes(final))
+                {
+                    int mo2 = after.MeshStart + mv.Mesh * 36;
+                    ushort si = BitConverter.ToUInt16(final, mo2 + 10), sc = BitConverter.ToUInt16(final, mo2 + 12);
+                    for (int s = 0; s < sc; s++)
+                    {
+                        int ss = after.SubmeshStart + (si + s) * 16;
+                        int t2 = (int)(BitConverter.ToUInt32(final, ss + 4) / 3);
+                        nowAll += t2;
+                        if (bitAfter >= 0 && (BitConverter.ToUInt32(final, ss + 8) & (1u << bitAfter)) != 0)
+                            nowTagged += t2;
+                    }
+                }
+                Assert.NotNull(ModelPartReader.Read(final));
+                outcome = $"PATCHED, now hides {100.0 * nowTagged / nowAll:F1}%";
+            }
+            catch (Exception ex) { outcome = $"FAILED: {ex.Message}"; }
+
+            o.WriteLine($"{Path.GetFileName(f),-46} shp_hib={(shape ? "YES" : "no "),-4} "
+                      + $"atr_kam={(kam >= 0 ? "YES" : "no "),-4}"
+                      + (tagged > 0
+                          ? $"  author hid {100.0 * tagged / total,5:F1}% down to y={lowest:F4}" : "")
+                      + $"   -> {outcome}");
+        }
+
+        foreach (var (label, wearer) in new[] { ("with the wearer's face model", head), ("VANILLA FACE - no model to read", null) })
+        {
+        o.WriteLine("");
+        o.WriteLine($"--- {label} ---");
+        foreach (var f in files)
+        {
+            byte[] mdl;
+            ModelParts? parts;
+            HatCompatSolve.Result solve;
+            try
+            {
+                mdl = File.ReadAllBytes(f);
+                parts = ModelPartReader.Read(mdl);
+                if (parts == null) { o.WriteLine($"{Path.GetFileName(f),-34} unreadable"); continue; }
+                solve = HatCompatSolve.Solve(mdl, parts, wearer);
+            }
+            catch (Exception ex) { o.WriteLine($"{Path.GetFileName(f),-34} {ex.GetType().Name}: {ex.Message}"); continue; }
+
+            var meshes = HatCompatSolve.ReadLod0Meshes(mdl);
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var mv in meshes)
+                foreach (var p in mv.Positions) { lo = MathF.Min(lo, p.Y); hi = MathF.Max(hi, p.Y); }
+
+            // How much of the model the cut takes, counted in triangles so it is comparable across models.
+            int cutTris = 0, allTris = 0;
+            var src = SecondSkinWriter.Parse(mdl);
+            foreach (var mv in meshes)
+            {
+                int mo = src.MeshStart + mv.Mesh * 36;
+                ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
+                for (int s = 0; s < subCount; s++)
+                    allTris += (int)(BitConverter.ToUInt32(mdl, src.SubmeshStart + (subIdx + s) * 16 + 4) / 3);
+            }
+            foreach (var part in solve.Cut)
+            {
+                if (part.Island < 0)
+                {
+                    int mo = src.MeshStart + part.Mesh * 36;
+                    ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10);
+                    cutTris += (int)(BitConverter.ToUInt32(
+                        mdl, src.SubmeshStart + (subIdx + part.Submesh) * 16 + 4) / 3);
+                }
+                else cutTris += part.Ordinals.Length;
+            }
+
+            float hatLine = solve.Centre.Y + HatCompatSolve.HatLine;
+
+            // HOW FAR DOWN the cut actually reaches. It is supposed to take only triangles whose every
+            // corner clears the hat line, so the lowest corner of anything cut should sit ON that line. A
+            // cut corner well below it means the classification is picking up geometry a hat never covers,
+            // which is what a visible slice across the chest would be.
+            float lowestCut = float.MaxValue;
+            // And HOW FAR OUT. The cut is a horizontal plane, but a hat is not a half-space — it is a shell
+            // sitting on the skull, roughly 130 mm from the head's centre at its widest. A strand sweeping
+            // forward over the shoulder crosses the hat line a long way in front of the face, where no hat
+            // reaches, and cutting it there leaves an edge in plain view.
+            float furthestCut = 0f, cutBeyond = 0f;
+            int cutOutside = 0, cutTotal = 0;
+            const float HatShell = 0.13f;
+            var byMesh = meshes.ToDictionary(m => m.Mesh, m => m.Positions);
+            foreach (var part in solve.Cut)
+            {
+                if (!byMesh.TryGetValue(part.Mesh, out var pos)) continue;
+                foreach (var v in HatCompatSolve.VerticesOf(mdl, src, part))
+                {
+                    if (v >= pos.Length) continue;
+                    lowestCut = MathF.Min(lowestCut, pos[v].Y);
+                    float r = (pos[v] - solve.Centre).Length();
+                    furthestCut = MathF.Max(furthestCut, r);
+                    cutTotal++;
+                    if (r > HatShell) { cutOutside++; cutBeyond = MathF.Max(cutBeyond, r); }
+                }
+            }
+
+            o.WriteLine($"{Path.GetFileName(f),-34} {solve.Centre.Y,9:F4} {hatLine,9:F4} "
+                      + $"{lo,7:F3}..{hi,-8:F3} {cutTris,6} {allTris,6} {solve.Considered,6}"
+                      + (allTris > 0 ? $"   {100.0 * cutTris / allTris,5:F1}% cut" : "")
+                      + (solve.Dropped > 0 ? $"   DROPPED {solve.Dropped} for budget" : "")
+                      + (cutTotal > 0
+                          ? $"   cut reaches {furthestCut * 1000:F0} mm from centre; "
+                          + $"{100.0 * cutOutside / cutTotal:F0}% of cut corners are beyond a hat "
+                          + $"(worst {cutBeyond * 1000:F0} mm)" : ""));
+        }
+        }
+    }
+
+    /// <summary>
+    /// Does every face model agree about where the head is?
+    /// <para/>
+    /// The hat line is an offset from the head's CENTRE, and that centre is the midpoint of the face model's
+    /// bounding box — so it is only as stable as the face mod the player happens to be wearing. If two face
+    /// mods disagree, the cut lands at a different height for each of them, and a hairstyle that fits one
+    /// wearer is sliced across the chest on another. Everything measured here so far used whichever
+    /// <c>_fac</c> model the harness found first, which would hide exactly that.
+    /// </summary>
+    [Fact]
+    public void DoAllFaceModelsAgreeWhereTheHeadIs()
+    {
+        if (!Directory.Exists(Mods)) return;
+        string[] faces;
+        try { faces = Directory.GetFiles(Mods, "c0201f*_fac.mdl", SearchOption.AllDirectories); }
+        catch (IOException) { return; }
+        if (faces.Length == 0) return;
+
+        o.WriteLine($"{"face model",-46} {"centre y",9} {"radius",8} {"hat line",9} {"model y range",18}");
+        var centres = new List<float>();
+        foreach (var f in faces.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            byte[] head;
+            try { head = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            if (HatCompatSolve.FrameAndFloor(head, head) is not { } fr) { o.WriteLine($"{Trim(f),-46} unreadable"); continue; }
+
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var mv in HatCompatSolve.ReadLod0Meshes(head))
+                foreach (var p in mv.Positions) { lo = MathF.Min(lo, p.Y); hi = MathF.Max(hi, p.Y); }
+
+            centres.Add(fr.Centre.Y);
+            o.WriteLine($"{Trim(f),-46} {fr.Centre.Y,9:F4} {fr.Radius,8:F4} "
+                      + $"{fr.Centre.Y + HatCompatSolve.HatLine,9:F4} {lo,8:F3}..{hi,-8:F3}");
+        }
+
+        if (centres.Count == 0) return;
+        centres.Sort();
+        o.WriteLine("");
+        o.WriteLine($"{centres.Count} face model(s): centre y spans {centres[0]:F4}..{centres[^1]:F4} "
+                  + $"= {(centres[^1] - centres[0]) * 1000:F0} mm of disagreement about where the head is, "
+                  + $"which the hat line inherits one-for-one.");
+    }
+
     private static byte[]? HeadModel()
     {
         if (!Directory.Exists(Mods)) return null;
@@ -814,7 +1066,8 @@ public class HatCompatDiagTests(ITestOutputHelper o)
                 // ponytails is withdrawn, so solve.Cut is computed and not applied. Tagging Hide here
                 // instead measured a patch the plugin does not produce.
                 var tag = solve.Cut;
-                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
+                var cleared = ModelAttributeWriter.ClearAttribute(mdl, "atr_kam");
+                var (split, targets) = ModelAttributeWriter.IsolateParts(cleared, tag);
                 patched = tag.Count > 0
                     ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
                 patched = ModelAttributeWriter.AddShape(patched, HatShape, solve.Moved, out stuck);
@@ -1104,7 +1357,8 @@ public class HatCompatDiagTests(ITestOutputHelper o)
                 // ponytails is withdrawn, so solve.Cut is computed and not applied. Tagging Hide here
                 // instead measured a patch the plugin does not produce.
                 var tag = solve.Cut;
-                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
+                var cleared = ModelAttributeWriter.ClearAttribute(mdl, "atr_kam");
+                var (split, targets) = ModelAttributeWriter.IsolateParts(cleared, tag);
                 patched = tag.Count > 0
                     ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
                 if (solve.Moved.Count > 0)

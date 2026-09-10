@@ -32,7 +32,7 @@ public static class HatCompatSolve
     /// only way back was to undo and re-fit each one by hand. Stamping the record makes the watcher able to
     /// tell a current patch from a stale one, so it can redo the stale one by itself.
     /// </summary>
-    public const int Version = 14;
+    public const int Version = 16;
 
     /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
@@ -132,6 +132,24 @@ public static class HatCompatSolve
     // trade: it cleared the budget on four that were drawing correctly anyway, did not change the leak on
     // any of the three that were not, by so much as one vertex, and put 1 to 5 vertices through the hat on
     // twelve hairstyles that had been at zero. Left here as a signpost, because it is an appealing idea.
+
+    /// <summary>
+    /// How far beyond the scalp the cut still reaches, in model units — the thickness of the hat it assumes
+    /// is around the hair.
+    /// <para/>
+    /// Being above the hat line is only half of being hidden. The line is a horizontal plane; a hat is a
+    /// shell sitting on a skull, and the two agree only near the head. Without this bound the cut deleted
+    /// anything above the line however far out it sat, which on a long or voluminous hairstyle means the
+    /// strands sweeping forward over the shoulders — they cross the plane well in front of the face, where
+    /// no hat is, and lose their upper half to a horizontal edge across the chest.
+    /// <para/>
+    /// 30 mm, from the gap between hat and scalp measured across the reference hats. Over the crown, which
+    /// is the region above the hat line, that gap runs 12-30 mm; it opens to 60 mm lower down where a brim
+    /// flares away, but hair out there is below the line and none of the cut's business. Taking the small
+    /// end is the safe direction: hair inside a hat that goes uncut is merely pressed instead, which costs
+    /// shape values and looks like nothing, while hair cut outside one is a hole.
+    /// </summary>
+    public const float CutReach = 0.030f;
 
     /// <summary>
     /// How far BELOW the hat line the press keeps working before it fades to nothing, in model units.
@@ -552,7 +570,7 @@ public static class HatCompatSolve
         // hair vanish, and the fade below the line now presses tails smoothly along their own length, which
         // is what the exclusion had been protecting them from. <see cref="Strands"/> still classifies them
         // for the diagnostics; the solve no longer pays for it on every hairstyle change.
-        var (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine);
+        var (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine, centre, floor);
 
         // Where the press stops entirely. Everything between here and the hat line is faded, not cut off.
         float fanBottom = hatLine - fan;
@@ -637,9 +655,26 @@ public static class HatCompatSolve
 
         var presses = new List<float>();
         int dropped = 0;
+        // How many vertices each mesh already has, and how many spares the shape has promised it so far.
+        var meshVertexCount = meshes.ToDictionary(m => m.Mesh, m => m.Positions.Length);
+        var spares = new Dictionary<int, int>();
         foreach (var c in candidates)
         {
             if (spent + c.Cost > budget) { dropped++; continue; }
+
+            // AND the mesh's own vertex ceiling, which is a second, quite separate limit. A shape carries
+            // each moved vertex as a SPARE appended to its mesh, and VertexCount is a u16 — so a dense mesh
+            // can be well inside the shape-value budget and still have nowhere to put the spares.
+            // AddShape refuses outright when that happens, and refusing means the hairstyle is not fitted at
+            // all: two of the nine reported by testers failed here, needing 76407 and 69955 vertices against
+            // a ceiling of 65535, and got no shape and no cut for it. Stopping at the ceiling instead spends
+            // what room there is on the vertices that most need it, since the queue is already in that
+            // order, and leaves a partial fit rather than none.
+            meshVertexCount.TryGetValue(c.Mesh, out int have);
+            spares.TryGetValue(c.Mesh, out int used);
+            if (have + used >= ushort.MaxValue) { dropped++; continue; }
+            spares[c.Mesh] = used + 1;
+
             spent += c.Cost;
             if (!moved.TryGetValue(c.Mesh, out var here))
                 moved[c.Mesh] = here = new Dictionary<int, Vector3>();
@@ -674,11 +709,24 @@ public static class HatCompatSolve
     /// </summary>
     /// <returns>The submesh pieces to tag, and the vertices that no surviving triangle draws — those need no
     /// shape value, and spending one on them is what the budget cannot afford.</returns>
+    /// <param name="centre">The head's centre, for judging how far out a triangle sits.</param>
+    /// <param name="floor">The scalp's own radius per direction — see <see cref="HeadFloor"/>.</param>
     private static (List<ModelPart> Drop, HashSet<long> Gone) CutAtHatLine(
-        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine)
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine,
+        Vector3 centre, float[] floor)
     {
         var drop = new List<ModelPart>();
         var gone = new HashSet<long>();
+
+        // Whether a point sits beyond the hat that would be around it, judged against the scalp's own radius
+        // in that direction rather than one global sphere — a head is nothing like a sphere, and a fixed
+        // radius would spare the nose and cut the nape.
+        bool Outside(Vector3 p)
+        {
+            var d = p - centre;
+            float len = d.Length();
+            return len > 1e-5f && len > floor[BinOf(d / len)] + CutReach;
+        }
 
         foreach (var mv in meshes)
         {
@@ -706,6 +754,16 @@ public static class HatCompatSolve
 
                     uses[a]++; uses[b]++; uses[c]++;
                     if (pos[a].Y < hatLine || pos[b].Y < hatLine || pos[c].Y < hatLine) continue;
+
+                    // ABOVE THE LINE IS NOT ENOUGH — it must also be close enough to the head for a hat to
+                    // be around it. The line is a horizontal plane and a hat is a shell sitting on a skull,
+                    // so the two only agree near the head. A strand sweeping forward over the shoulder
+                    // crosses the plane a long way in front of the face, where no hat reaches; deleting it
+                    // there leaves a horizontal edge across the chest, which is exactly what testers saw.
+                    // Measured on the nine hairstyles they reported: the cut was reaching 189 mm from the
+                    // head's centre, against a hat shell that is about 130 mm at its widest.
+                    if (Outside(pos[a]) || Outside(pos[b]) || Outside(pos[c])) continue;
+
                     lost[a]++; lost[b]++; lost[c]++;
                     above.Add((int)(t / 3));
                 }

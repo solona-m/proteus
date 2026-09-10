@@ -50,6 +50,47 @@ public static class ModelAttributeWriter
     // ── attributes ──────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Take <paramref name="attributeName"/> off LOD0's submeshes, leaving the name in the table. A no-op on
+    /// a model that never declared it.
+    /// <para/>
+    /// For an attribute Proteus decides the meaning of. <c>atr_kam</c> says "drop this under a hat", and a
+    /// hair mod that ships it without a hat shape is usually not making a considered claim — it inherited
+    /// the flag from the vanilla hair it was built on, along with whatever that hair tagged. Measured across
+    /// the models testers reported: one drops half its geometry that way, another all of it, reaching far
+    /// below anything a hat covers. Adding to that mask can only make a hairstyle vanish harder, so the cut
+    /// clears it first and states the whole answer itself.
+    /// <para/>
+    /// LOD0 ONLY, and that bound matters. The submesh array is model-wide, so walking it by the header's own
+    /// count reaches LOD1 and LOD2 as well — but the cut that replaces what is cleared is computed from
+    /// LOD0's geometry and can only name LOD0's submeshes. Clearing all three would leave the distant LODs
+    /// tagged with nothing at all, so hair that correctly vanishes under a hat up close would reappear
+    /// through it as soon as the game swapped LOD.
+    /// </summary>
+    public static byte[] ClearAttribute(byte[] mdl, string attributeName)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int bit = Array.IndexOf(src.AttrNames, attributeName);
+        if (bit < 0) return mdl;
+
+        var o = (byte[])mdl.Clone();
+        uint keep = ~(1u << bit);
+        int end = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        for (int m = src.Lod0MeshIndex; m < end; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (mo + 36 > o.Length) break;
+            ushort subIdx = BitConverter.ToUInt16(o, mo + 10), subCount = BitConverter.ToUInt16(o, mo + 12);
+            for (int s = 0; s < subCount; s++)
+            {
+                int at = src.SubmeshStart + (subIdx + s) * 16;
+                if (at + 16 > o.Length) break;
+                W32(o, at + 8, BitConverter.ToUInt32(o, at + 8) & keep);
+            }
+        }
+        return o;
+    }
+
+    /// <summary>
     /// Add <paramref name="attributeName"/> to the model's attribute table and tag every named submesh with
     /// it. The submeshes then draw only while the attribute is enabled, which an IMC entry decides.
     /// <para/>
@@ -57,6 +98,8 @@ public static class ModelAttributeWriter
     /// indexes the table positionally. Which IMC bit ends up driving it is a different question with a
     /// different answer — the trailing letter of the NAME, see <c>SecondSkinService.PartAttributeBit</c> —
     /// so the two never have to agree and the caller picks the letter.
+    /// <para/>
+    /// A name the model ALREADY declares is tagged against the bit it already has — see below.
     /// </summary>
     /// <param name="targets">(mesh index, submesh index within that mesh) pairs.</param>
     public static byte[] AddAttribute(
@@ -64,11 +107,42 @@ public static class ModelAttributeWriter
     {
         var src = SecondSkinWriter.Parse(mdl);
         int attrCount = src.AttrNames.Length;
+
+        // ALREADY THERE — tag against the bit it already has, rather than refusing.
+        //
+        // Refusing was wrong, and expensively so. Hair mods ship atr_kam without a hat shape all the time —
+        // seven of nine reported broken by testers did — usually inherited from whatever vanilla hair they
+        // were built on. The model is not hat-compatible in any useful sense, since nothing presses the hair,
+        // but the attribute is present, so this threw and the whole patch was abandoned. The hairstyle then
+        // kept the author's tagging, which on one measured model drops 51% of the hair the moment a hat goes
+        // on, and Proteus could neither improve it nor explain it.
+        //
+        // Nothing is inserted on this path: the name is in the table and every offset stays where it is, so
+        // only the submesh masks change. It therefore needs no free slot, which is why it is tested BEFORE
+        // the table-full guard below — checking that first refused the one model shape this exists to
+        // rescue, a full table that already holds the very name being asked for.
+        int existing = Array.IndexOf(src.AttrNames, attributeName);
+        if (existing >= 0)
+        {
+            var reused = (byte[])mdl.Clone();
+            uint reusedBit = 1u << existing;
+            foreach (var (mesh, submesh) in targets)
+            {
+                int mo = src.MeshStart + mesh * 36;
+                ushort subIdx = BitConverter.ToUInt16(reused, mo + 10);
+                ushort subCount = BitConverter.ToUInt16(reused, mo + 12);
+                if (submesh < 0 || submesh >= subCount)
+                    throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+                int at = src.SubmeshStart + (subIdx + submesh) * 16;
+                W32(reused, at + 8, BitConverter.ToUInt32(reused, at + 8) | reusedBit);
+            }
+            return reused;
+        }
+
+        // Only a NEW name needs a slot, so the ceiling is enforced here rather than at the top.
         if (attrCount >= MaxAttributes)
             throw new ModelEditException(
                 $"this model already declares {attrCount} attributes, which is all a submesh mask can hold");
-        if (src.AttrNames.Contains(attributeName, StringComparer.Ordinal))
-            throw new ModelEditException($"this model already declares an attribute named {attributeName}");
 
         // Padded to four bytes so every table after the string block keeps its alignment. The tables are
         // read by byte offset and would parse either way, but a u32 array landing on an odd address is not
