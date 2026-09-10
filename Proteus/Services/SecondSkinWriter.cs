@@ -8032,9 +8032,34 @@ public static class SecondSkinWriter
         //
         // Deliberately after the ramp smoothing, not folded into the averaging loop above: relaxW is not
         // smoothed today, and a pin that a later Jacobi pass could bleed back into is not a pin.
+        //
+        // FADED OVER SEVERAL RINGS, not zeroed at the rim alone. Zeroing only the boundary nodes is the
+        // same mistake this file records twice elsewhere — a full-weight node sitting directly beside a
+        // pinned one, so the whole displacement appears across a single edge. Measured on the crotch
+        // socket that turned the fold from a flattener into a lip: the cross-section came out 9.9% ROUGHER
+        // than the untouched body, worst in exactly the three bands the socket passes through.
+        //
+        // So the pin gets a skirt. Graph distance out from the rim, smoothstepped, which leaves the rim
+        // exactly where it is and lets the relax come back up to full strength a few rings away.
         if (rimNode != null)
+        {
+            var ring = new int[nodeCount];
+            Array.Fill(ring, -1);
+            var q0 = new Queue<int>();
+            for (int n = 0; n < nodeCount; n++) if (rimNode[n]) { ring[n] = 0; q0.Enqueue(n); }
+            while (q0.Count > 0)
+            {
+                int q = q0.Dequeue();
+                if (ring[q] >= RimPinFade || adj[q] == null) continue;
+                foreach (int k in adj[q])
+                    if (ring[k] < 0) { ring[k] = ring[q] + 1; q0.Enqueue(k); }
+            }
             for (int n = 0; n < nodeCount; n++)
-                if (rimNode[n]) relaxW[n] = 0f;
+            {
+                if (ring[n] < 0) continue;                       // beyond the skirt, untouched
+                relaxW[n] *= Smoothstep(ring[n] / (float)RimPinFade);
+            }
+        }
 
         int region = 0;
         for (int n = 0; n < nodeCount; n++) if (nW[n] > 0f) region++;
@@ -9233,7 +9258,25 @@ public static class SecondSkinWriter
             if (near[i] > 0f)
             {
                 float b = Fade(-pos[i].Z, back);
-                if (b > 0f) { relax[i] = box * b; relaxed++; if (pos[i].Z <= 0f) under++; }
+
+                // CONFINED TO THE FOLD'S OWN WIDTH, which is narrower than the corridor. `box` holds full
+                // strength everywhere inside the corridor and only fades beyond it, so the relax was
+                // smoothing the inner thigh as hard as the crotch — and the thigh is where a garment's leg
+                // trim runs. Measured per lateral bin, the mean displacement PEAKED at 15-18mm off the
+                // midline (3.39mm, against 0.93mm on the midline) with a 4.63mm spread inside that single
+                // bin: both larger and less even than anything at the centre, which is a trim that wanders
+                // rather than one that lifts.
+                //
+                // The fold's shoulders sit at ±10mm against a corridor of ±16.6mm, so full strength out to
+                // half the corridor covers the feature and the fade covers the rest. Tapering from the
+                // midline instead would weaken the shoulders, which are part of what is being flattened.
+                float side2 = MathF.Abs(pos[i].X - mid);
+                float core = corridor * FoldRelaxCore;
+                float confine = side2 <= core ? 1f
+                              : 1f - Smoothstep(Math.Clamp((side2 - core) / (corridor - core), 0f, 1f));
+
+                if (b > 0f && confine > 0f)
+                { relax[i] = box * b * confine; relaxed++; if (pos[i].Z <= 0f) under++; }
             }
         }
         if (seeded < MinBustBridgeNodes)
@@ -9262,6 +9305,18 @@ public static class SecondSkinWriter
     /// them is the inner thigh and spanning to THAT is what webs the legs together.
     /// </summary>
     private const float FoldCorridor = 0.5f;
+
+    /// <summary>
+    /// How much of the corridor the RELAX holds at full strength before it starts fading, as a fraction of
+    /// the corridor's own half-width. The rest of the corridor gets the fade.
+    /// <para/>
+    /// Half, because the fold's shoulders sit at about ±10mm against a corridor of ±16.6mm: full strength
+    /// to ±8.3mm and a fade from there covers the feature and lets go of the inner thigh, which is what
+    /// the garment's leg trim lies on. This is NOT the same thing as the corridor's own feather — that
+    /// fades the region out past its edge to avoid a step; this decides how much of the inside of the
+    /// region the relax is entitled to work on at all.
+    /// </summary>
+    private const float FoldRelaxCore = 0.5f;
 
     /// <summary>
     /// Flatten each row of the region onto a straight line fitted across its own OUTER surface — the
@@ -9327,6 +9382,7 @@ public static class SecondSkinWriter
         }
         if (hiL <= loL) return target;
         float latW = hiL - loL;
+        float midL = (loL + hiL) * 0.5f;
 
         int Bin(float u) => Math.Clamp((int)((u - loL) / latW * EnvelopeBins), 0, EnvelopeBins - 1);
 
@@ -9338,65 +9394,84 @@ public static class SecondSkinWriter
             if (h0[n] > binMax[b, q]) { binMax[b, q] = h0[n]; binLat[b, q] = lat[n]; }
         }
 
-        // A PARABOLA through each band's envelope samples, not a straight line. The corridor is 33mm of a
-        // round body, so a line fitted across it is a chord of the body's own curvature: snapping the
-        // surface onto one flattens the hip as well as the fold, which showed up as 17mm of movement in
-        // rows that have no fold in them at all. A quadratic carries the curvature and leaves the fold as
-        // the part that deviates from it.
-        var fitA = new float[bands];
-        var fitB = new float[bands];
-        var fitC = new float[bands];
+        // A LOW-PASS ALONG THE BAND, not a polynomial fitted to it.
+        //
+        // This used to fit a parabola, and the note that stood here said why that could not be rescued by
+        // feeding it better samples: the fold's cross-section is a W — shoulders at ±10mm, grooves at
+        // ±6mm, a ridge on the midline — and a parabola cannot describe a W, so the fold is not what
+        // deviates from the fitted curve. It showed in its own log line: the fit left 8.6mm rms against a
+        // feature only 4.6mm tall, which is to say the target was mostly noise. Snapping a surface onto a
+        // target that wrong is why the pass MADE the crotch rougher, measured at 9.9% worse than the
+        // untouched body across the bands it moved.
+        //
+        // What actually separates the two is SCALE, not shape. The body's curvature runs the width of the
+        // corridor; the fold wiggles several times across it. So smooth the envelope laterally and keep
+        // what survives: a low-pass carries any curvature the body happens to have — no assumption that it
+        // is a parabola, or symmetric, or has one minimum — and removes the fold whatever shape it is.
+        //
+        // It is also TWO-SIDED, which a raise-only construction is not. Filling the grooves alone leaves
+        // the midline ridge standing, and the ridge is most of what still shows; here a node above the
+        // smoothed line moves in and one below moves out, so the ridge comes down as the grooves come up.
+        // SIZED IN MILLIMETRES, not in bins. The bins span whatever lateral extent the region happens to
+        // have, and that is the FEATHERED corridor — 59.7mm on the body this was tuned against, not the
+        // 33.2mm corridor itself. Counting passes instead of distance therefore made the filter almost
+        // twice as wide as intended (sigma 8.9mm against the 5mm meant), wide enough to smooth the inner
+        // thigh's own curvature. That showed up as the pass moving the surface MOST at 15-18mm off the
+        // midline — further out than the fold reaches, and right where a garment's leg trim runs, which is
+        // exactly the trim wobbling in game.
+        //
+        // k passes of [1 2 1] is a Gaussian of sigma = sqrt(k/2) bins, so k = 2*(sigma/binWidth)^2.
+        float binW = latW / EnvelopeBins;
+        int passes = Math.Clamp((int)MathF.Round(2f * (EnvelopeSmoothSigma / binW) * (EnvelopeSmoothSigma / binW)),
+                                1, 40);
+
+        var prof = new float[bands, EnvelopeBins];
         var fitOk = new bool[bands];
+        var row = new float[EnvelopeBins];
+        var next = new float[EnvelopeBins];
         for (int b = 0; b < bands; b++)
         {
-            // Normal equations for h = a + b*u + c*u^2, solved by Gaussian elimination on a 3x3.
-            var mm = new double[3, 4];
-            int n = 0;
+            int have = 0;
+            for (int q = 0; q < EnvelopeBins; q++) if (binMax[b, q] != float.MinValue) have++;
+            if (have < EnvelopeMinBins) continue;
+
+            // Gaps filled from the nearest sample either side before smoothing, so an empty bin does not
+            // drag its neighbours toward zero — and so the smoothing kernel stays uniform, which is what
+            // makes "how many passes" mean a fixed distance on the body.
             for (int q = 0; q < EnvelopeBins; q++)
             {
-                if (binMax[b, q] == float.MinValue) continue;
-
-                // EVERY BIN, INCLUDING THE VALLEY'S OWN. Excluding the middle — fitting only the shoulders
-                // and letting the parabola interpolate across, the way the chord is anchored on the ground
-                // either side of a gap — is the obvious idea and it measured WORSE. Starved of the middle,
-                // barely half the bands could fit at all (9 of 19 against 13), the residual tripled to
-                // 16.9mm, and the rows it was meant to flatten came out rougher: y 0.872 went 4.63mm to
-                // 5.55mm and y 0.880 went 4.16mm to 5.23mm.
-                //
-                // The lesson is about the MODEL, not the samples. A parabola cannot describe a W, so no
-                // choice of which points to feed it produces a curve the fold deviates from — starving it
-                // only makes it extrapolate. Fixing this properly means a different construction here, not
-                // a better-chosen subset.
-                double u = binLat[b, q], h = binMax[b, q];
-                double[] t = [1, u, u * u];
-                for (int i = 0; i < 3; i++)
-                {
-                    for (int j = 0; j < 3; j++) mm[i, j] += t[i] * t[j];
-                    mm[i, 3] += t[i] * h;
-                }
-                n++;
+                if (binMax[b, q] != float.MinValue) { row[q] = binMax[b, q]; continue; }
+                float lo2 = float.MinValue, hi2 = float.MinValue;
+                for (int k = q - 1; k >= 0; k--) if (binMax[b, k] != float.MinValue) { lo2 = binMax[b, k]; break; }
+                for (int k = q + 1; k < EnvelopeBins; k++) if (binMax[b, k] != float.MinValue) { hi2 = binMax[b, k]; break; }
+                row[q] = lo2 == float.MinValue ? hi2 : hi2 == float.MinValue ? lo2 : (lo2 + hi2) * 0.5f;
             }
-            if (n < EnvelopeMinBins) continue;
 
-            bool ok = true;
-            for (int c = 0; c < 3 && ok; c++)
+            // [1 2 1], repeated. Clamped at the ends rather than wrapped or reflected: the corridor's edge
+            // is the inner thigh, not the other side of the same feature.
+            for (int pass = 0; pass < passes; pass++)
             {
-                int piv = c;
-                for (int r = c + 1; r < 3; r++) if (Math.Abs(mm[r, c]) > Math.Abs(mm[piv, c])) piv = r;
-                if (Math.Abs(mm[piv, c]) < 1e-20) { ok = false; break; }
-                if (piv != c) for (int j = 0; j <= 3; j++) (mm[c, j], mm[piv, j]) = (mm[piv, j], mm[c, j]);
-                for (int r = 0; r < 3; r++)
+                for (int q = 0; q < EnvelopeBins; q++)
                 {
-                    if (r == c) continue;
-                    double f2 = mm[r, c] / mm[c, c];
-                    for (int j = c; j <= 3; j++) mm[r, j] -= f2 * mm[c, j];
+                    float l = row[Math.Max(0, q - 1)], r = row[Math.Min(EnvelopeBins - 1, q + 1)];
+                    next[q] = (l + 2f * row[q] + r) * 0.25f;
                 }
+                (row, next) = (next, row);
             }
-            if (!ok) continue;
-            fitA[b] = (float)(mm[0, 3] / mm[0, 0]);
-            fitB[b] = (float)(mm[1, 3] / mm[1, 1]);
-            fitC[b] = (float)(mm[2, 3] / mm[2, 2]);
+
+            for (int q = 0; q < EnvelopeBins; q++) prof[b, q] = row[q];
             fitOk[b] = true;
+        }
+
+        // The smoothed profile read back at an arbitrary lateral position, linearly between bin centres.
+        float Envelope(int b, float u)
+        {
+            float t = (u - loL) / latW * EnvelopeBins - 0.5f;
+            int q0 = (int)MathF.Floor(t);
+            float f = t - q0;
+            int qa = Math.Clamp(q0, 0, EnvelopeBins - 1);
+            int qb = Math.Clamp(q0 + 1, 0, EnvelopeBins - 1);
+            return prof[b, qa] + (prof[b, qb] - prof[b, qa]) * Math.Clamp(f, 0f, 1f);
         }
 
         // How much the envelope actually rises and falls across each band — the size of whatever feature
@@ -9415,9 +9490,16 @@ public static class SecondSkinWriter
 
         // Smoothed down the bands for the same reason the chord smooths its apex line: each band takes its
         // samples from whichever vertices fall in it, and that wobbles by a fraction of an edge from one
-        // row to the next.
-        for (int pass = 0; pass < BustBandSmoothing; pass++)
-        { Smooth1D(fitA, bands); Smooth1D(fitB, bands); Smooth1D(fitC, bands); Smooth1D(bandRelief, bands); }
+        // row to the next. One column per lateral bin, so the profile is filtered in BOTH directions —
+        // across the corridor above, and up the body here.
+        var col = new float[bands];
+        for (int q = 0; q < EnvelopeBins; q++)
+        {
+            for (int b = 0; b < bands; b++) col[b] = prof[b, q];
+            for (int pass = 0; pass < BustBandSmoothing; pass++) Smooth1D(col, bands);
+            for (int b = 0; b < bands; b++) prof[b, q] = col[b];
+        }
+        for (int pass = 0; pass < BustBandSmoothing; pass++) Smooth1D(bandRelief, bands);
 
         int flattened = 0;
         double askSum = 0, gotSum = 0, fadeSum = 0; int deep = 0;
@@ -9460,9 +9542,20 @@ public static class SecondSkinWriter
             if (behind >= skin) { deep++; continue; }
             float onSurface = 1f - Smoothstep(behind / skin);
 
-            float u2 = lat[n];
-            float want = fitA[b] + fitB[b] * u2 + fitC[b] * u2 * u2;
-            float move = Math.Clamp((want - h0[n]) * onSurface, -relief, relief);
+            float want = Envelope(b, lat[n]);
+
+            // TAPERED ACROSS THE CORRIDOR. The fold sits on the midline — shoulders at ±10mm — and
+            // everything past it is inner thigh, so the flatten has no business being at full strength out
+            // there. Without this it was not merely present at the edge but STRONGEST there: measured per
+            // lateral bin, the mean move peaked at 3.41mm in the 15-18mm band against 0.94mm on the
+            // midline, with a 4.65mm spread inside that one band. Large and uneven, on the line a garment's
+            // trim follows.
+            //
+            // The region's own ramp (nW) does not cover this. It fades from the region's OUTER boundary at
+            // ~30mm, so at 16mm it is still saturated; this taper is about the fold's own lateral scale,
+            // which is a different and smaller thing.
+            float taper = 1f - Smoothstep(Math.Clamp(MathF.Abs(lat[n] - midL) / (latW * 0.5f), 0f, 1f));
+            float move = Math.Clamp((want - h0[n]) * onSurface * taper, -relief, relief);
             target[n] = h0[n] + move;
             askSum += Math.Abs(want - h0[n]);
             gotSum += Math.Abs(target[n] - h0[n]);
@@ -9477,8 +9570,7 @@ public static class SecondSkinWriter
             for (int q = 0; q < EnvelopeBins; q++)
             {
                 if (binMax[b, q] == float.MinValue) continue;
-                double u = binLat[b, q];
-                double d = binMax[b, q] - (fitA[b] + fitB[b] * u + fitC[b] * u * u);
+                double d = binMax[b, q] - Envelope(b, binLat[b, q]);
                 resid += d * d; rn++;
             }
         }
@@ -9492,6 +9584,32 @@ public static class SecondSkinWriter
                       + $"{(rn > 0 ? Math.Sqrt(resid / rn) * 1000 : 0):0.###}mm rms on the envelope");
         return target;
     }
+
+    /// <summary>
+    /// How many rings out from the rim of a hole the relax fades back in over. The rim itself is held
+    /// exactly; its neighbours recover smoothly rather than in one step.
+    /// <para/>
+    /// Three because the crotch's mesh runs about a millimetre an edge, so this is a ~3mm skirt around a
+    /// hole roughly 3mm across — the same order as the feature, which is the scale a fade has to be at to
+    /// be invisible. One ring is not a fade at all, and much more starts protecting surface the pass is
+    /// there to flatten.
+    /// </summary>
+    private const int RimPinFade = 3;
+
+    /// <summary>
+    /// How wide the envelope's lateral low-pass is, as a distance on the body — the number that decides
+    /// where "the body's shape" ends and "the fold" begins.
+    /// <para/>
+    /// IN METRES, not in bins or passes, because the bins span the region's own lateral extent and that
+    /// varies with the body and with how far the corridor is feathered. Expressed as a pass count it was
+    /// silently 1.8x wider than intended on the first body it met. See the derivation at the use site.
+    /// <para/>
+    /// 5mm sits above the fold's own features (shoulders at ±10mm, grooves at ±6mm, so wavelengths of
+    /// 12-20mm) and well below the width of the corridor, which is the scale the body's curvature runs at.
+    /// Turning it up indefinitely converges on a straight line across the corridor — the failure the
+    /// parabola was originally chosen to avoid, which moved rows with no fold in them by up to 17mm.
+    /// </summary>
+    private const float EnvelopeSmoothSigma = 0.005f;
 
     /// <summary>Lateral bins the envelope is sampled in, across the region's width.</summary>
     private const int EnvelopeBins = 16;
