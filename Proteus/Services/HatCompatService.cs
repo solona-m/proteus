@@ -273,7 +273,12 @@ public static class HatCompatService
         if (proposal.AlreadyCompatible)
             return new Outcome(false, Loc.Localize("HatCompat.Apply.Already",
                 "This hairstyle already has a hat shape of its own."), 0);
-        if (proposal.Solve.Moved.Count == 0 && hide.Count == 0)
+        // The wearer's choice about ponytails, PLUS the geometry above the hat line, which is not a choice —
+        // dropping it is how the fit works, and it costs nothing where pressing the same hair costs a shape
+        // value per index slot. Tagged in one pass so a submesh claimed by both is cut once.
+        var tag = hide.Concat(proposal.Solve.Cut).ToList();
+
+        if (proposal.Solve.Moved.Count == 0 && tag.Count == 0)
             return new Outcome(false, Loc.Localize("HatCompat.Apply.Nothing",
                 "There is nothing to change: no hair stands proud of the scalp and no part needs hiding."), 0);
 
@@ -282,7 +287,7 @@ public static class HatCompatService
         try
         {
             patched = mdl;
-            if (hide.Count > 0)
+            if (tag.Count > 0)
             {
                 // Cut the tails out of whatever they share a submesh with FIRST. An attribute is carried by
                 // a submesh record, and a hairstyle routinely keeps its scalp cap and every one of its
@@ -292,7 +297,7 @@ public static class HatCompatService
                 // Safe to do before the shape: a split re-describes which triangles belong to which record
                 // and moves no vertex and no index, so every mesh-relative number the press produced still
                 // means what it meant.
-                var (split, targets) = ModelAttributeWriter.IsolateParts(patched, hide);
+                var (split, targets) = ModelAttributeWriter.IsolateParts(patched, tag);
                 patched = ModelAttributeWriter.AddAttribute(split, ScalpAttribute, targets);
             }
             if (proposal.Solve.Moved.Count > 0)
@@ -315,7 +320,7 @@ public static class HatCompatService
             var record = ReadRecord(modRoot) ?? new HatCompatRecord();
             if (!record.Files.Contains(proposal.Rel, StringComparer.OrdinalIgnoreCase))
                 record.Files.Add(proposal.Rel);
-            record.Hidden[proposal.Rel] = hide.Select(p => $"{p.Mesh}.{p.Submesh}").ToList();
+            record.Hidden[proposal.Rel] = tag.Select(p => $"{p.Mesh}.{p.Submesh}").ToList();
             record.Versions[proposal.Rel] = HatCompatSolve.Version;
             WriteRecord(modRoot, record);
         }

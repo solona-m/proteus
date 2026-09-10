@@ -810,8 +810,12 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             int stuck;
             try
             {
-                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, solve.Hide);
-                patched = solve.Hide.Count > 0
+                // Exactly what HatCompatService.Apply tags, which is the CUT and nothing else — hiding
+                // ponytails is withdrawn, so solve.Hide is computed and not applied. Tagging Hide here
+                // instead measured a patch the plugin does not produce.
+                var tag = solve.Cut;
+                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
+                patched = tag.Count > 0
                     ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
                 patched = ModelAttributeWriter.AddShape(patched, HatShape, solve.Moved, out stuck);
             }
@@ -1040,6 +1044,288 @@ public class HatCompatDiagTests(ITestOutputHelper o)
                 if (k < mv.Positions.Length) lowest = MathF.Min(lowest, mv.Positions[k].Y);
         }
         return lowest;
+    }
+
+    /// <summary>
+    /// Every LM hairstyle installed, put through the whole pipeline and judged on the result.
+    /// <para/>
+    /// A regression net rather than an investigation. Everything else here was written to chase one defect
+    /// on one hairstyle, and each of those chases changed a rule that applies to all of them — the press
+    /// reaching below the hat line, hiding narrowed to tails that meet a hat, the budget re-ordered. This
+    /// runs the author's own file through patch and read-back and reports, per hairstyle, the three things
+    /// that can go wrong: hair still standing through the hat, hair hidden that should not be, and the
+    /// format quietly running out of room.
+    /// <para/>
+    /// Sampled every fourth vertex. The ray cast is linear in the hat's triangles and this is a sweep over
+    /// dozens of models; a quarter of sixty thousand vertices is still thousands of samples per hairstyle,
+    /// which is ample for a number that only has to catch a hairstyle behaving differently from its peers.
+    /// </summary>
+    [Fact]
+    public void SweepEveryLMHairThroughTheCurrentDesign()
+    {
+        var hats = Hats().Where(h => h.Name.Contains("Wrangler", StringComparison.OrdinalIgnoreCase)
+                                  || h.Name.Contains("Battlemage", StringComparison.OrdinalIgnoreCase))
+                         .Select(h => (h.Name, Mesh: FbxMesh.Load(h.Path)))
+                         .Where(h => h.Mesh != null).ToList();
+        if (hats.Count == 0) return;
+        var head = HeadModel();
+
+        var files = HairModels()
+            .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+            .Select(f => Pristine(f) ?? f)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(f => f.Contains(Path.DirectorySeparatorChar + "LM ", StringComparison.OrdinalIgnoreCase)
+                     || f.Contains("LM_", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (files.Length == 0) return;
+
+        o.WriteLine($"{"hairstyle",-38} {"press",6} {"drop",5} {"stuck",5} "
+                  + "parts tails hide kept  through the hat");
+        var trouble = new List<string>();
+
+        foreach (var f in files)
+        {
+            var mdl = File.ReadAllBytes(f);
+            ModelParts? parts;
+            HatCompatSolve.Result solve;
+            try
+            {
+                parts = ModelPartReader.Read(mdl);
+                if (parts == null) { trouble.Add($"{Trim(f)}: unreadable"); continue; }
+                solve = HatCompatSolve.Solve(mdl, parts, head);
+            }
+            catch (Exception ex) { trouble.Add($"{Trim(f)}: solve threw {ex.GetType().Name}"); continue; }
+
+            byte[] patched;
+            int stuck = 0;
+            try
+            {
+                // Exactly what HatCompatService.Apply tags, which is the CUT and nothing else — hiding
+                // ponytails is withdrawn, so solve.Hide is computed and not applied. Tagging Hide here
+                // instead measured a patch the plugin does not produce.
+                var tag = solve.Cut;
+                var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
+                patched = tag.Count > 0
+                    ? ModelAttributeWriter.AddAttribute(split, "atr_kam", targets) : split;
+                if (solve.Moved.Count > 0)
+                    patched = ModelAttributeWriter.AddShape(patched, HatShape, solve.Moved, out stuck);
+            }
+            catch (Exception ex) { trouble.Add($"{Trim(f)}: {ex.Message}"); continue; }
+
+            var strands = HatCompatSolve.Strands(mdl, parts, head).Where(s => s.Tail).ToList();
+            int hidTris = solve.Hide.Sum(p => p.TriangleCount);
+            int allTris = parts.Parts.Where(p => p.Island < 0).Sum(p => p.TriangleCount);
+            double hidPct = allTris > 0 ? 100.0 * hidTris / allTris : 0;
+
+            var src = SecondSkinWriter.Parse(patched);
+            int kamBit = Array.IndexOf(src.AttrNames, "atr_kam");
+            var meshes = HatCompatSolve.ReadLod0Meshes(patched);
+            // THE HAT LINE, and nothing lower. Below it hair is supposed to be visible — that is the whole
+            // point of the fade — so counting it as "through the hat" measures the hairstyle, not the fit.
+            // Two earlier windows got this wrong in both directions: the fan's own bottom moved whenever the
+            // constants moved, flattering any change that shortened it, and a fixed 100 mm below centre swept
+            // in hair hanging past the jaw that no hat was ever going to cover. What the cut promises is that
+            // nothing DRAWN remains above the line, so that is what to check.
+            float fanBottom = solve.Centre.Y + HatCompatSolve.HatLine;
+
+            var swap = new Dictionary<uint, ushort>();
+            if (src.Shapes.TryGetValue(HatShape, out var entries))
+                foreach (var e in entries)
+                    foreach (var (b, rep) in e.Values) swap[e.MeshIndexOffset + b] = rep;
+
+            // Which vertices the game actually draws, after the shape and after the tagged parts go.
+            var drawn = new HashSet<(int, int)>();
+            foreach (var mv in meshes)
+            {
+                int mo = src.MeshStart + mv.Mesh * 36;
+                ushort subIdx = BitConverter.ToUInt16(patched, mo + 10);
+                ushort subCount = BitConverter.ToUInt16(patched, mo + 12);
+                for (int s = 0; s < subCount; s++)
+                {
+                    int ss = src.SubmeshStart + (subIdx + s) * 16;
+                    if (kamBit >= 0 && (BitConverter.ToUInt32(patched, ss + 8) & (1u << kamBit)) != 0) continue;
+                    uint io = BitConverter.ToUInt32(patched, ss), ic = BitConverter.ToUInt32(patched, ss + 4);
+                    for (uint k = 0; k < ic; k += 4)
+                    {
+                        int at = src.Ib + (int)(io + k) * 2;
+                        if (at + 2 > patched.Length) break;
+                        int v = BitConverter.ToUInt16(patched, at);
+                        if (swap.TryGetValue(io + k, out var rep)) v = rep;
+                        if (v < mv.Positions.Length) drawn.Add((mv.Mesh, v));
+                    }
+                }
+            }
+
+            var report = new List<string>();
+            foreach (var (hatName, hat) in hats)
+            {
+                int miss = 0;
+                foreach (var (mesh, v) in drawn)
+                {
+                    var p = meshes.First(m => m.Mesh == mesh).Positions[v];
+                    if (p.Y < fanBottom) continue;
+                    if (FirstHit(hat!, p, Vector3.UnitY) <= 0f) miss++;
+                }
+                report.Add($"{hatName.Split('\'')[0]} {miss}");
+                if (miss > 0) trouble.Add($"{Trim(f)}: {miss} sampled vertices stand through {hatName}");
+            }
+
+            if (hidPct > 60) trouble.Add($"{Trim(f)}: hides {hidPct:F0}% of its triangles");
+            if (solve.Dropped > 0 || stuck > 0)
+                trouble.Add($"{Trim(f)}: {solve.Dropped} dropped for budget, {stuck} unaddressable");
+
+            var all = HatCompatSolve.Strands(mdl, parts, head);
+            if (strands.Count == 0 && all.Count > 0)
+            {
+                // No tails at all on a hairstyle that clearly has long hair: say what the two tests saw, so
+                // the reason is a number rather than a guess.
+                var byDrop = all.OrderByDescending(s => s.Drop).First();
+                var byReach = all.OrderByDescending(s => s.Reach).First();
+                int passDrop = all.Count(s => s.Drop > HatCompatSolve.TailDrop);
+                int passReach = all.Count(s => s.Reach > HatCompatSolve.TailReach);
+                o.WriteLine($"    !! {Trim(f)}: no tails. deepest drop {byDrop.Drop * 1000:F0} mm "
+                          + $"(needs >{HatCompatSolve.TailDrop * 1000:F0}), furthest reach "
+                          + $"{byReach.Reach * 1000:F0} mm (needs >{HatCompatSolve.TailReach * 1000:F0}); "
+                          + $"{passDrop} parts pass drop, {passReach} pass reach");
+            }
+            o.WriteLine($"{Trim(f),-38} {solve.Considered,6} {solve.Dropped,5} {stuck,5} "
+                      + $"{all.Count,4}p {strands.Count,4}t {solve.Hide.Count,4}h "
+                      + $"{strands.Count(s => !s.Hideable),4}k  {string.Join("  ", report)}");
+        }
+
+        o.WriteLine(trouble.Count == 0
+            ? $"\nAll {files.Length} LM hairstyles clean."
+            : $"\n{trouble.Count} thing(s) to look at across {files.Length} LM hairstyles:");
+        foreach (var t in trouble) o.WriteLine($"  {t}");
+    }
+
+    /// <summary>
+    /// What is being hidden, and does any of it actually meet a hat?
+    /// <para/>
+    /// Hiding is the one thing here that destroys hair rather than moving it, so the bar for it should be
+    /// that a strand cannot be dealt with any other way. A ponytail whose every vertex hangs BELOW the hat
+    /// line meets no hat at all — it falls past the brim, in front of nothing — so hiding it removes hair
+    /// the wearer chose and a hat was never going to touch.
+    /// </summary>
+    [Fact]
+    public void IsAnythingBeingHiddenThatNoHatWouldTouch()
+    {
+        var head = HeadModel();
+        var files = HairModels()
+            .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+            .Where(f => f.Contains("Maria", StringComparison.OrdinalIgnoreCase)
+                     || f.Contains("Locksley", StringComparison.OrdinalIgnoreCase))
+            .Select(f => Pristine(f) ?? f)
+            .Distinct().ToArray();
+        if (files.Length == 0) return;
+
+        foreach (var f in files)
+        {
+            var mdl = File.ReadAllBytes(f);
+            var parts = ModelPartReader.Read(mdl);
+            if (parts == null) continue;
+            if (HatCompatSolve.FrameAndFloor(mdl, head) is not { } frame) continue;
+            float hatLineY = frame.Centre.Y + HatCompatSolve.HatLine;
+
+            var src = SecondSkinWriter.Parse(mdl);
+            var verts = HatCompatSolve.ReadLod0Meshes(mdl).ToDictionary(m => m.Mesh, m => m.Positions);
+
+            int tails = 0, hidden = 0, tailVerts = 0, keptVerts = 0;
+            float highestKept = float.MinValue;
+            foreach (var s in HatCompatSolve.Strands(mdl, parts, head).Where(s => s.Tail))
+            {
+                if (!verts.TryGetValue(s.Part.Mesh, out var pos)) continue;
+                tails++;
+                float top = float.MinValue;
+                int n = 0;
+                foreach (var v in HatCompatSolve.VerticesOf(mdl, src, s.Part))
+                    if (v < pos.Length) { top = MathF.Max(top, pos[v].Y); n++; }
+                tailVerts += n;
+
+                if (s.Hideable) { hidden++; continue; }
+                keptVerts += n;
+                highestKept = MathF.Max(highestKept, top);
+            }
+
+            o.WriteLine($"{Trim(f)}: {tails} tail strand(s), {tailVerts} vertices — {hidden} hidden, "
+                      + $"{tails - hidden} kept ({keptVerts} vertices)"
+                      + (highestKept > float.MinValue
+                          ? $", the highest kept one topping out {(hatLineY - highestKept) * 1000:F0} mm "
+                          + "below the hat line" : ""));
+        }
+    }
+
+    /// <summary>
+    /// How low can the cut go before it shows?
+    /// <para/>
+    /// The hat line means something different now that geometry above it is DELETED rather than pressed. It
+    /// used to be "how far down does a hat press hair against the head", and being generous with it cost
+    /// nothing. It is now "how far down is hair certainly hidden", and every millimetre too low is a hole
+    /// cut in hair the wearer can see.
+    /// <para/>
+    /// So measure that directly, and from the head rather than from the hat: walk the scalp, cast straight
+    /// UP from each point, and ask whether any hat is between it and the sky. The lowest scalp height that
+    /// still answers yes is the lowest a cut may go on that hat. Anything below it is in view.
+    /// </summary>
+    [Fact]
+    public void HowLowCanTheCutGoBeforeItShows()
+    {
+        var head = HeadModel();
+        var hats = Hats();
+        if (head == null || hats.Count == 0) return;
+        if (HatCompatSolve.FrameAndFloor(head, head) is not { } f) return;
+
+        var scalp = HatCompatSolve.ReadLod0Meshes(head)
+            .SelectMany(m => m.Positions)
+            .Where(p => (p - f.Centre).Length() > f.Radius * 0.8f)     // the cranium, not the mouth's inside
+            .ToArray();
+        if (scalp.Length == 0) return;
+
+        o.WriteLine($"head centre y {f.Centre.Y:F4};  covered = a hat is directly overhead");
+        o.WriteLine($"{"hat",-26} {"lowest covered scalp point",28} {"as an offset from centre",26}");
+        float worst = float.MinValue;
+        foreach (var (name, path) in hats)
+        {
+            var hat = FbxMesh.Load(path);
+            if (hat == null) continue;
+
+            // The lowest point that is still covered, and the highest that is not: a hat whose coverage is
+            // not a clean horizontal band would show these overlapping, which is worth knowing.
+            // Straight up is the wrong question and answered yes everywhere: a brim covers the whole cranium
+            // from directly overhead, so by that test a cut could go anywhere. What exposes a cut edge is
+            // being LOOKED AT, from around eye level and under the brim. So cast outward from each scalp
+            // point along the directions a viewer occupies — level, a little above, a little below — and
+            // call the point hidden only if the hat blocks EVERY one of them.
+            float lowestCovered = float.MaxValue, highestBare = float.MinValue;
+            int covered = 0;
+            foreach (var p in scalp)
+            {
+                var outward = new Vector3(p.X - f.Centre.X, 0f, p.Z - f.Centre.Z);
+                if (outward.LengthSquared() < 1e-8f) continue;
+                outward = Vector3.Normalize(outward);
+
+                bool hidden = true;
+                foreach (float el in new[] { -10f, 0f, 20f, 40f })
+                {
+                    float r = el * MathF.PI / 180f;
+                    var dir = Vector3.Normalize(outward * MathF.Cos(r) + Vector3.UnitY * MathF.Sin(r));
+                    if (FirstHit(hat, p, dir) <= 0f) { hidden = false; break; }
+                }
+                if (!hidden) { highestBare = MathF.Max(highestBare, p.Y); continue; }
+                covered++;
+                lowestCovered = MathF.Min(lowestCovered, p.Y);
+            }
+            if (covered == 0) { o.WriteLine($"{name,-26} {"never overhead",28}"); continue; }
+
+            // The safe line is the highest BARE point, not the lowest covered one: below that height the
+            // hat has stopped covering somewhere, whatever it still does elsewhere.
+            float safe = highestBare > float.MinValue ? highestBare : lowestCovered;
+            worst = MathF.Max(worst, safe - f.Centre.Y);
+            o.WriteLine($"{name,-26} {(lowestCovered - f.Centre.Y) * 1000,20:F0} mm "
+                      + $"   highest bare {(safe - f.Centre.Y) * 1000,6:F0} mm   ({covered}/{scalp.Length} covered)");
+        }
+        o.WriteLine($"\nleast generous hat wants the cut at or above {worst * 1000:F0} mm; "
+                  + $"HatLine is {HatCompatSolve.HatLine * 1000:F0} mm");
     }
 
     /// <summary>

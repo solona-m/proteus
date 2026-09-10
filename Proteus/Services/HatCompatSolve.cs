@@ -32,7 +32,7 @@ public static class HatCompatSolve
     /// only way back was to undo and re-fit each one by hand. Stamping the record makes the watcher able to
     /// tell a current patch from a stale one, so it can redo the stale one by itself.
     /// </summary>
-    public const int Version = 10;
+    public const int Version = 13;
 
     /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
@@ -42,27 +42,26 @@ public static class HatCompatSolve
     /// inside it — and nothing shows. Below it the hat is simply not there, and moving a single vertex is a
     /// visible defect on a part of the hairstyle the wearer chose.
     /// <para/>
-    /// Measured by ray-casting every reference hat against the wearer's own head and keeping the directions
-    /// where the hat's surface sits within 80 mm of the scalp — which is what tells a hat wrapping a head
-    /// from a brim flaring away into the air. Across four real hats the lowest covered point lands between
-    /// 7 and 23 mm BELOW the head centre, and the line has to be the least generous of them: -7 mm, from
-    /// the Battlemage's and Wrangler's hats.
+    /// Measured as VISIBILITY, because that is what the line now decides. Geometry above it is deleted
+    /// outright, so the only question that matters is whether a viewer could have seen it: walk the scalp,
+    /// cast outward from each point along the directions a viewer occupies — level, and a little above and
+    /// below — and a point is hidden only when the hat blocks every one of them. The highest point that is
+    /// NOT hidden is the lowest a cut may safely go.
     /// <para/>
-    /// The measured worst case IS the number, and it was not always. While the fit worked by cutting
-    /// geometry away, this sat 12 mm higher on purpose: a cut that went too low showed as hair sliced off
-    /// below where a hat reaches, so erring upward cost nothing and erring downward was a hole. Nothing is
-    /// cut any more — only pressed — and that reverses the asymmetry completely. Pressing slightly too low
-    /// moves hair the hat covers anyway and cannot be seen; pressing too little leaves a strand standing out
-    /// through the brim, which is exactly what the 12 mm of caution was producing. Measured at 830 corners
-    /// of one hairstyle still outside the Wrangler's Hat on near-level rays, every one of them in the band
-    /// this margin was declining to touch.
+    /// The three real hats answer 17 mm (Wrangler's), 21 mm (Battlemage's) and 22 mm (Coronal Straw) above
+    /// the head's centre, and the line takes the least generous. The other four reference pieces are
+    /// glasses, a corsage and a veil, which cover almost nothing and would drag the line to the top of the
+    /// skull; they are not hats and do not get a vote.
     /// <para/>
-    /// Two earlier attempts at this number were wrong in instructive ways. Taking the brim's lowest point
-    /// licensed crushing hair a hand's width below anything a hat touches. Taking the height at which the
-    /// hat comes closest to the head's vertical AXIS found the pointed tip of a witch's hat and called it
-    /// the band. Only measuring against the head itself distinguishes the two.
+    /// Three earlier attempts were wrong in instructive ways, and all three measured the wrong thing rather
+    /// than measuring it badly. Taking the brim's lowest point licensed crushing hair a hand's width below
+    /// anything a hat touches. Taking the height where the hat comes closest to the head's vertical AXIS
+    /// found the pointed tip of a witch's hat and called it the band. Asking what a hat covers from directly
+    /// OVERHEAD answered "all of it" — a brim shades the whole cranium from above, so by that test a cut
+    /// could go anywhere, while the cut edge was plainly visible from the side. A cut shows because someone
+    /// looks at it, so the test has to be a line of sight.
     /// </summary>
-    public const float HatLine = -0.007f;
+    public const float HatLine = 0.022f;
 
     /// <summary>
     /// Where the covered hair is driven to, as a FRACTION of the scalp's own radius in that direction.
@@ -127,6 +126,13 @@ public static class HatCompatSolve
     public const float TailReach = 0.10f;
 
 
+    // No SCALP CLEARANCE here, and it was tried. A hat never comes within 12 mm of the scalp on any of the
+    // seven measured, so hair already nearer than that cannot clip and skipping it looks like free budget —
+    // and the budget is what this format is short of. Swept across 25 installed hairstyles it was a bad
+    // trade: it cleared the budget on four that were drawing correctly anyway, did not change the leak on
+    // any of the three that were not, by so much as one vertex, and put 1 to 5 vertices through the hat on
+    // twelve hairstyles that had been at zero. Left here as a signpost, because it is an appealing idea.
+
     /// <summary>
     /// How far BELOW the hat line the press keeps working before it fades to nothing, in model units.
     /// <para/>
@@ -146,14 +152,16 @@ public static class HatCompatSolve
     /// there is no discontinuity for a ribbon to form across. Continuity by construction rather than by
     /// prohibition — which is also why it can afford to reach so much further than the freeze ever could.
     /// <para/>
-    /// 40 mm and not more, from the sweep. Those 128 corners go to zero at 40 mm and stay there at 80 and
-    /// 120, so the extra reach buys nothing on the hairstyle that showed the defect — and it is not free:
-    /// every millimetre of fan flattens hair a hat does not cover, faintly but visibly, and spends shape
-    /// values that this format counts in a u16. At 80 mm one of the three files measured blew its budget by
-    /// 4034 vertices; at 40 mm the same file spends 590. Reaching further would trade hair standing out for
-    /// hair sucked in, which is the same mistake in the other direction.
+    /// Sized against <see cref="HatLine"/> rather than chosen on its own, because the two only mean anything
+    /// together: the fade runs from the line down, so raising the line by 29 mm lifted the bottom of the
+    /// fade by 29 mm too and left a band of hair that had been pressed suddenly untouched. It reaches to
+    /// about 68 mm below the head's centre, which is roughly where a brim stops being able to hide anything.
+    /// <para/>
+    /// It is not free in either direction. Every millimetre flattens hair a hat does not cover, faintly but
+    /// visibly, and spends shape values the format counts in a u16 — so the fade is the reason the press
+    /// budget matters at all, now that everything above the line is dropped rather than pressed.
     /// </summary>
-    public const float FanBelow = 0.04f;
+    public const float FanBelow = 0.09f;
 
     /// <summary>
     /// How many edge-rings the press takes to reach full strength, counting in from the last vertex it is
@@ -223,6 +231,15 @@ public static class HatCompatSolve
         int Considered,
         int Dropped = 0)
     {
+        /// <summary>
+        /// The pieces above the hat line, to be dropped outright.
+        /// <para/>
+        /// Separate from <see cref="Hide"/>, and it must be: hiding ponytails is a setting the wearer may
+        /// switch off, while cutting at the hat line is how the fit works at all. Carried on the same list,
+        /// unticking the box would quietly stop the hairstyle fitting.
+        /// </summary>
+        public IReadOnlyList<ModelPart> Cut { get; init; } = [];
+
         /// <summary>Nothing to do — for a hairstyle whose author already made it hat-compatible.</summary>
         public static Result None { get; } = new(
             new Dictionary<int, IReadOnlyDictionary<int, Vector3>>(), [], Vector3.Zero, 0, 0, 0, 0);
@@ -548,13 +565,17 @@ public static class HatCompatSolve
         // hat, and a brim is exactly the place a player looks up under. It is why the guide reaches for a
         // shape key and not the delete key: a pressed vertex that guessed wrong is hair in a slightly odd
         // place, while a deleted one is a hole.
-        var tails = strands.Where(s => s.Tail).Select(s => s.Part).ToList();
+        var tails = strands.Where(s => s.Hideable).Select(s => s.Part).ToList();
 
-        // A tail is never pressed either — the press moves vertices, not strands, so pressing the root of a
-        // ponytail while its length stays put is what flattened one against the back of the head.
-        var hanging = new HashSet<long>();
-        foreach (var s in strands.Where(s => s.Tail))
-            foreach (var v in VerticesOf(mdl, parsed, s.Part)) hanging.Add(VertexKey(s.Part.Mesh, v));
+        // Everything the hat covers outright goes, rather than being pressed. See CutAtHatLine.
+        var (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine);
+
+        // Tails are NOT excluded from the press any more, and that reversal is worth explaining because it
+        // undoes an earlier fix. Excluding them was right when the press was a hard cut-off at the hat line:
+        // it moved a ponytail's root and left its length where it was, which folded the tail flat against
+        // the head. The fade removes exactly that failure — a tail is now pressed hard where the hat covers
+        // it and released smoothly along its own length — so the exclusion has stopped protecting anything
+        // and only leaves ponytails standing through the brim, now that hiding them is gone too.
 
         // Where the press stops entirely. Everything between here and the hat line is faded, not cut off.
         float fanBottom = hatLine - fan;
@@ -568,7 +589,7 @@ public static class HatCompatSolve
             {
                 var p = mv.Positions[v];
                 if (p.Y < fanBottom) continue;                      // past the fade: the author's hair, untouched
-                if (hanging.Contains(VertexKey(mv.Mesh, v))) continue;   // part of a tail
+                if (gone.Contains(VertexKey(mv.Mesh, v))) continue;      // cut away; a shape value would move nothing
 
                 var d = p - centre;
                 float len = d.Length();
@@ -582,7 +603,13 @@ public static class HatCompatSolve
                 float scalp = floor[BinOf(d / len)];
                 if (len <= scalp) continue;
 
-                float target = MathF.Max(0.005f, scalp * depth);
+                // ONTO the scalp below the line, INTO the skull above it, and the difference is whether the
+                // hat is there to hide the result. Above the line nothing shows however hard it is crushed,
+                // and overshooting is free insurance against a stray sliver. Below the line the hair is in
+                // plain view: driving it to three quarters of the scalp radius buries it in the head, which
+                // is why hair was reading as squashed against the face well under the brim. The furthest it
+                // may go there is the scalp itself.
+                float target = p.Y >= hatLine ? MathF.Max(0.005f, scalp * depth) : scalp;
                 if (len <= target) continue;
 
                 int slots = cost != null && v < cost.Length ? cost[v] : 0;
@@ -651,7 +678,86 @@ public static class HatCompatSolve
             presses.Count > 0 ? presses[presses.Count / 2] : 0f,
             presses.Count > 0 ? presses[^1] : 0f,
             presses.Count,
-            dropped);
+            dropped) { Cut = drop };
+    }
+
+    /// <summary>
+    /// Cut the hairstyle at the hat line: what to drop, and which vertices go with it.
+    /// <para/>
+    /// Above the line a hat covers the hair completely, so the hair there does not need to be moved — it
+    /// needs to be gone. Dropping it costs NOTHING, because a submesh tagged <c>atr_kam</c> simply is not
+    /// drawn, where pressing the same geometry costs a shape value per index slot naming it. That is the
+    /// difference between fitting a dense hairstyle and not: one measured here needed about 176000 values
+    /// against a format ceiling of 65535, and left whatever it could not afford standing through the hat.
+    /// <para/>
+    /// The cut follows TRIANGLES, not a true geometric slice — a triangle goes only if all three of its
+    /// corners clear the line. What is left is a ragged fringe up to one triangle tall, and the press deals
+    /// with it: those corners are above the line, so they are driven onto the scalp where the hat hides
+    /// them. A real slice would put the edge exactly on the line instead, at the cost of inserting new
+    /// vertices and triangles into the model; under an opaque hat the two look the same.
+    /// </summary>
+    /// <returns>The submesh pieces to tag, and the vertices that no surviving triangle draws — those need no
+    /// shape value, and spending one on them is what the budget cannot afford.</returns>
+    private static (List<ModelPart> Drop, HashSet<long> Gone) CutAtHatLine(
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine)
+    {
+        var drop = new List<ModelPart>();
+        var gone = new HashSet<long>();
+
+        foreach (var mv in meshes)
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            if (mo + 36 > mdl.Length) continue;
+            ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
+            var pos = mv.Positions;
+            var uses = new int[pos.Length];
+            var lost = new int[pos.Length];
+
+            for (int s = 0; s < subCount; s++)
+            {
+                int ss = src.SubmeshStart + (subIdx + s) * 16;
+                if (ss + 16 > mdl.Length) break;
+                uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                if ((long)src.Ib + (io + ic) * 2 > mdl.Length) break;
+
+                var above = new List<int>();
+                for (uint t = 0; t + 3 <= ic; t += 3)
+                {
+                    int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t) * 2);
+                    int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + 1) * 2);
+                    int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + 2) * 2);
+                    if (a >= pos.Length || b >= pos.Length || c >= pos.Length) continue;
+
+                    uses[a]++; uses[b]++; uses[c]++;
+                    if (pos[a].Y < hatLine || pos[b].Y < hatLine || pos[c].Y < hatLine) continue;
+                    lost[a]++; lost[b]++; lost[c]++;
+                    above.Add((int)(t / 3));
+                }
+
+                // A submesh entirely above the line is claimed whole; Island < 0 tells IsolateParts there is
+                // nothing to cut, which saves it splitting a submesh into itself.
+                if (above.Count == 0) continue;
+                bool whole = above.Count == ic / 3;
+                drop.Add(new ModelPart
+                {
+                    Mesh = mv.Mesh,
+                    Submesh = s,
+                    Island = whole ? -1 : 0,
+                    Label = $"{mv.Mesh}.{s}",
+                    Material = "",
+                    Triangles = [],
+                    Ordinals = whole ? [] : above.ToArray(),
+                    AttributeMask = 0,
+                    Min = Vector3.Zero,
+                    Max = Vector3.Zero,
+                    Toggleable = false,
+                });
+            }
+
+            for (int v = 0; v < pos.Length; v++)
+                if (uses[v] > 0 && uses[v] == lost[v]) gone.Add(VertexKey(mv.Mesh, v));
+        }
+        return (drop, gone);
     }
 
     /// <summary>One vertex the press wants to move, and how far.</summary>
@@ -753,8 +859,14 @@ public static class HatCompatSolve
     /// decided per triangle now, not per strand.</param>
     /// <param name="Tail">It hangs far enough off the head that no hat could cover it — a ponytail, a side
     /// tail. Not the opposite of <paramref name="Covered"/>: most of a hairstyle is neither.</param>
+    /// <param name="Hideable">A tail that also REACHES the hat, so hiding it is the only way to deal with
+    /// it. Deliberately narrower than <paramref name="Tail"/>, and the two must not be confused: a tail is
+    /// never pressed, because pressing one root drags a ponytail flat against the head, but a tail hanging
+    /// entirely below the hat line meets no hat at all and hiding it destroys hair a hat was never going to
+    /// touch. One measured hairstyle had 125 of its 129 tail strands wholly below the line, the highest of
+    /// them 60 mm clear of it — nine tenths of its ponytail, deleted for nothing.</param>
     internal readonly record struct Strand(
-        ModelPart Part, int Verts, int Below, float Drop, float Reach, bool Covered, bool Tail);
+        ModelPart Part, int Verts, int Below, float Drop, float Reach, bool Covered, bool Tail, bool Hideable);
 
     /// <summary>
     /// Every strand of a hairstyle, and whether a hat covers it — which is the only question the press
@@ -791,7 +903,7 @@ public static class HatCompatSolve
                     q => q.Mesh == part.Mesh && q.Submesh == part.Submesh && q.Island >= 0)) continue;
             if (!verts.TryGetValue(part.Mesh, out var pos)) continue;
 
-            float lowest = float.MaxValue, reach = 0f;
+            float lowest = float.MaxValue, highest = float.MinValue, reach = 0f;
             int n = 0, below = 0;
             foreach (var v in VerticesOf(mdl, src, part))
             {
@@ -799,6 +911,7 @@ public static class HatCompatSolve
                 n++;
                 var p = pos[v];
                 if (p.Y < lowest) lowest = p.Y;
+                if (p.Y > highest) highest = p.Y;
                 if (p.Y < hatLine) below++;
 
                 var d = p - centre;
@@ -816,7 +929,17 @@ public static class HatCompatSolve
             // A TAIL is a much narrower thing, and the two are not complements — the great bulk of a
             // hairstyle is neither pressed nor hidden, but left exactly as its author made it.
             bool tail = drop > TailDrop && reach > TailReach;
-            found.Add(new Strand(part, n, below, drop, reach, covered, tail));
+
+            // And hiding is narrower still: only a tail that rises far enough to meet a hat. The boundary is
+            // the bottom of the press's own fade — the height below which this decides a hat has no
+            // influence at all — so the two answers cannot disagree about where the hat's reach ends.
+            //
+            // Not the hat line itself, which is 40 mm higher and much too strict. Measured across three
+            // hairstyles, tails topping out 2 and 8 mm below the line are at the brim and genuinely clip
+            // through it, while another's top out 60 mm below and hang clear of everything. Cutting at the
+            // line put the first two on the wrong side and left 168 corners standing up through a brim.
+            bool hideable = tail && highest >= hatLine - FanBelow;
+            found.Add(new Strand(part, n, below, drop, reach, covered, tail, hideable));
         }
         return found;
     }
