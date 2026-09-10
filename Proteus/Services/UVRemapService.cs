@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using BitMiracle.LibTiff.Classic;
 using Dalamud.Plugin.Services;
 
@@ -775,13 +776,85 @@ public class UVRemapService
         return mask;
     }
 
+    /// <summary>
+    /// Area-average ("box") reduction of an RGBA8 buffer: every destination texel is the mean of the
+    /// whole source rectangle it covers.
+    /// <para/>
+    /// This is the RIGHT filter for shrinking, and bilinear is not. Bilinear takes four taps whatever
+    /// the ratio, so a 2:1-or-worse reduction still skips most of the source and still aliases — and
+    /// nearest-neighbour, which is what this path used to do, skips ALL but one. On fine line art (a
+    /// tattoo's filigree, thin script) that decimation reads as blocky, speckled, stair-stepped edges
+    /// that everyone reports as "compression artifacts", even with compression off.
+    /// <para/>
+    /// UNWEIGHTED — the four channels are averaged independently, alpha included, with no premultiply.
+    /// Premultiplying would suit a diffuse (it stops a transparent neighbour's RGB bleeding into an
+    /// edge) but it is WRONG for the other things that come through here: a normal map's RGB is a
+    /// direction, not a colour, so weighting it by the coverage lane in alpha would drag texels near
+    /// any edge toward (0,0,0), which is not a flat normal — it would carve a dark seam into the relief
+    /// exactly where coverage falls off. One channel-agnostic rule beats a per-caller guess.
+    /// </summary>
+    public static byte[] ResizeBox(byte[] src, int srcW, int srcH, int dstW, int dstH)
+    {
+        if (srcW == dstW && srcH == dstH) return src;
+        var dst = new byte[dstW * dstH * 4];
+
+        void Row(int dy)
+        {
+            // Half-open source span for this destination row, never empty: a destination axis LARGER
+            // than the source collapses the span to one texel, which degrades this axis to point
+            // sampling rather than reading out of bounds.
+            int y0 = (int)((long)dy * srcH / dstH);
+            int y1 = (int)(((long)dy + 1) * srcH / dstH);
+            if (y1 <= y0) y1 = y0 + 1;
+            if (y1 > srcH) y1 = srcH;
+
+            for (int dx = 0; dx < dstW; dx++)
+            {
+                int x0 = (int)((long)dx * srcW / dstW);
+                int x1 = (int)(((long)dx + 1) * srcW / dstW);
+                if (x1 <= x0) x1 = x0 + 1;
+                if (x1 > srcW) x1 = srcW;
+
+                int r = 0, g = 0, b = 0, a = 0, n = 0;
+                for (int sy = y0; sy < y1; sy++)
+                {
+                    int rowOff = sy * srcW * 4;
+                    for (int sx = x0; sx < x1; sx++)
+                    {
+                        int si = rowOff + sx * 4;
+                        r += src[si];
+                        g += src[si + 1];
+                        b += src[si + 2];
+                        a += src[si + 3];
+                        n++;
+                    }
+                }
+
+                int di = (dy * dstW + dx) * 4;
+                dst[di]     = (byte)((r + n / 2) / n);
+                dst[di + 1] = (byte)((g + n / 2) / n);
+                dst[di + 2] = (byte)((b + n / 2) / n);
+                dst[di + 3] = (byte)((a + n / 2) / n);
+            }
+        }
+
+        // Same row partition (and same small-image guard) as TextureLoader's nearest scale — rows are
+        // independent and each writes only its own slice, so this is byte-identical to the serial form.
+        if (dstH * dstW < 256 * 256 || Environment.ProcessorCount < 2)
+            for (int dy = 0; dy < dstH; dy++) Row(dy);
+        else
+            Parallel.For(0, dstH, Row);
+        return dst;
+    }
+
     public static byte[] ResizeBilinear(byte[] src, int srcW, int srcH, int dstW, int dstH)
     {
         if (srcW == dstW && srcH == dstH) return src;
         var dst = new byte[dstW * dstH * 4];
         float xScale = (float)srcW / dstW;
         float yScale = (float)srcH / dstH;
-        for (int dy = 0; dy < dstH; dy++)
+
+        void Row(int dy)
         {
             for (int dx = 0; dx < dstW; dx++)
             {
@@ -805,6 +878,14 @@ public class UVRemapService
                 }
             }
         }
+
+        // Parallelised for the same reason ResizeBox is: this is no longer only a once-per-file base
+        // upscale, it is now on the composite's critical path whenever an overlay is smaller than the
+        // sheet it lands on. 16.7M pixels x 4 channels is not something to run on one thread there.
+        if (dstH * dstW < 256 * 256 || Environment.ProcessorCount < 2)
+            for (int dy = 0; dy < dstH; dy++) Row(dy);
+        else
+            Parallel.For(0, dstH, Row);
         return dst;
     }
 }
