@@ -32,7 +32,7 @@ public static class HatCompatSolve
     /// only way back was to undo and re-fit each one by hand. Stamping the record makes the watcher able to
     /// tell a current patch from a stale one, so it can redo the stale one by itself.
     /// </summary>
-    public const int Version = 5;
+    public const int Version = 10;
 
     /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
@@ -48,18 +48,21 @@ public static class HatCompatSolve
     /// 7 and 23 mm BELOW the head centre, and the line has to be the least generous of them: -7 mm, from
     /// the Battlemage's and Wrangler's hats.
     /// <para/>
-    /// Set 12 mm ABOVE that measured worst case, deliberately, because the two errors are not equally bad.
-    /// Hair inside a hat is invisible whatever is done with it — the hat is opaque — so declining to hide
-    /// some of it near the band costs nothing. Hiding too far down is what shows, as hair cut away below
-    /// where a hat actually reaches. The ray measurement finds where the hat's surface comes near the
-    /// scalp, which runs slightly below its visible edge, and this makes up for that.
+    /// The measured worst case IS the number, and it was not always. While the fit worked by cutting
+    /// geometry away, this sat 12 mm higher on purpose: a cut that went too low showed as hair sliced off
+    /// below where a hat reaches, so erring upward cost nothing and erring downward was a hole. Nothing is
+    /// cut any more — only pressed — and that reverses the asymmetry completely. Pressing slightly too low
+    /// moves hair the hat covers anyway and cannot be seen; pressing too little leaves a strand standing out
+    /// through the brim, which is exactly what the 12 mm of caution was producing. Measured at 830 corners
+    /// of one hairstyle still outside the Wrangler's Hat on near-level rays, every one of them in the band
+    /// this margin was declining to touch.
     /// <para/>
     /// Two earlier attempts at this number were wrong in instructive ways. Taking the brim's lowest point
     /// licensed crushing hair a hand's width below anything a hat touches. Taking the height at which the
     /// hat comes closest to the head's vertical AXIS found the pointed tip of a witch's hat and called it
     /// the band. Only measuring against the head itself distinguishes the two.
     /// </summary>
-    public const float HatLine = 0.005f;
+    public const float HatLine = -0.007f;
 
     /// <summary>
     /// Where the covered hair is driven to, as a FRACTION of the scalp's own radius in that direction.
@@ -90,6 +93,7 @@ public static class HatCompatSolve
     /// this survives only as a measurement the diagnostics report.
     /// </summary>
     public const float PressDip = 0.005f;
+
 
     /// <summary>
     /// How far below the hat line a strand must hang before it counts as a TAIL — something a hat cannot
@@ -124,6 +128,34 @@ public static class HatCompatSolve
 
 
     /// <summary>
+    /// How far BELOW the hat line the press keeps working before it fades to nothing, in model units.
+    /// <para/>
+    /// Everything above the hat line is pressed at full strength; from the line down, the press fades
+    /// smoothly to zero over this distance, so hair returns to exactly where its author put it. That fade
+    /// is the whole point and not a safety margin — it is what lets the press reach hair AT the brim at all.
+    /// <para/>
+    /// Before it existed the press stopped dead at the hat line, and hair below the line was never touched
+    /// however far it stood out. That is where the last of the clipping lived: measured on one hairstyle,
+    /// nothing at all stood proud of the Wrangler's hat above the line, while 128 drawn corners in the 80 mm
+    /// below it were standing up through the brim. No amount of tuning the line could reach them, because
+    /// moving the line down only moves the same hard edge somewhere else.
+    /// <para/>
+    /// It also retires the freeze rule. That rule pinned any triangle crossing the hat line, because a
+    /// pressed corner next to a fixed one drags a ribbon out of the triangle between them. A fade removes
+    /// the fixed corner: neighbours a millimetre apart now move by nearly the same amount, everywhere, so
+    /// there is no discontinuity for a ribbon to form across. Continuity by construction rather than by
+    /// prohibition — which is also why it can afford to reach so much further than the freeze ever could.
+    /// <para/>
+    /// 40 mm and not more, from the sweep. Those 128 corners go to zero at 40 mm and stay there at 80 and
+    /// 120, so the extra reach buys nothing on the hairstyle that showed the defect — and it is not free:
+    /// every millimetre of fan flattens hair a hat does not cover, faintly but visibly, and spends shape
+    /// values that this format counts in a u16. At 80 mm one of the three files measured blew its budget by
+    /// 4034 vertices; at 40 mm the same file spends 590. Reaching further would trade hair standing out for
+    /// hair sucked in, which is the same mistake in the other direction.
+    /// </summary>
+    public const float FanBelow = 0.04f;
+
+    /// <summary>
     /// How many edge-rings the press takes to reach full strength, counting in from the last vertex it is
     /// not allowed to move.
     /// <para/>
@@ -146,11 +178,17 @@ public static class HatCompatSolve
     /// <summary>
     /// The most shape values one model may carry: <c>ShapeValueCount</c> in the model header is a u16.
     /// <para/>
-    /// Left short of 65535 so a hairstyle that already has a shape of its own still has room, and because a
-    /// value is spent per INDEX SLOT — a vertex drawn by six triangles costs six — which makes the true cost
-    /// of a candidate hard to eyeball and easy to under-estimate.
+    /// A value is spent per INDEX SLOT — a vertex drawn by six triangles costs six — which makes the true
+    /// cost of a candidate hard to eyeball and easy to under-estimate. On a dense hairstyle this ceiling
+    /// genuinely binds: one measured here wanted to move 8161 vertices and could afford 5034, so nearly two
+    /// in five were left standing.
+    /// <para/>
+    /// Close to the format's own 65535 on purpose. This used to sit at 60000 to leave room for a hairstyle
+    /// that already carries a shape of its own — but the solve already subtracts exactly that, reading the
+    /// model's own count out of the header, so the margin was being taken twice and cost a tenth of the
+    /// budget for nothing. What is left is slack against the arithmetic, not against the model.
     /// </summary>
-    public const int MaxShapeValues = 60000;
+    public const int MaxShapeValues = 65000;
 
     /// <summary>Directional bins over the sphere. 32 around by 16 up — about 11 degrees, which is finer than
     /// the features of a skull and coarse enough that every bin a hair covers holds several vertices.</summary>
@@ -171,6 +209,10 @@ public static class HatCompatSolve
     /// <param name="Hide">Parts that cannot be pressed under a hat and should be tagged <c>atr_kam</c>.</param>
     /// <param name="Centre">The skull centre the press was computed about.</param>
     /// <param name="Radius">Median scalp radius about that centre.</param>
+    /// <param name="Dropped">Vertices the press wanted to move and could not afford — see
+    /// <see cref="MaxShapeValues"/>. Non-zero means the shape is a partial one and some hair is left standing
+    /// wherever the budget ran out, which is otherwise indistinguishable from the press deciding it was
+    /// already fine.</param>
     public sealed record Result(
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> Moved,
         IReadOnlyList<ModelPart> Hide,
@@ -178,7 +220,8 @@ public static class HatCompatSolve
         float Radius,
         float MedianPress,
         float MaxPressed,
-        int Considered)
+        int Considered,
+        int Dropped = 0)
     {
         /// <summary>Nothing to do — for a hairstyle whose author already made it hat-compatible.</summary>
         public static Result None { get; } = new(
@@ -187,6 +230,28 @@ public static class HatCompatSolve
 
     /// <summary>One LOD0 mesh's own vertices, indexed the way the model's index buffer indexes them.</summary>
     internal sealed record MeshVerts(int Mesh, Vector3[] Positions);
+
+    /// <summary>
+    /// The head frame and scalp floor the press would use, for diagnostics to interrogate.
+    /// <para/>
+    /// Exposed rather than reconstructed, for the same reason <see cref="Strands"/> is: a diagnostic that
+    /// builds its own copy of a rule ends up reporting on the copy. Asking why the press skipped a vertex
+    /// means asking against the very floor it consulted, not one built the same way twice.
+    /// </summary>
+    internal static (Vector3 Centre, float Radius, float[] Floor)? FrameAndFloor(byte[] mdl, byte[]? head)
+    {
+        var meshes = ReadLod0Meshes(mdl);
+        if (meshes.Count == 0) return null;
+        var frame = head != null ? HeadFrameFrom(head) : null;
+        var (centre, radius) = frame ?? HeadFrame(meshes);
+        var floor = frame != null
+            ? HeadFloor(ReadLod0Meshes(head!), centre, radius, centre.Y + HatLine)
+            : ScalpFloor(meshes, centre, radius);
+        return (centre, radius, floor);
+    }
+
+    /// <summary>Which directional bin a direction falls in — for diagnostics reading <see cref="FrameAndFloor"/>.</summary>
+    internal static int BinFor(Vector3 dir) => BinOf(dir);
 
     /// <summary>
     /// Read every LOD0 mesh's positions separately.
@@ -445,8 +510,10 @@ public static class HatCompatSolve
     /// for whatever head the player is actually wearing, and it costs nothing to obtain because the live
     /// model list the hair path came from already names it. Without it the skull has to be guessed from the
     /// hair's own inner surface, which fails outright on a style that never touches the scalp.</param>
+    /// <param name="fan">How far below the hat line the press fades out over. A test seam, so the distance
+    /// can be swept against real hats rather than argued about. See <see cref="FanBelow"/>.</param>
     public static Result Solve(byte[] mdl, ModelParts parts, byte[]? head = null,
-                               float depth = ScalpFraction)
+                               float depth = ScalpFraction, float fan = FanBelow)
     {
         var meshes = ReadLod0Meshes(mdl);
         var moved = new Dictionary<int, IReadOnlyDictionary<int, Vector3>>();
@@ -489,10 +556,8 @@ public static class HatCompatSolve
         foreach (var s in strands.Where(s => s.Tail))
             foreach (var v in VerticesOf(mdl, parsed, s.Part)) hanging.Add(VertexKey(s.Part.Mesh, v));
 
-        // And the rule that lets the press take over what the cut used to do — see FrozenVertices. It
-        // replaces the old strand-level gate, which refused a whole strand the moment any part of it hung
-        // below the line and so left the top of an ordinary lock standing outside the hat.
-        var frozen = FrozenVertices(mdl, parsed, meshes, hatLine);
+        // Where the press stops entirely. Everything between here and the hat line is faded, not cut off.
+        float fanBottom = hatLine - fan;
 
         // Every vertex poking out through the ceiling, with what it costs and how far out it is.
         var candidates = new List<Candidate>();
@@ -502,9 +567,8 @@ public static class HatCompatSolve
             for (int v = 0; v < mv.Positions.Length; v++)
             {
                 var p = mv.Positions[v];
-                if (p.Y < hatLine) continue;                        // below the hat: never touched
+                if (p.Y < fanBottom) continue;                      // past the fade: the author's hair, untouched
                 if (hanging.Contains(VertexKey(mv.Mesh, v))) continue;   // part of a tail
-                if (frozen.Contains(VertexKey(mv.Mesh, v))) continue;    // would stretch a triangle into view
 
                 var d = p - centre;
                 float len = d.Length();
@@ -523,7 +587,17 @@ public static class HatCompatSolve
 
                 int slots = cost != null && v < cost.Length ? cost[v] : 0;
                 if (slots == 0) continue;                           // drawn by nothing; a spare would do nothing
-                candidates.Add(new Candidate(mv.Mesh, v, p, centre + d * (target / len), len - target, slots));
+
+                // The fade. Full strength at the hat line and above, tapering to nothing at the bottom of
+                // the fan, so hair rejoins the author's silhouette without a step anywhere along the way.
+                float height = p.Y >= hatLine || fan <= 0f
+                    ? 1f
+                    : Math.Clamp((p.Y - fanBottom) / fan, 0f, 1f);
+                if (height <= 0f) continue;
+
+                candidates.Add(new Candidate(
+                    mv.Mesh, v, p, Vector3.Lerp(p, centre + d * (target / len), height),
+                    len - target, (len - target) * height, slots));
             }
         }
 
@@ -538,6 +612,7 @@ public static class HatCompatSolve
             var c = candidates[i];
             int rings = ringsFromEdge.TryGetValue(VertexKey(c.Mesh, c.Vertex), out var d) ? d : PressRamp;
             float w = MathF.Min(rings / (float)PressRamp, 1f);
+            // Need is deliberately left alone: it is the priority, and the ramp must not reorder the queue.
             candidates[i] = c with { To = Vector3.Lerp(c.From, c.To, w), Press = c.Press * w };
         }
 
@@ -549,12 +624,13 @@ public static class HatCompatSolve
         int already = BitConverter.ToUInt16(mdl, SecondSkinWriter.Parse(mdl).Mh + 20);
         int budget = Math.Max(0, MaxShapeValues - already), spent = 0;
         if (candidates.Sum(c => c.Cost) > budget)
-            candidates.Sort((a, b) => b.Press.CompareTo(a.Press));
+            candidates.Sort((a, b) => b.Need.CompareTo(a.Need));
 
         var presses = new List<float>();
+        int dropped = 0;
         foreach (var c in candidates)
         {
-            if (spent + c.Cost > budget) continue;
+            if (spent + c.Cost > budget) { dropped++; continue; }
             spent += c.Cost;
             if (!moved.TryGetValue(c.Mesh, out var here))
                 moved[c.Mesh] = here = new Dictionary<int, Vector3>();
@@ -574,14 +650,20 @@ public static class HatCompatSolve
             centre, radius,
             presses.Count > 0 ? presses[presses.Count / 2] : 0f,
             presses.Count > 0 ? presses[^1] : 0f,
-            presses.Count);
+            presses.Count,
+            dropped);
     }
 
     /// <summary>One vertex the press wants to move, and how far.</summary>
     /// <param name="From">Where its author put it — kept so the ramp can interpolate rather than recompute.</param>
+    /// <param name="Need">How far out of the scalp it started, BEFORE the ramp. This and not
+    /// <paramref name="Press"/> is what orders the budget: need is how badly the vertex has to move, press is
+    /// merely how far it is allowed to. Ordering by the latter spends the budget backwards — a vertex
+    /// standing right out of the hat but sitting near the ramp's edge has a small press, sorts last, and is
+    /// dropped in favour of hair that was nearly fine already.</param>
     /// <param name="Cost">Shape values it would spend: one per index slot naming it.</param>
     private readonly record struct Candidate(
-        int Mesh, int Vertex, Vector3 From, Vector3 To, float Press, int Cost);
+        int Mesh, int Vertex, Vector3 From, Vector3 To, float Need, float Press, int Cost);
 
     /// <summary>
     /// How far each pressed vertex sits, in mesh edges, from the nearest vertex the press may not move.
@@ -644,54 +726,6 @@ public static class HatCompatSolve
                 if (dist[v] != int.MaxValue && dist[v] > 0) found[VertexKey(mv.Mesh, v)] = dist[v];
         }
         return found;
-    }
-
-    /// <summary>
-    /// Every vertex the press must leave alone: the corners of any triangle that reaches below the hat line.
-    /// <para/>
-    /// This one rule is what lets the press cover hair the old cut had to delete, and it is worth stating why
-    /// it is safe. Move a corner of a triangle that dips below the line and the triangle stretches from
-    /// wherever the hair still is up into the skull — those are the flat ribbons seen slicing through a hat,
-    /// and they are visible precisely because part of that triangle is outside it. Move only vertices whose
-    /// every triangle sits ENTIRELY above the line and none of that can happen: each such triangle has its
-    /// corners either driven inside the skull or left above the line, so however badly it is distorted it
-    /// stays inside the hat, where nothing is visible at all.
-    /// <para/>
-    /// Per VERTEX and per TRIANGLE, which is what makes it better than the strand-level gate it replaces.
-    /// That gate asked whether a whole connected strand hung below the line and refused all of it if any did
-    /// — so an ordinary lock running from the crown down past the ear was left entirely untouched, with its
-    /// top standing outside the hat. Here the same lock is pressed down to the last triangle that clears the
-    /// line and left alone below it, with no cut and no ribbon.
-    /// </summary>
-    private static HashSet<long> FrozenVertices(
-        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine)
-    {
-        var frozen = new HashSet<long>();
-        foreach (var mv in meshes)
-        {
-            int mo = src.MeshStart + mv.Mesh * 36;
-            if (mo + 36 > mdl.Length) continue;
-            uint ic = BitConverter.ToUInt32(mdl, mo + 4), start = BitConverter.ToUInt32(mdl, mo + 16);
-            if ((long)src.Ib + (start + ic) * 2 > mdl.Length) continue;
-
-            var pos = mv.Positions;
-            for (uint t = 0; t + 3 <= ic; t += 3)
-            {
-                int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t) * 2);
-                int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 1) * 2);
-                int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(start + t + 2) * 2);
-
-                // An index past the end of the mesh is a model this cannot read correctly, so freeze rather
-                // than guess: a vertex left unpressed is hair slightly proud of the skull, under a hat.
-                static bool Low(Vector3[] p, int v, float line) => v >= p.Length || p[v].Y < line;
-                if (!Low(pos, a, hatLine) && !Low(pos, b, hatLine) && !Low(pos, c, hatLine)) continue;
-
-                frozen.Add(VertexKey(mv.Mesh, a));
-                frozen.Add(VertexKey(mv.Mesh, b));
-                frozen.Add(VertexKey(mv.Mesh, c));
-            }
-        }
-        return frozen;
     }
 
     /// <summary>One vertex of one mesh, as a single value for a set.</summary>
