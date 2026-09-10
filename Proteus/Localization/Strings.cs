@@ -51,6 +51,7 @@ public static class Strings
     public static ColorsStrings     Colors     { get; private set; } = new();
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
+    public static HatCompatStrings  HatCompat  { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -77,7 +78,75 @@ public static class Strings
         Colors     = new ColorsStrings();
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
+        HatCompat  = new HatCompatStrings();
     }
+}
+
+/// <summary>The hat-compatibility panel.</summary>
+public sealed class HatCompatStrings
+{
+    public readonly string AutoFit = Loc.Localize(
+        "HatCompat.AutoFit.Label", "Make hairstyles fit under hats") + "###hatCompatAuto";
+
+    public readonly string AutoFitTip = Loc.Localize("HatCompat.AutoFit.Tip",
+        "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
+        "through. When on, Proteus checks each hairstyle as you put it on and presses\n" +
+        "the hair that a hat would cover flat against your head.\n\n" +
+        "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
+        "off and travels with the mod if you export it. Originals are kept and the\n" +
+        "change can be undone here.");
+
+    public readonly string HidePonytails = Loc.Localize(
+        "HatCompat.HidePonytails.Label", "Hide ponytails") + "###hatCompatHideTails";
+
+    public readonly string HidePonytailsTip = Loc.Localize("HatCompat.HidePonytails.Tip",
+        "Also make the parts that no hat could cover — ponytails, side tails, a long\n" +
+        "fall at the back — disappear while a hat is worn, instead of leaving them\n" +
+        "hanging out from under it.\n\n" +
+        "Off by default. Pressing hair is invisible when it overshoots, because the hat\n" +
+        "covers it; hiding is all or nothing, so a part judged wrongly simply vanishes.");
+
+    public readonly string Working = Loc.Localize("HatCompat.Working", "Looking at this hairstyle...");
+
+    public readonly string NoModdedHair = Loc.Localize("HatCompat.NoModdedHair",
+        "You are wearing hair that came with the game, which already works under hats. "
+      + "This has something to do when you wear a hair mod.");
+
+    public readonly string WearingFmt = Loc.Localize("HatCompat.Wearing.Fmt",
+        "Hairstyle {0}, from {1}.");
+
+    public readonly string AuthorDidIt = Loc.Localize("HatCompat.AuthorDidIt",
+        "This hairstyle already supports hats — its author added it. Nothing to do.");
+
+    public readonly string AlreadyPatched = Loc.Localize("HatCompat.AlreadyPatched",
+        "Proteus has already made this hairstyle fit under hats.");
+
+    public readonly string PressFmt = Loc.Localize("HatCompat.Press.Fmt",
+        "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.");
+
+    public readonly string TooWeldedFmt = Loc.Localize("HatCompat.TooWelded.Fmt",
+        "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape "
+      + "format to address. They will keep their shape, so a hat may still clip there.");
+
+    public readonly string WillHideFmt = Loc.Localize("HatCompat.WillHide.Fmt",
+        "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.");
+
+    public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
+        "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
+
+    public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
+
+    public readonly string ApplyTip = Loc.Localize("HatCompat.Apply.Tip",
+        "Writes into the hair mod's own folder. The original files are copied to\n"
+      + "Proteus/hatcompat-backup/ inside that mod first, and this can be undone.");
+
+    public readonly string Undo = Loc.Localize("HatCompat.Undo.Btn", "Undo") + "###hatCompatUndo";
+
+    public readonly string Undone = Loc.Localize("HatCompat.Undone",
+        "The hairstyle has been put back exactly as its author made it.");
+
+    public readonly string Unreadable = Loc.Localize("HatCompat.Unreadable",
+        "This hairstyle's model could not be read, so Proteus cannot change it.");
 }
 
 /// <summary>Strings shared by more than one screen.</summary>
@@ -137,6 +206,43 @@ public sealed class ModsStrings
         "metadata.json; absent means off).\n" +
         "On / Off = your own setting for this mod, overriding the pack.\n\n" +
         "(The global strength sliders are in Settings.)");
+
+    // ── "this mod is on and painting nothing" ────────────────────────────────────────────────────────
+    // The faces of CompositorService.InertReason. The LOG says the same things in English literals, on
+    // purpose — a log is evidence, and evidence that changes language cannot be searched or compared.
+    // See CompositorService.EnglishInert, which must be kept saying the same facts as these.
+    //
+    // Unlike the rest of this class these are wrapped tooltip and panel text, not column labels: they are
+    // allowed to be sentences.
+
+    /// <summary>{0} is how many option groups the mod has; {1} is their names, comma-joined, in the mod's
+    /// own order — Penumbra group names, which are the author's and are never translated.</summary>
+    public readonly string InertNothingTickedFmt = Loc.Localize("Mods.Inert.NothingTicked.Fmt",
+        "Nothing is ticked in Penumbra. This mod's {0} option group(s) — {1} — are all empty, so it " +
+        "paints nothing. Open it in Penumbra and tick an option in each.");
+
+    /// <summary>{0} is the comma-joined names of groups the mod's Proteus data expects but Penumbra has
+    /// not got. Author-facing: the user cannot fix this one.</summary>
+    public readonly string InertGroupsMissingFmt = Loc.Localize("Mods.Inert.GroupsMissing.Fmt",
+        "This mod's Proteus data names the option group(s) {0}, which Penumbra's copy of the mod hasn't " +
+        "got — renamed or dropped when it was re-exported. Only its author can fix that.");
+
+    /// <summary>{0} is what the mod paints and {1} what the character is, both as "body · Race F" — e.g.
+    /// "bibo · Midlander F, Viera F". Race names come from ModelRace and are not translated.</summary>
+    public readonly string InertWrongRaceFmt = Loc.Localize("Mods.Inert.WrongRace.Fmt",
+        "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.");
+
+    /// <summary>{0} is the Penumbra group name for masks — literally "Masks", the author's own group
+    /// name, which arrives already untranslated.</summary>
+    public readonly string InertMaskNeedsShellFmt = Loc.Localize("Mods.Inert.MaskNeedsShell.Fmt",
+        "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked " +
+        "in its \"{0}\" group in Penumbra.");
+
+    public readonly string InertNothingReached = Loc.Localize("Mods.Inert.NothingReached",
+        "Its ticked options resolved, but none of them reached a surface this character has loaded.");
+
+    public readonly string InertSettingsUnreadable = Loc.Localize("Mods.Inert.SettingsUnreadable",
+        "Penumbra didn't answer when Proteus asked which of this mod's options are on.");
 }
 
 public sealed class BindingsStrings
@@ -312,6 +418,8 @@ public sealed class SettingsStrings
     public readonly string SecGeneral     = Loc.Localize("Settings.Section.General", "General");
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
+    public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 
     public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");

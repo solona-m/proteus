@@ -8,7 +8,12 @@ namespace Proteus.Services;
 /// <summary>
 /// One color table row for a gear overlay. Null fields keep the template's value.
 /// </summary>
-public sealed class GearColorRow
+// A record rather than a class purely so callers can say `row with { … }`. SecondSkinService.BuildRows
+// merges an authored row over the neutral baseline, and doing that by listing every field means the next
+// field added here is silently dropped from every authored row — which is exactly what happened when the
+// weave (TileIndex and friends) arrived. `with` copies what it is not told to change, so the failure mode
+// for a new field is "behaves as it did before the merge existed" rather than "vanishes".
+public sealed record GearColorRow
 {
     public (float R, float G, float B)? Diffuse { get; init; }
     public (float R, float G, float B)? Emissive { get; init; }

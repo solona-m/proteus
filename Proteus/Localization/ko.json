@@ -1283,6 +1283,102 @@
     "message": "알 수 없는 오류",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "헤어스타일을 모자에 맞추기",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 착용하는 헤어스타일마다 확인하여, 모자가 가릴\n머리카락을 두상에 밀착시킵니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 여기서 되돌릴 수\n있습니다.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "포니테일 숨기기",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "어떤 모자로도 가릴 수 없는 부분 — 포니테일, 옆으로 묶은 머리, 등 뒤로\n흐르는 긴 머리 — 도 모자를 쓰는 동안 아래로 삐져나오게 두지 않고 숨깁니다.\n\n기본값은 꺼짐입니다. 지나치게 밀착시켜도 모자가 덮어 보이지 않지만, 숨기기는\n전부 아니면 전무여서 잘못 판단된 부분은 그대로 사라집니다.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0}개의 머리 가닥이 머리에서 너무 멀리 떨어져 있어 모자에 들어가지 않으므로, 모자를 쓰는 동안 숨겨집니다.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "이 헤어스타일을 확인하는 중...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus가 이 헤어스타일을 이미 모자에 맞게 바꿔 두었습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "맞추기",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "헤어 모드 자체의 폴더에 기록합니다. 원본 파일은 먼저 해당 모드 안의\nProteus/hatcompat-backup/ 으로 복사되며, 이 작업은 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "이 헤어스타일은 이미 모자를 지원합니다 — 제작자가 넣어 두었습니다. 할 일이 없습니다.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "게임 기본 헤어를 착용 중이며, 이미 모자와 함께 작동합니다. 헤어 모드를 착용하면 여기서 할 일이 생깁니다.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "이 헤어스타일은 모든 부위가 모자 아래로 눌려 들어가므로 숨길 것이 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "머리카락 정점 {0}개가 두상에 밀착됩니다. 평균 {1:F1} cm, 최대 {2:F1} cm입니다.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "정점 {0}개는 옮길 수 없습니다. 이 헤어스타일은 게임의 셰이프 형식이 다루기에 너무 큰 덩어리로 합쳐져 있습니다. 형태가 그대로 남으므로 모자가 뚫고 나올 수 있습니다.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "되돌리기",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "헤어스타일을 제작자가 만든 상태 그대로 되돌렸습니다.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "이 헤어스타일의 모델을 읽을 수 없어 Proteus가 변경할 수 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "헤어스타일 {0}, 출처 {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "이 헤어스타일에는 이미 자체 모자 셰이프가 있습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0}을(를) 편집할 수 없습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "쓰기에 실패했습니다: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "변경할 것이 없습니다. 두피에서 뜨는 머리카락도, 숨겨야 할 부분도 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "복원할 원본 모델을 찾을 수 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "이 모드에는 되돌릴 Proteus 모자 호환 편집이 없습니다.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "레이어를 BC7 .tex로 변환",
     "description": ""
@@ -1831,6 +1927,30 @@
     "message": "색상",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "이 모드의 Proteus 데이터는 옵션 그룹 {0}을(를) 지정하지만, Penumbra의 모드 사본에는 해당 그룹이 없습니다. 다시 내보낼 때 이름이 바뀌었거나 삭제된 것으로, 제작자만 고칠 수 있습니다.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "마스크가 장비로 렌더링되도록 설정되어 있습니다. 의상은 마스크로부터 만들어지는데, Penumbra의 \"{0}\" 그룹에서 선택된 것이 없습니다.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "선택한 옵션은 처리되었지만, 이 캐릭터가 불러온 표면에 도달한 것은 없습니다.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Penumbra에서 선택된 것이 없습니다. 이 모드의 옵션 그룹 {0}개({1})가 모두 비어 있어 아무것도 그리지 않습니다. Penumbra에서 열어 각 그룹에서 옵션을 선택하세요.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "이 모드의 어떤 옵션이 켜져 있는지 Proteus가 물었지만 Penumbra가 응답하지 않았습니다.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "이 모드는 {0}을(를) 칠하지만, 당신은 {1}입니다. 이 모드에 포함된 것 중 지금 착용한 몸에 맞는 것이 없습니다.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Proteus 사이드카가 있는 모드를 찾지 못했습니다.",
     "description": ""
@@ -2205,6 +2325,10 @@
   },
   "Settings.Section.General": {
     "message": "일반",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "모자",
     "description": ""
   },
   "Settings.Section.Hosting": {

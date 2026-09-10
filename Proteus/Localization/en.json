@@ -1283,6 +1283,102 @@
     "message": "unknown error",
     "description": "Appears in the composite-result line under the tab content."
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Make hairstyles fit under hats",
+    "description": "Checkbox, first control in Settings > Hats."
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus checks each hairstyle as you put it on and presses\nthe hair that a hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Hide ponytails",
+    "description": "Checkbox under the one above, in Settings > Hats."
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Also make the parts that no hat could cover — ponytails, side tails, a long\nfall at the back — disappear while a hat is worn, instead of leaving them\nhanging out from under it.\n\nOff by default. Pressing hair is invisible when it overshoots, because the hat\ncovers it; hiding is all or nothing, so a part judged wrongly simply vanishes.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.",
+    "description": "{0} is a count of hair strands. Shown instead of a list of them; can be 0."
+  },
+  "HatCompat.Working": {
+    "message": "Looking at this hairstyle...",
+    "description": "Shown while Proteus examines the hairstyle. Brief."
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus has already made this hairstyle fit under hats.",
+    "description": "Status line in Settings > Hats, above the Undo button."
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Make it fit",
+    "description": "Button. Writes the change into the hair mod."
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Writes into the hair mod's own folder. The original files are copied to\nProteus/hatcompat-backup/ inside that mod first, and this can be undone.",
+    "description": "Tooltip for the button above. Keep the line break; the tooltip is not wrapped."
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "This hairstyle already supports hats — its author added it. Nothing to do.",
+    "description": "Status line. The mod ships its own hat shape, so Proteus leaves it alone."
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "You are wearing hair that came with the game, which already works under hats. This has something to do when you wear a hair mod.",
+    "description": "Shown when there is nothing to act on."
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.",
+    "description": "Replaces the checkbox list when the list is empty."
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.",
+    "description": "{0} is a count of vertices. {1} and {2} are distances in centimetres."
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape format to address. They will keep their shape, so a hat may still clip there.",
+    "description": "Warning. {0} is a count of vertices the format cannot address."
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Undo",
+    "description": "Button. Restores the hair mod's original files."
+  },
+  "HatCompat.Undone": {
+    "message": "The hairstyle has been put back exactly as its author made it.",
+    "description": "Success line after Undo."
+  },
+  "HatCompat.Unreadable": {
+    "message": "This hairstyle's model could not be read, so Proteus cannot change it.",
+    "description": "Failure line."
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Hairstyle {0}, from {1}.",
+    "description": "{0} is a hair id such as h0104, {1} is the mod folder's name."
+  },
+  "HatCompat.Apply.Already": {
+    "message": "This hairstyle already has a hat shape of its own.",
+    "description": "Refusal. The mod author made this hair hat-compatible by hand, so Proteus leaves it alone."
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} could not be edited: {1}. Nothing has been written.",
+    "description": "{0} is a file path inside the mod, {1} is a reason from the model editor. The mod is untouched."
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Writing failed: {0}",
+    "description": "{0} is an operating-system error message, e.g. the file being read-only."
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "There is nothing to change: no hair stands proud of the scalp and no part needs hiding.",
+    "description": "Refusal. This hairstyle already sits close enough to the head to fit under a hat."
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "None of the original models could be found to restore.",
+    "description": "Failure when undoing. The copies Proteus took before editing are missing or unreadable."
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "This mod has no Proteus hat-compatibility edits to undo.",
+    "description": "Refusal when undoing a mod Proteus never edited."
+  },
   "Import.AsTex.Label": {
     "message": "Convert layers to BC7 .tex",
     "description": "Control label. Appears in the Import tab."
@@ -1831,6 +1927,30 @@
     "message": "Colors",
     "description": "Opens the colour editor. Narrow table column - keep short."
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "This mod's Proteus data names the option group(s) {0}, which Penumbra's copy of the mod hasn't got — renamed or dropped when it was re-exported. Only its author can fix that.",
+    "description": "Why a mod that is switched on paints nothing. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, NOT a fixed-width column label, so full sentences are correct here. {0} is a comma-joined list of Penumbra option-group names written by the mod's author: leave them exactly as they arrive. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked in its \"{0}\" group in Penumbra.",
+    "description": "Why a mod that is switched on paints nothing. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is the Penumbra group name for masks, always the literal English \"Masks\" (it is the author's own group name and arrives already untranslated) - keep the quotes around it. \"Penumbra\" is a product name and is never translated. \"Gear\" here means worn equipment as opposed to skin."
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Its ticked options resolved, but none of them reached a surface this character has loaded.",
+    "description": "Why a mod that is switched on paints nothing - the fallback used when no more specific reason was found. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. \"Surface\" means a body/equipment material on the character."
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Nothing is ticked in Penumbra. This mod's {0} option group(s) — {1} — are all empty, so it paints nothing. Open it in Penumbra and tick an option in each.",
+    "description": "Why a mod that is switched on paints nothing - the most common reason, and what a freshly installed mod shows. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is a count of option groups; {1} is their names, comma-joined - Penumbra group names written by the mod's author, so leave them exactly as they arrive. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra didn't answer when Proteus asked which of this mod's options are on.",
+    "description": "Why a mod that is switched on paints nothing - Penumbra could not be queried, so nothing could be determined. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. \"Penumbra\" and \"Proteus\" are product names and are never translated."
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.",
+    "description": "Why a mod that is switched on paints nothing - it is built for other body types or races. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is what the mod paints and {1} is what the character is, both in the form \"bibo · Midlander F, Viera F\": a body-mod name, a middle dot, then FFXIV race names with M/F for the gender. Both arrive already built and untranslated - insert them verbatim."
+  },
   "Mods.NoSidecarMods": {
     "message": "No Proteus sidecar mods detected.",
     "description": "Appears in the Mods tab."
@@ -2206,6 +2326,10 @@
   "Settings.Section.General": {
     "message": "General",
     "description": "Section heading in Settings."
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Hats",
+    "description": "Section header in Settings. Very tight space."
   },
   "Settings.Section.Hosting": {
     "message": "Hosting",

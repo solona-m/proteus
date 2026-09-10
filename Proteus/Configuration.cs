@@ -234,6 +234,30 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoInvisibleGlasses { get; set; } = true;
 
+    /// <summary>
+    /// When true, Proteus checks the hairstyle the player is actually wearing for hat compatibility and adds
+    /// it: <c>atr_kam</c> on the geometry above the hat line, which a hat hides outright, and a
+    /// <c>shp_hib</c> shape key pressing what remains against the skull on a fade that releases below.
+    /// Both are native to the game, so a patched hairstyle keeps working with Proteus turned off.
+    /// <para/>
+    /// OFF BY DEFAULT, and deliberately so — no initializer here, which is the default this relies on. The
+    /// edit is written INTO the hair mod's own files rather than into a Proteus redirect, and that is the
+    /// point of it: it survives Proteus being disabled and travels with an export. It also means enabling
+    /// this lets Proteus modify somebody else's mod folder unattended, which is not something to assume
+    /// consent for. Originals are copied to <c>Proteus/hatcompat-backup/</c> before the first edit and the
+    /// change is undoable per hairstyle.
+    /// <para/>
+    /// Hairstyles whose author already shipped a hat shape are left alone entirely.
+    /// </summary>
+    public bool AutoHatCompat { get; set; }
+
+    // HatCompatHidePonytails was removed. It tagged whole ponytails so the game dropped them under a hat,
+    // and it rested on telling a tail from a parting by geometry alone — a judgement wrong often enough that
+    // ticking the box could take most of a long hairstyle with it. What replaced it does not need the
+    // judgement: everything above the hat line is cut because a hat certainly hides it, and everything below
+    // is pressed on a fade that releases along each strand's own length. A key left in an old config file is
+    // ignored, which is the right outcome — there is nothing for it to turn on.
+
     // AutoEmperorRing was removed. It gated whether the reconcile would EQUIP an invisible carrier, but not
     // whether ChooseHosts would offer one as a host — so turning it off did not stop layers being assigned to
     // carriers, it only stopped those carriers from ever being worn. The layers then rendered nothing, and

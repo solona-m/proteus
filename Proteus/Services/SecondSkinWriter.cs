@@ -4320,8 +4320,13 @@ public static class SecondSkinWriter
 
         p += shapeCount * 16 + shapeMeshCount * 12 + shapeValueCount * 4;
 
+        // CLAMPED to what is actually left in the file, for the same reason the v5 bone count above is: this
+        // length is read straight off the disk, so a model walked wrongly — or simply truncated — puts
+        // arbitrary bytes here, and `new ushort[0xFFFFFFFF / 2]` asks for four gigabytes and takes the whole
+        // caller down with an OutOfMemoryException. Reading a short map degrades to geometry the shell does
+        // not split; allocating on a corrupt length degrades to nothing working at all.
         uint mapBytes = U32(p); p += 4;
-        var map = new ushort[mapBytes / 2];
+        var map = new ushort[Math.Clamp((long)mapBytes, 0, Math.Max(0, s.Length - p)) / 2];
         for (int i = 0; i < map.Length; i++) map[i] = U16(p + i * 2);
         p += (int)mapBytes;
 
@@ -14092,7 +14097,7 @@ public static class SecondSkinWriter
     }
 
     /// <summary>Write x,y,z into a position element of the given type, leaving any 4th component intact.</summary>
-    private static void WriteXYZ(byte[] a, int off, byte type, float x, float y, float z)
+    internal static void WriteXYZ(byte[] a, int off, byte type, float x, float y, float z)
     {
         switch (type)
         {

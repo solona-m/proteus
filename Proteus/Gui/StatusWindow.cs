@@ -50,6 +50,9 @@ public class StatusWindow : Window
     // just the sidecar ones this window otherwise lists.
     private readonly PartsPanel parts;
 
+    /// <summary>Drawn in Settings, and only while <c>AutoHatCompat</c> is on.</summary>
+    private readonly HatCompatPanel hatCompat;
+
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static Vector4 BindingAccent => ProteusStyle.Binding;
 
@@ -358,7 +361,8 @@ public class StatusWindow : Window
         EyeImportService eyeImport,
         ModExportService modExport,
         TextureLoader textureLoader,
-        PartsPanel parts)
+        PartsPanel parts,
+        HatCompatWatcher hatCompatWatcher)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -386,6 +390,7 @@ public class StatusWindow : Window
         // Shares this window's one FileDialogManager: it has to be pumped every frame from Draw(), and a
         // second instance would need a second pump nobody would remember to add.
         presetBar = new PresetBar(presets, penumbra, _fileDialog, config, Plugin.Log);
+        hatCompat = new HatCompatPanel(hatCompatWatcher, config);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -1049,6 +1054,13 @@ public class StatusWindow : Window
         using (ProteusStyle.Card())
             DrawOutputSettings();
 
+        // Always drawn, because the switch that governs it now lives inside it. Hiding the section behind
+        // its own setting left no way back once it was off.
+        ImGui.Spacing();
+        ProteusStyle.SectionHeader(s.SecHatCompat);
+        using (ProteusStyle.Card())
+            hatCompat.Draw();
+
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecSkinEffects);
         using (ProteusStyle.Card())
@@ -1111,6 +1123,9 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.InPlaceReloadTip);
+
+        // The hat-compatibility toggles live in their own section beside the hairstyle they act on — see
+        // DrawSettingsTab. Split across two sections they read as unrelated switches.
 
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small
@@ -4687,6 +4702,25 @@ public class StatusWindow : Window
             .ToList();
     }
 
+    /// <summary>
+    /// One <see cref="CompositorService.InertReason"/> as a sentence in the user's language. The compositor
+    /// publishes a typed cause rather than finished text precisely so this can differ from the English the
+    /// log records — see <c>CompositorService.EnglishInert</c>, which must keep stating the same facts.
+    /// </summary>
+    private static string DescribeInert(CompositorService.InertReason r)
+    {
+        var ms = Strings.Mods;
+        return r.Cause switch
+        {
+            CompositorService.InertCause.SettingsUnreadable => ms.InertSettingsUnreadable,
+            CompositorService.InertCause.GroupsMissing      => string.Format(ms.InertGroupsMissingFmt, r.Groups),
+            CompositorService.InertCause.NothingTicked      => string.Format(ms.InertNothingTickedFmt, r.GroupCount, r.Groups),
+            CompositorService.InertCause.WrongRace          => string.Format(ms.InertWrongRaceFmt, r.Wants, r.Have),
+            CompositorService.InertCause.MaskNeedsShell     => string.Format(ms.InertMaskNeedsShellFmt, r.Groups),
+            _                                               => ms.InertNothingReached,
+        };
+    }
+
     private void DrawModsTab()
     {
         // ── Overlay mod list ─────────────────────────────────────────────────
@@ -4808,6 +4842,27 @@ public class StatusWindow : Window
                 // out for a state the user never chose reads as "broken" rather than as "not in this
                 // design". Enabled mods composite now, so enabled is the only thing this colour says.
                 ImGui.TableNextColumn();
+
+                // An amber "!" for a mod that is ON and painting nothing — the one state this list used to
+                // render identically to a mod that works. Only for enabled rows: a disabled mod contributes
+                // nothing for a reason already shown by the checkbox beside it.
+                //
+                // A glyph inside the stretch column rather than a column of its own, because a column would
+                // be empty on every row almost every time, and widening the table for it would push the
+                // three fixed columns about for a case that is meant to be rare.
+                // Formatted once, not once per tooltip call: ReasonTooltip takes finished text, so the
+                // string.Format below runs whether or not anything is hovered — twice a frame, forever,
+                // if the two call sites each build their own.
+                var inertTip = active && compositor.GetInertReason(entry.ModDirectory) is { } why
+                    ? DescribeInert(why)
+                    : null;
+                if (inertTip != null)
+                {
+                    ImGui.TextColored(ProteusStyle.Warn, "!");
+                    ProteusStyle.ReasonTooltip(inertTip);
+                    ImGui.SameLine(0f, ProteusStyle.S(4f));
+                }
+
                 using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), !active))
                 {
                     if (ImGui.Selectable($"{entry.ModName}##{entry.ModDirectory}"))
@@ -4815,6 +4870,9 @@ public class StatusWindow : Window
                         penumbra.OpenToMod(entry.ModDirectory);
                     }
                 }
+                // Repeated on the name itself: the glyph is four pixels wide, and someone who has noticed
+                // a row is wrong will hover the mod, not the punctuation.
+                ProteusStyle.ReasonTooltip(inertTip);
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();
@@ -5326,16 +5384,37 @@ public class StatusWindow : Window
         var maskAssets = discovery.ResolveActiveMaskAssets(entry);
         bool anyMaskWithId = maskAssets.Any(a => a.IndexPath != null);
 
+        // Why this mod is painting nothing, if it is. Drawn ABOVE the tab strip and not only in the
+        // nothing-selected branch below: the two causes hardest to work out on your own — a pack built for
+        // another body, and masks that render as gear with no mask ticked — both leave options ticked and
+        // tabs on screen, so a notice that only appears when the strip is empty misses them entirely. That
+        // is the state this panel looks most normal in and is most wrong.
+        var inertReason = compositor.GetInertReason(entry.ModDirectory);
+        var inertText   = inertReason is { } r ? DescribeInert(r) : null;
+
         if (activeOptions.Count == 0 && !anyMaskWithId)
         {
             // Nothing selected means there are no colours to edit — but Bodies is a MOD-wide setting and
             // this panel is now its only home, so it can't leave with the tabs. An all-"None" mod is a mod
             // that isn't painting, and "the bake never reached my body type" is one of the reasons why, so
             // the control would otherwise disappear in exactly the state that sends someone looking for it.
-            ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            //
+            // When the compositor knows WHICH of those reasons it is, say that instead of the generic line:
+            // this panel is the second place someone looks after the Mods tab, and "no active options" is
+            // true of a renamed group and a wrong-race pack alike while helping with neither.
+            if (inertText != null)
+                ProteusStyle.WarnWrapped(inertText);
+            else
+                ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
             if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
             return;
+        }
+
+        if (inertText != null)
+        {
+            ProteusStyle.WarnWrapped(inertText);
+            ImGui.Spacing();
         }
 
         // Show the tabs in TRUE stacking order, top-first — the same ordering the compositor applies,
