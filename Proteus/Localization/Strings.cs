@@ -1071,6 +1071,11 @@ public sealed class ColorsStrings
 
     public readonly string Advanced = Loc.Localize("Colors.Advanced", "Advanced");
 
+    /// <summary>Heading for the mod-wide geometry features, in their own section above the tab strip.
+    /// "Geometry" rather than "Body" because what these change is the shape of the mesh, not which body
+    /// the art is baked onto — that is Bodies, which stays per-tab in Advanced.</summary>
+    public readonly string GeometrySection = Loc.Localize("Colors.Geometry.Section", "Geometry");
+
     public readonly string Pinned = Loc.Localize("Colors.Pinned", "(pinned)");
     public readonly string Auto   = Loc.Localize("Colors.Auto", "(auto)");
 
