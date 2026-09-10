@@ -111,12 +111,20 @@ public class ModelAttributeWriterTests
         AssertOffsetsLandOnTheirData(model, after, after.Length - model.Length);
     }
 
+    /// <summary>
+    /// A duplicate name used to throw. It does not any more: the name is already in the table, so the
+    /// submesh is tagged against the bit it has and no second copy is added. Refusing abandoned the whole
+    /// patch on any hair mod that shipped the attribute already, which is most of them.
+    /// </summary>
     [Fact]
-    public void AddAttribute_RefusesADuplicateName()
+    public void AddAttribute_DoesNotAddASecondCopyOfANameItAlreadyHas()
     {
         var model = SyntheticModel.Build(["atr_tv_a"], Mesh(new SyntheticModel.Sub(0)));
-        Assert.Throws<ModelAttributeWriter.ModelEditException>(
-            () => ModelAttributeWriter.AddAttribute(model, "atr_tv_a", [(0, 0)]));
+
+        var after = ModelAttributeWriter.AddAttribute(model, "atr_tv_a", [(0, 0)]);
+
+        Assert.Single(SecondSkinWriter.Parse(after).AttrNames, "atr_tv_a");
+        Assert.Equal(model.Length, after.Length);
     }
 
     [Fact]
@@ -232,6 +240,86 @@ public class ModelAttributeWriterTests
         var alternating = Enumerable.Range(0, ModelAttributeWriter.MaxRuns + 4).Where(i => i % 2 == 0).ToHashSet();
         Assert.Throws<ModelAttributeWriter.ModelEditException>(
             () => ModelAttributeWriter.SplitSubmesh(model, 0, 0, alternating));
+    }
+
+    // ── an attribute the model already declares ─────────────────────────────
+
+    /// <summary>
+    /// A name already in the table is tagged against the bit it has, not refused. Hair mods ship
+    /// <c>atr_kam</c> without a hat shape routinely, and refusing abandoned the whole patch.
+    /// </summary>
+    [Fact]
+    public void AddAttribute_ReusesABitTheModelAlreadyDeclares()
+    {
+        var model = SyntheticModel.Build(["atr_kam"],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0)));
+        var before = SecondSkinWriter.Parse(model);
+        int bit = Array.IndexOf(before.AttrNames, "atr_kam");
+        Assert.True(bit >= 0);
+
+        var after = ModelAttributeWriter.AddAttribute(model, "atr_kam", [(0, 1)]);
+        var src = SecondSkinWriter.Parse(after);
+
+        // Same table, same length: nothing was inserted, so no offset moved.
+        Assert.Equal(before.AttrNames, src.AttrNames);
+        Assert.Equal(model.Length, after.Length);
+        // The named submesh carries it and its neighbour does not.
+        var parts = ModelPartReader.Read(after)!;
+        Assert.Equal(0u, parts.Parts[0].AttributeMask & (1u << bit));
+        Assert.NotEqual(0u, parts.Parts[1].AttributeMask & (1u << bit));
+    }
+
+    /// <summary>
+    /// The reuse path needs no free slot, so a full attribute table must not block it — that refused the one
+    /// model shape it exists to rescue.
+    /// </summary>
+    [Fact]
+    public void AddAttribute_ReusesABitEvenWhenTheTableIsFull()
+    {
+        var names = Enumerable.Range(0, ModelAttributeWriter.MaxAttributes - 1)
+            .Select(i => $"atr_x{i}").Append("atr_kam").ToArray();
+        var model = SyntheticModel.Build(names, Mesh(new SyntheticModel.Sub(0)));
+        Assert.Equal(ModelAttributeWriter.MaxAttributes, SecondSkinWriter.Parse(model).AttrNames.Length);
+
+        var after = ModelAttributeWriter.AddAttribute(model, "atr_kam", [(0, 0)]);
+
+        int bit = Array.IndexOf(SecondSkinWriter.Parse(after).AttrNames, "atr_kam");
+        Assert.NotEqual(0u, ModelPartReader.Read(after)!.Parts[0].AttributeMask & (1u << bit));
+        // A genuinely NEW name still cannot fit.
+        Assert.Throws<ModelAttributeWriter.ModelEditException>(
+            () => ModelAttributeWriter.AddAttribute(model, "atr_new", [(0, 0)]));
+    }
+
+    /// <summary>
+    /// Clearing takes the bit off LOD0 and leaves the name in the table, so a following add can reuse it.
+    /// </summary>
+    [Fact]
+    public void ClearAttribute_TakesTheBitOffAndKeepsTheName()
+    {
+        var model = SyntheticModel.Build(["atr_kam"],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0)));
+        var tagged = ModelAttributeWriter.AddAttribute(model, "atr_kam", [(0, 0), (0, 1)]);
+        int bit = Array.IndexOf(SecondSkinWriter.Parse(tagged).AttrNames, "atr_kam");
+        Assert.All(ModelPartReader.Read(tagged)!.Parts, p => Assert.NotEqual(0u, p.AttributeMask & (1u << bit)));
+
+        var cleared = ModelAttributeWriter.ClearAttribute(tagged, "atr_kam");
+
+        Assert.All(ModelPartReader.Read(cleared)!.Parts, p => Assert.Equal(0u, p.AttributeMask & (1u << bit)));
+        // The NAME survives — the table is untouched, so the bit can be handed straight back out.
+        Assert.Contains("atr_kam", SecondSkinWriter.Parse(cleared).AttrNames);
+        Assert.Equal(tagged.Length, cleared.Length);
+
+        var retagged = ModelAttributeWriter.AddAttribute(cleared, "atr_kam", [(0, 1)]);
+        var parts = ModelPartReader.Read(retagged)!;
+        Assert.Equal(0u, parts.Parts[0].AttributeMask & (1u << bit));
+        Assert.NotEqual(0u, parts.Parts[1].AttributeMask & (1u << bit));
+    }
+
+    [Fact]
+    public void ClearAttribute_LeavesAModelThatNeverDeclaredItAlone()
+    {
+        var model = SyntheticModel.Build(["atr_tv_a"], Mesh(new SyntheticModel.Sub(0)));
+        Assert.Same(model, ModelAttributeWriter.ClearAttribute(model, "atr_kam"));
     }
 
     // ── RegroupSubmesh ──────────────────────────────────────────────────────
