@@ -355,6 +355,10 @@
     "message": "Skin (роспись) — skin.shpk.  Cloth — character.shpk (сфера, металл).\nАнимированное свечение — characterscroll.shpk. Закрепление останавливает автосмену режима.",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "Геометрия",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Свечение",
     "description": ""

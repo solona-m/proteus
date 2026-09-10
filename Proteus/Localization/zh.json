@@ -355,6 +355,10 @@
     "message": "Skin（绘制）— skin.shpk。  Cloth — character.shpk（球面、金属）。\n动态发光 — characterscroll.shpk。固定后会停止自动切换模式。",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "几何",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "发光",
     "description": ""

@@ -355,6 +355,10 @@
     "message": "Skin（塗り）— skin.shpk。  Cloth — character.shpk（スフィア、メタル）。\nアニメーショングロー — characterscroll.shpk。固定すると自動モード切り替えが止まります。",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "ジオメトリ",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "グロー",
     "description": ""

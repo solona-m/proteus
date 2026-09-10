@@ -355,6 +355,10 @@
     "message": "Skin (pintado) — skin.shpk.  Cloth — character.shpk (sphere, metal).\nBrillo animado — characterscroll.shpk. Fijarlo detiene el cambio automático de modo.",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "Geometría",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Brillo",
     "description": ""

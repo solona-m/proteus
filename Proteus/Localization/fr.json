@@ -355,6 +355,10 @@
     "message": "Skin (peint) — skin.shpk.  Cloth — character.shpk (sphere, métal).\nLueur animée — characterscroll.shpk. Épingler arrête le changement de mode automatique.",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "Géométrie",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Lueur",
     "description": ""
