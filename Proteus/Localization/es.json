@@ -1219,6 +1219,26 @@
     "message": "error desconocido",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Adaptar los peinados a los sombreros",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "La mayoría del pelo modificado no admite sombreros, así que un sombrero puesto\nencima lo atraviesa. Con esta opción activada, Proteus revisa cada peinado que\nte pones y aplasta contra la cabeza el pelo que un sombrero taparía.\n\nEsto edita los archivos del propio mod de pelo, así que sigue funcionando con\nProteus desactivado y viaja con el mod si lo exportas. Los originales se\nconservan y el cambio se puede deshacer aquí.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Ocultar las coletas",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Hace además que las partes que ningún sombrero podría cubrir — coletas, coletas\nlaterales, una melena larga por detrás — desaparezcan mientras llevas un\nsombrero, en lugar de dejarlas asomando por debajo.\n\nDesactivado por defecto. Aplastar de más es invisible, porque lo tapa el\nsombrero; ocultar es todo o nada, y una parte mal juzgada simplemente\ndesaparece.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Analizando este peinado...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus ya ha adaptado este peinado a los sombreros.",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "Este peinado ya admite sombreros — lo añadió su autor. No hay nada que hacer.",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "Listo — el peinado ahora se aplasta bajo un sombrero, con {0} parte(s) ocultas.",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — difusa {1}, normales {2}, máscara {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "Adaptar los peinados a los sombreros",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "La mayoría del pelo modificado no admite sombreros, así que un sombrero puesto\nencima lo atraviesa. Con esta opción activada, Proteus revisa el peinado que\nllevas y ofrece adaptarlo: el pelo se pega a la cabeza mientras llevas un\nsombrero, y las partes que ningún sombrero podría cubrir se ocultan.\n\nEsto edita los archivos del propio mod de pelo, así que sigue funcionando con\nProteus desactivado y viaja con el mod si lo exportas. Los originales se\nconservan y el cambio se puede deshacer. No se escribe nada hasta que lo\nconfirmes.",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {

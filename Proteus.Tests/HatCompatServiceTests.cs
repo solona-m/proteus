@@ -289,6 +289,57 @@ public class HatCompatServiceTests
     }
 
     /// <summary>
+    /// The identity used to decide "is this still the same hairstyle" has to notice a MOD swap, not just a
+    /// hairstyle swap.
+    /// <para/>
+    /// Right-clicking a hair mod in Penumbra leaves the game path identical and changes only which file
+    /// serves it, so a key built from the path alone reports no change and the panel goes on describing
+    /// the mod that was just switched away from — which is exactly what happened in game.
+    /// </summary>
+    [Fact]
+    public void TheHairKeyNoticesADifferentModServingTheSamePath()
+    {
+        using var one = new Mod(Hair());
+        using var two = new Mod(Hair());
+        var modsRoot = Path.GetDirectoryName(one.Root)!;
+        string File1 = Path.Combine(one.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar));
+        string File2 = Path.Combine(two.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar));
+
+        var keyOne = HatCompatService.EquippedHairKey([HairPath], _ => File1, modsRoot);
+        var keyTwo = HatCompatService.EquippedHairKey([HairPath], _ => File2, modsRoot);
+
+        Assert.NotNull(keyOne);
+        Assert.NotNull(keyTwo);
+        Assert.NotEqual(keyOne, keyTwo);        // same game path, different mod
+        Assert.Equal(keyOne, HatCompatService.EquippedHairKey([HairPath], _ => File1, modsRoot));
+    }
+
+    /// <summary>And it notices the file being rewritten under it — which is how a patch is spotted.</summary>
+    [Fact]
+    public void TheHairKeyNoticesTheFileChanging()
+    {
+        using var mod = new Mod(Hair());
+        var modsRoot = Path.GetDirectoryName(mod.Root)!;
+        var file = Path.Combine(mod.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar));
+
+        var before = HatCompatService.EquippedHairKey([HairPath], _ => file, modsRoot);
+        var bigger = Hair().Concat(new byte[64]).ToArray();
+        File.WriteAllBytes(file, bigger);
+
+        Assert.NotEqual(before, HatCompatService.EquippedHairKey([HairPath], _ => file, modsRoot));
+    }
+
+    [Fact]
+    public void TheHairKeyIsNullWhenThereIsNothingToWatch()
+    {
+        using var mod = new Mod(Hair());
+        var modsRoot = Path.GetDirectoryName(mod.Root)!;
+        Assert.Null(HatCompatService.EquippedHairKey(null, _ => null, modsRoot));
+        Assert.Null(HatCompatService.EquippedHairKey([HairPath], _ => null, modsRoot));
+        Assert.Null(HatCompatService.EquippedHairKey([FacePath], _ => null, modsRoot));
+    }
+
+    /// <summary>
     /// The mod is the FIRST folder under the mods root, however deep the file sits — that is the unit a
     /// backup and a record belong to, and taking a deeper folder would scatter both.
     /// </summary>

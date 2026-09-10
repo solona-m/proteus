@@ -1219,6 +1219,26 @@
     "message": "不明なエラー",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "髪型を帽子に合わせる",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは着用した髪型をそのつど確認し、帽子で隠れる部分の\n髪を頭に沿って押し付けます。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更はここから\n元に戻せます。",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "ポニーテールを隠す",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "どんな帽子でも隠せない部分——ポニーテール、サイドテール、背中に流れる長い髪\n——も、帽子をかぶっている間は下からはみ出させずに非表示にします。\n\n既定ではオフです。押し込みすぎても帽子が覆うので見えませんが、非表示は全か無\nかで、判定を誤った部分はそのまま消えてしまいます。",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "この髪型を確認しています...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteusはこの髪型を既に帽子対応にしています。",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "この髪型は既に帽子に対応しています — 作者が組み込んでいます。することはありません。",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "完了 — 帽子をかぶると髪が収まるようになりました。{0} 個のパーツが非表示になります。",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — ディフューズ {1}、ノーマル {2}、マスク {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "髪型を帽子に合わせる",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは着用中の髪型を確認し、対応の追加を提案します。帽\n子をかぶっている間は髪が頭に沿って収まり、どんな帽子でも隠せない部分は非表示\nになります。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更は元に戻せ\nます。確認するまで何も書き込まれません。",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {

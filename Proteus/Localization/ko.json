@@ -1219,6 +1219,26 @@
     "message": "알 수 없는 오류",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "헤어스타일을 모자에 맞추기",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 착용하는 헤어스타일마다 확인하여, 모자가 가릴\n머리카락을 두상에 밀착시킵니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 여기서 되돌릴 수\n있습니다.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "포니테일 숨기기",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "어떤 모자로도 가릴 수 없는 부분 — 포니테일, 옆으로 묶은 머리, 등 뒤로\n흐르는 긴 머리 — 도 모자를 쓰는 동안 아래로 삐져나오게 두지 않고 숨깁니다.\n\n기본값은 꺼짐입니다. 지나치게 밀착시켜도 모자가 덮어 보이지 않지만, 숨기기는\n전부 아니면 전무여서 잘못 판단된 부분은 그대로 사라집니다.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "이 헤어스타일을 확인하는 중...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus가 이 헤어스타일을 이미 모자에 맞게 바꿔 두었습니다.",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "이 헤어스타일은 이미 모자를 지원합니다 — 제작자가 넣어 두었습니다. 할 일이 없습니다.",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "완료 — 이제 모자를 쓰면 머리카락이 눌립니다. {0}개 부위가 숨겨집니다.",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — 디퓨즈 {1}, 노멀 {2}, 마스크 {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "헤어스타일을 모자에 맞추기",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 착용 중인 헤어스타일을 확인하고 지원을 추가할지\n제안합니다. 모자를 쓰는 동안 머리카락이 두상에 밀착되고, 어떤 모자로도 가릴\n수 없는 부분은 숨겨집니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 되돌릴 수 있습니다.\n확인하기 전까지는 아무것도 기록되지 않습니다.",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {

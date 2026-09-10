@@ -85,6 +85,29 @@ public static class Strings
 /// <summary>The hat-compatibility panel.</summary>
 public sealed class HatCompatStrings
 {
+    public readonly string AutoFit = Loc.Localize(
+        "HatCompat.AutoFit.Label", "Make hairstyles fit under hats") + "###hatCompatAuto";
+
+    public readonly string AutoFitTip = Loc.Localize("HatCompat.AutoFit.Tip",
+        "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
+        "through. When on, Proteus checks each hairstyle as you put it on and presses\n" +
+        "the hair that a hat would cover flat against your head.\n\n" +
+        "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
+        "off and travels with the mod if you export it. Originals are kept and the\n" +
+        "change can be undone here.");
+
+    public readonly string HidePonytails = Loc.Localize(
+        "HatCompat.HidePonytails.Label", "Hide ponytails") + "###hatCompatHideTails";
+
+    public readonly string HidePonytailsTip = Loc.Localize("HatCompat.HidePonytails.Tip",
+        "Also make the parts that no hat could cover — ponytails, side tails, a long\n" +
+        "fall at the back — disappear while a hat is worn, instead of leaving them\n" +
+        "hanging out from under it.\n\n" +
+        "Off by default. Pressing hair is invisible when it overshoots, because the hat\n" +
+        "covers it; hiding is all or nothing, so a part judged wrongly simply vanishes.");
+
+    public readonly string Working = Loc.Localize("HatCompat.Working", "Looking at this hairstyle...");
+
     public readonly string NoModdedHair = Loc.Localize("HatCompat.NoModdedHair",
         "You are wearing hair that came with the game, which already works under hats. "
       + "This has something to do when you wear a hair mod.");
@@ -121,9 +144,6 @@ public sealed class HatCompatStrings
       + "Proteus/hatcompat-backup/ inside that mod first, and this can be undone.");
 
     public readonly string Undo = Loc.Localize("HatCompat.Undo.Btn", "Undo") + "###hatCompatUndo";
-
-    public readonly string DoneFmt = Loc.Localize("HatCompat.Done.Fmt",
-        "Done — the hairstyle now presses down under a hat, with {0} part(s) hidden.");
 
     public readonly string Undone = Loc.Localize("HatCompat.Undone",
         "The hairstyle has been put back exactly as its author made it.");
@@ -509,18 +529,6 @@ public sealed class SettingsStrings
         "transparency, so sphere maps and metalness survive gpose (which drops them on\n" +
         "transparent surfaces). Trade-off: sheer edges become hard/aliased. Best for\n" +
         "mostly-opaque fabrics; a very sheer fabric will look coarse. Recomposite after toggling.");
-
-    public readonly string AutoHatCompat = Loc.Localize(
-        "Settings.General.AutoHatCompat.Label", "Make hairstyles fit under hats") + "###autoHatCompat";
-
-    public readonly string AutoHatCompatTip = Loc.Localize("Settings.General.AutoHatCompat.Tip",
-        "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
-        "through. When on, Proteus checks the hairstyle you are wearing and offers to\n" +
-        "add it: the hair presses against your head while a hat is on, and the parts no\n" +
-        "hat could cover are hidden.\n\n" +
-        "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
-        "off and travels with the mod if you export it. Originals are kept and the\n" +
-        "change can be undone. Nothing is written until you confirm it.");
 
     // ── hosting ─────────────────────────────────────────────────────────────────────────────────────
     public readonly string InvisibleGlasses = Loc.Localize(

@@ -1219,6 +1219,26 @@
     "message": "未知错误",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "让发型适配帽子",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "大多数模组发型都不支持帽子，戴上帽子会直接穿模。开启后，Proteus 会在你每次\n换发型时检查它，并把帽子会遮住的头发压贴到头部。\n\n这会修改发型模组自身的文件，因此即使关闭 Proteus 也依然有效，导出模组时也会\n一并带走。原始文件会被保留，改动可以在这里撤销。",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "隐藏马尾",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "同时让任何帽子都遮不住的部分——马尾、双马尾、垂在背后的长发——在戴帽子时\n直接隐藏，而不是从帽子下面露出来。\n\n默认关闭。压得过头也看不出来，因为有帽子遮着；但隐藏是全有或全无，判断错的\n部分就会直接消失。",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "正在检查该发型...",
+    "description": ""
+  },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus 已经让这个发型适配了帽子。",
     "description": ""
@@ -1233,10 +1253,6 @@
   },
   "HatCompat.AuthorDidIt": {
     "message": "这个发型已经支持帽子了 — 是作者做的。无需处理。",
-    "description": ""
-  },
-  "HatCompat.Done.Fmt": {
-    "message": "完成 — 戴帽子时发型会贴合头部，已隐藏 {0} 个部件。",
     "description": ""
   },
   "HatCompat.HidePrompt": {
@@ -2121,14 +2137,6 @@
   },
   "Settings.Diag.Reach.Ok.Fmt": {
     "message": "{0} — 漫反射 {1}，法线 {2}，遮罩 {3}",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Label": {
-    "message": "让发型适配帽子",
-    "description": ""
-  },
-  "Settings.General.AutoHatCompat.Tip": {
-    "message": "大多数模组发型都不支持帽子，戴上帽子会直接穿模。开启后，Proteus 会检查你\n当前的发型并提议为其添加支持：戴帽子时头发会贴合头部，任何帽子都遮不住的部\n分会被隐藏。\n\n这会修改发型模组自身的文件，因此即使关闭 Proteus 也依然有效，导出模组时也会\n一并带走。原始文件会被保留，改动可以撤销。在你确认之前不会写入任何内容。",
     "description": ""
   },
   "Settings.General.AutoRaise.Label": {
