@@ -32,7 +32,7 @@ public static class HatCompatSolve
     /// only way back was to undo and re-fit each one by hand. Stamping the record makes the watcher able to
     /// tell a current patch from a stale one, so it can redo the stale one by itself.
     /// </summary>
-    public const int Version = 13;
+    public const int Version = 14;
 
     /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
@@ -214,7 +214,6 @@ public static class HatCompatSolve
     private const int MinRadiusBins = 2;
 
     /// <param name="Moved">Per LOD0 mesh, the mesh-relative vertices to move and where to.</param>
-    /// <param name="Hide">Parts that cannot be pressed under a hat and should be tagged <c>atr_kam</c>.</param>
     /// <param name="Centre">The skull centre the press was computed about.</param>
     /// <param name="Radius">Median scalp radius about that centre.</param>
     /// <param name="Dropped">Vertices the press wanted to move and could not afford — see
@@ -223,7 +222,6 @@ public static class HatCompatSolve
     /// already fine.</param>
     public sealed record Result(
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> Moved,
-        IReadOnlyList<ModelPart> Hide,
         Vector3 Centre,
         float Radius,
         float MedianPress,
@@ -231,18 +229,12 @@ public static class HatCompatSolve
         int Considered,
         int Dropped = 0)
     {
-        /// <summary>
-        /// The pieces above the hat line, to be dropped outright.
-        /// <para/>
-        /// Separate from <see cref="Hide"/>, and it must be: hiding ponytails is a setting the wearer may
-        /// switch off, while cutting at the hat line is how the fit works at all. Carried on the same list,
-        /// unticking the box would quietly stop the hairstyle fitting.
-        /// </summary>
+        /// <summary>The pieces above the hat line, to be dropped outright — see CutAtHatLine.</summary>
         public IReadOnlyList<ModelPart> Cut { get; init; } = [];
 
         /// <summary>Nothing to do — for a hairstyle whose author already made it hat-compatible.</summary>
         public static Result None { get; } = new(
-            new Dictionary<int, IReadOnlyDictionary<int, Vector3>>(), [], Vector3.Zero, 0, 0, 0, 0);
+            new Dictionary<int, IReadOnlyDictionary<int, Vector3>>(), Vector3.Zero, 0, 0, 0, 0);
     }
 
     /// <summary>One LOD0 mesh's own vertices, indexed the way the model's index buffer indexes them.</summary>
@@ -535,7 +527,7 @@ public static class HatCompatSolve
         var meshes = ReadLod0Meshes(mdl);
         var moved = new Dictionary<int, IReadOnlyDictionary<int, Vector3>>();
         if (meshes.Count == 0)
-            return new Result(moved, [], Vector3.Zero, 0, 0, 0, 0);
+            return new Result(moved, Vector3.Zero, 0, 0, 0, 0);
 
         var frame = head != null ? HeadFrameFrom(head) : null;
         var (centre, radius) = frame ?? HeadFrame(meshes);
@@ -552,30 +544,15 @@ public static class HatCompatSolve
         // What each vertex would cost to shape: one value per index slot naming it.
         var parsed = SecondSkinWriter.Parse(mdl);
         var valence = Valence(mdl, parsed, meshes);
-        // Only hair a hat actually covers may be pressed; everything else is left exactly as its author
-        // made it, and offered for hiding instead.
-        var strands = Strands(mdl, parsed, parts, meshes, hatLine, centre, floor);
 
-        // ONLY a tail is hidden. Nothing else gives up any geometry at all.
+        // Everything a hat certainly hides is cut away rather than pressed. See CutAtHatLine.
         //
-        // Cutting the above-the-line triangles out of every other strand did fit under a hat, and it looked
-        // wrong doing it: hair ended along a hard horizontal line under the brim, with the cut edge in plain
-        // view. That is not a matter of picking a better line. A deletion leaves a visible boundary wherever
-        // the hat's real silhouette differs from the measured hat line, the two differ somewhere on every
-        // hat, and a brim is exactly the place a player looks up under. It is why the guide reaches for a
-        // shape key and not the delete key: a pressed vertex that guessed wrong is hair in a slightly odd
-        // place, while a deleted one is a hole.
-        var tails = strands.Where(s => s.Hideable).Select(s => s.Part).ToList();
-
-        // Everything the hat covers outright goes, rather than being pressed. See CutAtHatLine.
+        // NOTHING ELSE is removed. Hiding whole ponytails used to happen here as well, and it is gone: it
+        // rested on telling a tail from a parting by geometry alone, got that wrong often enough to make
+        // hair vanish, and the fade below the line now presses tails smoothly along their own length, which
+        // is what the exclusion had been protecting them from. <see cref="Strands"/> still classifies them
+        // for the diagnostics; the solve no longer pays for it on every hairstyle change.
         var (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine);
-
-        // Tails are NOT excluded from the press any more, and that reversal is worth explaining because it
-        // undoes an earlier fix. Excluding them was right when the press was a hard cut-off at the hat line:
-        // it moved a ponytail's root and left its length where it was, which folded the tail flat against
-        // the head. The fade removes exactly that failure — a tail is now pressed hard where the hat covers
-        // it and released smoothly along its own length — so the exclusion has stopped protecting anything
-        // and only leaves ponytails standing through the brim, now that hiding them is gone too.
 
         // Where the press stops entirely. Everything between here and the hat line is faded, not cut off.
         float fanBottom = hatLine - fan;
@@ -633,7 +610,12 @@ public static class HatCompatSolve
         // and depth is the number of edges in from it.
         var free = new HashSet<long>();
         foreach (var c in candidates) free.Add(VertexKey(c.Mesh, c.Vertex));
-        var ringsFromEdge = PressDepth(mdl, parsed, meshes, free);
+        // Cut-away vertices are NOT a boundary, and that distinction is the difference between the fringe
+        // being pressed and being left standing. The ramp exists to avoid a step between hair that moved and
+        // hair that stayed — but hair that was deleted did not stay, there is no step, and nobody can see
+        // where it used to be. Counting it as a boundary put the ragged fringe left by the cut one ring from
+        // an edge, so the very corners that most need driving onto the scalp moved a quarter of the way.
+        var ringsFromEdge = PressDepth(mdl, parsed, meshes, free, gone);
         for (int i = 0; i < candidates.Count; i++)
         {
             var c = candidates[i];
@@ -648,7 +630,7 @@ public static class HatCompatSolve
         // rather than by developing a hard edge somewhere arbitrary.
         // Whatever the model already spends on its own shapes comes off the top — the count in the header is
         // for the whole file, not per shape.
-        int already = BitConverter.ToUInt16(mdl, SecondSkinWriter.Parse(mdl).Mh + 20);
+        int already = BitConverter.ToUInt16(mdl, parsed.Mh + 20);
         int budget = Math.Max(0, MaxShapeValues - already), spent = 0;
         if (candidates.Sum(c => c.Cost) > budget)
             candidates.Sort((a, b) => b.Need.CompareTo(a.Need));
@@ -666,14 +648,8 @@ public static class HatCompatSolve
         }
 
         presses.Sort();
-        // The SAME strands the press refused to touch. That is the whole coherence of the two settings:
-        // hair that hangs off the head is either hidden under a hat or left exactly as its author made it,
-        // and never something in between. The earlier list was computed separately, from how far a whole
-        // submesh still stood proud afterwards — which on a hairstyle keeping its scalp and its tails in
-        // one submesh nominated that submesh, and hiding it made the wearer bald.
         return new Result(
             moved,
-            tails,
             centre, radius,
             presses.Count > 0 ? presses[presses.Count / 2] : 0f,
             presses.Count > 0 ? presses[^1] : 0f,
@@ -784,8 +760,12 @@ public static class HatCompatSolve
     /// the caller reads that as full press, which is right — it is a strand wholly inside the hat, with no
     /// boundary to ease towards.
     /// </summary>
+    /// <param name="ignore">Vertices that are neither pressed nor a boundary — geometry the cut removed. They
+    /// seed nothing, but the walk still passes through them, so a fringe vertex measures its distance from
+    /// the nearest RETAINED hair rather than from the hole beside it.</param>
     private static Dictionary<long, int> PressDepth(
-        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, HashSet<long> free)
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes,
+        HashSet<long> free, HashSet<long> ignore)
     {
         var found = new Dictionary<long, int>();
         foreach (var mv in meshes)
@@ -817,9 +797,10 @@ public static class HatCompatSolve
             var q = new Queue<int>();
             for (int v = 0; v < n; v++)
             {
-                bool moving = free.Contains(VertexKey(mv.Mesh, v));
-                dist[v] = moving ? int.MaxValue : 0;
-                if (!moving) q.Enqueue(v);
+                var key = VertexKey(mv.Mesh, v);
+                bool seeds = !free.Contains(key) && !ignore.Contains(key);
+                dist[v] = seeds ? 0 : int.MaxValue;
+                if (seeds) q.Enqueue(v);
             }
             while (q.Count > 0)
             {

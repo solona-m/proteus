@@ -85,14 +85,11 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         var solve = proposal.Solve;
         ImGui.TextWrapped(string.Format(s.PressFmt, solve.Considered, solve.MedianPress * 100f,
                                         solve.MaxPressed * 100f));
-        if (proposal.Unaddressable > 0)
-            ImGui.TextWrapped(string.Format(s.TooWeldedFmt, proposal.Unaddressable));
-
         // Nothing to choose. Hiding whole ponytails was a setting here and is withdrawn: judging which
         // strands a hat cannot cover is a call the geometry cannot make reliably, and getting it wrong makes
         // hair disappear. The cut at the hat line is not affected — it is part of the fit, not an option.
         ImGui.Spacing();
-        if (ImGui.Button(s.Apply)) watcher.Apply([]);
+        if (ImGui.Button(s.Apply)) watcher.Apply();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.ApplyTip);
         DrawMessage(view);
     }

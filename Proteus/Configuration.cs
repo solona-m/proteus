@@ -250,18 +250,12 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoHatCompat { get; set; }
 
-    /// <summary>
-    /// Whether the parts that cannot fit under a hat — ponytails, side tails, the long fall at the back —
-    /// are tagged so the game drops them entirely while a head piece is worn.
-    /// <para/>
-    /// Separate from <see cref="AutoHatCompat"/>, and off by default, because the two halves fail very
-    /// differently. Pressing hair against the skull is invisible when it overshoots: the hat covers it. But
-    /// hiding is all or nothing, and a part wrongly judged unfittable simply vanishes under every hat in the
-    /// game — an early version of the classifier offered to hide most of a long hairstyle, which in game
-    /// read as going bald. Now that the press drives everything under the hat line inside the skull, almost
-    /// nothing needs hiding at all, so this is for the wearer who WANTS a tail gone rather than a repair.
-    /// </summary>
-    public bool HatCompatHidePonytails { get; set; }
+    // HatCompatHidePonytails was removed. It tagged whole ponytails so the game dropped them under a hat,
+    // and it rested on telling a tail from a parting by geometry alone — a judgement wrong often enough that
+    // ticking the box could take most of a long hairstyle with it. What replaced it does not need the
+    // judgement: everything above the hat line is cut because a hat certainly hides it, and everything below
+    // is pressed on a fade that releases along each strand's own length. A key left in an old config file is
+    // ignored, which is the right outcome — there is nothing for it to turn on.
 
     // AutoEmperorRing was removed. It gated whether the reconcile would EQUIP an invisible carrier, but not
     // whether ChooseHosts would offer one as a host — so turning it off did not stop layers being assigned to

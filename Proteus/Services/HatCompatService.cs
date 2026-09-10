@@ -69,20 +69,14 @@ public static class HatCompatService
     /// <summary>
     /// What Proteus proposes to do to one hair model, before anything is written.
     /// <para/>
-    /// Separated from applying it because the user confirms the hide list first: deciding that a part cannot
-    /// fit under a hat is a judgement, and one wrong call makes hair disappear under every hat in the game.
+    /// Separated from applying it so the panel can describe the change before it happens, and so the same
+    /// examination can be reused for the sibling files an option group swaps in.
     /// </summary>
-    /// <param name="Hide">Submeshes proposed for <see cref="ScalpAttribute"/>, in the order shown.</param>
-    /// <param name="Unaddressable">Vertices the press wanted to move that a shape value cannot name — see
-    /// <see cref="ModelAttributeWriter.AddShape"/>. Non-zero means this hair is welded into meshes too large
-    /// to shape completely.</param>
     public sealed record Proposal(
         string Rel,
         ModelParts Parts,
         HatCompatSolve.Result Solve,
-        IReadOnlyList<ModelPart> Hide,
-        bool AlreadyCompatible,
-        int Unaddressable);
+        bool AlreadyCompatible);
 
     /// <summary>The hair Proteus would patch, and the head it would press it against.</summary>
     /// <param name="ModRoot">The mod folder that supplies the hair — the folder directly under Penumbra's
@@ -253,30 +247,30 @@ public static class HatCompatService
         var parts = ModelPartReader.Read(mdl);
         if (parts == null) return null;
         if (IsHatCompatible(mdl))
-            return new Proposal(rel, parts, HatCompatSolve.Result.None, [], true, 0);
+            return new Proposal(rel, parts, HatCompatSolve.Result.None, true);
 
-        var solve = HatCompatSolve.Solve(mdl, parts, head);
-        return new Proposal(rel, parts, solve, solve.Hide, false, 0);
+        return new Proposal(rel, parts, HatCompatSolve.Solve(mdl, parts, head), false);
     }
 
     /// <summary>
     /// Write the shape and the tags into <paramref name="rel"/> inside <paramref name="modRoot"/>.
     /// <para/>
     /// The attribute goes on FIRST and the shape second, and not for a structural reason — either order
-    /// works, because each edit re-parses the file it is given. It reads better this way: the hide list is
-    /// what the user confirmed, so it is applied while its submesh numbers are still the ones they saw.
+    /// works, because each edit re-parses the file it is given. It reads better this way: the cut decides
+    /// which geometry still exists, so it is settled before anything is said about where that geometry goes.
     /// </summary>
-    /// <param name="hide">The submeshes to tag, as confirmed by the user — NOT
-    /// <see cref="Proposal.Hide"/>, which is only the proposal.</param>
-    public static Outcome Apply(string modRoot, byte[] mdl, Proposal proposal, IReadOnlyList<ModelPart> hide)
+    /// <param name="extra">Further submeshes to tag alongside the cut. Empty in the plugin — the cut is the
+    /// whole of what is dropped — and present for tests that need to exercise the tagging path directly.</param>
+    public static Outcome Apply(string modRoot, byte[] mdl, Proposal proposal,
+                                IReadOnlyList<ModelPart>? extra = null)
     {
         if (proposal.AlreadyCompatible)
             return new Outcome(false, Loc.Localize("HatCompat.Apply.Already",
                 "This hairstyle already has a hat shape of its own."), 0);
-        // The wearer's choice about ponytails, PLUS the geometry above the hat line, which is not a choice —
-        // dropping it is how the fit works, and it costs nothing where pressing the same hair costs a shape
-        // value per index slot. Tagged in one pass so a submesh claimed by both is cut once.
-        var tag = hide.Concat(proposal.Solve.Cut).ToList();
+        // The geometry above the hat line, which the hat hides outright. Dropping it costs nothing where
+        // pressing the same hair costs a shape value per index slot. Tagged in one pass so a submesh claimed
+        // twice is cut once.
+        var tag = (extra ?? []).Concat(proposal.Solve.Cut).ToList();
 
         if (proposal.Solve.Moved.Count == 0 && tag.Count == 0)
             return new Outcome(false, Loc.Localize("HatCompat.Apply.Nothing",
