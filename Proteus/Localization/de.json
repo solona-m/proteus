@@ -355,6 +355,10 @@
     "message": "Skin (gemalt) — skin.shpk.  Cloth — character.shpk (Sphere, Metall).\nAnimiertes Leuchten — characterscroll.shpk. Das Anheften stoppt den automatischen Moduswechsel.",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "Geometrie",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Leuchten",
     "description": ""

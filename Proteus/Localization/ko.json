@@ -355,6 +355,10 @@
     "message": "Skin(그리기) — skin.shpk.  Cloth — character.shpk(스피어, 메탈).\n애니메이션 발광 — characterscroll.shpk. 고정하면 자동 모드 전환이 멈춥니다.",
     "description": ""
   },
+  "Colors.Geometry.Section": {
+    "message": "지오메트리",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "발광",
     "description": ""
