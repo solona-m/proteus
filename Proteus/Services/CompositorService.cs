@@ -9115,6 +9115,35 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
+    /// Redraw the player so the game re-reads a model file that changed on disk, and do nothing else.
+    /// <para/>
+    /// For an edit to SOMEONE ELSE'S mod — a hairstyle made to fit under a hat — where the only thing needed
+    /// is for the game to drop the copy it has cached against that path. The caller has already told
+    /// Penumbra to reload the mod that owns the file; this is the second half, because a redraw alone
+    /// re-resolves the path and is handed back the bytes Penumbra still has in memory.
+    /// <para/>
+    /// Deliberately NOT <see cref="RestoreChangedAccessory"/>, which was doing this job and doing far more
+    /// besides: it reloads Proteus's own managed mod and waits 300 ms for it, which re-renders the whole
+    /// composite. Nothing about a hairstyle touches the composite, so that was a full skin rebuild bought
+    /// for nothing every time the player changed hair.
+    /// </summary>
+    public void RedrawForChangedModel()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                // Stamped so the compositor recognises the echo as its own doing and does not treat the
+                // redraw as the player having changed something.
+                StampOwnRedraw();
+                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
+                    CancelOwnRedrawEcho();
+            }
+            catch (Exception ex) { log.Error(ex, "[Proteus] redraw for a changed model failed"); }
+        });
+    }
+
+    /// <summary>
     /// Restore any accessory whose model the second skin replaced back to its original geometry, by
     /// forcing a FULL player redraw so the game reloads the accessory's own .mdl. When the managed mod's
     /// redirects have been cleared (disable, or nothing composited) this reverts the accessory to vanilla;

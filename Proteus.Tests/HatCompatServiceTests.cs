@@ -65,8 +65,8 @@ public class HatCompatServiceTests
         {
             [0] = new Dictionary<int, Vector3> { [1] = new(0.5f, 0.5f, 0.5f) },
         };
-        var solve = new HatCompatSolve.Result(moved, [], Vector3.Zero, 0.075f, 0.004f, 0.01f, 1);
-        return new HatCompatService.Proposal(ModelRel, parts, solve, [], false, 0);
+        var solve = new HatCompatSolve.Result(moved, Vector3.Zero, 0.075f, 0.004f, 0.01f, 1);
+        return new HatCompatService.Proposal(ModelRel, parts, solve, false);
     }
 
     private static ModelPart PartOf(ModelParts parts, int mesh)
@@ -157,7 +157,6 @@ public class HatCompatServiceTests
         var proposal = HatCompatService.Inspect(mdl, ModelRel, null);
         Assert.NotNull(proposal);
         Assert.True(proposal!.AlreadyCompatible);
-        Assert.Empty(proposal.Hide);
 
         using var mod = new Mod(mdl);
         var outcome = HatCompatService.Apply(mod.Root, mdl, proposal, []);
@@ -189,7 +188,7 @@ public class HatCompatServiceTests
         Assert.True(HatCompatService.Apply(mod.Root, one, Proposal(one, parts), []).Ok);
 
         var proposalTwo = new HatCompatService.Proposal(
-            second, parts, Proposal(originalTwo, parts).Solve, [], false, 0);
+            second, parts, Proposal(originalTwo, parts).Solve, false);
         Assert.True(HatCompatService.Apply(mod.Root, originalTwo, proposalTwo, []).Ok);
         var patchedTwo = File.ReadAllBytes(dest);
         Assert.NotEqual(originalTwo, patchedTwo);
@@ -237,7 +236,7 @@ public class HatCompatServiceTests
         };
         var proposal = new HatCompatService.Proposal(
             ModelRel, parts,
-            new HatCompatSolve.Result(moved, [], Vector3.Zero, 0, 0, 0, 1), [], false, 0);
+            new HatCompatSolve.Result(moved, Vector3.Zero, 0, 0, 0, 1), false);
 
         var outcome = HatCompatService.Apply(mod.Root, mdl, proposal, []);
         Assert.False(outcome.Ok);

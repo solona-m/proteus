@@ -549,10 +549,10 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             var (b4, w4, n) = Penetration(hat, meshes, solved.Centre, null);
             var (af, wa, _) = Penetration(hat, meshes, solved.Centre, solved.Moved);
 
-            int hideTris = solved.Hide.Sum(p => p.TriangleCount);
+            int hideTris = solved.Cut.Sum(p => p.TriangleCount);
             int allTris = parts.Parts.Where(p => p.Island < 0).Sum(p => p.TriangleCount);
             o.WriteLine($"{Trim(f),-34} {n,7} {b4,8} {w4,8:F4} → {af,8} {wa,8:F4}  {solved.MedianPress,9:F4}"
-                      + $"  hide {solved.Hide.Count,3}p {(allTris > 0 ? 100.0 * hideTris / allTris : 0),5:F1}%"
+                      + $"  hide {solved.Cut.Count,3}p {(allTris > 0 ? 100.0 * hideTris / allTris : 0),5:F1}%"
                       + $"  c.y {solved.Centre.Y,6:F3} r {solved.Radius,5:F3}");
             tested++;
             if (af <= b4) improved++;
@@ -811,7 +811,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             try
             {
                 // Exactly what HatCompatService.Apply tags, which is the CUT and nothing else — hiding
-                // ponytails is withdrawn, so solve.Hide is computed and not applied. Tagging Hide here
+                // ponytails is withdrawn, so solve.Cut is computed and not applied. Tagging Hide here
                 // instead measured a patch the plugin does not produce.
                 var tag = solve.Cut;
                 var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
@@ -1101,7 +1101,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             try
             {
                 // Exactly what HatCompatService.Apply tags, which is the CUT and nothing else — hiding
-                // ponytails is withdrawn, so solve.Hide is computed and not applied. Tagging Hide here
+                // ponytails is withdrawn, so solve.Cut is computed and not applied. Tagging Hide here
                 // instead measured a patch the plugin does not produce.
                 var tag = solve.Cut;
                 var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, tag);
@@ -1113,7 +1113,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             catch (Exception ex) { trouble.Add($"{Trim(f)}: {ex.Message}"); continue; }
 
             var strands = HatCompatSolve.Strands(mdl, parts, head).Where(s => s.Tail).ToList();
-            int hidTris = solve.Hide.Sum(p => p.TriangleCount);
+            int hidTris = solve.Cut.Sum(p => p.TriangleCount);
             int allTris = parts.Parts.Where(p => p.Island < 0).Sum(p => p.TriangleCount);
             double hidPct = allTris > 0 ? 100.0 * hidTris / allTris : 0;
 
@@ -1189,7 +1189,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
                           + $"{passDrop} parts pass drop, {passReach} pass reach");
             }
             o.WriteLine($"{Trim(f),-38} {solve.Considered,6} {solve.Dropped,5} {stuck,5} "
-                      + $"{all.Count,4}p {strands.Count,4}t {solve.Hide.Count,4}h "
+                      + $"{all.Count,4}p {strands.Count,4}t {solve.Cut.Count,4}h "
                       + $"{strands.Count(s => !s.Hideable),4}k  {string.Join("  ", report)}");
         }
 
@@ -1647,10 +1647,10 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         if (parts == null) return;
 
         var solve = HatCompatSolve.Solve(mdl, parts, head);
-        o.WriteLine($"solve: {solve.Considered} vertices pressed, {solve.Hide.Count} tail strands to hide");
-        if (solve.Hide.Count == 0) { o.WriteLine("nothing classified as a tail — nothing to check"); return; }
+        o.WriteLine($"solve: {solve.Considered} vertices pressed, {solve.Cut.Count} tail strands to hide");
+        if (solve.Cut.Count == 0) { o.WriteLine("nothing classified as a tail — nothing to check"); return; }
 
-        var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, solve.Hide);
+        var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, solve.Cut);
         o.WriteLine($"isolate: {targets.Count} submeshes now hold exactly those strands");
         var tagged = ModelAttributeWriter.AddAttribute(split, HatCompatService.ScalpAttribute, targets);
 
@@ -1675,7 +1675,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         }
         // A part cut down to a chosen set of triangles carries its ordinals but no rebased Triangles array
         // — nothing draws it — so TriangleCount reads zero for those and the ordinals are the real count.
-        long wantTris = solve.Hide.Sum(p => (long)(p.TriangleCount > 0 ? p.TriangleCount : p.Ordinals.Length));
+        long wantTris = solve.Cut.Sum(p => (long)(p.TriangleCount > 0 ? p.TriangleCount : p.Ordinals.Length));
         o.WriteLine($"tagged {taggedTris} of {allTris} triangles ({100.0 * taggedTris / allTris:F0}%); "
                   + $"the solve asked for {wantTris}");
 
@@ -2266,7 +2266,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             var (b4, w4, _) = Penetration(hat, meshes, solve.Centre, null);
             var (af, wa, _) = Penetration(hat, meshes, solve.Centre, ShapedPositions(after, HatShape + "_test"));
 
-            int hideTris = solve.Hide.Sum(p => p.TriangleCount);
+            int hideTris = solve.Cut.Sum(p => p.TriangleCount);
             int allTris = parts.Parts.Where(p => p.Island < 0).Sum(p => p.TriangleCount);
             // How many vertices the press actually moved, and how many shape values that cost — the budget
             // is a u16 ceiling on the whole model, so a hairstyle can silently be pressed only in part.

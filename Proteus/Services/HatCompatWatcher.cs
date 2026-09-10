@@ -265,21 +265,11 @@ public sealed class HatCompatWatcher : IDisposable
 
         current = new View(target, proposal, Busy: true);
         if (mayApply && config.AutoHatCompat && !proposal.AlreadyCompatible)
-            Write(target, proposal, HideList(proposal));
+            Write(target, proposal);
     }
 
-    /// <summary>
-    /// The parts to hide beyond the cut at the hat line, which is now none of them.
-    /// <para/>
-    /// Hiding whole ponytails is withdrawn. It rested on telling a ponytail from a parting by geometry
-    /// alone, the answer was wrong often enough to make hair vanish, and there is no way for one checkbox to
-    /// say "those three but not that one". The cut at the hat line is unaffected and travels separately, on
-    /// <see cref="HatCompatSolve.Result.Cut"/> — it is how the fit works rather than a preference.
-    /// </summary>
-    private static IReadOnlyList<ModelPart> HideList(HatCompatService.Proposal proposal) => [];
-
-    /// <summary>Apply what is currently proposed, with the caller's own choice of parts to hide.</summary>
-    public void Apply(IReadOnlyList<ModelPart> hide)
+    /// <summary>Apply what is currently proposed.</summary>
+    public void Apply()
     {
         var view = current;
         if (view.Target == null || view.Proposal == null || view.Busy) return;
@@ -289,7 +279,7 @@ public sealed class HatCompatWatcher : IDisposable
         var proposal = view.Proposal;
         Task.Run(() =>
         {
-            try { Write(target, proposal, hide); }
+            try { Write(target, proposal); }
             catch (Exception ex)
             {
                 log.Error(ex, "hat compat: applying to {0} failed", target.Rel);
@@ -303,18 +293,17 @@ public sealed class HatCompatWatcher : IDisposable
         });
     }
 
-    private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal,
-                       IReadOnlyList<ModelPart> hide)
+    private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal)
     {
-        log.Information("hat compat: fitting {0} — pressing {1} vertices, hiding {2} part(s){3}",
-                        target.Rel, proposal.Solve.Considered, hide.Count,
+        log.Information("hat compat: fitting {0} — pressing {1} vertices, cutting {2} piece(s){3}",
+                        target.Rel, proposal.Solve.Considered, proposal.Solve.Cut.Count,
                         // Only when it happened. A shape that had to be cut short leaves hair standing
                         // exactly where the budget ran out, which looks identical to the press deciding that
                         // hair was fine — and telling those apart from a screenshot alone is impossible.
                         proposal.Solve.Dropped > 0
                             ? $", {proposal.Solve.Dropped} left unpressed for want of shape budget"
                             : "");
-        var outcome = HatCompatService.Apply(target.ModRoot, target.Model, proposal, hide);
+        var outcome = HatCompatService.Apply(target.ModRoot, target.Model, proposal);
         if (!outcome.Ok)
         {
             log.Warning("hat compat: {0} was not fitted — {1}", target.Rel, outcome.Message);
@@ -337,7 +326,7 @@ public sealed class HatCompatWatcher : IDisposable
                     target.ModRoot, rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
                 if (HatCompatService.Inspect(bytes, rel, target.Head) is not { AlreadyCompatible: false } sib)
                     continue;
-                var sibOutcome = HatCompatService.Apply(target.ModRoot, bytes, sib, HideList(sib));
+                var sibOutcome = HatCompatService.Apply(target.ModRoot, bytes, sib);
                 log.Information("hat compat: sibling {0} — {1}", rel,
                                 sibOutcome.Ok ? "fitted" : sibOutcome.Message);
             }
@@ -364,7 +353,7 @@ public sealed class HatCompatWatcher : IDisposable
             var ec = penumbra.ReloadModDirectory(modDir);
             log.Information("hat compat: asked Penumbra to reload {0} — {1}", modDir, ec);
         }
-        compositor.RestoreChangedAccessory();
+        compositor.RedrawForChangedModel();
     }
 
     /// <summary>
@@ -404,24 +393,18 @@ public sealed class HatCompatWatcher : IDisposable
         }
 
         log.Information("hat compat: restored {0} file(s) in {1}", restored, target.ModRoot);
-        compositor.RestoreChangedAccessory();
+        compositor.RedrawForChangedModel();
         return true;
     }
 
     /// <summary>
-    /// Redo the patch on a hairstyle that already has one, with whatever the settings say now.
+    /// Put this hairstyle back the way its author shipped it.
     /// <para/>
-    /// Needed because a patch is a one-time write, not a live effect: once a hairstyle carries one, nothing
-    /// re-examines it, so turning "hide ponytails" on left the tails exactly where the previous patch had
-    /// put them and the setting appeared to do nothing at all. Undoing first is what makes this safe —
-    /// the second patch is computed from the author's own file, never from the output of the first.
+    /// Undo only. There used to be a redo-with-the-new-settings twin of this, for a "hide ponytails" switch
+    /// that no longer exists; a patch made stale by a newer Proteus is now redone by <see cref="Examine"/>
+    /// on its own, which is the case that twin was really covering.
     /// </summary>
-    public void Reapply() => Revert(thenApply: true);
-
-    /// <summary>Put this hairstyle back the way its author shipped it.</summary>
-    public void Revert() => Revert(thenApply: false);
-
-    private void Revert(bool thenApply)
+    public void Revert()
     {
         var view = current;
         if (view.Target == null || view.Busy) return;
@@ -439,12 +422,6 @@ public sealed class HatCompatWatcher : IDisposable
                 // mayApply, or an undo would immediately undo itself.
                 lastKey = null;
                 Examine(mayApply: false);
-
-                // Re-patching is a deliberate second step, and it writes whatever the settings now say
-                // even when the automatic path is switched off: the user has just changed a setting whose
-                // only effect is on the patch, so leaving the hairstyle bare would be the odd answer.
-                if (thenApply && current is { Target: { } t, Proposal: { } p } && !p.AlreadyCompatible)
-                    Write(t, p, HideList(p));
             }
             catch (Exception ex)
             {
