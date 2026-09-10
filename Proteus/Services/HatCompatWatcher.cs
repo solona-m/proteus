@@ -61,6 +61,21 @@ public sealed class HatCompatWatcher : IDisposable
     /// <summary>Polls remaining before the next heartbeat. Starts at 1 so the first poll reports.</summary>
     private int beats = 1;
 
+    /// <summary>How many consecutive empty readings it takes to believe the hair really is gone.</summary>
+    private const int BlanksBeforeNone = 2;
+
+    /// <summary>Consecutive polls that found no hair — see <see cref="OnFrameworkUpdate"/>.</summary>
+    private int blanks;
+
+    /// <summary>
+    /// The hairstyle the user undid, which the automatic path must not put straight back.
+    /// <para/>
+    /// Held as mod root and file, not as the poll's key, because the key includes the file's timestamp and
+    /// an undo is precisely the thing that changes it. Cleared as soon as a DIFFERENT hairstyle is worn, so
+    /// undo means "leave this one alone" rather than "stop fitting anything".
+    /// </summary>
+    private volatile string? undone;
+
     /// <summary>
     /// The model list the last live walk saw, for the examination to work from.
     /// <para/>
@@ -151,6 +166,17 @@ public sealed class HatCompatWatcher : IDisposable
             log.Debug("hat compat: watching — key={0}  {1}", key ?? "(null)", compositor.HatCompatDiag());
         }
 
+        // A BLANK READING IS ALMOST ALWAYS A REDRAW, not the hair coming off — and the redraw is usually
+        // ours, since writing a patch forces one. For the frame or two the character is being rebuilt the
+        // draw object carries no hair, so the walk answers nothing. Taken at face value that clears the
+        // comparison, and the perfectly ordinary reading that follows then looks like a brand-new hairstyle
+        // and is fitted all over again. Undo was the visible casualty: it restored the file, the redraw it
+        // triggered blanked the reading, and the automatic path put the patch straight back.
+        //
+        // Two in a row, so genuinely taking the hair off still registers a second later.
+        if (key == null && ++blanks < BlanksBeforeNone) return;
+        if (key != null) blanks = 0;
+
         if (key == lastKey) return;
 
         log.Information("hat compat: hairstyle changed ({0} -> {1})", lastKey ?? "(none)", key ?? "(none)");
@@ -223,6 +249,9 @@ public sealed class HatCompatWatcher : IDisposable
         var target = live != null ? compositor.HatCompatTargetFor(live) : compositor.HatCompatTarget();
         if (target == null) { current = new View(); return; }
 
+        // Undo holds only until a different hairstyle is worn.
+        if (undone != null && undone != Identity(target)) undone = null;
+
         // Per FILE, not per mod: a hair pack ships a dozen hairstyles out of one folder, and a mod-level
         // test would report every one of them as already done the moment any one was.
         if (HatCompatService.IsPatched(target.ModRoot, target.Rel, out var stale))
@@ -264,9 +293,18 @@ public sealed class HatCompatWatcher : IDisposable
         }
 
         current = new View(target, proposal, Busy: true);
+
+        // The user's undo outranks the setting. Automatic fitting means "fit each hairstyle as you put it
+        // on", not "overrule anyone who says no" — and without this the two fight: undo restores the file,
+        // the file looks unfitted, and the next examination fits it again within the second.
+        if (undone == Identity(target)) return;
+
         if (mayApply && config.AutoHatCompat && !proposal.AlreadyCompatible)
             Write(target, proposal);
     }
+
+    /// <summary>Which hairstyle this is, independent of anything an edit to it would change.</summary>
+    private static string Identity(HatCompatService.Target target) => $"{target.ModRoot}|{target.Rel}";
 
     /// <summary>Apply what is currently proposed.</summary>
     public void Apply()
@@ -274,6 +312,7 @@ public sealed class HatCompatWatcher : IDisposable
         var view = current;
         if (view.Target == null || view.Proposal == null || view.Busy) return;
         if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
+        undone = null;                        // asked for it explicitly, so the undo no longer stands
         current = view with { Busy = true };
         var target = view.Target;
         var proposal = view.Proposal;
@@ -416,6 +455,11 @@ public sealed class HatCompatWatcher : IDisposable
             try
             {
                 if (!RevertFiles(target)) return;
+
+                // Remember it, and remember it HERE rather than in RevertFiles — the automatic refit of a
+                // stale patch reverts too, and that one is a step on the way to writing a better patch, not
+                // a request to leave the hairstyle alone.
+                undone = Identity(target);
 
                 // Look at the restored file rather than guessing what it now needs. Not through Refresh,
                 // which would refuse while this examination still holds the flag — and never with
