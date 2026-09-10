@@ -6,9 +6,19 @@
   </PropertyGroup>
 
   <Target Name="ComputeProteusVersion" BeforeTargets="GetAssemblyVersion;GenerateNuspec;Build" Condition="'$(ProteusVersion)' == ''">
-    <Exec Command="git rev-list --count HEAD" ConsoleToMsBuild="true" StandardOutputImportance="low">
+    <!-- stderr is redirected because ConsoleToMsBuild captures BOTH streams and joins the lines with
+         ';', so any git warning ends up spliced into the version. A corrupt commit-graph cache once
+         produced '2609.warning: unable to find all commit-graph files;395' here, which surfaced as a
+         CS7035 in generated AssemblyInfo.cs — a long way from the actual cause. Detached HEAD notes
+         and index-lock advisories would do the same. Exec shells through cmd.exe on Windows and this
+         project is win-x64 only, so 2>NUL is safe. -->
+    <Exec Command="git rev-list --count HEAD 2&gt;NUL" ConsoleToMsBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitCount" />
     </Exec>
+    <!-- Fail here, saying what happened, rather than handing the compiler a malformed version. With no
+         git on PATH the count comes back empty and the version becomes a bare '2609.'. -->
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(GitCommitCount)', '^\d+$'))"
+           Text="ComputeProteusVersion: could not read a commit count from git (got '$(GitCommitCount)'). Is git on PATH, and is this a git checkout?" />
     <CreateProperty Value="$([System.DateTime]::UtcNow.ToString('yyMM')).$(GitCommitCount)">
       <Output TaskParameter="Value" PropertyName="ProteusVersion" />
     </CreateProperty>
