@@ -20,12 +20,6 @@ namespace Proteus.Gui;
 /// </summary>
 internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration config)
 {
-    /// <summary>Parts the user has UNticked, keyed "mesh.submesh", for the hairstyle on screen.</summary>
-    private readonly HashSet<string> unticked = new(StringComparer.Ordinal);
-
-    /// <summary>Which hairstyle <see cref="unticked"/> describes, so a change starts a fresh list.</summary>
-    private string forPath = "";
-
     public void Draw()
     {
         var s = Strings.HatCompat;
@@ -50,6 +44,9 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
             {
                 config.HatCompatHidePonytails = hide;
                 config.Save();
+                // A patch is a one-time write, so a hairstyle that already has one has to be done again
+                // for this to mean anything. Without it the box appeared to do nothing at all.
+                if (watcher.Current.Patched) watcher.Reapply();
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.HidePonytailsTip);
             ImGui.SameLine();
@@ -73,13 +70,6 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
             ImGui.TextWrapped(s.NoModdedHair);
             DrawMessage(view);
             return;
-        }
-
-        // A different hairstyle means the previous corrections describe geometry that is no longer here.
-        if (view.Target.GamePath != forPath)
-        {
-            forPath = view.Target.GamePath;
-            unticked.Clear();
         }
 
         ImGui.TextWrapped(string.Format(s.WearingFmt,
@@ -114,26 +104,17 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         if (proposal.Unaddressable > 0)
             ImGui.TextWrapped(string.Format(s.TooWeldedFmt, proposal.Unaddressable));
 
-        // The hide list is only offered while the setting that uses it is on — otherwise it is a list of
-        // checkboxes that governs nothing, which reads as broken rather than as disabled.
-        var chosen = new List<ModelPart>();
-        if (config.HatCompatHidePonytails && proposal.Hide.Count > 0)
+        // What WILL happen, not a decision to make. This used to offer a checkbox per strand, and on a real
+        // hairstyle that is three hundred of them named "2.1.106" — a choice nobody has the information to
+        // make, presented as though they did. The classifier has the geometry and is the only thing here
+        // that can tell a ponytail from a parting.
+        var chosen = config.HatCompatHidePonytails ? proposal.Hide : [];
+        if (config.HatCompatHidePonytails)
         {
             ImGui.Spacing();
-            ImGui.TextWrapped(s.HidePrompt);
-            using (ImRaii.PushIndent())
-                foreach (var part in proposal.Hide)
-                {
-                    var key = $"{part.Mesh}.{part.Submesh}";
-                    bool on = !unticked.Contains(key);
-                    if (ImGui.Checkbox($"{part.Label}###hatHide{key}", ref on))
-                    {
-                        if (on) unticked.Remove(key); else unticked.Add(key);
-                    }
-                    ImGui.SameLine();
-                    ImGui.TextDisabled(string.Format(s.TrianglesFmt, part.TriangleCount));
-                    if (on) chosen.Add(part);
-                }
+            ImGui.TextWrapped(chosen.Count > 0
+                ? string.Format(s.WillHideFmt, chosen.Count)
+                : s.NothingToHide);
         }
 
         ImGui.Spacing();

@@ -397,7 +397,33 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         return f == null ? null : File.ReadAllBytes(f);
     }
 
-    /// <summary>A TexTools export of the reference hat, on the machine that owns the game. Never shipped.</summary>
+    /// <summary>
+    /// Where TexTools exports live on the machine that owns the game. Every c0201 head piece under it is a
+    /// reference hat; nothing derived from them is ever shipped.
+    /// </summary>
+    private static readonly string HatRoot =
+        Environment.GetEnvironmentVariable("PROTEUS_HAT_ROOT")
+        ?? @"K:\Users\Corey\OneDrive\DocumentsOld\TexTools\Saved\Head";
+
+    /// <summary>Every reference hat exported for a Midlander female, named by its folder.</summary>
+    private static List<(string Name, string Path)> Hats()
+    {
+        var found = new List<(string, string)>();
+        if (!Directory.Exists(HatRoot)) return found;
+        try
+        {
+            foreach (var f in Directory.GetFiles(HatRoot, "c0201*_met.fbx", SearchOption.AllDirectories))
+            {
+                var dir = Path.GetDirectoryName(Path.GetDirectoryName(f));
+                found.Add((dir == null ? "?" : Path.GetFileName(dir), f));
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return found.OrderBy(h => h.Item1, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>A TexTools export of one reference hat, for the tests that need something hat-shaped.</summary>
     private static readonly string HatFbx =
         Environment.GetEnvironmentVariable("PROTEUS_HAT_FBX")
         ?? @"K:\Users\Corey\OneDrive\DocumentsOld\TexTools\Saved\Head\Wrangler's Hat\3D\c0201e0380_met.fbx";
@@ -696,6 +722,374 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         }
         o.WriteLine($"tightest at y {bandY:F3} ({bandY - centre.Y:+0.000;-0.000} from head centre), "
                   + $"radius {bandR:F4} — head radius there is about {radius:F4}");
+    }
+
+    /// <summary>
+    /// Profile EVERY reference hat, and report the tightest of them.
+    /// <para/>
+    /// Everything about the press was calibrated against one hat, and hats are not one shape. A strand that
+    /// tucks under a wide-brimmed Wrangler's sits outside a Battlemage's, which is taller and narrower —
+    /// so the press flattened it where the second hat leaves it on show. What the constants have to
+    /// describe is the WORST case across hats, which is the same advice Ulli's guide gives when it names
+    /// two particular caps to check against.
+    /// <para/>
+    /// Two numbers per hat: where its opening sits on the head, and how much room its crown leaves over
+    /// the scalp. The press must use the highest opening and the smallest clearance of any hat here.
+    /// </summary>
+    [Fact]
+    public void ProfileEveryReferenceHat()
+    {
+        var hats = Hats();
+        var head = HeadModel();
+        if (hats.Count == 0 || head == null) return;
+        var frame = HatCompatSolve.HeadFrameFrom(head);
+        if (frame == null) return;
+        var (centre, radius) = frame.Value;
+        o.WriteLine($"head centre {F(centre)}  radius {radius:F4}");
+        o.WriteLine($"{"hat",-28} {"verts",6} {"band y",8} {"vs centre",10} {"crown gap",10} {"min gap",9}");
+
+        // The head as a ray target, so "how far off the scalp" is measured against the scalp itself rather
+        // than a sphere — a head is nothing like one, and every gap below would inherit the error.
+        if (!SecondSkinWriter.TryReadLod0Geometry(head, out var hp, out _, out var ht, keepMaterial: _ => true))
+            return;
+        var headMesh = new FbxMesh.Mesh(
+            Enumerable.Range(0, hp.Length / 3).Select(i => new Vector3(hp[i * 3], hp[i * 3 + 1], hp[i * 3 + 2])).ToArray(),
+            ht);
+
+        float highestBand = float.MinValue, tightestCrown = float.MaxValue;
+        string bandFrom = "", crownFrom = "";
+        foreach (var (name, path) in hats)
+        {
+            var hat = FbxMesh.Load(path);
+            if (hat == null) { o.WriteLine($"{name,-28} unreadable"); continue; }
+
+            // Cast outward from the head centre over the whole sphere. Where a hat WRAPS the head, its
+            // outer surface sits just past the scalp; where it flares into a brim it is far away and the
+            // head is not covered there at all. That difference is what tells an opening from a brim, and
+            // measuring the hat's own radius cannot see it — which is why the first attempt found the
+            // pointed tip of a witch's hat and called it the band.
+            float lowestCovered = float.MaxValue;
+            var gaps = new List<float>();
+            for (int iv = 1; iv < 40; iv++)
+            for (int iu = 0; iu < 64; iu++)
+            {
+                float theta = MathF.PI * iv / 40f, phi = 2 * MathF.PI * iu / 64f;
+                var dir = new Vector3(MathF.Sin(theta) * MathF.Cos(phi), MathF.Cos(theta),
+                                      MathF.Sin(theta) * MathF.Sin(phi));
+                float tHead = FirstHit(headMesh, centre, dir);
+                if (tHead <= 0f) continue;
+                float tHat = FirstHit(hat, centre, dir);
+                if (tHat <= 0f) continue;
+
+                float gap = tHat - tHead;
+                if (gap > 0.08f) continue;              // a brim out in the air, not the hat on the head
+                gaps.Add(gap);
+                lowestCovered = MathF.Min(lowestCovered, centre.Y + dir.Y * tHead);
+            }
+            if (gaps.Count == 0) { o.WriteLine($"{name,-28} {hat.Positions.Length,6}  covers nothing"); continue; }
+
+            gaps.Sort();
+            float band = lowestCovered - centre.Y;
+            float tight = gaps[gaps.Count / 10];        // the tightest tenth, not the single worst texel
+            o.WriteLine($"{name,-28} {hat.Positions.Length,6} {lowestCovered,8:F3} {band * 1000,9:F0}mm "
+                      + $"{gaps[gaps.Count / 2] * 1000,9:F0}mm {tight * 1000,8:F0}mm");
+
+            if (band > highestBand) { highestBand = band; bandFrom = name; }
+            if (tight < tightestCrown) { tightestCrown = tight; crownFrom = name; }
+        }
+
+        o.WriteLine("");
+        o.WriteLine($"WORST CASE: opening sits {highestBand * 1000:F0} mm above the head centre ({bandFrom}); "
+                  + $"crown leaves {tightestCrown * 1000:F0} mm over the scalp ({crownFrom})");
+        o.WriteLine($"press currently uses hat line {HatCompatSolve.HatLine * 1000:F0} mm, "
+                  + $"allowed dip {HatCompatSolve.PressDip * 1000:F0} mm, tail from {HatCompatSolve.TailDrop * 1000:F0} mm drop and {HatCompatSolve.TailReach * 1000:F0} mm reach");
+    }
+
+    /// <summary>
+    /// Run the WHOLE apply path over a real hairstyle and check the tails actually end up tagged.
+    /// <para/>
+    /// Solve, cut the tail strands out of the submeshes they share, tag them <c>atr_kam</c>, add the shape
+    /// — exactly what pressing the button does — and then read the result back to see which triangles the
+    /// game would drop under a hat. A classifier that finds the ponytail and a writer that fails to tag it
+    /// look identical from the outside, and the only way to tell them apart is to look at the bytes.
+    /// </summary>
+    [Fact]
+    public void TaggingTheTailsActuallyMarksThem()
+    {
+        var wanted = Environment.GetEnvironmentVariable("PROTEUS_HAIR") ?? "Locksley";
+        var head = HeadModel();
+        // Prefer a pristine copy: an already-patched file has nothing left to find.
+        var file = HairModels().Concat(PristineBackups())
+            .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+            .Where(f => f.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => HatCompatService.IsHatCompatible(File.ReadAllBytes(f)) ? 1 : 0)
+            .FirstOrDefault();
+        if (file == null || head == null) return;
+
+        var mdl = File.ReadAllBytes(file);
+        o.WriteLine($"{Trim(file)}  (already patched: {HatCompatService.IsHatCompatible(mdl)})");
+        var parts = ModelPartReader.Read(mdl);
+        if (parts == null) return;
+
+        var solve = HatCompatSolve.Solve(mdl, parts, head);
+        o.WriteLine($"solve: {solve.Considered} vertices pressed, {solve.Hide.Count} tail strands to hide");
+        if (solve.Hide.Count == 0) { o.WriteLine("nothing classified as a tail — nothing to check"); return; }
+
+        var (split, targets) = ModelAttributeWriter.IsolateParts(mdl, solve.Hide);
+        o.WriteLine($"isolate: {targets.Count} submeshes now hold exactly those strands");
+        var tagged = ModelAttributeWriter.AddAttribute(split, HatCompatService.ScalpAttribute, targets);
+
+        var src = SecondSkinWriter.Parse(tagged);
+        int bit = Array.IndexOf(src.AttrNames, HatCompatService.ScalpAttribute);
+        Assert.True(bit >= 0, "atr_kam is not in the attribute table");
+
+        // How much geometry the game would actually drop, against how much the solve wanted dropped.
+        long taggedTris = 0, allTris = 0;
+        for (int m = 0; m < src.MeshCount; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (mo + 36 > tagged.Length) break;
+            int si = BitConverter.ToUInt16(tagged, mo + 10), sc = BitConverter.ToUInt16(tagged, mo + 12);
+            for (int k = 0; k < sc; k++)
+            {
+                int ss = src.SubmeshStart + (si + k) * 16;
+                uint count = BitConverter.ToUInt32(tagged, ss + 4) / 3;
+                allTris += count;
+                if ((BitConverter.ToUInt32(tagged, ss + 8) & (1u << bit)) != 0) taggedTris += count;
+            }
+        }
+        // A part cut down to a chosen set of triangles carries its ordinals but no rebased Triangles array
+        // — nothing draws it — so TriangleCount reads zero for those and the ordinals are the real count.
+        long wantTris = solve.Hide.Sum(p => (long)(p.TriangleCount > 0 ? p.TriangleCount : p.Ordinals.Length));
+        o.WriteLine($"tagged {taggedTris} of {allTris} triangles ({100.0 * taggedTris / allTris:F0}%); "
+                  + $"the solve asked for {wantTris}");
+
+        Assert.True(taggedTris > 0, "no triangle carries atr_kam");
+        Assert.Equal(wantTris, taggedTris);
+    }
+
+    /// <summary>
+    /// What is ACTUALLY in the patched file on disk right now.
+    /// <para/>
+    /// The offline pipeline can be perfect and the thing in the mod folder still be wrong — a different
+    /// code path, an older build, a write that silently failed. When the game disagrees with the tests,
+    /// this is the file the game is reading, so this is the one worth asking.
+    /// </summary>
+    [Fact]
+    public void WhatIsInThePatchedFileOnDisk()
+    {
+        var wanted = Environment.GetEnvironmentVariable("PROTEUS_HAIR") ?? "Locksley";
+        foreach (var f in HairModels()
+                     .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+                     .Where(f => f.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+                     .Take(4))
+        {
+            var mdl = File.ReadAllBytes(f);
+            SecondSkinWriter.Source src;
+            try { src = SecondSkinWriter.Parse(mdl); }
+            catch (Exception ex) { o.WriteLine($"{Trim(f)}: parse failed {ex.GetType().Name}"); continue; }
+
+            o.WriteLine("");
+            o.WriteLine($"{Trim(f)}  {new FileInfo(f).Length} bytes, written {new FileInfo(f).LastWriteTime:HH:mm:ss}");
+            o.WriteLine($"  attributes: [{string.Join(", ", src.AttrNames)}]");
+            o.WriteLine($"  shapes:     [{string.Join(", ", src.Shapes.Keys)}]  "
+                      + $"(declares shp_hib: {ModelAttributeWriter.DeclaresShape(mdl, HatCompatService.HatShape)})");
+
+            int bit = Array.IndexOf(src.AttrNames, HatCompatService.ScalpAttribute);
+            if (bit < 0) { o.WriteLine("  atr_kam is NOT in this file"); continue; }
+
+            long tagged = 0, all = 0;
+            int taggedSubs = 0, subs = 0;
+            for (int m = 0; m < src.MeshCount; m++)
+            {
+                int mo = src.MeshStart + m * 36;
+                if (mo + 36 > mdl.Length) break;
+                int si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+                for (int k = 0; k < sc; k++)
+                {
+                    int ss = src.SubmeshStart + (si + k) * 16;
+                    uint tris = BitConverter.ToUInt32(mdl, ss + 4) / 3;
+                    all += tris;
+                    subs++;
+                    if ((BitConverter.ToUInt32(mdl, ss + 8) & (1u << bit)) == 0) continue;
+                    tagged += tris;
+                    taggedSubs++;
+                }
+            }
+            o.WriteLine($"  atr_kam is bit {bit}, on {taggedSubs} of {subs} submeshes, "
+                      + $"{tagged} of {all} triangles ({(all > 0 ? 100.0 * tagged / all : 0):F0}%)");
+
+            // WHERE the tagged geometry is. A count that matches proves the right NUMBER of triangles was
+            // tagged and nothing about which ones — and a ponytail still on show while a third of the model
+            // carries the attribute means the attribute is on something else.
+            var verts = HatCompatSolve.ReadLod0Meshes(mdl).ToDictionary(x => x.Mesh, x => x.Positions);
+            var inTag = new List<Vector3>();
+            var outTag = new List<Vector3>();
+            for (int m = 0; m < src.MeshCount; m++)
+            {
+                int mo = src.MeshStart + m * 36;
+                if (mo + 36 > mdl.Length || !verts.TryGetValue(m, out var pos)) continue;
+                int si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+                uint start = BitConverter.ToUInt32(mdl, mo + 16);
+                for (int k = 0; k < sc; k++)
+                {
+                    int ss = src.SubmeshStart + (si + k) * 16;
+                    uint off = BitConverter.ToUInt32(mdl, ss), cnt = BitConverter.ToUInt32(mdl, ss + 4);
+                    bool on = (BitConverter.ToUInt32(mdl, ss + 8) & (1u << bit)) != 0;
+                    for (uint i = 0; i < cnt; i += 33)      // sampled; only the extent is wanted
+                    {
+                        int at = src.Ib + (int)(off + i) * 2;
+                        if (at + 2 > mdl.Length) break;
+                        int v = BitConverter.ToUInt16(mdl, at);
+                        if (v < pos.Length) (on ? inTag : outTag).Add(pos[v]);
+                    }
+                }
+                _ = start;
+            }
+            void Extent(string what, List<Vector3> ps)
+            {
+                if (ps.Count == 0) { o.WriteLine($"    {what}: none"); return; }
+                var lo = ps.Aggregate(Vector3.Min);
+                var hi = ps.Aggregate(Vector3.Max);
+                var mid = new Vector3(ps.Average(p => p.X), ps.Average(p => p.Y), ps.Average(p => p.Z));
+                o.WriteLine($"    {what}: centroid {F(mid)}  y {lo.Y:F3}..{hi.Y:F3}  z {lo.Z:F3}..{hi.Z:F3}");
+            }
+            Extent("tagged  ", inTag);
+            Extent("untagged", outTag);
+        }
+    }
+
+    /// <summary>
+    /// What each reference hat's EQP entry says about hiding hair.
+    /// <para/>
+    /// This is the question the whole hide feature turns on, and it is not answered by anything in the hair
+    /// model. <c>atr_kam</c> marks WHICH part of a hairstyle is the scalp; whether that part is drawn is the
+    /// HAT's decision, carried in its equipment parameters. A hat that asks for neither
+    /// <c>HeadHideScalp</c> nor <c>HeadHideHair</c> shows every strand of hair no matter what the hair
+    /// model is tagged with — which is exactly what a correctly tagged ponytail refusing to disappear
+    /// looks like.
+    /// <para/>
+    /// Head entries are 3 bytes at byte 5 of each item's 8-byte EQP block, per Penumbra's
+    /// <c>EqpEntry</c> and its <c>(offset, mask)</c> table for <c>EquipSlot.Head</c>.
+    /// </summary>
+    [Fact]
+    public void WhatDoTheReferenceHatsSayAboutHidingHair()
+    {
+        var game = Environment.GetEnvironmentVariable("PROTEUS_GAME")
+                ?? @"C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn";
+        var sqpack = Path.Combine(game, "game", "sqpack");
+        if (!Directory.Exists(sqpack)) { o.WriteLine($"no game data at {sqpack}"); return; }
+
+        Lumina.GameData data;
+        try { data = new Lumina.GameData(sqpack); }
+        catch (Exception ex) { o.WriteLine($"could not open game data: {ex.Message}"); return; }
+
+        var eqp = data.GetFile("chara/xls/equipmentparameter/equipmentparameter.eqp");
+        if (eqp == null) { o.WriteLine("no equipmentparameter.eqp"); return; }
+        var bytes = eqp.Data;
+        o.WriteLine($"eqp: {bytes.Length} bytes");
+
+        // Set ids come from the exported file names: c0201eNNNN_met.
+        foreach (var (name, path) in Hats())
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(Path.GetFileName(path), @"e(\d{4})_met");
+            if (!m.Success) { o.WriteLine($"{name,-28} (no set id in the file name)"); continue; }
+            int set = int.Parse(m.Groups[1].Value);
+
+            // The EQP file is a block-compressed table; entry N lives at N*8 once expanded, and the plain
+            // layout holds for the low set ids these hats use.
+            int at = set * 8;
+            if (at + 8 > bytes.Length) { o.WriteLine($"{name,-28} set {set}: past the end of the table"); continue; }
+            ulong entry = BitConverter.ToUInt64(bytes, at);
+
+            bool hideScalp = (entry & (0x02ul << 40)) != 0;
+            bool hideHair = (entry & (0x04ul << 40)) != 0;
+            bool showOverride = (entry & (0x08ul << 40)) != 0;
+            o.WriteLine($"{name,-28} set {set,4}  0x{entry:X16}  "
+                      + $"HideScalp={hideScalp,-5} HideHair={hideHair,-5} ShowHairOverride={showOverride}");
+        }
+    }
+
+    /// <summary>
+    /// WHERE do hand-made hat-compatible hairstyles put <c>atr_kam</c>?
+    /// <para/>
+    /// The guide says to tag the parts you want hidden — ponytails and such — with "scalp". Glamourer's own
+    /// table describes the same attribute as "a part of a hairstyle denoted as the scalp", which is the
+    /// opposite reading: the part that STAYS. Both cannot be right, and a ponytail correctly tagged and
+    /// still on show under a hat that asks for HideScalp says one of them is wrong.
+    /// <para/>
+    /// Seventy-six installed hairstyles were made hat-compatible by hand. Where their authors put the
+    /// attribute settles it: near the skull means it marks the scalp, out where a tail hangs means it marks
+    /// what disappears.
+    /// </summary>
+    [Fact]
+    public void WhereDoWorkingModsPutTheScalpAttribute()
+    {
+        var head = HeadModel();
+        var frame = head == null ? null : HatCompatSolve.HeadFrameFrom(head);
+        if (frame == null) return;
+        var centre = frame.Value.Centre;
+
+        int nearScalp = 0, outFar = 0;
+        o.WriteLine($"{"hair",-34} {"tagged%",8} {"tagged centroid",-26} {"reach mm",9}");
+        foreach (var f in HairModels().Where(f => !f.Contains("hatcompat-backup", StringComparison.OrdinalIgnoreCase)))
+        {
+            byte[] mdl;
+            try { mdl = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            if (!System.Text.Encoding.ASCII.GetString(mdl).Contains(HatShape, StringComparison.Ordinal)) continue;
+
+            SecondSkinWriter.Source src;
+            try { src = SecondSkinWriter.Parse(mdl); } catch { continue; }
+            int bit = Array.IndexOf(src.AttrNames, ScalpAttr);
+            if (bit < 0) continue;
+
+            var verts = HatCompatSolve.ReadLod0Meshes(mdl).ToDictionary(x => x.Mesh, x => x.Positions);
+            var tagged = new List<Vector3>();
+            long tagTris = 0, allTris = 0;
+            for (int m = 0; m < src.MeshCount; m++)
+            {
+                int mo = src.MeshStart + m * 36;
+                if (mo + 36 > mdl.Length || !verts.TryGetValue(m, out var pos)) continue;
+                int si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+                for (int k = 0; k < sc; k++)
+                {
+                    int ss = src.SubmeshStart + (si + k) * 16;
+                    uint off = BitConverter.ToUInt32(mdl, ss), cnt = BitConverter.ToUInt32(mdl, ss + 4);
+                    allTris += cnt / 3;
+                    if ((BitConverter.ToUInt32(mdl, ss + 8) & (1u << bit)) == 0) continue;
+                    tagTris += cnt / 3;
+                    for (uint i = 0; i < cnt; i += 21)
+                    {
+                        int at = src.Ib + (int)(off + i) * 2;
+                        if (at + 2 > mdl.Length) break;
+                        int v = BitConverter.ToUInt16(mdl, at);
+                        if (v < pos.Length) tagged.Add(pos[v]);
+                    }
+                }
+            }
+            if (tagged.Count == 0 || allTris == 0) continue;
+
+            var mid = new Vector3(tagged.Average(p => p.X), tagged.Average(p => p.Y), tagged.Average(p => p.Z));
+            float reach = tagged.Max(p => (p - centre).Length());
+            if (reach < 0.20f) nearScalp++; else outFar++;
+            o.WriteLine($"{Trim(f),-34} {100.0 * tagTris / allTris,7:F0}% {F(mid),-26} {reach * 1000,9:F0}");
+        }
+        o.WriteLine("");
+        o.WriteLine($"{nearScalp} hairstyles tag geometry that hugs the head (reach < 200 mm), "
+                  + $"{outFar} tag geometry that hangs out beyond it");
+    }
+
+    /// <summary>Backup copies Proteus took before patching — the author's original bytes.</summary>
+    private static IEnumerable<string> PristineBackups()
+    {
+        if (!Directory.Exists(Mods)) return [];
+        try
+        {
+            return Directory.GetFiles(Mods, "*_hir.mdl", SearchOption.AllDirectories)
+                .Where(f => f.Contains(HatCompatService.BackupSubdir, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (IOException) { return []; }
+        catch (UnauthorizedAccessException) { return []; }
     }
 
     /// <summary>Axis-aligned bounds after the FBX-to-game axis swap, <c>game = (x, z, -y) * scale</c>.</summary>
@@ -1210,30 +1604,67 @@ public class HatCompatDiagTests(ITestOutputHelper o)
 
             // Islands where a submesh has them, the whole submesh where it does not — the same granularity
             // a press gate would work at.
-            var byPart = parts.Parts.Where(p => p.Island >= 0
-                || !parts.Parts.Any(q => q.Mesh == p.Mesh && q.Submesh == p.Submesh && q.Island >= 0));
-
-            // EVERY strand, sorted by how far it hangs — the gate is a cut through this list, and only the
-            // whole list shows whether the cut lands in a gap or through the middle of a population.
-            var rows = new List<(string Label, int N, double Below, float Drop, float Stand, int Above)>();
-            foreach (var part in byPart)
+            // Straight from the classifier the press uses, so these numbers cannot drift from the ones the
+            // gate is actually deciding on.
+            var strands = HatCompatSolve.Strands(mdl, parts, head);
+            int covered = strands.Count(s => s.Covered);
+            // Strand COUNT is a poor measure once submeshes have been split — what matters is how much
+            // geometry each side of the line accounts for.
+            int vAll = strands.Sum(s => s.Verts), vCov = strands.Where(s => s.Covered).Sum(s => s.Verts);
+            int vAbove = strands.Sum(s => s.Verts - s.Below);
+            o.WriteLine($"  {strands.Count} strands, {covered} covered and pressed, "
+                      + $"{strands.Count - covered} left alone, {strands.Count(s => s.Tail)} tails offered for hiding");
+            o.WriteLine($"  vertices: {vAll} total, {vAbove} above the hat line, {vCov} in pressed strands "
+                      + $"({(vAbove > 0 ? 100.0 * vCov / vAbove : 0):F0}% of what sits above the line)");
+            // How much of the hairstyle a given cut would hide. The visible ponytail is a contiguous mass,
+            // so the threshold that catches it should show up as a plateau — a range where moving the cut
+            // changes the share very little, because there is nothing there to catch.
+            o.WriteLine("  if a strand were hidden when it hangs more than X below the hat line:");
+            foreach (var t in new[] { .10f, .15f, .20f, .25f, .30f, .35f, .40f, .45f, .50f, .60f })
             {
-                if (!verts.TryGetValue(part.Mesh, out var pos)) continue;
-                var vs = HatCompatSolve.VerticesOf(mdl, src, part).Where(v => v < pos.Length).Distinct().ToArray();
-                if (vs.Length == 0) continue;
-
-                int below = vs.Count(v => pos[v].Y < hatLine);
-                float minY = vs.Min(v => pos[v].Y);
-                float standoff = vs.Max(v => (pos[v] - frame.Value.Centre).Length()) - frame.Value.Radius;
-                rows.Add((part.Label, vs.Length, 100.0 * below / vs.Length,
-                          (hatLine - minY) * 1000, standoff * 1000, vs.Length - below));
+                var hit = strands.Where(s => s.Drop > t).ToList();
+                o.WriteLine($"    drop > {t * 1000,4:F0} mm: {hit.Count,4} strands, "
+                          + $"{hit.Sum(s => s.Part.TriangleCount),7} tris "
+                          + $"({100.0 * hit.Sum(s => s.Part.TriangleCount) / Math.Max(1, strands.Sum(s => s.Part.TriangleCount)),5:F1}%), "
+                          + $"reach {(hit.Count > 0 ? hit.Min(s => s.Reach) * 1000 : 0),5:F0}"
+                          + $"-{(hit.Count > 0 ? hit.Max(s => s.Reach) * 1000 : 0),5:F0} mm");
             }
 
-            o.WriteLine($"  {rows.Count} strands; left alone when drop > {HatCompatSolve.TailDrop * 1000:F0} mm AND reach > {HatCompatSolve.TailReach * 1000:F0} mm");
-            foreach (var r in rows.OrderByDescending(r => r.Drop))
-                o.WriteLine($"  {r.Label,-10} {r.N,6} {r.Below,6:F0}% {r.Drop,8:F0} {r.Above,8} {r.Stand,11:F0}"
-                          + (r.Drop > HatCompatSolve.TailDrop * 1000 && r.Stand > HatCompatSolve.TailReach * 1000
-                              ? "  LEFT ALONE" : "  pressed"));
+            o.WriteLine("  if a strand were hidden when it reaches more than X off the scalp:");
+            foreach (var t in new[] { .10f, .15f, .20f, .25f, .30f, .35f, .40f, .45f, .50f, .60f })
+            {
+                var hit = strands.Where(s => s.Reach > t).ToList();
+                o.WriteLine($"    reach > {t * 1000,4:F0} mm: {hit.Count,4} strands, "
+                          + $"{hit.Sum(s => s.Part.TriangleCount),7} tris "
+                          + $"({100.0 * hit.Sum(s => s.Part.TriangleCount) / Math.Max(1, strands.Sum(s => s.Part.TriangleCount)),5:F1}%), "
+                          + $"drop {(hit.Count > 0 ? hit.Min(s => s.Drop) * 1000 : 0),5:F0}"
+                          + $"-{(hit.Count > 0 ? hit.Max(s => s.Drop) * 1000 : 0),5:F0} mm");
+            }
+
+            var tails = strands.Where(s => s.Tail).ToList();
+            var kept = strands.Where(s => !s.Tail && !s.Covered).ToList();
+            if (tails.Count > 0)
+                o.WriteLine($"  tails:  {tails.Sum(s => s.Verts),7} verts, drop {tails.Min(s => s.Drop) * 1000:F0}"
+                          + $"-{tails.Max(s => s.Drop) * 1000:F0} mm, reach {tails.Min(s => s.Reach) * 1000:F0}"
+                          + $"-{tails.Max(s => s.Reach) * 1000:F0} mm");
+            if (kept.Count > 0)
+                o.WriteLine($"  kept:   {kept.Sum(s => s.Verts),7} verts, drop {kept.Min(s => s.Drop) * 1000:F0}"
+                          + $"-{kept.Max(s => s.Drop) * 1000:F0} mm, reach {kept.Min(s => s.Reach) * 1000:F0}"
+                          + $"-{kept.Max(s => s.Reach) * 1000:F0} mm");
+
+            // Only strands with geometry ABOVE the line can be pressed at all, so they are the population a
+            // threshold has to cut. Bucketed by how deep below the line they also reach.
+            var live = strands.Where(s => s.Verts > s.Below).ToList();
+            o.WriteLine($"  {live.Count} strands have geometry above the line, {vAbove} vertices between them");
+            foreach (var (lo, hi) in new[] { (0f, .001f), (.001f, .02f), (.02f, .05f), (.05f, .10f),
+                                             (.10f, .20f), (.20f, .40f), (.40f, 9f) })
+            {
+                var band = live.Where(s => s.Drop >= lo && s.Drop < hi).ToList();
+                if (band.Count == 0) continue;
+                o.WriteLine($"    drop {lo * 1000,5:F0}-{(hi > 8 ? 9999 : hi * 1000),5:F0} mm: "
+                          + $"{band.Count,4} strands, {band.Sum(s => s.Verts - s.Below),7} verts above the line, "
+                          + $"reach {band.Min(s => s.Reach) * 1000,5:F0}-{band.Max(s => s.Reach) * 1000,5:F0} mm");
+            }
         }
     }
 

@@ -1235,6 +1235,10 @@
     "message": "Hace además que las partes que ningún sombrero podría cubrir — coletas, coletas\nlaterales, una melena larga por detrás — desaparezcan mientras llevas un\nsombrero, en lugar de dejarlas asomando por debajo.\n\nDesactivado por defecto. Aplastar de más es invisible, porque lo tapa el\nsombrero; ocultar es todo o nada, y una parte mal juzgada simplemente\ndesaparece.",
     "description": ""
   },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} mechón(es) sobresalen demasiado de la cabeza para caber bajo un sombrero y se ocultarán mientras lleves uno.",
+    "description": ""
+  },
   "HatCompat.Working": {
     "message": "Analizando este peinado...",
     "description": ""
@@ -1255,10 +1259,6 @@
     "message": "Este peinado ya admite sombreros — lo añadió su autor. No hay nada que hacer.",
     "description": ""
   },
-  "HatCompat.HidePrompt": {
-    "message": "Estas partes sobresalen demasiado de la cabeza para caber bajo un sombrero, así que se ocultarían mientras lleves uno. Desmarca lo que deba quedarse.",
-    "description": ""
-  },
   "HatCompat.NoModdedHair": {
     "message": "Llevas pelo original del juego, que ya funciona bajo los sombreros. Esto tendrá algo que hacer cuando lleves un mod de pelo.",
     "description": ""
@@ -1273,10 +1273,6 @@
   },
   "HatCompat.TooWelded.Fmt": {
     "message": "{0} puntos no se pueden mover: este peinado está unido en piezas demasiado grandes para el formato de formas del juego. Conservarán su forma, así que un sombrero puede seguir atravesándolas.",
-    "description": ""
-  },
-  "HatCompat.Triangles.Fmt": {
-    "message": "({0} triángulos)",
     "description": ""
   },
   "HatCompat.Undo.Btn": {

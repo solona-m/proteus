@@ -225,9 +225,36 @@ public sealed class HatCompatWatcher : IDisposable
 
         // Per FILE, not per mod: a hair pack ships a dozen hairstyles out of one folder, and a mod-level
         // test would report every one of them as already done the moment any one was.
-        bool patched = HatCompatService.ReadRecord(target.ModRoot)?.Files
-            .Contains(target.Rel, StringComparer.OrdinalIgnoreCase) ?? false;
-        if (patched) { current = new View(target, null, Patched: true, Busy: true); return; }
+        if (HatCompatService.IsPatched(target.ModRoot, target.Rel, out var stale))
+        {
+            // A patch is a one-time write, so this is the only moment anything ever looks at a hairstyle
+            // that already carries one — and until now it looked, saw a patch, and stopped. Every
+            // improvement to the press since therefore reached only hairstyles that had never been worn,
+            // and a hairstyle fitted by an older Proteus kept that older Proteus's idea of where a hat sits
+            // for good. Redo it from the author's own backup, which is what the setting already promises:
+            // it says Proteus checks each hairstyle as you put it on, not each hairstyle once ever.
+            if (!(stale && mayApply && config.AutoHatCompat))
+            {
+                current = new View(target, null, Patched: true, Busy: true);
+                return;
+            }
+
+            log.Information("hat compat: {0} was fitted by an older build — fitting it again", target.Rel);
+            if (!RevertFiles(target))
+            {
+                // Still patched, just with the older patch — which is a working hairstyle, not a failure to
+                // report loudly. Keep whatever the revert had to say about why.
+                current = new View(target, null, Patched: true, Busy: true,
+                                   Message: current.Message, Failed: current.Failed);
+                return;
+            }
+
+            // Re-read: the bytes in hand are the patched ones, and solving from those would press an
+            // already-pressed model. The backup is on disk now, so ask for the target afresh.
+            target = live != null ? compositor.HatCompatTargetFor(live) : compositor.HatCompatTarget();
+            if (target == null) { current = new View(); return; }
+            lastKey = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
+        }
 
         var proposal = HatCompatService.Inspect(target.Model, target.Rel, target.Head);
         if (proposal == null)
@@ -289,18 +316,103 @@ public sealed class HatCompatWatcher : IDisposable
             return;
         }
 
+        // The same hairstyle again, from every other option that supplies it. Each gets its own solve —
+        // a long version and a short one are different geometry and the tails are not in the same places.
+        foreach (var rel in FilesFor(target))
+        {
+            if (rel.Equals(target.Rel, StringComparison.OrdinalIgnoreCase)) continue;
+            try
+            {
+                var bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(
+                    target.ModRoot, rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
+                if (HatCompatService.Inspect(bytes, rel, target.Head) is not { AlreadyCompatible: false } sib)
+                    continue;
+                var sibOutcome = HatCompatService.Apply(
+                    target.ModRoot, bytes, sib, config.HatCompatHidePonytails ? sib.Hide : []);
+                log.Information("hat compat: sibling {0} — {1}", rel,
+                                sibOutcome.Ok ? "fitted" : sibOutcome.Message);
+            }
+            catch (Exception ex) { log.Warning(ex, "hat compat: sibling {0} could not be fitted", rel); }
+        }
+
         // The file just changed underneath the key that was computed from it, so the next poll would see a
         // difference and examine all over again. Re-key here instead.
         lastKey = compositor.HatCompatKey();
 
         current = new View(target, null, Patched: true, Busy: current.Busy);
-        // The game has the old model open under this path and caches by resolved path, so nothing changes
-        // on screen until it is made to load the file again.
+
+        // Make Penumbra re-read the mod BEFORE forcing the redraw, and in that order.
+        //
+        // The file was overwritten in place, which is the one case the game handles worst: it keeps the
+        // model it already loaded for a resolved path, so a redraw on its own re-resolves the path and is
+        // handed back the very bytes that were there before. That is how a hairstyle could come back
+        // correctly pressed — from an earlier apply that did get loaded — while the tags written moments
+        // ago were nowhere, which looks exactly like the tagging having failed.
+        var modDir = System.IO.Path.GetFileName(target.ModRoot.TrimEnd(
+            System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+        if (modDir.Length > 0)
+        {
+            var ec = penumbra.ReloadModDirectory(modDir);
+            log.Information("hat compat: asked Penumbra to reload {0} — {1}", modDir, ec);
+        }
         compositor.RestoreChangedAccessory();
     }
 
+    /// <summary>
+    /// Every file in the mod that serves the hairstyle being worn.
+    /// <para/>
+    /// The unit of work for BOTH directions, and it has to be — an apply that writes four files and an undo
+    /// that restores one leaves three carrying a patch nobody can see or reach. Worse, they then read as
+    /// already hat-compatible, so the next apply skips them and they keep the old patch for good. That was
+    /// exactly the shape of "I clicked undo and it still will not fit".
+    /// </summary>
+    private static List<string> FilesFor(HatCompatService.Target target)
+        => HatCompatService.SiblingFiles(target.ModRoot, target.GamePath, target.Rel);
+
+    /// <summary>
+    /// Put every file serving this hairstyle back the way its author shipped it. Runs on a thread that
+    /// already holds the busy flag.
+    /// </summary>
+    /// <returns>False if nothing could be restored, with the reason already on <see cref="Current"/>.</returns>
+    private bool RevertFiles(HatCompatService.Target target)
+    {
+        var restored = 0;
+        var reason = "";
+        foreach (var rel in FilesFor(target))
+        {
+            var outcome = HatCompatService.Revert(target.ModRoot, rel);
+            if (outcome.Ok) { restored += outcome.FilesPatched; continue; }
+            // Only the file actually being worn was necessarily patched. A sibling that was never touched
+            // reports "nothing to undo", which is the right answer and not a failure — so this is kept
+            // only to explain a revert that restored nothing at all.
+            reason = outcome.Message;
+        }
+
+        if (restored == 0)
+        {
+            current = current with { Message = reason, Failed = reason.Length > 0 };
+            return false;
+        }
+
+        log.Information("hat compat: restored {0} file(s) in {1}", restored, target.ModRoot);
+        compositor.RestoreChangedAccessory();
+        return true;
+    }
+
+    /// <summary>
+    /// Redo the patch on a hairstyle that already has one, with whatever the settings say now.
+    /// <para/>
+    /// Needed because a patch is a one-time write, not a live effect: once a hairstyle carries one, nothing
+    /// re-examines it, so turning "hide ponytails" on left the tails exactly where the previous patch had
+    /// put them and the setting appeared to do nothing at all. Undoing first is what makes this safe —
+    /// the second patch is computed from the author's own file, never from the output of the first.
+    /// </summary>
+    public void Reapply() => Revert(thenApply: true);
+
     /// <summary>Put this hairstyle back the way its author shipped it.</summary>
-    public void Revert()
+    public void Revert() => Revert(thenApply: false);
+
+    private void Revert(bool thenApply)
     {
         var view = current;
         if (view.Target == null || view.Busy) return;
@@ -311,17 +423,19 @@ public sealed class HatCompatWatcher : IDisposable
         {
             try
             {
-                var outcome = HatCompatService.Revert(target.ModRoot, target.Rel);
-                if (!outcome.Ok)
-                {
-                    current = current with { Message = outcome.Message, Failed = true };
-                    return;
-                }
-                compositor.RestoreChangedAccessory();
+                if (!RevertFiles(target)) return;
+
                 // Look at the restored file rather than guessing what it now needs. Not through Refresh,
-                // which would refuse while this examination still holds the flag — and it must NOT be
-                // allowed to apply, or undoing would immediately be undone.
+                // which would refuse while this examination still holds the flag — and never with
+                // mayApply, or an undo would immediately undo itself.
+                lastKey = null;
                 Examine(mayApply: false);
+
+                // Re-patching is a deliberate second step, and it writes whatever the settings now say
+                // even when the automatic path is switched off: the user has just changed a setting whose
+                // only effect is on the patch, so leaving the hairstyle bare would be the odd answer.
+                if (thenApply && current is { Target: { } t, Proposal: { } p } && !p.AlreadyCompatible)
+                    Write(t, p, HideList(p));
             }
             catch (Exception ex)
             {

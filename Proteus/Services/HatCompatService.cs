@@ -22,6 +22,17 @@ internal sealed class HatCompatRecord
 
     /// <summary>Submeshes tagged to vanish under a hat, as "mesh.submesh", per file.</summary>
     [JsonPropertyName("Hidden")] public Dictionary<string, List<string>> Hidden { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Which generation of <see cref="HatCompatSolve"/> patched each file — see
+    /// <see cref="HatCompatSolve.Version"/>. Missing means a record written before this was stamped, which
+    /// is exactly the generation most worth redoing.
+    /// <para/>
+    /// Per FILE and not per mod, because a hair pack ships a dozen hairstyles out of one folder and they are
+    /// patched as they are worn, months apart. A single stamp on the mod would call the eleven that have not
+    /// been touched since current, on the strength of the twelfth.
+    /// </summary>
+    [JsonPropertyName("Versions")] public Dictionary<string, int> Versions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -193,6 +204,44 @@ public static class HatCompatService
         catch { return false; }
     }
 
+    /// <summary>
+    /// Every file in the mod that serves this same hairstyle — the one Penumbra currently resolves, and any
+    /// sibling an option would swap in for it.
+    /// <para/>
+    /// A hair mod routinely ships the same hairstyle several times over: a long version and a short one, or
+    /// one per accessory, each its own file behind one option group. Patching only the file resolved right
+    /// now leaves every other option unpatched, so the hat works until the wearer changes option and then
+    /// silently stops — which looks exactly like the patch having failed. The Parts tab patches siblings
+    /// for the same reason.
+    /// </summary>
+    public static List<string> SiblingFiles(string modRoot, string gamePath, string rel)
+    {
+        var found = new List<string> { rel };
+        try
+        {
+            foreach (var r in PenumbraModMeta.ReadAllRedirects(modRoot))
+            {
+                if (!r.GamePath.Equals(gamePath, StringComparison.OrdinalIgnoreCase)) continue;
+                if (found.Contains(r.File, StringComparer.OrdinalIgnoreCase)) continue;
+                if (File.Exists(Path.Combine(modRoot, Native(r.File)))) found.Add(r.File);
+            }
+        }
+        catch (IOException) { /* the one we were given is still worth patching */ }
+        return found;
+    }
+
+    /// <summary>Whether Proteus has already fitted this exact file, and if so whether that patch is current.</summary>
+    /// <param name="stale">The patch was written by an older <see cref="HatCompatSolve.Version"/>, so redoing
+    /// it from the author's own backup would produce different — and by construction better — geometry.</param>
+    public static bool IsPatched(string modRoot, string rel, out bool stale)
+    {
+        stale = false;
+        var record = ReadRecord(modRoot);
+        if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
+        stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.Version;
+        return true;
+    }
+
     /// <summary>Work out what this hair needs, without writing anything.</summary>
     /// <param name="head">The wearer's face model, which carries the cranium the press aims at. Strongly
     /// preferred — see <see cref="HatCompatSolve.Solve"/>.</param>
@@ -231,8 +280,16 @@ public static class HatCompatService
             patched = mdl;
             if (hide.Count > 0)
             {
-                var targets = hide.Select(p => (p.Mesh, p.Submesh)).Distinct().ToArray();
-                patched = ModelAttributeWriter.AddAttribute(patched, ScalpAttribute, targets);
+                // Cut the tails out of whatever they share a submesh with FIRST. An attribute is carried by
+                // a submesh record, and a hairstyle routinely keeps its scalp cap and every one of its
+                // ponytail strands in one — so tagging by submesh number hid the scalp along with the
+                // tails, which in game is being bald.
+                //
+                // Safe to do before the shape: a split re-describes which triangles belong to which record
+                // and moves no vertex and no index, so every mesh-relative number the press produced still
+                // means what it meant.
+                var (split, targets) = ModelAttributeWriter.IsolateParts(patched, hide);
+                patched = ModelAttributeWriter.AddAttribute(split, ScalpAttribute, targets);
             }
             if (proposal.Solve.Moved.Count > 0)
                 patched = ModelAttributeWriter.AddShape(patched, HatShape, proposal.Solve.Moved, out _);
@@ -254,6 +311,7 @@ public static class HatCompatService
             if (!record.Files.Contains(proposal.Rel, StringComparer.OrdinalIgnoreCase))
                 record.Files.Add(proposal.Rel);
             record.Hidden[proposal.Rel] = hide.Select(p => $"{p.Mesh}.{p.Submesh}").ToList();
+            record.Versions[proposal.Rel] = HatCompatSolve.Version;
             WriteRecord(modRoot, record);
         }
         catch (Exception ex)
@@ -300,6 +358,7 @@ public static class HatCompatService
                 restoredFrom.Add(backup);
                 record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
                 record.Hidden.Remove(rel);
+                record.Versions.Remove(rel);
             }
             catch { skipped.Add(rel); }
         }

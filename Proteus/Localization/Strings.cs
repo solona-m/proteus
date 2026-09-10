@@ -128,14 +128,11 @@ public sealed class HatCompatStrings
         "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape "
       + "format to address. They will keep their shape, so a hat may still clip there.");
 
-    public readonly string HidePrompt = Loc.Localize("HatCompat.HidePrompt",
-        "These parts stand too far off your head to fit under a hat, so they would be hidden while one is "
-      + "worn. Untick anything that should stay.");
+    public readonly string WillHideFmt = Loc.Localize("HatCompat.WillHide.Fmt",
+        "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.");
 
     public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
         "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
-
-    public readonly string TrianglesFmt = Loc.Localize("HatCompat.Triangles.Fmt", "({0} triangles)");
 
     public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
 
