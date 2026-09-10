@@ -5208,6 +5208,7 @@ public class StatusWindow : Window
         // Scroll maps a gear overlay can pick from: the mod's own Effects/ folder, then the user's.
         var effects = discovery.ResolveAvailableEffects(entry, discovery.EffectsLibraryPath());
 
+
         // ── content packs: the pack's OWN material, one tab per selected option ────
         // Drawn first and separately from the overlay paths below, because a content option has no overlay
         // descriptor at all — no art, no coverage, no index texture of ours. Its colours go into the
@@ -5219,6 +5220,9 @@ public class StatusWindow : Window
             if (entry.Metadata.Overlays is not { Count: > 0 } && entry.Metadata.OptionGroups is not { Count: > 0 })
             {
                 ImGui.Separator();
+                // No glow footer on this path, so the geometry section takes the same place relative to
+                // Advanced that it does there: directly above it.
+                DrawGeometrySection(entry);
                 // Framed, to match the Presets bar and the other two Advanced disclosures. "###" so the
                 // localized word isn't hashed into the id and a language switch doesn't shut it.
                 if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###content_{entry.ModDirectory}"))
@@ -5295,6 +5299,7 @@ public class StatusWindow : Window
                 onReset: () => resetSimple = ResetToDefaults(entry, null, null),
                 resetDisabledReason: ResetBlockedReason(entry),
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                drawBelowGlow: () => DrawGeometrySection(entry),
                 overrideActive: overrideActive);
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
@@ -5406,6 +5411,9 @@ public class StatusWindow : Window
                 ProteusStyle.WarnWrapped(inertText);
             else
                 ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
+            // Same placement as the content path above, and the reason this one matters: a mod with no
+            // active option has no tab, so this is the ONLY place the geometry features can be reached.
+            DrawGeometrySection(entry);
             if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
             return;
@@ -5730,31 +5738,39 @@ public class StatusWindow : Window
 
             ImGui.Separator();
             bool maskFooterChanged = false, maskModeChanged = false;
-            if (modHasGear)
             {
-                // Forced Cloth shell — the mask's layer isn't user-chosen when it stacks over gear.
-                ColorTableEditor.DrawRenderingAsBadge(RenderMode.Cloth);
-                ImGui.SameLine();
-                ImGui.TextDisabled(Strings.ColorPanel.Forced);
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(Strings.ColorPanel.ForcedTip);
-            }
-            else
-            {
-                // Same footer as the overlay tabs: the "Rendering as" badge + Advanced force-mode radios +
-                // glow-effect picker. No per-option reset (the mask has no defaults cache) → onReset null.
+                // The same footer as the overlay tabs, INCLUDING when the mask is forced to a top Cloth
+                // shell by the mod having gear. That case used to draw a bare "Cloth (forced)" badge and
+                // nothing else, which suppressed far more than the mode choice it meant to: the glow-effect
+                // picker went with it, and a mask carries a glow perfectly well — it has its own glow key.
+                // Now only the force-mode radios are replaced, by `modeForced`.
+                //
+                // No per-option reset (the mask has no defaults cache) → onReset null.
+                //
+                // Bodies is still NOT drawn here. It is mod-wide, so repeating it on every tab said the
+                // same thing several times and invited the reading that Masks had its own copy. Nothing is
+                // put out of reach: it appears on every option tab, and a mod whose ONLY tab is Masks takes
+                // the no-active-options path instead.
                 maskFooterChanged = ColorTableEditor.DrawGlowFooter(
                     maskScope, entry.ModDirectory, [maskDesc], maskGearOvr, effects,
                     out var maskFooterEdit, onReset: null,
-                    drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+                    drawExtraAdvanced: null,
+                    drawBelowGlow: () => DrawGeometrySection(entry),
+                    modeForced: modHasGear ? Strings.ColorPanel.ForcedTip : null,
+                    // Shows the badge as Cloth without persisting it, which is what "forced" means here.
+                    promotedToGear: modHasGear,
                     // Nothing reads MaskDescriptor.SkinToneMask — the mask paints into the diffuse in its
                     // own pass, and a promoted mask gets a shell descriptor built from scratch — so the
                     // slider would be a control that saves and does nothing.
                     skinTintApplies: false,
                     overrideActive: overrideActive);
-                maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
-                    maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
-                ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
+                // Not when the mode is forced: re-inferring would fight the force every frame.
+                if (!modHasGear)
+                {
+                    maskModeChanged = ReconcileMode([maskDesc], maskGearOvr, maskRows,
+                        maskRowEdit != FeatureEdit.Neutral ? maskRowEdit : maskFooterEdit);
+                    ApplyGlowTransition(maskRows, maskModeBefore, EffectiveMode([maskDesc], maskGearOvr));
+                }
             }
 
             if (maskChanged || maskFooterChanged || maskModeChanged)
@@ -5902,6 +5918,7 @@ public class StatusWindow : Window
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
+            drawBelowGlow: () => DrawGeometrySection(entry),
             promotedToGear: promotedToGear,
             noShellReason: noShellReason,
             overrideActive: overrideActive);
@@ -5983,15 +6000,38 @@ public class StatusWindow : Window
         // so a control that quietly writes global config instead has to break that expectation out loud.
         if (binding)
             ImGui.TextDisabled(cp.BodiesGlobalNote);
+    }
 
-        DrawBustBridgeAdvanced(entry);
+    /// <summary>
+    /// The geometry features, as their own section below the glow-effect controls and above Advanced.
+    /// <para/>
+    /// They are mod-wide, and inside Advanced they read as belonging to the option whose tab happened to be
+    /// open — the same misreading that took them off the Masks tab, only worse, because there they sat
+    /// under a heading whose every other control IS per-option. With a heading of their own, between the
+    /// glow controls and Advanced, they are neither buried in the per-option section nor repeated.
+    /// <para/>
+    /// NOT drawn on the Masks tab. The two paths that have no glow footer at all — a pure content pack, and
+    /// a mod with no active option — draw it directly above their Advanced disclosure instead, which is the
+    /// same position relative to Advanced; on the second of those it is the only place it can be reached.
+    /// </summary>
+    private void DrawGeometrySection(OverlayEntry entry)
+    {
+        // "###" so the localized word is not hashed into the id — a language switch would otherwise shut a
+        // section the user had opened. Same reason as the Advanced disclosures.
+        if (ImGui.CollapsingHeader($"{Strings.Colors.GeometrySection}###geometry_{entry.ModDirectory}"))
+            DrawBustBridgeAdvanced(entry);
     }
 
     /// <summary>
     /// The mod-wide bust bridge, drawn in the whole-mod part of Advanced beside Bodies — so it appears on
-    /// every tab, INCLUDING Masks, which is the one that needed it most: on the common mod shape (every
-    /// fabric on the Skin layer, the Masks descriptor carrying the only geometry) the mask shell is the
-    /// garment, and a per-option control could not reach it at all.
+    /// the option tabs, and on Masks ONLY when Masks is the only tab there is.
+    /// <para/>
+    /// It used to be drawn on Masks unconditionally, for a reason worth keeping: on the common mod shape
+    /// (every fabric on the Skin layer, the Masks descriptor carrying the only geometry) the mask shell IS
+    /// the garment, so a control that skipped that tab could be out of reach altogether. That case is now
+    /// tested for directly at the call site instead of covered by always drawing it, because "mod-wide
+    /// setting repeated on every tab" reads as "this tab has its own copy" — most of all on Masks, which
+    /// is pinned to the top and is the first tab seen.
     /// <para/>
     /// Written to the sidecar rather than to <see cref="Configuration"/> like Bodies above, because this is
     /// an AUTHORING decision that should ship with the pack: whether a garment lifts off the sternum is
@@ -6001,117 +6041,48 @@ public class StatusWindow : Window
     {
         var md = entry.Metadata;
         var cs = Strings.Colors;
-        bool on = md.BustBridge == true;
-        if (ImGui.Checkbox($"{cs.BustBridge}##bustbridge_{entry.ModDirectory}", ref on))
-        {
-            // Cleared to null rather than false, so an untick leaves the sidecar as it was before anyone
-            // opened this — the documented "absent = off" default.
-            md.BustBridge = on ? true : null;
-            if (!on) md.BustBridgeStrength = null;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "bust-bridge");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.BustBridgeTip);
 
-        if (on)
+        // ON OR OFF, no amount. Each of these had a 0..1 strength slider under it, and the sliders are
+        // gone: four features x (checkbox + slider) is eight controls for four decisions, and the amount
+        // was not a decision anyone was making — every one of them was authored at 1.
+        //
+        // The STRENGTH FIELDS SURVIVE in the sidecar and the compositor still honours them, because a pack
+        // may already ship one and silently rendering it differently would change how a published mod
+        // looks. What the toggle now does is clear it: ticking a feature writes "on, full", so anything
+        // partial can still be got rid of from here even though it can no longer be dialled.
+        void Toggle(string label, string id, string tip, bool current,
+                    Action<bool> set, string reason)
         {
-        float strength = md.BustBridgeStrength ?? 1f;
-        ImGui.SetNextItemWidth(150);
-        if (ImGui.DragFloat($"{cs.BustBridgeStrength}##bustbridgestr_{entry.ModDirectory}",
-                ref strength, 0.01f, 0f, 1f, "%.2f"))
-        {
-            // 1 is the default, so it is stored as omitted — the sidecar stays free of no-op lines and
-            // "absent = full" keeps meaning what it says.
-            md.BustBridgeStrength = Math.Abs(strength - 1f) < 0.001f ? null : strength;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "bust-bridge");
+            bool on = current;
+            if (ImGui.Checkbox($"{label}##{id}_{entry.ModDirectory}", ref on))
+            {
+                set(on);
+                discovery.SaveMetadata(entry);
+                RecompositeForOverlay(entry, reason);
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(tip);
         }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.BustBridgeStrengthTip);
-        }
+
+        // Cleared to null rather than false, so an untick leaves the sidecar as it was before anyone
+        // opened this — the documented "absent = off" default. The strength goes with it either way.
+        Toggle(cs.BustBridge, "bustbridge", cs.BustBridgeTip, md.BustBridge == true,
+               on => { md.BustBridge = on ? true : null; md.BustBridgeStrength = null; }, "bust-bridge");
 
         // Independent of the bridge above, and beside it because they are the same kind of decision
         // about the same part of the garment. A mod may want either.
-        bool smooth = md.SmoothNipples == true;
-        if (ImGui.Checkbox($"{cs.SmoothNipples}##smoothnipples_{entry.ModDirectory}", ref smooth))
-        {
-            md.SmoothNipples = smooth ? true : null;
-            if (!smooth) md.SmoothNipplesStrength = null;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "smooth-nipples");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.SmoothNipplesTip);
-
-        if (smooth)
-        {
-        float smoothStrength = md.SmoothNipplesStrength ?? 1f;
-        ImGui.SetNextItemWidth(150);
-        if (ImGui.DragFloat($"{cs.SmoothNipplesStrength}##smoothnipplesstr_{entry.ModDirectory}",
-                ref smoothStrength, 0.01f, 0f, 1f, "%.2f"))
-        {
-            md.SmoothNipplesStrength = Math.Abs(smoothStrength - 1f) < 0.001f ? null : smoothStrength;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "smooth-nipples");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.SmoothNipplesStrengthTip);
-        }
+        Toggle(cs.SmoothNipples, "smoothnipples", cs.SmoothNipplesTip, md.SmoothNipples == true,
+               on => { md.SmoothNipples = on ? true : null; md.SmoothNipplesStrength = null; }, "smooth-nipples");
 
         // The same decision as the bust bridge on the other side of the body, so it sits with it rather
         // than anywhere near the leg controls: what the user is choosing is how this garment treats the
         // body's two clefts, and they are one thought.
-        bool cleft = md.CleftBridge == true;
-        if (ImGui.Checkbox($"{cs.CleftBridge}##cleftbridge_{entry.ModDirectory}", ref cleft))
-        {
-            md.CleftBridge = cleft ? true : null;
-            if (!cleft) md.CleftBridgeStrength = null;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "cleft-bridge");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.CleftBridgeTip);
-
-        if (cleft)
-        {
-        float cleftStrength = md.CleftBridgeStrength ?? 1f;
-        ImGui.SetNextItemWidth(150);
-        if (ImGui.DragFloat($"{cs.CleftBridgeStrength}##cleftbridgestr_{entry.ModDirectory}",
-                ref cleftStrength, 0.01f, 0f, 1f, "%.2f"))
-        {
-            md.CleftBridgeStrength = Math.Abs(cleftStrength - 1f) < 0.001f ? null : cleftStrength;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "cleft-bridge");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.CleftBridgeStrengthTip);
-        }
+        Toggle(cs.CleftBridge, "cleftbridge", cs.CleftBridgeTip, md.CleftBridge == true,
+               on => { md.CleftBridge = on ? true : null; md.CleftBridgeStrength = null; }, "cleft-bridge");
 
         // The fourth of the same kind of decision, and the last of the body's own creases.
-        bool foldSmooth = md.SmoothFold == true;
-        if (ImGui.Checkbox($"{cs.SmoothFold}##smoothfold_{entry.ModDirectory}", ref foldSmooth))
-        {
-            md.SmoothFold = foldSmooth ? true : null;
-            if (!foldSmooth) md.SmoothFoldStrength = null;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "smooth-fold");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.SmoothFoldTip);
-
-        if (!foldSmooth) return;
-        float foldStrength = md.SmoothFoldStrength ?? 1f;
-        ImGui.SetNextItemWidth(150);
-        if (ImGui.DragFloat($"{cs.SmoothFoldStrength}##smoothfoldstr_{entry.ModDirectory}",
-                ref foldStrength, 0.01f, 0f, 1f, "%.2f"))
-        {
-            md.SmoothFoldStrength = Math.Abs(foldStrength - 1f) < 0.001f ? null : foldStrength;
-            discovery.SaveMetadata(entry);
-            RecompositeForOverlay(entry, "smooth-fold");
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.SmoothFoldStrengthTip);
+        Toggle(cs.SmoothFold, "smoothfold", cs.SmoothFoldTip, md.SmoothFold == true,
+               on => { md.SmoothFold = on ? true : null; md.SmoothFoldStrength = null; }, "smooth-fold");
     }
 
     /// <summary>

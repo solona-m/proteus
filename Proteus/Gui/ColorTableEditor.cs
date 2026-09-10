@@ -79,6 +79,12 @@ public static class ColorTableEditor
         Func<bool>? onReset = null,
         string? resetDisabledReason = null,
         Action? drawExtraAdvanced = null,
+        // Mod-wide sections drawn between the glow controls and Advanced. Like drawExtraAdvanced this
+        // commits for itself; unlike it, callers pass null on tabs that should not show it at all.
+        Action? drawBelowGlow = null,
+        // Non-null when this option's render mode is decided for it — its text replaces the force-mode
+        // radios inside Advanced and explains why. Everything else in the footer is still drawn.
+        string? modeForced = null,
         // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
         // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
         bool promotedToGear = false,
@@ -187,6 +193,11 @@ public static class ColorTableEditor
                 ImGui.SetTooltip(cs.TilingTip);
         }
 
+        // Mod-wide sections that belong below the glow controls but above Advanced. Between the two because
+        // Advanced is where the per-OPTION settings live, and burying a mod-wide section inside it reads as
+        // belonging to whichever tab happens to be open.
+        drawBelowGlow?.Invoke();
+
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
         //
         // A CollapsingHeader rather than a bare TreeNodeEx, so this reads as the same kind of disclosure as
@@ -234,6 +245,16 @@ public static class ColorTableEditor
 
         if (advOpen)
         {
+            // The mode radios, unless the mode is not this option's to choose — a mask stacked over gear is
+            // always a top Cloth shell. Only the RADIOS are replaced, not the rest of the footer: the
+            // forced case used to skip the whole thing, and that took the glow picker with it even though a
+            // mask carries a glow effect perfectly well.
+            if (modeForced != null)
+            {
+                ImGui.TextDisabled(modeForced);
+            }
+            else
+            {
             ImGui.TextDisabled(cs.ForceModeHint);
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
             {
@@ -253,6 +274,7 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(cs.ForceModeTip);
+            }
 
             // Skin-tint suppression, per option. Drawn only in Skin mode, the way scroll speed/tiling are
             // drawn only in Glow: the compositor's suppression pass never runs for a Cloth or Glow overlay
