@@ -9018,6 +9018,18 @@ public class CompositorService : IDisposable
     private volatile HashSet<string> _appendHostModelPaths = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The hairstyle Proteus could make hat-compatible, and the mod that supplies it — or null when the
+    /// player is wearing vanilla hair, when nothing has been walked yet, or when Penumbra is not there.
+    /// <para/>
+    /// Lives here because the two things the answer needs are both here: the models the character is
+    /// actually drawing (which is the only way a hairstyle's game path is knowable) and the Penumbra
+    /// resolver that says which file serves it. Reads a volatile snapshot, so it is safe off the framework
+    /// thread and may be one walk out of date, which for a panel the user is looking at is fine.
+    /// </summary>
+    internal HatCompatService.Target? HatCompatTarget()
+        => HatCompatService.FindEquippedHair(_humanPartModels, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>
     /// Restore any accessory whose model the second skin replaced back to its original geometry, by
     /// forcing a FULL player redraw so the game reloads the accessory's own .mdl. When the managed mod's
     /// redirects have been cleared (disable, or nothing composited) this reverts the accessory to vanilla;

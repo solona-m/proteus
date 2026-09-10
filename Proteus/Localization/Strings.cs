@@ -51,6 +51,7 @@ public static class Strings
     public static ColorsStrings     Colors     { get; private set; } = new();
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
+    public static HatCompatStrings  HatCompat  { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -77,7 +78,58 @@ public static class Strings
         Colors     = new ColorsStrings();
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
+        HatCompat  = new HatCompatStrings();
     }
+}
+
+/// <summary>The hat-compatibility panel.</summary>
+public sealed class HatCompatStrings
+{
+    public readonly string NoModdedHair = Loc.Localize("HatCompat.NoModdedHair",
+        "You are wearing hair that came with the game, which already works under hats. "
+      + "This has something to do when you wear a hair mod.");
+
+    public readonly string WearingFmt = Loc.Localize("HatCompat.Wearing.Fmt",
+        "Hairstyle {0}, from {1}.");
+
+    public readonly string AuthorDidIt = Loc.Localize("HatCompat.AuthorDidIt",
+        "This hairstyle already supports hats — its author added it. Nothing to do.");
+
+    public readonly string AlreadyPatched = Loc.Localize("HatCompat.AlreadyPatched",
+        "Proteus has already made this hairstyle fit under hats.");
+
+    public readonly string PressFmt = Loc.Localize("HatCompat.Press.Fmt",
+        "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.");
+
+    public readonly string TooWeldedFmt = Loc.Localize("HatCompat.TooWelded.Fmt",
+        "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape "
+      + "format to address. They will keep their shape, so a hat may still clip there.");
+
+    public readonly string HidePrompt = Loc.Localize("HatCompat.HidePrompt",
+        "These parts stand too far off your head to fit under a hat, so they would be hidden while one is "
+      + "worn. Untick anything that should stay.");
+
+    public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
+        "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
+
+    public readonly string TrianglesFmt = Loc.Localize("HatCompat.Triangles.Fmt", "({0} triangles)");
+
+    public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
+
+    public readonly string ApplyTip = Loc.Localize("HatCompat.Apply.Tip",
+        "Writes into the hair mod's own folder. The original files are copied to\n"
+      + "Proteus/hatcompat-backup/ inside that mod first, and this can be undone.");
+
+    public readonly string Undo = Loc.Localize("HatCompat.Undo.Btn", "Undo") + "###hatCompatUndo";
+
+    public readonly string DoneFmt = Loc.Localize("HatCompat.Done.Fmt",
+        "Done — the hairstyle now presses down under a hat, with {0} part(s) hidden.");
+
+    public readonly string Undone = Loc.Localize("HatCompat.Undone",
+        "The hairstyle has been put back exactly as its author made it.");
+
+    public readonly string Unreadable = Loc.Localize("HatCompat.Unreadable",
+        "This hairstyle's model could not be read, so Proteus cannot change it.");
 }
 
 /// <summary>Strings shared by more than one screen.</summary>
@@ -349,6 +401,8 @@ public sealed class SettingsStrings
     public readonly string SecGeneral     = Loc.Localize("Settings.Section.General", "General");
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
+    public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 
     public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
@@ -455,6 +509,18 @@ public sealed class SettingsStrings
         "transparency, so sphere maps and metalness survive gpose (which drops them on\n" +
         "transparent surfaces). Trade-off: sheer edges become hard/aliased. Best for\n" +
         "mostly-opaque fabrics; a very sheer fabric will look coarse. Recomposite after toggling.");
+
+    public readonly string AutoHatCompat = Loc.Localize(
+        "Settings.General.AutoHatCompat.Label", "Make hairstyles fit under hats") + "###autoHatCompat";
+
+    public readonly string AutoHatCompatTip = Loc.Localize("Settings.General.AutoHatCompat.Tip",
+        "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
+        "through. When on, Proteus checks the hairstyle you are wearing and offers to\n" +
+        "add it: the hair presses against your head while a hat is on, and the parts no\n" +
+        "hat could cover are hidden.\n\n" +
+        "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
+        "off and travels with the mod if you export it. Originals are kept and the\n" +
+        "change can be undone. Nothing is written until you confirm it.");
 
     // ── hosting ─────────────────────────────────────────────────────────────────────────────────────
     public readonly string InvisibleGlasses = Loc.Localize(

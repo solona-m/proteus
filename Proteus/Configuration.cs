@@ -234,6 +234,22 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoInvisibleGlasses { get; set; } = true;
 
+    /// <summary>
+    /// When true, Proteus checks the hairstyle the player is actually wearing for hat compatibility, and
+    /// offers to add it: a <c>shp_hib</c> shape key that presses the hair against the skull while a head
+    /// piece is worn, plus <c>atr_kam</c> on the parts no hat can cover. Both are native to the game.
+    /// <para/>
+    /// Off by default, and deliberately so: the edit is written INTO the hair mod's own files rather than
+    /// into a Proteus redirect — that is what makes it survive Proteus being disabled and travel with an
+    /// export — so enabling it means Proteus modifies somebody else's mod folder. Originals are copied to
+    /// <c>Proteus/hatcompat-backup/</c> first and the change is undoable, but nothing is written without the
+    /// user confirming which parts should vanish under a hat, because a wrong call there makes hair
+    /// disappear under every hat in the game.
+    /// <para/>
+    /// Hairstyles whose author already shipped a hat shape are left alone.
+    /// </summary>
+    public bool AutoHatCompat { get; set; }
+
     // AutoEmperorRing was removed. It gated whether the reconcile would EQUIP an invisible carrier, but not
     // whether ChooseHosts would offer one as a host — so turning it off did not stop layers being assigned to
     // carriers, it only stopped those carriers from ever being worn. The layers then rendered nothing, and
