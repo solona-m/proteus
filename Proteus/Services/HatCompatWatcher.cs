@@ -269,14 +269,14 @@ public sealed class HatCompatWatcher : IDisposable
     }
 
     /// <summary>
-    /// The parts to tag, which is the whole proposal or nothing at all.
+    /// The parts to hide beyond the cut at the hat line, which is now none of them.
     /// <para/>
-    /// No middle setting, because there is no way for a checkbox to express "these three tails but not that
-    /// one" and the classifier is the only thing that has an opinion. The panel offers the individual
-    /// tick boxes for a one-off correction; this is what the automatic path uses.
+    /// Hiding whole ponytails is withdrawn. It rested on telling a ponytail from a parting by geometry
+    /// alone, the answer was wrong often enough to make hair vanish, and there is no way for one checkbox to
+    /// say "those three but not that one". The cut at the hat line is unaffected and travels separately, on
+    /// <see cref="HatCompatSolve.Result.Cut"/> — it is how the fit works rather than a preference.
     /// </summary>
-    private IReadOnlyList<ModelPart> HideList(HatCompatService.Proposal proposal)
-        => config.HatCompatHidePonytails ? proposal.Hide : [];
+    private static IReadOnlyList<ModelPart> HideList(HatCompatService.Proposal proposal) => [];
 
     /// <summary>Apply what is currently proposed, with the caller's own choice of parts to hide.</summary>
     public void Apply(IReadOnlyList<ModelPart> hide)
@@ -337,8 +337,7 @@ public sealed class HatCompatWatcher : IDisposable
                     target.ModRoot, rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
                 if (HatCompatService.Inspect(bytes, rel, target.Head) is not { AlreadyCompatible: false } sib)
                     continue;
-                var sibOutcome = HatCompatService.Apply(
-                    target.ModRoot, bytes, sib, config.HatCompatHidePonytails ? sib.Hide : []);
+                var sibOutcome = HatCompatService.Apply(target.ModRoot, bytes, sib, HideList(sib));
                 log.Information("hat compat: sibling {0} — {1}", rel,
                                 sibOutcome.Ok ? "fitted" : sibOutcome.Message);
             }
