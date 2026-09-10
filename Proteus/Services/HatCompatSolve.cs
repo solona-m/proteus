@@ -57,6 +57,31 @@ public static class HatCompatSolve
     public const float ScalpFraction = 0.75f;
 
     /// <summary>
+    /// How far below the hat line a connected strand must hang to count as hair that falls, in model units.
+    /// <para/>
+    /// A ponytail's ROOT is above the hat line, so a press that judges vertex by vertex drives the root
+    /// into the skull and leaves the length where it was — and the tail splays out into a flat sheet behind
+    /// the hat. Nothing about the per-vertex rule is wrong; the mistake is treating a strand as a bag of
+    /// vertices when it is one object that has to move, or not move, as a whole.
+    /// </summary>
+    public const float TailDrop = 0.15f;
+
+    /// <summary>
+    /// How far from the scalp that same strand must reach, in model units, before it is left alone.
+    /// <para/>
+    /// The second half of the test, and the half that does the real work. Hanging far below the hat line
+    /// is not enough on its own: hair at the nape hangs 170 mm below it while lying flat on the neck, and
+    /// leaving that alone would give up pressing a good part of the hairstyle for nothing. What separates
+    /// a tail from hair lying against the head is how far off the skull it stands.
+    /// <para/>
+    /// Measured across the hairstyle that showed the defect, at the moment its ponytail's outer edges were
+    /// still being flattened: its scalp cap reaches 80 mm from the scalp, its nape hair 111–115 mm, the
+    /// ponytail edges that were being wrecked 229–372 mm, and the body of the tail 700–800 mm. 180 mm sits
+    /// between the second and third of those with room on both sides.
+    /// </summary>
+    public const float TailReach = 0.18f;
+
+    /// <summary>
     /// The most shape values one model may carry: <c>ShapeValueCount</c> in the model header is a u16.
     /// <para/>
     /// Left short of 65535 so a hairstyle that already has a shape of its own still has room, and because a
@@ -395,7 +420,9 @@ public static class HatCompatSolve
         float hatLine = centre.Y + HatLine;
 
         // What each vertex would cost to shape: one value per index slot naming it.
-        var valence = Valence(mdl, SecondSkinWriter.Parse(mdl), meshes);
+        var parsed = SecondSkinWriter.Parse(mdl);
+        var valence = Valence(mdl, parsed, meshes);
+        var hanging = HangingStrands(mdl, parsed, parts, meshes, hatLine, centre, radius);
 
         // Every vertex poking out through the ceiling, with what it costs and how far out it is.
         var candidates = new List<(int Mesh, int Vertex, Vector3 To, float Press, int Cost)>();
@@ -406,6 +433,7 @@ public static class HatCompatSolve
             {
                 var p = mv.Positions[v];
                 if (p.Y < hatLine) continue;                        // below the hat: never touched
+                if (hanging.Contains(VertexKey(mv.Mesh, v))) continue;   // part of a strand that hangs
 
                 var d = p - centre;
                 float len = d.Length();
@@ -457,6 +485,58 @@ public static class HatCompatSolve
             presses.Count > 0 ? presses[presses.Count / 2] : 0f,
             presses.Count > 0 ? presses[^1] : 0f,
             presses.Count);
+    }
+
+    /// <summary>One vertex of one mesh, as a single value for a set.</summary>
+    private static long VertexKey(int mesh, int vertex) => ((long)mesh << 32) | (uint)vertex;
+
+    /// <summary>
+    /// Every vertex of every connected strand that hangs more than <see cref="TailDrop"/> below the hat
+    /// line — a ponytail, a side tail, a long fall — which the press must not touch at all.
+    /// <para/>
+    /// ALL of the strand, including the part above the hat line. That is the entire point: the root is
+    /// above the line, and moving only the root is what wrecks the tail.
+    /// <para/>
+    /// Judged per ISLAND rather than per submesh, because the two are not the same thing here. The
+    /// hairstyle that showed this defect keeps its scalp cap and all six of its ponytail strands in one
+    /// submesh, so a submesh-level test would either spare the tails or condemn the scalp with them.
+    /// </summary>
+    private static HashSet<long> HangingStrands(
+        byte[] mdl, SecondSkinWriter.Source src, ModelParts parts,
+        IReadOnlyList<MeshVerts> meshes, float hatLine, Vector3 centre, float radius)
+    {
+        var hanging = new HashSet<long>();
+        var verts = meshes.ToDictionary(m => m.Mesh, m => m.Positions);
+
+        // Islands where a submesh was split into them, the whole submesh where it was not — so every
+        // triangle is judged exactly once, at the finest granularity available for it.
+        foreach (var part in parts.Parts)
+        {
+            if (part.Island < 0 && parts.Parts.Any(
+                    q => q.Mesh == part.Mesh && q.Submesh == part.Submesh && q.Island >= 0)) continue;
+            if (!verts.TryGetValue(part.Mesh, out var pos)) continue;
+
+            float lowest = float.MaxValue, reach = 0f;
+            var mine = new List<int>();
+            foreach (var v in VerticesOf(mdl, src, part))
+            {
+                if (v >= pos.Length) continue;
+                mine.Add(v);
+                var p = pos[v];
+                if (p.Y < lowest) lowest = p.Y;
+
+                // Distance from the head's centre, less its median radius. Deliberately the crude measure
+                // rather than the directional scalp used by the press: the thresholds either side of this
+                // were read off real hairstyles measured exactly this way, and a more refined yardstick
+                // here would shift every one of those numbers by a couple of centimetres while the
+                // constants stayed put.
+                reach = MathF.Max(reach, (p - centre).Length() - radius);
+            }
+            if (mine.Count == 0) continue;
+            if (hatLine - lowest <= TailDrop || reach <= TailReach) continue;
+            foreach (var v in mine) hanging.Add(VertexKey(part.Mesh, v));
+        }
+        return hanging;
     }
 
     /// <summary>
