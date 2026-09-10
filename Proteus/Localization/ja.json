@@ -1219,6 +1219,102 @@
     "message": "不明なエラー",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "髪型を帽子に合わせる",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは着用した髪型をそのつど確認し、帽子で隠れる部分の\n髪を頭に沿って押し付けます。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更はここから\n元に戻せます。",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "ポニーテールを隠す",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "どんな帽子でも隠せない部分——ポニーテール、サイドテール、背中に流れる長い髪\n——も、帽子をかぶっている間は下からはみ出させずに非表示にします。\n\n既定ではオフです。押し込みすぎても帽子が覆うので見えませんが、非表示は全か無\nかで、判定を誤った部分はそのまま消えてしまいます。",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} 本の毛束が頭から離れすぎていて帽子に収まらないため、帽子の着用中は非表示になります。",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "この髪型を確認しています...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteusはこの髪型を既に帽子対応にしています。",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "対応させる",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "髪Mod自身のフォルダに書き込みます。元のファイルは先にそのMod内の\nProteus/hatcompat-backup/ にコピーされ、この操作は元に戻せます。",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "この髪型は既に帽子に対応しています — 作者が組み込んでいます。することはありません。",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "ゲーム標準の髪を着用しています。これは元から帽子に対応しています。髪Modを着用すると、ここで操作できるようになります。",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "この髪型はすべてのパーツが帽子の下に収まるため、非表示にする必要はありません。",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} 個の髪の頂点が頭に沿って押し込まれます。平均 {1:F1} cm、最大 {2:F1} cmです。",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} 個の頂点は動かせません。この髪型はゲームのシェイプ形式で扱うには大きすぎるまとまりに結合されています。形状はそのままのため、帽子が突き抜ける場合があります。",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "元に戻す",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "髪型を作者が作成した状態にそのまま戻しました。",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "この髪型のモデルを読み取れなかったため、Proteusは変更できません。",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "髪型 {0}（{1} より）。",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "この髪型には既に独自の帽子用シェイプがあります。",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} を編集できませんでした: {1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "変更点はありません。頭皮から浮いている髪も、隠す必要のあるパーツもありません。",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "復元元となる元のモデルが見つかりませんでした。",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "このModには元に戻すべきProteusの帽子対応編集がありません。",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "レイヤーをBC7 .texに変換",
     "description": ""
@@ -2165,6 +2261,10 @@
   },
   "Settings.Section.General": {
     "message": "全般",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "帽子",
     "description": ""
   },
   "Settings.Section.Hosting": {

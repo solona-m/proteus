@@ -1219,6 +1219,102 @@
     "message": "error desconocido",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Adaptar los peinados a los sombreros",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "La mayoría del pelo modificado no admite sombreros, así que un sombrero puesto\nencima lo atraviesa. Con esta opción activada, Proteus revisa cada peinado que\nte pones y aplasta contra la cabeza el pelo que un sombrero taparía.\n\nEsto edita los archivos del propio mod de pelo, así que sigue funcionando con\nProteus desactivado y viaja con el mod si lo exportas. Los originales se\nconservan y el cambio se puede deshacer aquí.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Ocultar las coletas",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Hace además que las partes que ningún sombrero podría cubrir — coletas, coletas\nlaterales, una melena larga por detrás — desaparezcan mientras llevas un\nsombrero, en lugar de dejarlas asomando por debajo.\n\nDesactivado por defecto. Aplastar de más es invisible, porque lo tapa el\nsombrero; ocultar es todo o nada, y una parte mal juzgada simplemente\ndesaparece.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} mechón(es) sobresalen demasiado de la cabeza para caber bajo un sombrero y se ocultarán mientras lleves uno.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Analizando este peinado...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus ya ha adaptado este peinado a los sombreros.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Adaptar",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Escribe en la carpeta del propio mod de pelo. Los archivos originales se copian\nprimero a Proteus/hatcompat-backup/ dentro de ese mod, y esto se puede\ndeshacer.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Este peinado ya admite sombreros — lo añadió su autor. No hay nada que hacer.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Llevas pelo original del juego, que ya funciona bajo los sombreros. Esto tendrá algo que hacer cuando lleves un mod de pelo.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Todas las partes de este peinado caben bajo un sombrero, así que no hay que ocultar nada.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} puntos de pelo se aplastarían contra la cabeza, {1:F1} cm de media y {2:F1} cm como máximo.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} puntos no se pueden mover: este peinado está unido en piezas demasiado grandes para el formato de formas del juego. Conservarán su forma, así que un sombrero puede seguir atravesándolas.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Deshacer",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "El peinado ha vuelto a quedar exactamente como lo hizo su autor.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "No se pudo leer el modelo de este peinado, así que Proteus no puede cambiarlo.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Peinado {0}, de {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "Este peinado ya tiene su propia forma para sombreros.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "No se pudo editar {0}: {1}. No se ha escrito nada.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Error al escribir: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "No hay nada que cambiar: ningún cabello sobresale del cuero cabelludo y ninguna parte necesita ocultarse.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "No se encontró ninguno de los modelos originales para restaurar.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "Este mod no tiene ediciones de compatibilidad con sombreros de Proteus que deshacer.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Convertir las capas a .tex BC7",
     "description": ""
@@ -2165,6 +2261,10 @@
   },
   "Settings.Section.General": {
     "message": "General",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Sombreros",
     "description": ""
   },
   "Settings.Section.Hosting": {

@@ -1219,6 +1219,102 @@
     "message": "unbekannter Fehler",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Frisuren unter Hüte passen lassen",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Die meisten Haar-Mods unterstützen keine Hüte, sodass ein Hut einfach\nhindurchgeht. Ist dies aktiv, prüft Proteus jede Frisur beim Aufsetzen und\ndrückt das Haar, das ein Hut verdecken würde, flach an den Kopf.\n\nDies bearbeitet die Dateien des Haar-Mods selbst, funktioniert also auch bei\nabgeschaltetem Proteus und bleibt beim Exportieren erhalten. Die Originale\nwerden aufbewahrt und die Änderung lässt sich hier rückgängig machen.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Zöpfe ausblenden",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Lässt zusätzlich die Teile, die kein Hut verdecken kann — Pferdeschwänze,\nseitliche Zöpfe, langes Haar im Nacken — verschwinden, solange ein Hut\ngetragen wird, statt sie darunter hervorhängen zu lassen.\n\nStandardmäßig aus. Zu festes Andrücken bleibt unsichtbar, weil der Hut es\nverdeckt; Ausblenden ist alles oder nichts, und ein falsch beurteilter Teil\nverschwindet einfach.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} Strähne(n) stehen zu weit vom Kopf ab, um unter einen Hut zu passen, und werden ausgeblendet, solange einer getragen wird.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Diese Frisur wird geprüft ...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus hat diese Frisur bereits huttauglich gemacht.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Anpassen",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Schreibt in den Ordner des Haar-Mods selbst. Die Originaldateien werden zuvor\nnach Proteus/hatcompat-backup/ in diesem Mod kopiert, und dies lässt sich\nrückgängig machen.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Diese Frisur unterstützt Hüte bereits — ihr Autor hat es eingebaut. Nichts zu tun.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Du trägst Haar aus dem Spiel selbst, das bereits unter Hüten funktioniert. Dies hat etwas zu tun, sobald du einen Haar-Mod trägst.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Jeder Teil dieser Frisur lässt sich unter einen Hut drücken, es muss also nichts ausgeblendet werden.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} Haarpunkte würden an den Kopf gedrückt, im Schnitt um {1:F1} cm und höchstens um {2:F1} cm.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} Punkte lassen sich nicht bewegen: Diese Frisur ist zu großen Teilen verschmolzen, als dass das Formformat des Spiels sie ansprechen könnte. Sie behalten ihre Form, ein Hut kann dort also weiterhin durchschneiden.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Rückgängig",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "Die Frisur ist wieder exakt so, wie ihr Autor sie erstellt hat.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "Das Modell dieser Frisur konnte nicht gelesen werden, Proteus kann es nicht ändern.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Frisur {0}, aus {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "Diese Frisur hat bereits eine eigene Hutform.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} konnte nicht bearbeitet werden: {1}. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Schreiben fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "Es gibt nichts zu ändern: Kein Haar steht von der Kopfhaut ab und kein Teil muss ausgeblendet werden.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "Keines der ursprünglichen Modelle konnte zum Wiederherstellen gefunden werden.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "Dieser Mod hat keine Proteus-Hutkompatibilität, die rückgängig gemacht werden könnte.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Ebenen in BC7 .tex umwandeln",
     "description": ""
@@ -2165,6 +2261,10 @@
   },
   "Settings.Section.General": {
     "message": "Allgemein",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Hüte",
     "description": ""
   },
   "Settings.Section.Hosting": {

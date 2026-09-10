@@ -1393,6 +1393,7 @@ public class CompositorService : IDisposable
                 _equippedMetModels = metModels;
                 _bareBodyModels = bare;
                 _humanPartModels = humanParts;
+                NoteHairChange();
                 // Framework thread (this is the redraw hook), so the owner can be read inline.
                 UpdateDrawnRaceCode(modelPaths, Plugin.ObjectTable.LocalPlayer?.Name.TextValue);
                 var sig = EquipSignature(equipped, accessories, metModels, bare, humanParts);
@@ -2086,6 +2087,7 @@ public class CompositorService : IDisposable
             _equippedMetModels = EquippedMetModelsFromModels(equipped, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
             _bareBodyModels = BareBodyModelsFromModels(equipped);
             _humanPartModels = HumanPartModelsFromModels(equipped);
+            NoteHairChange();
             // Keep the last known race on a walk that carried no human model: it only changes on a
             // race change, which redraws, and "unknown" would send the shell back to charCode.
             // Bounded by the owner check, so "keep" never means "keep someone else's".
@@ -9045,6 +9047,130 @@ public class CompositorService : IDisposable
     /// which they are.
     /// </summary>
     private volatile HashSet<string> _appendHostModelPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The hair model path the player was last seen wearing, for change detection.</summary>
+    private volatile string? _lastHairPath;
+
+    /// <summary>
+    /// Raised on the framework thread when the player puts on a DIFFERENT hairstyle.
+    /// <para/>
+    /// Exists because a hairstyle change fires nothing else a listener can hang off: it is not a mod
+    /// setting, not a design, and not an equipment slot, so the only evidence is that the model walk came
+    /// back naming a different <c>obj/hair</c> path than last time. Both walks route through here rather
+    /// than one, because either can be the first to see the new hair — the redraw hook usually is, but a
+    /// composite triggered by something else can beat it.
+    /// </summary>
+    internal event Action? HairChanged;
+
+    /// <summary>Compare the walked hair path against the last one and raise <see cref="HairChanged"/>.</summary>
+    private void NoteHairChange()
+    {
+        var hair = _humanPartModels?.FirstOrDefault(
+            p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase));
+        // Null means the walk carried no hair at all — a teardown, or a character with none. Not a change
+        // to report: the last known hairstyle is still the answer, and firing here would have every
+        // listener re-examine a hairstyle that is merely momentarily invisible.
+        if (hair == null || string.Equals(hair, _lastHairPath, StringComparison.Ordinal)) return;
+        _lastHairPath = hair;
+        try { HairChanged?.Invoke(); }
+        catch (Exception ex) { log.Error(ex, "hair-changed listener threw"); }
+    }
+
+    /// <summary>
+    /// The hairstyle Proteus could make hat-compatible, and the mod that supplies it — or null when the
+    /// player is wearing vanilla hair, when nothing has been walked yet, or when Penumbra is not there.
+    /// <para/>
+    /// Lives here because the two things the answer needs are both here: the models the character is
+    /// actually drawing (which is the only way a hairstyle's game path is knowable) and the Penumbra
+    /// resolver that says which file serves it. Reads a volatile snapshot, so it is safe off the framework
+    /// thread and may be one walk out of date, which for a panel the user is looking at is fine.
+    /// </summary>
+    internal HatCompatService.Target? HatCompatTarget()
+        => HatCompatService.FindEquippedHair(_humanPartModels, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>
+    /// A cheap identity for the equipped hairstyle, for deciding whether a re-examination is worth doing.
+    /// Resolves a path but reads no model — see <see cref="HatCompatService.EquippedHairKey"/>.
+    /// </summary>
+    internal string? HatCompatKey()
+        => HatCompatService.EquippedHairKey(_humanPartModels, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>
+    /// Walk the character NOW and report both the hairstyle's identity and the model list it came from.
+    /// FRAMEWORK THREAD ONLY — it calls the draw-object IPC directly.
+    /// <para/>
+    /// Live rather than from <c>_humanPartModels</c>, and that is the whole reason it exists. That cache is
+    /// refreshed by a redraw or a composite, and a hairstyle can change without either: Glamourer applies a
+    /// customise change in place, so the cache goes on naming the hair that was on a moment ago and every
+    /// question asked of it is answered about the wrong hairstyle. Reading the draw object cannot be stale.
+    /// <para/>
+    /// Deliberately does NOT publish into the caches the way the redraw hook does. Those feed the shell
+    /// builder, and quietly rewriting them once a second from a different call site would make any bug in
+    /// them impossible to attribute.
+    /// </summary>
+    internal (string? Key, IReadOnlyList<string>? Parts) HatCompatWalkLive()
+    {
+        var paths = penumbra.GetActivePlayerModelPaths();
+        if (paths is not { Count: > 0 }) return (null, null);
+        var parts = HumanPartModelsFromModels(paths);
+        return (HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot), parts);
+    }
+
+    /// <summary>The hair named by a model list the caller already has, resolved through Penumbra.</summary>
+    internal HatCompatService.Target? HatCompatTargetFor(IReadOnlyList<string>? parts)
+        => HatCompatService.FindEquippedHair(parts, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>That same list's hairstyle identity, without reading the model.</summary>
+    internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)
+        => HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>
+    /// Every input the hat-compat lookup depends on, as one line for the log.
+    /// <para/>
+    /// Exists because "nothing happened" is the same observation for half a dozen different causes — no
+    /// model walk yet, Penumbra's mod directory not known, the hairstyle resolving to the game's own files,
+    /// or resolving to a folder that is not a mod. Each needs a different fix and none of them can be told
+    /// apart from the outside.
+    /// </summary>
+    internal string HatCompatDiag()
+    {
+        var hair = _humanPartModels?.FirstOrDefault(
+            p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase));
+        string? file = null;
+        if (hair != null)
+            try { file = penumbra.ResolvePlayer(hair); } catch { file = "(resolve threw)"; }
+        return $"modsRoot='{modsRoot}' humanParts={_humanPartModels?.Count ?? -1} "
+             + $"hair='{hair ?? "(none)"}' resolved='{file ?? "(null)"}'";
+    }
+
+    /// <summary>
+    /// Redraw the player so the game re-reads a model file that changed on disk, and do nothing else.
+    /// <para/>
+    /// For an edit to SOMEONE ELSE'S mod — a hairstyle made to fit under a hat — where the only thing needed
+    /// is for the game to drop the copy it has cached against that path. The caller has already told
+    /// Penumbra to reload the mod that owns the file; this is the second half, because a redraw alone
+    /// re-resolves the path and is handed back the bytes Penumbra still has in memory.
+    /// <para/>
+    /// Deliberately NOT <see cref="RestoreChangedAccessory"/>, which was doing this job and doing far more
+    /// besides: it reloads Proteus's own managed mod and waits 300 ms for it, which re-renders the whole
+    /// composite. Nothing about a hairstyle touches the composite, so that was a full skin rebuild bought
+    /// for nothing every time the player changed hair.
+    /// </summary>
+    public void RedrawForChangedModel()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                // Stamped so the compositor recognises the echo as its own doing and does not treat the
+                // redraw as the player having changed something.
+                StampOwnRedraw();
+                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
+                    CancelOwnRedrawEcho();
+            }
+            catch (Exception ex) { log.Error(ex, "[Proteus] redraw for a changed model failed"); }
+        });
+    }
 
     /// <summary>
     /// Restore any accessory whose model the second skin replaced back to its original geometry, by

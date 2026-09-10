@@ -1219,6 +1219,102 @@
     "message": "unknown error",
     "description": "Appears in the composite-result line under the tab content."
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Make hairstyles fit under hats",
+    "description": "Checkbox, first control in Settings > Hats."
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus checks each hairstyle as you put it on and presses\nthe hair that a hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Hide ponytails",
+    "description": "Checkbox under the one above, in Settings > Hats."
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Also make the parts that no hat could cover — ponytails, side tails, a long\nfall at the back — disappear while a hat is worn, instead of leaving them\nhanging out from under it.\n\nOff by default. Pressing hair is invisible when it overshoots, because the hat\ncovers it; hiding is all or nothing, so a part judged wrongly simply vanishes.",
+    "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.",
+    "description": "{0} is a count of hair strands. Shown instead of a list of them; can be 0."
+  },
+  "HatCompat.Working": {
+    "message": "Looking at this hairstyle...",
+    "description": "Shown while Proteus examines the hairstyle. Brief."
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus has already made this hairstyle fit under hats.",
+    "description": "Status line in Settings > Hats, above the Undo button."
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Make it fit",
+    "description": "Button. Writes the change into the hair mod."
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Writes into the hair mod's own folder. The original files are copied to\nProteus/hatcompat-backup/ inside that mod first, and this can be undone.",
+    "description": "Tooltip for the button above. Keep the line break; the tooltip is not wrapped."
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "This hairstyle already supports hats — its author added it. Nothing to do.",
+    "description": "Status line. The mod ships its own hat shape, so Proteus leaves it alone."
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "You are wearing hair that came with the game, which already works under hats. This has something to do when you wear a hair mod.",
+    "description": "Shown when there is nothing to act on."
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.",
+    "description": "Replaces the checkbox list when the list is empty."
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.",
+    "description": "{0} is a count of vertices. {1} and {2} are distances in centimetres."
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape format to address. They will keep their shape, so a hat may still clip there.",
+    "description": "Warning. {0} is a count of vertices the format cannot address."
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Undo",
+    "description": "Button. Restores the hair mod's original files."
+  },
+  "HatCompat.Undone": {
+    "message": "The hairstyle has been put back exactly as its author made it.",
+    "description": "Success line after Undo."
+  },
+  "HatCompat.Unreadable": {
+    "message": "This hairstyle's model could not be read, so Proteus cannot change it.",
+    "description": "Failure line."
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Hairstyle {0}, from {1}.",
+    "description": "{0} is a hair id such as h0104, {1} is the mod folder's name."
+  },
+  "HatCompat.Apply.Already": {
+    "message": "This hairstyle already has a hat shape of its own.",
+    "description": "Refusal. The mod author made this hair hat-compatible by hand, so Proteus leaves it alone."
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} could not be edited: {1}. Nothing has been written.",
+    "description": "{0} is a file path inside the mod, {1} is a reason from the model editor. The mod is untouched."
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Writing failed: {0}",
+    "description": "{0} is an operating-system error message, e.g. the file being read-only."
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "There is nothing to change: no hair stands proud of the scalp and no part needs hiding.",
+    "description": "Refusal. This hairstyle already sits close enough to the head to fit under a hat."
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "None of the original models could be found to restore.",
+    "description": "Failure when undoing. The copies Proteus took before editing are missing or unreadable."
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "This mod has no Proteus hat-compatibility edits to undo.",
+    "description": "Refusal when undoing a mod Proteus never edited."
+  },
   "Import.AsTex.Label": {
     "message": "Convert layers to BC7 .tex",
     "description": "Control label. Appears in the Import tab."
@@ -2166,6 +2262,10 @@
   "Settings.Section.General": {
     "message": "General",
     "description": "Section heading in Settings."
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Hats",
+    "description": "Section header in Settings. Very tight space."
   },
   "Settings.Section.Hosting": {
     "message": "Hosting",
