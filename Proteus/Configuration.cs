@@ -235,18 +235,19 @@ public class Configuration : IPluginConfiguration
     public bool AutoInvisibleGlasses { get; set; } = true;
 
     /// <summary>
-    /// When true, Proteus checks the hairstyle the player is actually wearing for hat compatibility, and
-    /// offers to add it: a <c>shp_hib</c> shape key that presses the hair against the skull while a head
-    /// piece is worn, plus <c>atr_kam</c> on the parts no hat can cover. Both are native to the game.
+    /// When true, Proteus checks the hairstyle the player is actually wearing for hat compatibility and adds
+    /// it: <c>atr_kam</c> on the geometry above the hat line, which a hat hides outright, and a
+    /// <c>shp_hib</c> shape key pressing what remains against the skull on a fade that releases below.
+    /// Both are native to the game, so a patched hairstyle keeps working with Proteus turned off.
     /// <para/>
-    /// Off by default, and deliberately so: the edit is written INTO the hair mod's own files rather than
-    /// into a Proteus redirect — that is what makes it survive Proteus being disabled and travel with an
-    /// export — so enabling it means Proteus modifies somebody else's mod folder. Originals are copied to
-    /// <c>Proteus/hatcompat-backup/</c> first and the change is undoable, but nothing is written without the
-    /// user confirming which parts should vanish under a hat, because a wrong call there makes hair
-    /// disappear under every hat in the game.
+    /// OFF BY DEFAULT, and deliberately so — no initializer here, which is the default this relies on. The
+    /// edit is written INTO the hair mod's own files rather than into a Proteus redirect, and that is the
+    /// point of it: it survives Proteus being disabled and travels with an export. It also means enabling
+    /// this lets Proteus modify somebody else's mod folder unattended, which is not something to assume
+    /// consent for. Originals are copied to <c>Proteus/hatcompat-backup/</c> before the first edit and the
+    /// change is undoable per hairstyle.
     /// <para/>
-    /// Hairstyles whose author already shipped a hat shape are left alone.
+    /// Hairstyles whose author already shipped a hat shape are left alone entirely.
     /// </summary>
     public bool AutoHatCompat { get; set; }
 
