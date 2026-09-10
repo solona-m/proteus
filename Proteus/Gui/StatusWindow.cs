@@ -50,6 +50,9 @@ public class StatusWindow : Window
     // just the sidecar ones this window otherwise lists.
     private readonly PartsPanel parts;
 
+    /// <summary>Drawn in Settings, and only while <c>AutoHatCompat</c> is on.</summary>
+    private readonly HatCompatPanel hatCompat;
+
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static Vector4 BindingAccent => ProteusStyle.Binding;
 
@@ -358,7 +361,8 @@ public class StatusWindow : Window
         EyeImportService eyeImport,
         ModExportService modExport,
         TextureLoader textureLoader,
-        PartsPanel parts)
+        PartsPanel parts,
+        HatCompatWatcher hatCompatWatcher)
         // "###ProteusStatus" is the stable window id (position/state persist); the text before it is the
         // visible title. Show the assembly version (yyMM.gitCommitCount, e.g. v2607.185.0.0 — computed in
         // Directory.Build.props), not the dev BuildNumber, so it matches the published plugin version.
@@ -386,6 +390,7 @@ public class StatusWindow : Window
         // Shares this window's one FileDialogManager: it has to be pumped every frame from Draw(), and a
         // second instance would need a second pump nobody would remember to add.
         presetBar = new PresetBar(presets, penumbra, _fileDialog, config, Plugin.Log);
+        hatCompat = new HatCompatPanel(hatCompatWatcher, config);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -1049,6 +1054,13 @@ public class StatusWindow : Window
         using (ProteusStyle.Card())
             DrawOutputSettings();
 
+        // Always drawn, because the switch that governs it now lives inside it. Hiding the section behind
+        // its own setting left no way back once it was off.
+        ImGui.Spacing();
+        ProteusStyle.SectionHeader(s.SecHatCompat);
+        using (ProteusStyle.Card())
+            hatCompat.Draw();
+
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecSkinEffects);
         using (ProteusStyle.Card())
@@ -1111,6 +1123,9 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.InPlaceReloadTip);
+
+        // The hat-compatibility toggles live in their own section beside the hairstyle they act on — see
+        // DrawSettingsTab. Split across two sections they read as unrelated switches.
 
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small
