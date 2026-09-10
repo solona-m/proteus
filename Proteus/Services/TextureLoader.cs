@@ -23,6 +23,18 @@ namespace Proteus.Services;
 public enum TexEncoding { Uncompressed, Bc5, Bc7 }
 
 /// <summary>
+/// How an overlay is resampled when its art is not already at the size the caller asked for.
+/// <para/>
+/// <see cref="Auto"/> filters — area-average down, bilinear up — and is right for every CONTINUOUS
+/// channel: diffuse, normal, mask, coverage alpha. <see cref="Nearest"/> point-samples, and is the
+/// only correct choice for an INDEX (<c>_id</c>) texture, whose red/green encode discrete colour-table
+/// row selectors (<c>red / 17 + 1</c>). Averaging row 3 with row 5 does not produce a soft edge, it
+/// produces row 4 — a colour nobody assigned. Same reason the index is exempt from block compression;
+/// see Configuration.EnableCompression.
+/// </summary>
+public enum ResampleFilter { Auto, Nearest }
+
+/// <summary>
 /// Loads textures from disk (.tex via Lumina, .png via StbImageSharp) as raw RGBA byte arrays,
 /// and extracts texture game paths from .mtrl files.
 /// </summary>
@@ -1020,8 +1032,13 @@ public class TextureLoader
     /// decoder, the same path the base skin textures use. Dispatch is by extension because Proteus
     /// mods reference each overlay by its exact file path, so a BC7-packaged mod names its overlays
     /// <c>*.dds</c> (or <c>*.tex</c>). Returns null on failure.
+    /// <para/>
+    /// <paramref name="filter"/> decides how a size mismatch is resolved — see <see cref="ResampleFilter"/>.
+    /// It defaults to <see cref="ResampleFilter.Auto"/>, so only the index-texture callers have to say
+    /// anything; getting that wrong on an <c>_id</c> map is a wrong COLOUR, not a soft edge.
     /// </summary>
-    public byte[]? LoadPngAsRgba(string path, int targetW, int targetH)
+    public byte[]? LoadPngAsRgba(string path, int targetW, int targetH,
+                                 ResampleFilter filter = ResampleFilter.Auto)
     {
         // Extension tolerance: a mod may ship diffuse.png while its metadata references diffuse.dds (or vice
         // versa). If the exact file is absent, resolve a sibling extension (.png/.dds/.tex) — the same fallback
@@ -1054,7 +1071,7 @@ public class TextureLoader
                     var (rgba, sw, sh) = full.Value;
                     var data = (sw == targetW && sh == targetH)
                         ? rgba
-                        : ScaleNearest(rgba, sw, sh, targetW, targetH);
+                        : Resample(rgba, sw, sh, targetW, targetH, filter);
                     return (data, targetW, targetH);
                 }
 
@@ -1062,7 +1079,7 @@ public class TextureLoader
                 var img = ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
                 var pdata = (img.Width == targetW && img.Height == targetH)
                     ? img.Data
-                    : ScaleNearest(img.Data, img.Width, img.Height, targetW, targetH);
+                    : Resample(img.Data, img.Width, img.Height, targetW, targetH, filter);
                 return (pdata, targetW, targetH);
             }
             catch (Exception ex)
@@ -1077,8 +1094,14 @@ public class TextureLoader
         var key = DiskKey(isTex ? "TEXO" : isDds ? "DDSO" : "PNG", path);
         if (key == null) return Decode()?.rgba;
 
+        // ...and the FILTER, because the same file at the same size decodes to different pixels under
+        // each one. An index map and a mask can be the same image (a mod's _id doubling as coverage);
+        // without this the first caller's choice would be served to the second, which is how a nearest
+        // request quietly gets bilinear-blended rows back.
+        var fkey = filter == ResampleFilter.Nearest ? "|n" : "|a";
+
         // Read-only for callers, so the cached array is shared (no clone).
-        return GetOrDecode(key + "|" + targetW + "x" + targetH, Decode)?.Rgba;
+        return GetOrDecode(key + "|" + targetW + "x" + targetH + fkey, Decode)?.Rgba;
     }
 
     /// <summary>
@@ -1789,8 +1812,107 @@ public class TextureLoader
     }
 
     /// <summary>Nearest-neighbour resize of an RGBA8 buffer.</summary>
+    // Deliberately still nearest, and deliberately NOT routed through Resample: its callers ask for
+    // point sampling by name, and changing what this returns would change them silently.
     public byte[] ScaleRgba(byte[] src, int sw, int sh, int dw, int dh)
         => ScaleNearest(src, sw, sh, dw, dh);
+
+    /// <summary>
+    /// Resize an RGBA8 buffer under a <see cref="ResampleFilter"/>. <see cref="ResampleFilter.Auto"/>
+    /// picks by DIRECTION — area-average when an axis actually shrinks, bilinear otherwise — because the
+    /// two failures are different: shrinking badly aliases (it throws detail away), growing badly
+    /// blocks up (it repeats texels). Nearest is passed through verbatim for index maps.
+    /// <para/>
+    /// STRICTLY smaller, not "smaller or equal". A gen2 remap hands this a 2048x4096 half sheet to bring
+    /// up to a square one: nothing shrinks there, and treating the equal axis as a reduction would send
+    /// it to the box filter, whose span collapses to a single texel on the axis that grows — i.e. point
+    /// sampling, the very thing this exists to stop.
+    /// </summary>
+    internal static byte[] Resample(byte[] src, int sw, int sh, int dw, int dh, ResampleFilter filter)
+    {
+        if (sw == dw && sh == dh) return src;
+        if (filter == ResampleFilter.Nearest) return ScaleNearest(src, sw, sh, dw, dh);
+        return dw < sw || dh < sh
+            ? UVRemapService.ResizeBox(src, sw, sh, dw, dh)
+            : UVRemapService.ResizeBilinear(src, sw, sh, dw, dh);
+    }
+
+    /// <summary>
+    /// The stored dimensions of an image, read from its HEADER — no decode, no cache entry. Returns
+    /// null for anything missing or unrecognised.
+    /// <para/>
+    /// Exists so the shell can size its sheet to the art the author actually supplied before committing
+    /// to decoding any of it. Decoding first would mean holding a 64 MB buffer per overlay just to ask
+    /// how big it is.
+    /// <para/>
+    /// Carries the same sibling-extension tolerance as <see cref="LoadPngAsRgba"/>, so it measures the
+    /// file that will actually be loaded when a mod's metadata says <c>.dds</c> and the folder holds
+    /// <c>.png</c> — otherwise the size decision and the load would disagree about which file they mean.
+    /// </summary>
+    public static (int Width, int Height)? ProbeSize(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                var dir = Path.GetDirectoryName(path) ?? string.Empty;
+                var stem = Path.GetFileNameWithoutExtension(path);
+                foreach (var ext in new[] { ".png", ".dds", ".tex" })
+                {
+                    var cand = Path.Combine(dir, stem + ext);
+                    if (File.Exists(cand)) { path = cand; break; }
+                }
+                if (!File.Exists(path)) return null;
+            }
+
+            Span<byte> head = stackalloc byte[32];
+            using (var fs = File.OpenRead(path))
+            {
+                int got = 0;
+                while (got < head.Length)
+                {
+                    int n = fs.Read(head[got..]);
+                    if (n <= 0) break;
+                    got += n;
+                }
+                if (got < 32) return null;
+            }
+
+            // PNG: 8-byte signature, then the IHDR chunk — length+type at 8..15, width/height at 16..23,
+            // both big-endian. The spec requires IHDR to come first, so the offsets are fixed.
+            if (head[0] == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G')
+            {
+                int w = (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19];
+                int h = (head[20] << 24) | (head[21] << 16) | (head[22] << 8) | head[23];
+                return w > 0 && h > 0 ? (w, h) : null;
+            }
+
+            // DDS: "DDS " magic, then DDS_HEADER — dwHeight at 12, dwWidth at 16, little-endian.
+            if (head[0] == 'D' && head[1] == 'D' && head[2] == 'S' && head[3] == ' ')
+            {
+                int h = BitConverter.ToInt32(head[12..16]);
+                int w = BitConverter.ToInt32(head[16..20]);
+                return w > 0 && h > 0 ? (w, h) : null;
+            }
+
+            // .tex has no magic; it is identified by extension everywhere else in this file, so do the
+            // same here. Width at 0x08, height at 0x0A, u16 little-endian — the layout WriteTex emits.
+            if (path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+            {
+                int w = BitConverter.ToUInt16(head[8..10]);
+                int h = BitConverter.ToUInt16(head[10..12]);
+                return w > 0 && h > 0 ? (w, h) : null;
+            }
+
+            return null;
+        }
+        catch
+        {
+            // A probe is an optimisation of the size CHOICE, never a load. Anything unreadable simply
+            // does not get a vote; the caller falls back to its floor and the real load reports the error.
+            return null;
+        }
+    }
 
     // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match.
     //
