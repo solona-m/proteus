@@ -355,6 +355,10 @@
     "message": "Skin (painted) — skin.shpk.  Cloth — character.shpk (sphere, metal).\nAnimated glow — characterscroll.shpk. Pinning stops the auto mode-switch.",
     "description": "Names three shader files (skin.shpk, character.shpk, characterscroll.shpk) - file names, never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.Geometry.Section": {
+    "message": "Geometry",
+    "description": "Heading for a collapsible section in the colour-table editor window, holding the settings that reshape the body mesh (spanning the cleavage, smoothing the nipple, and so on) rather than colouring it."
+  },
   "Colors.GlowAmount.Label": {
     "message": "Glow",
     "description": "Control label. Appears in the colour-table editor window."

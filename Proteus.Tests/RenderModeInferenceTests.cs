@@ -230,7 +230,7 @@ public class RenderModeInferenceTests
     public void Promote_ChestGeometryOnPinnedSkin_PromotesAnyway()
         => Assert.True(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
             Rows(), aboveGear: false, canShell: true, needsUnmirroredShell: false,
-            toeCapWanted: false, chestGeometry: true));
+            toeCapWanted: false, geometryWanted: true));
 
     /// <summary>The pin still holds for every route that is an inference rather than a request.</summary>
     [Fact]
@@ -247,14 +247,40 @@ public class RenderModeInferenceTests
     public void Promote_PrintWithChestGeometry_StaysSkin()
         => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: false,
             Rows(new ColorTableSubRowPreset { Blend = RowBlend.Multiply }), aboveGear: false,
-            canShell: true, needsUnmirroredShell: false, toeCapWanted: false, chestGeometry: true));
+            canShell: true, needsUnmirroredShell: false, toeCapWanted: false, geometryWanted: true));
 
     /// <summary>And the surface veto is not overridden either — there is still nowhere to put it.</summary>
     [Fact]
     public void Promote_ChestGeometryWithNoShellSurface_StaysSkin()
         => Assert.False(RenderModeInference.ShouldPromoteToGear(OverlayLayer.Skin, pinned: true,
             Rows(), aboveGear: false, canShell: false, needsUnmirroredShell: false,
-            toeCapWanted: false, chestGeometry: true));
+            toeCapWanted: false, geometryWanted: true));
+
+    /// <summary>
+    /// EVERY geometry feature counts, one test per feature so a new one cannot be added to the UI and
+    /// forgotten here. That is not hypothetical: SmoothFold was added last and reached none of the four
+    /// places that spelled this list out inline, so a mod with only "Smooth between the legs" ticked was
+    /// never promoted, never reached the second-skin phase, and the fold never ran.
+    /// </summary>
+    [Theory]
+    [InlineData("BustBridge")]
+    [InlineData("SmoothNipples")]
+    [InlineData("CleftBridge")]
+    [InlineData("SmoothFold")]
+    public void WantsGeometry_EachFeatureAloneCounts(string feature)
+    {
+        var md = new ProteusMetadata();
+        typeof(ProteusMetadata).GetProperty(feature)!.SetValue(md, true);
+        Assert.True(RenderModeInference.WantsGeometry(md), $"{feature} alone must promote to a shell");
+    }
+
+    /// <summary>A mod asking for none of them is not promoted by this route, and null is not a crash.</summary>
+    [Fact]
+    public void WantsGeometry_NothingTicked_IsFalse()
+    {
+        Assert.False(RenderModeInference.WantsGeometry(new ProteusMetadata()));
+        Assert.False(RenderModeInference.WantsGeometry(null));
+    }
 
     /// <summary>A row that paints is untouched by any of this.</summary>
     [Fact]
