@@ -567,20 +567,13 @@ public class OverlayDescriptor
     [JsonIgnore]
     public bool IsMaskShell { get; set; }
 
-    /// <summary>
-    /// Transient (never serialized): this overlay was authored as SKIN and auto-promoted to a gear shell —
-    /// for sitting above gear, for a colorset feature skin.shpk can't render, or for asymmetric art on a
-    /// mirrored body. Set by the compositor's promotion, never by an author.
-    /// <para/>
-    /// It decides what an EMPTY colour table means. A shell with no row presets normally inherits the
-    /// vanilla template's table, which is right for an overlay someone deliberately made cloth — that
-    /// template belongs to the look being worn. It is wrong here: nobody chose gear, nobody chose colours,
-    /// and on the skin layer this art would have rendered at its authored colour. Inheriting e0041's table
-    /// instead multiplies it by a random vanilla top's palette — pink, olive and brown rows included — so a
-    /// promoted overlay takes the neutral-white baseline and renders as painted.
-    /// </summary>
-    [JsonIgnore]
-    public bool PromotedFromSkin { get; set; }
+    // PromotedFromSkin lived here until 2026-09-10. It was set on an auto-promoted overlay for one purpose:
+    // to give that shell the neutral-white colour table instead of the cloned vanilla template's, whose
+    // pink/olive/brown rows multiply the author's art into dark patches. That turned out to be the right
+    // answer for EVERY shell with no authored rows, not only auto-promoted ones — a deliberately-made cloth
+    // overlay was inheriting the same arbitrary palette from the same fixed e0041 top, and rendering at a
+    // fraction of the brightness the identical art has on the skin layer. See the Build call in
+    // SecondSkinService, which now passes neutralWhenEmpty unconditionally, so nothing read this any more.
 }
 
 /// <summary>Maps one Penumbra option group to per-option overlay sets.</summary>

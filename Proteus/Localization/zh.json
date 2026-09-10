@@ -1283,6 +1283,102 @@
     "message": "未知错误",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "让发型适配帽子",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "大多数模组发型都不支持帽子，戴上帽子会直接穿模。开启后，Proteus 会在你每次\n换发型时检查它，并把帽子会遮住的头发压贴到头部。\n\n这会修改发型模组自身的文件，因此即使关闭 Proteus 也依然有效，导出模组时也会\n一并带走。原始文件会被保留，改动可以在这里撤销。",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "隐藏马尾",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "同时让任何帽子都遮不住的部分——马尾、双马尾、垂在背后的长发——在戴帽子时\n直接隐藏，而不是从帽子下面露出来。\n\n默认关闭。压得过头也看不出来，因为有帽子遮着；但隐藏是全有或全无，判断错的\n部分就会直接消失。",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "有 {0} 缕头发离头部太远，无法塞进帽子里，戴帽子时会被隐藏。",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "正在检查该发型...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus 已经让这个发型适配了帽子。",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "让它适配",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "写入发型模组自身的文件夹。原始文件会先复制到该模组内的\nProteus/hatcompat-backup/，并且此操作可以撤销。",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "这个发型已经支持帽子了 — 是作者做的。无需处理。",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "你正戴着游戏自带的头发，它本来就能配合帽子。当你戴上发型模组时，这里才有事可做。",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "这个发型的每个部件都能塞进帽子里，无需隐藏任何部分。",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "将有 {0} 个头发顶点被压向头部，平均 {1:F1} 厘米，最多 {2:F1} 厘米。",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "有 {0} 个顶点无法移动：这个发型被合并成了对游戏形态格式而言过大的整块。它们会保持原状，因此帽子仍可能在那里穿模。",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "撤销",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "发型已完全恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "无法读取该发型的模型，因此 Proteus 无法修改它。",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "发型 {0}，来自 {1}。",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "该发型已经有自己的帽子形态。",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "无法编辑 {0}：{1}。未写入任何内容。",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "写入失败：{0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "没有需要修改的地方：没有头发翘出头皮，也没有部件需要隐藏。",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "找不到任何可用于还原的原始模型。",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "该模组没有可撤销的 Proteus 帽子兼容性修改。",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "将层转换为 BC7 .tex",
     "description": ""
@@ -1831,6 +1927,30 @@
     "message": "颜色",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "此模组的 Proteus 数据指定了选项组 {0}，但 Penumbra 中的模组副本没有这些组——重新导出时被改名或删除了。只有作者才能修复。",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "它的遮罩被设置为按装备渲染，而衣物需要用遮罩来构建——但在 Penumbra 中它的“{0}”组里没有勾选任何内容。",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "已勾选的选项都已解析，但没有一个抵达此角色已加载的表面。",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Penumbra 中没有勾选任何内容。此模组的 {0} 个选项组（{1}）全都是空的，因此不会绘制任何东西。请在 Penumbra 中打开它，并在每个组里勾选一个选项。",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Proteus 询问此模组的哪些选项已启用时，Penumbra 没有响应。",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "此模组绘制的是 {0}，而你是 {1}。它提供的内容都不适合你当前的身体。",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "未检测到带 Proteus 附属文件的模组。",
     "description": ""
@@ -2205,6 +2325,10 @@
   },
   "Settings.Section.General": {
     "message": "常规",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "帽子",
     "description": ""
   },
   "Settings.Section.Hosting": {

@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 686;
+    public const int BuildNumber = 696;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -65,6 +65,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly TilePreview tilePreview;
     private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
+    private readonly HatCompatWatcher hatCompat;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -226,10 +227,14 @@ public sealed class Plugin : IDalamudPlugin
         partViewport = new Gui.PartViewport(TextureProvider, log);
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
 
+        // Subscribes to the hairstyle change on construction, so it works with the window shut — which is
+        // the whole point of it being a service and not part of the panel that draws its findings.
+        hatCompat = new HatCompatWatcher(compositor, penumbra, config, log);
+
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel);
+            textureLoader, partsPanel, hatCompat);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
@@ -421,6 +426,7 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.Dispose();
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();

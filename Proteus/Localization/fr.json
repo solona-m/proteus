@@ -1283,6 +1283,102 @@
     "message": "erreur inconnue",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Adapter les coiffures aux chapeaux",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine chaque\ncoiffure que vous mettez et plaque contre la tête les cheveux qu'un chapeau\nrecouvrirait.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée ici.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Masquer les queues de cheval",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Fait également disparaître, tant qu'un chapeau est porté, les parties qu'aucun\nchapeau ne peut couvrir — queues de cheval, couettes, longueurs dans le dos —\nau lieu de les laisser dépasser en dessous.\n\nDésactivé par défaut. Un plaquage trop fort reste invisible, puisque le chapeau\nle recouvre ; le masquage est tout ou rien, et une partie mal jugée disparaît\npurement et simplement.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} mèche(s) dépassent trop de la tête pour tenir sous un chapeau et seront masquées tant qu'on en porte un.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Analyse de cette coiffure...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus a déjà adapté cette coiffure aux chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Adapter",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Écrit dans le dossier du mod de coiffure lui-même. Les fichiers d'origine sont\nd'abord copiés dans Proteus/hatcompat-backup/ à l'intérieur de ce mod, et\nl'opération peut être annulée.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Cette coiffure gère déjà les chapeaux — son auteur l'a prévu. Rien à faire.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Vous portez une coiffure d'origine du jeu, qui fonctionne déjà sous les chapeaux. Ceci aura quelque chose à faire lorsque vous porterez un mod de coiffure.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Chaque partie de cette coiffure peut être plaquée sous un chapeau : rien n'a besoin d'être masqué.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} points de cheveux seraient plaqués contre votre tête, de {1:F1} cm en moyenne et {2:F1} cm au maximum.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} points ne peuvent pas être déplacés : cette coiffure est fusionnée en morceaux trop grands pour le format de formes du jeu. Ils garderont leur forme, un chapeau peut donc encore les traverser.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "La coiffure a été remise exactement telle que son auteur l'a créée.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "Le modèle de cette coiffure n'a pas pu être lu, Proteus ne peut donc pas le modifier.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Coiffure {0}, de {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "Cette coiffure possède déjà sa propre forme pour les chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} n'a pas pu être modifié : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "Il n'y a rien à changer : aucun cheveu ne dépasse du crâne et aucune partie n'a besoin d'être masquée.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "Aucun des modèles d'origine n'a pu être retrouvé pour la restauration.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "Ce mod n'a aucune modification de compatibilité avec les chapeaux à annuler.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Convertir les couches en .tex BC7",
     "description": ""
@@ -1831,6 +1927,30 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Les données Proteus de ce mod nomment le ou les groupes d'options {0}, que la copie du mod dans Penumbra ne possède pas : renommés ou supprimés lors d'un réexport. Seule la personne qui l'a créé peut corriger cela.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Ses masques sont rendus comme de l'équipement, ce qui nécessite un masque pour construire le vêtement — et rien n'est coché dans son groupe « {0} » dans Penumbra.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Ses options cochées ont bien été résolues, mais aucune n'a atteint une surface chargée par ce personnage.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Rien n'est coché dans Penumbra. Les {0} groupe(s) d'options de ce mod — {1} — sont tous vides, il ne peint donc rien. Ouvrez-le dans Penumbra et cochez une option dans chacun.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra n'a pas répondu lorsque Proteus a demandé quelles options de ce mod sont activées.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Ce mod peint {0}, et vous êtes {1}. Rien de ce qu'il fournit ne correspond au corps que vous portez.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Aucun mod avec fichier Proteus détecté.",
     "description": ""
@@ -2205,6 +2325,10 @@
   },
   "Settings.Section.General": {
     "message": "Général",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Chapeaux",
     "description": ""
   },
   "Settings.Section.Hosting": {

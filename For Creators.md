@@ -241,6 +241,12 @@ If your mod has multiple options (style variants, independent pieces, etc.) you 
 
 This is only the **default**. The array order decides nothing once the wearer rearranges the option tabs in Proteus: their stack then sets both what draws on top and what covers what, and your `Groups` order is just the arrangement they start from.
 
+**`DefaultSettings` is what a brand-new installer sees.** It is a bitmask over the option list — `0` selects nothing, `1` the first option, `2` the second, `3` the first two, and so on. Penumbra only consults it for a collection that has never seen your mod, so it does nothing for anyone who already has it installed, and it is not a substitute for telling people what to tick.
+
+A `Multi` group shipping `0` means everyone who installs your pack sees a mod that is enabled and does nothing at all until they go and tick something — the single most common "it's installed but not appearing" report. Unless your groups are genuinely all-optional extras, give the primary group a bitmask that selects one sensible option so the pack looks like something the moment it goes on. If your garment's shape comes from a `Masks` group, that group is the one that needs a default: without a mask there is nothing to build the garment from, so a pack with fabric selected and no mask still renders nothing.
+
+Proteus will now say so rather than leaving you to guess: a mod that is switched on and contributes nothing gets an amber `!` in the Mods tab naming the reason, and one line in the log — `… is enabled but contributes nothing: nothing is ticked in Penumbra …`.
+
 The easiest way to get all this right is to build the group in Penumbra's own mod editor, or let the Substance Painter packager write it for you.
 
 **Proteus metadata.json:**

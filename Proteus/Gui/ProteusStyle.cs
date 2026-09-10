@@ -417,6 +417,17 @@ public static class ProteusStyle
     }
 
     /// <summary>
+    /// <see cref="DisabledWrapped"/> in <see cref="Warn"/> amber — for a notice that explains why
+    /// something the user expected to happen did not. Dimmed text is the wrong weight for that: it reads
+    /// as "nothing to see here", which is the opposite of what these lines are for.
+    /// </summary>
+    public static void WarnWrapped(string text)
+    {
+        using (ImRaii.PushColor(ImGuiCol.Text, Warn))
+            ImGui.TextWrapped(text);
+    }
+
+    /// <summary>
     /// Tooltip for an item that may be disabled. A disabled item reports no hover under the default
     /// flags, so the "why is this off" explanation is unreachable at exactly the moment it is wanted —
     /// this always asks with AllowWhenDisabled. A null reason draws nothing.
