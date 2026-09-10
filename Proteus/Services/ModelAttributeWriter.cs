@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace Proteus.Services;
@@ -89,6 +90,11 @@ public static class ModelAttributeWriter
         int dStr = strBytes.Length, delta = dStr + 4;
 
         W32(o, src.DeclEnd + 4, src.StrSize + (uint)dStr);          // string block size
+        // The string COUNT, which the game ignores and every other reader does not: Penumbra and TexTools
+        // walk exactly this many NUL-terminated strings and then resolve a table's offset against the list
+        // they built (MdlFile.LoadStrings). Leave it stale and the new name is off the end of that list, so
+        // the attribute reads back nameless in both — while working perfectly in game.
+        W16(o, src.DeclEnd, (ushort)(BitConverter.ToUInt16(o, src.DeclEnd) + 1));
         W16(o, src.Mh + dStr + 6, (ushort)(attrCount + 1));         // attribute count
         Shift(o, src.LodStart + dStr, delta);
 
@@ -221,6 +227,393 @@ public static class ModelAttributeWriter
         return (o, byGroup);
     }
 
+    // ── shapes ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Position element types <see cref="SecondSkinWriter.WriteXYZ"/> can actually encode a 3-vector into.
+    /// <para/>
+    /// Checked rather than assumed because that method has no <c>default</c> arm: handed a type it does not
+    /// know, it writes nothing and returns, leaving the duplicate vertex sitting exactly on its source. The
+    /// shape is then structurally perfect and moves the hair nowhere, which is the worst kind of bug to go
+    /// looking for. Half2 is excluded deliberately even though it is a case there — it has no z.
+    /// </summary>
+    private static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
+
+    /// <summary>
+    /// Add a shape key (a morph target) named <paramref name="shapeName"/>, moving the named vertices of the
+    /// named LOD0 meshes to new positions.
+    /// <para/>
+    /// A shape does not store offsets. Each <c>ShapeValue</c> rewires ONE INDEX-BUFFER SLOT to a replacement
+    /// vertex that already lives in the same mesh's vertex buffer, so the deformation is expressed as whole
+    /// spare vertices the game swaps in while the shape is enabled. This appends those spares at the end of
+    /// each mesh's own block — which is what keeps every existing vertex index and byte address valid, and
+    /// therefore what lets an existing shape survive the edit untouched.
+    /// <para/>
+    /// LOD1 and LOD2 are left alone. Their geometry lives in different buffers and only their offsets move,
+    /// so a model shaped here simply stops deforming at distance rather than breaking.
+    /// </summary>
+    /// <param name="moved">Per mesh index, the MESH-RELATIVE vertex indices to move and where to. Mesh
+    /// relative on both counts: a model's index buffer stores mesh-relative vertex numbers, and
+    /// <c>ModelPart.Triangles</c> does NOT — those are rebased across meshes for drawing and skip meshes the
+    /// reader could not decode, so they are the wrong thing to pass here.</param>
+    /// <param name="normals">Optional replacement normals, addressed the same way. Omitted, a spare keeps
+    /// its source's normal, which is a lighting approximation, not a correctness problem.</param>
+    public static byte[] AddShape(
+        byte[] mdl, string shapeName,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>>? normals = null)
+        => AddShape(mdl, shapeName, moved, out _, normals);
+
+    /// <inheritdoc cref="AddShape(byte[], string, IReadOnlyDictionary{int, IReadOnlyDictionary{int, Vector3}}, IReadOnlyDictionary{int, IReadOnlyDictionary{int, Vector3}})"/>
+    /// <param name="unaddressable">How many requested vertices were left where they are because every
+    /// triangle drawing them sits past index slot 65535, which a shape value cannot name. Zero for most
+    /// models; a large fraction means this hair is too heavily welded to shape and the caller should say so
+    /// rather than ship a shape that moves a third of what was asked.</param>
+    public static byte[] AddShape(
+        byte[] mdl, string shapeName,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved,
+        out int unaddressable,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>>? normals = null)
+    {
+        unaddressable = 0;
+        if (string.IsNullOrEmpty(shapeName))
+            throw new ModelEditException("a shape needs a name");
+
+        var src = SecondSkinWriter.Parse(mdl);
+
+        ushort shapeCount = BitConverter.ToUInt16(mdl, src.Mh + 16);
+        ushort shapeMeshCount = BitConverter.ToUInt16(mdl, src.Mh + 18);
+        ushort shapeValueCount = BitConverter.ToUInt16(mdl, src.Mh + 20);
+
+        int shapeBlock = src.ShapeBlock;
+        int shapeMeshBlock = shapeBlock + shapeCount * 16;
+        int shapeValBlock = shapeMeshBlock + shapeMeshCount * 12;
+        int shapeValEnd = shapeValBlock + shapeValueCount * 4;
+
+        // The shape block sits after the bone tables, whose layout is the one thing that changed at
+        // Dawntrail — so its position is also the proof that the walk was right for this model's version.
+        // Reading the submesh bone map's length prefix is the cheapest way to ask: on a mis-walk it is
+        // arbitrary bytes and fails one of these. Without it, a v5 model read as v6 would splice the new
+        // tables into the middle of a bone table and produce a file the game cannot load, silently.
+        if (shapeValEnd < 0 || shapeValEnd + 4 > mdl.Length)
+            throw new ModelEditException("this model's shape block runs past the end of the file");
+        uint boneMapBytes = BitConverter.ToUInt32(mdl, shapeValEnd);
+        if (boneMapBytes % 2 != 0 || (long)shapeValEnd + 4 + boneMapBytes > mdl.Length)
+            throw new ModelEditException(
+                "this model's tables do not add up — the shape block is not where the format says it is");
+
+        if (DeclaresShape(mdl, shapeName))
+            throw new ModelEditException($"this model already declares a shape named {shapeName}");
+
+        // Nothing here accounts for a neck-morph array, and neither does the parse it relies on. Refuse
+        // rather than splice past a table whose size is unknown.
+        if (mdl[src.Mh + 43] != 0)
+            throw new ModelEditException("this model carries neck morph data, which cannot be edited here");
+
+        var plans = BuildShapePlans(mdl, src, moved, normals, out unaddressable);
+        if (plans.Count == 0)
+            throw new ModelEditException(
+                "none of those vertices are used by a triangle, so a shape over them would deform nothing");
+
+        int totalValues = plans.Sum(p => p.ValueCount);
+        int totalMeshes = plans.Sum(p => p.Windows.Count);
+        if (shapeCount + 1 > ushort.MaxValue
+         || shapeMeshCount + totalMeshes > ushort.MaxValue
+         || shapeValueCount + (long)totalValues > ushort.MaxValue)
+            throw new ModelEditException(
+                $"this shape needs {totalValues} shape values, which overflows what the format counts");
+
+        // ── the three table records ──────────────────────────────────────────
+        // Appended at the ends of their arrays, which is why NO existing record needs renumbering: a
+        // Shape's shapeMeshStart and a ShapeMesh's valueStart are GLOBAL indices into those arrays, so
+        // every range an existing shape names still names the same records afterwards.
+        var shapeRec = new byte[16];
+        W32(shapeRec, 0, src.StrSize);                     // name offset — the string goes at the block's end
+        W16(shapeRec, 4, shapeMeshCount);                  // LOD0 start
+        W16(shapeRec, 6, (ushort)(shapeMeshCount + totalMeshes));   // LOD1/2 start: empty, past ours
+        W16(shapeRec, 8, (ushort)(shapeMeshCount + totalMeshes));
+        W16(shapeRec, 10, (ushort)totalMeshes);            // LOD0 count; LOD1/2 counts stay zero
+
+        var shapeMeshRecs = new byte[totalMeshes * 12];
+        var shapeValRecs = new byte[totalValues * 4];
+        int valueBase = 0, rec = 0;
+        foreach (var p in plans)
+            foreach (var (windowBase, values) in p.Windows)
+            {
+                W32(shapeMeshRecs, rec * 12, windowBase);
+                W32(shapeMeshRecs, rec * 12 + 4, (uint)values.Count);
+                W32(shapeMeshRecs, rec * 12 + 8, (uint)(shapeValueCount + valueBase));
+                for (int v = 0; v < values.Count; v++)
+                {
+                    W16(shapeValRecs, (valueBase + v) * 4, values[v].Item1);
+                    W16(shapeValRecs, (valueBase + v) * 4 + 2, values[v].Item2);
+                }
+                valueBase += values.Count;
+                rec++;
+            }
+
+        var text = Encoding.ASCII.GetBytes(shapeName);
+        int nameLen = text.Length + 1;
+        var strBytes = new byte[nameLen + (4 - nameLen % 4) % 4];
+        text.CopyTo(strBytes, 0);
+
+        // ── splice ───────────────────────────────────────────────────────────
+        // On a model with NO shapes at all, inserts 2, 3 and 4 all address the same offset — every table is
+        // empty and starts where the block does. They land in the right order only because Splice sorts
+        // with a STABLE sort, so equal keys keep the order given here. Do not reorder these four.
+        var inserts = new List<(int At, byte[] Bytes)>
+        {
+            (src.StrBlock + (int)src.StrSize, strBytes),
+            (shapeMeshBlock, shapeRec),
+            (shapeValBlock, shapeMeshRecs),
+            (shapeValEnd, shapeValRecs),
+        };
+        foreach (var p in plans)
+            foreach (var (at, bytes) in p.Inserts)
+                inserts.Add((at, bytes));
+
+        int dStr = strBytes.Length;
+        int dMeta = dStr + shapeRec.Length + shapeMeshRecs.Length + shapeValRecs.Length;
+        int dV = plans.Sum(p => p.Inserts.Sum(i => i.Bytes.Length));
+
+        var o = Splice(mdl, inserts.ToArray());
+
+        // ── the new file's coordinates ───────────────────────────────────────
+        // The LOD and mesh tables sit BETWEEN the string insert and the shape inserts, so they move by the
+        // string block's growth alone — the same trap AddAttribute documents, from the other side.
+        int mhN = src.Mh + dStr, lodStartN = src.LodStart + dStr, meshStartN = src.MeshStart + dStr;
+
+        W32(o, src.DeclEnd + 4, src.StrSize + (uint)dStr);                          // string block size
+        W16(o, src.DeclEnd, (ushort)(BitConverter.ToUInt16(o, src.DeclEnd) + 1));    // string COUNT
+        W16(o, mhN + 16, (ushort)(shapeCount + 1));
+        W16(o, mhN + 18, (ushort)(shapeMeshCount + totalMeshes));
+        W16(o, mhN + 20, (ushort)(shapeValueCount + totalValues));
+
+        foreach (var p in plans)
+            W16(o, meshStartN + p.Mesh * 36, (ushort)(p.VertexCount + p.SrcVerts.Length));
+
+        // Every LOD0 mesh's per-stream offset moves past the inserts at or below it. At or below, not
+        // strictly below: Splice puts inserted bytes BEFORE the byte originally at that offset, so a block
+        // whose start coincides with an insertion point — mesh A's stream 1 beginning exactly where its
+        // stream 0 ended — does move, while the block that grew does not.
+        var vInserts = plans.SelectMany(p => p.Inserts).ToArray();
+        int lod0End = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        for (int m = src.Lod0MeshIndex; m < lod0End; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            for (int j = 0; j < 3; j++)
+            {
+                if (mdl[mo + 32 + j] == 0) continue;
+                long at = src.Vb + BitConverter.ToUInt32(mdl, mo + 20 + j * 4);
+                int shift = vInserts.Where(i => i.At <= at).Sum(i => i.Bytes.Length);
+                if (shift != 0)
+                    W32(o, meshStartN + m * 36 + 20 + j * 4,
+                        BitConverter.ToUInt32(o, meshStartN + m * 36 + 20 + j * 4) + (uint)shift);
+            }
+        }
+
+        W32(o, 40, BitConverter.ToUInt32(o, 40) + (uint)dV);                    // VertexBufferSize[0]
+        W32(o, lodStartN + 44, BitConverter.ToUInt32(o, lodStartN + 44) + (uint)dV);
+
+        // Two phases, because the inserts straddle the vertex buffer. The metadata grew before all of it,
+        // so every absolute offset follows; the vertices grew INSIDE buffer 0, so only what comes after
+        // that buffer follows. RuntimeSize is the distance from the header to the START of vertex data,
+        // which the second phase does not move — and it stays in Shift precisely so no caller can include
+        // it by accident.
+        Shift(o, lodStartN, dMeta);
+        ShiftOffsets(o, lodStartN, dV, (long)src.Vb + dMeta);
+        return o;
+    }
+
+    /// <summary>
+    /// How many index slots one <c>ShapeMesh</c> can address: <c>BaseIndicesIndex</c> is a u16, so a slot is
+    /// named as a number in 0..65535 added to that record's own <c>MeshIndexOffset</c>.
+    /// </summary>
+    private const int SlotWindow = ushort.MaxValue + 1;
+
+    /// <summary>One mesh's share of a shape: the spare vertices to append and the slots that select them.</summary>
+    private sealed class ShapePlan
+    {
+        public required int Mesh { get; init; }
+        public required ushort VertexCount { get; init; }
+        public required int[] SrcVerts { get; init; }
+        public required List<(int At, byte[] Bytes)> Inserts { get; init; }
+
+        /// <summary>
+        /// The slots to rewire, split into <see cref="SlotWindow"/>-sized runs of the index buffer — one
+        /// <c>ShapeMesh</c> record each, at absolute base <c>Base</c>.
+        /// <para/>
+        /// A mesh usually needs exactly one window and it starts at the mesh's own <c>StartIndex</c>, which
+        /// is what every well-formed model on disk looks like. A mesh with more than 65535 index entries
+        /// needs more than one, and that case is the whole reason this is a list: hair welded into one big
+        /// mesh routinely runs to 150,000 slots, and a single window reaches less than half of it.
+        /// </summary>
+        public required List<(uint Base, List<(ushort Slot, ushort Replace)> Values)> Windows { get; init; }
+
+        public int ValueCount => Windows.Sum(w => w.Values.Count);
+    }
+
+    private static List<ShapePlan> BuildShapePlans(
+        byte[] mdl, SecondSkinWriter.Source src,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>>? normals,
+        out int unaddressable)
+    {
+        unaddressable = 0;
+        int lod0End = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        var plans = new List<ShapePlan>();
+
+        foreach (var mesh in moved.Keys.OrderBy(k => k))
+        {
+            var wanted = moved[mesh];
+            if (wanted.Count == 0) continue;
+            if (mesh < src.Lod0MeshIndex || mesh >= lod0End)
+                throw new ModelEditException(
+                    $"mesh {mesh} is not part of LOD0, whose meshes are the only ones this can shape");
+
+            int mo = src.MeshStart + mesh * 36;
+            ushort vc = BitConverter.ToUInt16(mdl, mo);
+            uint ic = BitConverter.ToUInt32(mdl, mo + 4), startIndex = BitConverter.ToUInt32(mdl, mo + 16);
+
+            var asked = wanted.Keys.OrderBy(k => k).ToArray();
+            foreach (var v in asked)
+                if (v < 0 || v >= vc)
+                    throw new ModelEditException($"mesh {mesh} has no vertex {v} — it has {vc}");
+            if (vc + asked.Length > ushort.MaxValue)
+                throw new ModelEditException(
+                    $"mesh {mesh} would need {vc + asked.Length} vertices, past the {ushort.MaxValue} a "
+                  + "model can count — this is the format reason a hair meant for hats is kept under 30k polys");
+
+            if ((long)src.Ib + (startIndex + ic) * 2 > mdl.Length)
+                throw new ModelEditException($"mesh {mesh}'s index range runs past the end of the file");
+
+            var srcVerts = asked;
+
+            // Slot -> replacement, over this mesh's own index range only. ONE VALUE PER SLOT, not per
+            // vertex: a vertex shared by six triangles is named by six slots and every one of them has to
+            // be rewired, or the shape tears the mesh along the ones that were missed.
+            var newIndexOf = new Dictionary<int, ushort>(srcVerts.Length);
+            for (int r = 0; r < srcVerts.Length; r++) newIndexOf[srcVerts[r]] = (ushort)(vc + r);
+
+            // Split into windows as we go. A slot is named RELATIVE to its record's own MeshIndexOffset, so
+            // a mesh longer than a u16 can count simply gets a second record based 65536 slots further in.
+            // Everything before this reached less than half of a big hairstyle: the unreachable tail was a
+            // contiguous REGION of the head — measured at head-centre height on the model that prompted
+            // this — so pressing everything except it stretched the geometry along the boundary. That was
+            // "the hair under the hat looked broken".
+            var windows = new List<(uint Base, List<(ushort, ushort)> Values)>();
+            for (uint w = 0; w * SlotWindow < ic; w++)
+            {
+                uint from = w * (uint)SlotWindow, to = Math.Min(ic, from + SlotWindow);
+                List<(ushort, ushort)>? here = null;
+                for (uint s = from; s < to; s++)
+                {
+                    int idx = BitConverter.ToUInt16(mdl, src.Ib + (int)(startIndex + s) * 2);
+                    if (newIndexOf.TryGetValue(idx, out var rep))
+                        (here ??= []).Add(((ushort)(s - from), rep));
+                }
+                if (here != null) windows.Add((startIndex + from, here));
+            }
+            // Nothing draws these vertices, so a shape over them would grow the file and deform nothing.
+            if (windows.Count == 0) continue;
+
+            plans.Add(new ShapePlan
+            {
+                Mesh = mesh,
+                VertexCount = vc,
+                SrcVerts = srcVerts,
+                Windows = windows,
+                Inserts = SpareVertices(mdl, src, mesh, mo, vc, srcVerts, wanted,
+                                        normals != null && normals.TryGetValue(mesh, out var n) ? n : null),
+            });
+        }
+        return plans;
+    }
+
+    /// <summary>
+    /// The bytes of one mesh's spare vertices, per stream, positioned at the end of that stream's block.
+    /// <para/>
+    /// EVERY stream the mesh has is grown, not just the one holding position. A mesh routinely keeps
+    /// position in stream 0 and its blend weights, UV and tangent frame in stream 1, and the streams are
+    /// addressed independently by vertex number — so growing one alone leaves every later mesh reading its
+    /// second stream one stride out of register for every vertex. That miscompiles into nothing, crashes
+    /// nothing, and skins the model to the wrong bones.
+    /// </summary>
+    private static List<(int At, byte[] Bytes)> SpareVertices(
+        byte[] mdl, SecondSkinWriter.Source src, int mesh, int mo, ushort vc,
+        int[] srcVerts, IReadOnlyDictionary<int, Vector3> positions, IReadOnlyDictionary<int, Vector3>? normals)
+    {
+        var decl = src.Decls[mesh];
+        var pos = Array.Find(decl, e => e.Usage == SecondSkinWriter.UsePosition);
+        if (pos == default && !Array.Exists(decl, e => e.Usage == SecondSkinWriter.UsePosition))
+            throw new ModelEditException($"mesh {mesh} declares no position element");
+        if (Array.IndexOf(PositionTypes, pos.Type) < 0)
+            throw new ModelEditException(
+                $"mesh {mesh} stores its positions as vertex type {pos.Type}, which cannot be written here");
+
+        var nrm = Array.Find(decl, e => e.Usage == SecondSkinWriter.UseNormal);
+        bool haveNormal = normals != null && Array.Exists(decl, e => e.Usage == SecondSkinWriter.UseNormal);
+
+        var inserts = new List<(int At, byte[] Bytes)>();
+        for (int j = 0; j < 3; j++)
+        {
+            byte stride = mdl[mo + 32 + j];
+            if (stride == 0) continue;
+            uint vbo = BitConverter.ToUInt32(mdl, mo + 20 + j * 4);
+            int blockStart = src.Vb + (int)vbo;
+            if (blockStart < 0 || blockStart + (vc + 1) * stride > mdl.Length + stride)
+                throw new ModelEditException($"mesh {mesh}'s stream {j} runs past the end of the file");
+
+            var bytes = new byte[srcVerts.Length * stride];
+            for (int r = 0; r < srcVerts.Length; r++)
+            {
+                // Verbatim, then overwrite. The spare has to keep its source's blend weights, blend
+                // indices, UV, tangent frame and colour or it skins and shades as a different vertex.
+                Array.Copy(mdl, blockStart + srcVerts[r] * stride, bytes, r * stride, stride);
+                if (pos.Stream == j)
+                {
+                    var p = positions[srcVerts[r]];
+                    SecondSkinWriter.WriteXYZ(bytes, r * stride + pos.Offset, pos.Type, p.X, p.Y, p.Z);
+                }
+                if (haveNormal && nrm.Stream == j && normals!.TryGetValue(srcVerts[r], out var n))
+                    SecondSkinWriter.WriteNormal(bytes, r * stride + nrm.Offset, nrm.Type, n.X, n.Y, n.Z);
+            }
+            inserts.Add((blockStart + vc * stride, bytes));
+        }
+        return inserts;
+    }
+
+    /// <summary>
+    /// Whether the model declares a shape by this name.
+    /// <para/>
+    /// Reads the <c>Shape</c> records directly, NOT <see cref="SecondSkinWriter.Source.Shapes"/>: the parse
+    /// keeps only shapes with LOD0 entries and drops the rest, so a shape covering only the lower LODs is
+    /// absent from that dictionary. Asking it instead would report a hairstyle as having no hat shape and
+    /// invite a second one to be added beside the one it has.
+    /// </summary>
+    public static bool DeclaresShape(byte[] mdl, string shapeName)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        ushort shapeCount = BitConverter.ToUInt16(mdl, src.Mh + 16);
+        for (int si = 0; si < shapeCount; si++)
+        {
+            int at = src.ShapeBlock + si * 16;
+            if (at + 16 > mdl.Length) break;
+            if (string.Equals(StringAt(mdl, src, BitConverter.ToUInt32(mdl, at)), shapeName, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>A string from the model's own block, by the block-relative offset the tables store.</summary>
+    private static string StringAt(byte[] mdl, SecondSkinWriter.Source src, uint rel)
+    {
+        if (rel >= src.StrSize) return "";
+        int o = src.StrBlock + (int)rel, e = o;
+        while (e < mdl.Length && mdl[e] != 0) e++;
+        return Encoding.ASCII.GetString(mdl, o, e - o);
+    }
+
     // ── shared ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -263,21 +656,40 @@ public static class ModelAttributeWriter
     private static void Shift(byte[] o, int lodStart, int delta)
     {
         W32(o, 8, BitConverter.ToUInt32(o, 8) + (uint)delta);       // RuntimeSize
+        ShiftOffsets(o, lodStart, delta, -1);
+    }
+
+    /// <summary>
+    /// The eight offsets alone, moving only those past <paramref name="past"/>.
+    /// <para/>
+    /// Split out for the one edit whose inserts do not all land before the geometry: adding a shape appends
+    /// spare vertices INSIDE LOD0's vertex buffer, and the regions run V0, I0, V1, I1, V2, I2 — so that
+    /// growth moves everything except <c>VertexOffset[0]</c> and LOD0's <c>VertexDataOffset</c>, which name
+    /// where that buffer starts rather than anything inside it. A threshold says that in one line and keeps
+    /// the field list in one place; enumerating the survivors by hand is how the list drifts.
+    /// <para/>
+    /// <c>RuntimeSize</c> is deliberately NOT here. It measures the distance from the header to the START of
+    /// the vertex data, so growing the buffer's contents does not change it — and leaving it in
+    /// <see cref="Shift"/> means no caller can include it by accident.
+    /// </summary>
+    /// <param name="past">Only offsets strictly greater than this move; -1 moves all of them.</param>
+    private static void ShiftOffsets(byte[] o, int lodStart, int delta, long past)
+    {
         for (int i = 0; i < 3; i++)
         {
-            Bump(o, 16 + i * 4, delta);                             // VertexOffset[i]
-            Bump(o, 28 + i * 4, delta);                             // IndexOffset[i]
-            Bump(o, lodStart + i * 60 + 52, delta);                 // LOD VertexDataOffset
-            Bump(o, lodStart + i * 60 + 56, delta);                 // LOD IndexDataOffset
+            Bump(o, 16 + i * 4, delta, past);                       // VertexOffset[i]
+            Bump(o, 28 + i * 4, delta, past);                       // IndexOffset[i]
+            Bump(o, lodStart + i * 60 + 52, delta, past);           // LOD VertexDataOffset
+            Bump(o, lodStart + i * 60 + 56, delta, past);           // LOD IndexDataOffset
         }
     }
 
     /// <summary>Add to a u32, leaving a zero alone — an unused LOD or stream reads 0 and must stay 0.</summary>
-    private static void Bump(byte[] o, int at, int delta)
+    private static void Bump(byte[] o, int at, int delta, long past = -1)
     {
         if (at + 4 > o.Length) return;
         var v = BitConverter.ToUInt32(o, at);
-        if (v != 0) W32(o, at, v + (uint)delta);
+        if (v != 0 && v > past) W32(o, at, v + (uint)delta);
     }
 
     private static void W16(byte[] b, int o, ushort v) => BitConverter.TryWriteBytes(b.AsSpan(o), v);

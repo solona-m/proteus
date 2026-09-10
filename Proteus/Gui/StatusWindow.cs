@@ -50,6 +50,9 @@ public class StatusWindow : Window
     // just the sidecar ones this window otherwise lists.
     private readonly PartsPanel parts;
 
+    /// <summary>Drawn in Settings, and only while <c>AutoHatCompat</c> is on.</summary>
+    private readonly HatCompatPanel hatCompat;
+
     // Accent used to flag an active design binding (and the mods/colors it drives).
     private static Vector4 BindingAccent => ProteusStyle.Binding;
 
@@ -386,6 +389,7 @@ public class StatusWindow : Window
         // Shares this window's one FileDialogManager: it has to be pumped every frame from Draw(), and a
         // second instance would need a second pump nobody would remember to add.
         presetBar = new PresetBar(presets, penumbra, _fileDialog, config, Plugin.Log);
+        hatCompat = new HatCompatPanel(compositor, Plugin.Log);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -1044,6 +1048,17 @@ public class StatusWindow : Window
             DrawGeneralToggles();
         }
 
+        // Only while the toggle above is on. The panel inspects the hair the player is wearing and offers
+        // to edit somebody else's mod, so it has no business appearing to a user who has not asked for it —
+        // and the section vanishing is also the clearest confirmation that the toggle did something.
+        if (config.AutoHatCompat)
+        {
+            ImGui.Spacing();
+            ProteusStyle.SectionHeader(s.SecHatCompat);
+            using (ProteusStyle.Card())
+                hatCompat.Draw();
+        }
+
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecOutput);
         using (ProteusStyle.Card())
@@ -1111,6 +1126,22 @@ public class StatusWindow : Window
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.InPlaceReloadTip);
+
+        // No recomposite: this one does not change what Proteus publishes. It edits the hair mod's own
+        // files, and only after the user has confirmed which parts to hide — so turning it on merely
+        // starts the CHECK, and turning it off stops offering. Anything already written stays written and
+        // is undone from the panel below, not by this checkbox: silently reverting somebody's mod because
+        // a setting was toggled would be a worse surprise than leaving a working hairstyle alone.
+        var autoHat = config.AutoHatCompat;
+        if (ImGui.Checkbox(s.AutoHatCompat, ref autoHat))
+        {
+            config.AutoHatCompat = autoHat;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.AutoHatCompatTip);
+        ImGui.SameLine();
+        ImGuiComponents.HelpMarker(s.AutoHatCompatTip);
 
         // The scroll-map library lives in Proteus's own Penumbra mod folder — nothing to configure, so
         // the only thing worth surfacing is a way IN. This used to be a TextDisabled path with a small

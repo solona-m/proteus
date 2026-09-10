@@ -1219,6 +1219,90 @@
     "message": "erreur inconnue",
     "description": ""
   },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus a déjà adapté cette coiffure aux chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Adapter",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Écrit dans le dossier du mod de coiffure lui-même. Les fichiers d'origine sont\nd'abord copiés dans Proteus/hatcompat-backup/ à l'intérieur de ce mod, et\nl'opération peut être annulée.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Cette coiffure gère déjà les chapeaux — son auteur l'a prévu. Rien à faire.",
+    "description": ""
+  },
+  "HatCompat.Done.Fmt": {
+    "message": "Terminé — la coiffure se plaque désormais sous un chapeau, avec {0} partie(s) masquée(s).",
+    "description": ""
+  },
+  "HatCompat.HidePrompt": {
+    "message": "Ces parties dépassent trop de la tête pour tenir sous un chapeau : elles seraient masquées tant qu'on en porte un. Décochez tout ce qui doit rester.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Vous portez une coiffure d'origine du jeu, qui fonctionne déjà sous les chapeaux. Ceci aura quelque chose à faire lorsque vous porterez un mod de coiffure.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Chaque partie de cette coiffure peut être plaquée sous un chapeau : rien n'a besoin d'être masqué.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} points de cheveux seraient plaqués contre votre tête, de {1:F1} cm en moyenne et {2:F1} cm au maximum.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} points ne peuvent pas être déplacés : cette coiffure est fusionnée en morceaux trop grands pour le format de formes du jeu. Ils garderont leur forme, un chapeau peut donc encore les traverser.",
+    "description": ""
+  },
+  "HatCompat.Triangles.Fmt": {
+    "message": "({0} triangles)",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "La coiffure a été remise exactement telle que son auteur l'a créée.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "Le modèle de cette coiffure n'a pas pu être lu, Proteus ne peut donc pas le modifier.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Coiffure {0}, de {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "Cette coiffure possède déjà sa propre forme pour les chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} n'a pas pu être modifié : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "Il n'y a rien à changer : aucun cheveu ne dépasse du crâne et aucune partie n'a besoin d'être masquée.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "Aucun des modèles d'origine n'a pu être retrouvé pour la restauration.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "Ce mod n'a aucune modification de compatibilité avec les chapeaux à annuler.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Convertir les couches en .tex BC7",
     "description": ""
@@ -2039,6 +2123,14 @@
     "message": "{0} — diffuse {1}, normale {2}, masque {3}",
     "description": ""
   },
+  "Settings.General.AutoHatCompat.Label": {
+    "message": "Adapter les coiffures aux chapeaux",
+    "description": ""
+  },
+  "Settings.General.AutoHatCompat.Tip": {
+    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine la\ncoiffure que vous portez et propose de l'adapter : les cheveux se plaquent sur\nla tête tant qu'un chapeau est porté, et les parties qu'aucun chapeau ne peut\ncouvrir sont masquées.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée. Rien n'est écrit\navant votre confirmation.",
+    "description": ""
+  },
   "Settings.General.AutoRaise.Label": {
     "message": "Élever automatiquement la priorité du mod",
     "description": ""
@@ -2165,6 +2257,10 @@
   },
   "Settings.Section.General": {
     "message": "Général",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Chapeaux",
     "description": ""
   },
   "Settings.Section.Hosting": {

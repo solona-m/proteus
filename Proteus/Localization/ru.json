@@ -1219,6 +1219,90 @@
     "message": "неизвестная ошибка",
     "description": ""
   },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus уже подогнал эту причёску под шляпы.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Подогнать",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Записывает в папку самого мода причёски. Исходные файлы сначала копируются в\nProteus/hatcompat-backup/ внутри этого мода, и изменение можно отменить.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Эта причёска уже поддерживает шляпы — автор это предусмотрел. Делать нечего.",
+    "description": ""
+  },
+  "HatCompat.Done.Fmt": {
+    "message": "Готово — теперь под шляпой причёска приминается, скрыто частей: {0}.",
+    "description": ""
+  },
+  "HatCompat.HidePrompt": {
+    "message": "Эти части слишком сильно торчат от головы, чтобы поместиться под шляпой, поэтому они будут скрыты, пока она надета. Снимите галочки с того, что должно остаться.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Сейчас надета игровая причёска, которая и так работает под шляпами. Здесь появится действие, когда вы наденете мод причёски.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Все части этой причёски помещаются под шляпу, скрывать нечего.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} точек волос будут прижаты к голове: в среднем на {1:F1} см, максимум на {2:F1} см.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} точек нельзя сдвинуть: эта причёска слита в куски, слишком большие для формата форм игры. Они сохранят свою форму, поэтому шляпа всё ещё может там проходить насквозь.",
+    "description": ""
+  },
+  "HatCompat.Triangles.Fmt": {
+    "message": "({0} треугольников)",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Отменить",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "Причёска возвращена ровно к тому виду, в каком её создал автор.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "Не удалось прочитать модель этой причёски, поэтому Proteus не может её изменить.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Причёска {0}, из {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "У этой причёски уже есть собственная форма для шляп.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "Не удалось изменить {0}: {1}. Ничего не записано.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Ошибка записи: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "Менять нечего: волосы нигде не торчат над черепом, и ни одну часть не нужно скрывать.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "Не удалось найти ни одной исходной модели для восстановления.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "В этом моде нет правок совместимости со шляпами от Proteus, которые можно отменить.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Преобразовать слои в BC7 .tex",
     "description": ""
@@ -2039,6 +2123,14 @@
     "message": "{0} — диффуз {1}, нормали {2}, маска {3}",
     "description": ""
   },
+  "Settings.General.AutoHatCompat.Label": {
+    "message": "Подгонять причёски под шляпы",
+    "description": ""
+  },
+  "Settings.General.AutoHatCompat.Tip": {
+    "message": "Большинство модовых причёсок не поддерживает шляпы, поэтому надетая сверху\nшляпа проходит сквозь волосы. Когда включено, Proteus проверяет надетую\nпричёску и предлагает добавить поддержку: пока шляпа надета, волосы\nприжимаются к голове, а части, которые не скрыть никакой шляпой, прячутся.\n\nЭто изменяет файлы самого мода причёски, поэтому работает и с выключенным\nProteus и сохраняется при экспорте мода. Оригиналы сохраняются, изменение\nможно отменить. Ничего не записывается без вашего подтверждения.",
+    "description": ""
+  },
   "Settings.General.AutoRaise.Label": {
     "message": "Автоматически повышать приоритет мода",
     "description": ""
@@ -2165,6 +2257,10 @@
   },
   "Settings.Section.General": {
     "message": "Общие",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "Шляпы",
     "description": ""
   },
   "Settings.Section.Hosting": {

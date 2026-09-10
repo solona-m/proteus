@@ -1219,6 +1219,90 @@
     "message": "不明なエラー",
     "description": ""
   },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteusはこの髪型を既に帽子対応にしています。",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "対応させる",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "髪Mod自身のフォルダに書き込みます。元のファイルは先にそのMod内の\nProteus/hatcompat-backup/ にコピーされ、この操作は元に戻せます。",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "この髪型は既に帽子に対応しています — 作者が組み込んでいます。することはありません。",
+    "description": ""
+  },
+  "HatCompat.Done.Fmt": {
+    "message": "完了 — 帽子をかぶると髪が収まるようになりました。{0} 個のパーツが非表示になります。",
+    "description": ""
+  },
+  "HatCompat.HidePrompt": {
+    "message": "これらのパーツは頭から離れすぎていて帽子に収まらないため、帽子の着用中は非表示になります。残したいものはチェックを外してください。",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "ゲーム標準の髪を着用しています。これは元から帽子に対応しています。髪Modを着用すると、ここで操作できるようになります。",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "この髪型はすべてのパーツが帽子の下に収まるため、非表示にする必要はありません。",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} 個の髪の頂点が頭に沿って押し込まれます。平均 {1:F1} cm、最大 {2:F1} cmです。",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} 個の頂点は動かせません。この髪型はゲームのシェイプ形式で扱うには大きすぎるまとまりに結合されています。形状はそのままのため、帽子が突き抜ける場合があります。",
+    "description": ""
+  },
+  "HatCompat.Triangles.Fmt": {
+    "message": "({0} 三角形)",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "元に戻す",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "髪型を作者が作成した状態にそのまま戻しました。",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "この髪型のモデルを読み取れなかったため、Proteusは変更できません。",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "髪型 {0}（{1} より）。",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "この髪型には既に独自の帽子用シェイプがあります。",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} を編集できませんでした: {1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "書き込みに失敗しました: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "変更点はありません。頭皮から浮いている髪も、隠す必要のあるパーツもありません。",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "復元元となる元のモデルが見つかりませんでした。",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "このModには元に戻すべきProteusの帽子対応編集がありません。",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "レイヤーをBC7 .texに変換",
     "description": ""
@@ -2039,6 +2123,14 @@
     "message": "{0} — ディフューズ {1}、ノーマル {2}、マスク {3}",
     "description": ""
   },
+  "Settings.General.AutoHatCompat.Label": {
+    "message": "髪型を帽子に合わせる",
+    "description": ""
+  },
+  "Settings.General.AutoHatCompat.Tip": {
+    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは着用中の髪型を確認し、対応の追加を提案します。帽\n子をかぶっている間は髪が頭に沿って収まり、どんな帽子でも隠せない部分は非表示\nになります。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更は元に戻せ\nます。確認するまで何も書き込まれません。",
+    "description": ""
+  },
   "Settings.General.AutoRaise.Label": {
     "message": "MOD優先度を自動で引き上げる",
     "description": ""
@@ -2165,6 +2257,10 @@
   },
   "Settings.Section.General": {
     "message": "全般",
+    "description": ""
+  },
+  "Settings.Section.HatCompat": {
+    "message": "帽子",
     "description": ""
   },
   "Settings.Section.Hosting": {
