@@ -34,7 +34,17 @@ public class HatCompatDiagTests(ITestOutputHelper o)
     private static string[] HairModels()
     {
         if (!Directory.Exists(Mods)) return [];
-        try { return Directory.GetFiles(Mods, "*_hir.mdl", SearchOption.AllDirectories); }
+        try
+        {
+            // Not the copies Proteus took before patching. They live inside the mods they belong to and
+            // are byte-identical to what the author shipped, so a sweep that picks them up measures every
+            // patched hairstyle twice — once patched, once pristine — and reports the pristine one as
+            // untouched. That is exactly as confusing as it sounds.
+            return Directory.GetFiles(Mods, "*_hir.mdl", SearchOption.AllDirectories)
+                .Where(f => !f.Contains(HatCompatService.BackupSubdir, StringComparison.OrdinalIgnoreCase)
+                         && !f.Contains(MeshToggleService.BackupSubdir, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
         catch (UnauthorizedAccessException) { return []; }
         catch (IOException) { return []; }
     }
@@ -527,9 +537,14 @@ public class HatCompatDiagTests(ITestOutputHelper o)
                   + $"{totalBefore} vertices through the hat before, {totalAfter} after");
         if (tested == 0) return;
         Assert.Equal(tested, improved);
-        // The press exists to get hair inside a hat, so the bar is that it mostly does — not merely that it
-        // does no harm. A quarter leaves room for a hairstyle no press can save without hiding parts of it.
-        Assert.True(totalAfter * 4 <= totalBefore,
+        // No stricter bar than "no worse", deliberately. This used to demand that three quarters of the
+        // penetration go away, which was the right test while the press moved every covered vertex. It no
+        // longer does: a strand that hangs off the head is left ALONE, tail and root together, because
+        // pressing only the root drove it into the skull and splayed the rest into a flat sheet behind the
+        // hat. What is left outside the hat afterwards is mostly ponytail, on purpose — hiding it is what
+        // the separate setting is for — so tightening this number would only measure how many hairstyles
+        // in the sample have tails.
+        Assert.True(totalAfter <= totalBefore,
                     $"the press left {totalAfter} of {totalBefore} vertices outside the hat");
     }
 
@@ -1154,6 +1169,72 @@ public class HatCompatDiagTests(ITestOutputHelper o)
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Per connected strand: how much of it hangs below the hat line, and how far down it reaches.
+    /// <para/>
+    /// The press crushes everything above the hat line and nothing below it, which is right for a scalp and
+    /// wrong for a ponytail — a tail's ROOT is above the line, so it gets driven into the skull while its
+    /// length stays where it was, and it splays out into a flat sheet behind the hat. Leaving whole strands
+    /// alone is the fix, but only if a scalp and a tail can actually be told apart. This prints the numbers
+    /// to choose that test from, rather than guessing a threshold and finding out in game.
+    /// </summary>
+    [Fact]
+    public void HowFarDoesEachStrandHangBelowTheHatLine()
+    {
+        var head = HeadModel();
+        var wanted = Environment.GetEnvironmentVariable("PROTEUS_HAIR") ?? "Locksley";
+        var files = HairModels()
+            .Where(f => Path.GetFileName(f).StartsWith("c0201h", StringComparison.Ordinal))
+            .Where(f => Trim(f).Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (files.Length == 0 || head == null) return;
+
+        var frame = HatCompatSolve.HeadFrameFrom(head);
+        if (frame == null) return;
+        float hatLine = frame.Value.Centre.Y + HatCompatSolve.HatLine;
+        o.WriteLine($"head centre y {frame.Value.Centre.Y:F4}, hat line {hatLine:F4}");
+
+        foreach (var f in files.Take(3))
+        {
+            var mdl = File.ReadAllBytes(f);
+            var parts = ModelPartReader.Read(mdl);
+            if (parts == null) continue;
+            var src = SecondSkinWriter.Parse(mdl);
+            var verts = HatCompatSolve.ReadLod0Meshes(mdl).ToDictionary(m => m.Mesh, m => m.Positions);
+
+            o.WriteLine("");
+            o.WriteLine(Trim(f));
+            o.WriteLine($"  {"part",-10} {"verts",6} {"below%",7} {"drop mm",8} {"above",8} {"standoff",11}");
+
+            // Islands where a submesh has them, the whole submesh where it does not — the same granularity
+            // a press gate would work at.
+            var byPart = parts.Parts.Where(p => p.Island >= 0
+                || !parts.Parts.Any(q => q.Mesh == p.Mesh && q.Submesh == p.Submesh && q.Island >= 0));
+
+            // EVERY strand, sorted by how far it hangs — the gate is a cut through this list, and only the
+            // whole list shows whether the cut lands in a gap or through the middle of a population.
+            var rows = new List<(string Label, int N, double Below, float Drop, float Stand, int Above)>();
+            foreach (var part in byPart)
+            {
+                if (!verts.TryGetValue(part.Mesh, out var pos)) continue;
+                var vs = HatCompatSolve.VerticesOf(mdl, src, part).Where(v => v < pos.Length).Distinct().ToArray();
+                if (vs.Length == 0) continue;
+
+                int below = vs.Count(v => pos[v].Y < hatLine);
+                float minY = vs.Min(v => pos[v].Y);
+                float standoff = vs.Max(v => (pos[v] - frame.Value.Centre).Length()) - frame.Value.Radius;
+                rows.Add((part.Label, vs.Length, 100.0 * below / vs.Length,
+                          (hatLine - minY) * 1000, standoff * 1000, vs.Length - below));
+            }
+
+            o.WriteLine($"  {rows.Count} strands; left alone when drop > {HatCompatSolve.TailDrop * 1000:F0} mm AND reach > {HatCompatSolve.TailReach * 1000:F0} mm");
+            foreach (var r in rows.OrderByDescending(r => r.Drop))
+                o.WriteLine($"  {r.Label,-10} {r.N,6} {r.Below,6:F0}% {r.Drop,8:F0} {r.Above,8} {r.Stand,11:F0}"
+                          + (r.Drop > HatCompatSolve.TailDrop * 1000 && r.Stand > HatCompatSolve.TailReach * 1000
+                              ? "  LEFT ALONE" : "  pressed"));
+        }
     }
 
     /// <summary>Bytes one vertex of a mesh occupies across every stream it has.</summary>
