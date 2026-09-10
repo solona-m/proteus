@@ -9304,7 +9304,7 @@ public static class SecondSkinWriter
     /// enough to contain the fold's shoulders — measured at ±10mm — and no wider, because everything past
     /// them is the inner thigh and spanning to THAT is what webs the legs together.
     /// </summary>
-    private const float FoldCorridor = 0.5f;
+    private const float FoldCorridor = 0.25f;
 
     /// <summary>
     /// How much of the corridor the RELAX holds at full strength before it starts fading, as a fraction of
@@ -9555,7 +9555,8 @@ public static class SecondSkinWriter
             // ~30mm, so at 16mm it is still saturated; this taper is about the fold's own lateral scale,
             // which is a different and smaller thing.
             float taper = 1f - Smoothstep(Math.Clamp(MathF.Abs(lat[n] - midL) / (latW * 0.5f), 0f, 1f));
-            float move = Math.Clamp((want - h0[n]) * onSurface * taper, -relief, relief);
+            float cap = relief * EnvelopeMaxMove;
+            float move = Math.Clamp((want - h0[n]) * onSurface * taper, -cap, cap);
             target[n] = h0[n] + move;
             askSum += Math.Abs(want - h0[n]);
             gotSum += Math.Abs(target[n] - h0[n]);
@@ -9611,6 +9612,21 @@ public static class SecondSkinWriter
     /// </summary>
     private const float EnvelopeSmoothSigma = 0.005f;
 
+    /// <summary>
+    /// The furthest a node may be moved onto the envelope, as a multiple of its own band's relief.
+    /// <para/>
+    /// The clamp exists so a node can never travel further than the feature it is part of is tall — a
+    /// bound that scales with the body instead of a constant that has to be right on all of them. At 1.0
+    /// it was the binding constraint rather than a backstop: the flatten asked for 4.7mm and delivered
+    /// 1.9mm, and after the region ramp about 0.9mm reached the mesh.
+    /// <para/>
+    /// A modeller's own pass over the same crotch is the calibration. Diffed against the shipped result it
+    /// still moved the midline by 5.6mm on average and up to 13.5mm — so the ask was about right all along
+    /// and the clamp was throwing most of it away. Three gives the ask room to land while still refusing
+    /// to move a node several times the height of anything near it.
+    /// </summary>
+    private const float EnvelopeMaxMove = 3.0f;
+
     /// <summary>Lateral bins the envelope is sampled in, across the region's width.</summary>
     private const int EnvelopeBins = 16;
 
@@ -9643,7 +9659,7 @@ public static class SecondSkinWriter
     /// fold sits directly above where the legs meet and is done well before the belly starts; the hip bone
     /// is not, so something has to say where to stop.
     /// </summary>
-    private const float FoldHeight = 0.5f;
+    private const float FoldHeight = 0.3f;
 
     /// <summary>How tall a slice above that lowest point the crotch's width is measured over, as a
     /// fraction of the hip region's half-width. Enough rows to average out one ragged one.</summary>
@@ -9727,7 +9743,7 @@ public static class SecondSkinWriter
     /// with them, while the largest displacement grew from 8.6mm to 12.9mm — which is not the fold going
     /// anywhere, it is the legs pulling in. Twelve dominates it on every measure at once.
     /// </summary>
-    private const int FoldRelaxPasses = 12;
+    private const int FoldRelaxPasses = 60;
 
     /// <summary>How far each relax pass moves a node toward its neighbours' centroid. Under-relaxed for
     /// the reason every other relaxation here is: at 1 a Jacobi step has eigenvalue -1 on the checkerboard

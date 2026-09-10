@@ -493,6 +493,260 @@ public class CrotchHoleDiagTests
         }
     }
 
+    /// <summary>
+    /// How far BACK between the legs the fold reaches, and what the underside looks like across there.
+    /// <para/>
+    /// Behind the mid-plane the envelope flatten does nothing — it is gated to front-facing surface — so
+    /// everything back here is the relax alone. Two things are reported per depth slice: how much the pass
+    /// moved anything at that depth, and the shape of the underside across the corridor, which is where a
+    /// ridge running fore-aft would show as a bump in the profile.
+    /// <para/>
+    /// The underside is the LOWEST surface at each lateral position, because between the legs that is what
+    /// you see looking up — not the frontmost, which is the measure the front of the crotch needs.
+    /// </summary>
+    [Fact]
+    public void WhatHappensFurtherBackBetweenTheLegs()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_DIAG_MODEL")
+                  ?? @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\GEN C Small.mdl";
+        if (!File.Exists(target)) { o.WriteLine($"skipped — no model at {target}"); return; }
+
+        var before = File.ReadAllBytes(target);
+        var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
+        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        if (after == null) { o.WriteLine("the pass declined this model"); return; }
+
+        var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
+        var b = ReadMeshes(after, SecondSkinWriter.Parse(after)).Single(m => m.Skin);
+
+        const float CrotchHalf = 0.0331f;
+        float corridor = CrotchHalf * 0.5f;
+
+        // ── how much the pass does at each depth ──────────────────────────────────────────────────────
+        o.WriteLine("displacement by depth (z<0 is behind the mid-plane, where only the relax acts)");
+        o.WriteLine("     z band      moved     mean       max     spread");
+        for (float z = 0.030f; z > -0.040f; z -= 0.005f)
+        {
+            int n = 0; double sum = 0; float mx = 0, lo = float.MaxValue, hi = float.MinValue;
+            for (int v = 0; v < a.Pos.Length && v < b.Pos.Length; v++)
+            {
+                var p = a.Pos[v];
+                if (p.Z > z || p.Z <= z - 0.005f) continue;
+                if (MathF.Abs(p.X) > corridor) continue;
+                float d = Vector3.Distance(p, b.Pos[v]);
+                if (d <= 1e-6f) continue;
+                n++; sum += d; mx = MathF.Max(mx, d);
+                lo = MathF.Min(lo, d); hi = MathF.Max(hi, d);
+            }
+            if (n == 0) continue;
+            o.WriteLine($"  {(z - 0.005f) * 1000,6:F1}..{z * 1000,-6:F1}mm {n,5} {sum / n * 1000,8:F3}mm "
+                      + $"{mx * 1000,8:F3}mm {(hi - lo) * 1000,8:F3}mm");
+        }
+
+        // ── the shape of the underside, across the corridor, at each depth ────────────────────────────
+        o.WriteLine("");
+        o.WriteLine("underside profile across the corridor — rms/p2t off a straight line");
+        o.WriteLine("     z band     before rms    after rms    before p2t     after p2t");
+        double sa = 0, sb = 0; int bands = 0;
+        for (float z = 0.010f; z > -0.035f; z -= 0.005f)
+        {
+            var pa = Underside(a, z - 0.005f, z, corridor);
+            var pb = Underside(b, z - 0.005f, z, corridor);
+            if (pa.Count < 6 || pb.Count < 6) continue;
+            var (rA, tA) = Flatness(pa);
+            var (rB, tB) = Flatness(pb);
+            sa += rA; sb += rB; bands++;
+            o.WriteLine($"  {(z - 0.005f) * 1000,6:F1}..{z * 1000,-6:F1}mm {rA * 1000,9:F3}mm "
+                      + $"{rB * 1000,9:F3}mm  {tA * 1000,9:F3}mm {tB * 1000,9:F3}mm");
+        }
+        if (bands > 0)
+            o.WriteLine($"MEAN over {bands} slice(s): {sa / bands * 1000:F3}mm -> {sb / bands * 1000:F3}mm "
+                      + $"({(sa > 0 ? (1 - sb / sa) * 100 : 0):F1}% flatter)");
+    }
+
+    /// <summary>
+    /// Diff a HAND-EDITED crotch against the model it was edited from, and report where the modeller
+    /// actually moved the surface and how far.
+    /// <para/>
+    /// This is the measurement that settled the nipple, for the same reason: an rms against a fitted curve
+    /// says how much structure is left but never says which structure is the feature. A modeller's own
+    /// relax pass says exactly where the answer is, so the pass can be aimed at it instead of at a
+    /// constant that looked plausible.
+    /// <para/>
+    /// Matched by POSITION, not by index, because an export may reorder. Vertices that merged on the way
+    /// out cannot be matched at all, so the counts are reported first — if they disagree wildly the diff
+    /// below is comparing two different meshes and should not be believed.
+    /// </summary>
+    [Fact]
+    public void WhereDidTheModellerMoveTheCrotch()
+    {
+        var edited = Environment.GetEnvironmentVariable("PROTEUS_DIAG_EDIT")
+                  ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                  "OneDrive", "Desktop", "crotch.mdl");
+        if (!File.Exists(edited)) { o.WriteLine($"skipped — no edited model at {edited}"); return; }
+
+        var candidates = new List<string>
+        {
+            Path.Combine(Path.GetTempPath(), "proteus-shell-dump", "host0_body1.mdl"),
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\GEN C Small.mdl",
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\GEN B Small.mdl",
+        };
+
+        // NOT filtered to skin materials. A round trip through a modelling package renames materials, so
+        // the filter the pass itself uses rejects the very file being measured. The biggest mesh is the
+        // body either way.
+        var ed = ReadMeshes(File.ReadAllBytes(edited), SecondSkinWriter.Parse(File.ReadAllBytes(edited)));
+        o.WriteLine($"edited: {Path.GetFileName(edited)} — {ed.Count} mesh(es)");
+        foreach (var m in ed)
+            o.WriteLine($"    mesh {m.Index,2} {(m.Skin ? "SKIN" : "    ")} {m.Material,-44} "
+                      + $"{m.Pos.Length,6} verts {m.Tris.Length / 3,6} tris");
+        if (ed.Count == 0) { o.WriteLine("no mesh in the edited model"); return; }
+        var E = ed.OrderByDescending(m => m.Pos.Length).First();
+
+        foreach (var c in candidates)
+        {
+            if (!File.Exists(c)) { o.WriteLine($"  (missing) {c}"); continue; }
+            var src = ReadMeshes(File.ReadAllBytes(c), SecondSkinWriter.Parse(File.ReadAllBytes(c)));
+            if (src.Count == 0) continue;
+            var S = src.OrderByDescending(m => m.Pos.Length).First();
+            o.WriteLine($"  candidate {Path.GetFileName(c),-20} {S.Pos.Length} verts, {S.Tris.Length / 3} tris"
+                      + $"{(S.Pos.Length == E.Pos.Length && S.Tris.Length == E.Tris.Length ? "   <= SAME TOPOLOGY" : "")}");
+        }
+
+        // Which base was it edited from? All three share a topology, so the counts cannot say. The size of
+        // the diff can: editing the smoothed body leaves only the hand edit, editing the original leaves
+        // the hand edit PLUS everything the pass did, so the smallest diff names the true base.
+        foreach (var c in candidates.Where(File.Exists))
+        {
+            var S = ReadMeshes(File.ReadAllBytes(c), SecondSkinWriter.Parse(File.ReadAllBytes(c)))
+                    .OrderByDescending(m => m.Pos.Length).First();
+            if (S.Pos.Length != E.Pos.Length) continue;
+            int mv = 0; float mx = 0;
+            for (int i = 0; i < E.Pos.Length; i++)
+            {
+                float d = Vector3.Distance(S.Pos[i], E.Pos[i]);
+                if (d <= 2e-5f) continue;
+                mv++; mx = MathF.Max(mx, d);
+            }
+            o.WriteLine($"  vs {Path.GetFileName(c),-20} {mv,5} moved, max {mx * 1000,7:F2}mm");
+        }
+
+        // THE ORIGINAL, always — never the dumped smoothed body, however much smaller that diff looks.
+        //
+        // The dump is rewritten every time the game recomposites, so it is not a fixed reference: measured
+        // here, it was rewritten eight minutes AFTER the hand edit was saved, and the "modeller's edit"
+        // silently became `edit minus a newer pass output`. It showed as the edit's own bounding box
+        // drifting between runs of this test (±10.7mm, then ±13.5mm, then ±15.5mm) while nothing about the
+        // edited file had changed.
+        //
+        // Against the original the diff is the WHOLE target — everything the surface has to do to get from
+        // the mod's mesh to the one the modeller signed off — and the pass's own displacement is measured
+        // from the same place, so the two columns are comparable and neither moves.
+        var best = candidates.Where(File.Exists).Skip(1)
+            .Select(c => (Path: c, M: ReadMeshes(File.ReadAllBytes(c), SecondSkinWriter.Parse(File.ReadAllBytes(c)))
+                                    .OrderByDescending(m => m.Pos.Length).FirstOrDefault()))
+            .Where(x => x.M != null)
+            .FirstOrDefault();
+        if (best.M == null) { o.WriteLine("no candidate source could be read"); return; }
+        o.WriteLine($"diffing against {Path.GetFileName(best.Path)}");
+        var B = best.M!;
+
+        // Index-aligned when the counts agree; otherwise nearest position, which survives a reorder.
+        var byPos = new Dictionary<(int, int, int), int>();
+        if (B.Pos.Length != E.Pos.Length)
+            for (int i = 0; i < B.Pos.Length; i++) byPos[Key(B.Pos[i])] = i;
+
+        int moved = 0; float worst = 0f;
+        var hits = new List<(Vector3 At, Vector3 D)>();
+        int n2 = Math.Min(B.Pos.Length, E.Pos.Length);
+        for (int i = 0; i < (B.Pos.Length == E.Pos.Length ? n2 : E.Pos.Length); i++)
+        {
+            Vector3 from;
+            if (B.Pos.Length == E.Pos.Length) from = B.Pos[i];
+            else
+            {
+                // Unmatched means the export merged or added it; skip rather than invent a pairing.
+                if (!byPos.TryGetValue(Key(E.Pos[i]), out int j)) continue;
+                from = B.Pos[j];
+            }
+            var d = E.Pos[i] - from;
+            float m = d.Length();
+            if (m <= 2e-5f) continue;
+            moved++; worst = MathF.Max(worst, m);
+            hits.Add((from, d));
+        }
+
+        o.WriteLine($"{moved} vertex(es) moved, max {worst * 1000:F2}mm");
+        if (moved == 0) return;
+
+        var at = hits.Select(h => h.At).ToArray();
+        var (lo, hi) = Bounds(at);
+        o.WriteLine($"edit region: x {lo.X:F4}..{hi.X:F4}  y {lo.Y:F4}..{hi.Y:F4}  z {lo.Z:F4}..{hi.Z:F4}");
+        o.WriteLine($"  ({(hi.X - lo.X) * 1000:F1}mm wide, {(hi.Y - lo.Y) * 1000:F1}mm tall, "
+                  + $"{(hi.Z - lo.Z) * 1000:F1}mm deep)");
+
+        // MY pass's own displacement, over the same bins, so the two can be read against each other. This
+        // is the whole point of the exercise: not "is the modeller's edit big" but "where is the pass
+        // short of it, and in which direction".
+        var origPath = candidates[1];
+        List<(Vector3 At, Vector3 D)> mine = new();
+        if (File.Exists(origPath))
+        {
+            var raw = File.ReadAllBytes(origPath);
+            var smoothed = SecondSkinWriter.SmoothBodyNipples(raw, new SecondSkinLayer { MaterialName = "/probe.mtrl" },
+                                                              0f, null, 1f);
+            if (smoothed != null)
+            {
+                var O = ReadMeshes(raw, SecondSkinWriter.Parse(raw)).OrderByDescending(m => m.Pos.Length).First();
+                var P = ReadMeshes(smoothed, SecondSkinWriter.Parse(smoothed)).OrderByDescending(m => m.Pos.Length).First();
+                for (int i = 0; i < O.Pos.Length && i < P.Pos.Length; i++)
+                {
+                    var d = P.Pos[i] - O.Pos[i];
+                    if (d.Length() > 1e-6f) mine.Add((O.Pos[i], d));
+                }
+            }
+        }
+        o.WriteLine($"the pass moves {mine.Count} vertex(es) for comparison");
+
+        foreach (var (name, sel) in new (string, Func<Vector3, float>)[]
+                 { ("x", v => v.X), ("y", v => v.Y), ("z", v => v.Z) })
+        {
+            o.WriteLine($"  by {name}:            ------ modeller ------   -------- pass --------");
+            float blo = sel(lo), bhi = sel(hi), w2 = MathF.Max(1e-6f, bhi - blo);
+            for (int q = 0; q < 10; q++)
+            {
+                float a0 = blo + w2 * q / 10, a1 = blo + w2 * (q + 1) / 10;
+                var inBand = hits.Where(h => sel(h.At) >= a0 && sel(h.At) < a1).ToList();
+                var mineBand = mine.Where(h => sel(h.At) >= a0 && sel(h.At) < a1).ToList();
+                if (inBand.Count == 0 && mineBand.Count == 0) continue;
+                o.WriteLine($"    {a0,8:F4}..{a1,-8:F4} {inBand.Count,5} @ "
+                          + $"{(inBand.Count > 0 ? inBand.Average(h => h.D.Length()) * 1000 : 0),6:F2}mm mean "
+                          + $"{(inBand.Count > 0 ? inBand.Max(h => h.D.Length()) * 1000 : 0),6:F2} max   "
+                          + $"{mineBand.Count,5} @ "
+                          + $"{(mineBand.Count > 0 ? mineBand.Average(h => h.D.Length()) * 1000 : 0),6:F2}mm mean "
+                          + $"{(mineBand.Count > 0 ? mineBand.Max(h => h.D.Length()) * 1000 : 0),6:F2} max");
+            }
+        }
+    }
+
+    /// <summary>Lowest surface per lateral bin — what you see looking up between the legs.</summary>
+    private static List<(float X, float Z)> Underside(Mesh me, float zLo, float zHi, float corridor)
+    {
+        const int Bins = 16;
+        var best = new float[Bins]; var at = new float[Bins]; var has = new bool[Bins];
+        for (int i = 0; i < me.Pos.Length; i++)
+        {
+            var p = me.Pos[i];
+            if (p.Z < zLo || p.Z >= zHi) continue;
+            if (MathF.Abs(p.X) > corridor) continue;
+            int q = Math.Clamp((int)((p.X + corridor) / (2 * corridor) * Bins), 0, Bins - 1);
+            if (!has[q] || p.Y < best[q]) { best[q] = p.Y; at[q] = p.X; has[q] = true; }
+        }
+        var outp = new List<(float, float)>();
+        for (int q = 0; q < Bins; q++) if (has[q]) outp.Add((at[q], best[q]));
+        return outp;
+    }
+
     /// <summary>Frontmost vertex per lateral bin — the outline the eye actually sees.</summary>
     private static List<(float X, float Z)> Silhouette(Mesh me, float yLo, float yHi, float corridor)
     {
