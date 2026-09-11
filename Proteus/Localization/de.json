@@ -175,6 +175,14 @@
     "message": "Erweitert",
     "description": ""
   },
+  "Colors.Asymmetric.Label": {
+    "message": "Diese Grafik ist asymmetrisch (links und rechts unterscheiden sich)",
+    "description": ""
+  },
+  "Colors.Asymmetric.Tip": {
+    "message": "Aktiviere dies, wenn sich die beiden Seiten UNTERSCHEIDEN sollen — ein Tattoo auf einem\nArm, eine Narbe auf einer Wange, nicht gespiegeltes Make-up. Lass es bei allem anderen\naus, auch bei normaler Haut.\nEin Vanilla-Körper und das Vanilla-Gesicht geben beiden Seiten dieselben Pixel, daher wird\ndafür gemalte Grafik halbiert: eine Seite bleibt und wird gespiegelt. Bei einem symmetrischen\nEntwurf fällt das nicht auf, einen asymmetrischen zerstört es. Ist dies aktiv, rendert Proteus\ndas Overlay über eine eigene Ebene, deren zwei Seiten die zwei Hälften deiner Textur lesen,\nsodass beide Seiten erhalten bleiben.\nEs lässt sich nicht automatisch erkennen. Echte Haut ist nie symmetrisch — Sommersprossen und\nMuttermale unterscheiden sich links und rechts — nur du weißt, ob ein Unterschied Absicht ist.",
+    "description": ""
+  },
   "Colors.Auto": {
     "message": "(automatisch)",
     "description": ""
@@ -473,14 +481,6 @@
   },
   "Colors.None": {
     "message": "Keiner",
-    "description": ""
-  },
-  "Colors.OneSided.Label": {
-    "message": "Diese Grafik ist bewusst einseitig",
-    "description": ""
-  },
-  "Colors.OneSided.Tip": {
-    "message": "Aktiviere dies für Grafiken, die nur auf EINER Seite erscheinen sollen — ein Tattoo auf\neinem Arm, eine Narbe auf einer Wange. Lass es bei allem anderen aus, auch bei normaler Haut.\nEin Vanilla-Körper und das Vanilla-Gesicht geben beiden Seiten dieselben Pixel, daher wird\ndafür gemalte Grafik halbiert: eine Seite bleibt und wird gespiegelt. Bei einem symmetrischen\nEntwurf fällt das nicht auf, einen einseitigen zerstört es. Ist dies aktiv, rendert Proteus\ndas Overlay über eine eigene Ebene, deren zwei Seiten die zwei Hälften deiner Textur lesen,\nsodass beide Seiten erhalten bleiben.\nEs lässt sich nicht automatisch erkennen. Echte Haut ist nie symmetrisch — Sommersprossen und\nMuttermale unterscheiden sich links und rechts — nur du weißt, ob ein Unterschied Absicht ist.",
     "description": ""
   },
   "Colors.Opacity.Label": {

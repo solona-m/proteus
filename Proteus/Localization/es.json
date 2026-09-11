@@ -175,6 +175,14 @@
     "message": "Avanzado",
     "description": ""
   },
+  "Colors.Asymmetric.Label": {
+    "message": "Este arte es asimétrico (izquierda y derecha difieren)",
+    "description": ""
+  },
+  "Colors.Asymmetric.Tip": {
+    "message": "Activa esto cuando los dos lados deban DIFERIR: un tatuaje en un brazo, una cicatriz en\nuna mejilla, maquillaje sin reflejar. Déjalo desactivado para todo lo demás, incluida la\npiel normal.\nUn cuerpo vanilla y la cara vanilla dan a ambos lados los mismos píxeles, así que el arte\npintado para ellos se dobla por la mitad: se conserva un lado y se refleja. Eso es invisible\nen un diseño simétrico y arruina uno asimétrico. Con esto activo, Proteus renderiza la\nsuperposición mediante una capa propia cuyos dos lados leen las dos mitades de tu textura,\nde modo que ambos lados sobreviven.\nNo se puede detectar automáticamente. La piel real nunca es simétrica —pecas y lunares\ndifieren de izquierda a derecha— así que solo tú sabes si una diferencia es intencionada.",
+    "description": ""
+  },
   "Colors.Auto": {
     "message": "(automático)",
     "description": ""
@@ -473,14 +481,6 @@
   },
   "Colors.None": {
     "message": "Ninguno",
-    "description": ""
-  },
-  "Colors.OneSided.Label": {
-    "message": "Este arte es de un solo lado a propósito",
-    "description": ""
-  },
-  "Colors.OneSided.Tip": {
-    "message": "Activa esto para arte pensado para aparecer en UN solo lado: un tatuaje en un brazo, una\ncicatriz en una mejilla. Déjalo desactivado para todo lo demás, incluida la piel normal.\nUn cuerpo vanilla y la cara vanilla dan a ambos lados los mismos píxeles, así que el arte\npintado para ellos se dobla por la mitad: se conserva un lado y se refleja. Eso es invisible\nen un diseño simétrico y arruina uno de un solo lado. Con esto activo, Proteus renderiza la\nsuperposición mediante una capa propia cuyos dos lados leen las dos mitades de tu textura,\nde modo que ambos lados sobreviven.\nNo se puede detectar automáticamente. La piel real nunca es simétrica —pecas y lunares\ndifieren de izquierda a derecha— así que solo tú sabes si una diferencia es intencionada.",
     "description": ""
   },
   "Colors.Opacity.Label": {

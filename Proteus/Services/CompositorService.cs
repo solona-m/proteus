@@ -4837,10 +4837,67 @@ public class CompositorService : IDisposable
                     finally { blendLoadStats.Stop(tRemap); }
                 }
 
+                /// <summary>
+                /// Load an overlay image and bring it into this material's UV space — the path-based form of
+                /// <see cref="RemapIfNeeded"/>, and what every caller that starts from a FILE should use.
+                /// <para/>
+                /// It exists because the size a source must be DECODED at depends on the space it was painted
+                /// for, and an argument is evaluated before the call that would have said so. A doubled face
+                /// sheet is 2:1 against the square layout it folds into, so
+                /// <c>RemapIfNeeded(LoadPng(p, w, h), …)</c> decoded and resampled a whole buffer at the wrong
+                /// aspect, threw it away, and decoded the same file a second time at (2w × h) — two full
+                /// decodes and two cache entries per slot, for one image. Deciding the load size here costs
+                /// one of each.
+                /// </summary>
+                byte[]? LoadRemapped(string path, int w, int h, string? srcType,
+                                     ResampleFilter filter = ResampleFilter.Auto)
+                {
+                    if (srcType != null
+                        && string.Equals(srcType, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Timed as a LOAD, which is all it is: the same counter LoadPng feeds, so a folded
+                        // sheet is not invisible to the phase numbers just because it skipped LoadPng.
+                        var t0 = PhaseCounter.Begin();
+                        try { return FoldFaceSplit(path, w, h, filter); }
+                        finally { blendLoadStats.Stop(t0); }
+                    }
+                    return RemapIfNeeded(LoadPng(path, w, h, filter), w, h, srcType, path, filter);
+                }
+
+                /// <summary>
+                /// Fold a DOUBLED face sheet into the vanilla face layout, at (w × h).
+                /// <para/>
+                /// Loaded at twice the destination's WIDTH so the crop lands at the base's own size whatever
+                /// resolution the author painted at — the sheet's aspect is a UV fact, not a pixel one.
+                /// </summary>
+                byte[]? FoldFaceSplit(string path, int w, int h, ResampleFilter filter)
+                {
+                    var doubled = textureLoader.LoadPngAsRgba(path, w * 2, h, filter);
+                    return doubled == null ? null : UVRemapService.CropRightHalf(doubled, w * 2, h);
+                }
+
                 byte[]? RemapIfNeededCore(byte[]? png, int w, int h, string? srcType, string? overlayPath = null,
                                           ResampleFilter filter = ResampleFilter.Auto)
                 {
-                    if (png == null || srcType == null || dstBodyType == null) return png;
+                    if (png == null || srcType == null) return png;
+                    // A DOUBLED face sheet that reached the SKIN path — no shell took it, because the art
+                    // isn't declared one-sided, the face model turned out not to be mirrored, or its geometry
+                    // couldn't be read. It has to be FOLDED here, and the fold has to be a crop: the sheet is
+                    // 2:1 against the face's own square layout, so merely resampling it to the base texture's
+                    // size (which is all this method used to do — InferBodyType answers null for every face
+                    // material, so the dstBodyType guard below returned the art untouched) squeezes the whole
+                    // doubled image into the vanilla layout and lands the sheet's OUTER edge on the midline
+                    // of the face. The right half IS the vanilla layout — SecondSkinService sends the +X side
+                    // there by the same affine gen2 is bibo's right half by — so cropping it is exactly the
+                    // "keep the +X side and mirror it" fold a vanilla body already gets.
+                    //
+                    // No live caller takes this branch — every one of them enters through LoadRemapped, which
+                    // folds first and never pays for the base-size decode. It stays because this is the entry
+                    // point that takes a BUFFER, where the decode size is already spent and the fold is the
+                    // only thing standing between a doubled sheet and the wrong-scale paste above.
+                    if (string.Equals(srcType, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase))
+                        return overlayPath == null ? png : FoldFaceSplit(overlayPath, w, h, filter) ?? png;
+                    if (dstBodyType == null) return png;
                     if (string.Equals(srcType, dstBodyType, StringComparison.OrdinalIgnoreCase)) return png;
                     // Any source → gen2 (vanilla): vanilla UV is the right half of bibo UV space.
                     // Convert to bibo first (via transfer map if needed), crop right half, resize.
@@ -4900,8 +4957,7 @@ public class CompositorService : IDisposable
                     // hard swap rather than a blend — the same reasoning has to reach the RESIZE, or an
                     // overlay whose art does not match the base's size gets its rows interpolated on the
                     // way in and the hard swap defends nothing. See ResampleFilter.
-                    var idx = RemapIfNeeded(LoadPng(idxPath, w, h, ResampleFilter.Nearest),
-                                            w, h, srcType, idxPath, ResampleFilter.Nearest);
+                    var idx = LoadRemapped(idxPath, w, h, srcType, ResampleFilter.Nearest);
                     if (idx == null || !maskAssetsByMod.TryGetValue(modDir, out var assets)) return idx;
 
                     // This mod's masks are handled elsewhere, NOT merged into the overlay index here (merging
@@ -4923,9 +4979,8 @@ public class CompositorService : IDisposable
                     foreach (var (maskPath, _, maskIndexPath) in assets)
                     {
                         if (maskIndexPath == null) continue;
-                        var maskPng = RemapIfNeeded(LoadPng(maskPath, w, h), w, h, srcType, maskPath);
-                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, w, h, ResampleFilter.Nearest),
-                                                    w, h, srcType, maskIndexPath, ResampleFilter.Nearest);
+                        var maskPng = LoadRemapped(maskPath, w, h, srcType);
+                        var maskIdx = LoadRemapped(maskIndexPath, w, h, srcType, ResampleFilter.Nearest);
                         if (maskPng == null || maskIdx == null) continue;
                         // Timed per mask, excluding the two loads above — see the note on this method.
                         var tMerge = PhaseCounter.Begin();
@@ -4960,8 +5015,7 @@ public class CompositorService : IDisposable
                         byte[]? wArr = null, tArr = null;
                         for (int pidx = paths.Count - 1; pidx >= 0; pidx--)
                         {
-                            var m = textureLoader.LoadPngAsRgba(paths[pidx], w, h);
-                            if (m != null) m = RemapIfNeeded(m, w, h, srcBodyType, paths[pidx]);
+                            var m = LoadRemapped(paths[pidx], w, h, srcBodyType);
                             if (m == null) continue;
                             // Masks accumulate in order (outer loop), but within one mask every pixel is
                             // independent — so the inner pass parallelises exactly like the kernels below.
@@ -5039,8 +5093,23 @@ public class CompositorService : IDisposable
                         // shell is cut from the body mesh) — so it describes a garment only on a body-UV
                         // material. Without this it traced onto the face/hair material too, sampling body
                         // coverage in face UV and scribbling AO shadows + Skindenting grooves over the face.
-                        if (gd.Layer == OverlayLayer.Gear && !IsBodyUvMaterial(mtrlGamePath))
-                            continue;
+                        if (gd.Layer == OverlayLayer.Gear)
+                        {
+                            if (!IsBodyUvMaterial(mtrlGamePath)) continue;
+                            // The converse, and the half that guard cannot cover: a shell is cut from whatever
+                            // surface its overlay PAINTS, and only a body one leaves the art in body UV. A
+                            // face shell is cut from the face mesh, so its makeup is in FACE UV — unioned into
+                            // a body silhouette it casts contact shadows and Skindenting grooves wherever
+                            // those texels happen to fall on the torso. Reachable since a doubled face sheet
+                            // started declaring itself one-sided: that promotes it to a shell, which is
+                            // exactly a Gear-layer overlay whose art is not in body UV.
+                            //
+                            // Keyed on the SURFACE, not on IsBodyUvMaterial: an overlay that names no surface
+                            // at all (a real garment's equipment material, or no material) is left alone
+                            // rather than silently dropped from the silhouette it has always contributed to.
+                            var gKeys = ShellSurface.KeysFor(gd.MaterialGamePaths);
+                            if (gKeys.Count > 0 && !gKeys.Any(k => k.IsBody)) continue;
+                        }
 
                         var gSrc = gd.SourceBodyType;
                         if (gSrc == null)
@@ -5051,7 +5120,7 @@ public class CompositorService : IDisposable
                                 gSrc = "gen3";
                         }
                         var dp = Path.Combine(gEntry.SidecarRoot, gd.Diffuse);
-                        var img = RemapIfNeeded(LoadPng(dp, w, h), w, h, gSrc, dp);
+                        var img = LoadRemapped(dp, w, h, gSrc);
                         if (img == null) continue;
 
                         // A print has no silhouette of its own — it borrows the fabric's. Its art is
@@ -5253,12 +5322,12 @@ public class CompositorService : IDisposable
                     if (d.Diffuse != null)
                     {
                         var p = Path.Combine(e.SidecarRoot, d.Diffuse);
-                        cov = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                        cov = LoadRemapped(p, tw, th, srcT);
                     }
                     else if (d.Normal != null)
                     {
                         var p = Path.Combine(e.SidecarRoot, d.Normal);
-                        var n = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                        var n = LoadRemapped(p, tw, th, srcT);
                         if (n != null)
                         {
                             cov = new byte[n.Length];
@@ -5268,7 +5337,7 @@ public class CompositorService : IDisposable
                     else if (d.Mask != null)
                     {
                         var p = Path.Combine(e.SidecarRoot, d.Mask);
-                        cov = RemapIfNeeded(LoadPng(p, tw, th), tw, th, srcT, p);
+                        cov = LoadRemapped(p, tw, th, srcT);
                     }
                     if (cov == null) return null;
 
@@ -5503,7 +5572,7 @@ public class CompositorService : IDisposable
                         if (EnsureBaseDiffuse() != null)
                         {
                             var diffPath = Path.Combine(entry.SidecarRoot, desc.Diffuse);
-                            diffuseOv = RemapIfNeeded(LoadPng(diffPath, wD, hD), wD, hD, srcBodyType, diffPath);
+                            diffuseOv = LoadRemapped(diffPath, wD, hD, srcBodyType);
                             if (diffuseOv != null)
                             {
                                 // All opacity (indexed and flat) is applied AFTER the Masks-group mask
@@ -5530,7 +5599,7 @@ public class CompositorService : IDisposable
                         if (baseN.Length > 0)
                         {
                             var normPath = Path.Combine(entry.SidecarRoot, desc.Normal);
-                            normalOv = RemapIfNeeded(LoadPng(normPath, wN, hN), wN, hN, srcBodyType, normPath);
+                            normalOv = LoadRemapped(normPath, wN, hN, srcBodyType);
                         }
 
                         if (normalOv != null && covSrc == null)
@@ -5567,7 +5636,7 @@ public class CompositorService : IDisposable
                         if (baseM.Length > 0)
                         {
                             var maskPath3 = Path.Combine(entry.SidecarRoot, desc.Mask);
-                            var maskOv = RemapIfNeeded(LoadPng(maskPath3, wM, hM), wM, hM, srcBodyType, maskPath3);
+                            var maskOv = LoadRemapped(maskPath3, wM, hM, srcBodyType);
                             if (maskOv != null)
                             {
                                 // Flat opacity deferred — CovAt applies it after the Masks-group mask.
@@ -5696,7 +5765,7 @@ public class CompositorService : IDisposable
                             // SOURCE (e.g. bibo) UV space and lands misaligned on a converted base
                             // (gen3/vanilla), producing a fringe/seam at UV-island boundaries.
                             var diffPath = Path.Combine(entry.SidecarRoot, desc.Diffuse);
-                            cov = RemapIfNeeded(LoadPng(diffPath, tw, th), tw, th, srcBodyType, diffPath);
+                            cov = LoadRemapped(diffPath, tw, th, srcBodyType);
                         }
                         else
                         {
@@ -5960,7 +6029,7 @@ public class CompositorService : IDisposable
                         if (baseM.Length > 0)
                         {
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
-                            var ov = RemapIfNeeded(LoadPng(maskPathD, wM, hM), wM, hM, srcBodyType, maskPathD);
+                            var ov = LoadRemapped(maskPathD, wM, hM, srcBodyType);
                             // PaintCovAt for the same reason as Phase B: gloss and specular describe a
                             // surface, and a print does not have one.
                             var mCov = ov != null ? PaintCovAt(wM, hM) : null;
@@ -6008,8 +6077,8 @@ public class CompositorService : IDisposable
                         foreach (var (maskPath, normalPath, _) in assets)   // top-first (highest priority first)
                         {
                             if (normalPath == null) continue;
-                            var maskPng  = RemapIfNeeded(LoadPng(maskPath, wN, hN), wN, hN, maskSrcBodyType, maskPath);
-                            var normalOv = RemapIfNeeded(LoadPng(normalPath, wN, hN), wN, hN, maskSrcBodyType, normalPath);
+                            var maskPng  = LoadRemapped(maskPath, wN, hN, maskSrcBodyType);
+                            var normalOv = LoadRemapped(normalPath, wN, hN, maskSrcBodyType);
                             if (maskPng != null && normalOv != null)
                                 reliefMasks.Add((normalOv, maskPng));
                         }
@@ -6091,11 +6160,10 @@ public class CompositorService : IDisposable
                     {
                         var (maskPath, _, maskIndexPath) = assets[mi];
                         if (maskIndexPath == null) continue;
-                        var maskPng = RemapIfNeeded(LoadPng(maskPath, wD, hD), wD, hD, maskSrcBodyType, maskPath);
+                        var maskPng = LoadRemapped(maskPath, wD, hD, maskSrcBodyType);
                         // NEAREST, like every other _id read: red is a row *id* (red / 17 + 1), so a filtered
                         // texel names a row nobody assigned. This pass reads that red straight below.
-                        var maskIdx = RemapIfNeeded(LoadPng(maskIndexPath, wD, hD, ResampleFilter.Nearest),
-                                                    wD, hD, maskSrcBodyType, maskIndexPath, ResampleFilter.Nearest);
+                        var maskIdx = LoadRemapped(maskIndexPath, wD, hD, maskSrcBodyType, ResampleFilter.Nearest);
                         if (maskPng == null || maskIdx == null) continue;
                         anyMask = true;
                         ParallelPixels(0, n, 1, (from, to) =>

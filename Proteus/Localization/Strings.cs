@@ -1305,15 +1305,15 @@ public sealed class ColorsStrings
     public readonly string WholeSkin = Loc.Localize("Colors.WholeSkin.Label",
         "This overlay is the whole skin");
 
-    public readonly string OneSided = Loc.Localize("Colors.OneSided.Label",
-        "This art is deliberately one-sided");
+    public readonly string Asymmetric = Loc.Localize("Colors.Asymmetric.Label",
+        "This art is asymmetric (left and right differ)");
 
-    public readonly string OneSidedTip = Loc.Localize("Colors.OneSided.Tip",
-        "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\n"
-      + "one cheek. Leave it off for anything else, including ordinary skin.\n"
+    public readonly string AsymmetricTip = Loc.Localize("Colors.Asymmetric.Tip",
+        "Turn this on when the two sides are meant to DIFFER — a tattoo on one arm, a scar on one\n"
+      + "cheek, makeup that isn't mirrored. Leave it off for anything else, including ordinary skin.\n"
       + "A vanilla body and the vanilla face give both sides the same pixels, so art painted for\n"
       + "them is folded in half: one side is kept and mirrored across. That is invisible on a\n"
-      + "symmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\n"
+      + "symmetric design and ruins an asymmetric one. With this on, Proteus renders the overlay\n"
       + "through a layer of its own whose two sides read the two halves of your sheet, so both\n"
       + "sides survive.\n"
       + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
