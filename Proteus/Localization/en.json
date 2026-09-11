@@ -175,6 +175,14 @@
     "message": "Advanced",
     "description": "Appears in the colour-table editor window."
   },
+  "Colors.Asymmetric.Label": {
+    "message": "This art is asymmetric (left and right differ)",
+    "description": "Checkbox in the colour-table editor's Advanced section."
+  },
+  "Colors.Asymmetric.Tip": {
+    "message": "Turn this on when the two sides are meant to DIFFER — a tattoo on one arm, a scar on one\ncheek, makeup that isn't mirrored. Leave it off for anything else, including ordinary skin.\nA vanilla body and the vanilla face give both sides the same pixels, so art painted for\nthem is folded in half: one side is kept and mirrored across. That is invisible on a\nsymmetric design and ruins an asymmetric one. With this on, Proteus renders the overlay\nthrough a layer of its own whose two sides read the two halves of your sheet, so both\nsides survive.\nIt cannot be detected for you. Real skin is never symmetric — freckles and moles differ\nleft to right — so only you can say whether a difference is the point or just detail.",
+    "description": "Tooltip for the checkbox above. \"asymmetric\" means the character's left and right differ. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.Auto": {
     "message": "(auto)",
     "description": "Appears in the colour-table editor window."
@@ -474,14 +482,6 @@
   "Colors.None": {
     "message": "None",
     "description": "Appears in the colour-table editor window."
-  },
-  "Colors.OneSided.Label": {
-    "message": "This art is deliberately one-sided",
-    "description": "Checkbox in the colour-table editor's Advanced section."
-  },
-  "Colors.OneSided.Tip": {
-    "message": "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\none cheek. Leave it off for anything else, including ordinary skin.\nA vanilla body and the vanilla face give both sides the same pixels, so art painted for\nthem is folded in half: one side is kept and mirrored across. That is invisible on a\nsymmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\nthrough a layer of its own whose two sides read the two halves of your sheet, so both\nsides survive.\nIt cannot be detected for you. Real skin is never symmetric — freckles and moles differ\nleft to right — so only you can say whether a difference is the point or just detail.",
-    "description": "Tooltip for the checkbox above. \"one-sided\" means appearing on only the left or only the right of the character. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Opacity.Label": {
     "message": "Opacity",
