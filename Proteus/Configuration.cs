@@ -240,21 +240,22 @@ public class Configuration : IPluginConfiguration
     /// <c>shp_hib</c> shape key pressing what remains against the skull on a fade that releases below.
     /// Both are native to the game, so a patched hairstyle keeps working with Proteus turned off.
     /// <para/>
-    /// ON BY DEFAULT. It was off at first because the edit is written INTO the hair mod's own files rather
-    /// than into a Proteus redirect, which means the automatic path modifies somebody else's mod folder
-    /// unattended — and that is not normally something to assume consent for. What makes it assumable here
-    /// is that the edit is reversible and says so: the author's files are copied to
+    /// OFF BY DEFAULT, and the initializer says so explicitly rather than leaning on the property default.
+    /// It was on for a while and is off again: the edit is written INTO the hair mod's own files rather
+    /// than into a Proteus redirect, so the automatic path modifies somebody else's mod folder unattended,
+    /// and that is not something to assume consent for however reversible it is. The safeguards are still
+    /// all there for anyone who turns it on — the author's files are copied to
     /// <c>Proteus/hatcompat-backup/</c> before the first write, the change is undoable per hairstyle, and
     /// each hairstyle it fits is reported in chat with both ways out (see
-    /// <c>HatCompatWatcher.Announce</c>). Left off, the overwhelmingly common outcome was a hat going
-    /// straight through modded hair and nobody knowing there was a setting for it.
+    /// <c>HatCompatWatcher.Announce</c>) — but they now follow a choice the user made instead of standing
+    /// in for one.
     /// <para/>
     /// Writing into the mod is still the point of the design rather than an awkwardness of it: a patched
     /// hairstyle keeps working with Proteus disabled, and travels with an export.
     /// <para/>
     /// Hairstyles whose author already shipped a hat shape are left alone entirely.
     /// </summary>
-    public bool AutoHatCompat { get; set; } = true;
+    public bool AutoHatCompat { get; set; }
 
     // There is deliberately no "the hat-compat notice has been shown" flag here. The chat line fires per
     // HAIRSTYLE FITTED, which the patch record on disk already tracks exactly — see
@@ -553,18 +554,19 @@ public class Configuration : IPluginConfiguration
         // and false -> true is exactly what a config that never touched the setting should get anyway.
         if (Version < 4) AutoRedraw = !DisableAutoRedraw;
 
-        // v4 -> v5: hat compatibility is on by default now, and existing configs have to be moved rather
-        // than left on the property default, which only a brand-new config ever sees. Everyone who had run
-        // the plugin before this would otherwise keep a hat going through their hair with no sign that
-        // anything had changed.
+        // v4 -> v5 turned hat compatibility ON for everyone, unconditionally. v5 -> v6 takes that back: the
+        // automatic path edits another author's mod folder, and it should do that only because someone
+        // asked for it. This step is the undo of that one, not a new opinion about the setting — so it is
+        // unconditional in the same way and for the same reason, because a stored true written BY a
+        // migration is indistinguishable on disk from one the user ticked themselves.
         //
-        // Unconditional, because the stored false carries NO information: the setting shipped off, so
-        // "never touched it" and "tried it and turned it off" are the same byte on disk and there is
-        // nothing to tell them apart with. Someone in the second group is turned back on once, and the
-        // chat line that fires on the next fit tells them where to switch it off again — which is a worse
-        // outcome for them than for the many people in the first group who would never have found the
-        // setting at all. Anyone who had it ON is unaffected.
-        if (Version < 5) AutoHatCompat = true;
+        // Someone who had genuinely turned it on in the window between the two is switched off once and has
+        // to tick it again; the panel is where they found it the first time. That is the cheap half of the
+        // trade against leaving mod folders being edited on nobody's say-so.
+        //
+        // The v4 step is gone rather than kept and then reversed: running both would be writing a value
+        // only to overwrite it, and a config at v4 should land on the property default like a new one.
+        if (Version < 6) AutoHatCompat = false;
 
         Version = CurrentVersion;
     }
