@@ -789,8 +789,9 @@ public sealed class ModCreationService
         // one leaves a mod that loads in Penumbra and does nothing in Proteus.
         PenumbraModMeta.AtomicWrite(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
 
-        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. Written in the older
-        // layout on purpose: every Penumbra can read it, and a new one migrates it into meta.json on load.
+        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. It goes down BEFORE the
+        // redirects below, and that order is load-bearing now rather than incidental: PenumbraModMeta
+        // refuses to write into a pre-v4 folder, and a folder with no manifest at all reads as pre-v4.
         // Via AtomicWrite for durability — a manifest left truncated or zero-filled by a crash makes
         // Penumbra drop the whole mod, with only a parse error in its Messages tab to say why.
         PenumbraModMeta.AtomicWrite(

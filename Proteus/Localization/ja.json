@@ -1967,8 +1967,20 @@
     "message": "チェックしたパーツからスイッチを作成",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "このパーツは作者が既に独自のスイッチに割り当てているため、追加できません。",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "作者スイッチ",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "このModはPenumbraの古い形式のままで、Proteusは書き込みません。一度Penumbraで有効にして更新させてから、あらためてお試しください。",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "このパーツには、Mod作者がすでにスイッチを設定しています。ここで追加するスイッチはその上に重なり、両方がオンのときだけパーツが表示されます。",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "このパーツには、モデルが名前を持たないタグが付いています。すでに何が制御しているか判別できないため、衝突する恐れのあるスイッチは追加しません。",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2052,7 +2064,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "元に戻しました。モデルファイル{0}個を復元し、オプショングループを削除しました。",
+    "message": "元に戻しました。{0}個のモデルファイルを復元し、このModの設定からスイッチを削除しました。",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2085,6 +2097,10 @@
   },
   "Parts.Write.Btn": {
     "message": "スイッチをMODに書き込む",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "このMod自身のグループ「{0}」には、すでに「{1}」というオプションがあります。新しいスイッチには別の名前を付けてください。",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

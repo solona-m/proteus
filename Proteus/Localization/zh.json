@@ -1967,8 +1967,20 @@
     "message": "用勾选的部件创建开关",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "模组作者已将该部件绑定到自己的开关上，因此无法再添加一个。",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "作者开关",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "这个模组仍使用 Penumbra 的旧格式，Proteus 不会写入。请先在 Penumbra 中启用一次让它自行更新，然后再回来。",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "模组作者已经为这个部件设置了开关。你添加的开关会叠加在其之上：只有两者都开启时，该部件才会显示。",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "这个部件带有模型未命名的标记，Proteus 无法判断已经有什么在控制它，因此不会冒险添加可能冲突的开关。",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2052,7 +2064,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "已撤销。还原了 {0} 个模型文件，并移除了选项组。",
+    "message": "已撤销。已还原 {0} 个模型文件，并从该模组的设置中移除了开关。",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2085,6 +2097,10 @@
   },
   "Parts.Write.Btn": {
     "message": "将开关写入模组",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "该模组自带的「{0}」分组中已经有名为「{1}」的选项。请为新开关取一个不同的名称。",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {
