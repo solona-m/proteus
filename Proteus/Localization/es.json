@@ -123,6 +123,10 @@
     "message": "[Proteus] «{0}» aplica brillo en una capa de piel. La piel ya no puede brillar, así que esa opción se representa ahora como capa de tela: necesita un accesorio libre y su superficie se verá algo distinta.",
     "description": ""
   },
+  "Chat.HatCompat": {
+    "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Sombreros.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+  },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Instalaste desde la URL antigua del repositorio de plugins. Cambiarla a https://dl.solona.info/repo.json en /xlplugins > Experimental hace que las actualizaciones sean más rápidas y reduce la carga en GitHub. Tu instalación seguirá funcionando de cualquier modo. Este aviso se muestra unas pocas veces y luego deja de aparecer.",
     "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
