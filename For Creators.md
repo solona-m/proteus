@@ -86,7 +86,57 @@ Color table rows control how Proteus tints and illuminates the overlay. Rows are
 - **LightResponse**: 0–1, how much the scene's light takes this row's glow away. Omitted or 0 is the unconditional glow every row had before — the same brightness in a lit street as in a cellar. 1 is dark-only: full brightness with no light on the wearer, nothing at all in daylight. It only means something where `Emissive` is above zero. Because it is per sub-row, one region of a tattoo can be dark-only while another is always on; the two are told apart by your `_id` texture, the same way their colours are.
 - **HideInLight**: `true` makes the row's *opacity follow its glow* — as the light takes the glow away it takes the surface with it, so where the row has stopped glowing there is nothing left but skin. Without it a dark-only row still leaves the shell's own colour behind, usually the near-black a glowing material wants, and the art reads as a dark silhouette at noon rather than vanishing. Per row, like `LightResponse`, because the opacity it moves is the shell normal's blue channel and your `_id` says which texel belongs to which row: one region can vanish in daylight while the region beside it stays. A `HideInLight` with no `LightResponse` follows the glow all the way; with one, it fades only as far as the glow does.
 
+- **Blend**: how the row combines with what your mod has already painted. `"Paint"` (the default, and what every row did before this existed) lays the art on top. Anything else makes the row a **print** — see below.
+
 None of these are baked into anything: Proteus applies them to the live material each frame, so the light changing costs no recomposite and nothing on disk is rebuilt. Users can switch the whole behaviour off, or pin the light level by hand, under **Settings → Light-sensitive glow**.
+
+##### The fabric weave — `"Tile"`
+
+- **Tile**: which of the game's 64 fabric weaves tiles over this row, `0`–`63`. This is what makes a second skin read as *cloth* rather than skin, and it costs no texture of your own — the patterns are the game's, shared by every gear material. Proteus leaves it off by default, because the weave a gear template ships with looks like grain over bare skin. Note `0` is a real weave, not "off": omit the field for no weave. Like glow, it needs the gear shader, so setting it promotes a skin overlay to a cloth layer.
+- **TileStrength**: `0`–`1`, how strongly the weave shows. Omitted means full strength.
+- **TileScaleU** / **TileScaleV**: how many times the weave repeats across each axis of the texture. Omitted is the game's own default of `16`; higher is finer. Setting the two apart stretches the weave in one direction.
+
+Both only mean something alongside a `Tile`, and are ignored without one. On their own they would re-arm whatever weave the material already happens to name — the gear template's on a shell, the author's on an imported pack — which is never a pattern anyone picked.
+
+```json
+"ColorTableRows": [
+  { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Tile": 12, "TileScaleU": 24.0, "TileScaleV": 24.0 } }
+]
+```
+
+Unlike the light settings above, the weave is written into the shell's material when the look is composited, not applied per frame.
+
+##### Prints — `"Blend"`
+
+A print colours the fabric your other layers painted, instead of covering it. Give a fishnet stocking a rainbow print and the *threads* come out rainbow while the holes stay skin — which a plain overlay cannot do, because it would paint over the holes too.
+
+```json
+"ColorTableRows": [
+  { "Row": 16, "SubRowA": { "Diffuse": "#FFFFFF", "Blend": "Multiply" } }
+]
+```
+
+| Mode | What it does |
+|---|---|
+| `Paint` | Alpha-over, the default. The row brings its own colour and lays it on top. |
+| `Multiply` | Darkens. White is invisible, black is opaque. What a printed pattern usually wants — ink on cloth takes the cloth's shading with it. |
+| `Screen` | Lightens. The complement of `Multiply`, and what a bright print on dark fabric needs. |
+| `Overlay` | `Multiply` in the fabric's shadows, `Screen` in its highlights. Keeps the weave's contrast, so the print reads as dyed *into* the cloth. |
+| `Add` | Purely additive — a sheen, or a dusting of glitter. Saturates to white. |
+| `Replace` | Takes the row's colour outright, keeping the fabric's shape. Flat, and loses the fabric's own shading. |
+
+Three rules worth knowing before you author one:
+
+- **A print only reaches your own mod's layers.** It never touches another mod's clothing, so a print cannot be shipped as a way to recolour someone else's work.
+- **On bare skin a print paints nothing.** Selected on its own it shows nothing at all — there is nothing there to print on. This is deliberate, not a failure; the plugin log says so at debug level.
+- **A print is never promoted to a cloth layer.** It has no coverage of its own to cut a shell from, and a shell would take it away from the very layers it exists to colour. Put glow on the fabric, not on the print.
+- **A print contributes colour and nothing else.** Its `Normal` and `Mask` are clipped to the same coverage its colour is, so a row that prints everywhere adds no relief, no gloss, no ambient occlusion and no skin-tone suppression. Relief belongs on the fabric, which is the thing that actually has a surface. If your print ships a normal map intending it to apply on its own, make the row `Paint` instead.
+
+If a row prints but its option also declares an `Index` that fails to load, Proteus cannot tell which texel belongs to which row, so the rows fall back to painting and a warning naming the mod goes to the log — the print will look like it simply stopped working.
+
+Because `Blend` is per sub-row, one region of a print can multiply while the region beside it screens — your `_id` texture tells them apart exactly as it does their colours. Mixing a printing row and a painting row in one option is allowed; the option then still counts as a surface (it casts ambient occlusion, and can still be promoted).
+
+The row's `Diffuse` still tints the art, and its `Opacity` is the print's strength.
 
 Users can override these values at any time from the Proteus status window. Their changes are written back to your `metadata.json` inside their local mod installation.
 
@@ -187,7 +237,15 @@ If your mod has multiple options (style variants, independent pieces, etc.) you 
 
 `"Type": "Single"` means only one option is active at a time. The options list just needs the names — all texture work is handled by Proteus, so `Files` stays empty. `Id` values are GUIDs Penumbra uses to keep a user's saved selections stable across mod updates; keep them the same when you re-export.
 
-**Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array wins. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
+**Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array starts on top — it draws over the later one, and it hides the later one wherever it is opaque. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
+
+This is only the **default**. The array order decides nothing once the wearer rearranges the option tabs in Proteus: their stack then sets both what draws on top and what covers what, and your `Groups` order is just the arrangement they start from.
+
+**`DefaultSettings` is what a brand-new installer sees.** It is a bitmask over the option list — `0` selects nothing, `1` the first option, `2` the second, `3` the first two, and so on. Penumbra only consults it for a collection that has never seen your mod, so it does nothing for anyone who already has it installed, and it is not a substitute for telling people what to tick.
+
+A `Multi` group shipping `0` means everyone who installs your pack sees a mod that is enabled and does nothing at all until they go and tick something — the single most common "it's installed but not appearing" report. Unless your groups are genuinely all-optional extras, give the primary group a bitmask that selects one sensible option so the pack looks like something the moment it goes on. If your garment's shape comes from a `Masks` group, that group is the one that needs a default: without a mask there is nothing to build the garment from, so a pack with fabric selected and no mask still renders nothing.
+
+Proteus will now say so rather than leaving you to guess: a mod that is switched on and contributes nothing gets an amber `!` in the Mods tab naming the reason, and one line in the log — `… is enabled but contributes nothing: nothing is ticked in Penumbra …`.
 
 The easiest way to get all this right is to build the group in Penumbra's own mod editor, or let the Substance Painter packager write it for you.
 
@@ -234,6 +292,56 @@ The easiest way to get all this right is to build the group in Penumbra's own mo
 ```
 
 Each option can have its own `ColorTableRows`. If an option omits `ColorTableRows`, it inherits the top-level `ColorTableRows` if present.
+
+#### Shipping presets — starter looks
+
+A pack with a lot of groups is a blank page to whoever installs it. A **preset** is a named set of option
+ticks, colours and layer settings that a wearer applies in one click, and you can ship as many as you like
+in a top-level `Presets` array:
+
+```json
+{
+  "FormatVersion": 1,
+  "Name": "My Stockings",
+  "Presets": [
+    {
+      "Name": "Sheer",
+      "Description": "Barely-there, for a lighter skin tone.",
+      "Options": {
+        "Style": ["Roses"],
+        "Welt":  ["None"]
+      },
+      "Colors": {
+        "Options": {
+          "Style": { "Roses": [ { "Row": 16, "SubRowA": { "Diffuse": "#F3E2DA", "Opacity": -45 } } ] }
+        }
+      }
+    },
+    {
+      "Name": "Full coverage",
+      "Options": { "Style": ["Roses"], "Welt": ["Wide"] }
+    }
+  ]
+}
+```
+
+- `Options` maps a **Penumbra group name** to the option names ticked in it — the same names as in
+  `meta.json`. A single-select group takes a one-element list.
+- `Colors` and `Gear` take the same shapes the colour editor writes: `Top` for the mod-wide colorset,
+  `Mask` for the Masks tab, and `Options[group][option]` for one option's. Every part is optional — a
+  preset that only sets `Options` is perfectly good, and is the easiest kind to write by hand.
+- `StackOrder` is optional and rarely worth setting; omit it and the wearer's own stacking stands.
+- You don't need to write any of this by hand. Set the mod up the way you want it in game, press
+  **+ Save…** in the Colors panel, then use the preset's **Export** button and paste the file's contents
+  into your `Presets` array — dropping `Id`, which is per-machine.
+
+Presets you ship are marked with a `*` and are **read-only** in the UI: editing one makes the wearer an
+editable copy instead. That is deliberate, and it is what makes it safe for you to change or remove them
+in an update — nothing anyone saved is ever silently rewritten.
+
+Applying a preset does not touch your `metadata.json`. The option ticks go to Penumbra; the colours and
+layer settings ride on top only while the preset is worn, so **No preset** always gets your own colours
+back exactly as shipped.
 
 #### Independent toggleable pieces
 

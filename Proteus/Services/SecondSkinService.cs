@@ -39,12 +39,140 @@ public sealed class SecondSkinService
     /// </summary>
     private readonly Func<string, string?>? resolveUpstream;
 
-    /// <summary>Textures are authored in BODY UV (the shell inherits the body's UVs).</summary>
-    // internal so the compositor can prefetch this phase's art at the right size; see PrefetchAhead.
-    internal const int TexSize = 2048;
+    /// <summary>
+    /// The smallest sheet a shell is ever baked at, and what it stays at unless the art asks for more.
+    /// Everything shipped before shells could grow was written at exactly this, so a 1K- or 2K-authored
+    /// overlay produces byte-identical output to before.
+    /// </summary>
+    internal const int TexSizeFloor = 2048;
+
+    /// <summary>
+    /// The largest sheet a shell is baked at — the same ceiling the skin path runs at
+    /// (<see cref="TextureLoader.BaseTargetSize"/>), which is the point: a cloth-layer overlay and a
+    /// skin-layer one should resolve the same art identically, and until this existed the shell was
+    /// fixed at <see cref="TexSizeFloor"/> while the skin path was always 4096. A 4K tattoo therefore
+    /// looked clean on skin and came out speckled on cloth, which reads as compression damage and is
+    /// not — see <see cref="ResampleFilter"/>.
+    /// <para/>
+    /// A 4K sheet is 64 MB uncompressed against 16 MB, per slot, per layer, so this is a ceiling and not
+    /// a target: <see cref="ChooseTexSize"/> only reaches it for art that actually carries the detail.
+    /// </summary>
+    internal const int TexSizeCap = 4096;
+
+    // The sheet a build bakes at is a LOCAL of Build, passed down by parameter — never a field.
+    //
+    // ONE size for the whole build, not one per layer: a layer's relief is compounded element-wise into its
+    // same-mod siblings' normals (the sibling-relief pre-pass and CompoundNormal), and the mask merges do
+    // the same, so two layers at different sizes would index each other's buffers out of step.
+    //
+    // But "one per build" must not become "one per SERVICE". Composites genuinely overlap — see
+    // CompositorService's _compositesInFlight, and the measurement quoted above remapCache — this instance
+    // is shared, and Build takes no lock. A field would let one build store 2048 while another is midway
+    // through a 4096 sheet, and this value is a buffer DIMENSION: the loser reads a 4.19M-element array
+    // with 16.7M indices and throws, or reads a 16.7M-element one with 4.19M and silently bakes a quarter
+    // of the sheet. Every other per-build field here (remapCache, UnwearableContent) merely repeats work
+    // when it races; this one would not.
 
     /// <summary>Coverage only decides whether a whole triangle survives, so it can be coarse.</summary>
     private const int CoverageSize = 256;
+
+    /// <summary>
+    /// The toe-cap mask is sampled per VERTEX, not per texel, so it needs more resolution than coverage
+    /// (the toes are a small, position-sensitive patch of body UV) but far less than the art.
+    /// </summary>
+    private const int ToeCapSize = 512;
+
+    /// <summary>
+    /// How much of the capped area a shell must actually paint before it gets a toe cap. A shell that
+    /// stops at the ankle has no business rebuilding the toes.
+    /// <para/>
+    /// Deliberately LOW. Every shell that keeps any geometry over the toes has to be capped, or it
+    /// sleeves each toe while the capped shell smooths over them, and the uncapped one comes through —
+    /// measured with a thigh-band overlay whose shell still had toe geometry: 226 of its toe vertices
+    /// sat outside the capped shell, by up to 0.0036. Capping a shell whose toe art really is absent
+    /// costs nothing, because the coverage test then trims the rebuilt cap away exactly as it trimmed
+    /// what was cut out.
+    /// </summary>
+    private const float MinToeCoverage = 0.02f;
+
+    /// <summary>
+    /// Every body-UV image a shell build will load, across all its layers — the input both to
+    /// <see cref="ChooseTexSize"/> and to the compositor's prefetch, which must warm at the size the
+    /// build will actually ask for or warm nothing useful at all. One definition so they cannot drift.
+    /// <para/>
+    /// Masks are included because they are remapped onto the same sheet (coverage, <c>_id</c> merge and
+    /// relief all go through it). Scroll maps are NOT — see ChooseTexSize.
+    /// </summary>
+    internal static IEnumerable<string?> ShellArtPaths(
+        IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
+        SidecarDiscoveryService discovery)
+    {
+        foreach (var (entry, overlay) in gearOverlays)
+        {
+            var d = overlay.Descriptor;
+            if (d.Diffuse != null) yield return Path.Combine(entry.SidecarRoot, d.Diffuse);
+            if (d.Normal  != null) yield return Path.Combine(entry.SidecarRoot, d.Normal);
+            if (d.Mask    != null) yield return Path.Combine(entry.SidecarRoot, d.Mask);
+            if (d.Index   != null) yield return Path.Combine(entry.SidecarRoot, d.Index);
+
+            // Already absolute — ResolveActiveMaskAssets resolves against the mod folder itself.
+            foreach (var (maskPath, normalPath, indexPath) in discovery.ResolveActiveMaskAssets(entry))
+            {
+                yield return maskPath;
+                yield return normalPath;
+                yield return indexPath;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The sheet size a build should bake at, given the art it is about to load: the largest dimension any
+    /// of it actually carries, rounded up to a power of two and clamped to
+    /// [<see cref="TexSizeFloor"/>, <see cref="TexSizeCap"/>].
+    /// <para/>
+    /// Never downsample below what the author supplied — that was the whole defect. Never upsample past
+    /// it either: inventing texels a 1K overlay does not have costs 16x the memory to say nothing new.
+    /// <para/>
+    /// Sizing is by HEADER probe, not by decoding: the decision has to be made before any of this art is
+    /// loaded, because the size is what the loads are keyed on. A path that cannot be probed simply gets
+    /// no vote — the real load will report the failure with a message worth reading.
+    /// <para/>
+    /// Scroll maps are excluded by every caller and must stay excluded: a scroll is a TILING pattern
+    /// sampled through uv1, not body-UV art, so its resolution says nothing about the sheet it tiles over.
+    /// </summary>
+    internal static int ChooseTexSize(IEnumerable<string?> artPaths) => ChooseTexSize(artPaths, out _);
+
+    /// <inheritdoc cref="ChooseTexSize(IEnumerable{string})"/>
+    /// <param name="largestArt">
+    /// The largest dimension found before the floor and cap were applied — 0 when nothing could be probed.
+    /// Reported alongside the chosen size so a log line says WHY it landed where it did: "4096 (largest art
+    /// 4096)" and "2048 (largest art 1024)" are very different situations that a bare size cannot tell
+    /// apart. Once the cap is reached the scan stops, so this is "at least this big", not a true maximum —
+    /// which is all the log needs and all any caller should read it as.
+    /// </param>
+    internal static int ChooseTexSize(IEnumerable<string?> artPaths, out int largestArt)
+    {
+        largestArt = 0;
+        foreach (var p in artPaths)
+        {
+            if (string.IsNullOrEmpty(p)) continue;
+            if (TextureLoader.ProbeSize(p) is not { } s) continue;
+            largestArt = Math.Max(largestArt, Math.Max(s.Width, s.Height));
+            // Nothing further can raise the answer, and each remaining probe is a File.Exists plus an
+            // OpenRead on the composite thread. A mod with a dozen masks pays that list twice a composite
+            // (here and in the prefetch), so stop as soon as the answer is settled.
+            if (largestArt >= TexSizeCap) break;
+        }
+        if (largestArt <= TexSizeFloor) return TexSizeFloor;
+        if (largestArt >= TexSizeCap) return TexSizeCap;
+
+        // Round UP to a power of two. Not cosmetic: block compression needs 4-aligned dimensions (see
+        // WriteTex's fallback to uncompressed), the coverage grid divides the sheet by a fixed power of
+        // two, and an odd sheet size would make every one of those a special case.
+        int pow = TexSizeFloor;
+        while (pow < largestArt) pow <<= 1;
+        return Math.Min(pow, TexSizeCap);
+    }
 
     /// <summary>Number of single-char base-36 shell disk ids (0-9a-z) — the ceiling on placeable layers,
     /// so an id never runs past 'z'.</summary>
@@ -90,6 +218,52 @@ public sealed class SecondSkinService
         this.log = log;
         this.resolveUpstream = resolveUpstream;
     }
+
+    /// <summary>
+    /// The hand-modelled toe box shipped beside the plugin, read once. Null when it is missing or will
+    /// not parse, in which case the shell builds exactly as it did before — this is additive.
+    /// </summary>
+    private readonly List<SecondSkinWriter.AuthoredCapSet> authoredCaps = [];
+    private bool authoredCapTried;
+
+    private IReadOnlyList<SecondSkinWriter.AuthoredCapSet> AuthoredCaps()
+    {
+        if (authoredCapTried) return authoredCaps;
+        authoredCapTried = true;
+        try
+        {
+            var dir = discovery.AssemblyDir;
+            if (dir == null) return authoredCaps;
+            // ONE CAP PER BODY: toecap.mdl / toecap.<body>.mdl, each with the binding of the same name
+            // that says where it sits on the body it was modelled for. The binding carries it across
+            // heels and other foot-model swaps for that body; it does NOT carry it to another body, which
+            // is why there is a cap per body rather than one cap and many bindings. The writer picks by
+            // which binding places best, so no file has to be matched to a body by name.
+            var meshDir = Path.Combine(dir, "Meshes");
+            if (Directory.Exists(meshDir))
+                foreach (var mp in Directory.GetFiles(meshDir, "toecap*.mdl").OrderBy(x => x))
+                {
+                    var bindPath = Path.ChangeExtension(mp, ".bind");
+                    authoredCaps.Add(new SecondSkinWriter.AuthoredCapSet(
+                        File.ReadAllBytes(mp),
+                        File.Exists(bindPath) ? File.ReadAllBytes(bindPath) : null,
+                        Path.GetFileNameWithoutExtension(mp)));
+                    log.Information("[Proteus] second skin: toe cap {0} loaded{1}",
+                        Path.GetFileName(mp),
+                        File.Exists(bindPath) ? "" : " (no binding — fits one foot only)");
+                }
+            if (authoredCaps.Count == 0)
+                log.Debug("[Proteus] second skin: no authored toe cap in {0}", meshDir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not load the authored toe cap");
+        }
+        return authoredCaps;
+    }
+
+    /// <summary>Last cap messages told to the wearer, so a recomposite doesn't repeat them.</summary>
+    private string? lastCapDeclined, lastCapUsed;
 
     /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
@@ -502,6 +676,18 @@ public sealed class SecondSkinService
     /// doesn't, a redraw landing mid-write would read a half-written model. Same reasoning and same shape
     /// as TextureLoader.WriteWithRetry and PenumbraModMeta.AtomicWrite.
     /// </summary>
+    /// <summary>
+    /// The body models as the USER installed them, by game path — remembered before the nipple smooth
+    /// republishes any of them, so later composites never read our own output back as their source.
+    /// <para/>
+    /// Known limit: if the wearer swaps body mods while the smooth is on, this keeps handing out the old
+    /// bytes, because the path now resolves to our file and there is nothing left to notice the change
+    /// through. The proper cure is <c>CompositorService.PrimeUpstreamCache</c>, which already unpublishes
+    /// and re-reads for exactly this reason — its <c>IsReadableBase</c> filter excludes equipment paths
+    /// and would have to admit these.
+    /// </summary>
+    private readonly Dictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
+
     private static bool WriteIfChanged(string path, byte[] data)
     {
         try
@@ -586,6 +772,20 @@ public sealed class SecondSkinService
     /// Salted away from <see cref="Hash"/>'s space so a stamp can never coincidentally equal a content hash
     /// for the same path — the two share one dictionary, and a false match there is a skipped write.
     /// </summary>
+    /// <summary>
+    /// Where a smoothed body is published — CONTENT-ADDRESSED, with the hash of the bytes in the name.
+    /// <para/>
+    /// The same thing the shell does (models/secondskin_{hash}.mdl) and for the same reason, which this
+    /// path had simply never been given: the game caches models by RESOLVED PATH. Publishing every
+    /// revision of a body to one fixed name means the path never changes, so the cache is never invalidated
+    /// and the character keeps whichever version the game happened to load first. Every symptom of that is
+    /// a symptom of the feature not working — the nipple still standing after the smoothing pass has
+    /// demonstrably flattened it on disk, and a settings change or a manual redraw doing nothing at all.
+    /// </summary>
+    private static string SmoothedBodyPath(string modelsDir, string gamePath, byte[] content)
+        => Path.Combine(modelsDir,
+                        $"smoothed_{CompositorService.SanitizeName(gamePath)}_{Hash(content):x16}.mdl");
+
     private static ulong StampHash(string src, long ticks, long length)
     {
         ulong h = 14695981039346656037;   // FNV-1a, as Hash
@@ -737,13 +937,14 @@ public sealed class SecondSkinService
     /// body's UV space. The shell INHERITS the body's UVs, so the destination is the character's body UV
     /// type — not the accessory material's. Mirrors CompositorService.RemapIfNeeded; keep them in step.
     /// </summary>
-    private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h)
+    private byte[]? LoadRemapped(string? rel, string sidecarRoot, string? srcType, string? dstType, int w, int h,
+                                 ResampleFilter filter = ResampleFilter.Auto)
     {
         if (rel == null) return null;
         // Extension tolerance (metadata says diffuse.dds but the file is diffuse.png, etc.) is handled
         // centrally in TextureLoader.LoadPngAsRgba, so skin and gear resolve identically.
         var path = Path.Combine(sidecarRoot, rel);
-        return RemapPath(path, srcType, dstType, w, h);
+        return RemapPath(path, srcType, dstType, w, h, filter);
     }
 
     /// <summary>
@@ -770,31 +971,42 @@ public sealed class SecondSkinService
     /// of work: the key names every input the result depends on, so an entry another build put there is
     /// exactly what this one would have computed.
     /// </summary>
-    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H), byte[]?> remapCache = new();
+    // The FILTER is part of the key for the same reason it is part of TextureLoader's decode key: an index
+    // map and a mask can be the same file, and the two must not be able to hand each other their result.
+    private readonly ConcurrentDictionary<(string Path, string? Src, string? Dst, int W, int H, ResampleFilter F), byte[]?> remapCache = new();
 
-    private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h)
+    private byte[]? RemapPath(string path, string? srcType, string? dstType, int w, int h,
+                              ResampleFilter filter = ResampleFilter.Auto)
     {
-        var png = textureLoader.LoadPngAsRgba(path, w, h);
+        var png = textureLoader.LoadPngAsRgba(path, w, h, filter);
         if (png == null || srcType == null || dstType == null) return png;
         if (string.Equals(srcType, dstType, StringComparison.OrdinalIgnoreCase)) return png;
 
         // Only the REMAPPING path is memoized. The two returns above are already cheap — LoadPngAsRgba has
         // its own decode cache — and caching them would duplicate that for nothing.
-        var key = (path, srcType, dstType, w, h);
+        var key = (path, srcType, dstType, w, h, filter);
         if (remapCache.TryGetValue(key, out var hit)) return hit;
-        var result = RemapPathCore(path, png, srcType, dstType, w, h);
+        var result = RemapPathCore(path, png, srcType, dstType, w, h, filter);
         remapCache[key] = result;
         return result;
     }
 
-    private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h)
+    private byte[]? RemapPathCore(string path, byte[] png, string srcType, string dstType, int w, int h,
+                                  ResampleFilter filter = ResampleFilter.Auto)
     {
+        // Every branch below finishes by bringing a 4096² intermediate back to (w, h), and until this
+        // existed they all did it with ResizeBilinear regardless of what the texture MEANT — so a
+        // cross-UV index map has had its row selectors interpolated all along. SnapIndexRowsToDefined
+        // repairs some of that downstream, but only by guessing at a value that should never have been
+        // invented. Honour the caller's filter on those tails instead.
+        byte[] ToTarget(byte[] src, int sw, int sh)
+            => TextureLoader.Resample(src, sw, sh, w, h, filter);
 
         // Any source -> gen2 (vanilla): vanilla UV is the RIGHT HALF of bibo UV space, so convert to
         // bibo first (via transfer map when needed), crop, then resize.
         if (string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase))
         {
-            var native = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            var native = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
             if (native == null) return png;
             byte[] biboSpace;
             if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
@@ -808,7 +1020,7 @@ public sealed class SecondSkinService
                 biboSpace = converted;
             }
             var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
-            return UVRemapService.ResizeBilinear(rightHalf, 2048, 4096, w, h);
+            return ToTarget(rightHalf, 2048, 4096);
         }
 
         // gen2 -> an asymmetric space: the inverse of the crop above. Reached whenever a gen2-native layer
@@ -833,17 +1045,19 @@ public sealed class SecondSkinService
             var expanded = UVRemapService.ExpandMirrored(png, w, h, 4096, 4096);
             var moved = uvRemap.Remap(expanded, 4096, 4096, srcDoubled, dstType);
             if (ReferenceEquals(moved, expanded)) return png;   // no transfer map — leave it alone
-            return UVRemapService.ResizeBilinear(moved, 4096, 4096, w, h);
+            return ToTarget(moved, 4096, 4096);
         }
 
         // Transfer maps operate at 4096x4096; our textures are smaller, so remap at full res then resize.
+        // A shell sized at the cap skips the round trip entirely — Resample returns the buffer untouched
+        // when the sizes already agree, so a 4K sheet stops paying the squash this branch used to force.
         if (w != 4096 || h != 4096)
         {
-            var native4k = textureLoader.LoadPngAsRgba(path, 4096, 4096);
+            var native4k = textureLoader.LoadPngAsRgba(path, 4096, 4096, filter);
             if (native4k == null) return png;
             var remapped = uvRemap.Remap(native4k, 4096, 4096, srcType, dstType);
             if (ReferenceEquals(remapped, native4k)) return png;
-            return UVRemapService.ResizeBilinear(remapped, 4096, 4096, w, h);
+            return ToTarget(remapped, 4096, 4096);
         }
         return uvRemap.Remap(png, w, h, srcType, dstType);
     }
@@ -894,7 +1108,18 @@ public sealed class SecondSkinService
         // appended into the carrier verbatim rather than cut from the character. Allocated to hosts AFTER
         // the gear shells above, from whatever material capacity they leave, so a character with no content
         // packs gets a bit-identical shell allocation to before this existed.
-        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null)
+        IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers = null,
+        // Every mod in the look, not just those contributing a shell. A toe cap belongs to the foot, so
+        // the mod that ships the map need not be the one wearing anything over the toes.
+        IReadOnlyList<OverlayEntry>? allEntries = null,
+        // The sheet size this build should bake at, when the caller has already worked it out. The
+        // compositor has: it warms this phase's art in the background and the decode cache keys on the
+        // target size, so a warm at any other size is not a cheaper warm, it is a wasted one. Passing the
+        // number it warmed at is the only way the two are guaranteed to agree — recomputing here would
+        // re-probe the same files against a tree that may have moved underneath (a mask toggled, a file
+        // replaced), and a disagreement puts every decode back on the composite thread. Null recomputes,
+        // which is right for tests and any caller with no prefetch to keep in step with.
+        int? shellTexSize = null)
     {
         int contentIn = contentLayers?.Count ?? 0;
 
@@ -902,6 +1127,19 @@ public sealed class SecondSkinService
         // them across composites would dwarf the decode cache for no benefit — the inputs are re-read from
         // TextureLoader's cache anyway, and only the repetition WITHIN one build is worth avoiding.
         remapCache.Clear();
+
+        // The sheet size for THIS build, chosen from the art before any of it is decoded — every load below
+        // is keyed on it, so it has to be settled first. A LOCAL, passed down by parameter: see the note
+        // where CoverageSize is declared for why this must never become a field.
+        int largestArt = 0;
+        int texSize = shellTexSize ?? ChooseTexSize(ShellArtPaths(gearOverlays, discovery), out largestArt);
+        // Anything above the floor is worth a line — it is what to grep when a shell looks softer than its
+        // art or a composite got slower — while the ordinary floor case stays quiet.
+        if (texSize != TexSizeFloor)
+            log.Information("[Proteus] second skin: shell textures at {0} (largest art {1}, floor {2}, cap {3})",
+                $"{texSize}x{texSize}",
+                largestArt == 0 ? "as given by the caller" : $"{largestArt}px",
+                TexSizeFloor, TexSizeCap);
 
         // Cleared FIRST, so the field means "as of this build" rather than "as of some build". Nothing else
         // resets it, and several paths below return before the content loop runs — turn off the pack that
@@ -1146,6 +1384,12 @@ public sealed class SecondSkinService
         // was cut from — the path's race code is what decides how the game deforms this geometry, and the
         // shell has to be hosted in that same space (see cutCode below).
         var bodies = new List<(byte[] Bytes, HashSet<string>? Shapes, string Path, string? Uv)>();
+
+        // Body paths whose bytes are ALREADY our own published, smoothed body — read back because our
+        // redirect masks the original and we have not seen it unmasked this session. The shell is cut from
+        // them normally; the smoothing pass must hold what it has rather than run again. See the block
+        // that fills this.
+        var bodySettled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? modelType = null;   // UV space of the first kept part, from its own skin material
         // Bare-body slots attempted vs. missing — the whole-body fallback below fires only when EVERY one
         // of them came back missing (see there for why "any one missing" is the wrong trigger).
@@ -1176,8 +1420,109 @@ public sealed class SecondSkinService
             // ResolvePlayer only yields a real file for MODDED models; a vanilla piece resolves to the
             // game path unchanged, so read from the game data in that case. The transcoder reads each
             // model's own vertex declaration, so vanilla and modded models both skin correctly.
+            // A PLAIN RESOLVE, deliberately, and NOT through resolveUpstream the way the append host does.
+            //
+            // Routing this through the shared upstream resolver looks obviously right — it exists to see
+            // past our own redirect — and it published someone else's body. The resolver remembers the
+            // last non-ours answer for a path, and a body path is CONTESTED: two installed body mods can
+            // both provide c0201e0000_top.mdl. The composite clears our redirects and waits for Penumbra
+            // to rebuild, and inside that window the path transiently resolves to whichever contributor
+            // has been applied so far. One such answer got remembered and stuck: the character's chest
+            // silently changed mod, size and piercings mid-session, from Neolithe's 7164-vertex model to
+            // Yet Another Body's 8164-vertex "buff - large".
+            //
+            // The plain resolve plus the byte cache below does not have that failure. It only ever
+            // remembers bytes it read when the path was NOT masked by us — a settled, uncontested moment —
+            // and when it has nothing remembered it declines to publish rather than guessing.
             var bodyDisk = penumbra.ResolvePlayer(bodyGamePath);
-            var bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+            // THE BODY MAY NOW BE ONE OF OUR OWN PUBLICATIONS. The nipple smooth republishes the body with
+            // its chest relaxed, so from the next composite onward this path resolves to that file — and
+            // cutting a shell from it, or smoothing it again, would compound the effect a little more
+            // every time. The upstream is remembered the first time it is seen and used from then on, so
+            // every pass keeps working from the body the user actually installed.
+            //
+            // Falling back to the game's own data (what the host loader does in this situation) is wrong
+            // here: that is VANILLA, and a character wearing a Bibo body would have its shell cut from a
+            // body it is not wearing.
+            bool bodyIsOurs = bodyDisk != null && IsInsideOutputRoot(bodyDisk, outputRoot);
+
+            // SMOOTHING OUR OWN OUTPUT AGAIN is the thing that must never happen, and it is not merely
+            // wrong once — it COMPOUNDS. The composite runs on every appearance change, so the deformation
+            // grows without bound. Observed over six minutes of ordinary play: the crotch corridor is a
+            // fixed 45.4mm wide and the vertex count inside it climbed 865 -> 913 as the surface migrated
+            // into it, and the character finished with holes through the stomach and crotch. Each round of
+            // that looks like a fresh bug in whichever pass ran last, which is exactly how it hid.
+            //
+            // The part is still READ, though, and that distinction cost a round of its own. This list is
+            // what the SHELL is cut from as well as what the smoothing passes run on, so dropping a part
+            // here does not decline to smooth it — it deletes it from the garment. Skipping top and dwn
+            // published a bodysuit with no chest and no lower body (2 meshes and 388 KB against 6 and
+            // 1370), alternating with a good one composite by composite.
+            //
+            // So: read it either way, and mark it. bodySettled below carries "these bytes are already our
+            // own published body" to the smoothing pass, which then holds the file it has instead of
+            // recomputing from it. The shell keeps every part; the body stops eating itself.
+            //
+            // Falling back to the game's own data is NOT the alternative. That is VANILLA, and a character
+            // wearing a Bibo body would have its shell cut from a body it is not wearing.
+            // The upstream body KEPT ON DISK, beside the smoothed one. In memory alone is not enough: our
+            // own redirect masks the path from the moment we first publish, and nothing afterwards
+            // unmasks it — CompositorService.PrimeUpstreamCache's IsReadableBase excludes
+            // chara/equipment/, so a body path is never primed. So a session that starts with our
+            // redirect in the persisted manifest would never see the real body again, and holding the
+            // file we published instead froze the character: toggling nipple or fold smoothing changed
+            // nothing, because nothing recomputed.
+            //
+            // Written whenever the path IS unmasked, which is the settled, uncontested moment — the same
+            // condition that makes the in-memory copy trustworthy. Read back when it is masked. The
+            // smoothing then always runs on the body the user installed, every composite, and responds to
+            // their settings.
+            // In a SUBFOLDER of models/, and that detail is load-bearing. PruneManagedOutput deletes every
+            // file directly under models/ that the manifest about to be published does not name, and these
+            // are never published — so kept beside the smoothed bodies they lasted exactly one composite.
+            // The prune uses Directory.GetFiles, which does not recurse, so a subfolder is untouched.
+            var upstreamDir = Path.Combine(modelsDir, "upstream");
+            var upstreamDisk = Path.Combine(upstreamDir, CompositorService.SanitizeName(bodyGamePath) + ".mdl");
+
+            byte[]? bytes;
+            if (bodyIsOurs && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
+            {
+                bytes = remembered;
+            }
+            else if (bodyIsOurs && File.Exists(upstreamDisk))
+            {
+                bytes = File.ReadAllBytes(upstreamDisk);
+                _upstreamBodies[bodyGamePath] = bytes;
+                log.Debug("[Proteus] second skin: {0} resolves to our own output — smoothing the upstream "
+                        + "kept at {1}", bodyGamePath, upstreamDisk);
+            }
+            else if (bodyIsOurs)
+            {
+                // Nothing remembered anywhere. Cut the shell from what we published — it IS the body the
+                // character draws — but do not run the passes over it again; that is the compounding bug.
+                // Never DROP the part: this list feeds the shell, and skipping one publishes a garment
+                // with no chest and no lower body.
+                bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+                bodySettled.Add(bodyGamePath);
+                log.Debug("[Proteus] second skin: {0} still resolves to our own output ({1}) and no "
+                        + "upstream is remembered — cutting the shell from it, and holding the body we "
+                        + "already published rather than smoothing it again", bodyGamePath, bodyDisk ?? "(null)");
+            }
+            else
+            {
+                bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+                if (bytes != null)
+                {
+                    _upstreamBodies[bodyGamePath] = bytes;
+                    try
+                    {
+                        Directory.CreateDirectory(upstreamDir);
+                        WriteIfChanged(upstreamDisk, bytes);
+                    }
+                    catch (Exception ex)
+                    { log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
+                }
+            }
 
             if (bytes == null)
             {
@@ -2556,16 +2901,113 @@ public sealed class SecondSkinService
             if (rd.IsMaskShell) continue;   // mask coverage/relief is handled by BuildMaskCoverage
             if (layerSurface[i] < 0) continue;   // surface unresolved — the layer is not being built
             var (rSrc, rDst) = UvFor(i, rd);
-            var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, TexSize, TexSize, MaskAdds(rEntry, rOv));
+            var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, texSize, texSize, MaskAdds(rEntry, rOv));
             alphaByLayer[i] = rAlpha;
             if (rd.Normal == null || rAlpha == null) continue;
-            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, TexSize, TexSize);
+            var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, texSize, texSize);
             if (rNormal == null) continue;
             rNormal = (byte[])rNormal.Clone();   // LoadRemapped may hand back a shared cached buffer
             int nn = Math.Min(rAlpha.Length, rNormal.Length / 4);
             for (int p = 0; p < nn; p++) rNormal[p * 4 + 3] = rAlpha[p];   // coverage → alpha lane (the gate)
             reliefContribs.Add((rEntry.ModDirectory, i, rNormal));
         }
+
+        // A toe cap belongs to the FOOT, not to the mod that happens to ship the map. One mod paints it
+        // and every shell over those toes is rebuilt with it — otherwise a wardrobe of stockings needs the
+        // same map copied into each one, and any shell missing it sleeves the toes while its neighbour
+        // caps them. The map is remapped into the body's UV using its own mod's source type, so it is
+        // shared as body-UV pixels that any shell can use.
+        byte[]? sharedToeCap = null;
+        var capCandidates = (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+            .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First());
+        foreach (var tEntry in capCandidates)
+        {
+            var tPath = discovery.ResolveActiveToeCap(tEntry);
+            if (tPath == null) continue;
+
+            // Remapped with the OWNING mod's UV space; after that it is body-UV pixels anyone can use.
+            var tDesc = gearOverlays.FirstOrDefault(g =>
+                string.Equals(g.Entry.ModDirectory, tEntry.ModDirectory, StringComparison.OrdinalIgnoreCase)).Overlay?.Descriptor;
+            var tSrc = tDesc != null ? tDesc.SourceBodyType ?? InferOverlayBodyType(tDesc) : bodyType;
+            sharedToeCap = ReadToeCap(tPath, tSrc, bodyType);
+            if (sharedToeCap != null)
+            {
+                log.Information("[Proteus] second skin: toe cap {0} from \"{1}\" applies to every shell over the toes",
+                    Path.GetFileName(tPath), tEntry.ModDirectory);
+                break;
+            }
+        }
+
+        // A bust bridge belongs to the GARMENT, not to the one layer it was ticked on. A mod's shells are
+        // stacked a fifth of a millimetre apart, so if the fabric spans the cleavage and the mask shell
+        // over it does not, the mask sinks THROUGH the fabric and the look is worse than with neither
+        // spanning. Any of a mod's shells asking for it spans all of them, at the strongest setting asked.
+        //
+        // Per MOD, not global like the toe cap: a cap is a property of the foot everyone's stockings share,
+        // whereas whether a garment lifts off the sternum is a design choice about that garment.
+        // The nipple smooth travels with it, for the same reason and by the same rule — two shells of
+        // one garment smoothing by different amounts would cross exactly as two spanning differently do.
+        var bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var cleftByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        var foldByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
+                     .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
+        {
+            if (bEntry.Metadata.BustBridge == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
+                if (s > 0f) bridgeByMod[bEntry.ModDirectory] = s;
+            }
+            if (bEntry.Metadata.SmoothNipples == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.SmoothNipplesStrength ?? 1f, 0f, 1f);
+                if (s > 0f) smoothByMod[bEntry.ModDirectory] = s;
+            }
+            if (bEntry.Metadata.CleftBridge == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.CleftBridgeStrength ?? 1f, 0f, 1f);
+                if (s > 0f) cleftByMod[bEntry.ModDirectory] = s;
+            }
+            if (bEntry.Metadata.SmoothFold == true)
+            {
+                float s = Math.Clamp(bEntry.Metadata.SmoothFoldStrength ?? 1f, 0f, 1f);
+                if (s > 0f) foldByMod[bEntry.ModDirectory] = s;
+            }
+        }
+        foreach (var (cMod, cStrength) in cleftByMod)
+            log.Information("[Proteus] second skin: cleft bridge at {0:0.##} applies to every shell of \"{1}\"",
+                cStrength, cMod);
+        foreach (var (fMod, fStrength) in foldByMod)
+            log.Information("[Proteus] second skin: fold smoothing at {0:0.##} applies to every shell of \"{1}\"",
+                fStrength, fMod);
+        foreach (var (sMod, sStrength) in smoothByMod)
+            log.Information("[Proteus] second skin: nipple smoothing at {0:0.##} applies to every shell of \"{1}\"",
+                sStrength, sMod);
+        foreach (var (bMod, bStrength) in bridgeByMod)
+            log.Information("[Proteus] second skin: bust bridge at {0:0.##} applies to every shell of \"{1}\"",
+                bStrength, bMod);
+
+        // Which MOD is outermost on each host — every one of its shells gets its backfaces drawn, and no
+        // one else's do.
+        //
+        // Two wrong versions preceded this and each is worth keeping straight. Showing them on EVERY
+        // spanning shell puts the underside of each inner shell into the transparent pass too; those are
+        // surfaces nothing can look at, since the shell above covers them, so all they add is blended
+        // layers — with three shells a fifth of a millimetre apart that read as the lower garment bleeding
+        // through the upper one in patches. (Measured on that build: layer separation was intact at 0.0002
+        // everywhere, so nothing had actually moved. It looked exactly like a hole or a crossing and was
+        // neither.)
+        //
+        // Showing them on the single outermost SHELL is worse, because a mod's mask shell is appended
+        // after its fabric and so is outermost of all: the flag landed on the mask alone and the garment
+        // underneath it stopped drawing. A mod is one garment, and its shells are one surface stacked for
+        // colour, not separate things — so the unit is the mod, not the layer.
+        var topSpanningModOnHost = new Dictionary<int, string>();
+        foreach (var (wi, wh) in work)
+            if (bridgeByMod.ContainsKey(gearOverlays[wi].Entry.ModDirectory))
+                topSpanningModOnHost[wh] = gearOverlays[wi].Entry.ModDirectory;   // work is in stack order
 
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
@@ -2607,7 +3049,7 @@ public sealed class SecondSkinService
             // The mask shell's coverage IS the mask; other shells' coverage is the overlay's art shaped by masks.
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
             var alpha = isMaskShell
-                ? BuildMaskCoverage(entry, srcType, dstType, TexSize, TexSize)
+                ? BuildMaskCoverage(entry, srcType, dstType, texSize, texSize)
                 : alphaByLayer[i];   // computed once in the sibling-relief pre-pass above
 
             // Error-drops (below) don't consume a host slot — inHost/diskLetter only advance on a full success.
@@ -2615,7 +3057,7 @@ public sealed class SecondSkinService
             // Drop the shell rather than render it fully opaque — a fabric with no coverage gate covers the
             // WHOLE body and the masks never carve it (this masked a diffuse.dds/.png extension mismatch).
             if (alpha == null) continue;
-            var coverage = Downsample(alpha, TexSize, TexSize, CoverageSize);
+            var coverage = Downsample(alpha, texSize, texSize, CoverageSize);
 
             // Same-mod siblings' relief compounds into this fabric shell (never into a mask shell — its normal
             // IS the mask relief). Self is excluded so a shell doesn't double-stamp its own normal.
@@ -2659,8 +3101,8 @@ public sealed class SecondSkinService
             if (template == null) { log.Error("[Proteus] second skin: missing template material for {0}", shader); continue; }
 
             var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, ref shellChanged, mergeMasks, siblingReliefs,
-                GearMaterialWriter.TextureNames(template));
+                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, texSize, ref shellChanged, mergeMasks,
+                siblingReliefs, GearMaterialWriter.TextureNames(template));
             if (texPaths == null) continue;
 
             var scroll = new ScrollSettings(
@@ -2673,17 +3115,33 @@ public sealed class SecondSkinService
             // A mask shell's colour lives in the colorset over a WHITE base (no diffuse of its own), so the
             // colorset diffuse must be linearised to render at the authored (sRGB) value — matching the skin
             // bake. Fabric shells carry colour in their base texture with a white colorset, so they don't.
-            // An overlay AUTO-PROMOTED from Skin takes the neutral baseline too, for the same reason a mask
-            // shell does: nobody chose gear and nobody chose colours, so there is no "look being worn" whose
-            // template table should show through. Inheriting it multiplies the author's art by a vanilla
-            // top's palette — e0041 ships pink, olive and brown rows — which renders a skin overlay as dark
-            // patches wherever the _id happens to select one of them.
+            //
+            // NEUTRAL WHENEVER THE AUTHOR SET NO ROWS, however the overlay reached this layer. The
+            // alternative — null, i.e. keep the cloned template's own table — sounds like inheriting "the
+            // look being worn", and it is not: the template is a FIXED vanilla top (e0041), unrelated to
+            // anything the character has on, and it ships pink, olive and brown rows. Its pair 16 is very
+            // nearly black. So an overlay whose _id selects pair 16 — which is Proteus's own convention for
+            // an unclaimed texel, and what a tattoo's index usually says — got multiplied down to about a
+            // tenth of its authored brightness, while the identical art on the SKIN layer rendered
+            // untinted (BuildRowDict returns an empty dict for empty presets, so nothing tints it there).
+            // That is the whole "cloth looks a lot darker than skin" report, and nobody can have designed
+            // against a palette they cannot see and did not choose.
+            //
+            // Narrow, despite reading broad: BuildRows only consults this when the preset list is EMPTY.
+            // An author who set even one row already starts from NeutralRows, so their unset pairs are
+            // white today and stay white.
             //
             // Only the BASELINE, though — not the mask shell's half-pair mirroring, which is why this is a
-            // separate argument. A promoted overlay still carries its own art, so mirroring would tint and
-            // light it at every green < 255 texel; see BuildRows.
-            bool neutralRows = isMaskShell || ov.Descriptor.PromotedFromSkin;
-            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: neutralRows), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell); }
+            // separate argument. An ordinary shell carries its own art, so mirroring would tint and light
+            // it at every green < 255 texel; see BuildRows.
+            //
+            // A spanning shell needs its backfaces drawn: it lifts off the body between the breasts, so the
+            // inside of the span is visible from below and from the side, and culled it reads as a hole
+            // through the garment rather than as cloth with an underside. Every shell of the outermost
+            // MOD, and only those — see topSpanningModOnHost for the two narrower rules that failed.
+            bool spanning = topSpanningModOnHost.TryGetValue(hIdx, out var topMod)
+                         && string.Equals(topMod, entry.ModDirectory, StringComparison.OrdinalIgnoreCase);
+            try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: true), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell, showBackfaces: spanning); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
@@ -2694,6 +3152,14 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
+            // A shell follows every body contour, so hosiery sleeves each toe unless the toe area is
+            // marked — then the writer cuts that region out and rebuilds it as one rounded cap.
+            // BODY SURFACES ONLY. The map is body UV and the cap is a foot; handing one to a face or a
+            // tail layer would cut its geometry against a mask painted for another atlas entirely, and
+            // the coverage gate below would be comparing body-UV texels to face-UV alpha.
+            var toeCap = layerSurf.Key.IsBody
+                ? ToeCapFor(ov.Descriptor, entry, srcType, dstType, sharedToeCap, alpha, texSize)
+                : null;
             if (BuildLightProfile(ov.ColorTableRows, isMaskShell, layerSurf.Key.Kind,
                     isScroll: string.Equals(shader, RenderModeInference.GlowShader,
                                             StringComparison.OrdinalIgnoreCase)) is { } lightProfile)
@@ -2706,6 +3172,29 @@ public sealed class SecondSkinService
                 CoverageWidth = coverage == null ? 0 : CoverageSize,
                 CoverageHeight = coverage == null ? 0 : CoverageSize,
                 PushScale = PushFor(i),
+                ToeCap = toeCap,
+                ToeCapWidth = toeCap == null ? 0 : ToeCapSize,
+                ToeCapHeight = toeCap == null ? 0 : ToeCapSize,
+                ToeCapStrength = Math.Clamp(ov.Descriptor.ToeCapStrength ?? 1f, 0f, 1f),
+                // BODY SURFACES ONLY, for the same reason the cap is: a face or a tail has no bust bones,
+                // so the pass would decline anyway — but saying so here keeps the gate where the reason
+                // for it is, instead of in a silent early return three files away.
+                BustBridgeStrength = layerSurf.Key.IsBody
+                                  && bridgeByMod.TryGetValue(entry.ModDirectory, out var bridgeS)
+                    ? bridgeS
+                    : 0f,
+                NippleSmoothStrength = layerSurf.Key.IsBody
+                                    && smoothByMod.TryGetValue(entry.ModDirectory, out var smoothS)
+                    ? smoothS
+                    : 0f,
+                CleftBridgeStrength = layerSurf.Key.IsBody
+                                   && cleftByMod.TryGetValue(entry.ModDirectory, out var cleftS)
+                    ? cleftS
+                    : 0f,
+                FoldSmoothStrength = layerSurf.Key.IsBody
+                                  && foldByMod.TryGetValue(entry.ModDirectory, out var foldS)
+                    ? foldS
+                    : 0f,
             });
             inHost[hIdx]++; diskLetter++;       // slot consumed
             if (isMaskShell) maskLayers++; else clothLayers++;
@@ -2739,7 +3228,7 @@ public sealed class SecondSkinService
             if (unit.Glow != null)
             {
                 mtrl = BuildContentGlowMaterial(unit, texPrefix, texturesDir, diskChar, effectsFolder,
-                    redirects, ref shellChanged);
+                    texSize, redirects, ref shellChanged);
                 glowBuilt = mtrl != null;
                 // The pack's own material rather than nothing: an effect file that has gone missing, or a
                 // template the game could not hand us, must not take the piece off the character.
@@ -3034,8 +3523,106 @@ public sealed class SecondSkinService
         else
             _lastClaimedCarriers = null;   // re-arm: the same mod mattering later is news again
 
-        // Build one shell model per host that got layers; fold each into the single Result.
         bool modelChangedAny = false;
+
+        // ── the body under the garment, BEFORE anything is cut from it ────────────────────────────
+        //
+        // Smoothing lowers a surface, and a shell rides one millimetre off the skin — so a shell smoothed
+        // on its own sits INSIDE the body and the body's own nipple stands through it. That is not a
+        // tuning problem, it is what two independent relaxes on two different meshes must do: measured on
+        // a real capture the shell ended up 2-3.3mm BEHIND the skin across the areola, which is exactly
+        // the well with a point in the middle of it that the shell-only version produced.
+        //
+        // So there is only ever ONE relax. It happens here, to the body, and the shell is then cut from
+        // the smoothed body and pushed out along its reshaded normals. That restores the guarantee the
+        // whole second-skin scheme rests on — a shell is a displaced COPY of what is published beneath
+        // it, so it cannot be pierced by it — instead of trying to keep two surfaces in step by hand.
+        //
+        // Only where a garment that asked for it COVERS, so an uncovered breast keeps its own shape.
+        if (smoothByMod.Count > 0 || foldByMod.Count > 0)
+        {
+            float smoothMax = smoothByMod.Count == 0 ? 0f : smoothByMod.Values.Max();
+            float foldMax = foldByMod.Count == 0 ? 0f : foldByMod.Values.Max();
+            // ONE coverage union for both. They are two regions of one body and the gate answers the same
+            // question for each — is this skin under cloth that asked — so a layer that asked for either
+            // contributes to it.
+            byte[]? union = null;
+            int uw = 0, uh = 0;
+            foreach (var l in perHostLayers.SelectMany(x => x))
+            {
+                if ((l.NippleSmoothStrength <= 0f && l.FoldSmoothStrength <= 0f) || l.Coverage == null
+                 || l.CoverageWidth <= 0 || l.CoverageHeight <= 0) continue;
+                if (union == null) { uw = l.CoverageWidth; uh = l.CoverageHeight; union = (byte[])l.Coverage.Clone(); }
+                else if (l.CoverageWidth == uw && l.CoverageHeight == uh && l.Coverage.Length >= uw * uh)
+                    for (int p = 0; p < union.Length; p++) if (l.Coverage[p] > union[p]) union[p] = l.Coverage[p];
+            }
+            var gate = new SecondSkinLayer
+            {
+                MaterialName = "/bodysmooth.mtrl",   // never emitted; carries the coverage only
+                Coverage = union,
+                CoverageWidth = union == null ? 0 : uw,
+                CoverageHeight = union == null ? 0 : uh,
+            };
+
+            var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (bBytes, _, bPath, _) in bodies)
+            {
+                // Already ours: these bytes ARE the body we published last time. Re-running the passes on
+                // them is the compounding bug, and dropping the redirect instead would put the untouched
+                // body back on screen — the nipple popping out again every other composite. So keep the
+                // file exactly as it stands and say nothing changed.
+                if (bodySettled.Contains(bPath))
+                {
+                    var held = SmoothedBodyPath(modelsDir, bPath, bBytes);
+                    if (File.Exists(held))
+                    {
+                        redirects[bPath] = Rel(outputRoot, held);
+                        smoothedBody[bPath] = bBytes;
+                    }
+                    continue;
+                }
+
+                byte[]? smoothed;
+                try
+                {
+                    smoothed = SecondSkinWriter.SmoothBodyNipples(bBytes, gate, smoothMax,
+                        msg => log.Debug("[Proteus] second skin: {0}", msg), foldMax);
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] second skin: could not smooth {0}", bPath);
+                    continue;
+                }
+                if (smoothed == null) continue;   // no bust bones, or nothing covered — most parts
+
+                var disk = SmoothedBodyPath(modelsDir, bPath, smoothed);
+                bool changed = WriteIfChanged(disk, smoothed);
+                redirects[bPath] = Rel(outputRoot, disk);
+                modelChangedAny |= changed;
+                smoothedBody[bPath] = smoothed;
+                if (changed)
+                    log.Information("[Proteus] second skin: republished {0} with the chest relaxed -> {1}",
+                                    bPath, Path.GetFileName(disk));
+            }
+
+            if (smoothedBody.Count > 0)
+            {
+                // Re-point every surface at the bodies just published. SourcePaths is index-aligned with
+                // Sources, so a part that did not smooth (no bust bones — most of them) keeps its own bytes.
+                for (int i = 0; i < surfaces.Count; i++)
+                {
+                    var s = surfaces[i];
+                    var swapped = s.Sources.Select((src, k) =>
+                        k < s.SourcePaths.Count && smoothedBody.TryGetValue(s.SourcePaths[k], out var nb)
+                            ? src with { Model = nb }
+                            : src).ToList();
+                    surfaces[i] = s with { Sources = swapped };
+                }
+
+            }
+        }
+
+        // Build one shell model per host that got layers; fold each into the single Result.
         var hostModelPaths = new List<string>();
         var appendHostModelPaths = new List<string>();
         for (int h = 0; h < hosts.Count; h++)
@@ -3064,8 +3651,10 @@ public sealed class SecondSkinService
                 var srcs = perHostLayers[h].All(l => l.Geometry.Count > 0)
                     ? []
                     : surface.Sources;
+                DumpShellInputs(h, srcs, perHostLayers[h], host.BaseModel);
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
-                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg));
+                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps());
+                DumpShellOutput(h, shell);
             }
             catch (EmptyShellException ex) when (ex.ByToggle)
             {
@@ -3080,6 +3669,38 @@ public sealed class SecondSkinService
             {
                 log.Error(ex, "[Proteus] second skin: model build failed for host {0}{1:D4}/{2}", host.Prefix, host.SetId, host.Slot);
                 continue;   // this host fails; the others still build
+            }
+
+            // The toe cap was wanted but no binding described this body, so none was emitted. Say so —
+            // the toes just quietly lose their cap otherwise, and there is a concrete thing the wearer
+            // can do about it (bake a binding against this body). Deduped: the shell rebuilds often.
+            if (stats.CapDeclined is { } declined)
+            {
+                if (lastCapDeclined != declined)
+                {
+                    lastCapDeclined = declined;
+                    var capMsg = $"[Proteus] Toe cap skipped: {declined}. The cap is fitted by a binding "
+                               + "measured against each supported body; this one has none, so the toes are "
+                               + "left uncapped rather than torn.";
+                    // Marshalled for the same reason as the messages above: this runs off the framework
+                    // thread and ChatGui's queue is not safe to enqueue into concurrently with the tick
+                    // that drains it.
+                    _ = Plugin.Framework.RunOnFrameworkThread(
+                        () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(capMsg, 25).Build()));
+                }
+                log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
+            }
+
+            // Which cap this shell actually got. Said out loud because the alternative is reading the
+            // Dalamud log, which is size-capped and quietly stops writing — "is the cap I just authored
+            // being used?" should not need forensics. Only on a change, so it is not chat spam.
+            if (stats.CapUsed is { } capUsed && lastCapUsed != capUsed)
+            {
+                lastCapUsed = capUsed;
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder()
+                        .AddUiForeground($"[Proteus] Toe cap: {capUsed}", 25).Build()));
+                log.Information("[Proteus] second skin: toe cap {0}", capUsed);
             }
 
             // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host. The Emperor
@@ -3281,7 +3902,7 @@ public sealed class SecondSkinService
                 return null;
             }
             // Every pass below is per-texel with no carried state, so partitioning them cannot change a
-            // byte — and at TexSize each is 4.19M iterations, run once per mask per layer.
+            // byte — and each is 4.19M iterations at a 2K sheet (16.7M at 4K), run once per mask per layer.
             var al = alpha; var ar = art;
             CompositorService.ParallelPixels(0, n, 1, (from, to) =>
             { for (int i = from; i < to; i++) al[i] = ar[i * 4 + 3]; });
@@ -3387,6 +4008,148 @@ public sealed class SecondSkinService
         return cov;
     }
 
+    /// <summary>
+    /// Write out exactly what the writer is about to be handed, so the offline harness can rebuild the
+    /// same shell instead of approximating its inputs. Enabled by CREATING the folder — it does nothing
+    /// until %TEMP%\proteus-shell-dump exists, and there is nothing to turn off afterwards but deleting
+    /// it again.
+    /// <para/>
+    /// This exists because approximating those inputs cost several rounds of chasing defects that the
+    /// harness could not reproduce: it was pointed at a different foot model than the one equipped, and
+    /// then at one body where the game passes several, no shape keys, and no connector-mesh mode.
+    /// </summary>
+    private void DumpShellInputs(int host, IReadOnlyList<SecondSkinWriter.SourceSpec> sources,
+                                 IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        try
+        {
+            var pre = Path.Combine(dir, $"host{host}_");
+            for (int i = 0; i < sources.Count; i++) File.WriteAllBytes($"{pre}body{i}.mdl", sources[i].Model);
+            if (baseModel != null) File.WriteAllBytes($"{pre}base.mdl", baseModel);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"bodies={sources.Count}");
+            for (int i = 0; i < sources.Count; i++)
+            {
+                var sp = sources[i];
+                sb.AppendLine($"source[{i}] dropConnectors={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
+                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")}");
+            }
+            for (int i = 0; i < layers.Count; i++)
+            {
+                var l = layers[i];
+                sb.AppendLine($"layer[{i}] material={l.MaterialName} "
+                            + $"coverage={(l.Coverage == null ? "none" : $"{l.CoverageWidth}x{l.CoverageHeight}")} "
+                            + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
+                            + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength} "
+                            // The two body passes were missing here, and their absence cost a diagnosis:
+                            // a report of holes came in against a dump that recorded only the shell's own
+                            // settings, so there was no way to tell from it whether the fold had even run.
+                            + $"cleftBridge={l.CleftBridgeStrength} smoothFold={l.FoldSmoothStrength}");
+                if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
+                if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
+            }
+            File.WriteAllText($"{pre}inputs.txt", sb.ToString());
+            log.Information("[Proteus] second skin: dumped build inputs for host {0} to {1}", host, dir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not dump build inputs");
+        }
+    }
+
+    /// <summary>
+    /// The finished shell, beside the inputs that produced it. Same opt-in as
+    /// <see cref="DumpShellInputs"/> — the folder existing is the switch.
+    /// <para/>
+    /// Worth its own file rather than being rebuilt from the inputs offline: a harness that reconstructs
+    /// the shell can differ from the game's in ways that are the whole question (which bodies were merged,
+    /// which shapes were on, which host it landed on), and then the mesh being measured is not the mesh
+    /// anyone saw. This is the one the game actually published.
+    /// </summary>
+    private void DumpShellOutput(int host, byte[] shell)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, $"host{host}_shell.mdl"), shell);
+            log.Information("[Proteus] second skin: dumped built shell for host {0} to {1}", host, dir);
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not dump built shell");
+        }
+    }
+
+    /// <summary>
+    /// Load this shell's toe-cap map as a single-channel mask in the BODY's UV space (the shell inherits
+    /// the body's UVs, so the same remap the art takes applies here). Greyscale, so the red channel is the
+    /// value. Null — and no cap — when the file won't load or the map is all black.
+    /// </summary>
+    private byte[]? ReadToeCap(string path, string? srcType, string? dstType)
+    {
+        var rgba = RemapPath(path, srcType, dstType, ToeCapSize, ToeCapSize);
+        if (rgba == null)
+        {
+            log.Warning("[Proteus] second skin: toe cap map {0} failed to load — shells built without a cap", path);
+            return null;
+        }
+
+        var mask = new byte[ToeCapSize * ToeCapSize];
+        bool any = false;
+        for (int p = 0; p < mask.Length; p++)
+        {
+            mask[p] = rgba[p * 4];
+            if (mask[p] != 0) any = true;
+        }
+        return any ? mask : null;   // all black = untouched everywhere; keep the build byte-identical
+    }
+
+    /// <summary>
+    /// The toe cap for one shell: its option's own map if it names one, otherwise the shared map any mod
+    /// in the look supplied. Returned only when this shell's art actually reaches the toes — a cap cuts
+    /// the toe box out and rebuilds it, so handing one to a shell that stops at the ankle would carve a
+    /// hole in the body and fill it with fabric nobody asked for.
+    /// </summary>
+    // texSize is the build's sheet size, which is what `alpha` is square at — a parameter rather than a
+    // field for the reason given where CoverageSize is declared. The cap map stays at its own ToeCapSize,
+    // so the two are strided against each other below.
+    private byte[]? ToeCapFor(OverlayDescriptor d, OverlayEntry entry, string? srcType, string? dstType,
+                              byte[]? shared, byte[]? alpha, int texSize)
+    {
+        if ((d.ToeCapStrength ?? 1f) <= 0f) return null;
+
+        var mask = d.ToeCap != null
+            ? ReadToeCap(Path.Combine(entry.SidecarRoot, d.ToeCap), srcType, dstType)
+            : shared;
+        if (mask == null || alpha == null) return null;
+
+        // How much of the capped area this shell actually paints, sampling the coverage under the map.
+        int over = 0, painted = 0;
+        int step = texSize / ToeCapSize;
+        for (int y = 0; y < ToeCapSize; y++)
+            for (int x = 0; x < ToeCapSize; x++)
+            {
+                if (mask[y * ToeCapSize + x] < 128) continue;
+                over++;
+                if (alpha[(y * step) * texSize + x * step] >= 32) painted++;
+            }
+        float share = over == 0 ? 0f : (float)painted / over;
+        if (share < MinToeCoverage)
+        {
+            log.Debug("[Proteus] second skin: shell covers {0:P0} of the toe cap area — below {1:P0}, left uncapped",
+                share, MinToeCoverage);
+            return null;
+        }
+
+        log.Information("[Proteus] second skin: toe cap at strength {0:0.##}, shell covers {1:P0} of it",
+            d.ToeCapStrength ?? 1f, share);
+        return mask;
+    }
+
     /// <summary>Box-downsample the coverage for triangle trimming; it only decides keep/drop.</summary>
     private static byte[]? Downsample(byte[]? src, int w, int h, int size)
     {
@@ -3416,11 +4179,16 @@ public sealed class SecondSkinService
     /// </summary>
     private const string VanillaSkinMask = "chara/common/texture/skin_mask.tex";
 
-    /// <summary>A flat RGBA texture at the shell texture size. The fallback for a slot the source doesn't
-    /// fill — see the callers for what each colour means, since a wrong one is never blank, it renders.</summary>
-    private static byte[] Solid(byte r, byte g, byte b, byte a)
+    /// <summary>A flat RGBA texture at <paramref name="size"/> square. The fallback for a slot the source
+    /// doesn't fill — see the callers for what each colour means, since a wrong one is never blank, it
+    /// renders.</summary>
+    // The size is a parameter, not a field read: some of these go straight to a slot (where WriteTex's
+    // flat-colour shrink makes the dimensions moot) but others are the BUFFER a later pass writes into —
+    // CombineMaskReliefs and CompoundNormal both take a normal that may have started here — so it has to be
+    // conformant with the rest of the build's sheet.
+    private static byte[] Solid(byte r, byte g, byte b, byte a, int size)
     {
-        var t = new byte[TexSize * TexSize * 4];
+        var t = new byte[size * size * 4];
         for (int i = 0; i < t.Length; i += 4) { t[i] = r; t[i + 1] = g; t[i + 2] = b; t[i + 3] = a; }
         return t;
     }
@@ -3429,6 +4197,9 @@ public sealed class SecondSkinService
         OverlayEntry entry, OverlayDescriptor d, string shader, string texPrefix,
         string texturesDir, Dictionary<string, string> redirects, char letter, byte[]? alpha,
         string? srcType, string? dstType, List<ColorTableRowPreset>? rows, string? effectsFolder,
+        // The build's sheet size — see Build, which owns it. Every buffer this method allocates or combines
+        // is square at this, and the caller's `alpha`/`siblingReliefs` already are.
+        int texSize,
         ref bool texturesChanged, bool mergeMasks = true,
         IReadOnlyList<byte[]>? siblingReliefs = null,   // each: a normal RGBA with coverage in its alpha lane
         // The template's own texture paths, in slot order. A slot the overlay doesn't supply and cannot be
@@ -3438,25 +4209,44 @@ public sealed class SecondSkinService
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
 
-        byte[]? Png(string? rel) => LoadRemapped(rel, sidecarRoot, srcType, dstType, TexSize, TexSize);
+        byte[]? Png(string? rel, ResampleFilter filter = ResampleFilter.Auto)
+            => LoadRemapped(rel, sidecarRoot, srcType, dstType, texSize, texSize, filter);
 
         var diffuse = Png(d.Diffuse);
         var normal = Png(d.Normal);
         var mask = Png(d.Mask);
-        var index = Png(d.Index);
+        // NEAREST, always — the index's red/green are discrete colour-table row selectors, so a filtered
+        // texel is a row nobody assigned rather than a softer edge. See ResampleFilter.
+        var index = Png(d.Index, ResampleFilter.Nearest);
 
         // The scroll map is NOT body-UV art — it's a tiling pattern the shader samples with uv1, so it
         // must NOT be UV-remapped (that would tear the pattern apart). It also lives in an effects
         // folder, not the sidecar tree, so resolve it separately.
+        //
+        // And it keeps its OWN size. ChooseTexSize already excludes scroll maps, because a tiling pattern's
+        // resolution says nothing about the sheet it tiles over — but the exclusion has to run both ways or
+        // it is only half a rule. Loaded at the sheet size, a 512² tile on a 4K shell was upscaled 8x into
+        // a 64 MB texture carrying no more detail than the 1 MB source, and on characterscroll (slots norm,
+        // mask, id, catc — no base) that is a quarter of the material's footprint spent on an upscale.
         byte[]? scroll = null;
+        int scrollW = texSize, scrollH = texSize;
         if (d.Scroll != null)
         {
             var effectPath = SidecarDiscoveryService.ResolveEffectPath(entry, effectsFolder, d.Scroll);
             if (effectPath != null)
-                scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+            {
+                // Probe then request that exact size, rather than LoadImageAsRgba: this goes through the
+                // decode cache (LoadImageAsRgba is deliberately uncached, for once-per-mod-creation use)
+                // and asking for the native size makes the resample a no-op rather than skipping it.
+                var native = TextureLoader.ProbeSize(effectPath);
+                scrollW = native?.Width  ?? texSize;
+                scrollH = native?.Height ?? texSize;
+                scroll = textureLoader.LoadPngAsRgba(effectPath, scrollW, scrollH);
+            }
             else
                 log.Warning("[Proteus] second skin: effect \"{0}\" not found", d.Scroll);
         }
+        if (scroll == null) { scrollW = texSize; scrollH = texSize; }   // the flat fallback below is sheet-sized
 
         // ── Proteus "Masks" options ──────────────────────────────────────────
         // A mask isn't only coverage: its export can also ship its OWN row assignment (Masks/<x>_id.png)
@@ -3483,8 +4273,9 @@ public sealed class SecondSkinService
         foreach (var (maskPath, maskNormalPath, maskIndexPath) in Enumerable.Reverse(mergeTopFirst))
         {
             if (maskIndexPath == null) continue;
-            var maskPng = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
-            var maskIdx = RemapPath(maskIndexPath, srcType, dstType, TexSize, TexSize);
+            var maskPng = RemapPath(maskPath, srcType, dstType, texSize, texSize);
+            // A mask's _id is an index map like any other — nearest, for the same reason.
+            var maskIdx = RemapPath(maskIndexPath, srcType, dstType, texSize, texSize, ResampleFilter.Nearest);
             if (maskPng == null || maskIdx == null) continue;
             // LoadPngAsRgba hands back a shared cached array — clone before writing into it.
             if (index != null)
@@ -3497,8 +4288,8 @@ public sealed class SecondSkinService
                 // slot table below and the skin layer's flat-tint fallback. This used to be Solid(0,0,0,255),
                 // i.e. row 1 sub-row B — a pair most colorsets never configure, and whose B half is white
                 // when only A was authored, which painted the unclaimed band white.
-                index = Solid(255, 255, 0, 255);
-                idAuthored = new bool[TexSize * TexSize];
+                index = Solid(255, 255, 0, 255, texSize);
+                idAuthored = new bool[texSize * texSize];
             }
             var idxBuf = index; var mp = maskPng; var mi = maskIdx; var claimed = idAuthored;
             // Per texel, reading and writing only its own index, so partitioning is byte-identical.
@@ -3520,15 +4311,15 @@ public sealed class SecondSkinService
         foreach (var (maskPath, maskNormalPath, _) in mergeTopFirst)
         {
             if (maskNormalPath == null) continue;
-            var maskPng    = RemapPath(maskPath, srcType, dstType, TexSize, TexSize);
-            var maskNormal = RemapPath(maskNormalPath, srcType, dstType, TexSize, TexSize);
+            var maskPng    = RemapPath(maskPath, srcType, dstType, texSize, texSize);
+            var maskNormal = RemapPath(maskNormalPath, srcType, dstType, texSize, texSize);
             if (maskPng != null && maskNormal != null)
                 reliefMasks.Add((maskNormal, maskPng));
         }
         if (reliefMasks.Count > 0)
         {
-            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
-            CompositorService.CombineMaskReliefs(normal, TexSize, TexSize, reliefMasks);
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
+            CompositorService.CombineMaskReliefs(normal, texSize, texSize, reliefMasks);
         }
 
         // Sibling relief: additively fold each same-mod sibling overlay's normal into this shell's normal so a
@@ -3538,9 +4329,9 @@ public sealed class SecondSkinService
         // that sibling is visible. R/G only — blue stays this shell's coverage gate, so it rides this fabric.
         if (siblingReliefs is { Count: > 0 })
         {
-            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+            normal = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
             foreach (var sib in siblingReliefs)
-                CompositorService.CompoundNormal(normal, sib, TexSize, TexSize);
+                CompositorService.CompoundNormal(normal, sib, texSize, texSize);
         }
 
         // ── row-selector repair ──────────────────────────────────────────────
@@ -3563,7 +4354,7 @@ public sealed class SecondSkinService
             // LoadPngAsRgba hands back a shared cached array; the mask merge above clones only when it
             // actually merged, so clone here too rather than writing through to the cache.
             shaderIndex = (byte[])index.Clone();
-            CompositorService.SnapIndexRowsToDefined(shaderIndex, TexSize, TexSize,
+            CompositorService.SnapIndexRowsToDefined(shaderIndex, texSize, texSize,
                 rows.Select(p => p.Row).ToList(), authored: idAuthored);
         }
 
@@ -3575,7 +4366,7 @@ public sealed class SecondSkinService
         if (alpha != null && index != null && rows is { Count: > 0 })
         {
             // The row's two opacities, indexed by the 1-based row pair the index texture names, resolved
-            // ONCE up front. This loop runs per texel — 4.19M times at TexSize — and it used to do
+            // ONCE up front. This loop runs per texel — 4.19M times at a 2K sheet, 16.7M at 4K — and it used to do
             // `rows.FirstOrDefault(p => p.Row == pair)` inside, which allocates a closure capturing `pair`
             // and linearly scans the row list on every one of them. The red channel is a /17 bucket, so
             // there are only ever 16 distinct answers.
@@ -3651,11 +4442,11 @@ public sealed class SecondSkinService
         // two uses of blue are mutually exclusive, so a skin shell keeps the overlay's authored value and
         // takes its coverage from the triangle trim instead: hard edges, and the wearer's tone.
         bool skinShell = string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
-        var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255);
+        var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
         if (!skinShell)
         {
             var nrm = norm; var al = alpha;
-            CompositorService.ParallelPixels(0, TexSize * TexSize, 1, (from, to) =>
+            CompositorService.ParallelPixels(0, texSize * texSize, 1, (from, to) =>
             {
                 for (int i = from; i < to; i++)
                     nrm[i * 4 + 2] = al?[i] ?? 255;   // blue is the gate; alpha is not used
@@ -3673,16 +4464,24 @@ public sealed class SecondSkinService
             // maximum — which renders the skin flat and glossy. Substituted below by naming the TEMPLATE's
             // own path rather than writing a file, so a body shell inherits the shared skin mask and a face
             // shell inherits that face's, without either being hardcoded here.
-            ["mask"] = mask ?? (skinShell ? null! : Solid(255, 255, 255, 255)),
+            ["mask"] = mask ?? (skinShell ? null! : Solid(255, 255, 255, 255, texSize)),
             // No index texture → select Row 16 sub-row A everywhere, matching the SKIN layer's fallback
             // (it applies row16A as a flat tint when desc.Index == null). red 255 → row pair 16, green 255
             // → sub-row A. Defaulting to black (row 1) instead picked up the template's default row — which
             // renders the shell a flat red — and ignored the Row 16 tint the overlay actually carries.
-            ["id"]   = shaderIndex ?? Solid(255, 255, 0, 255),
+            ["id"]   = shaderIndex ?? Solid(255, 255, 0, 255, texSize),
 
-            ["base"] = diffuse ?? Solid(255, 255, 255, 255),  // tint also comes from the color table
-            ["catc"] = scroll ?? Solid(0, 0, 0, 255),         // black = no glow
+            ["base"] = diffuse ?? Solid(255, 255, 255, 255, texSize),  // tint also comes from the color table
+            ["catc"] = scroll ?? Solid(0, 0, 0, 255, texSize),         // black = no glow
         };
+
+        // Every slot is the build's square sheet EXCEPT the scroll, which is a uv1-tiled pattern at its own
+        // resolution (see where it is loaded). A .tex header is self-describing and the shader samples by
+        // UV, so slots in one material are free to differ — the mask slot has always shipped at 16x16 when
+        // it is a flat colour, via WriteTex's shrink.
+        (int W, int H) SizeOf(string slot)
+            => string.Equals(slot, "catc", StringComparison.OrdinalIgnoreCase) ? (scrollW, scrollH)
+                                                                              : (texSize, texSize);
 
         var order = GearMaterialWriter.TextureOrder(shader);
         var paths = new List<string>(order.Count);
@@ -3721,12 +4520,17 @@ public sealed class SecondSkinService
 
             // Skip the write when the content AND its encoding match what we last wrote — otherwise every
             // recomposite would look like a change and force a redraw. The encoding is folded into the hash
-            // so toggling compression forces a rewrite instead of a stale skip.
-            var hash = Hash(slots[slot]) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
+            // same reason: a build that grows the sheet must not be able to skip past the file it grew.
+            var (sw, sh) = SizeOf(slot);
+            var hash = Hash(slots[slot])
+                     ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
+                     ^ ((ulong)sw * 0xBF58476D1CE4E5B9ul)
+                     ^ ((ulong)sh * 0x94D049BB133111EBul);
             bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
             if (!same)
             {
-                if (!textureLoader.WriteTex(slots[slot], TexSize, TexSize, disk, encoding))
+                if (!textureLoader.WriteTex(slots[slot], sw, sh, disk, encoding))
                 {
                     log.Error("[Proteus] second skin: failed to write {0}", disk);
                     return null;
@@ -3760,6 +4564,9 @@ public sealed class SecondSkinService
     /// </summary>
     private byte[]? BuildContentGlowMaterial(
         ContentUnit unit, string texPrefix, string texturesDir, char letter, string? effectsFolder,
+        // The build's sheet size — see Build. Only the flat fallbacks below are sized by it; the pack's own
+        // textures are byte-copied at whatever the author shipped, and the scroll map keeps its own size.
+        int texSize,
         Dictionary<string, string> redirects, ref bool texturesChanged)
     {
         var glow = unit.Glow;
@@ -3781,7 +4588,11 @@ public sealed class SecondSkinService
                 unit.Entry.ModDirectory, effectName, effectsFolder ?? "(library unavailable)");
             return null;
         }
-        var scroll = textureLoader.LoadPngAsRgba(effectPath, TexSize, TexSize);
+        // At its OWN resolution, for the same reason the shell's is — a uv1-tiled pattern has no business
+        // being upscaled to the body sheet's size. See WriteTextures.
+        var scrollNative = TextureLoader.ProbeSize(effectPath);
+        int scrollW = scrollNative?.Width ?? texSize, scrollH = scrollNative?.Height ?? texSize;
+        var scroll = textureLoader.LoadPngAsRgba(effectPath, scrollW, scrollH);
         if (scroll == null)
         {
             log.Warning("[Proteus] content: effect \"{0}\" could not be decoded ({1})", effectName, effectPath);
@@ -3802,7 +4613,7 @@ public sealed class SecondSkinService
         // A ref parameter can't be captured by a local function; folded back into the caller's flag below.
         bool wroteAnything = false;
 
-        string? Publish(string slot, byte[] rgba)
+        string? Publish(string slot, byte[] rgba, int w, int h)
         {
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
@@ -3812,10 +4623,13 @@ public sealed class SecondSkinService
                 ? TexEncoding.Bc7
                 : TexEncoding.Uncompressed;
 
-            var hash = Hash(rgba) ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul);
+            var hash = Hash(rgba)
+                     ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
+                     ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
+                     ^ ((ulong)h * 0x94D049BB133111EBul);
             if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
             {
-                if (!textureLoader.WriteTex(rgba, TexSize, TexSize, disk, encoding))
+                if (!textureLoader.WriteTex(rgba, w, h, disk, encoding))
                 {
                     log.Error("[Proteus] content: failed to write {0}", disk);
                     return null;
@@ -3843,7 +4657,7 @@ public sealed class SecondSkinService
         string? Republish(string slot, string? packPath, byte[] fallback)
         {
             // Nothing named at all: the shell's own fallback for an empty slot.
-            if (packPath == null) return Publish(slot, fallback);
+            if (packPath == null) return Publish(slot, fallback, texSize, texSize);
 
             // The pack's OWN selection first, exactly as the non-glow path resolves it — see
             // SelectedTextureFiles. This used to go straight to ContentTextureFile, which asks Penumbra who
@@ -3881,10 +4695,10 @@ public sealed class SecondSkinService
 
         // Fallbacks match the shell path exactly, so the two can't disagree about what "no texture" means:
         // a white mask (a grey one halves the lighting everywhere) and a row-16-A index.
-        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255));
-        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255));
-        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255));
-        var catc = Publish("catc", scroll);
+        var norm = Republish("norm", packTex.Normal, Solid(128, 128, 255, 255, texSize));
+        var mask = Republish("mask", packTex.Mask,   Solid(255, 255, 255, 255, texSize));
+        var id   = Republish("id",   packTex.Index,  Solid(255, 255, 0, 255, texSize));
+        var catc = Publish("catc", scroll, scrollW, scrollH);
         texturesChanged |= wroteAnything;
         if (norm == null || mask == null || id == null || catc == null) return null;
 
@@ -4097,20 +4911,44 @@ public sealed class SecondSkinService
     }
 
     /// <summary>
-    /// Every colour-table row neutral white, so no row keeps the gear template's default (often dark)
-    /// colour. The index texture can select ANY pair, including one the colorset never defined, and that
-    /// row must not paint something the author never chose. (16 pairs = 32 sub-rows.)
+    /// Every colour-table row neutral, so no row keeps the gear template's own values. The index texture can
+    /// select ANY pair, including one the colorset never defined, and that row must not render something the
+    /// author never chose. (16 pairs = 32 sub-rows.)
+    /// <para/>
+    /// EVERY field <see cref="GearMaterialWriter.PatchColorTable"/> can write, not only the colour. It skips
+    /// null fields by design, so anything left null here is silently the template's — and the template is a
+    /// FIXED vanilla top (e0041), not the look being worn. Measured off a written shell: its pair 16, which
+    /// is Proteus's own convention for an unclaimed texel, ships specular 0.64/0.36, and rows elsewhere in
+    /// the same table carry metalness up to 1.0 and specular 1.44. Neutralising the diffuse alone left the
+    /// art un-tinted but still rendered through a duller, and sometimes metallic, surface response.
+    /// <para/>
+    /// Roughness 0.5 is the mid default the templates themselves ship on every row; the rest are the
+    /// identity for what they scale. Sphere maps are switched OFF rather than dialled down — an index with a
+    /// zero mask does nothing, and both halves are set so neither can be inherited on its own.
     /// <para/>
     /// White is the baseline for a pair the author never listed AT ALL. On a MASK shell it is not the right
     /// answer for the unset half of a pair they did list — see <see cref="BuildRows"/>, which mirrors there.
     /// The difference is what white MEANS: over an ordinary shell's own art (and on the skin layer) it is a
     /// (1,1,1) multiply, i.e. no tint; over a mask shell's white base it is paint.
     /// </summary>
+    internal static readonly GearColorRow NeutralRow = new()
+    {
+        Diffuse        = (1f, 1f, 1f),   // a no-op multiply over art that carries its own colour
+        Emissive       = (0f, 0f, 0f),   // nothing glows unless the author says so
+        Specular       = (1f, 1f, 1f),   // full, undimmed highlight response
+        Roughness      = 0.5f,
+        Metalness      = 0f,
+        SphereMapIndex = 0,              // an index with a zero mask does nothing; both halves are pinned
+        SphereMapMask  = 0f,
+    };
+
+    /// <inheritdoc cref="NeutralRow"/>
+    // Shared instance across all 32 entries: GearColorRow is init-only, so nothing can mutate one row's
+    // copy out from under another's.
     internal static Dictionary<int, GearColorRow> NeutralRows()
     {
         var rows = new Dictionary<int, GearColorRow>();
-        for (int r = 0; r < 32; r++)
-            rows[r] = new GearColorRow { Diffuse = (1f, 1f, 1f), Emissive = (0f, 0f, 0f) };
+        for (int r = 0; r < 32; r++) rows[r] = NeutralRow;
         return rows;
     }
 
@@ -4164,12 +5002,33 @@ public sealed class SecondSkinService
 
         void Add(int rowIndex, ColorTableSubRowPreset? sub)
         {
-            if (sub == null) return;   // neither sub-row set — leaves the neutral-white row from the init above
-            // Assigning REPLACES the neutral entry, so a preset that exists but carries no colour would hand
-            // the row a null diffuse — and PatchColorTable skips null fields, leaving the vanilla template's
-            // (often dark) colour, the exact thing NeutralRows exists to prevent. The editor materialises a
-            // blank preset the moment any non-colour field is touched, so this is reachable from the UI.
-            rows[rowIndex] = RowFrom(sub, diffuseWhenUnset: (1f, 1f, 1f));
+            if (sub == null) return;   // neither sub-row set — leaves the neutral row from the init above
+            // MERGED over the neutral row, not assigned over it. Assigning would replace the whole entry,
+            // and RowFrom leaves every field the author did not fill as null — PatchColorTable skips nulls,
+            // so each one silently falls back to the vanilla template's value. That is the same defect
+            // NeutralRows exists to prevent, one level down: an author who set a colour and nothing else
+            // still got e0041's specular, roughness, metalness and sphere map on the row they authored.
+            // The editor materialises a blank preset the moment any field is touched, so a preset carrying
+            // almost nothing is reachable straight from the UI.
+            // `with`, not a fresh object: anything not named here keeps the authored row's value, so a
+            // field added to GearColorRow later still behaves as it did before this merge existed rather
+            // than silently vanishing from every authored row. The weave (TileIndex and friends) is the
+            // case in point — it needs no neutral of its own, because Build already zeroes the tile alpha
+            // on every row of the cloned template.
+            var authored = RowFrom(sub, diffuseWhenUnset: NeutralRow.Diffuse);
+            rows[rowIndex] = authored with
+            {
+                Diffuse        = authored.Diffuse        ?? NeutralRow.Diffuse,
+                Emissive       = authored.Emissive       ?? NeutralRow.Emissive,
+                Specular       = authored.Specular       ?? NeutralRow.Specular,
+                Roughness      = authored.Roughness      ?? NeutralRow.Roughness,
+                Metalness      = authored.Metalness      ?? NeutralRow.Metalness,
+                SphereMapIndex = authored.SphereMapIndex ?? NeutralRow.SphereMapIndex,
+                SphereMapMask  = authored.SphereMapMask  ?? NeutralRow.SphereMapMask,
+                // EmissiveStrength is deliberately NOT defaulted: the glow dial is a characterscroll input
+                // that PatchColorTable reads to arm the scrolling effect, and NeutralRow carries none by
+                // design — falling back to it would be falling back to null anyway.
+            };
         }
     }
 
@@ -4282,6 +5141,10 @@ public sealed class SecondSkinService
             SphereMapMask = sub.SphereIntensity,
             Roughness = sub.Roughness,
             Metalness = sub.Metalness,
+            TileIndex = sub.Tile,
+            TileStrength = sub.TileStrength,
+            TileScaleU = sub.TileScaleU,
+            TileScaleV = sub.TileScaleV,
         };
     }
 

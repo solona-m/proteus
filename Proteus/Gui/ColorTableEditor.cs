@@ -38,8 +38,10 @@ public static class ColorTableEditor
 
     // Were `const string`; a localized lookup is not a compile-time constant, so they read through the
     // string table now. Still resolved once per language, not once per frame — see Strings.
-    private static string SphereTip => Strings.Colors.SphereTip;
-    private static string MetalTip  => Strings.Colors.MetalTip;
+    private static string SphereTip    => Strings.Colors.SphereTip;
+    private static string MetalTip     => Strings.Colors.MetalTip;
+    private static string TileTip      => Strings.Colors.TileTip;
+    private static string TileScaleTip => Strings.Colors.TileScaleTip;
 
     /// <summary>
     /// Bottom of the colour editor: the "Glow effect" thumbnail picker (+ its scroll speed/tiling), the
@@ -77,6 +79,18 @@ public static class ColorTableEditor
         Func<bool>? onReset = null,
         string? resetDisabledReason = null,
         Action? drawExtraAdvanced = null,
+        // Mod-wide sections drawn between the glow controls and Advanced. Like drawExtraAdvanced this
+        // commits for itself; unlike it, callers pass null on tabs that should not show it at all.
+        Action? drawBelowGlow = null,
+        // Non-null when this option's render mode is decided for it rather than inferred or pinned. A SHORT
+        // marker — "(forced)" — shown beside the "Rendering as" badge in place of the (auto)/(pinned)
+        // suffix, which would otherwise credit the inference with a decision taken elsewhere. It also
+        // suppresses "Back to auto": there is no pin here to release.
+        string? modeForced = null,
+        // The full explanation behind modeForced: the badge's tooltip, and the text drawn in place of the
+        // force-mode radios inside Advanced. Kept separate because those two positions want opposite
+        // lengths — a parenthetical beside the badge, a sentence where the radios' own hint would be.
+        string? modeForcedTip = null,
         // The compositor promoted this auto skin overlay to a gear shell because it's stacked above gear;
         // show it as Cloth so the footer agrees with the (gear) colour panel, without persisting the change.
         bool promotedToGear = false,
@@ -99,10 +113,10 @@ public static class ColorTableEditor
         //
         // Passed in rather than inferred from `ovr != null`, which looks equivalent and is not: `ovr` comes
         // from GetEditableGearOverride, which returns null whenever the binding's GEAR dictionary has no
-        // entry for this mod, while `editingBinding` tests its COLOUR dictionary. A binding that has never
+        // entry for this mod, while `overrideActive` tests its COLOUR dictionary. A binding that has never
         // recorded gear settings — the ordinary case — has a live colour override and a null gear override
         // at the same time, so the inference is false exactly when it matters.
-        bool editingBinding = false)
+        bool overrideActive = false)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0) return false;
@@ -185,16 +199,45 @@ public static class ColorTableEditor
                 ImGui.SetTooltip(cs.TilingTip);
         }
 
+        // Mod-wide sections that belong below the glow controls but above Advanced. Between the two because
+        // Advanced is where the per-OPTION settings live, and burying a mod-wide section inside it reads as
+        // belonging to whichever tab happens to be open.
+        drawBelowGlow?.Invoke();
+
         // ── Advanced (mode pin) at the very bottom, with the "Rendering as" badge to its right ──
-        bool advOpen = ImGui.TreeNodeEx($"{cs.Advanced}##{advancedScope}", ImGuiTreeNodeFlags.NoTreePushOnOpen);
+        //
+        // A CollapsingHeader rather than a bare TreeNodeEx, so this reads as the same kind of disclosure as
+        // the Presets bar directly below it: a full-width grey bar, not an arrow lost at the bottom of the
+        // panel. It returns the open state directly and pushes no tree, so NoTreePushOnOpen has nothing
+        // left to suppress and there is still no TreePop to pair.
+        //
+        // AllowItemOverlap is load-bearing, not decoration: the bar's hit box runs the full width of the
+        // panel, straight under the "Back to auto" button drawn on top of it below, and without the flag
+        // the header swallows that click and merely toggles itself. Mind the spelling — this ImGui predates
+        // 1.89.7, so the flag is AllowItemOverlap and NOT AllowOverlap, and there is no
+        // SetNextItemAllowOverlap. TreeNodeBehavior already calls SetItemAllowOverlap() for us when the
+        // flag is set, so the explicit call below is belt-and-braces; it is kept deliberately, not dead.
+        //
+        // "###" and not "##": an ImGui id is hashed from the WHOLE label, so with "##" the localized word
+        // "Advanced" was part of it and changing UI language silently reset every one of these to closed.
+        // "###" restarts the hash at the marker, so only the scope token counts.
+        bool advOpen = ImGui.CollapsingHeader($"{cs.Advanced}###adv_{advancedScope}",
+            ImGuiTreeNodeFlags.AllowItemOverlap);
+        ImGui.SetItemAllowOverlap();
 
         ImGui.SameLine(0f, 24f);
         DrawRenderingAsBadge(mode);
         ImGui.SameLine();
-        ImGui.TextDisabled(curLock ? cs.Pinned : cs.Auto);
+        // The suffix says where this mode came from, so a FORCED mode has to say so HERE — beside the badge
+        // it qualifies — rather than only inside Advanced. Reading "(auto)" next to a mode nothing about
+        // this option chose is worse than saying nothing: it credits the inference with a decision that was
+        // taken elsewhere, and it contradicted the "(forced)" note further down the same panel.
+        ImGui.TextDisabled(modeForced ?? (curLock ? cs.Pinned : cs.Auto));
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(curLock ? cs.PinnedTip : cs.AutoTip);
-        if (curLock)
+            ImGui.SetTooltip(modeForced != null ? (modeForcedTip ?? modeForced)
+                                                : (curLock ? cs.PinnedTip : cs.AutoTip));
+        // No "Back to auto" when the mode is not this option's to release.
+        if (curLock && modeForced == null)
         {
             ImGui.SameLine();
             if (ImGui.SmallButton($"{cs.BackToAuto}##{idScope}")) { SetLock(false); changed = true; }
@@ -214,6 +257,19 @@ public static class ColorTableEditor
 
         if (advOpen)
         {
+            // The mode radios, unless the mode is not this option's to choose — a mask stacked over gear is
+            // always a top Cloth shell. Only the RADIOS are replaced, not the rest of the footer: the
+            // forced case used to skip the whole thing, and that took the glow picker with it even though a
+            // mask carries a glow effect perfectly well.
+            if (modeForced != null)
+            {
+                // The EXPLANATION here, not the badge marker. This sits exactly where ForceModeHint would
+                // have been — a full sentence introducing the radios — so the short "(forced)" that reads
+                // correctly beside the badge reads as nothing at all on its own line.
+                ImGui.TextDisabled(modeForcedTip ?? modeForced);
+            }
+            else
+            {
             ImGui.TextDisabled(cs.ForceModeHint);
             foreach (var m in new[] { RenderMode.Skin, RenderMode.Cloth, RenderMode.Glow })
             {
@@ -233,6 +289,7 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(cs.ForceModeTip);
+            }
 
             // Skin-tint suppression, per option. Drawn only in Skin mode, the way scroll speed/tiling are
             // drawn only in Glow: the compositor's suppression pass never runs for a Cloth or Glow overlay
@@ -261,10 +318,10 @@ public static class ColorTableEditor
             // feedback that keeps this honest.
             //
             // NormalMode is structural — which map ends up on the material — so it has no
-            // GearSettingsPreset field and no binding override; `editingBinding` hides the control rather
+            // GearSettingsPreset field and no binding override; `overrideActive` hides the control rather
             // than letting it write somewhere that is never saved. Skin mode and a normal to blend are both
             // required for it to mean anything.
-            if (showSkinTint && !editingBinding && overlays.Any(d => d.Normal != null))
+            if (showSkinTint && !overrideActive && overlays.Any(d => d.Normal != null))
             {
                 bool wholeSkin = first.NormalMode == NormalMode.Replace;
                 if (ImGui.Checkbox($"{cs.WholeSkin}##normalmode_{idScope}", ref wholeSkin))
@@ -283,29 +340,30 @@ public static class ColorTableEditor
                     ImGui.SetTooltip(cs.WholeSkinTip);
             }
 
-            // One-sided art. DECLARED, because nothing can measure it: a real skin texture is never
+            // Asymmetric art. DECLARED, because nothing can measure it: a real skin texture is never
             // symmetric — freckles, moles — so probing the art called ordinary skin asymmetric and moved it
             // onto a shell, where it lost the wearer's tone. Only the author knows whether a difference
             // between the two sides is the point or just detail.
             //
             // Shown on the skin layer only. On a shell the art is already rendered through its own geometry
             // and nothing folds it, so the tick would decide nothing.
-            if (showSkinTint && !editingBinding)
+            if (showSkinTint && !overrideActive)
             {
-                bool oneSided = first.AsymmetricArt == true;
-                if (ImGui.Checkbox($"{cs.OneSided}##asymmetric_{idScope}", ref oneSided))
+                bool asymmetric = first.AsymmetricArt == true;
+                if (ImGui.Checkbox($"{cs.Asymmetric}##asymmetric_{idScope}", ref asymmetric))
                 {
                     // Cleared to null rather than false, so an untick leaves the sidecar as it was before
                     // anyone touched this — the documented "absent = symmetric" default.
-                    foreach (var d in overlays) d.AsymmetricArt = oneSided ? true : null;
+                    foreach (var d in overlays) d.AsymmetricArt = asymmetric ? true : null;
                     changed = true;
                 }
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(cs.OneSidedTip);
+                    ImGui.SetTooltip(cs.AsymmetricTip);
             }
 
-            // Whole-mod settings the caller owns (currently which bodies to bake onto). Separated because
-            // everything above this line is per-option and everything below it is not.
+            // Whole-mod settings the caller owns (currently which bodies to bake onto — the geometry passes
+            // moved out to drawBelowGlow, which draws them above this whole disclosure).
+            // Separated because everything above this line is per-option and everything below it is not.
             if (drawExtraAdvanced != null)
             {
                 ImGui.Separator();
@@ -510,8 +568,16 @@ public static class ColorTableEditor
             _                => new Vector4(0.80f, 0.75f, 0.68f, 1f),   // warm skin
         };
         ImGui.TextUnformatted(Strings.Colors.RenderingAs);
+
+        // Where ImGui ACTUALLY put that text, which on a line following a framed item — the Advanced
+        // CollapsingHeader this rides on — is FramePadding.y below the raw line top, because a framed item
+        // makes the whole line share its baseline. Measured rather than assumed: after SameLine the cursor
+        // is back at the raw top, so the difference IS DC.CurrLineTextBaseOffset, and it comes out 0 on an
+        // ordinary line (the Masks tab) without needing a special case. Pill paints its lozenge straight to
+        // the draw list and would otherwise sit above its own label.
+        var textTop = ImGui.GetItemRectMin().Y;
         ImGui.SameLine();
-        ProteusStyle.Pill(ModeName(mode), badgeColor);
+        ProteusStyle.Pill(ModeName(mode), badgeColor, textTop - ImGui.GetCursorScreenPos().Y);
     }
 
     /// <summary>Point the descriptors' (or the live design-binding override's) Layer+Shader at
@@ -707,6 +773,9 @@ public static class ColorTableEditor
     /// <summary>Thumbnails for the sphere-map picker. Set once at startup; null just means no previews.</summary>
     public static SphereMapPreview? Spheres { get; set; }
 
+    /// <summary>Thumbnails for the tile picker. Set once at startup; null just means no previews.</summary>
+    public static TilePreview? Tiles { get; set; }
+
     /// <summary>Thumbnails for the glow-effect picker. Set once at startup; null falls back to names only.</summary>
     public static EffectPreview? EffectThumbs { get; set; }
 
@@ -751,6 +820,70 @@ public static class ColorTableEditor
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(SphereTip);
+    }
+
+    /// <summary>
+    /// Fabric weave, as a dropdown of thumbnails — an index alone tells you nothing.
+    /// <para/>
+    /// <see cref="DrawSpherePicker"/> with one addition: a None entry. The sphere needs none because slice 0
+    /// there IS the game's empty sphere, but tile 0 is a real weave, so "no weave" has to be a choice of its
+    /// own. It is <paramref name="index"/> below zero, and it borrows the shared none icon
+    /// <see cref="SphereMapPreview.DrawNoneButton"/> exists to lend.
+    /// </summary>
+    private static void DrawTilePicker(string id, ref int index, out bool changed)
+    {
+        changed = false;
+        const float current = 32f;   // the one in use, beside the combo
+        const float thumb = 56f;     // the pictures in the list — click one to pick it
+
+        var cs = Strings.Colors;
+        if (index < 0) Spheres?.DrawNone(current);
+        else Tiles?.Draw(index, current);
+        if (Tiles != null || Spheres != null) ImGui.SameLine();
+
+        ImGui.SetNextItemWidth(70);
+        var label = index < 0 ? cs.TileNone : index.ToString();
+        if (ImGui.BeginCombo($"{cs.TilePattern}##tl_{id}", label, ImGuiComboFlags.HeightLarge))
+        {
+            // "No weave" first, so switching it off doesn't mean hunting through sixty-four pictures.
+            bool noneAvailable = false;
+            if (Spheres?.DrawNoneButton($"##tlnone_{id}", thumb, out noneAvailable) == true && index >= 0)
+            {
+                index = -1;
+                changed = true;
+                ImGui.CloseCurrentPopup();
+            }
+            if (noneAvailable) ImGui.SameLine();
+
+            if (ImGui.Selectable($"{cs.TileNone}##tln_{id}", index < 0, ImGuiSelectableFlags.None,
+                    new Vector2(0, thumb)) && index >= 0)
+            {
+                index = -1;
+                changed = true;
+            }
+
+            for (int i = 0; i < TilePreview.Count; i++)
+            {
+                // The picture is the button — clicking it selects that index and closes the list.
+                if (Tiles?.DrawButton($"##tlimg_{id}_{i}", i, thumb) == true && i != index)
+                {
+                    index = i;
+                    changed = true;
+                    ImGui.CloseCurrentPopup();
+                }
+                if (Tiles != null) ImGui.SameLine();
+
+                if (ImGui.Selectable($"{i}##tl_{id}_{i}", i == index, ImGuiSelectableFlags.None,
+                        new Vector2(0, thumb)) && i != index)
+                {
+                    index = i;
+                    changed = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(TileTip);
     }
 
     /// <summary>
@@ -920,7 +1053,7 @@ public static class ColorTableEditor
         }
 
         // ── Colours ──────────────────────────────────────────────────────────
-        ImGui.TextDisabled(cs.Colours);
+        ProteusStyle.SubHeader(cs.Colours);
 
         var diffuse = HexToVec3(sub?.Diffuse);
         ImGui.SetNextItemWidth(22);
@@ -947,7 +1080,52 @@ public static class ColorTableEditor
                 changed = true;
             }
         }
+
+        // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
+        // coverage that becomes the normal map's blue channel (the transparency gate).
+        //
+        // Sits at METHOD-BODY depth, deliberately outside the bare block below. One brace lower and it
+        // would inherit the glow colour's `gear ? 1f : DimAlpha` push, greying out the most-used control on
+        // the panel on exactly the mode — Skin — where it does the most work.
+        int op = sub?.Opacity ?? 0;
+        ImGui.SetNextItemWidth(70);
+        if (ImGui.DragInt($"{cs.Opacity}##o_{id}", ref op, 1f, -100, 100, "%d%%"))
+        {
+            Edit().Opacity = Math.Clamp(op, -100, 100);
+            changed = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(cs.OpacityTip);
+
+        // Blend is a SKIN idea: a print recolours what this mod painted into the skin, and a shell has a
+        // real colour table of its own instead. Shown only where it can do something.
+        if (mode == RenderMode.Skin)
+        {
+            int bl = (int)(sub?.Blend ?? RowBlend.Paint);
+            ImGui.SetNextItemWidth(110);
+            if (ImGui.Combo($"{cs.Blend}##bl_{id}", ref bl, cs.BlendNames, cs.BlendNames.Length))
+            {
+                Edit().Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
+                changed = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(cs.BlendTip);
+        }
+
+        // ── Glow ─────────────────────────────────────────────────────────────
+        // Its own section rather than four more rows under "Colours", which named none of them. Everything
+        // below to the end of the light-response pair belongs to it.
+        //
+        // The heading is at method-body depth, ABOVE the bare block: the glow colour is dimmed on Skin but
+        // the amount below it is not (raising it is a request for a shell), so a heading that faded with
+        // the colour picker alone would be lying about the section it names.
+        ProteusStyle.SubHeader(cs.GlowSection);
+
         // Glow colour applies in any gear mode (it's the emissive colour); dimmed only on Skin.
+        //
+        // The bare braces are load-bearing and not style: they bound the alpha push to this one control.
+        // Without them it would run to the end of the method and silently dim the glow amount, the
+        // light-response pair, and — through the nested push further down — the whole Physical block.
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, gear ? 1f : DimAlpha);
             var emCol = HexToVec3(sub?.EmissiveColor ?? sub?.Diffuse);
@@ -1037,18 +1215,6 @@ public static class ColorTableEditor
                 ImGui.SetTooltip(cs.HideInLightTip);
         }
 
-        // Opacity applies to both layers: on skin it scales the overlay's alpha, on gear it scales the
-        // coverage that becomes the normal map's blue channel (the transparency gate).
-        int op = sub?.Opacity ?? 0;
-        ImGui.SetNextItemWidth(70);
-        if (ImGui.DragInt($"{cs.Opacity}##o_{id}", ref op, 1f, -100, 100, "%d%%"))
-        {
-            Edit().Opacity = Math.Clamp(op, -100, 100);
-            changed = true;
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.OpacityTip);
-
         // Roughness / metalness / sphere map belong to Cloth. Dimmed-but-clickable in Skin (touch
         // one to switch to Cloth), active in Cloth. HIDDEN in Animated glow: they don't apply there, AND
         // SphereIntensity is repurposed by characterscroll as the effect's visibility — exposing it as a
@@ -1063,8 +1229,7 @@ public static class ColorTableEditor
         {
             using var d = ImRaii.PushStyle(ImGuiStyleVar.Alpha, material ? 1f : DimAlpha);
 
-            ImGui.TextDisabled(cs.Physical);
-            if (!material) { ImGui.SameLine(); ImGui.TextDisabled(cs.ClothSuffix); }
+            ProteusStyle.SubHeader(cs.Physical, material ? null : cs.ClothSuffix);
 
             // The values the MATERIAL already holds, when the caller supplied them, instead of this editor's
             // neutral defaults. A shell's material is built from a neutral template so 0.5 / 0 is what is
@@ -1100,7 +1265,7 @@ public static class ColorTableEditor
             // labelled as something else, and a stray 0 in it silently kills the glow.
             if (mode == RenderMode.Glow) return;
 
-            ImGui.TextDisabled(cs.SphereMap);
+            ProteusStyle.SubHeader(cs.SphereMap);
 
             int sphere = sub?.SphereMap ?? 0;
             DrawSpherePicker(id, ref sphere, out bool sphereChanged);
@@ -1128,6 +1293,77 @@ public static class ColorTableEditor
             }
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(SphereTip);
+
+            // ── the fabric weave ─────────────────────────────────────────────
+            // Below the Glow early-return above, so this is hidden on a scrolling material for the same
+            // reason the sphere is: characterscroll reassigns halves in this neighbourhood, and a control
+            // whose value the shader reads as something else is worse than no control.
+            ProteusStyle.SubHeader(cs.Tile);
+
+            int tile = sub?.Tile ?? -1;
+            DrawTilePicker(id, ref tile, out bool tileChanged);
+            if (tileChanged)
+            {
+                var e = Edit();
+                e.Tile = tile < 0 ? null : Math.Clamp(tile, 0, TilePreview.Count - 1);
+                if (e.Tile != null)
+                {
+                    // A weave needs BOTH a pattern and a strength: the shell's material is built with tile
+                    // alpha zeroed on every row, so an index alone is an invisible tile. Seed it the way the
+                    // sphere seeds its intensity, and leave a value the user has already chosen alone.
+                    if ((e.TileStrength ?? 0f) <= 0f) e.TileStrength = 1f;
+                }
+                else
+                {
+                    // Clearing the pattern clears what only meant anything with it, so the sub-row can go
+                    // back to reading as blank — see ContentGlowRow.IsBlank, which decides whether a cell
+                    // survives at all.
+                    e.TileStrength = null;
+                    e.TileScaleU = null;
+                    e.TileScaleV = null;
+                }
+                edited = FeatureEdit.Cloth;
+                changed = true;
+            }
+
+            // Strength and scale do nothing without a pattern to apply them to. Dimmed rather than hidden:
+            // reachable, so the panel doesn't reshuffle as soon as a weave is picked, but visibly inert.
+            //
+            // Multiplied INTO the enclosing alpha rather than set over it, because PushStyle assigns — the
+            // whole block is already dimmed in Skin mode, and a bare 1f here would make these three controls
+            // the brightest thing on a panel where everything around them is faded.
+            using (ImRaii.PushStyle(ImGuiStyleVar.Alpha,
+                       ImGui.GetStyle().Alpha * (sub?.Tile != null ? 1f : DimAlpha)))
+            {
+                float tileStrength = (sub?.TileStrength ?? 0f) * 100f;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileStrength}##ts_{id}", ref tileStrength, 1f, 0f, 100f, "%.0f%%"))
+                {
+                    Edit().TileStrength = Math.Clamp(tileStrength / 100f, 0f, 1f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+
+                float scaleU = sub?.TileScaleU ?? GearMaterialWriter.DefaultTileScale;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileScaleU}##tsu_{id}", ref scaleU, 0.25f, 0.1f, 256f, "%.1f"))
+                {
+                    Edit().TileScaleU = Math.Clamp(scaleU, 0.1f, 256f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+
+                float scaleV = sub?.TileScaleV ?? GearMaterialWriter.DefaultTileScale;
+                ImGui.SetNextItemWidth(70);
+                if (ImGui.DragFloat($"{cs.TileScaleV}##tsv_{id}", ref scaleV, 0.25f, 0.1f, 256f, "%.1f"))
+                {
+                    Edit().TileScaleV = Math.Clamp(scaleV, 0.1f, 256f);
+                    edited = FeatureEdit.Cloth;
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(TileScaleTip);
+            }
         }
     }
 

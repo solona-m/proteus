@@ -123,6 +123,10 @@
     "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
     "description": ""
   },
+  "Chat.HatCompat": {
+    "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 모자 에서 되돌리거나 이 기능을 끌 수 있습니다.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+  },
   "Chat.MirrorRepo": {
     "message": "[Proteus] 이전 플러그인 저장소 URL로 설치되었습니다. /xlplugins > Experimental에서 https://dl.solona.info/repo.json 으로 변경하면 업데이트가 빨라지고 GitHub 부하도 줄어듭니다. 변경하지 않아도 설치는 계속 작동합니다. 이 알림은 몇 번 표시된 후 사라집니다.",
     "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
@@ -175,6 +179,14 @@
     "message": "고급",
     "description": ""
   },
+  "Colors.Asymmetric.Label": {
+    "message": "이 아트는 좌우 비대칭",
+    "description": ""
+  },
+  "Colors.Asymmetric.Tip": {
+    "message": "좌우가 서로 달라야 하는 아트(한쪽 팔의 문신, 한쪽 뾨의 훉터, 비대칭 메이크업)에\n켜세요. 일반 피부를 포함해 그 밖의 모든 경우에는 꾨 두세요.\n바닐라 몸과 바닐라 얼굴은 양쪽에 같은 픽셀을 주므로, 그에 맞춰 그린 아트는 절반으로\n접힙니다. 한쪽만 남고 반대쪽으로 거울처럼 복사됩니다. 좌우 대칭 디자인에서는 보이지\n않지만 비대칭 디자인은 망가집니다.\n이 옵션을 켜면 Proteus가 전용 레이어로 렌더링하며, 그 좌우가 텍스처의 좌우 절반을\n각각 읽으므로 양쪽이 모두 남습니다.\n자동으로는 판별할 수 없습니다. 실제 피부는 결코 대칭이 아니며 주근깨와 점은 좌우가\n다릅니다. 그 차이가 의도인지 아닌지는 제작자만 알 수 있습니다.",
+    "description": ""
+  },
   "Colors.Auto": {
     "message": "(자동)",
     "description": ""
@@ -189,6 +201,38 @@
   },
   "Colors.BaseUnchanged": {
     "message": "기본 색상은 그대로입니다. 단 \"고급\"의 \"기본값으로 되돌리기\"는 기본 색상을 덮어쓰며, \"바디\"는 어떤 연결도 기록하지 않는 전역 설정입니다.",
+    "description": ""
+  },
+  "Colors.Blend.Add": {
+    "message": "더하기",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "혼합 모드",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "곱하기",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "오버레이",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "페인트",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "바꾸기",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "스크린",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "이 행의 이미지를 이미 피부에 있는 것과 어떻게 합성할지 정합니다.\n\n\"페인트\"는 그 위에 얹기만 하며, 지금까지 모든 레이어가 해온 방식입니다.\n그 외를 고르면 이 행은 프린트가 됩니다. 같은 모드의 다른 레이어가 칠한\n천을 물들이고 그 모양대로 잘리므로, 망사에 무지개를 올리면 실만 물들고\n구멍은 피부로 남습니다.\n\n프린트는 자기 모드의 레이어에만 닿으며, 다른 모드의 옷은 절대 건드리지 않습니다.\n맨살 위에는 아무것도 칠하지 않으므로 프린트만 선택하면 아무것도 보이지 않습니다.\n의도된 동작입니다. 그 위에 찍을 바탕이 없기 때문입니다.\n\n곱하기는 어둡게만 할 수 있어 아주 어두운 천에서는 거의 보이지 않습니다.\n그럴 때는 스크린을 쓰세요. 이 행의 색은 여전히 이미지를 물들이며,\n불투명도가 프린트의 세기입니다.",
     "description": ""
   },
   "Colors.Bodies.All": {
@@ -217,6 +261,70 @@
   },
   "Colors.Bodies.Tip": {
     "message": "이 모드를 어떤 바디 유형에 구울지:\n모든 바디 = 자매 바디(bibo↔gen3/Eve) + 기본(gen2)\nbibo+gen3 = 자매 바디에만 굽기(기본값)\n끔 = 합성하지 않음\n\n이 옵션뿐 아니라 모드 전체에 적용됩니다.",
+    "description": ""
+  },
+  "Colors.BustBridge.Label": {
+    "message": "가슴 사이를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "잇는 정도",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "천이 평평한 연결선을 향해 얼마나 이완되는지. 1.00은 완전히 잇습니다.\n값이 낮을수록 아래의 형태가 더 많이 남습니다.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에, 기본적으로 몸을 따라 가슴골로\n들어갑니다. 그래서 천이 아니라 칠한 것처럼 보입니다. 실제 천은 그 틈을 가로지릅니다.\n양쪽 가슴에서 가장 앞으로 나온 지점을 잇는 직선으로요.\n이 설정을 켜면 가슴 사이의 천이 그 선까지 이완됩니다. 안쪽으로 당겨지는 일은 없으므로\n몸을 파고들 수 없고, 가슴 자체의 형태도 그대로 유지됩니다.\n네크라인이 이미 컵 사이의 천을 잘라낸 곳에는 이을 것이 없으므로,\n이 설정은 아무 일도 하지 않습니다.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Label": {
+    "message": "다리 사이를 매끄럽게",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "매끄럽게 하는 정도",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "주름을 얼마나 매끄럽게 할지. 1.00은 주변 곡면에 완전히 녹여 넣고, 낮은 값일수록 원래\n형태가 남습니다.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "사타구니를 덮는 천에는 이 옵션을 켜세요.\nProteus는 의상을 신체의 복사본으로 만들기 때문에 다리 사이의 주름까지 그대로 옮깁니다 —\n천이라기보다 몸에 그려 넣은 것처럼 보이죠. 켜면 그곳의 피부를 먼저 주변 곡면까지\n매끄럽게 펴므로, 거기서 잘라낸 의상도 매끄럽게 나옵니다.\n이 옵션은 신체 자체를 바꾸므로 동시에 착용한 모든 의상에 적용됩니다.",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Label": {
+    "message": "유두를 매끄럽게",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Strength.Label": {
+    "message": "매끄럽게 하는 정도",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Strength.Tip": {
+    "message": "천을 얼마나 매끄럽게 할지. 1.00은 완전히 매끄럽게 합니다.\n값이 낮을수록 아래의 형태가 더 많이 남습니다.",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Tip": {
+    "message": "가슴을 덮는 천에 사용하세요.\nProteus는 의상을 몸의 복사본으로 만들기 때문에 유두도 뾰족한 그대로 재현됩니다.\n그래서 천이 아니라 칠한 것처럼 보입니다. 이 설정을 켜면 그 위의 천이 주변 곡면에\n자연스럽게 이어지도록 매끄러워집니다.\n아직 완성되지 않았습니다. 매끄러워지는 것은 의상뿐이고 아래의 몸은 원래 형태를 유지하므로,\n밀착되는 의상에서는 비쳐 보일 수 있습니다. 피부까지 맞추는 작업은 이후에 추가됩니다.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Label": {
+    "message": "엉덩이 사이를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "엉덩이를 덮는 천에는 이 옵션을 켜세요.\nProteus는 의상을 신체의 복사본으로 만들기 때문에 골을 끝까지 따라갑니다 —\n입은 것이 아니라 그려 넣은 것처럼 보이죠. 켜면 실제 천처럼 그 위를\n가로질러 이어집니다.\n가슴 사이를 잇는 것과 같은 개념이지만 골이 훨씬 깊으니 낮은 값부터 시작하세요.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "잇는 정도",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "천이 평평하게 이어지는 정도. 1.00은 골을 양옆 엉덩이 높이까지 들어 올리는데,\n대개 지나칩니다 — 낮은 값일수록 원래 형태가 남습니다.",
     "description": ""
   },
   "Colors.CopyRow.Btn": {
@@ -257,6 +365,10 @@
   },
   "Colors.ForceMode.Tip": {
     "message": "Skin(그리기) — skin.shpk.  Cloth — character.shpk(스피어, 메탈).\n애니메이션 발광 — characterscroll.shpk. 고정하면 자동 모드 전환이 멈춥니다.",
+    "description": ""
+  },
+  "Colors.Geometry.Section": {
+    "message": "지오메트리",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -327,6 +439,14 @@
     "message": "이 모드의 다른 활성 옵션이 장비로 렌더링되므로 마스크는 그 셸 위에 얹혀야 하며,\n아래의 피부에 그려 넣을 수 없습니다. 해당 옵션들을 (각 탭의 고급에서) Skin으로\n바꾸면 마스크가 자신의 모드 선택을 되찾습니다.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap이 켜져 있습니다",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "Penumbra에서 이 모드의 Masks 그룹에 «Toe Cap» 옵션이 체크되어 있습니다. 발가락을\n하나의 둥근 형태로 다시 만들기 때문에, 이 모드의 Skin 오버레이는 천으로 승격됩니다\n— 피부 레이어에는 없는 지오메트리가 필요하기 때문입니다. 그만큼 셸을 다시 만듭니다.\n\n직접 체크한 적이 없다면: Penumbra는 이 그룹의 선택을 옵션 «번호»로 저장하므로,\n옵션 순서가 바뀐 채 다시 내보낸 모드에서는 저장된 선택이 조용히 다른 항목을 가리킵니다.\nPenumbra에서 그룹을 다시 체크해 동기화하세요.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "마스크",
     "description": ""
@@ -365,14 +485,6 @@
   },
   "Colors.None": {
     "message": "없음",
-    "description": ""
-  },
-  "Colors.OneSided.Label": {
-    "message": "이 아트는 의도적으로 한쪽만",
-    "description": ""
-  },
-  "Colors.OneSided.Tip": {
-    "message": "한쪽에만 나타나야 하는 아트(한쪽 팔의 문신, 한쪽 뺨의 흉터)에만 켜세요.\n일반 피부를 포함해 그 밖의 모든 경우에는 꺼 두세요.\n바닐라 몸과 바닐라 얼굴은 양쪽에 같은 픽셀을 주므로, 그에 맞춰 그린 아트는 절반으로\n접힙니다. 한쪽만 남고 반대쪽으로 거울처럼 복사됩니다. 좌우 대칭 디자인에서는 보이지\n않지만 한쪽만의 디자인은 망가집니다.\n이 옵션을 켜면 Proteus가 전용 레이어로 렌더링하며, 그 좌우가 텍스처의 좌우 절반을\n각각 읽으므로 양쪽이 모두 남습니다.\n자동으로는 판별할 수 없습니다. 실제 피부는 결코 대칭이 아니며 주근깨와 점은 좌우가\n다릅니다. 그 차이가 의도인지 아닌지는 제작자만 알 수 있습니다.",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -451,6 +563,10 @@
     "message": "색상",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "발광",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "물리 속성",
     "description": ""
@@ -485,6 +601,38 @@
   },
   "Colors.Sphere.Intensity.Label": {
     "message": "강도",
+    "description": ""
+  },
+  "Colors.Section.Tile": {
+    "message": "직물 무늬",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "패턴",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "없음",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "강도",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "배율 U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "배율 V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "이 영역에 반복되는 직물 무늬입니다. 게임에 내장된 64가지 패턴 중 하나이므로 텍스처가 필요 없습니다.\n세컨드 스킨을 피부가 아닌 천처럼 보이게 하는 설정입니다. 맨살 위의 무늬는 잡티처럼 보이기 때문에\nProteus는 기본적으로 꺼 둡니다. 장비 셰이더가 필요하므로, 선택하면 피부 레이어가 천 셸로 옮겨집니다.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "무늬가 표면에서 반복되는 횟수입니다. 값이 클수록 촘촘해지며, 16이 게임의 기본값입니다.\nU와 V는 텍스처의 두 방향이므로, 다르게 설정하면 무늬가 한쪽으로 늘어납니다.",
     "description": ""
   },
   "Colors.Sphere.Tip": {
@@ -1143,6 +1291,102 @@
     "message": "알 수 없는 오류",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "헤어스타일을 모자에 맞추기",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 착용하는 헤어스타일마다 확인하여, 모자가 가릴\n머리카락을 두상에 밀착시킵니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 여기서 되돌릴 수\n있습니다.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "포니테일 숨기기",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "어떤 모자로도 가릴 수 없는 부분 — 포니테일, 옆으로 묶은 머리, 등 뒤로\n흐르는 긴 머리 — 도 모자를 쓰는 동안 아래로 삐져나오게 두지 않고 숨깁니다.\n\n기본값은 꺼짐입니다. 지나치게 밀착시켜도 모자가 덮어 보이지 않지만, 숨기기는\n전부 아니면 전무여서 잘못 판단된 부분은 그대로 사라집니다.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0}개의 머리 가닥이 머리에서 너무 멀리 떨어져 있어 모자에 들어가지 않으므로, 모자를 쓰는 동안 숨겨집니다.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "이 헤어스타일을 확인하는 중...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus가 이 헤어스타일을 이미 모자에 맞게 바꿔 두었습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "맞추기",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "헤어 모드 자체의 폴더에 기록합니다. 원본 파일은 먼저 해당 모드 안의\nProteus/hatcompat-backup/ 으로 복사되며, 이 작업은 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "이 헤어스타일은 이미 모자를 지원합니다 — 제작자가 넣어 두었습니다. 할 일이 없습니다.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "게임 기본 헤어를 착용 중이며, 이미 모자와 함께 작동합니다. 헤어 모드를 착용하면 여기서 할 일이 생깁니다.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "이 헤어스타일은 모든 부위가 모자 아래로 눌려 들어가므로 숨길 것이 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "머리카락 정점 {0}개가 두상에 밀착됩니다. 평균 {1:F1} cm, 최대 {2:F1} cm입니다.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "정점 {0}개는 옮길 수 없습니다. 이 헤어스타일은 게임의 셰이프 형식이 다루기에 너무 큰 덩어리로 합쳐져 있습니다. 형태가 그대로 남으므로 모자가 뚫고 나올 수 있습니다.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "되돌리기",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "헤어스타일을 제작자가 만든 상태 그대로 되돌렸습니다.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "이 헤어스타일의 모델을 읽을 수 없어 Proteus가 변경할 수 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "헤어스타일 {0}, 출처 {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "이 헤어스타일에는 이미 자체 모자 셰이프가 있습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0}을(를) 편집할 수 없습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "쓰기에 실패했습니다: {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "변경할 것이 없습니다. 두피에서 뜨는 머리카락도, 숨겨야 할 부분도 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "복원할 원본 모델을 찾을 수 없습니다.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "이 모드에는 되돌릴 Proteus 모자 호환 편집이 없습니다.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "레이어를 BC7 .tex로 변환",
     "description": ""
@@ -1691,6 +1935,30 @@
     "message": "색상",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "이 모드의 Proteus 데이터는 옵션 그룹 {0}을(를) 지정하지만, Penumbra의 모드 사본에는 해당 그룹이 없습니다. 다시 내보낼 때 이름이 바뀌었거나 삭제된 것으로, 제작자만 고칠 수 있습니다.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "마스크가 장비로 렌더링되도록 설정되어 있습니다. 의상은 마스크로부터 만들어지는데, Penumbra의 \"{0}\" 그룹에서 선택된 것이 없습니다.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "선택한 옵션은 처리되었지만, 이 캐릭터가 불러온 표면에 도달한 것은 없습니다.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Penumbra에서 선택된 것이 없습니다. 이 모드의 옵션 그룹 {0}개({1})가 모두 비어 있어 아무것도 그리지 않습니다. Penumbra에서 열어 각 그룹에서 옵션을 선택하세요.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "이 모드의 어떤 옵션이 켜져 있는지 Proteus가 물었지만 Penumbra가 응답하지 않았습니다.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "이 모드는 {0}을(를) 칠하지만, 당신은 {1}입니다. 이 모드에 포함된 것 중 지금 착용한 몸에 맞는 것이 없습니다.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Proteus 사이드카가 있는 모드를 찾지 못했습니다.",
     "description": ""
@@ -2067,6 +2335,10 @@
     "message": "일반",
     "description": ""
   },
+  "Settings.Section.HatCompat": {
+    "message": "모자",
+    "description": ""
+  },
   "Settings.Section.Hosting": {
     "message": "적재 위치",
     "description": ""
@@ -2142,5 +2414,241 @@
   "Tab.Settings": {
     "message": "설정",
     "description": ""
+  },
+  "Presets.Header": {
+    "message": "Presets",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None": {
+    "message": "No preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None.Tip": {
+    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackMarker": {
+    "message": "* ",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ModifiedMarker": {
+    "message": "●",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew": {
+    "message": "+ Save…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew.Tip": {
+    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Save": {
+    "message": "Save",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.RenameConfirm": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Cancel": {
+    "message": "Cancel",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NeedsAName": {
+    "message": "Give it a name first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoCollection": {
+    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FirstName": {
+    "message": "My look",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NthName.Fmt": {
+    "message": "My look {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Selected.Fmt": {
+    "message": "{0} · {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FromPack": {
+    "message": "from the mod",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackReadOnly": {
+    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update": {
+    "message": "Update",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update.Tip": {
+    "message": "Fold everything on screen back into this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NothingChanged": {
+    "message": "Nothing has changed since this preset was saved.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Rename": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Duplicate": {
+    "message": "Duplicate",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Fork.Tip": {
+    "message": "Make an editable copy of the mod's preset and wear it.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CopyCode.Tip": {
+    "message": "Copy this preset as a share code to paste to someone.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CodeCopied": {
+    "message": "Share code copied to the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Export.Tip": {
+    "message": "Save this preset as a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Delete.Tip": {
+    "message": "Hold Ctrl and click to delete this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode": {
+    "message": "Paste code",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode.Tip": {
+    "message": "Read a preset share code from the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import": {
+    "message": "Import…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import.Tip": {
+    "message": "Load a preset from a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Staged.Fmt": {
+    "message": "\"{0}\" is ready to add.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.StagedOtherMod.Fmt": {
+    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddStaged": {
+    "message": "Add",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Discard": {
+    "message": "Discard",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Added.Fmt": {
+    "message": "Added \"{0}\".",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportDialog.Title": {
+    "message": "Save preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportDialog.Title": {
+    "message": "Open preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Dialog.Filter": {
+    "message": "Proteus preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Exported.Fmt": {
+    "message": "Saved to {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportFailed.Fmt": {
+    "message": "Couldn't save it: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PartialApply.Fmt": {
+    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingGroups.Fmt": {
+    "message": "The mod no longer has these option groups: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingOptions.Fmt": {
+    "message": "These options are gone: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.JustNow": {
+    "message": "just now",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MinutesAgo.Fmt": {
+    "message": "{0} m ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HoursAgo.Fmt": {
+    "message": "{0} h ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.DaysAgo.Fmt": {
+    "message": "{0} d ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Header": {
+    "message": "Preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.None": {
+    "message": "—",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Tip": {
+    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HeaderApplied.Fmt": {
+    "message": "Presets — {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportFailed.Fmt": {
+    "message": "That isn't a preset Proteus can read: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportedFrom.Fmt": {
+    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoMatchingMod": {
+    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo": {
+    "message": "Add to",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PickAMod": {
+    "message": "Pick a mod…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo.Tip": {
+    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddedTo.Fmt": {
+    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   }
 }

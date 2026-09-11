@@ -50,6 +50,8 @@ public static class Strings
     public static ColorPanelStrings ColorPanel { get; private set; } = new();
     public static ColorsStrings     Colors     { get; private set; } = new();
     public static PartsStrings      Parts      { get; private set; } = new();
+    public static PresetsStrings    Presets    { get; private set; } = new();
+    public static HatCompatStrings  HatCompat  { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -75,7 +77,76 @@ public static class Strings
         ColorPanel = new ColorPanelStrings();
         Colors     = new ColorsStrings();
         Parts      = new PartsStrings();
+        Presets    = new PresetsStrings();
+        HatCompat  = new HatCompatStrings();
     }
+}
+
+/// <summary>The hat-compatibility panel.</summary>
+public sealed class HatCompatStrings
+{
+    public readonly string AutoFit = Loc.Localize(
+        "HatCompat.AutoFit.Label", "Make hairstyles fit under hats") + "###hatCompatAuto";
+
+    public readonly string AutoFitTip = Loc.Localize("HatCompat.AutoFit.Tip",
+        "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
+        "through. When on, Proteus checks each hairstyle as you put it on and presses\n" +
+        "the hair that a hat would cover flat against your head.\n\n" +
+        "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
+        "off and travels with the mod if you export it. Originals are kept and the\n" +
+        "change can be undone here.");
+
+    public readonly string HidePonytails = Loc.Localize(
+        "HatCompat.HidePonytails.Label", "Hide ponytails") + "###hatCompatHideTails";
+
+    public readonly string HidePonytailsTip = Loc.Localize("HatCompat.HidePonytails.Tip",
+        "Also make the parts that no hat could cover — ponytails, side tails, a long\n" +
+        "fall at the back — disappear while a hat is worn, instead of leaving them\n" +
+        "hanging out from under it.\n\n" +
+        "Off by default. Pressing hair is invisible when it overshoots, because the hat\n" +
+        "covers it; hiding is all or nothing, so a part judged wrongly simply vanishes.");
+
+    public readonly string Working = Loc.Localize("HatCompat.Working", "Looking at this hairstyle...");
+
+    public readonly string NoModdedHair = Loc.Localize("HatCompat.NoModdedHair",
+        "You are wearing hair that came with the game, which already works under hats. "
+      + "This has something to do when you wear a hair mod.");
+
+    public readonly string WearingFmt = Loc.Localize("HatCompat.Wearing.Fmt",
+        "Hairstyle {0}, from {1}.");
+
+    public readonly string AuthorDidIt = Loc.Localize("HatCompat.AuthorDidIt",
+        "This hairstyle already supports hats — its author added it. Nothing to do.");
+
+    public readonly string AlreadyPatched = Loc.Localize("HatCompat.AlreadyPatched",
+        "Proteus has already made this hairstyle fit under hats.");
+
+    public readonly string PressFmt = Loc.Localize("HatCompat.Press.Fmt",
+        "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.");
+
+    public readonly string TooWeldedFmt = Loc.Localize("HatCompat.TooWelded.Fmt",
+        "{0} points cannot be moved: this hairstyle is welded into pieces too large for the game's shape "
+      + "format to address. They will keep their shape, so a hat may still clip there.");
+
+    public readonly string WillHideFmt = Loc.Localize("HatCompat.WillHide.Fmt",
+        "{0} strand(s) hang too far off your head to fit under a hat and will be hidden while one is worn.");
+
+    public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
+        "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
+
+    public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
+
+    public readonly string ApplyTip = Loc.Localize("HatCompat.Apply.Tip",
+        "Writes into the hair mod's own folder. The original files are copied to\n"
+      + "Proteus/hatcompat-backup/ inside that mod first, and this can be undone.");
+
+    public readonly string Undo = Loc.Localize("HatCompat.Undo.Btn", "Undo") + "###hatCompatUndo";
+
+    public readonly string Undone = Loc.Localize("HatCompat.Undone",
+        "The hairstyle has been put back exactly as its author made it.");
+
+    public readonly string Unreadable = Loc.Localize("HatCompat.Unreadable",
+        "This hairstyle's model could not be read, so Proteus cannot change it.");
 }
 
 /// <summary>Strings shared by more than one screen.</summary>
@@ -135,6 +206,43 @@ public sealed class ModsStrings
         "metadata.json; absent means off).\n" +
         "On / Off = your own setting for this mod, overriding the pack.\n\n" +
         "(The global strength sliders are in Settings.)");
+
+    // ── "this mod is on and painting nothing" ────────────────────────────────────────────────────────
+    // The faces of CompositorService.InertReason. The LOG says the same things in English literals, on
+    // purpose — a log is evidence, and evidence that changes language cannot be searched or compared.
+    // See CompositorService.EnglishInert, which must be kept saying the same facts as these.
+    //
+    // Unlike the rest of this class these are wrapped tooltip and panel text, not column labels: they are
+    // allowed to be sentences.
+
+    /// <summary>{0} is how many option groups the mod has; {1} is their names, comma-joined, in the mod's
+    /// own order — Penumbra group names, which are the author's and are never translated.</summary>
+    public readonly string InertNothingTickedFmt = Loc.Localize("Mods.Inert.NothingTicked.Fmt",
+        "Nothing is ticked in Penumbra. This mod's {0} option group(s) — {1} — are all empty, so it " +
+        "paints nothing. Open it in Penumbra and tick an option in each.");
+
+    /// <summary>{0} is the comma-joined names of groups the mod's Proteus data expects but Penumbra has
+    /// not got. Author-facing: the user cannot fix this one.</summary>
+    public readonly string InertGroupsMissingFmt = Loc.Localize("Mods.Inert.GroupsMissing.Fmt",
+        "This mod's Proteus data names the option group(s) {0}, which Penumbra's copy of the mod hasn't " +
+        "got — renamed or dropped when it was re-exported. Only its author can fix that.");
+
+    /// <summary>{0} is what the mod paints and {1} what the character is, both as "body · Race F" — e.g.
+    /// "bibo · Midlander F, Viera F". Race names come from ModelRace and are not translated.</summary>
+    public readonly string InertWrongRaceFmt = Loc.Localize("Mods.Inert.WrongRace.Fmt",
+        "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.");
+
+    /// <summary>{0} is the Penumbra group name for masks — literally "Masks", the author's own group
+    /// name, which arrives already untranslated.</summary>
+    public readonly string InertMaskNeedsShellFmt = Loc.Localize("Mods.Inert.MaskNeedsShell.Fmt",
+        "Its masks render as gear, which needs a mask to build the garment from — and nothing is ticked " +
+        "in its \"{0}\" group in Penumbra.");
+
+    public readonly string InertNothingReached = Loc.Localize("Mods.Inert.NothingReached",
+        "Its ticked options resolved, but none of them reached a surface this character has loaded.");
+
+    public readonly string InertSettingsUnreadable = Loc.Localize("Mods.Inert.SettingsUnreadable",
+        "Penumbra didn't answer when Proteus asked which of this mod's options are on.");
 }
 
 public sealed class BindingsStrings
@@ -310,6 +418,8 @@ public sealed class SettingsStrings
     public readonly string SecGeneral     = Loc.Localize("Settings.Section.General", "General");
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
+    public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 
     public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
@@ -961,6 +1071,11 @@ public sealed class ColorsStrings
 
     public readonly string Advanced = Loc.Localize("Colors.Advanced", "Advanced");
 
+    /// <summary>Heading for the mod-wide geometry features, in their own section above the tab strip.
+    /// "Geometry" rather than "Body" because what these change is the shape of the mesh, not which body
+    /// the art is baked onto — that is Bodies, which stays per-tab in Advanced.</summary>
+    public readonly string GeometrySection = Loc.Localize("Colors.Geometry.Section", "Geometry");
+
     public readonly string Pinned = Loc.Localize("Colors.Pinned", "(pinned)");
     public readonly string Auto   = Loc.Localize("Colors.Auto", "(auto)");
 
@@ -1066,6 +1181,14 @@ public sealed class ColorsStrings
 
     public readonly string Specular = Loc.Localize("Colors.Specular.Label", "Specular");
 
+    /// <summary>
+    /// Its own section since the glow colour, amount and light response were pulled out of "Colours".
+    /// NOT the same string as <see cref="GlowAmount"/>, which happens to render the same word in English —
+    /// that one is the slider's own label and can be renamed without touching the heading. The field cannot
+    /// be called <c>Glow</c> either: that is already the highlight button beside the Copy/Paste pair.
+    /// </summary>
+    public readonly string GlowSection = Loc.Localize("Colors.Section.Glow", "Glow");
+
     public readonly string GlowColour = Loc.Localize("Colors.GlowColour.Label", "Glow colour");
 
     public readonly string GlowColourTip = Loc.Localize("Colors.GlowColour.Tip",
@@ -1109,6 +1232,35 @@ public sealed class ColorsStrings
     public readonly string OpacityTip = Loc.Localize("Colors.Opacity.Tip",
         "Negative fades this row toward transparent; positive pushes it toward opaque.");
 
+    public readonly string Blend = Loc.Localize("Colors.Blend.Label", "Blend");
+
+    public readonly string BlendTip = Loc.Localize("Colors.Blend.Tip",
+        "How this row's art combines with what is already on the skin.\n" +
+        "\n" +
+        "\"Paint\" lays it on top, which is what every layer has always done.\n" +
+        "Anything else makes this row a PRINT: it colours the fabric this mod's\n" +
+        "other layers painted, and is clipped to their shape — so a rainbow on a\n" +
+        "fishnet colours the threads and leaves the holes as skin.\n" +
+        "\n" +
+        "A print only reaches its OWN mod's layers; it never touches another mod's\n" +
+        "clothing. On bare skin it paints nothing at all, so a print selected on its\n" +
+        "own shows nothing — there is nothing there to print on.\n" +
+        "\n" +
+        "Multiply can only darken, so it reads faintly on very dark fabric — use\n" +
+        "Screen there instead. This row's colour still tints the art, and its\n" +
+        "Opacity is the print's strength.");
+
+    /// <summary>Display names for <see cref="RowBlend"/>, in declaration order.</summary>
+    public readonly string[] BlendNames =
+    [
+        Loc.Localize("Colors.Blend.Paint",    "Paint"),
+        Loc.Localize("Colors.Blend.Multiply", "Multiply"),
+        Loc.Localize("Colors.Blend.Screen",   "Screen"),
+        Loc.Localize("Colors.Blend.Overlay",  "Overlay"),
+        Loc.Localize("Colors.Blend.Add",      "Add"),
+        Loc.Localize("Colors.Blend.Replace",  "Replace"),
+    ];
+
     public readonly string Physical    = Loc.Localize("Colors.Section.Physical", "Physical");
     public readonly string ClothSuffix = Loc.Localize("Colors.Section.Physical.ClothSuffix", "— Cloth");
 
@@ -1118,6 +1270,23 @@ public sealed class ColorsStrings
     public readonly string SphereMap   = Loc.Localize("Colors.Section.SphereMap", "Sphere map");
     public readonly string SphereIndex = Loc.Localize("Colors.Sphere.Index.Label", "Index");
     public readonly string Intensity   = Loc.Localize("Colors.Sphere.Intensity.Label", "Intensity");
+
+    public readonly string Tile         = Loc.Localize("Colors.Section.Tile", "Tile");
+    public readonly string TilePattern  = Loc.Localize("Colors.Tile.Pattern.Label", "Pattern");
+    public readonly string TileNone     = Loc.Localize("Colors.Tile.None", "None");
+    public readonly string TileStrength = Loc.Localize("Colors.Tile.Strength.Label", "Strength");
+    public readonly string TileScaleU   = Loc.Localize("Colors.Tile.ScaleU.Label", "Scale U");
+    public readonly string TileScaleV   = Loc.Localize("Colors.Tile.ScaleV.Label", "Scale V");
+
+    public readonly string TileTip = Loc.Localize("Colors.Tile.Tip",
+        "A fabric weave tiled over this region — one of the game's own 64 patterns, so it costs no texture.\n"
+      + "This is what makes a second skin read as cloth rather than skin; Proteus leaves it off by default\n"
+      + "because a weave over bare skin looks like grain. Needs the gear shader, so picking one moves a skin\n"
+      + "overlay onto a cloth shell.");
+
+    public readonly string TileScaleTip = Loc.Localize("Colors.Tile.Scale.Tip",
+        "How many times the weave repeats across the surface. Higher is finer; 16 is the game's own default.\n"
+      + "U and V are the two directions of the texture, so setting them apart stretches the weave one way.");
 
     /// <summary>Deliberately the same wording as the global Settings slider: this is the same knob at a
     /// narrower scope, and calling it something else would read as a second, unrelated control.</summary>
@@ -1136,19 +1305,91 @@ public sealed class ColorsStrings
     public readonly string WholeSkin = Loc.Localize("Colors.WholeSkin.Label",
         "This overlay is the whole skin");
 
-    public readonly string OneSided = Loc.Localize("Colors.OneSided.Label",
-        "This art is deliberately one-sided");
+    public readonly string Asymmetric = Loc.Localize("Colors.Asymmetric.Label",
+        "This art is asymmetric (left and right differ)");
 
-    public readonly string OneSidedTip = Loc.Localize("Colors.OneSided.Tip",
-        "Turn this on for art meant to appear on ONE side only — a tattoo on one arm, a scar on\n"
-      + "one cheek. Leave it off for anything else, including ordinary skin.\n"
+    public readonly string AsymmetricTip = Loc.Localize("Colors.Asymmetric.Tip",
+        "Turn this on when the two sides are meant to DIFFER — a tattoo on one arm, a scar on one\n"
+      + "cheek, makeup that isn't mirrored. Leave it off for anything else, including ordinary skin.\n"
       + "A vanilla body and the vanilla face give both sides the same pixels, so art painted for\n"
       + "them is folded in half: one side is kept and mirrored across. That is invisible on a\n"
-      + "symmetric design and ruins a one-sided one. With this on, Proteus renders the overlay\n"
+      + "symmetric design and ruins an asymmetric one. With this on, Proteus renders the overlay\n"
       + "through a layer of its own whose two sides read the two halves of your sheet, so both\n"
       + "sides survive.\n"
       + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
       + "left to right — so only you can say whether a difference is the point or just detail.");
+
+    public readonly string BustBridge = Loc.Localize("Colors.BustBridge.Label",
+        "Span the cleavage");
+
+    public readonly string BustBridgeTip = Loc.Localize("Colors.BustBridge.Tip",
+        "Turn this on for cloth over the chest.\n"
+      + "Proteus builds a garment as a copy of the body, so by default it follows the body into\n"
+      + "the cleavage — which is what makes it read as paint rather than fabric. Real cloth spans\n"
+      + "the gap: a straight line between the furthest-forward point of each breast.\n"
+      + "With this on, the fabric between the breasts is relaxed out to that line. Nothing is ever\n"
+      + "pulled inward, so it cannot cut into the body, and the breasts themselves keep their shape.\n"
+      + "Where a neckline has cut the cloth away between the cups there is nothing to span, and\n"
+      + "this does nothing.");
+
+    public readonly string BustBridgeStrength = Loc.Localize("Colors.BustBridge.Strength.Label",
+        "Span amount");
+
+    public readonly string BustBridgeStrengthTip = Loc.Localize("Colors.BustBridge.Strength.Tip",
+        "How far the fabric relaxes toward the flat span. 1.00 spans it fully; lower values keep\n"
+      + "more of the shape underneath.");
+
+    public readonly string SmoothNipples = Loc.Localize("Colors.SmoothNipples.Label",
+        "Smooth the nipple");
+
+    public readonly string SmoothNipplesTip = Loc.Localize("Colors.SmoothNipples.Tip",
+        "Turn this on for cloth over the chest.\n"
+      + "Proteus builds a garment as a copy of the body, so it reproduces the nipple as a point —\n"
+      + "which reads as body paint rather than fabric. With this on, the fabric over it is smoothed\n"
+      + "into the surrounding curve.\n"
+      + "NOT FINISHED YET: this smooths the garment, and the body underneath keeps its own shape, so\n"
+      + "on a close fit it can still show through. Smoothing the skin to match is still to come.");
+
+    public readonly string SmoothNipplesStrength = Loc.Localize("Colors.SmoothNipples.Strength.Label",
+        "Smoothing amount");
+
+    public readonly string SmoothNipplesStrengthTip = Loc.Localize("Colors.SmoothNipples.Strength.Tip",
+        "How far the fabric is smoothed. 1.00 smooths it fully; lower values keep more of the\n"
+      + "shape underneath.");
+
+    public readonly string CleftBridge = Loc.Localize("Colors.CleftBridge.Label",
+        "Span the buttocks");
+
+    public readonly string CleftBridgeTip = Loc.Localize("Colors.CleftBridge.Tip",
+        "Turn this on for cloth over the seat.\n"
+      + "Proteus builds a garment as a copy of the body, so it follows the cleft all the way in —\n"
+      + "which reads as painted on rather than worn. With this on, the fabric spans across it the\n"
+      + "way real cloth does.\n"
+      + "The same idea as spanning the cleavage, on a much deeper cleft, so start the amount low.");
+
+    public readonly string CleftBridgeStrength = Loc.Localize("Colors.CleftBridge.Strength.Label",
+        "Span amount");
+
+    public readonly string CleftBridgeStrengthTip = Loc.Localize("Colors.CleftBridge.Strength.Tip",
+        "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
+      + "cheeks either side, which is usually too much — lower values keep more of it.");
+
+    public readonly string SmoothFold = Loc.Localize("Colors.SmoothFold.Label",
+        "Smooth between the legs");
+
+    public readonly string SmoothFoldTip = Loc.Localize("Colors.SmoothFold.Tip",
+        "Turn this on for cloth over the crotch.\n"
+      + "Proteus builds a garment as a copy of the body, so it reproduces the fold between the legs —\n"
+      + "which reads as body paint rather than fabric. With this on, the skin there is smoothed out to\n"
+      + "the surrounding curve first, so the garment cut from it comes out smooth too.\n"
+      + "This changes the body, so it applies to every garment worn at once.");
+
+    public readonly string SmoothFoldStrength = Loc.Localize("Colors.SmoothFold.Strength.Label",
+        "Smoothing amount");
+
+    public readonly string SmoothFoldStrengthTip = Loc.Localize("Colors.SmoothFold.Strength.Tip",
+        "How far the fold is smoothed. 1.00 flattens it into the surrounding curve; lower values keep\n"
+      + "more of it.");
 
     public readonly string WholeSkinTip = Loc.Localize("Colors.WholeSkin.Tip",
         "Turn this on for a converted skin mod — art that IS the skin, not something laid on it.\n"
@@ -1226,6 +1467,17 @@ public sealed class ColorPanelStrings
         "Another active option in this mod renders as gear, so the mask has to sit on that\n" +
         "shell — it can't be painted into the skin underneath it. Switch those options to\n" +
         "Skin (Advanced on their tabs) and the mask gets its own mode choice back.");
+
+    public readonly string ToeCapOn = Loc.Localize("Colors.Mask.ToeCap", "Toe Cap is on");
+
+    public readonly string ToeCapOnTip = Loc.Localize("Colors.Mask.ToeCap.Tip",
+        "The \"Toe Cap\" option is ticked in this mod's Masks group in Penumbra. It rebuilds\n" +
+        "the toes as one rounded shape, so this mod's skin overlays are promoted to cloth —\n" +
+        "they need geometry the skin layer hasn't got. That costs a shell rebuild.\n" +
+        "\n" +
+        "If you didn't tick it: Penumbra stores this group's selection by option INDEX, so a\n" +
+        "mod re-exported with its options in a different order silently re-points every saved\n" +
+        "selection. Re-tick the group in Penumbra to re-sync it.");
 }
 
 /// <summary>Shared by the Mods and Bindings tabs.</summary>
@@ -1371,4 +1623,139 @@ public sealed class PartsStrings
 
     public readonly string RevertedFmt = Loc.Localize("Parts.Reverted.Fmt",
         "Undone. {0} model file(s) restored, and the option group removed.");
+}
+
+/// <summary>The named-looks strip at the top of a mod's colour editor. See <see cref="Gui.PresetBar"/>.</summary>
+public sealed class PresetsStrings
+{
+    public readonly string Header = Loc.Localize("Presets.Header", "Presets");
+
+    /// <summary>The collapsing header while a preset is worn, so a closed section still says which.</summary>
+    public readonly string HeaderAppliedFmt = Loc.Localize("Presets.HeaderApplied.Fmt", "Presets — {0}");
+
+    /// <summary>Bare text, with no "###id" suffix: this is a combo's preview value as well as a
+    /// selectable's label, and a preview value is rendered verbatim — the id would show on screen.</summary>
+    public readonly string NoPreset = Loc.Localize("Presets.None", "No preset");
+
+    public readonly string NoPresetTip = Loc.Localize("Presets.None.Tip",
+        "Wear the mod's own colours again. Your option ticks are left exactly as they are.");
+
+    /// <summary>Prefix on a chip the mod author shipped. A glyph rather than a word so it costs no
+    /// width in any language.</summary>
+    public readonly string PackMarker = Loc.Localize("Presets.PackMarker", "* ");
+
+    /// <summary>Suffix on the worn chip once the look has drifted from what was saved.</summary>
+    public readonly string ModifiedMarker = Loc.Localize("Presets.ModifiedMarker", "●");
+
+    public readonly string SaveNew = Loc.Localize("Presets.SaveNew", "+ Save…") + "###presetSaveNew";
+
+    public readonly string SaveNewTip = Loc.Localize("Presets.SaveNew.Tip",
+        "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.");
+
+    public readonly string Save = Loc.Localize("Presets.Save", "Save") + "###presetSaveGo";
+    public readonly string RenameConfirm = Loc.Localize("Presets.RenameConfirm", "Rename") + "###presetSaveGo";
+    public readonly string Cancel = Loc.Localize("Presets.Cancel", "Cancel");
+
+    public readonly string NeedsAName = Loc.Localize("Presets.NeedsAName", "Give it a name first.");
+
+    public readonly string NoCollection = Loc.Localize("Presets.NoCollection",
+        "Penumbra hasn't told Proteus which collection you're wearing yet.");
+
+    public readonly string FirstPresetName = Loc.Localize("Presets.FirstName", "My look");
+    public readonly string NthPresetNameFmt = Loc.Localize("Presets.NthName.Fmt", "My look {0}");
+
+    public readonly string SelectedFmt = Loc.Localize("Presets.Selected.Fmt", "{0} · {1}");
+
+    public readonly string FromPack = Loc.Localize("Presets.FromPack", "from the mod");
+
+    public readonly string PackReadOnly = Loc.Localize("Presets.PackReadOnly",
+        "This one came with the mod, so it can't be changed. Duplicate it to make it yours.");
+
+    public readonly string Update = Loc.Localize("Presets.Update", "Update");
+
+    public readonly string UpdateTip = Loc.Localize("Presets.Update.Tip",
+        "Fold everything on screen back into this preset.");
+
+    public readonly string NothingChanged = Loc.Localize("Presets.NothingChanged",
+        "Nothing has changed since this preset was saved.");
+
+    public readonly string Rename = Loc.Localize("Presets.Rename", "Rename");
+    public readonly string Duplicate = Loc.Localize("Presets.Duplicate", "Duplicate");
+
+    public readonly string ForkTip = Loc.Localize("Presets.Fork.Tip",
+        "Make an editable copy of the mod's preset and wear it.");
+
+    public readonly string CopyCodeTip = Loc.Localize("Presets.CopyCode.Tip",
+        "Copy this preset as a share code to paste to someone.");
+
+    public readonly string CodeCopied = Loc.Localize("Presets.CodeCopied", "Share code copied to the clipboard.");
+
+    public readonly string ExportTip = Loc.Localize("Presets.Export.Tip", "Save this preset as a file.");
+
+    public readonly string DeleteTip = Loc.Localize("Presets.Delete.Tip", "Hold Ctrl and click to delete this preset.");
+
+    public readonly string PasteCode = Loc.Localize("Presets.PasteCode", "Paste code");
+
+    public readonly string PasteCodeTip = Loc.Localize("Presets.PasteCode.Tip",
+        "Read a preset share code from the clipboard.");
+
+    public readonly string Import = Loc.Localize("Presets.Import", "Import…");
+    public readonly string ImportTip = Loc.Localize("Presets.Import.Tip", "Load a preset from a file.");
+
+    public readonly string StagedFmt = Loc.Localize("Presets.Staged.Fmt", "\"{0}\" is ready to add.");
+
+    public readonly string StagedOtherModFmt = Loc.Localize("Presets.StagedOtherMod.Fmt",
+        "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its " +
+        "options and colours this mod happens to share.");
+
+    public readonly string AddStaged = Loc.Localize("Presets.AddStaged", "Add");
+    public readonly string Discard = Loc.Localize("Presets.Discard", "Discard");
+    public readonly string AddedFmt = Loc.Localize("Presets.Added.Fmt", "Added \"{0}\".");
+
+    public readonly string ExportDialogTitle = Loc.Localize("Presets.ExportDialog.Title", "Save preset");
+    public readonly string ImportDialogTitle = Loc.Localize("Presets.ImportDialog.Title", "Open preset");
+    public readonly string DialogFilter = Loc.Localize("Presets.Dialog.Filter", "Proteus preset");
+
+    // The Import tab's .ptp branch — a preset picked where mods are normally installed.
+    public readonly string ImportFailedFmt = Loc.Localize("Presets.ImportFailed.Fmt",
+        "That isn't a preset Proteus can read: {0}");
+
+    public readonly string ImportedFromFmt = Loc.Localize("Presets.ImportedFrom.Fmt",
+        "Preset \"{0}\" — made for \"{1}\" by {2}.");
+
+    public readonly string NoMatchingMod = Loc.Localize("Presets.NoMatchingMod",
+        "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.");
+
+    public readonly string AddTo = Loc.Localize("Presets.AddTo", "Add to");
+    public readonly string PickAMod = Loc.Localize("Presets.PickAMod", "Pick a mod…");
+
+    public readonly string AddToTip = Loc.Localize("Presets.AddTo.Tip",
+        "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.");
+
+    public readonly string AddedToFmt = Loc.Localize("Presets.AddedTo.Fmt",
+        "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.");
+
+    public readonly string ExportedFmt = Loc.Localize("Presets.Exported.Fmt", "Saved to {0}.");
+    public readonly string ExportFailedFmt = Loc.Localize("Presets.ExportFailed.Fmt", "Couldn't save it: {0}");
+
+    public readonly string PartialApplyFmt = Loc.Localize("Presets.PartialApply.Fmt",
+        "\"{0}\" was applied as far as it goes. {1}");
+
+    public readonly string MissingGroupsFmt = Loc.Localize("Presets.MissingGroups.Fmt",
+        "The mod no longer has these option groups: {0}.");
+
+    public readonly string MissingOptionsFmt = Loc.Localize("Presets.MissingOptions.Fmt",
+        "These options are gone: {0}.");
+
+    public readonly string JustNow = Loc.Localize("Presets.JustNow", "just now");
+    public readonly string MinutesAgoFmt = Loc.Localize("Presets.MinutesAgo.Fmt", "{0} m ago");
+    public readonly string HoursAgoFmt = Loc.Localize("Presets.HoursAgo.Fmt", "{0} h ago");
+    public readonly string DaysAgoFmt = Loc.Localize("Presets.DaysAgo.Fmt", "{0} d ago");
+
+    /// <summary>The Mods-tab column and its combo entry for "nothing pinned".</summary>
+    public readonly string ColumnHeader = Loc.Localize("Presets.Column.Header", "Preset");
+    public readonly string ColumnNone = Loc.Localize("Presets.Column.None", "—");
+
+    public readonly string ColumnTip = Loc.Localize("Presets.Column.Tip",
+        "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.");
 }

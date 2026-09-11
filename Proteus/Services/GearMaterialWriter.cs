@@ -8,7 +8,12 @@ namespace Proteus.Services;
 /// <summary>
 /// One color table row for a gear overlay. Null fields keep the template's value.
 /// </summary>
-public sealed class GearColorRow
+// A record rather than a class purely so callers can say `row with { … }`. SecondSkinService.BuildRows
+// merges an authored row over the neutral baseline, and doing that by listing every field means the next
+// field added here is silently dropped from every authored row — which is exactly what happened when the
+// weave (TileIndex and friends) arrived. `with` copies what it is not told to change, so the failure mode
+// for a new field is "behaves as it did before the merge existed" rather than "vanishes".
+public sealed record GearColorRow
 {
     public (float R, float G, float B)? Diffuse { get; init; }
     public (float R, float G, float B)? Emissive { get; init; }
@@ -34,6 +39,28 @@ public sealed class GearColorRow
 
     public float? Roughness { get; init; }
     public float? Metalness { get; init; }
+
+    /// <summary>
+    /// Slice of the shared array chara/common/texture/tile_norm_array.tex (0–63) — the fabric weave tiled
+    /// over this row. Needs no material texture.
+    /// <para/>
+    /// Null leaves the material's own value, which on a shell is the zeroed weave <see cref="Build"/>
+    /// writes, and on an imported pack's material is whatever its author chose.
+    /// </summary>
+    public int? TileIndex { get; init; }
+
+    /// <summary>How strongly the weave shows. Null means full strength. Like <see cref="TileScaleU"/>, it is
+    /// ignored entirely without a <see cref="TileIndex"/> — see the writer for why the three only travel
+    /// together.</summary>
+    public float? TileStrength { get; init; }
+
+    /// <summary>Weave repeats per UV axis — the tile transform's diagonal. Either one present writes the
+    /// whole 2x2 matrix with zero skew, the missing axis falling back to the game default of 16. Ignored
+    /// without a <see cref="TileIndex"/>.</summary>
+    public float? TileScaleU { get; init; }
+
+    /// <inheritdoc cref="TileScaleU"/>
+    public float? TileScaleV { get; init; }
 }
 
 /// <summary>
@@ -183,7 +210,8 @@ public static class GearMaterialWriter
 
     /// <summary>
     /// g_AlphaOffset (CRC of the name under the game's reflected CRC-32). "Enhanced Nylon" raises it to 1
-    /// on character.shpk for a sheerer alpha falloff. Gear non-scroll only.
+    /// on character.shpk for a sheerer alpha falloff; we push to 1.5 for a sheerer edge still. Gear
+    /// non-scroll only.
     /// </summary>
     private const uint ConstAlphaOffset = 0xD07A6A65;
 
@@ -211,8 +239,23 @@ public static class GearMaterialWriter
     private const int HDiffuse = 0, HSpecular = 4, HEmissive = 8;
     private const int HRoughness = 16, HMetalness = 18;
     private const int HSphereMask = 21, HSphereIndex = 27;
-    private const int HTileAlpha = 26;
+    private const int HTileIndex = 25, HTileAlpha = 26;
+    /// <summary>
+    /// The tile transform: a 2x2 UV matrix (UU, UV, VU, VV) whose diagonal is how many times the weave
+    /// repeats per axis and whose off-diagonal is skew. Vanilla ships ScaledIdentity(16) — repeat 16 both
+    /// ways, no skew. Proteus writes the diagonal from the editor's Scale controls and pins skew to zero:
+    /// on a 64px weave skew and rotation are invisible, and composing them would mean porting
+    /// Penumbra.GameData's HalfMatrix2x2 (a project Proteus does not reference) for a control nobody moves.
+    /// </summary>
+    private const int HTileXfUU = 28, HTileXfUV = 29, HTileXfVU = 30, HTileXfVV = 31;
     private const int RowCount = 32, RowBytes = 64;
+
+    /// <summary>Slices in chara/common/texture/tile_norm_array.tex — read out of the .tex header, and the
+    /// reason <see cref="HTileIndex"/>'s encoding divides by 64.</summary>
+    internal const int TileCount = 64;
+
+    /// <summary>The tile transform vanilla ships on every row, and what an unset Scale axis falls back to.</summary>
+    internal const float DefaultTileScale = 16f;
 
     /// <summary>
     /// What actually switches the scrolling effect ON — per Bacara's characterscroll guide, and confirmed
@@ -253,8 +296,10 @@ public static class GearMaterialWriter
         IReadOnlyDictionary<int, GearColorRow>? rows,
         ScrollSettings? scroll = null,
         bool cutoutAlpha = false,
-        bool linearizeDiffuse = false)   // convert the colorset diffuse sRGB→linear (mask shells: colour lives
-    {                                    // in the colorset over a white base, so it must match the skin bake)
+        bool linearizeDiffuse = false,   // convert the colorset diffuse sRGB→linear (mask shells: colour lives
+                                         // in the colorset over a white base, so it must match the skin bake)
+        bool showBackfaces = false)
+    {
         var m = template;
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
 
@@ -346,7 +391,13 @@ public static class GearMaterialWriter
                         + addDataSize + dataSetSize;
         if (shaderStart + 12 <= r.Length)
         {
-            uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency | FlagHideBackfaces;
+            uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency;
+            // Backfaces are hidden by default because a shell hugs the body: nothing can see its inside,
+            // and drawing it doubles the transparent surfaces the sheer blend has to sort. A shell that
+            // SPANS lifts off the body, and then the inside of the span faces the viewer wherever they
+            // look up under it — hidden, that reads as a hole straight through the garment.
+            if (showBackfaces) flags &= ~FlagHideBackfaces;
+            else               flags |= FlagHideBackfaces;
 
             BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
         }
@@ -377,12 +428,16 @@ public static class GearMaterialWriter
             // Sheer edge: always raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer — a
             // second skin should never be a hard cutout. Not applicable to characterscroll (handled above);
             // no-ops safely if the template lacks the constant.
-            r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1f).data;
+            r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1.5f).data;
         }
 
         // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
         // and the templates ship it at full strength. A second skin is SKIN — that weave shows up as a
         // rough, grainy texture the real skin doesn't have. Switch it off on every row.
+        //
+        // A BASELINE, not a verdict: PatchColorTable runs immediately below and re-writes half 26 on any row
+        // whose preset asked for a weave, so an authored tile survives and every other row stays smooth.
+        // Keep this BEFORE the patch — swapping the two makes the editor's Tile picker a silent no-op.
         {
             int cs = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
             for (int row = 0; row < RowCount; row++)
@@ -517,6 +572,47 @@ public static class GearMaterialWriter
             if (def.SphereMapMask is { } sm) WH(HSphereMask, sm);
             if (def.Roughness is { } ro) WH(HRoughness, ro);
             if (def.Metalness is { } me) WH(HMetalness, me);
+
+            // ── the fabric weave ─────────────────────────────────────────────
+            // Never on a scrolling material. characterscroll demonstrably reassigns halves in this
+            // neighbourhood — 21 is the effect's visibility and 23 its master switch, neither of which means
+            // that on character.shpk — so there is no basis for assuming 25/26/28-31 survive it either. A
+            // value reaching one of those there would be stale rather than chosen, since the editor hides
+            // the Tile block on a glow material for the same reason it hides the sphere.
+            //
+            // EVERY tile write hangs off the index, strength and scale included. On their own they are not a
+            // weaker version of the same request, they are a different one, and both ways of making it are
+            // wrong:
+            //   - strength alone revives whatever weave the row ALREADY names. On a shell that is the vanilla
+            //     template's, which Build only silenced (it zeroes half 26 and leaves half 25 alone), so the
+            //     body comes back wearing a pattern nobody picked.
+            //   - scale alone re-tiles a weave the user never chose and clears its skew — on an imported pack
+            //     that is the author's own material, edited in place, with no second copy to restore from.
+            // The editor can reach both: its Strength and Scale controls are dimmed while no pattern is set,
+            // and dimmed in this codebase means inert-looking but still draggable. Keeping the trio together
+            // here is what makes that safe, and it also protects hand-authored metadata, which no UI guards.
+            if (!isScroll && def.TileIndex is { } ti)
+            {
+                // The index is NOT stored as a number: the shader reads (half * 64), so the row carries
+                // (index + 0.5) / 64. The half-step centres the value in its bucket so the truncating read
+                // cannot land a slice off — 63 encodes as 0.9921875, where Half's step is a thirtieth of the
+                // bucket width, so every slice round-trips exactly.
+                WH(HTileIndex, (Math.Clamp(ti, 0, TileCount - 1) + 0.5f) / 64f);
+
+                // Build zeroed half 26 on every row, so an index with no strength would be an invisible
+                // tile — the same silent no-op as a sphere index with a zero mask. Full unless told.
+                WH(HTileAlpha, def.TileStrength ?? 1f);
+
+                // Either axis writes the whole matrix: the off-diagonal has to be pinned to zero explicitly
+                // or a content pack's authored skew would survive under a scale the user thinks is plain.
+                if (def.TileScaleU is not null || def.TileScaleV is not null)
+                {
+                    WH(HTileXfUU, def.TileScaleU ?? DefaultTileScale);
+                    WH(HTileXfUV, 0f);
+                    WH(HTileXfVU, 0f);
+                    WH(HTileXfVV, def.TileScaleV ?? DefaultTileScale);
+                }
+            }
 
             // ── the scrolling effect ─────────────────────────────────────────
             // Arm it on rows that actually glow. Field 23 is the master switch — without it nothing renders

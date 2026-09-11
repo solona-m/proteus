@@ -323,6 +323,49 @@ public class ModCreationTests
     }
 
     /// <summary>
+    /// The one exception to the rule above, and the reason it is one: "this face texture is split left/right"
+    /// IS a statement that the art has two sides. Nobody paints a doubled sheet for art that is the same on
+    /// both cheeks — the layout exists only because the vanilla face one cannot hold a one-sided mark at all.
+    /// <para/>
+    /// It has to be said in BOTH fields, because they are read by different code and one without the other
+    /// renders wrong rather than plainly: <see cref="OverlayDescriptor.SourceBodyType"/> names the layout, but
+    /// <c>CompositorService.NeedsUnmirroredShell</c> bails on its first line unless the art is declared
+    /// one-sided, so a sheet with only the first field got no face shell, fell through to the skin path and
+    /// was resampled onto the face's own square texture — which puts the OUTER edge of the sheet down the
+    /// middle of the face.
+    /// </summary>
+    [Fact]
+    public void WriteMod_face_split_declares_both_the_layout_and_its_two_sides()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "proteus_create_" + Path.GetRandomFileName());
+        var diffuse = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".png");
+        File.WriteAllBytes(diffuse, new byte[] { 1, 2, 3, 4 });
+
+        try
+        {
+            ModCreationService.WriteMod(
+                root, "Asym Makeup", "Artist",
+                "chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl",
+                diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null,
+                faceSplit: true);
+
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            var ov = Assert.Single(meta!.Overlays!);
+            Assert.Equal(UVRemapService.FaceSplitSpace, ov.SourceBodyType);
+            Assert.True(ov.AsymmetricArt);
+            Assert.True(CompositorService.NeedsUnmirroredShell(ov, wearingMirroredBody: false));
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { File.Delete(diffuse); } catch { }
+        }
+    }
+
+    /// <summary>
     /// The Create tab's auto-detect, first gate. Measured against the real art: a converted skin's base
     /// bottoms out at alpha 251, while a detail overlay ("Boney Diffuse" — collarbones and ribs) peaks at
     /// 117 over a mean of 6. This only rules sparse art OUT; garment art is routinely opaque end to end and

@@ -45,6 +45,7 @@ Lista todos los mods de Penumbra que contienen un archivo Proteus. Haz clic en u
 | Act. | Activa o desactiva la composición de Proteus para ese mod. |
 | Mod | El nombre visible del mod. Haz clic para saltar a ese mod en Penumbra. |
 | Prio | Prioridad dentro de la pila de composición de Proteus. Los números más bajos van primero (capa inferior). Arrastra para cambiarla; Ctrl+clic para escribirla. |
+| Preajuste | El aspecto guardado que lleva puesto este mod. Elige otro para cambiar sin abrir el editor de color. Muestra — en un mod que no tiene preajustes. |
 | Colores | Abre el editor de colores de ese mod. |
 | Skindent | Sombra de oclusión ambiental y hendidura de normales en los bordes de las correas de este mod. «Paquete» sigue lo que pidió el mod; Sí/No lo sobrescribe. |
 
@@ -91,6 +92,10 @@ Los paquetes de Atramentum Luminis esconden su brillo en el canal alfa de una te
 - No hay filtro de raza ni de sexo, así que el mod pinta cualquier personaje que tenga un cuerpo con el mismo material. Desactívalo en Penumbra para los personajes para los que no fue pintado.
 - El brillo de ojos no se importa hoy por hoy, pero escríbeme si te interesa.
 
+
+**Preajustes (`.ptp`)** — un aspecto que alguien compartió para un mod que ya tienes.
+
+Un preajuste no es un mod, así que no se instala nada: Proteus lee para qué mod se hizo, se ofrece a añadirlo a ese, y lo dice si no lo tienes con ese nombre — entonces eliges tú el mod correcto. Se guarda, no se pone; llévalo desde la sección Preajustes de ese mod en Color cuando quieras.
 #### Exportar
 
 Guarda uno de tus mods de Proteus como paquete de mod de Penumbra (`.pmp`) para compartirlo. Elige el mod en la lista desplegable, pulsa **Exportar** y elige dónde ponerlo: el nombre de archivo se rellena a partir del nombre del mod, y el diálogo se abre en tu escritorio la primera vez y después donde guardaste la última vez.
@@ -134,6 +139,23 @@ Tres botones de aquí merecen mención:
 - **Restaurar accesorio modificado** — fuerza un redibujado completo si alguna vez una segunda piel se queda atascada en un anillo o una pulsera tras desactivarla o cambiarla.
 - **Vaciar caché de texturas** — úsalo cuando una edición de textura no aparece, por ejemplo si has vuelto a exportar una superposición con el mismo tamaño.
 - **Texturas de efecto de brillo** — abre la carpeta de la que Proteus lee los mapas de desplazamiento del brillo animado. Deja imágenes ahí y aparecerán en la lista Efecto de cada superposición de equipo. Pasa el ratón por el botón para ver la ruta completa.
+
+### Preajustes
+
+Un **preajuste** es un aspecto con nombre para **un solo mod**: qué opciones tiene marcadas, todos sus colores y su brillo y ajustes de capa. Los paquetes complejos — monos, medias — traen una docena de grupos, y dar con una combinación que merezca la pena significa toquetear casillas hasta que algo encaje. Un preajuste conserva esa combinación.
+
+Los preajustes están en una sección plegable **Preajustes** al final del editor de color de un mod, debajo de Avanzado. **+ Guardar…** conserva con un nombre el aspecto actual del mod; la lista desplegable de al lado elige cuál se lleva puesto. Plegada, la cabecera sigue diciendo cuál llevas.
+
+- Los preajustes marcados con `*` vinieron con el mod. Son de solo lectura: al editar uno obtienes tu propia copia, así que una actualización del mod nunca puede sobrescribir lo que guardaste.
+- Un `●` junto al preajuste puesto significa que has cambiado algo desde que se guardó. **Actualizar** incorpora esos cambios; si lo ignoras, el preajuste se queda como estaba.
+- **Sin preajuste** devuelve los colores propios del mod. Tus opciones marcadas se quedan como están: quitar un aspecto no es pedir deshacer tus propios cambios.
+- Probar preajustes es gratis. Solo las opciones marcadas se escriben en Penumbra; los colores y ajustes de capa van por encima mientras se lleva un preajuste, y los archivos del mod nunca se tocan.
+
+Comparte uno con **Copiar código** (una cadena para pegar en el chat) o **Exportar…** (un archivo `.ptp`). Al otro lado se usa **Pegar código** o **Importar…**; un preajuste hecho para otro mod lo advierte antes de añadirse.
+
+Aplicar un preajuste con un vínculo de diseño activo hace vista previa sobre ese vínculo, como cualquier otra edición: pulsa **Actualizar vínculo** para conservarlo. Aplicar un diseño de Glamourer quita los preajustes puestos, ya que el diseño lleva sus propios colores; los preajustes en sí siguen guardados.
+
+Si una actualización del mod renombra o quita una opción, aplicar un preajuste antiguo pone todo lo que aún existe y te dice qué no pudo.
 
 ### Editor de colores
 

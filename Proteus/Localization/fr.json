@@ -123,6 +123,10 @@
     "message": "[Proteus] « {0} » applique une lueur sur un calque de peau. La peau ne peut plus briller, donc cette option est désormais rendue comme un calque de tissu — elle a besoin d'un accessoire libre, et sa surface aura un aspect légèrement différent.",
     "description": ""
   },
+  "Chat.HatCompat": {
+    "message": "[Proteus] Proteus a rendu cette coiffure compatible avec les chapeaux. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Chapeaux.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+  },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Vous avez installé depuis l'ancienne URL du dépôt de plugins. La remplacer par https://dl.solona.info/repo.json dans /xlplugins > Experimental accélère les mises à jour et allège la charge sur GitHub. Votre installation continue de fonctionner dans tous les cas. Ce rappel s'affiche quelques fois, puis disparaît.",
     "description": "Chat line shown at most three times to users installed from the old plugin repository URL. Do NOT translate the URL, \"/xlplugins\", or \"Proteus\". \"Experimental\" is the name of a tab in Dalamud's plugin installer - use whatever that tab is called in your language."
@@ -175,6 +179,14 @@
     "message": "Avancé",
     "description": ""
   },
+  "Colors.Asymmetric.Label": {
+    "message": "Cette texture est asymétrique (gauche et droite diffèrent)",
+    "description": ""
+  },
+  "Colors.Asymmetric.Tip": {
+    "message": "Activez ceci lorsque les deux côtés doivent DIFFÉRER : un tatouage sur un bras, une\ncicatrice sur une joue, un maquillage non miroiré. Laissez-le désactivé pour tout le\nreste, peau ordinaire comprise.\nUn corps vanilla et le visage vanilla donnent les mêmes pixels aux deux côtés, donc une\ntexture peinte pour eux est pliée en deux : un côté est conservé et reflété. C'est invisible\nsur un motif symétrique et cela ruine un motif asymétrique. Avec ceci activé, Proteus rend\nle calque via une couche propre dont les deux côtés lisent les deux moitiés de votre texture.\nCela ne peut pas être détecté à votre place. La vraie peau n'est jamais symétrique — taches\nde rousseur et grains de beauté diffèrent — vous seul savez si un écart est intentionnel.",
+    "description": ""
+  },
   "Colors.Auto": {
     "message": "(auto)",
     "description": ""
@@ -189,6 +201,38 @@
   },
   "Colors.BaseUnchanged": {
     "message": "Couleurs de base inchangées — sauf dans Avancé, où « Rétablir les valeurs par défaut » les réécrit et où « Corps » est un réglage global qu'aucune liaison ne capture.",
+    "description": ""
+  },
+  "Colors.Blend.Add": {
+    "message": "Ajouter",
+    "description": ""
+  },
+  "Colors.Blend.Label": {
+    "message": "Fusion",
+    "description": ""
+  },
+  "Colors.Blend.Multiply": {
+    "message": "Multiplier",
+    "description": ""
+  },
+  "Colors.Blend.Overlay": {
+    "message": "Incrustation",
+    "description": ""
+  },
+  "Colors.Blend.Paint": {
+    "message": "Peindre",
+    "description": ""
+  },
+  "Colors.Blend.Replace": {
+    "message": "Remplacer",
+    "description": ""
+  },
+  "Colors.Blend.Screen": {
+    "message": "Écran",
+    "description": ""
+  },
+  "Colors.Blend.Tip": {
+    "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
     "description": ""
   },
   "Colors.Bodies.All": {
@@ -217,6 +261,70 @@
   },
   "Colors.Bodies.Tip": {
     "message": "Sur quels types de corps cuire ce mod :\nTous les corps = corps frère (bibo↔gen3/Eve) + d'origine (gen2)\nbibo+gen3 = cuire uniquement sur le corps frère (par défaut)\nAucun = pas de synthèse\n\nS'applique à tout le mod, pas seulement à cette option.",
+    "description": ""
+  },
+  "Colors.BustBridge.Label": {
+    "message": "Tendre le tissu sur le décolleté",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Label": {
+    "message": "Intensité du tendu",
+    "description": ""
+  },
+  "Colors.BustBridge.Strength.Tip": {
+    "message": "Jusqu'où le tissu se détend vers le tendu plat. 1,00 le tend entièrement ; les valeurs plus\nbasses conservent davantage la forme en dessous.",
+    "description": ""
+  },
+  "Colors.BustBridge.Tip": {
+    "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : par défaut, il suit donc le corps\njusque dans le décolleté — c'est ce qui le fait lire comme de la peinture plutôt que du\ntissu. Le vrai tissu tend l'écart : une ligne droite entre le point le plus avancé de chaque sein.\nAvec ceci, le tissu entre les seins est détendu jusqu'à cette ligne. Rien n'est jamais tiré\nvers l'intérieur : cela ne peut donc pas entrer dans le corps, et les seins gardent leur forme.\nLà où une encolure a déjà découpé le tissu entre les bonnets, il n'y a rien à tendre, et\nceci ne fait rien.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Label": {
+    "message": "Adoucir l'entrejambe",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Label": {
+    "message": "Intensité de l'adoucissement",
+    "description": ""
+  },
+  "Colors.SmoothFold.Strength.Tip": {
+    "message": "À quel point le pli est adouci. 1.00 le fond entièrement dans la courbe environnante ; les\nvaleurs basses en conservent davantage.",
+    "description": ""
+  },
+  "Colors.SmoothFold.Tip": {
+    "message": "Activez ceci pour du tissu sur l'entrejambe.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le pli entre les jambes —\nce qui semble peint sur le corps plutôt que porté. Avec ceci, la peau y est d'abord adoucie jusqu'à\nla courbe environnante, si bien que le vêtement qui en est tiré ressort lisse lui aussi.\nCeci modifie le corps : l'effet s'applique donc à tous les vêtements portés à la fois.",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Label": {
+    "message": "Adoucir le téton",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Strength.Label": {
+    "message": "Intensité de l'adoucissement",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Strength.Tip": {
+    "message": "Jusqu'où le tissu est adouci. 1,00 l'adoucit entièrement ; les valeurs plus basses conservent\ndavantage la forme en dessous.",
+    "description": ""
+  },
+  "Colors.SmoothNipples.Tip": {
+    "message": "Activez ceci pour du tissu sur la poitrine.\nProteus construit un vêtement comme une copie du corps : il reproduit donc le téton en\npointe, ce qui se lit comme de la peinture plutôt que du tissu. Avec ceci, le tissu par-dessus\nest fondu dans la courbe environnante.\nPAS ENCORE TERMINÉ : ceci adoucit le vêtement, et le corps en dessous garde sa propre forme,\ndonc il peut encore transparaître sur une coupe près du corps. Adoucir la peau viendra ensuite.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Label": {
+    "message": "Tendre le tissu sur les fesses",
+    "description": ""
+  },
+  "Colors.CleftBridge.Tip": {
+    "message": "Activez ceci pour du tissu sur le fessier.\nProteus construit un vêtement comme une copie du corps : il suit donc le sillon jusqu'au fond —\nce qui semble peint plutôt que porté. Avec ceci, le tissu se tend par-dessus comme\nle ferait du vrai tissu.\nMême idée que pour le décolleté, mais le sillon est bien plus profond : commencez bas.",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Label": {
+    "message": "Intensité du tendu",
+    "description": ""
+  },
+  "Colors.CleftBridge.Strength.Tip": {
+    "message": "À quel point le tissu se tend à plat. 1.00 relève le sillon au niveau des fesses de\npart et d'autre, ce qui est souvent trop — les valeurs basses en conservent davantage.",
     "description": ""
   },
   "Colors.CopyRow.Btn": {
@@ -257,6 +365,10 @@
   },
   "Colors.ForceMode.Tip": {
     "message": "Skin (peint) — skin.shpk.  Cloth — character.shpk (sphere, métal).\nLueur animée — characterscroll.shpk. Épingler arrête le changement de mode automatique.",
+    "description": ""
+  },
+  "Colors.Geometry.Section": {
+    "message": "Géométrie",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -327,6 +439,14 @@
     "message": "Une autre option active de ce mod est rendue comme de l'équipement, le masque doit donc\nse poser sur cette coque — il ne peut pas être peint dans la peau en dessous. Passez ces\noptions sur Skin (Avancé dans leurs onglets) et le masque retrouvera son propre choix\nde mode.",
     "description": ""
   },
+  "Colors.Mask.ToeCap": {
+    "message": "Toe Cap est activé",
+    "description": ""
+  },
+  "Colors.Mask.ToeCap.Tip": {
+    "message": "L'option « Toe Cap » est cochée dans le groupe Masks de ce mod dans Penumbra. Elle\nreconstruit les orteils en une seule forme arrondie, donc les calques Skin de ce mod sont\npromus en tissu — il leur faut une géométrie que la couche peau n'a pas. Cela coûte une\nreconstruction de coque.\n\nSi vous ne l'avez pas cochée : Penumbra enregistre la sélection de ce groupe par INDEX\nd'option. Un mod réexporté avec ses options dans un autre ordre redirige donc en silence\ntoute sélection enregistrée. Recochez le groupe dans Penumbra pour le resynchroniser.",
+    "description": ""
+  },
   "Colors.MasksTab": {
     "message": "Masques",
     "description": ""
@@ -365,14 +485,6 @@
   },
   "Colors.None": {
     "message": "Aucun",
-    "description": ""
-  },
-  "Colors.OneSided.Label": {
-    "message": "Cette texture est volontairement d'un seul côté",
-    "description": ""
-  },
-  "Colors.OneSided.Tip": {
-    "message": "Activez ceci pour une texture destinée à n'apparaître que d'UN seul côté : un tatouage sur\nun bras, une cicatrice sur une joue. Laissez-le désactivé pour tout le reste, peau ordinaire\ncomprise.\nUn corps vanilla et le visage vanilla donnent les mêmes pixels aux deux côtés, donc une\ntexture peinte pour eux est pliée en deux : un côté est conservé et reflété. C'est invisible\nsur un motif symétrique et cela ruine un motif d'un seul côté. Avec ceci activé, Proteus rend\nle calque via une couche propre dont les deux côtés lisent les deux moitiés de votre texture.\nCela ne peut pas être détecté à votre place. La vraie peau n'est jamais symétrique — taches\nde rousseur et grains de beauté diffèrent — vous seul savez si un écart est intentionnel.",
     "description": ""
   },
   "Colors.Opacity.Label": {
@@ -451,6 +563,10 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Colors.Section.Glow": {
+    "message": "Lueur",
+    "description": ""
+  },
   "Colors.Section.Physical": {
     "message": "Physique",
     "description": ""
@@ -485,6 +601,38 @@
   },
   "Colors.Sphere.Intensity.Label": {
     "message": "Intensité",
+    "description": ""
+  },
+  "Colors.Section.Tile": {
+    "message": "Tissage",
+    "description": ""
+  },
+  "Colors.Tile.Pattern.Label": {
+    "message": "Motif",
+    "description": ""
+  },
+  "Colors.Tile.None": {
+    "message": "Aucun",
+    "description": ""
+  },
+  "Colors.Tile.Strength.Label": {
+    "message": "Intensité",
+    "description": ""
+  },
+  "Colors.Tile.ScaleU.Label": {
+    "message": "Échelle U",
+    "description": ""
+  },
+  "Colors.Tile.ScaleV.Label": {
+    "message": "Échelle V",
+    "description": ""
+  },
+  "Colors.Tile.Tip": {
+    "message": "Un tissage répété sur cette région — l'un des 64 motifs du jeu, il ne coûte donc aucune texture.\nC'est ce qui fait qu'une seconde peau ressemble à du tissu plutôt qu'à de la peau ; Proteus le laisse\ndésactivé par défaut, car un tissage sur la peau nue ressemble à du grain. Nécessite le shader\nd'équipement : en choisir un déplace un calque de peau vers une coque de tissu.",
+    "description": ""
+  },
+  "Colors.Tile.Scale.Tip": {
+    "message": "Combien de fois le tissage se répète sur la surface. Plus la valeur est élevée, plus le motif est fin ;\n16 est la valeur par défaut du jeu. U et V sont les deux directions de la texture : les régler\ndifféremment étire le tissage dans un sens.",
     "description": ""
   },
   "Colors.Sphere.Tip": {
@@ -1143,6 +1291,102 @@
     "message": "erreur inconnue",
     "description": ""
   },
+  "HatCompat.AutoFit.Label": {
+    "message": "Adapter les coiffures aux chapeaux",
+    "description": ""
+  },
+  "HatCompat.AutoFit.Tip": {
+    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine chaque\ncoiffure que vous mettez et plaque contre la tête les cheveux qu'un chapeau\nrecouvrirait.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée ici.",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Label": {
+    "message": "Masquer les queues de cheval",
+    "description": ""
+  },
+  "HatCompat.HidePonytails.Tip": {
+    "message": "Fait également disparaître, tant qu'un chapeau est porté, les parties qu'aucun\nchapeau ne peut couvrir — queues de cheval, couettes, longueurs dans le dos —\nau lieu de les laisser dépasser en dessous.\n\nDésactivé par défaut. Un plaquage trop fort reste invisible, puisque le chapeau\nle recouvre ; le masquage est tout ou rien, et une partie mal jugée disparaît\npurement et simplement.",
+    "description": ""
+  },
+  "HatCompat.WillHide.Fmt": {
+    "message": "{0} mèche(s) dépassent trop de la tête pour tenir sous un chapeau et seront masquées tant qu'on en porte un.",
+    "description": ""
+  },
+  "HatCompat.Working": {
+    "message": "Analyse de cette coiffure...",
+    "description": ""
+  },
+  "HatCompat.AlreadyPatched": {
+    "message": "Proteus a déjà adapté cette coiffure aux chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.Btn": {
+    "message": "Adapter",
+    "description": ""
+  },
+  "HatCompat.Apply.Tip": {
+    "message": "Écrit dans le dossier du mod de coiffure lui-même. Les fichiers d'origine sont\nd'abord copiés dans Proteus/hatcompat-backup/ à l'intérieur de ce mod, et\nl'opération peut être annulée.",
+    "description": ""
+  },
+  "HatCompat.AuthorDidIt": {
+    "message": "Cette coiffure gère déjà les chapeaux — son auteur l'a prévu. Rien à faire.",
+    "description": ""
+  },
+  "HatCompat.NoModdedHair": {
+    "message": "Vous portez une coiffure d'origine du jeu, qui fonctionne déjà sous les chapeaux. Ceci aura quelque chose à faire lorsque vous porterez un mod de coiffure.",
+    "description": ""
+  },
+  "HatCompat.NothingToHide": {
+    "message": "Chaque partie de cette coiffure peut être plaquée sous un chapeau : rien n'a besoin d'être masqué.",
+    "description": ""
+  },
+  "HatCompat.Press.Fmt": {
+    "message": "{0} points de cheveux seraient plaqués contre votre tête, de {1:F1} cm en moyenne et {2:F1} cm au maximum.",
+    "description": ""
+  },
+  "HatCompat.TooWelded.Fmt": {
+    "message": "{0} points ne peuvent pas être déplacés : cette coiffure est fusionnée en morceaux trop grands pour le format de formes du jeu. Ils garderont leur forme, un chapeau peut donc encore les traverser.",
+    "description": ""
+  },
+  "HatCompat.Undo.Btn": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HatCompat.Undone": {
+    "message": "La coiffure a été remise exactement telle que son auteur l'a créée.",
+    "description": ""
+  },
+  "HatCompat.Unreadable": {
+    "message": "Le modèle de cette coiffure n'a pas pu être lu, Proteus ne peut donc pas le modifier.",
+    "description": ""
+  },
+  "HatCompat.Wearing.Fmt": {
+    "message": "Coiffure {0}, de {1}.",
+    "description": ""
+  },
+  "HatCompat.Apply.Already": {
+    "message": "Cette coiffure possède déjà sa propre forme pour les chapeaux.",
+    "description": ""
+  },
+  "HatCompat.Apply.EditFailed.Fmt": {
+    "message": "{0} n'a pas pu être modifié : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "HatCompat.Apply.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "HatCompat.Apply.Nothing": {
+    "message": "Il n'y a rien à changer : aucun cheveu ne dépasse du crâne et aucune partie n'a besoin d'être masquée.",
+    "description": ""
+  },
+  "HatCompat.Revert.NoBackups": {
+    "message": "Aucun des modèles d'origine n'a pu être retrouvé pour la restauration.",
+    "description": ""
+  },
+  "HatCompat.Revert.Nothing": {
+    "message": "Ce mod n'a aucune modification de compatibilité avec les chapeaux à annuler.",
+    "description": ""
+  },
   "Import.AsTex.Label": {
     "message": "Convertir les couches en .tex BC7",
     "description": ""
@@ -1691,6 +1935,30 @@
     "message": "Couleurs",
     "description": ""
   },
+  "Mods.Inert.GroupsMissing.Fmt": {
+    "message": "Les données Proteus de ce mod nomment le ou les groupes d'options {0}, que la copie du mod dans Penumbra ne possède pas : renommés ou supprimés lors d'un réexport. Seule la personne qui l'a créé peut corriger cela.",
+    "description": ""
+  },
+  "Mods.Inert.MaskNeedsShell.Fmt": {
+    "message": "Ses masques sont rendus comme de l'équipement, ce qui nécessite un masque pour construire le vêtement — et rien n'est coché dans son groupe « {0} » dans Penumbra.",
+    "description": ""
+  },
+  "Mods.Inert.NothingReached": {
+    "message": "Ses options cochées ont bien été résolues, mais aucune n'a atteint une surface chargée par ce personnage.",
+    "description": ""
+  },
+  "Mods.Inert.NothingTicked.Fmt": {
+    "message": "Rien n'est coché dans Penumbra. Les {0} groupe(s) d'options de ce mod — {1} — sont tous vides, il ne peint donc rien. Ouvrez-le dans Penumbra et cochez une option dans chacun.",
+    "description": ""
+  },
+  "Mods.Inert.SettingsUnreadable": {
+    "message": "Penumbra n'a pas répondu lorsque Proteus a demandé quelles options de ce mod sont activées.",
+    "description": ""
+  },
+  "Mods.Inert.WrongRace.Fmt": {
+    "message": "Ce mod peint {0}, et vous êtes {1}. Rien de ce qu'il fournit ne correspond au corps que vous portez.",
+    "description": ""
+  },
   "Mods.NoSidecarMods": {
     "message": "Aucun mod avec fichier Proteus détecté.",
     "description": ""
@@ -2067,6 +2335,10 @@
     "message": "Général",
     "description": ""
   },
+  "Settings.Section.HatCompat": {
+    "message": "Chapeaux",
+    "description": ""
+  },
   "Settings.Section.Hosting": {
     "message": "Hébergement",
     "description": ""
@@ -2142,5 +2414,241 @@
   "Tab.Settings": {
     "message": "Paramètres",
     "description": ""
+  },
+  "Presets.Header": {
+    "message": "Presets",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None": {
+    "message": "No preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.None.Tip": {
+    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackMarker": {
+    "message": "* ",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ModifiedMarker": {
+    "message": "●",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew": {
+    "message": "+ Save…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.SaveNew.Tip": {
+    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Save": {
+    "message": "Save",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.RenameConfirm": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Cancel": {
+    "message": "Cancel",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NeedsAName": {
+    "message": "Give it a name first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoCollection": {
+    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FirstName": {
+    "message": "My look",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NthName.Fmt": {
+    "message": "My look {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Selected.Fmt": {
+    "message": "{0} · {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.FromPack": {
+    "message": "from the mod",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PackReadOnly": {
+    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update": {
+    "message": "Update",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Update.Tip": {
+    "message": "Fold everything on screen back into this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NothingChanged": {
+    "message": "Nothing has changed since this preset was saved.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Rename": {
+    "message": "Rename",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Duplicate": {
+    "message": "Duplicate",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Fork.Tip": {
+    "message": "Make an editable copy of the mod's preset and wear it.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CopyCode.Tip": {
+    "message": "Copy this preset as a share code to paste to someone.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.CodeCopied": {
+    "message": "Share code copied to the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Export.Tip": {
+    "message": "Save this preset as a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Delete.Tip": {
+    "message": "Hold Ctrl and click to delete this preset.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode": {
+    "message": "Paste code",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PasteCode.Tip": {
+    "message": "Read a preset share code from the clipboard.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import": {
+    "message": "Import…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Import.Tip": {
+    "message": "Load a preset from a file.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Staged.Fmt": {
+    "message": "\"{0}\" is ready to add.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.StagedOtherMod.Fmt": {
+    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddStaged": {
+    "message": "Add",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Discard": {
+    "message": "Discard",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Added.Fmt": {
+    "message": "Added \"{0}\".",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportDialog.Title": {
+    "message": "Save preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportDialog.Title": {
+    "message": "Open preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Dialog.Filter": {
+    "message": "Proteus preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Exported.Fmt": {
+    "message": "Saved to {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ExportFailed.Fmt": {
+    "message": "Couldn't save it: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PartialApply.Fmt": {
+    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingGroups.Fmt": {
+    "message": "The mod no longer has these option groups: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MissingOptions.Fmt": {
+    "message": "These options are gone: {0}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.JustNow": {
+    "message": "just now",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.MinutesAgo.Fmt": {
+    "message": "{0} m ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HoursAgo.Fmt": {
+    "message": "{0} h ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.DaysAgo.Fmt": {
+    "message": "{0} d ago",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Header": {
+    "message": "Preset",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.None": {
+    "message": "—",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.Column.Tip": {
+    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.HeaderApplied.Fmt": {
+    "message": "Presets — {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportFailed.Fmt": {
+    "message": "That isn't a preset Proteus can read: {0}",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.ImportedFrom.Fmt": {
+    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.NoMatchingMod": {
+    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo": {
+    "message": "Add to",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.PickAMod": {
+    "message": "Pick a mod…",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddTo.Tip": {
+    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Presets.AddedTo.Fmt": {
+    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   }
 }
