@@ -56,7 +56,7 @@ public class Configuration : IPluginConfiguration
     /// brand-new config is stamped current and so never runs a migration written for settings it was
     /// never saved with.
     /// </summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     public int Version { get; set; } = CurrentVersion;
 
