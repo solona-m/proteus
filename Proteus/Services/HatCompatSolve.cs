@@ -109,7 +109,13 @@ public static class HatCompatSolve
     /// the hat's edge. And it aimed at the cranium floor, which is culled above the old hat line and so
     /// inherits a median radius in every direction pointing at the rim; it aims at the band floor now.
     /// </summary>
-    public const int Version = 30;
+    /// <para/>
+    /// 31: the ring's press fades out over 30 mm BELOW the rim - see <see cref="RingFade"/>. Pressed only
+    /// above the rim, a lock crossing it 80 mm out from the scalp had its ring section flattened while the
+    /// rest of it stayed put, so the surface turned a right angle and read as a shelf. The fade lets it
+    /// bend in over its own length.
+    /// </summary>
+    public const int Version = 31;
 
     /// <summary>
     /// The HAT LINE: how far above the head's centre a hat actually sits on the head, in model units.
@@ -440,6 +446,21 @@ public static class HatCompatSolve
     /// small enough that the press can afford it where pressing the whole hairstyle could not.
     /// </summary>
     internal const float RingHeight = 0.015f;
+
+    /// <summary>
+    /// How far BELOW the rim the ring's press fades out, in metres.
+    /// <para/>
+    /// Without it the ring kinks. A lock crossing the rim 80 mm out from the scalp has its ring section
+    /// pressed flat while the rest of it, below the rim, is untouched — so the surface turns a right angle
+    /// and reads as a shelf. Fading the press out over a band below the rim lets the lock bend in over its
+    /// own length instead.
+    /// <para/>
+    /// It is also why this is 30 mm and not the 90 mm the old whole-hairstyle fade used: every millimetre of
+    /// fade is hair that costs shape values, and the budget is about 11800 movable vertices for the whole
+    /// file. Measured at roughly 2200 vertices per 10 mm band on a dense hairstyle, 30 mm of fade plus the
+    /// 15 mm ring comes to around 42000 of the 65000 values available.
+    /// </summary>
+    internal const float RingFade = 0.03f;
 
     /// <summary>
     /// How far BELOW the hat line a hat still wraps the head, and how far off the scalp its inner surface
@@ -960,10 +981,11 @@ public static class HatCompatSolve
                 var p = mv.Positions[v];
                 if (gone.Contains(VertexKey(mv.Mesh, v))) continue;      // cut away; a shape value would move nothing
 
-                // The band, and only the band: above the rim (everything higher has been cut) and no
-                // further up than the ring is tall.
+                // The ring, plus the fade below it. Above the rim everything higher has already been cut,
+                // so the ring is capped at its own height; below the rim the press reaches down RingFade
+                // and weakens as it goes, which is what stops the ring kinking against untouched hair.
                 float above = HatProfile.AboveRim(raceCode, p, centre);
-                if (above <= 0f || above > RingHeight) continue;
+                if (above > RingHeight || above < -RingFade) continue;
 
                 var d = p - centre;
                 float len = d.Length();
@@ -995,12 +1017,15 @@ public static class HatCompatSolve
                 int slots = cost != null && v < cost.Length ? cost[v] : 0;
                 if (slots == 0) continue;                           // drawn by nothing; a spare would do nothing
 
-                // No fade across the ring. A fade existed to blend a press that ran 90 mm down the head
-                // into untouched hair; a 15 mm band pressed onto the scalp has no such distance to cover,
-                // and the ramp below still eases it in from its own edge.
+                // Full strength at the rim and above, tapering to nothing at the bottom of the fade. A
+                // vertex close to the scalp barely moves under this anyway, so the fade spends itself on
+                // exactly the hair that needs it: the locks standing well proud of the head.
+                float w = above >= 0f ? 1f : (above + RingFade) / RingFade;
+                if (w <= 0f) continue;
+
                 candidates.Add(new Candidate(
-                    mv.Mesh, v, p, centre + d * (target / len),
-                    len - target, len - target, slots));
+                    mv.Mesh, v, p, Vector3.Lerp(p, centre + d * (target / len), w),
+                    len - target, (len - target) * w, slots));
             }
         }
 
