@@ -60,6 +60,28 @@ public static class HatCompatService
     /// <summary>"Scalp" — the attribute the game drops entirely under a head piece.</summary>
     public const string ScalpAttribute = "atr_kam";
 
+    /// <summary>
+    /// The one spelling of a mod-relative path this class compares, records and looks up by: forward
+    /// slashes, as a manifest names it.
+    /// <para/>
+    /// Load-bearing, and it was not applied consistently. A path reaches here from two places that
+    /// disagree: <see cref="InMods"/> normalises a resolved file to forward slashes, while
+    /// <see cref="SiblingFiles"/> returned whatever the mod's own manifest said, which on Windows is
+    /// backslashes. Every comparison in this file is then a plain string compare, so ONE FILE under TWO
+    /// SPELLINGS is two files — and a record in the wild proves it happens, carrying
+    /// <c>races/miqote/…</c> beside <c>races\miqote earless\…</c>.
+    /// <para/>
+    /// What that cost: <see cref="IsPatched"/> reported the backslash-recorded file as untouched, so
+    /// <see cref="Inspect"/> then found the <c>shp_hib</c> PROTEUS ITSELF had written and credited it to
+    /// the mod's author; <see cref="Revert"/> filtered the same list the same way and told the user there
+    /// was nothing to undo while the patch sat on disk; and the leftover <see cref="HatCompatRecord.Hidden"/>
+    /// and <see cref="HatCompatRecord.Versions"/> entries kept the record alive so it went on claiming
+    /// files were patched.
+    /// <para/>
+    /// Not the same thing as <see cref="Native"/>, which goes the other way to build a real path.
+    /// </summary>
+    internal static string Rel(string rel) => rel.Replace('\\', '/');
+
     /// <param name="FilesPatched">How many model files were changed.</param>
     /// <param name="Unaddressable">Vertices the press wanted to move that no shape value could name — see
     /// <see cref="ModelAttributeWriter.AddShape"/>. Reported rather than discarded: it is hair left standing
@@ -72,11 +94,19 @@ public static class HatCompatService
     /// Separated from applying it so the panel can describe the change before it happens, and so the same
     /// examination can be reused for the sibling files an option group swaps in.
     /// </summary>
+    /// <param name="Unmeasurable">The wearer's head could not be read, so there is no skull to fit against
+    /// and Proteus does nothing. See <see cref="Inspect"/>.</param>
+    /// <param name="TookOver">The hairstyle arrived with hat support of its own, and that support measured
+    /// as hiding hair no hat covers — so Proteus is replacing its <c>atr_kam</c> mask and LEAVING its shape
+    /// alone. See <see cref="HatCompatSolve.MeasureScalpTagging"/> and the mask-only branch in
+    /// <see cref="Apply"/>.</param>
     public sealed record Proposal(
         string Rel,
         ModelParts Parts,
         HatCompatSolve.Result Solve,
-        bool AlreadyCompatible);
+        bool AlreadyCompatible,
+        bool Unmeasurable = false,
+        bool TookOver = false);
 
     /// <summary>The hair Proteus would patch, and the head it would press it against.</summary>
     /// <param name="ModRoot">The mod folder that supplies the hair — the folder directly under Penumbra's
@@ -97,8 +127,12 @@ public static class HatCompatService
     /// the mods folder, is not something to edit, and vanilla hair already has a hat shape anyway.
     /// </summary>
     /// <param name="resolve">Penumbra's game-path-to-file resolver, honouring the active collection.</param>
+    /// <param name="readFile">Reads any game file, from the mod redirect if there is one and from the
+    /// game's own data otherwise — <c>TextureLoader.LoadRawFile</c>. REQUIRED for the face model to be
+    /// found at all on a wearer whose face is vanilla; see the remarks below.</param>
     public static Target? FindEquippedHair(
-        IReadOnlyList<string>? humanPartModels, Func<string, string?> resolve, string? modsRoot)
+        IReadOnlyList<string>? humanPartModels, Func<string, string?> resolve, string? modsRoot,
+        Func<string, byte[]?> readFile)
     {
         if (Locate(humanPartModels, resolve, modsRoot) is not { } at) return null;
         var (hair, file, modRoot, rel) = at;
@@ -106,14 +140,24 @@ public static class HatCompatService
         byte[] model;
         try { model = File.ReadAllBytes(file); } catch (IOException) { return null; }
 
-        // The face model carries the cranium the press aims at. Resolved the same way and entirely
-        // optional — a wearer with vanilla eyebrows still has a head, and reading it from the game's own
-        // data is not something this can do, so a miss simply falls back.
+        // The face model carries the cranium the press aims at, and it MUST be read from the game's own
+        // data when no mod supplies one.
+        //
+        // This used to require File.Exists on the resolved path, which quietly meant "only a face a mod
+        // replaces". Penumbra hands back the game path unchanged for an unmodded file, and that is not a
+        // file on disk — so every wearer with a VANILLA FACE fell through to guessing the skull from the
+        // hair, and that guess is not close. Measured on one character: 1.5271 centre / 0.0728 radius from
+        // the real face against 1.4613 / 0.1334 guessed, putting the cut plane 66 mm too low and the
+        // lateral bound at 163 mm instead of 103 mm. Most of the hairstyle was tagged to vanish, and the
+        // hair mod, the race and the hat all looked like plausible causes.
+        //
+        // The old comment here claimed reading game data was not something this could do. It has been for
+        // as long as the second skin has been cutting shells from vanilla bodies.
         byte[]? head = null;
         var facePath = humanPartModels?.FirstOrDefault(
             p => p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
-        if (facePath != null && resolve(facePath) is { } faceFile && File.Exists(faceFile))
-            try { head = File.ReadAllBytes(faceFile); } catch (IOException) { /* press falls back */ }
+        if (facePath != null)
+            try { head = readFile(facePath); } catch (IOException) { /* refuses to fit */ }
 
         return new Target(hair, modRoot, rel, model, head);
     }
@@ -213,19 +257,33 @@ public static class HatCompatService
     /// </summary>
     public static List<string> SiblingFiles(string modRoot, string gamePath, string rel)
     {
-        var found = new List<string> { rel };
+        // Canonicalised on the way in AND on each manifest entry, or the dedupe below compares the
+        // manifest's backslashes against a forward-slash rel, never matches, and returns the file we were
+        // given a second time under its other spelling. See Rel.
+        var found = new List<string> { Rel(rel) };
         try
         {
             foreach (var r in PenumbraModMeta.ReadAllRedirects(modRoot))
             {
                 if (!r.GamePath.Equals(gamePath, StringComparison.OrdinalIgnoreCase)) continue;
-                if (found.Contains(r.File, StringComparer.OrdinalIgnoreCase)) continue;
-                if (File.Exists(Path.Combine(modRoot, Native(r.File)))) found.Add(r.File);
+                var sibling = Rel(r.File);
+                if (found.Contains(sibling, StringComparer.OrdinalIgnoreCase)) continue;
+                if (File.Exists(Path.Combine(modRoot, Native(sibling)))) found.Add(sibling);
             }
         }
         catch (IOException) { /* the one we were given is still worth patching */ }
         return found;
     }
+
+    /// <summary>
+    /// How many files Proteus has patched anywhere in this mod, from the record.
+    /// <para/>
+    /// For the panel, which cannot ask the question any other way: a hair mod ships ONE MODEL PER RACE,
+    /// each with its own game path, so the files served by the hairstyle currently worn are only ever a
+    /// subset of what Proteus has edited in the folder. The difference between this and that subset is
+    /// exactly the set of patches a per-hairstyle undo cannot reach.
+    /// </summary>
+    public static int PatchedCount(string modRoot) => ReadRecord(modRoot)?.Files.Count ?? 0;
 
     /// <summary>Whether Proteus has already fitted this exact file, and if so whether that patch is current.</summary>
     /// <param name="stale">The patch was written by an older <see cref="HatCompatSolve.Version"/>, so redoing
@@ -233,6 +291,7 @@ public static class HatCompatService
     public static bool IsPatched(string modRoot, string rel, out bool stale)
     {
         stale = false;
+        rel = Rel(rel);
         var record = ReadRecord(modRoot);
         if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
         stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.Version;
@@ -240,16 +299,50 @@ public static class HatCompatService
     }
 
     /// <summary>Work out what this hair needs, without writing anything.</summary>
-    /// <param name="head">The wearer's face model, which carries the cranium the press aims at. Strongly
-    /// preferred — see <see cref="HatCompatSolve.Solve"/>.</param>
-    public static Proposal? Inspect(byte[] mdl, string rel, byte[]? head)
+    /// <param name="head">The wearer's face model, which carries the cranium the press aims at. REQUIRED:
+    /// null yields a proposal marked <see cref="Proposal.Unmeasurable"/> and nothing is fitted. It used to
+    /// fall back to guessing the skull from the hair — see the remarks in the body for why that is gone.</param>
+    /// <param name="raceCode">The wearer's model code ("0801"), which picks the baked hat profile the
+    /// cut is measured against. Taken from the hair's own game path by the caller — see
+    /// <see cref="HatProfile"/>.</param>
+    public static Proposal? Inspect(byte[] mdl, string rel, byte[]? head, string? raceCode = null)
     {
+        // Here, so everything downstream of a proposal is canonical without having to remember: Apply
+        // writes proposal.Rel into all three of the record's collections, and Revert looks the file up by
+        // the same string later.
+        rel = Rel(rel);
         var parts = ModelPartReader.Read(mdl);
         if (parts == null) return null;
         if (IsHatCompatible(mdl))
-            return new Proposal(rel, parts, HatCompatSolve.Result.None, true);
+        {
+            // Hat support of its own — but whose, and is it any good? The attribute and the shape are the
+            // game's own names, so a mask an author measured for this mesh and a mask inherited wholesale
+            // from the vanilla hair it was built on are indistinguishable by name. Measure what the mask
+            // actually costs instead; see MeasureScalpTagging for why depth alone is the wrong test.
+            //
+            // Needs a head: without one there is no hat line, so the existing support cannot be judged and
+            // therefore stands. That is also why this cannot move above the head check below.
+            var tagging = head != null ? HatCompatSolve.MeasureScalpTagging(mdl, head) : null;
+            if (tagging is { } t && t.HarmfulShare > HatCompatSolve.InheritedTagShare)
+                return new Proposal(rel, parts, HatCompatSolve.Solve(mdl, parts, head, raceCode: raceCode), false,
+                                    TookOver: true);
 
-        return new Proposal(rel, parts, HatCompatSolve.Solve(mdl, parts, head), false);
+            return new Proposal(rel, parts, HatCompatSolve.Result.None, true);
+        }
+
+        // NO HEAD, NO FIT. The skull used to be guessed from the hair when the face model could not be
+        // read, and that guess is not a near miss — measured against the same character's real face it put
+        // the centre 66 mm low and the radius at nearly double, because what it is really measuring is the
+        // hair's own extent, tails included. The cut plane then lands around ear height and takes the
+        // crown, the sides and the fringe with it.
+        //
+        // Refusing is strictly the better failure. A hat that clips through hair is a cosmetic annoyance
+        // the wearer can see and reason about; most of a hairstyle silently missing under every hat is not,
+        // and it looks like the hair mod's fault.
+        if (head == null)
+            return new Proposal(rel, parts, HatCompatSolve.Result.None, false, Unmeasurable: true);
+
+        return new Proposal(rel, parts, HatCompatSolve.Solve(mdl, parts, head, raceCode: raceCode), false);
     }
 
     /// <summary>
@@ -264,6 +357,12 @@ public static class HatCompatService
     public static Outcome Apply(string modRoot, byte[] mdl, Proposal proposal,
                                 IReadOnlyList<ModelPart>? extra = null)
     {
+        // Before the AlreadyCompatible check, because it is the stronger refusal: without a skull there is
+        // no hat line, so nothing here could even tell whether the hairstyle needed anything.
+        if (proposal.Unmeasurable)
+            return new Outcome(false, Loc.Localize("HatCompat.Apply.NoHead",
+                "Proteus could not read your character's head, so it has not changed this hairstyle."), 0);
+
         if (proposal.AlreadyCompatible)
             return new Outcome(false, Loc.Localize("HatCompat.Apply.Already",
                 "This hairstyle already has a hat shape of its own."), 0);
@@ -310,9 +409,31 @@ public static class HatCompatService
                 var (split, targets) = ModelAttributeWriter.IsolateParts(patched, tag);
                 patched = ModelAttributeWriter.AddAttribute(split, ScalpAttribute, targets);
             }
-            if (proposal.Solve.Moved.Count > 0)
+            // THE MASK ONLY, on a take-over. The hairstyle already declares shp_hib — that is what made
+            // Proteus stand down for it — and AddShape refuses a name the model already has, for good
+            // reason: a second shape record under one name leaves the game to pick, and which one it picks
+            // is not ours to decide. Replacing the author's shape would mean cutting records out of the
+            // shape block and restitching three parallel tables, which is a great deal of surgery to buy a
+            // better press.
+            //
+            // It buys little, because the press is not the harm. What an inherited mask does is DELETE the
+            // cap, the fringe and the nape — geometry no hat covers — and that is the bald head the user
+            // sees. The author's press stays, so hair still flattens under a hat; if it flattens poorly,
+            // the result is hair clipping through a hat, which is the failure this whole file is written to
+            // prefer (see CutReach: "hair inside a hat that goes uncut is merely pressed instead, which
+            // looks like nothing, while hair cut outside one is a hole").
+            if (proposal.TookOver)
+            {
+                if (tag.Count == 0)
+                    return new Outcome(false, Loc.Localize("HatCompat.Apply.Nothing",
+                        "There is nothing to change: no hair stands proud of the scalp and no part needs "
+                      + "hiding."), 0);
+            }
+            else if (proposal.Solve.Moved.Count > 0)
+            {
                 patched = ModelAttributeWriter.AddShape(
                     patched, HatShape, proposal.Solve.Moved, out unaddressable);
+            }
         }
         catch (ModelAttributeWriter.ModelEditException ex)
         {
@@ -359,8 +480,9 @@ public static class HatCompatService
             return new Outcome(false, Loc.Localize("HatCompat.Revert.Nothing",
                 "This mod has no Proteus hat-compatibility edits to undo."), 0);
 
+        var target = only != null ? Rel(only) : null;
         var wanted = record.Files.Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(f => only == null || f.Equals(only, StringComparison.OrdinalIgnoreCase))
+            .Where(f => target == null || f.Equals(target, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (wanted.Count == 0)
             return new Outcome(false, Loc.Localize("HatCompat.Revert.Nothing",
@@ -405,13 +527,47 @@ public static class HatCompatService
 
     // ── the record ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Read the record, with every path canonicalised — the one choke point where a record written by an
+    /// older build heals itself.
+    /// <para/>
+    /// Rebuilt rather than fixed in place, and the comparers are set here rather than trusted from the
+    /// field initializers: System.Text.Json REPLACES a deserialized dictionary wholesale, so the
+    /// <c>StringComparer</c> each property is constructed with never survives a load. <c>Hidden</c> was
+    /// case-sensitive and <c>Versions</c> case-insensitive on paper and both were ordinal in practice.
+    /// </summary>
     internal static HatCompatRecord? ReadRecord(string modRoot)
     {
         try
         {
             var path = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
             if (!File.Exists(path)) return null;
-            return JsonSerializer.Deserialize<HatCompatRecord>(File.ReadAllText(path));
+            var record = JsonSerializer.Deserialize<HatCompatRecord>(File.ReadAllText(path));
+            if (record == null) return null;
+
+            // Distinct AFTER canonicalising: two spellings of one file collapse to one entry here, which
+            // is the whole point — otherwise Revert would leave the duplicate behind and never delete the
+            // record.
+            record.Files = record.Files.Select(Rel).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var hidden = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (k, v) in record.Hidden) hidden[Rel(k)] = v;
+            record.Hidden = hidden;
+
+            // The LOWEST of two colliding stamps, not the newest. Only one of the two writes is the patch
+            // actually on disk and nothing here can say which, so pick by which way the mistake recovers:
+            // claiming the older generation refits a patch that was already current, which costs a revert
+            // and a re-solve and is otherwise invisible, while claiming the newer one leaves a patch from
+            // an older solver in place with nothing that will ever look at it again.
+            var versions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (k, v) in record.Versions)
+            {
+                var key = Rel(k);
+                versions[key] = versions.TryGetValue(key, out var had) ? Math.Min(had, v) : v;
+            }
+            record.Versions = versions;
+
+            return record;
         }
         catch { return null; }
     }
