@@ -1607,7 +1607,7 @@ public class HatCompatDiagTests(ITestOutputHelper o)
 
         var frame = HatCompatSolve.FrameAndFloor(head, head);
         if (frame is not { } f) return;
-        var (centre, radius, _) = f;
+        var (centre, radius, _, _) = f;
         var headMesh = HatCompatSolve.ReadLod0Meshes(head);
         o.WriteLine($"head centre {F(centre)} r {radius:F4};  gap = hat surface − head surface, in mm");
         o.WriteLine($"{"hat",-26} {"+60°",7} {"+45°",7} {"+30°",7} {"+15°",7} {"0°",7} {"-15°",7} {"-30°",7}");
@@ -2147,6 +2147,885 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         o.WriteLine($"{nearScalp} hairstyles tag geometry that hugs the head (reach < 200 mm), "
                   + $"{outFar} tag geometry that hangs out beyond it");
     }
+
+    /// <summary>
+    /// A face model for the race a hair model is authored at, so the hat line is measured against the right
+    /// skull. Falls back to any installed face, which is better than none for a rough sweep.
+    /// </summary>
+    private static readonly Dictionary<string, byte[]?> HeadCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every installed face model, indexed by race code — walked once, not once per hairstyle.</summary>
+    private static Dictionary<string, string> FaceIndex()
+    {
+        var byRace = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!Directory.Exists(Mods)) return byRace;
+        try
+        {
+            foreach (var f in Directory.GetFiles(Mods, "c*f*_fac.mdl", SearchOption.AllDirectories))
+            {
+                var n = Path.GetFileName(f);
+                if (n.Length < 5) continue;
+                byRace.TryAdd(n[..5], f);
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return byRace;
+    }
+
+    private static byte[]? HeadModelFor(string hairFile, Dictionary<string, string> faces)
+    {
+        var name = Path.GetFileName(hairFile);
+        // c0801h0118_hir.mdl -> c0801
+        var race = name.Length >= 5 && name[0] == 'c' ? name[..5] : "";
+        if (HeadCache.TryGetValue(race, out var cached)) return cached;
+
+        var file = faces.TryGetValue(race, out var exact) ? exact : faces.Values.FirstOrDefault();
+        byte[]? bytes = null;
+        try { if (file != null) bytes = File.ReadAllBytes(file); } catch (IOException) { }
+        HeadCache[race] = bytes;
+        return bytes;
+    }
+
+    /// <summary>
+    /// THE THRESHOLD SWEEP for taking over inherited <c>atr_kam</c>.
+    /// <para/>
+    /// Proteus stands down for any hairstyle declaring <c>shp_hib</c>, on the assumption its author did the
+    /// work. Many did not: they inherited the shape and the mask from the vanilla hair they built on and
+    /// never adapted either, and the game then drops geometry no hat covers. Taking that over needs a
+    /// number, and the number has to come from the two populations actually separating — so this prints the
+    /// measurement for every installed hairstyle, split by whether it declares a hat shape.
+    /// <para/>
+    /// What to look for: a gap. Sound support should measure near zero harmful share (its tagging is above
+    /// the hat line, or outside the hat shell), and inherited support should measure high. If there is no
+    /// gap, there is no defensible threshold and the take-over must not ship.
+    /// </summary>
+    [Fact]
+    public void WhatDoesTheExistingScalpTaggingMeasure()
+    {
+        var files = HairModels();
+        if (files.Length == 0) return;
+
+        var withShape = new List<(string File, HatCompatSolve.ScalpTagging M)>();
+        var without = new List<(string File, HatCompatSolve.ScalpTagging M)>();
+        var faces = FaceIndex();
+        var lines = new List<string>();
+
+        foreach (var f in files.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            byte[] mdl;
+            try { mdl = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            var text = System.Text.Encoding.ASCII.GetString(mdl);
+            if (!text.Contains(ScalpAttr, StringComparison.Ordinal)) continue;   // nothing tagged to judge
+
+            HatCompatSolve.ScalpTagging? m;
+            try { m = HatCompatSolve.MeasureScalpTagging(mdl, HeadModelFor(f, faces)); }
+            catch (Exception ex) { lines.Add($"{Trim(f)}: {ex.GetType().Name}"); continue; }
+            if (m is not { } measured || measured.Triangles == 0) continue;
+
+            (text.Contains(HatShape, StringComparison.Ordinal) ? withShape : without).Add((f, measured));
+        }
+
+        void Dump(string title, List<(string File, HatCompatSolve.ScalpTagging M)> rows)
+        {
+            lines.Add("");
+            lines.Add($"── {title} ({rows.Count}) ──");
+            lines.Add($"{"model",-44} {"tagged",8} {"harmful",8} {"deepest",9}");
+            foreach (var (f, m) in rows.OrderByDescending(r => r.M.HarmfulShare))
+                lines.Add($"{Trim(f),-44} {100f * m.Tagged / m.Triangles,7:F1}% "
+                        + $"{100f * m.HarmfulShare,7:F1}% {m.DeepestHarmful * 1000,8:F0}mm");
+        }
+
+        Dump("declares shp_hib — Proteus stands down for these today", withShape);
+        Dump("no hat shape — Proteus fits these already", without);
+
+        lines.Add("");
+        foreach (var (label, rows) in new[] { ("with shape", withShape), ("no shape", without) })
+        {
+            if (rows.Count == 0) continue;
+            var shares = rows.Select(r => r.M.HarmfulShare * 100f).OrderBy(x => x).ToArray();
+            lines.Add($"{label}: harmful share min {shares[0]:F1}%  median "
+                    + $"{shares[shares.Length / 2]:F1}%  max {shares[^1]:F1}%");
+        }
+
+        foreach (var l in lines) o.WriteLine(l);
+
+        // Also to a file: xUnit shows ITestOutputHelper output only for a FAILING test, and this one is
+        // meant to pass. A sweep whose findings can only be read by making it fail is a sweep nobody runs.
+        var dump = Environment.GetEnvironmentVariable("PROTEUS_DIAG_OUT");
+        if (!string.IsNullOrEmpty(dump))
+            try { File.WriteAllLines(dump, lines); } catch (IOException) { }
+    }
+
+    /// <summary>
+    /// The take-over threshold, pinned against the two real populations it has to separate — the hairstyle
+    /// that prompted the feature, and Proteus's own output.
+    /// <para/>
+    /// Asserts rather than reports, unlike everything else in this file, because these two facts are the
+    /// whole argument for the number in <c>HatCompatSolve.InheritedTagShare</c>: it must catch a mask that
+    /// leaves a wearer bald under a hat, and it must never catch a mask Proteus wrote itself — otherwise a
+    /// patch whose record was lost would be cut a second time, over its own cut. Skips where the mods are
+    /// not installed, like every test here.
+    /// </summary>
+    [Fact]
+    public void TheTakeOverThresholdSeparatesInheritedTaggingFromProteusOwnCut()
+    {
+        var files = HairModels();
+        if (files.Length == 0) return;
+        var faces = FaceIndex();
+
+        var caught = new List<string>();
+        var patchedByProteus = new List<(string File, float Share)>();
+
+        foreach (var f in files)
+        {
+            byte[] mdl;
+            try { mdl = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            var text = System.Text.Encoding.ASCII.GetString(mdl);
+            if (!text.Contains(ScalpAttr, StringComparison.Ordinal)) continue;
+            if (!text.Contains(HatShape, StringComparison.Ordinal)) continue;
+
+            HatCompatSolve.ScalpTagging? m;
+            try { m = HatCompatSolve.MeasureScalpTagging(mdl, HeadModelFor(f, faces)); }
+            catch (Exception) { continue; }
+            if (m is not { } measured || measured.Triangles == 0) continue;
+
+            if (measured.HarmfulShare > HatCompatSolve.InheritedTagShare) caught.Add(f);
+
+            // Proteus's own work, identified by the record in the mod that owns the file rather than by
+            // guessing from the bytes.
+            if (HatCompatService.InMods(f, Mods, out var modRoot, out var rel)
+                && HatCompatService.IsPatched(modRoot, rel, out _))
+                patchedByProteus.Add((f, measured.HarmfulShare));
+        }
+
+        o.WriteLine($"{caught.Count} hairstyle(s) measure above the {HatCompatSolve.InheritedTagShare:P0} "
+                  + "threshold and would have their mask replaced:");
+        foreach (var f in caught) o.WriteLine($"  {Trim(f)}");
+        o.WriteLine("");
+        o.WriteLine($"{patchedByProteus.Count} hairstyle(s) carry a Proteus patch with a live record:");
+        foreach (var (f, share) in patchedByProteus) o.WriteLine($"  {Trim(f)} {share:P1}");
+
+        // NEVER its own output. This is the property that makes a lost record safe: the mask Proteus writes
+        // sits above the hat line and inside the hat shell, which is exactly what the harmful test excludes.
+        foreach (var (f, share) in patchedByProteus)
+            Assert.True(share <= HatCompatSolve.InheritedTagShare,
+                $"{Trim(f)} carries a Proteus patch yet measures {share:P1} harmful, above the "
+              + $"{HatCompatSolve.InheritedTagShare:P0} threshold — the take-over would re-cut its own work.");
+    }
+
+    /// <summary>
+    /// WHICH CEILING actually stops the press, on the hairstyles where it stops.
+    /// <para/>
+    /// A hairstyle reported as leaving hair through a hat logged "12908 left unpressed for want of shape
+    /// budget" — more dropped than pressed. But two entirely different limits produce that line: the
+    /// file-wide shape-value count, and a per-mesh ceiling on spare vertices. They call for different
+    /// remedies, so which one bites has to be measured, not reasoned about.
+    /// </summary>
+    [Fact]
+    public void WhichCeilingStopsThePress()
+    {
+        var files = HairModels();
+        if (files.Length == 0) return;
+        var faces = FaceIndex();
+        var lines = new List<string>();
+
+        lines.Add($"{"model",-44} {"pressed",8} {"dropped",8} {"values",8} {"spares",7} "
+                + $"{"wanted",8} {"budget",8} {"maxmesh",8} {"cuttris",8} {"leftabove",9}");
+
+        foreach (var f in files.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            byte[] mdl;
+            try { mdl = File.ReadAllBytes(f); } catch (IOException) { continue; }
+
+            HatCompatSolve.Result r;
+            int biggest;
+            try
+            {
+                var parts = ModelPartReader.Read(mdl);
+                if (parts == null) continue;
+                r = HatCompatSolve.Solve(mdl, parts, HeadModelFor(f, faces));
+                biggest = HatCompatSolve.ReadLod0Meshes(mdl).Select(m => m.Positions.Length)
+                    .DefaultIfEmpty(0).Max();
+            }
+            catch (Exception) { continue; }
+            if (r.Dropped == 0) continue;
+
+            // THE HAIR THAT ACTUALLY POKES THROUGH: vertices above the hat line that are still DRAWN by a
+            // surviving triangle and were not pressed. Counting "not pressed" alone is meaningless, because
+            // the cut removes hair without moving it — that was the first version of this metric and it
+            // reported the fix as having changed nothing.
+            int leftAbove = 0, cutTris = 0;
+            try
+            {
+                var frame = HatCompatSolve.FrameAndFloor(mdl, HeadModelFor(f, faces));
+                var src = SecondSkinWriter.Parse(mdl);
+                if (frame is { } ff)
+                {
+                    float line = ff.Centre.Y + HatCompatSolve.HatLine;
+                    foreach (var mv in HatCompatSolve.ReadLod0Meshes(mdl))
+                    {
+                        int mo = src.MeshStart + mv.Mesh * 36;
+                        ushort si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+                        r.Moved.TryGetValue(mv.Mesh, out var here);
+                        var drawn = new bool[mv.Positions.Length];
+
+                        for (int s = 0; s < sc; s++)
+                        {
+                            int ss = src.SubmeshStart + (si + s) * 16;
+                            uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                            var claim = r.Cut.FirstOrDefault(p => p.Mesh == mv.Mesh && p.Submesh == s);
+                            var cutOrds = claim == null ? null
+                                : claim.Island < 0 ? new HashSet<int>(Enumerable.Range(0, (int)(ic / 3)))
+                                : new HashSet<int>(claim.Ordinals);
+                            cutTris += cutOrds?.Count ?? 0;
+
+                            for (uint t = 0; t + 3 <= ic; t += 3)
+                            {
+                                if (cutOrds != null && cutOrds.Contains((int)(t / 3))) continue;
+                                for (uint k = 0; k < 3; k++)
+                                {
+                                    int idx = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + k) * 2);
+                                    if (idx < drawn.Length) drawn[idx] = true;
+                                }
+                            }
+                        }
+
+                        for (int v = 0; v < mv.Positions.Length; v++)
+                            if (drawn[v] && mv.Positions[v].Y >= line
+                                && (here == null || !here.ContainsKey(v)))
+                                leftAbove++;
+                    }
+                }
+            }
+            catch (Exception) { }
+
+            lines.Add($"{Trim(f),-44} {r.Considered,8} {r.Dropped,8} {r.DroppedForValues,8} "
+                    + $"{r.DroppedForSpares,7} {r.WantedValues,8} {r.Budget,8} {biggest,8} "
+                    + $"{cutTris,8} {leftAbove,9}");
+        }
+
+        foreach (var l in lines) o.WriteLine(l);
+        var dump = Environment.GetEnvironmentVariable("PROTEUS_DIAG_OUT");
+        if (!string.IsNullOrEmpty(dump))
+            try { File.WriteAllLines(dump, lines); } catch (IOException) { }
+    }
+
+    /// <summary>
+    /// WHY IS THERE ANY HAIR ABOVE THE HAT LINE AT ALL.
+    /// <para/>
+    /// The algorithm says: cut everything above the line, press what is left. So nothing should be drawn
+    /// above the line, and yet a hairstyle measured 1418 vertices that are. This says which of the four
+    /// ways that can happen each one took, because they need different remedies:
+    /// <list type="number">
+    /// <item>the triangle STRADDLES the line — a corner below it, so cutting it would remove hair no hat
+    /// covers, and only the press can help;</item>
+    /// <item>it is entirely above the line but OUTSIDE the hat shell, so the cut deliberately spared it;</item>
+    /// <item>it is above the line, inside the shell, and simply was not claimed — which would be a bug;</item>
+    /// <item>the vertex sits inside the scalp radius already, so it is inside the hat and is not visible
+    /// however far above the line it is.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public void WhyIsAnyHairLeftAboveTheHatLine()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_HAIR")
+                  ?? Path.Combine(Mods, "⟡LM_Coco", "races", "miqote earless", "chara", "human",
+                                  "c0801", "obj", "hair", "h0124", "model", "c0801h0124_hir.mdl");
+        if (!File.Exists(target)) return;
+
+        var mdl = File.ReadAllBytes(target);
+        var parts = ModelPartReader.Read(mdl);
+        if (parts == null) return;
+        var head = HeadModelFor(target, FaceIndex());
+        if (HatCompatSolve.FrameAndFloor(mdl, head) is not { } ff) return;
+
+        var r = HatCompatSolve.Solve(mdl, parts, head);
+        float line = ff.Centre.Y + HatCompatSolve.HatLine;
+        var src = SecondSkinWriter.Parse(mdl);
+
+        int straddle = 0, sparedOutside = 0, straddleShell = 0, insideScalp = 0;
+        float worstOut = 0f;
+
+        foreach (var mv in HatCompatSolve.ReadLod0Meshes(mdl))
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            ushort si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+            r.Moved.TryGetValue(mv.Mesh, out var pressed);
+
+            for (int s = 0; s < sc; s++)
+            {
+                int ss = src.SubmeshStart + (si + s) * 16;
+                uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                var claim = r.Cut.FirstOrDefault(p => p.Mesh == mv.Mesh && p.Submesh == s);
+                var cutOrds = claim == null ? null
+                    : claim.Island < 0 ? new HashSet<int>(Enumerable.Range(0, (int)(ic / 3)))
+                    : new HashSet<int>(claim.Ordinals);
+
+                for (uint t = 0; t + 3 <= ic; t += 3)
+                {
+                    if (cutOrds != null && cutOrds.Contains((int)(t / 3))) continue;
+                    var idx = new int[3];
+                    for (uint k = 0; k < 3; k++)
+                        idx[k] = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + k) * 2);
+                    if (idx.Any(i => i >= mv.Positions.Length)) continue;
+
+                    bool anyBelow = idx.Any(i => mv.Positions[i].Y < line);
+
+                    foreach (var i in idx)
+                    {
+                        var p = mv.Positions[i];
+                        if (p.Y < line) continue;
+                        if (pressed != null && pressed.ContainsKey(i)) continue;
+
+                        var d = p - ff.Centre;
+                        float len = d.Length();
+                        float shell = ff.Floor[HatCompatSolve.BinFor(d / len)];
+                        float outBy = len - (shell + 0.030f);
+
+                        if (len <= shell) insideScalp++;
+                        else if (anyBelow) straddle++;
+                        else if (outBy > 0f) { sparedOutside++; worstOut = MathF.Max(worstOut, outBy); }
+                        // Inside the cut's own bound, yet its triangle was spared — which means a SIBLING
+                        // corner is outside it. Not a bug: the cut requires all three corners inside, so a
+                        // triangle crossing the shell boundary is spared whole, and this counts the corners
+                        // of those that happen to fall on the inside. Measured within 2 mm of the boundary,
+                        // so the lever here is CutReach, not a missing claim.
+                        else straddleShell++;
+                    }
+                }
+            }
+        }
+
+        o.WriteLine($"{Path.GetFileName(target)}  hat line y={line:F4}  centre y={ff.Centre.Y:F4} "
+                  + $"r={ff.Radius:F4}");
+        o.WriteLine($"pressed {r.Considered}, dropped {r.Dropped} "
+                  + $"(values {r.DroppedForValues}, spares {r.DroppedForSpares}), "
+                  + $"wanted {r.WantedValues} of {r.Budget}");
+        o.WriteLine("");
+        o.WriteLine("still drawn above the hat line, unpressed, by cause:");
+        o.WriteLine($"  straddling the hat line (never cuttable) : {straddle}");
+        o.WriteLine($"  outside the hat shell                   : {sparedOutside}  "
+                  + $"(worst {worstOut * 1000:F0}mm past it)");
+        o.WriteLine($"  straddling the shell bound (CutReach)   : {straddleShell}");
+        o.WriteLine($"  inside the scalp already (invisible)    : {insideScalp}");
+    }
+
+    /// <summary>
+    /// WHERE the hair that survives the cut actually is, relative to the hat line and to the scalp.
+    /// <para/>
+    /// With the cut alone doing the work, anything still drawn ABOVE the line is a defect; anything below it
+    /// is the hat's own band region, which a horizontal plane does not describe. Tufts through the back of a
+    /// cap are one or the other and the two need different fixes, so this says which.
+    /// </summary>
+    [Fact]
+    public void WhereIsTheHairThatSurvivesTheCut()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_HAIR")
+                  ?? Path.Combine(Mods, "⟡LM_Coco", "Proteus", HatCompatService.BackupSubdir,
+                                  "races", "miqote earless", "chara", "human", "c0801", "obj", "hair",
+                                  "h0124", "model", "c0801h0124_hir.mdl");
+        if (!File.Exists(target)) return;
+
+        var mdl = File.ReadAllBytes(target);
+        var parts = ModelPartReader.Read(mdl);
+        if (parts == null) return;
+        var head = HeadModelFor(target, FaceIndex());
+        if (HatCompatSolve.FrameAndFloor(mdl, head) is not { } ff) return;
+
+        var r = HatCompatSolve.Solve(mdl, parts, head);
+        float line = ff.Centre.Y + HatCompatSolve.HatLine;
+        var src = SecondSkinWriter.Parse(mdl);
+
+        // Bucketed by height relative to the hat line, in 10 mm steps. Each bucket also counts how many of
+        // its vertices sit radially PROUD of the scalp by more than 10 mm — those are the ones a hat's
+        // band would have to stretch around, i.e. the ones that poke through it.
+        var total = new SortedDictionary<int, int>();
+        var proud = new SortedDictionary<int, int>();
+        int aboveLine = 0;
+
+        foreach (var mv in HatCompatSolve.ReadLod0Meshes(mdl))
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            ushort si = BitConverter.ToUInt16(mdl, mo + 10), sc = BitConverter.ToUInt16(mdl, mo + 12);
+            var drawn = new bool[mv.Positions.Length];
+
+            for (int s = 0; s < sc; s++)
+            {
+                int ss = src.SubmeshStart + (si + s) * 16;
+                uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                var claim = r.Cut.FirstOrDefault(p => p.Mesh == mv.Mesh && p.Submesh == s);
+                var cutOrds = claim == null ? null
+                    : claim.Island < 0 ? new HashSet<int>(Enumerable.Range(0, (int)(ic / 3)))
+                    : new HashSet<int>(claim.Ordinals);
+
+                for (uint t = 0; t + 3 <= ic; t += 3)
+                {
+                    if (cutOrds != null && cutOrds.Contains((int)(t / 3))) continue;
+                    for (uint k = 0; k < 3; k++)
+                    {
+                        int idx = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + k) * 2);
+                        if (idx < drawn.Length) drawn[idx] = true;
+                    }
+                }
+            }
+
+            for (int v = 0; v < mv.Positions.Length; v++)
+            {
+                if (!drawn[v]) continue;
+                var p = mv.Positions[v];
+                int bucket = (int)MathF.Floor((p.Y - line) * 100f);      // 10 mm buckets
+                if (p.Y >= line) aboveLine++;
+                total.TryGetValue(bucket, out int n); total[bucket] = n + 1;
+
+                var d = p - ff.Centre;
+                float len = d.Length();
+                if (len > 1e-5f && len > ff.Floor[HatCompatSolve.BinFor(d / len)] + 0.010f)
+                {
+                    proud.TryGetValue(bucket, out int m); proud[bucket] = m + 1;
+                }
+            }
+        }
+
+        o.WriteLine($"{Path.GetFileName(target)}  hat line y={line:F4}  centre y={ff.Centre.Y:F4} "
+                  + $"scalp r={ff.Radius:F4}  (crown is about y={ff.Centre.Y + ff.Radius:F4})");
+        o.WriteLine($"cut {r.Cut.Count} piece(s); STILL DRAWN ABOVE THE HAT LINE: {aboveLine}");
+        o.WriteLine("");
+        o.WriteLine($"{"height vs hat line",22} {"drawn",8} {"proud of scalp",15}");
+        foreach (var (bucket, n) in total.Reverse())
+        {
+            proud.TryGetValue(bucket, out int m);
+            o.WriteLine($"{bucket * 10,6}..{bucket * 10 + 10,4} mm {"",4} {n,8} {m,15}");
+        }
+    }
+
+    /// <summary>
+    /// Does the band's own floor stop the back of the head being shaved?
+    /// <para/>
+    /// The band cut asks whether a vertex stands proud of the scalp. Which scalp radius it asks against is
+    /// the whole question: the cut's own floor is culled to the cranium ABOVE the hat line, so every
+    /// direction pointing into the band has no samples and inherits the global median — and the occiput
+    /// bulges past that median, so flat hair on the back reads as proud and is cut. This compares the two
+    /// floors by region and counts how many vertices change verdict.
+    /// </summary>
+    [Fact]
+    public void DoesTheBandFloorStopShavingTheBackOfTheHead()
+    {
+        var target = Environment.GetEnvironmentVariable("PROTEUS_HAIR")
+                  ?? Path.Combine(Mods, "⟡LM_Coco", "Proteus", HatCompatService.BackupSubdir,
+                                  "races", "miqote earless", "chara", "human", "c0801", "obj", "hair",
+                                  "h0124", "model", "c0801h0124_hir.mdl");
+        if (!File.Exists(target)) return;
+
+        var mdl = File.ReadAllBytes(target);
+        var head = HeadModelFor(target, FaceIndex());
+        if (HatCompatSolve.FrameAndFloor(mdl, head) is not { } ff) return;
+
+        float line = ff.Centre.Y + HatCompatSolve.HatLine;
+        float bottom = line - HatCompatSolve.HatBandDrop;
+
+        // Region by which axis the direction from the head centre leans on. Z is forward in game space, so
+        // the back of the head is -Z.
+        static string Region(Vector3 d)
+            => MathF.Abs(d.X) > MathF.Abs(d.Z) ? "side" : d.Z < 0 ? "BACK" : "front";
+
+        var seen = new Dictionary<string, (int N, int OldProud, int NewProud, float OldFloor, float NewFloor)>();
+
+        foreach (var mv in HatCompatSolve.ReadLod0Meshes(mdl))
+            foreach (var p in mv.Positions)
+            {
+                if (p.Y < bottom || p.Y >= line) continue;      // the band only
+                var d = p - ff.Centre;
+                float len = d.Length();
+                if (len < 1e-5f) continue;
+                int bin = HatCompatSolve.BinFor(d / len);
+
+                float oldF = ff.Floor[bin], newF = ff.BandFloor[bin];
+                var key = Region(d);
+                seen.TryGetValue(key, out var acc);
+                seen[key] = (acc.N + 1,
+                             acc.OldProud + (len > oldF + HatCompatSolve.HatClearance ? 1 : 0),
+                             acc.NewProud + (len > newF + HatCompatSolve.HatClearance ? 1 : 0),
+                             acc.OldFloor + oldF, acc.NewFloor + newF);
+            }
+
+        o.WriteLine($"{Path.GetFileName(target)}  band {bottom:F4}..{line:F4}  "
+                  + $"clearance {HatCompatSolve.HatClearance * 1000:F0}mm");
+        o.WriteLine("");
+        o.WriteLine($"{"region",8} {"verts",8} {"cranium floor",14} {"band floor",12} "
+                  + $"{"cut before",11} {"cut now",9}");
+        foreach (var (key, a) in seen.OrderBy(k => k.Key, StringComparer.Ordinal))
+            o.WriteLine($"{key,8} {a.N,8} {a.OldFloor / a.N * 1000,11:F1}mm {a.NewFloor / a.N * 1000,9:F1}mm "
+                      + $"{a.OldProud,11} {a.NewProud,9}");
+    }
+
+    /// <summary>
+    /// THE GENERATOR for the baked reference-hat profile. Run once; paste its output into
+    /// <c>HatProfile.cs</c>.
+    /// <para/>
+    /// Why baked at all: the cut is written into a hairstyle as one <c>atr_kam</c> mask, and the game turns
+    /// that mask off whenever ANY head piece is worn. There is nowhere to put a per-hat answer, so a single
+    /// reference hat is not an approximation of the right thing — it IS the right thing, and the game's own
+    /// hat-compatible hair works the same way.
+    /// <para/>
+    /// The reference is the Calfskin Rider's Cap, equipment set <b>e5506</b> (Item 32798). A cap is
+    /// close-fitting, which is the safe end to err towards: a real hat that covers MORE than the reference
+    /// simply hides the extra hair, while one that covers LESS would leave a bald gap.
+    /// <para/>
+    /// Read straight out of sqpack rather than from a TexTools export, because the cap is not among the
+    /// exports under <see cref="HatRoot"/> and because game data gives every race variant the game actually
+    /// ships, which is the set the table needs.
+    /// </summary>
+    [Fact]
+    public void BakeTheReferenceHatProfile()
+    {
+        // Which head piece to bake, by equipment set. NOT e5506: that was inferred from a cached equipment
+        // walk and is the player's GLASSES — measured at 217 vertices spanning 36 x 101 x 10 mm, and named
+        // outright by Proteus's own log line "glasses/head e5506 is the player's own pair". The e55xx family
+        // is facewear. See ProbeHeadPieceGeometry for the control that settled it.
+        var set = int.TryParse(Environment.GetEnvironmentVariable("PROTEUS_HAT_SET"), out var s) ? s : 380;
+
+        var game = Environment.GetEnvironmentVariable("PROTEUS_GAME")
+                ?? @"C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn";
+        var sqpack = Path.Combine(game, "game", "sqpack");
+        if (!Directory.Exists(sqpack)) { o.WriteLine($"no game data at {sqpack}"); return; }
+        Lumina.GameData data;
+        try { data = new Lumina.GameData(sqpack); }
+        catch (Exception ex) { o.WriteLine($"could not open game data: {ex.Message}"); return; }
+
+        // The set id is not looked up here: the generated Item sheet lives in a Dalamud assembly this test
+        // project does not reference, and adding one for a single confirmation is not worth it. e5506 is
+        // established independently — Glamourer's own state log records
+        // "Set Head ... to Calfskin Rider's Cap (32798)" and every equipment walk for the following two
+        // and a half hours reports chara/equipment/e5506/model/*_met.mdl.
+        var lines = new List<string>();
+        var rows = new List<(string Race, Vector3 Centre, float Radius, float[] Prof, int Covered,
+                             float A, float B, float C)>();
+
+        // Every playable model code, probed. Which races ship their own variant is not derivable — the game
+        // falls other races through via EQDP — so ask the archive.
+        for (int i = 1; i <= 18; i++)
+        {
+            var race = $"c{i:D2}01";
+            var hatPath = $"chara/equipment/e{set:D4}/model/{race}e{set:D4}_met.mdl";
+            var facePath = $"chara/human/{race}/obj/face/f0001/model/{race}f0001_fac.mdl";
+
+            byte[]? hatBytes = null, faceBytes = null;
+            try { hatBytes = data.GetFile(hatPath)?.Data; } catch (Exception) { }
+            try { faceBytes = data.GetFile(facePath)?.Data; } catch (Exception) { }
+            if (hatBytes == null || faceBytes == null)
+            {
+                o.WriteLine($"{race}: hat {(hatBytes == null ? "absent" : "present")}, "
+                          + $"face {(faceBytes == null ? "absent" : "present")} — skipped");
+                continue;
+            }
+
+            // The frame the runtime will use, from this race's own vanilla face. Baking the centre too is
+            // what lets the profile be re-anchored onto a MODDED head later.
+            if (HatCompatSolve.HeadFrameFrom(faceBytes) is not { } frame)
+            {
+                o.WriteLine($"{race}: face model unreadable");
+                continue;
+            }
+            var (centre, radius) = frame;
+
+            // ReadLod0Meshes, NOT TryReadLod0Geometry. The latter read one small mesh of the model and
+            // reported the "cap" as 217 vertices spanning 35 x 100 x 10 mm entirely on the -X side — a
+            // sliver, not a hat. It filters by material and drops any mesh whose vertex declaration it
+            // cannot fully read, which on a head piece is most of them. ReadLod0Meshes applies no filter at
+            // all, which is what a whole-object measurement needs.
+            var hatMeshes = HatCompatSolve.ReadLod0Meshes(hatBytes);
+            if (hatMeshes.Count == 0) { o.WriteLine($"{race}: hat geometry unreadable"); continue; }
+
+            // WHERE IS IT. Printed before anything is trusted: a measurement that finds almost nothing is
+            // indistinguishable from a hat that covers almost nothing, and the first version of this was
+            // the former while reading as the latter.
+            var hlo = new Vector3(float.MaxValue);
+            var hhi = new Vector3(float.MinValue);
+            int hatVerts = 0;
+            foreach (var mv in hatMeshes)
+                foreach (var q in mv.Positions) { hlo = Vector3.Min(hlo, q); hhi = Vector3.Max(hhi, q); hatVerts++; }
+            o.WriteLine($"{race}: hat {hatVerts}v in {hatMeshes.Count} mesh(es)  "
+                      + $"bounds [{hlo.X:F3}..{hhi.X:F3}, {hlo.Y:F3}..{hhi.Y:F3}, {hlo.Z:F3}..{hhi.Z:F3}]  "
+                      + $"centre {F(centre)}");
+
+            // One radius per direction bin, taken as the FARTHEST hat vertex in that direction. Farthest
+            // because a hat has an inner lining as well as an outer shell, and it is the outer surface that
+            // decides whether hair is poking through — the same reason the ray oracle takes its last hit.
+            //
+            // Vertices rather than ray casts: the profile only needs a radius per bin, and 512 bins against
+            // a few thousand vertices leaves few enough gaps that they can be filled from neighbours. It
+            // also needs no triangles, which is what forced the filtered reader that misread the model.
+            // SURFACE samples, not vertices. 377 vertices cannot populate 512 bins: binning them left holes
+            // all through the covered region — "127,0,129,0,0,0,136" — and a hole spares hair the cap
+            // covers. Every triangle is sampled on a barycentric grid instead, which is dense wherever the
+            // hat has area rather than wherever it happens to have corners.
+            // The HEAD's own radius per direction, so "how far off the head" can be asked per bin. Radius
+            // from the centre cannot separate the brim from the crown — the brim reaches ~155 mm and the
+            // crown ~130, and they overlap — but distance from the SCALP separates them cleanly, which is
+            // the discriminator the reference-hat oracle uses.
+            var headMax = new float[HatProfileBins];
+            foreach (var mv in HatCompatSolve.ReadLod0Meshes(faceBytes))
+                foreach (var q in mv.Positions)
+                {
+                    var d = q - centre;
+                    float len = d.Length();
+                    if (len < 1e-5f) continue;
+                    int bin = HatCompatSolve.BinFor(d / len);
+                    if (len > headMax[bin]) headMax[bin] = len;
+                }
+            // Empty bins take the measured scalp radius rather than 0, or a hat sample in a direction the
+            // face model never reaches would be rejected for being "far off a head" that is not there.
+            for (int b = 0; b < headMax.Length; b++) if (headMax[b] <= 0f) headMax[b] = radius;
+
+            var prof = new float[HatProfileBins];
+            var hatSrc = SecondSkinWriter.Parse(hatBytes);
+            const int Steps = 6;       // 21 samples per triangle
+            foreach (var mv in hatMeshes)
+            {
+                int mo = hatSrc.MeshStart + mv.Mesh * 36;
+                if (mo + 36 > hatBytes.Length) continue;
+                ushort si = BitConverter.ToUInt16(hatBytes, mo + 10);
+                ushort sc = BitConverter.ToUInt16(hatBytes, mo + 12);
+                for (int sm = 0; sm < sc; sm++)
+                {
+                    int ss = hatSrc.SubmeshStart + (si + sm) * 16;
+                    if (ss + 16 > hatBytes.Length) break;
+                    uint io = BitConverter.ToUInt32(hatBytes, ss), ic = BitConverter.ToUInt32(hatBytes, ss + 4);
+                    if ((long)hatSrc.Ib + (io + ic) * 2 > hatBytes.Length) break;
+
+                    for (uint t = 0; t + 3 <= ic; t += 3)
+                    {
+                        int ia = BitConverter.ToUInt16(hatBytes, hatSrc.Ib + (int)(io + t) * 2);
+                        int ib = BitConverter.ToUInt16(hatBytes, hatSrc.Ib + (int)(io + t + 1) * 2);
+                        int icx = BitConverter.ToUInt16(hatBytes, hatSrc.Ib + (int)(io + t + 2) * 2);
+                        if (ia >= mv.Positions.Length || ib >= mv.Positions.Length
+                            || icx >= mv.Positions.Length) continue;
+                        var pa = mv.Positions[ia];
+                        var pb = mv.Positions[ib];
+                        var pc = mv.Positions[icx];
+
+                        for (int ga = 0; ga <= Steps; ga++)
+                            for (int gb = 0; ga + gb <= Steps; gb++)
+                            {
+                                float wa = ga / (float)Steps, wb = gb / (float)Steps;
+                                var q = pa * wa + pb * wb + pc * (1f - wa - wb);
+                                var d = q - centre;
+                                float len = d.Length();
+                                // Inside the skull is not a hat surface. A chin strap or a degenerate
+                                // vertex passing near the head centre otherwise marks its bin covered with
+                                // a radius no hair could exceed — the Lalafell cap reported a 7 mm bin.
+                                if (len < radius * 0.5f) continue;
+
+                                // THE BRIM IS NOT THE HAT ON THE HEAD. It is a plate out in the air, and a
+                                // ray from the head centre going forward-and-down hits its underside — so
+                                // the brim marks every such direction "covered" out to 157 mm, and hair at
+                                // the temple BELOW the brim was cut, leaving a bald gap at the front and
+                                // sides. The same rejection the reference-hat oracle already uses
+                                // ("if (gap > 0.08f) continue; — a brim out in the air, not the hat on the
+                                // head"), so the profile describes only the part that actually wraps.
+                                int bin = HatCompatSolve.BinFor(d / len);
+
+                                // 70 mm off the scalp, and the margin between the two things it separates
+                                // is narrower than it looks. A baseball cap's crown genuinely stands ~48-60
+                                // mm above the skull, so 50 mm rejected the CROWN wherever the face model's
+                                // own radius ran small — which showed up as whole azimuth columns missing
+                                // from the table. The brim's gap is ~80 mm. 70 keeps one and drops the other.
+                                if (len > headMax[bin] + 0.07f) continue;
+
+                                if (len > prof[bin]) prof[bin] = len;
+                            }
+                    }
+                }
+            }
+
+            // FILL ENCLOSED HOLES. Dense sampling still leaves the odd single bin empty where a seam or a
+            // sliver of a triangle falls between grid points, and an empty bin spares the hair in that
+            // direction — one stray tuft through the crown, which is the artifact this whole change exists
+            // to remove. Only bins with most of their neighbourhood covered are filled, so the hat's
+            // silhouette is never grown outward; growing it would cut hair no hat covers.
+            // VERTICALLY ENCLOSED ONLY, which is what makes this safe. The cut now goes by direction alone,
+            // so an uncovered bin is uncut hair — a tuft — and holes matter far more than the radius in
+            // them does. But a neighbour-count rule would also fill along the hat's bottom EDGE, where a
+            // bin below the rim has three covered neighbours above it, and growing the silhouette downward
+            // is exactly the "cutting too low" this keeps coming back to.
+            //
+            // So a bin is filled only when the rows above AND below it are both covered at that azimuth:
+            // that is a hole in the middle of the hat, never its edge. The crown row has nothing above it
+            // and is filled from the row below instead — a hat that wraps the band certainly covers the top.
+            for (int pass = 0; pass < 3; pass++)
+            {
+                var filled = (float[])prof.Clone();
+                for (int iv = 0; iv < BinsVv; iv++)
+                    for (int iu = 0; iu < BinsUu; iu++)
+                    {
+                        int bin = iv * BinsUu + iu;
+                        if (prof[bin] > 0f) continue;
+
+                        float below = iv + 1 < BinsVv ? prof[(iv + 1) * BinsUu + iu] : 0f;
+                        if (iv == 0) { if (below > 0f) filled[bin] = below; continue; }
+
+                        float above = prof[(iv - 1) * BinsUu + iu];
+                        if (above > 0f && below > 0f) filled[bin] = MathF.Max(above, below);
+                    }
+                Array.Copy(filled, prof, prof.Length);
+            }
+
+            // THE RIM PLANE — what the cut actually wants.
+            //
+            // A radial profile cannot express "below the rim", and that is why it kept cutting too low: a
+            // ray from the head centre pointing down-and-back still hits the cap's band on its way out, so
+            // that direction reads as covered and every hair along the ray goes with it, rim or no rim.
+            //
+            // The rim is the bottom boundary of the part that wraps the head. Found as the LOWEST sample in
+            // each azimuth column (the brim is already excluded above, or its underside would drag the front
+            // of the plane down), then a least-squares plane through those: y = A*x + B*z + C, all relative
+            // to the head centre so a wearer's own centre re-anchors it.
+            var rimLow = new float[BinsUu];
+            var rimAt = new Vector3[BinsUu];
+            for (int k = 0; k < BinsUu; k++) rimLow[k] = float.MaxValue;
+            foreach (var mv in hatMeshes)
+            {
+                int mo2 = hatSrc.MeshStart + mv.Mesh * 36;
+                if (mo2 + 36 > hatBytes.Length) continue;
+                foreach (var q in mv.Positions)
+                {
+                    var d = q - centre;
+                    float len = d.Length();
+                    if (len < radius * 0.5f) continue;
+                    int bin = HatCompatSolve.BinFor(d / len);
+                    if (len > headMax[bin] + 0.07f) continue;          // same brim rejection
+                    int iu = bin % BinsUu;
+                    if (d.Y < rimLow[iu]) { rimLow[iu] = d.Y; rimAt[iu] = d; }
+                }
+            }
+
+            var pts = Enumerable.Range(0, BinsUu).Where(k => rimLow[k] < float.MaxValue)
+                                .Select(k => rimAt[k]).ToArray();
+            float pA = 0f, pB = 0f, pC = 0f, resid = 0f;
+            // Fitted three times, dropping whatever sits more than 25 mm off the previous fit. The raw fit
+            // had a 70-90 mm worst residual because a handful of columns are not the rim at all — the
+            // lining's top edge reads 85 mm up where the rim beside it is 2 mm — and least squares hands
+            // those outliers as much weight as the 30 columns that agree.
+            // Fitted as y = B*z + C, with NO left-right term. A head and a hat are bilaterally symmetric,
+            // so an x coefficient can only fit noise — and it did: the free three-parameter fit produced
+            // coefficients up to -0.038 on some races, which is the symptom the table's own doc warns is a
+            // fit that caught something other than the rim.
+            //
+            // Fitted three times, dropping whatever sits more than 25 mm off the previous round. The raw
+            // fit had a 70-90 mm worst residual because a handful of columns are not the rim at all — the
+            // lining's top edge reads 85 mm up where the rim beside it is 2 mm — and least squares hands
+            // those outliers as much weight as the thirty columns that agree.
+            for (int round = 0; round < 3 && pts.Length >= 8; round++)
+            {
+                double szz = 0, sz = 0, szy = 0, sy = 0, sn = pts.Length;
+                foreach (var q in pts) { szz += q.Z * q.Z; sz += q.Z; szy += q.Z * q.Y; sy += q.Y; }
+                double det = szz * sn - sz * sz;
+                if (Math.Abs(det) < 1e-12) break;
+                pA = 0f;
+                pB = (float)((szy * sn - sz * sy) / det);
+                pC = (float)((szz * sy - sz * szy) / det);
+
+                resid = 0f;
+                foreach (var q in pts) resid = MathF.Max(resid, MathF.Abs(q.Y - (pB * q.Z + pC)));
+
+                var keep = pts.Where(q => MathF.Abs(q.Y - (pB * q.Z + pC)) <= 0.025f).ToArray();
+                if (keep.Length < 8 || keep.Length == pts.Length) break;
+                pts = keep;
+            }
+            o.WriteLine($"{race}: rim plane y = {pA:F4}x + {pB:F4}z + {pC * 1000:F1}mm  "
+                      + $"from {pts.Length} columns, worst residual {resid * 1000:F1}mm");
+
+            // The rim column by column, in millimetres relative to the head centre, walking the azimuth
+            // from -X through -Z (back) and round. A residual of 70-90 mm says least squares is being
+            // dragged by something that is not the rim, and the only way to see what is to look.
+            var rimCol = Enumerable.Range(0, BinsUu)
+                .Select(k => rimLow[k] < float.MaxValue ? (int)MathF.Round(rimLow[k] * 1000f) : 9999)
+                .ToArray();
+            o.WriteLine($"    rim by azimuth: {string.Join(",", rimCol)}");
+            var real = rimCol.Where(x => x != 9999).OrderBy(x => x).ToArray();
+            if (real.Length > 0)
+                o.WriteLine($"    lowest {real[0]}mm  p25 {real[real.Length / 4]}mm  "
+                          + $"median {real[real.Length / 2]}mm  p75 {real[real.Length * 3 / 4]}mm  "
+                          + $"highest {real[^1]}mm");
+
+            int covered = prof.Count(x => x > 0f);
+            rows.Add((race, centre, radius, prof, covered, pA, pB, pC));
+            var hits = prof.Where(x => x > 0f).OrderBy(x => x).ToArray();
+            o.WriteLine($"{race}: covered {covered}/{HatProfileBins} bins, "
+                      + $"radius {hits[0] * 1000:F0}..{hits[^1] * 1000:F0}mm "
+                      + $"(median {hits[hits.Length / 2] * 1000:F0}mm), "
+                      + $"head centre y={centre.Y:F4} r={radius:F4}");
+        }
+
+        if (rows.Count == 0) { o.WriteLine("nothing measured"); return; }
+
+        // Ready-to-paste C#, in the shape HatProfile.cs wants.
+        lines.Add($"// Generated by HatCompatDiagTests.BakeTheReferenceHatProfile on "
+                + $"{DateTime.UtcNow:yyyy-MM-dd}.");
+        lines.Add($"// Calfskin Rider's Cap, equipment set e{set:D4} (Item 32798), read from sqpack.");
+        lines.Add("// The RIM PLANE of the part that wraps the head, RELATIVE to the head centre measured");
+        lines.Add("// from that race's vanilla face: y = A*x + B*z + C, in metres. Hair above it is under the");
+        lines.Add("// hat. The brim is excluded, or its underside drags the front of the plane down.");
+        foreach (var r in rows)
+            lines.Add($"        [\"{r.Race}\"] = new({r.A:0.#####}f, {r.B:0.#####}f, {r.C:0.#####}f),");
+
+        foreach (var l in lines) o.WriteLine(l);
+        var dump = Environment.GetEnvironmentVariable("PROTEUS_DIAG_OUT");
+        if (!string.IsNullOrEmpty(dump))
+            try { File.WriteAllLines(dump, lines); } catch (IOException) { }
+    }
+
+    /// <summary>
+    /// Control for the bake: read several head pieces out of sqpack and print how big each one is.
+    /// <para/>
+    /// e5506 measured as 217 vertices spanning 35 x 100 x 10 mm, which is not a cap. That is either the
+    /// wrong set id or a broken reader, and the two are indistinguishable from one model. A hat that is
+    /// known to be cap-shaped — the Wrangler's Hat, e0380, which is among the TexTools exports and is what
+    /// <c>HatLine</c> was partly measured against — tells them apart: if e0380 reads as thousands of
+    /// vertices wrapping the head then the reader is sound and e5506 is simply not the cap.
+    /// </summary>
+    [Fact]
+    public void ProbeHeadPieceGeometry()
+    {
+        var game = Environment.GetEnvironmentVariable("PROTEUS_GAME")
+                ?? @"C:\Program Files (x86)\SquareEnix\FINAL FANTASY XIV - A Realm Reborn";
+        var sqpack = Path.Combine(game, "game", "sqpack");
+        if (!Directory.Exists(sqpack)) { o.WriteLine($"no game data at {sqpack}"); return; }
+        Lumina.GameData data;
+        try { data = new Lumina.GameData(sqpack); }
+        catch (Exception ex) { o.WriteLine($"could not open game data: {ex.Message}"); return; }
+
+        int[] sets = [5506, 5516, 380, 316, 142, 123, 6105, 5501, 5504];
+        o.WriteLine($"{"set",6} {"verts",7} {"meshes",7} {"bounds (x, y, z)",48}");
+        foreach (var set in sets)
+        {
+            var path = $"chara/equipment/e{set:D4}/model/c0201e{set:D4}_met.mdl";
+            byte[]? bytes = null;
+            try { bytes = data.GetFile(path)?.Data; } catch (Exception) { }
+            if (bytes == null) { o.WriteLine($"{set,6} absent"); continue; }
+
+            var meshes = HatCompatSolve.ReadLod0Meshes(bytes);
+            var lo = new Vector3(float.MaxValue);
+            var hi = new Vector3(float.MinValue);
+            int n = 0;
+            foreach (var mv in meshes)
+                foreach (var q in mv.Positions) { lo = Vector3.Min(lo, q); hi = Vector3.Max(hi, q); n++; }
+            if (n == 0) { o.WriteLine($"{set,6} {0,7} {meshes.Count,7}  no positions read"); continue; }
+            o.WriteLine($"{set,6} {n,7} {meshes.Count,7}  "
+                      + $"[{lo.X:F3}..{hi.X:F3}, {lo.Y:F3}..{hi.Y:F3}, {lo.Z:F3}..{hi.Z:F3}]  "
+                      + $"({(hi.X - lo.X) * 1000:F0} x {(hi.Y - lo.Y) * 1000:F0} x {(hi.Z - lo.Z) * 1000:F0} mm)");
+        }
+    }
+
+    /// <summary>Mirrors the solve's own bin grid — see <c>HatCompatSolve.BinFor</c>.</summary>
+    private const int BinsUu = 32;
+
+    /// <inheritdoc cref="BinsUu"/>
+    private const int BinsVv = 16;
+
+    /// <inheritdoc cref="BinsUu"/>
+    private const int HatProfileBins = BinsUu * BinsVv;
 
     /// <summary>Backup copies Proteus took before patching — the author's original bytes.</summary>
     private static IEnumerable<string> PristineBackups()

@@ -9241,7 +9241,8 @@ public class CompositorService : IDisposable
     /// thread and may be one walk out of date, which for a panel the user is looking at is fine.
     /// </summary>
     internal HatCompatService.Target? HatCompatTarget()
-        => HatCompatService.FindEquippedHair(_humanPartModels, penumbra.ResolvePlayer, modsRoot);
+        => HatCompatService.FindEquippedHair(_humanPartModels, penumbra.ResolvePlayer, modsRoot,
+                                             ReadGameOrModFile);
 
     /// <summary>
     /// A cheap identity for the equipped hairstyle, for deciding whether a re-examination is worth doing.
@@ -9273,7 +9274,17 @@ public class CompositorService : IDisposable
 
     /// <summary>The hair named by a model list the caller already has, resolved through Penumbra.</summary>
     internal HatCompatService.Target? HatCompatTargetFor(IReadOnlyList<string>? parts)
-        => HatCompatService.FindEquippedHair(parts, penumbra.ResolvePlayer, modsRoot);
+        => HatCompatService.FindEquippedHair(parts, penumbra.ResolvePlayer, modsRoot,
+                                             ReadGameOrModFile);
+
+    /// <summary>
+    /// Raw bytes for a game path, from the mod that redirects it or from the game's own data.
+    /// <para/>
+    /// Here rather than inlined at both call sites so the hat-compat lookup cannot end up with one of them
+    /// reading game data and the other not — which is the bug it is fixing, in a smaller form.
+    /// </summary>
+    private byte[]? ReadGameOrModFile(string gamePath)
+        => textureLoader.LoadRawFile(penumbra.ResolvePlayer(gamePath), gamePath);
 
     /// <summary>That same list's hairstyle identity, without reading the model.</summary>
     internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)

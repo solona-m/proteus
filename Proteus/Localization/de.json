@@ -1319,6 +1319,14 @@
     "message": "Proteus hat diese Frisur bereits huttauglich gemacht.",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "Diese Frisur kam mit Hut-Unterstützung, die aber viel mehr Haar verbirgt als ein Hut bedeckt — wahrscheinlich von der Frisur übernommen, auf der sie aufbaut, und nie an diese angepasst. Proteus kann sie neu vermessen und ersetzen.",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "Nur der Teil, der Haar verbirgt, wird ersetzt. Die Frisur behält ihr eigenes\nFlachdrücken, im schlimmsten Fall ragt also ein Hut durch das Haar, statt\ndass Haar verschwindet, das kein Hut bedeckt hätte.\n\n„Rückgängig“ stellt genau das wieder her, was die Frisur mitbrachte.",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "Anpassen",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "Rückgängig",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus konnte nicht bestimmen, wo dein Kopf ist, und hat diese Frisur daher unverändert gelassen. Es liest das Gesicht deines Charakters, um zu wissen, wo ein Hut sitzt; ohne das wäre die Hutlinie nur geraten.",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus konnte den Kopf deines Charakters nicht lesen und hat diese Frisur daher nicht verändert.",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "Alle {0} Frisuren dieses Mods zurücksetzen",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "„Rückgängig“ stellt die Frisur wieder her, die du gerade trägst. Ein Haar-Mod\nliefert meist ein Modell pro Volk, also ist eine als anderes Volk angepasste\nFrisur nicht die aktuelle, und „Rückgängig“ erreicht sie nicht.\n\nDies stellt jede Frisur wieder her, die Proteus in diesem Mod geändert hat.",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "Die Frisur ist wieder exakt so, wie ihr Autor sie erstellt hat.",

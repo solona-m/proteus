@@ -259,14 +259,43 @@ public class HatCompatServiceTests
         var file = Path.Combine(mod.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar));
 
         var target = HatCompatService.FindEquippedHair(
-            [FacePath, HairPath], p => p == HairPath ? file : null, modsRoot);
+            [FacePath, HairPath], p => p == HairPath ? file : null, modsRoot, _ => null);
 
         Assert.NotNull(target);
         Assert.Equal(HairPath, target!.GamePath);
         Assert.Equal(mod.Root, target.ModRoot);
         Assert.Equal(ModelRel, target.Rel);
         Assert.NotEmpty(target.Model);
-        Assert.Null(target.Head);            // the face path resolved to nothing here
+        Assert.Null(target.Head);            // no game data behind this reader
+    }
+
+    /// <summary>
+    /// The wearer's face comes from the GAME'S OWN DATA when no mod replaces it, and that is the whole
+    /// difference between a measured skull and none.
+    /// <para/>
+    /// Penumbra hands back the game path unchanged for an unmodded file, which is what <c>resolve</c> does
+    /// here. The old code required <c>File.Exists</c> on that, so every wearer with a vanilla face was
+    /// fitted against a skull guessed from their hair — 66 mm low and nearly twice the radius, which tags
+    /// most of a hairstyle to vanish under a hat. Nothing in the plugin reported it as anything but a
+    /// working fit.
+    /// </summary>
+    [Fact]
+    public void FindsTheWearersFaceInTheGameDataWhenNoModSuppliesIt()
+    {
+        using var mod = new Mod(Hair());
+        var modsRoot = Path.GetDirectoryName(mod.Root)!;
+        var file = Path.Combine(mod.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar));
+        var faceBytes = Hair();          // any bytes: this is about reaching them, not reading them
+
+        var target = HatCompatService.FindEquippedHair(
+            [FacePath, HairPath],
+            // Exactly Penumbra's unmodded behaviour: the game path back, verbatim, not a file on disk.
+            p => p == HairPath ? file : p,
+            modsRoot,
+            p => p == FacePath ? faceBytes : null);
+
+        Assert.NotNull(target);
+        Assert.Equal(faceBytes, target!.Head);
     }
 
     /// <summary>
@@ -280,11 +309,11 @@ public class HatCompatServiceTests
         var modsRoot = Path.GetDirectoryName(mod.Root)!;
         var elsewhere = Path.Combine(Path.GetTempPath(), "not_a_mod", "hair.mdl");
 
-        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => elsewhere, modsRoot));
-        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => null, modsRoot));
-        Assert.Null(HatCompatService.FindEquippedHair([FacePath], _ => null, modsRoot));   // no hair at all
-        Assert.Null(HatCompatService.FindEquippedHair(null, _ => null, modsRoot));
-        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => null, null));
+        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => elsewhere, modsRoot, _ => null));
+        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => null, modsRoot, _ => null));
+        Assert.Null(HatCompatService.FindEquippedHair([FacePath], _ => null, modsRoot, _ => null));  // no hair
+        Assert.Null(HatCompatService.FindEquippedHair(null, _ => null, modsRoot, _ => null));
+        Assert.Null(HatCompatService.FindEquippedHair([HairPath], _ => null, null, _ => null));
     }
 
     /// <summary>
@@ -361,15 +390,165 @@ public class HatCompatServiceTests
     public void RejectsAFileNoModOwns(string root, string file)
         => Assert.False(HatCompatService.InMods(file, root, out _, out _));
 
+    /// <summary>
+    /// Existing hat support stands when there is no head to judge it against.
+    /// <para/>
+    /// Pins the ORDER of the two refusals, which is not arbitrary. Proteus now replaces a hairstyle's own
+    /// <c>atr_kam</c> mask when that mask measures as hiding hair no hat covers — but the measurement needs
+    /// a hat line, so with no head there is no verdict, and a verdict is required to overrule an author.
+    /// Refusing outright here would be the wrong refusal: it would report "Proteus could not find your
+    /// head" for a hairstyle that works under hats perfectly well.
+    /// </summary>
+    [Fact]
+    public void StandsDownForExistingHatSupportWhenTheHeadIsUnknown()
+    {
+        var mdl = SyntheticModel.Build(
+            [HatCompatService.ScalpAttribute],
+            [new SyntheticModel.Mesh("/mt_c0201h0001_hir_a.mtrl", new SyntheticModel.Sub(0))],
+            SyntheticModel.V6, [HatCompatService.HatShape]);
+
+        var proposal = HatCompatService.Inspect(mdl, ModelRel, head: null);
+
+        Assert.NotNull(proposal);
+        Assert.True(proposal!.AlreadyCompatible);
+        Assert.False(proposal.TookOver);
+        Assert.False(proposal.Unmeasurable);
+
+        // And with no head the mask cannot be measured at all, which is not a verdict of any kind.
+        Assert.Null(HatCompatSolve.MeasureScalpTagging(mdl, null));
+    }
+
+    // ── one file, two spellings ─────────────────────────────────────────────
+
+    /// <summary>
+    /// A record written with backslashes still names the same file, because one file under two spellings is
+    /// not two files.
+    /// <para/>
+    /// The spelling is not hypothetical: <c>InMods</c> normalises a resolved path to forward slashes while
+    /// the mod manifest spells it with backslashes, so a record could carry both — and one in the wild
+    /// does. Every comparison here is a plain string compare, so the backslash-recorded file reported as
+    /// UNPATCHED, which meant Proteus found the shape it had written itself and credited it to the mod's
+    /// author, and undo answered "there is nothing to undo" with the patch sitting on disk.
+    /// </summary>
+    [Fact]
+    public void ARecordWrittenWithBackslashesStillNamesTheSameFile()
+    {
+        using var mod = new Mod(Hair());
+        var original = mod.Model();
+        var parts = ModelPartReader.Read(original)!;
+
+        var outcome = HatCompatService.Apply(mod.Root, original, Proposal(original, parts),
+                                             [PartOf(parts, 1)]);
+        Assert.True(outcome.Ok);
+
+        // Rewrite the record the way an older build could leave it: native separators throughout. Written
+        // as a JSON escape (\\), which is how the real record in the wild spells it — a lone backslash is
+        // not valid JSON and would make this test pass for the wrong reason, by failing to parse at all.
+        var native = ModelRel.Replace("/", "\\\\");
+        File.WriteAllText(mod.Record,
+            "{\"Files\":[\"" + native + "\"],"
+          + "\"Hidden\":{\"" + native + "\":[\"1.0\"]},"
+          + "\"Versions\":{\"" + native + "\":" + HatCompatSolve.Version + "}}");
+
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, out var stale));
+        Assert.False(stale);
+
+        // And undo reaches it, restores the author's bytes exactly, and retires the record — which only
+        // happens if the Hidden and Versions removes matched the same key too.
+        var undo = HatCompatService.Revert(mod.Root, ModelRel);
+        Assert.True(undo.Ok);
+        Assert.Equal(original, mod.Model());
+        Assert.False(File.Exists(mod.Record));
+    }
+
+    /// <summary>
+    /// Undo reaches every file the record names, including a race variant that is not the one being worn.
+    /// <para/>
+    /// Hair mods ship ONE MODEL PER RACE, each behind its own game path. Scoping the FIT to the worn path
+    /// is right — each race is different geometry around a different skull — but undo used to inherit that
+    /// scope, so fitting as one race and then changing to another stranded the first patch where nothing
+    /// could name it.
+    /// </summary>
+    [Fact]
+    public void RevertReachesEveryFileTheRecordNamesWhateverIsWorn()
+    {
+        const string otherRel  = "hair/c0801h0001_hir.mdl";
+        const string otherPath = "chara/human/c0801/obj/hair/h0001/model/c0801h0001_hir.mdl";
+
+        using var mod = new Mod(Hair());
+        var original = mod.Model();
+
+        // A second race variant in the same mod, at its own game path.
+        var otherFile = Path.Combine(mod.Root, otherRel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(otherFile)!);
+        File.WriteAllBytes(otherFile, original);
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Bob\",\"Groups\":[],\"DefaultData\":{\"Files\":{"
+          + $"\"{GamePath}\":\"{ModelRel}\",\"{otherPath}\":\"{otherRel}\"" + "}}}");
+
+        var parts = ModelPartReader.Read(original)!;
+        Assert.True(HatCompatService.Apply(mod.Root, original, Proposal(original, parts),
+                                          [PartOf(parts, 1)]).Ok);
+        Assert.True(HatCompatService.Apply(
+            mod.Root, original,
+            new HatCompatService.Proposal(otherRel, parts, Proposal(original, parts).Solve, false),
+            [PartOf(parts, 1)]).Ok);
+
+        Assert.Equal(2, HatCompatService.PatchedCount(mod.Root));
+
+        // The fit stays scoped to the worn path — this is the behaviour being preserved, not a bug.
+        var siblings = HatCompatService.SiblingFiles(mod.Root, GamePath, ModelRel);
+        Assert.Equal([ModelRel], siblings);
+
+        // Undo of everything is not so scoped.
+        var undo = HatCompatService.Revert(mod.Root, only: null);
+        Assert.True(undo.Ok);
+        Assert.Equal(2, undo.FilesPatched);
+        Assert.Equal(original, mod.Model());
+        Assert.Equal(original, File.ReadAllBytes(otherFile));
+        Assert.False(File.Exists(mod.Record));
+    }
+
     /// <summary>Inspect on ordinary hair proposes a press, and names the file it was asked about.</summary>
     [Fact]
     public void InspectProposesAPressForOrdinaryHair()
     {
         var mdl = Hair();
-        var proposal = HatCompatService.Inspect(mdl, ModelRel, null);
+        var proposal = HatCompatService.Inspect(mdl, ModelRel, head: Hair());
         Assert.NotNull(proposal);
         Assert.False(proposal!.AlreadyCompatible);
+        Assert.False(proposal.Unmeasurable);
         Assert.Equal(ModelRel, proposal.Rel);
         Assert.NotNull(proposal.Parts);
+    }
+
+    /// <summary>
+    /// Without the wearer's head there is no hat line, and Proteus does nothing at all.
+    /// <para/>
+    /// The skull used to be guessed from the hair here. That guess measured the hairstyle's own extent,
+    /// tails included, so it put the centre 66 mm low and the radius at nearly double — and the cut plane
+    /// derived from it took the crown, the sides and the fringe. Refusing leaves a hat clipping through
+    /// hair, which is the smaller harm by a wide margin and the one the wearer can actually see.
+    /// </summary>
+    [Fact]
+    public void InspectRefusesWhenTheWearersHeadIsUnknown()
+    {
+        var mdl = Hair();
+        var proposal = HatCompatService.Inspect(mdl, ModelRel, head: null);
+
+        Assert.NotNull(proposal);
+        Assert.True(proposal!.Unmeasurable);
+        Assert.False(proposal.AlreadyCompatible);
+        Assert.Empty(proposal.Solve.Cut);
+        Assert.Empty(proposal.Solve.Moved);
+
+        // And it must refuse to write, not merely propose nothing — Apply is reachable from the panel's
+        // button and from the sibling loop without going back through Inspect's gate.
+        using var mod = new Mod(mdl);
+        var outcome = HatCompatService.Apply(mod.Root, mdl, proposal, []);
+        Assert.False(outcome.Ok);
+        Assert.Equal(mdl, mod.Model());
+        Assert.False(File.Exists(mod.Backup));
+        Assert.False(File.Exists(mod.Record));
     }
 }

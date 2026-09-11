@@ -103,6 +103,17 @@ public sealed class HatCompatWatcher : IDisposable
     private volatile View current = new();
     public View Current => current;
 
+    /// <summary>
+    /// How many files Proteus has patched in the worn hairstyle's mod — what the panel's undo-all is
+    /// offered for and labelled with.
+    /// <para/>
+    /// Beside <see cref="current"/> rather than inside it, because it is answered by a file read and the
+    /// panel must not do that once a frame. It can lag the view by an instant, which costs a button label
+    /// nothing.
+    /// </summary>
+    private volatile int patchedInMod;
+    public int PatchedInMod => patchedInMod;
+
     public HatCompatWatcher(CompositorService compositor, PenumbraBridge penumbra, Configuration config,
                             IPluginLog log)
     {
@@ -251,7 +262,9 @@ public sealed class HatCompatWatcher : IDisposable
         lastKey = key;
 
         var target = live != null ? compositor.HatCompatTargetFor(live) : compositor.HatCompatTarget();
-        if (target == null) { current = new View(); return; }
+        if (target == null) { patchedInMod = 0; current = new View(); return; }
+
+        patchedInMod = HatCompatService.PatchedCount(target.ModRoot);
 
         // Undo holds only until a different hairstyle is worn.
         if (undone != null && undone != Identity(target)) undone = null;
@@ -289,10 +302,26 @@ public sealed class HatCompatWatcher : IDisposable
             lastKey = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
         }
 
-        var proposal = HatCompatService.Inspect(target.Model, target.Rel, target.Head);
+        // The race code comes off the hair's own game path — chara/human/c0801/obj/hair/... — which is
+        // where ContentSlot already reads it from. It picks which baked hat profile the cut measures
+        // against, and every race's head is a different size and shape.
+        var raceCode = ContentSlot.Parse(target.GamePath)?.RaceCode;
+        var proposal = HatCompatService.Inspect(target.Model, target.Rel, target.Head, raceCode);
         if (proposal == null)
         {
             current = new View(target, Message: Strings.HatCompat.Unreadable, Failed: true, Busy: true);
+            return;
+        }
+
+        // Nothing to fit against, so say so and stop — ahead of the undo check, because this is a fact
+        // about the wearer rather than about this hairstyle and the user is entitled to it either way.
+        // Logged at Warning and naming the file: it is the one line separating "Proteus looked and decided
+        // the hair was fine" from "Proteus never found your head", and from outside those are one silence.
+        if (proposal.Unmeasurable)
+        {
+            log.Warning("hat compat: {0} left alone — the wearer's face model could not be read, so there "
+                      + "is no skull to measure a hat line against", target.Rel);
+            current = new View(target, proposal, Message: Strings.HatCompat.NoHead, Busy: true);
             return;
         }
 
@@ -353,17 +382,32 @@ public sealed class HatCompatWatcher : IDisposable
         log.Information("hat compat: head centre y={0:F4} r={1:F4} ({2}), hat line y={3:F4}, "
                       + "press fades out by y={4:F4}",
                         proposal.Solve.Centre.Y, proposal.Solve.Radius,
-                        target.Head != null ? "from the face model" : "GUESSED from the hair",
+                        // Always the face model now — a fit is refused outright without one, and the face
+                        // is read from the game's own data when no mod supplies one. Kept in the line
+                        // because it is the assertion that proves both, not because it can vary.
+                        "from the face model",
                         proposal.Solve.Centre.Y + HatCompatSolve.HatLine,
                         proposal.Solve.Centre.Y + HatCompatSolve.HatLine - HatCompatSolve.FanBelow);
+
+        if (proposal.TookOver)
+            log.Information("hat compat: {0} arrived with its own hat support that hides hair no hat "
+                          + "covers — replacing its atr_kam mask and leaving its shape alone", target.Rel);
 
         log.Information("hat compat: fitting {0} — pressing {1} vertices, cutting {2} piece(s){3}",
                         target.Rel, proposal.Solve.Considered, proposal.Solve.Cut.Count,
                         // Only when it happened. A shape that had to be cut short leaves hair standing
                         // exactly where the budget ran out, which looks identical to the press deciding that
                         // hair was fine — and telling those apart from a screenshot alone is impossible.
+                        // Which ceiling, and by how much. "Dropped" alone blamed the shape-value budget for
+                        // both limits, and they are not the same problem: the value count is spent across
+                        // the whole file, while the spare-vertex ceiling is per mesh and one dense mesh
+                        // reaches it with budget to spare. Printing what was wanted against what there was
+                        // says whether the shortfall is marginal or hopeless.
                         proposal.Solve.Dropped > 0
-                            ? $", {proposal.Solve.Dropped} left unpressed for want of shape budget"
+                            ? $", {proposal.Solve.Dropped} left unpressed "
+                            + $"({proposal.Solve.DroppedForValues} over the file's shape-value budget, "
+                            + $"{proposal.Solve.DroppedForSpares} over a mesh's spare-vertex ceiling; "
+                            + $"wanted {proposal.Solve.WantedValues} values of {proposal.Solve.Budget})"
                             : "");
         var outcome = HatCompatService.Apply(target.ModRoot, target.Model, proposal);
         if (!outcome.Ok)
@@ -383,14 +427,22 @@ public sealed class HatCompatWatcher : IDisposable
 
         // The same hairstyle again, from every other option that supplies it. Each gets its own solve —
         // a long version and a short one are different geometry and the tails are not in the same places.
+        var worn = HatCompatService.Rel(target.Rel);
         foreach (var rel in FilesFor(target))
         {
-            if (rel.Equals(target.Rel, StringComparison.OrdinalIgnoreCase)) continue;
+            // Both sides canonicalised, so the file just patched is recognised as itself. It used to be
+            // compared raw, and the mod manifest spells a path with backslashes where target.Rel has
+            // forward slashes — so the worn file came round again as its own sibling and was patched
+            // twice. Nothing went wrong only because the re-read below sees the shp_hib written a moment
+            // ago and Inspect bails; that is an accident, not a guard.
+            if (HatCompatService.Rel(rel).Equals(worn, StringComparison.OrdinalIgnoreCase)) continue;
             try
             {
                 var bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(
                     target.ModRoot, rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
-                if (HatCompatService.Inspect(bytes, rel, target.Head) is not { AlreadyCompatible: false } sib)
+                if (HatCompatService.Inspect(bytes, rel, target.Head,
+                        ContentSlot.Parse(target.GamePath)?.RaceCode)
+                    is not { AlreadyCompatible: false } sib)
                     continue;
                 var sibOutcome = HatCompatService.Apply(target.ModRoot, bytes, sib);
                 log.Information("hat compat: sibling {0} — {1}", rel,
@@ -402,6 +454,10 @@ public sealed class HatCompatWatcher : IDisposable
         // The file just changed underneath the key that was computed from it, so the next poll would see a
         // difference and examine all over again. Re-key here instead.
         lastKey = compositor.HatCompatKey();
+
+        // Re-counted here as well as in Examine: this path ends without re-examining, and the count is
+        // exactly what the write just changed.
+        patchedInMod = HatCompatService.PatchedCount(target.ModRoot);
 
         current = new View(target, null, Patched: true, Busy: current.Busy);
 
@@ -507,13 +563,50 @@ public sealed class HatCompatWatcher : IDisposable
     }
 
     /// <summary>
+    /// Undo every hat-compat edit Proteus has made ANYWHERE in this mod, not merely the ones serving the
+    /// hairstyle currently worn. Runs on a thread that already holds the busy flag.
+    /// <para/>
+    /// The record is the authority here, and that is the whole point. <see cref="FilesFor"/> asks which
+    /// files serve the WORN game path, and a hair mod ships one model per race — so fitting as a Miqo'te
+    /// and then changing to a Midlander left the Miqo'te patch named by nothing the panel could reach, and
+    /// therefore impossible to undo for good. <see cref="HatCompatService.Revert"/> has always taken
+    /// <c>only: null</c> to mean "everything in this mod"; nothing called it that way.
+    /// </summary>
+    /// <returns>False if nothing could be restored, with the reason already on <see cref="Current"/>.</returns>
+    private bool RevertWholeMod(HatCompatService.Target target)
+    {
+        var outcome = HatCompatService.Revert(target.ModRoot, only: null);
+        if (!outcome.Ok)
+        {
+            current = current with { Message = outcome.Message, Failed = outcome.Message.Length > 0 };
+            return false;
+        }
+
+        log.Information("hat compat: restored every patched file ({0}) in {1}",
+                        outcome.FilesPatched, target.ModRoot);
+        compositor.RedrawForChangedModel();
+        return true;
+    }
+
+    /// <summary>
     /// Put this hairstyle back the way its author shipped it.
     /// <para/>
     /// Undo only. There used to be a redo-with-the-new-settings twin of this, for a "hide ponytails" switch
     /// that no longer exists; a patch made stale by a newer Proteus is now redone by <see cref="Examine"/>
     /// on its own, which is the case that twin was really covering.
     /// </summary>
-    public void Revert()
+    public void Revert() => RunRevert(RevertFiles);
+
+    /// <summary>
+    /// Put every hairstyle in this mod back the way its author shipped it — including the race variants
+    /// the wearer is not currently wearing. See <see cref="RevertWholeMod"/>.
+    /// </summary>
+    public void RevertAll() => RunRevert(RevertWholeMod);
+
+    /// <summary>
+    /// The shared body of both undos: take the flag, restore off-thread, then look at what is left.
+    /// </summary>
+    private void RunRevert(Func<HatCompatService.Target, bool> restore)
     {
         var view = current;
         if (view.Target == null || view.Busy) return;
@@ -524,9 +617,9 @@ public sealed class HatCompatWatcher : IDisposable
         {
             try
             {
-                if (!RevertFiles(target)) return;
+                if (!restore(target)) return;
 
-                // Remember it, and remember it HERE rather than in RevertFiles — the automatic refit of a
+                // Remember it, and remember it HERE rather than in the restore — the automatic refit of a
                 // stale patch reverts too, and that one is a step on the way to writing a better patch, not
                 // a request to leave the hairstyle alone.
                 undone = Identity(target);
