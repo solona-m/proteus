@@ -1319,6 +1319,14 @@
     "message": "Proteus a déjà adapté cette coiffure aux chapeaux.",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "Cette coiffure est livrée avec une prise en charge des chapeaux, mais elle masque bien plus de cheveux qu'un chapeau n'en couvre — probablement héritée de la coiffure d'origine et jamais adaptée à celle-ci. Proteus peut la remesurer et la remplacer.",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "Seule la partie qui masque les cheveux est remplacée. La coiffure conserve\nson propre aplatissement ; au pire, un chapeau traversera les cheveux, au\nlieu que des cheveux disparaissent sans qu'un chapeau les couvre.\n\nAnnuler restaure exactement ce que la coiffure contenait.",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "Adapter",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "Annuler",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus n'a pas pu déterminer où se trouve votre tête et a donc laissé cette coiffure intacte. Il lit le visage de votre personnage pour savoir où se place un chapeau ; sans cela, la ligne du chapeau ne serait qu'une supposition.",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus n'a pas pu lire la tête de votre personnage, il n'a donc pas modifié cette coiffure.",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "Annuler les {0} coiffures de ce mod",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "Annuler restaure la coiffure que vous portez. Un mod de cheveux fournit\ngénéralement un modèle par race, donc une coiffure ajustée pour une autre race\nn'est pas celle que vous portez, et Annuler ne peut pas l'atteindre.\n\nCeci restaure toutes les coiffures que Proteus a modifiées dans ce mod.",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "La coiffure a été remise exactement telle que son auteur l'a créée.",

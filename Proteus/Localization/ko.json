@@ -1319,6 +1319,14 @@
     "message": "Proteus가 이 헤어스타일을 이미 모자에 맞게 바꿔 두었습니다.",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "이 헤어스타일에는 모자 지원이 포함되어 있지만, 모자가 덮는 범위보다 훨씬 많은 머리카락을 숨깁니다. 아마도 기반이 된 헤어스타일에서 그대로 이어받아 이 헤어스타일에 맞게 조정되지 않은 것입니다. Proteus가 다시 측정해 교체할 수 있습니다.",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "머리카락을 숨기는 부분만 교체합니다. 헤어스타일 자체의 눌림은 그대로\n유지되므로, 최악의 경우 모자가 머리카락을 관통할 뿐이며 모자가 덮지도\n않는 머리카락이 사라지지는 않습니다.\n\n되돌리기는 헤어스타일에 원래 들어 있던 것을 그대로 복원합니다.",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "맞추기",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "되돌리기",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus가 머리 위치를 파악할 수 없어 이 헤어스타일을 그대로 두었습니다. 모자가 어디에 놓이는지 알기 위해 캐릭터의 얼굴을 읽어야 하며, 그것이 없으면 모자 선은 추측이 됩니다.",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus가 캐릭터의 머리를 읽을 수 없어 이 헤어스타일을 변경하지 않았습니다.",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "이 모드의 헤어스타일 {0}개 모두 되돌리기",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "되돌리기는 지금 착용한 헤어스타일을 복원합니다. 헤어 모드는 보통 종족마다\n하나의 모델을 포함하므로, 다른 종족으로 맞춘 헤어스타일은 지금 착용한 것이\n아니어서 되돌리기로는 닿지 않습니다.\n\n이 기능은 Proteus가 이 모드에서 변경한 모든 헤어스타일을 복원합니다.",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "헤어스타일을 제작자가 만든 상태 그대로 되돌렸습니다.",

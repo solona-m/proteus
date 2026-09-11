@@ -1319,6 +1319,14 @@
     "message": "Proteus уже подогнал эту причёску под шляпы.",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "У этой причёски есть собственная поддержка шляп, но она скрывает гораздо больше волос, чем закрывает шляпа, — вероятно, унаследована от причёски-основы и никогда не подгонялась под эту. Proteus может измерить заново и заменить её.",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "Заменяется только то, что скрывает волосы. Собственное приглаживание\nпричёски остаётся, так что худшее — шляпа будет просвечивать через волосы,\nа не волосы исчезнут там, где шляпа их и не закрывает.\n\n«Отменить» вернёт ровно то, с чем причёска пришла.",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "Подогнать",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "Отменить",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus не смог определить, где находится ваша голова, и оставил эту причёску без изменений. Чтобы понять, где сидит шляпа, он читает лицо персонажа; без этого линия шляпы была бы догадкой.",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus не смог прочитать голову персонажа, поэтому не менял эту причёску.",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "Отменить все причёски этого мода ({0})",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "«Отменить» возвращает причёску, которая на вас сейчас. Мод на волосы обычно\nсодержит по одной модели на расу, поэтому причёска, подогнанная за другую\nрасу, — не та, что на вас, и «Отменить» до неё не дотянется.\n\nЭто вернёт все причёски, которые Proteus изменил в этом моде.",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "Причёска возвращена ровно к тому виду, в каком её создал автор.",

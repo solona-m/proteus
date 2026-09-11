@@ -121,6 +121,17 @@ public sealed class HatCompatStrings
     public readonly string AlreadyPatched = Loc.Localize("HatCompat.AlreadyPatched",
         "Proteus has already made this hairstyle fit under hats.");
 
+    public readonly string InheritedTag = Loc.Localize("HatCompat.InheritedTag",
+        "This hairstyle came with hat support, but it hides far more hair than a hat covers — most "
+      + "likely carried over from the hairstyle it was built from and never fitted to this one. Proteus "
+      + "can measure it again and replace it.");
+
+    public readonly string InheritedTagTip = Loc.Localize("HatCompat.InheritedTag.Tip",
+        "Only the part that hides hair is replaced. The hairstyle keeps its own\n" +
+        "flattening, so the worst this can do is leave a hat clipping through hair,\n" +
+        "instead of hair disappearing that no hat would have covered.\n\n" +
+        "Undo puts back exactly what the hairstyle came with.");
+
     public readonly string PressFmt = Loc.Localize("HatCompat.Press.Fmt",
         "{0} points of hair would be pressed against your head, by {1:F1} cm on average and {2:F1} cm at most.");
 
@@ -142,11 +153,24 @@ public sealed class HatCompatStrings
 
     public readonly string Undo = Loc.Localize("HatCompat.Undo.Btn", "Undo") + "###hatCompatUndo";
 
+    public readonly string UndoAllFmt = Loc.Localize("HatCompat.UndoAll.Fmt",
+        "Undo all {0} of this mod's hairstyles") + "###hatCompatUndoAll";
+
+    public readonly string UndoAllTip = Loc.Localize("HatCompat.UndoAll.Tip",
+        "Undo puts back the hairstyle you are wearing. A hair mod usually ships one\n" +
+        "model per race, so a hairstyle you fitted as another race is not the one you\n" +
+        "have on now, and Undo cannot reach it.\n\n" +
+        "This puts back every hairstyle Proteus has changed anywhere in this mod.");
+
     public readonly string Undone = Loc.Localize("HatCompat.Undone",
         "The hairstyle has been put back exactly as its author made it.");
 
     public readonly string Unreadable = Loc.Localize("HatCompat.Unreadable",
         "This hairstyle's model could not be read, so Proteus cannot change it.");
+
+    public readonly string NoHead = Loc.Localize("HatCompat.NoHead",
+        "Proteus could not work out where your head is, so it has left this hairstyle alone. It reads "
+      + "your character's face to know where a hat sits, and without that a hat line would be a guess.");
 }
 
 /// <summary>Strings shared by more than one screen.</summary>

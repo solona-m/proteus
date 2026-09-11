@@ -1319,6 +1319,14 @@
     "message": "Proteusはこの髪型を既に帽子対応にしています。",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "この髪型には帽子対応が付いていますが、帽子が隠す範囲よりもはるかに多くの髪を隠しています。おそらく元にした髪型から引き継がれたまま、この髪型に合わせて調整されていません。Proteus は再計測して置き換えられます。",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "髪を隠す部分だけを置き換えます。髪型自身の押しつぶしはそのまま残るため、\n最悪の場合でも帽子が髪を貫通するだけで、帽子が覆わない髪が消えることは\nありません。\n\n「元に戻す」で元の状態にそのまま戻ります。",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "対応させる",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "元に戻す",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus はあなたの頭の位置を特定できなかったため、この髪型には手を加えていません。帽子がどこに載るかを知るためにキャラクターの顔を読み取る必要があり、それがないと帽子のラインは推測になってしまいます。",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus はキャラクターの頭部を読み取れなかったため、この髪型を変更していません。",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "このModの髪型 {0} 件すべてを元に戻す",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "「元に戻す」は今着けている髪型を戻します。ヘアModは通常、種族ごとに\n1つのモデルを同梱するため、別の種族で調整した髪型は今の髪型とは別物で、\n「元に戻す」では届きません。\n\nこれはこのMod内でProteusが変更したすべての髪型を戻します。",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "髪型を作者が作成した状態にそのまま戻しました。",

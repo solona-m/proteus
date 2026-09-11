@@ -1319,6 +1319,14 @@
     "message": "Proteus 已经让这个发型适配了帽子。",
     "description": ""
   },
+  "HatCompat.InheritedTag": {
+    "message": "这个发型自带帽子适配，但它隐藏的头发远多于帽子实际遮住的部分——很可能是从它所基于的发型继承而来，从未针对这个发型调整过。Proteus 可以重新测量并替换它。",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "只替换隐藏头发的那部分。发型自身的压平效果会保留，因此最坏的结果只是\n帽子穿过头发，而不是本不该被遮住的头发消失。\n\n“撤销”会完整还原发型原本的内容。",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "让它适配",
     "description": ""
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "撤销",
     "description": ""
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus 无法确定你的头部位置，因此没有改动这个发型。它需要读取角色的面部来判断帽子的位置，否则帽檐线只能靠猜测。",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus 无法读取角色的头部，因此没有修改这个发型。",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "撤销此 Mod 的全部 {0} 个发型",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "“撤销”只会还原你当前戴着的发型。发型 Mod 通常为每个种族提供一个\n模型，因此你以其他种族适配过的发型并不是当前这个，“撤销”无法触及。\n\n此操作会还原 Proteus 在此 Mod 中修改过的所有发型。",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "发型已完全恢复为作者制作时的样子。",

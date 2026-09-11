@@ -1319,6 +1319,14 @@
     "message": "Proteus has already made this hairstyle fit under hats.",
     "description": "Status line in Settings > Hats, above the Undo button."
   },
+  "HatCompat.InheritedTag": {
+    "message": "This hairstyle came with hat support, but it hides far more hair than a hat covers — most likely carried over from the hairstyle it was built from and never fitted to this one. Proteus can measure it again and replace it.",
+    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.InheritedTag.Tip": {
+    "message": "Only the part that hides hair is replaced. The hairstyle keeps its own\nflattening, so the worst this can do is leave a hat clipping through hair,\ninstead of hair disappearing that no hat would have covered.\n\nUndo puts back exactly what the hairstyle came with.",
+    "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "HatCompat.Apply.Btn": {
     "message": "Make it fit",
     "description": "Button. Writes the change into the hair mod."
@@ -1350,6 +1358,22 @@
   "HatCompat.Undo.Btn": {
     "message": "Undo",
     "description": "Button. Restores the hair mod's original files."
+  },
+  "HatCompat.NoHead": {
+    "message": "Proteus could not work out where your head is, so it has left this hairstyle alone. It reads your character's face to know where a hat sits, and without that a hat line would be a guess.",
+    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.Apply.NoHead": {
+    "message": "Proteus could not read your character's head, so it has not changed this hairstyle.",
+    "description": "Failure message when applying hat compatibility without a readable head model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "HatCompat.UndoAll.Fmt": {
+    "message": "Undo all {0} of this mod's hairstyles",
+    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+  },
+  "HatCompat.UndoAll.Tip": {
+    "message": "Undo puts back the hairstyle you are wearing. A hair mod usually ships one\nmodel per race, so a hairstyle you fitted as another race is not the one you\nhave on now, and Undo cannot reach it.\n\nThis puts back every hairstyle Proteus has changed anywhere in this mod.",
+    "description": "Tooltip for the button above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "HatCompat.Undone": {
     "message": "The hairstyle has been put back exactly as its author made it.",

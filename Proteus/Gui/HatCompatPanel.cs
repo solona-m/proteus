@@ -42,6 +42,31 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         ImGui.Spacing();
 
         DrawState();
+        DrawUndoAll();
+    }
+
+    /// <summary>
+    /// The escape hatch for everything the per-hairstyle undo cannot see.
+    /// <para/>
+    /// Drawn outside <see cref="DrawState"/> on purpose, because the case it exists for is the one where
+    /// the hairstyle on screen is NOT the patched one: a hair mod ships one model per race, so fitting as
+    /// a Miqo'te and then changing to a Midlander leaves a patch that the worn hairstyle names nothing of.
+    /// Undo then reports success having restored the wrong file, or nothing at all.
+    /// <para/>
+    /// Hidden when the mod's only patched file is the one being worn, where the plain Undo above already
+    /// says the same thing in fewer words.
+    /// </summary>
+    private void DrawUndoAll()
+    {
+        var view = watcher.Current;
+        if (view.Target == null || view.Busy) return;
+        var count = watcher.PatchedInMod;
+        if (count == 0 || (count == 1 && view.Patched)) return;
+
+        var s = Strings.HatCompat;
+        ImGui.Spacing();
+        if (ImGui.Button(string.Format(s.UndoAllFmt, count))) watcher.RevertAll();
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.UndoAllTip);
     }
 
     private void DrawState()
@@ -76,10 +101,24 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         }
 
         if (view.Proposal is not { } proposal) { DrawMessage(view); return; }
+
+        // No Apply button on this branch, deliberately: there is no hat line to fit against, so the button
+        // would offer to do the one thing that cannot be done correctly.
+        if (proposal.Unmeasurable) { DrawMessage(view); return; }
+
         if (proposal.AlreadyCompatible)
         {
             ImGui.TextWrapped(s.AuthorDidIt);
             return;
+        }
+
+        // Said BEFORE the press numbers, because it changes what the button means: this is not "your hair
+        // has no hat support", it is "the support it came with is hiding the wrong hair".
+        if (proposal.TookOver)
+        {
+            ImGui.TextWrapped(s.InheritedTag);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.InheritedTagTip);
+            ImGui.Spacing();
         }
 
         var solve = proposal.Solve;
