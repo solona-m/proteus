@@ -306,7 +306,7 @@ public sealed class HatCompatWatcher : IDisposable
         // PluginEnabled as well as the setting: the events this also listens to reach it whether or not the
         // poll is running, so gating the poll alone would still let a Penumbra change trigger a write.
         if (mayApply && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
-            Write(target, proposal);
+            Write(target, proposal, automatic: true);
     }
 
     /// <summary>Which hairstyle this is, independent of anything an edit to it would change.</summary>
@@ -324,7 +324,10 @@ public sealed class HatCompatWatcher : IDisposable
         var proposal = view.Proposal;
         Task.Run(() =>
         {
-            try { Write(target, proposal); }
+            // automatic: false — the user pressed the button, so the "Proteus has done this to your hair"
+            // notice would be telling them something they just did. The panel they pressed it in already
+            // says where the backup goes and that it can be undone.
+            try { Write(target, proposal, automatic: false); }
             catch (Exception ex)
             {
                 log.Error(ex, "hat compat: applying to {0} failed", target.Rel);
@@ -338,7 +341,9 @@ public sealed class HatCompatWatcher : IDisposable
         });
     }
 
-    private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal)
+    /// <param name="automatic">The fit was Proteus's own idea rather than a button press, so it announces
+    /// itself in chat. See <see cref="Announce"/>.</param>
+    private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal, bool automatic)
     {
         // WHERE IT THINKS THE HEAD IS, every time. The hat line is an offset from that centre and every
         // other decision is measured from it, so a cut landing somewhere absurd is either a bad centre or
@@ -371,6 +376,10 @@ public sealed class HatCompatWatcher : IDisposable
             log.Warning("hat compat: {0} — {1} vertices could not be given a shape value at all; this hair is "
                       + "welded into meshes too large for the format to address", target.Rel,
                         outcome.Unaddressable);
+
+        // HERE, not before the apply: the notice reports something that happened, and a write that then
+        // failed would have announced an edit the mod folder never received.
+        if (automatic) Announce();
 
         // The same hairstyle again, from every other option that supplies it. Each gets its own solve —
         // a long version and a short one are different geometry and the tails are not in the same places.
@@ -411,6 +420,49 @@ public sealed class HatCompatWatcher : IDisposable
             log.Information("hat compat: asked Penumbra to reload {0} — {1}", modDir, ec);
         }
         compositor.RedrawForChangedModel();
+    }
+
+    /// <summary>
+    /// Say in chat that Proteus has fitted the hairstyle just put on — and where to undo it or switch the
+    /// feature off.
+    /// <para/>
+    /// The price of having the feature on by default. The fit is a silent edit to someone else's mod
+    /// folder, which the user did not ask for; saying so at the moment it happens is what separates that
+    /// from Proteus rummaging about behind their back. It also puts the two ways out in front of them,
+    /// which is the part a log line could never do.
+    /// <para/>
+    /// ONCE PER HAIRSTYLE, and that needs no bookkeeping of its own: a fit only reaches here when the
+    /// hairstyle was not already patched, and <see cref="HatCompatService.Apply"/> records the file before
+    /// reporting success — so wearing the same hairstyle again is silent, and only a refit by a newer
+    /// solver speaks again. Wearing a SECOND hairstyle is a second edit to a second file, and a line each
+    /// is the honest account of that. A once-ever flag was the wrong shape for precisely that reason: it
+    /// bought quiet by letting the tenth mod folder be edited as silently as if nothing had been said.
+    /// </summary>
+    private void Announce()
+    {
+        // Fire and forget onto the framework thread: this runs on a worker that has just spent a while
+        // reading and rewriting a model, and Dalamud's chat does not belong there.
+        //
+        // The catch goes INSIDE the lambda, not around the dispatch. RunOnFrameworkThread captures
+        // whatever the action throws into the task it returns, and that task is discarded here — so a
+        // catch out here would see only a failure to SCHEDULE, and a print that threw would disappear
+        // without a word in the log.
+        _ = Plugin.Framework.RunOnFrameworkThread(() =>
+        {
+            try
+            {
+                // The fit can finish just as the plugin is being torn down, and this is queued for a frame
+                // that may never come — by which time what it reaches for is gone.
+                if (disposed) return;
+                Plugin.ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
+                    .AddUiForeground(
+                        CheapLoc.Loc.Localize("Chat.HatCompat",
+                            "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or "
+                          + "turn the feature off, under /proteus > Settings > Hats."), 45)
+                    .Build());
+            }
+            catch (Exception ex) { log.Warning(ex, "hat compat: could not announce the fit in chat"); }
+        });
     }
 
     /// <summary>
