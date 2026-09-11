@@ -872,6 +872,16 @@ public class ContentPieceSelectionTests
         Assert.True(ContentGlowRow.Disarm(both, 2, subRowA: true));
         Assert.Null(both.Single().SubRowA);
         Assert.Equal("#00FF00", both.Single().SubRowB!.Diffuse);
+
+        // A weave is "anything else" too. IsBlank is what decides whether the cell is dropped, so a field it
+        // does not know about is a field switching an effect off silently deletes — the user's tile gone
+        // because they toggled an unrelated setting.
+        var woven = new List<ColorTableRowPreset>();
+        ContentGlowRow.Arm(woven, 3, subRowA: true);
+        woven.Single().SubRowA!.Tile = 11;
+        Assert.True(ContentGlowRow.Disarm(woven, 3, subRowA: true));
+        Assert.Equal(0f, woven.Single().SubRowA!.Emissive);
+        Assert.Equal(11, woven.Single().SubRowA!.Tile);
     }
 
     /// <summary>

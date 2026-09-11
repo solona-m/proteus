@@ -45,6 +45,7 @@ Liste tous les mods Penumbra qui contiennent un fichier Proteus. Cliquez sur un 
 | Act. | Active ou désactive la composition Proteus pour ce mod. |
 | Mod | Le nom affiché du mod. Cliquez dessus pour ouvrir le mod dans Penumbra. |
 | Prio | Priorité dans la pile de composition de Proteus. Les nombres les plus bas passent en premier (couche du bas). Glissez pour changer ; Ctrl-clic pour saisir une valeur. |
+| Préréglage | Le look enregistré que porte ce mod. Choisis-en un autre pour changer sans ouvrir l'éditeur de couleurs. Affiche — pour un mod sans préréglages. |
 | Couleurs | Ouvre l'éditeur de couleurs de ce mod. |
 | Skindent | Ombre d'occlusion ambiante et creux de normale sur les bords de sangle de ce mod. « Pack » suit ce que le mod a demandé ; Oui/Non le remplace. |
 
@@ -91,6 +92,10 @@ Les packs Atramentum Luminis cachent leur lueur dans le canal alpha d'une textur
 - Il n'y a ni filtre de race ni filtre de sexe, donc le mod peint n'importe quel personnage sur un corps utilisant le même matériau. Désactivez-le dans Penumbra pour les personnages auxquels il n'était pas destiné.
 - La lueur des yeux n'est pas importée pour l'instant, mais écrivez-moi si cela vous intéresse.
 
+
+**Préréglages (`.ptp`)** — un look que quelqu'un a partagé pour un mod que tu as déjà.
+
+Un préréglage n'est pas un mod, donc rien n'est installé : Proteus lit pour quel mod il a été fait, propose de l'ajouter à celui-là, et te le dit si tu ne l'as pas sous ce nom — tu choisis alors le bon mod toi-même. Il est enregistré, pas porté ; porte-le depuis la section Préréglages de ce mod dans Couleurs quand tu le veux.
 #### Exporter
 
 Enregistre un de vos mods Proteus en pack de mod Penumbra (`.pmp`) pour le partager. Choisissez le mod dans la liste, appuyez sur **Exporter**, et choisissez où le mettre — le nom de fichier est prérempli à partir du nom du mod, et la boîte de dialogue s'ouvre sur votre bureau la première fois, puis là où vous avez enregistré la dernière fois.
@@ -134,6 +139,23 @@ Trois boutons ici méritent d'être connus :
 - **Restaurer l'accessoire modifié** — force un redessin complet si une seconde peau reste coincée sur une bague ou un bracelet après une désactivation ou un échange.
 - **Vider le cache de textures** — à utiliser quand une modification de texture n'apparaît pas, par exemple après avoir réexporté un calque à la même taille.
 - **Textures d'effet lumineux** — ouvre le dossier dans lequel Proteus lit les cartes de défilement de lueur animée. Déposez-y des images et elles apparaîtront dans la liste Effet de chaque calque d'équipement. Survolez le bouton pour voir le chemin complet.
+
+### Préréglages
+
+Un **préréglage** est un look nommé pour **un seul mod** : les options cochées, toutes ses couleurs, et ses réglages de lueur et de calque. Les gros paquets — combinaisons, bas — embarquent une douzaine de groupes, et trouver une combinaison qui vaille le coup revient à cocher des cases jusqu'à ce que ça tombe juste. Un préréglage conserve cette combinaison.
+
+Les préréglages occupent une section repliable **Préréglages** en bas de l'éditeur de couleurs d'un mod, sous Avancé. **+ Enregistrer…** conserve l'aspect actuel du mod sous un nom ; la liste déroulante à côté choisit lequel est porté. Repliée, l'en-tête indique toujours celui que tu portes.
+
+- Les préréglages marqués `*` sont venus avec le mod. Ils sont en lecture seule : en modifier un t'en donne ta propre copie, si bien qu'une mise à jour du mod ne peut jamais écraser ce que tu as enregistré.
+- Un `●` à côté du préréglage porté signifie que tu as changé quelque chose depuis l'enregistrement. **Mettre à jour** intègre ces changements ; ignore-le et le préréglage reste tel quel.
+- **Aucun préréglage** rétablit les couleurs propres du mod. Tes options cochées ne bougent pas — retirer un look n'est pas une demande d'annuler tes propres réglages.
+- Essayer des préréglages ne coûte rien. Seules les options cochées sont écrites dans Penumbra ; les couleurs et les réglages de calque ne font que se superposer tant qu'un préréglage est porté, et les fichiers du mod ne sont jamais touchés.
+
+Partage-en un avec **Copier le code** (une chaîne à coller dans le chat) ou **Exporter…** (un fichier `.ptp`). En face, on utilise **Coller le code** ou **Importer…** ; un préréglage fait pour un autre mod le signale avant d'être ajouté.
+
+Appliquer un préréglage pendant qu'une liaison de design est active se prévisualise dans cette liaison, comme toute autre modification — appuie sur **Mettre à jour la liaison** pour la conserver. Appliquer un design Glamourer retire les préréglages portés, puisque le design apporte ses propres couleurs ; les préréglages eux-mêmes restent enregistrés.
+
+Si une mise à jour du mod renomme ou supprime une option, appliquer un ancien préréglage règle tout ce qui existe encore et te dit ce qu'il n'a pas pu faire.
 
 ### Éditeur de couleurs
 

@@ -756,6 +756,13 @@ public sealed class ModCreationService
             // otherwise — an ordinary face texture IS in the vanilla layout, and saying so would send its two
             // halves to the two sides of the head.
             SourceBodyType = faceSplit ? UVRemapService.FaceSplitSpace : null,
+            // And the tick IS the declaration of one-sidedness. AsymmetricArt is otherwise only ever set by
+            // hand in the colour panel, and CompositorService.NeedsUnmirroredShell bails on its very first
+            // line without it — so a doubled sheet written here got NO face shell, fell through to the skin
+            // path, and was simply resampled onto the face's own texture: a 2:1 sheet squeezed into a square
+            // layout, which lands the OUTER edge of the sheet on the midline of the face. Nobody would tick
+            // "this texture is split left/right" about art that has one side.
+            AsymmetricArt = faceSplit ? true : null,
             // Skin-tint suppression exists to keep FABRIC at its authored colour on any wearer. Art that is
             // itself the skin wants the opposite — the wearer's tone multiplied onto it, the way the face's
             // own material already does — so a whole skin ships with it off. Left null otherwise, which is

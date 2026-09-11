@@ -120,6 +120,414 @@ public class CompositorMathTests
         Assert.Equal(0,   baseTex[6]);
     }
 
+    // ── Blend modes: a print colours the fabric ───────────────────────────────
+    // The clip ("painted") is what this mod's own layers already put on the material. Every mode but
+    // Paint is multiplied through it, which is what makes a print colour a fishnet's threads and leave
+    // its holes as skin.
+
+    /// <summary>A print with nothing beneath it is invisible — the rule the whole feature rests on.</summary>
+    [Fact]
+    public void ApplyFlatOverlay_PrintWithNothingPaintedBeneath_LeavesBaseUnchanged()
+    {
+        var baseTex  = RGBA(100, 150, 200, 255);
+        var overlay  = RGBA(255, 0, 0, 255);          // fully opaque red print
+        var original = (byte[])baseTex.Clone();
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: null);
+
+        Assert.Equal(original, baseTex);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_WhiteMultiply_IsIdentity()
+    {
+        var baseTex  = RGBA(200, 120, 40, 255);
+        var overlay  = RGBA(255, 255, 255, 255);      // white multiplies to nothing
+        var original = (byte[])baseTex.Clone();
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(original, baseTex);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_Multiply_DarkensBase()
+    {
+        // 200/255 × 128/255 ≈ 0.394 → ≈100
+        var baseTex = RGBA(200, 200, 200, 255);
+        var overlay = RGBA(128, 128, 128, 255);
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [255]);
+
+        Assert.InRange(baseTex[0], 95, 105);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_Screen_LightensBase()
+    {
+        // 1 − (1 − 100/255)(1 − 128/255) ≈ 0.697 → ≈178
+        var baseTex = RGBA(100, 100, 100, 255);
+        var overlay = RGBA(128, 128, 128, 255);
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
+                                           1, 1, painted: [255]);
+
+        Assert.InRange(baseTex[0], 173, 183);
+    }
+
+    /// <summary>The neutral element of Screen, and the reason a dark print needs Multiply instead.</summary>
+    [Fact]
+    public void ApplyFlatOverlay_BlackScreen_IsIdentity()
+    {
+        var baseTex  = RGBA(200, 120, 40, 255);
+        var overlay  = RGBA(0, 0, 0, 255);
+        var original = (byte[])baseTex.Clone();
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(original, baseTex);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_Add_SaturatesAtWhite()
+    {
+        var baseTex = RGBA(200, 200, 200, 255);
+        var overlay = RGBA(200, 200, 200, 255);       // 0.784 + 0.784 clamps to 1
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Add),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(255, baseTex[0]);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_Replace_TakesTheOverlayColour()
+    {
+        var baseTex = RGBA(200, 200, 200, 255);
+        var overlay = RGBA(50, 60, 70, 255);
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Replace),
+                                           1, 1, painted: [255]);
+
+        Assert.InRange(baseTex[0], 48, 52);
+        Assert.InRange(baseTex[1], 58, 62);
+        Assert.InRange(baseTex[2], 68, 72);
+    }
+
+    /// <summary>
+    /// Half-painted lands between the base and the full result — the clip is the PRODUCT of the print's
+    /// alpha and the fabric's coverage, not the smaller of them. That is what fades a print out along a
+    /// fishnet's antialiased thread edges instead of stopping it at a hard line.
+    /// </summary>
+    [Fact]
+    public void ApplyFlatOverlay_HalfPainted_LandsBetweenBaseAndResult()
+    {
+        var baseTex = RGBA(200, 200, 200, 255);
+        var overlay = RGBA(0, 0, 0, 255);             // multiplying by black → 0 at full strength
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [128]);
+
+        Assert.InRange(baseTex[0], 95, 105);          // ≈100, halfway from 200 to 0
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_PrintRowColour_MultipliesIntoSource()
+    {
+        var baseTex = RGBA(255, 255, 255, 255);
+        var overlay = RGBA(255, 255, 255, 255);
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 0f, 0f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(255, baseTex[0]);
+        Assert.Equal(0,   baseTex[1]);
+        Assert.Equal(0,   baseTex[2]);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_ZeroPrintAlpha_LeavesBaseUnchanged()
+    {
+        var baseTex  = RGBA(100, 150, 200, 255);
+        var overlay  = RGBA(0, 0, 0, 0);
+        var original = (byte[])baseTex.Clone();
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(original, baseTex);
+    }
+
+    [Fact]
+    public void ApplyFlatOverlay_Print_DoesNotModifyDstAlpha()
+    {
+        var baseTex = RGBA(200, 200, 200, 77);
+        var overlay = RGBA(0, 0, 0, 255);
+
+        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                                           1, 1, painted: [255]);
+
+        Assert.Equal(77, baseTex[3]);
+    }
+
+    /// <summary>
+    /// A Paint row ignores the clip entirely. This is what guarantees that adding blend modes changed
+    /// nothing for every mod authored before they existed.
+    /// </summary>
+    [Fact]
+    public void ApplyIndexedOverlay_AllRowsPaint_IgnoresTheClip()
+    {
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = Row(1f, 0.5f, 0.25f), B = Row(0.2f, 0.4f, 0.6f) },
+        };
+        var idx = RGBA(255, 128, 0, 255);            // pair 15, halfway between A and B
+
+        var withoutClip = RGBA(200, 100, 50, 255);
+        var withClip    = RGBA(200, 100, 50, 255);
+        var overlay     = RGBA(180, 180, 180, 200);
+
+        CompositorService.ApplyIndexedOverlay(withoutClip, overlay, idx, rows, false, 1, 1, null);
+        CompositorService.ApplyIndexedOverlay(withClip,    overlay, idx, rows, false, 1, 1, [0]);
+
+        Assert.Equal(withoutClip, withClip);
+    }
+
+    /// <summary>
+    /// The reported case. A uniform (255,255) index resolves to pair 15 sub-row A — identically the row
+    /// the flat path uses — so the two must agree byte for byte.
+    /// </summary>
+    [Fact]
+    public void ApplyIndexedOverlay_UniformIndex_MatchesFlat()
+    {
+        var row16A = Row(1f, 0.5f, 0.25f, blend: RowBlend.Multiply);
+        var rows   = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = row16A, B = row16A },
+        };
+        var idx = RGBA(255, 255, 0, 255);
+
+        var viaIndexed = RGBA(200, 160, 120, 255);
+        var viaFlat    = RGBA(200, 160, 120, 255);
+        var overlay    = RGBA(128, 200, 64, 255);
+
+        CompositorService.ApplyIndexedOverlay(viaIndexed, overlay, idx, rows, false, 1, 1, [255]);
+        CompositorService.ApplyFlatOverlay(viaFlat, overlay, row16A, 1, 1, [255]);
+
+        Assert.Equal(viaFlat, viaIndexed);
+    }
+
+    /// <summary>
+    /// A blend mode cannot be interpolated, so each sub-row is resolved on its own and the RESULTS are
+    /// lerped. Half-way between a printing sub-row and a painting one must therefore land strictly between
+    /// the two — a hard seam at green 128 is exactly what picking the nearer sub-row would produce.
+    /// </summary>
+    [Fact]
+    public void ApplyIndexedOverlay_SubRowsWithDifferentModes_LerpTheResults()
+    {
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new()
+            {
+                // Black art. A multiplies it through a weak clip, so it only darkens a little; B paints it
+                // outright, so it goes to black. Two very different answers for the same texel.
+                A = Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                B = Row(1f, 1f, 1f),
+            },
+        };
+        var overlay = RGBA(0, 0, 0, 255);
+
+        var pureA = RGBA(200, 200, 200, 255);
+        var pureB = RGBA(200, 200, 200, 255);
+        var mixed = RGBA(200, 200, 200, 255);
+
+        CompositorService.ApplyIndexedOverlay(pureA, overlay, RGBA(255, 255, 0, 255), rows, false, 1, 1, [64]);
+        CompositorService.ApplyIndexedOverlay(pureB, overlay, RGBA(255, 0,   0, 255), rows, false, 1, 1, [64]);
+        CompositorService.ApplyIndexedOverlay(mixed, overlay, RGBA(255, 128, 0, 255), rows, false, 1, 1, [64]);
+
+        // A prints weakly (clip 64/255) and B paints outright, so the two differ; halfway must sit between.
+        Assert.True(pureA[0] > pureB[0], "a weak print should darken less than an opaque paint");
+        Assert.InRange(mixed[0], pureB[0], pureA[0]);
+    }
+
+    // ── Paint coverage ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void PaintCoverage_NoPrintRows_ReturnsTheInputUntouched()
+    {
+        var cov  = RGBA(10, 20, 30, 200);
+        var rows = new Dictionary<int, ColorTableRowOverride> { [15] = new() { A = Row(1f, 1f, 1f) } };
+
+        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1);
+
+        Assert.Same(cov, got);   // no allocation on the ordinary path
+    }
+
+    [Fact]
+    public void PaintCoverage_FlatPrint_IsAllZero()
+    {
+        var cov  = RGBA(10, 20, 30, 255);
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+
+        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1);
+
+        Assert.Equal(0, got[3]);
+    }
+
+    /// <summary>
+    /// An index cell nobody configured resolves to a default row, and a default row paints — so one
+    /// unconfigured cell is enough to keep the overlay a surface. The safe direction.
+    /// </summary>
+    [Fact]
+    public void AllRowsPrint_UnconfiguredIndexCell_IsNotAPrint()
+    {
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [3] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                          B = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+
+        Assert.False(CompositorService.AllRowsPrint(rows, hasIndex: true));
+    }
+
+    [Fact]
+    public void AllRowsPrint_FlatOverlayWithAPrintingRow16_IsAPrint()
+    {
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Screen) },
+        };
+
+        Assert.True(CompositorService.AllRowsPrint(rows, hasIndex: false));
+    }
+
+    /// <summary>
+    /// An indexed overlay whose `_id` failed to load cannot be routed, so guessing from row 16 would be a
+    /// claim about texels the index was supposed to place. Falling back to all-paint makes a broken index
+    /// degrade to "the print does not print" rather than to a print that bleaches skin tone.
+    /// </summary>
+    [Fact]
+    public void PaintCoverage_IndexDeclaredButMissing_FallsBackToAllPaint()
+    {
+        var cov  = RGBA(10, 20, 30, 255);
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+
+        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1, hasIndex: true);
+
+        Assert.Same(cov, got);
+    }
+
+    /// <summary>The same call without a declared index is a genuinely flat overlay, and row 16 does decide.</summary>
+    [Fact]
+    public void PaintCoverage_NoIndexDeclared_StillUsesRow16()
+    {
+        var cov  = RGBA(10, 20, 30, 255);
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+
+        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1, hasIndex: false);
+
+        Assert.Equal(0, got[3]);
+    }
+
+    /// <summary>The loop reads idx[i + 1], so a buffer that is not a whole number of texels must not
+    /// let the last iteration run off the end.</summary>
+    [Fact]
+    public void PaintCoverage_RaggedIndexBuffer_DoesNotOverrun()
+    {
+        var cov  = new byte[8];                       // two texels
+        var idx  = new byte[5];                       // one texel and a stray byte
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [0] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+
+        var ex = Record.Exception(() => CompositorService.PaintCoverage(cov, idx, rows, 2, 1));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void AnyCoverage_AllZeroAlpha_IsFalse()
+        => Assert.False(CompositorService.AnyCoverage(new byte[] { 9, 9, 9, 0, 9, 9, 9, 0 }));
+
+    [Fact]
+    public void AnyCoverage_OneCoveredTexel_IsTrue()
+        => Assert.True(CompositorService.AnyCoverage(new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }));
+
+    [Fact]
+    public void AnyCoverage_Null_IsFalse()
+        => Assert.False(CompositorService.AnyCoverage(null));
+
+    /// <summary>
+    /// Giving one row a blend mode must not move any OTHER row's output. The print path rounds where the
+    /// original truncates, so without a per-pair fast path a per-row edit would shift the whole table.
+    /// </summary>
+    [Fact]
+    public void ApplyIndexedOverlay_PaintPairInAPrintingTable_MatchesThePlainPath()
+    {
+        ColorTableRowOverride PaintPair() => new()
+        {
+            A = Row(1f, 0.53f, 0.27f),
+            B = Row(0.31f, 0.62f, 0.11f),
+        };
+
+        // Identical tables but for pair 3, which prints in one and paints in the other. Pair 15 — the one
+        // the index actually selects — is the same in both.
+        var printing = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = PaintPair(),
+            [3]  = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+                           B = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+        var plain = new Dictionary<int, ColorTableRowOverride>
+        {
+            [15] = PaintPair(),
+            [3]  = new() { A = Row(1f, 1f, 1f), B = Row(1f, 1f, 1f) },
+        };
+
+        var idx = RGBA(255, 137, 0, 255);            // pair 15, partway between A and B
+
+        var viaPrinting = RGBA(203, 101, 47, 255);
+        var viaPlain    = RGBA(203, 101, 47, 255);
+        var overlay     = RGBA(181, 77, 233, 199);
+
+        CompositorService.ApplyIndexedOverlay(viaPrinting, overlay, idx, printing, false, 1, 1, [255]);
+        CompositorService.ApplyIndexedOverlay(viaPlain,    overlay, idx, plain,    false, 1, 1, [255]);
+
+        Assert.Equal(viaPlain, viaPrinting);
+    }
+
+    [Fact]
+    public void UnionAlphaInto_MatchesTheNaiveLoop()
+    {
+        var rng  = new Random(20260905);
+        var acc  = new byte[257];
+        var rgba = new byte[257 * 4];
+        rng.NextBytes(acc);
+        rng.NextBytes(rgba);
+
+        var expected = (byte[])acc.Clone();
+        for (int i = 0; i < expected.Length; i++)
+            expected[i] = (byte)(expected[i] + (255 - expected[i]) * rgba[i * 4 + 3] / 255);
+
+        CompositorService.UnionAlphaInto(acc, rgba);
+
+        Assert.Equal(expected, acc);
+    }
+
     // ── AlphaComposite ────────────────────────────────────────────────────────
 
     [Fact]
@@ -824,6 +1232,152 @@ public class CompositorMathTests
         Assert.Equal(new byte[] { 200, 150, 100, 255 }, baseD);
     }
 
+    /// <summary>
+    /// A contact shadow needs contact. Where a bridged garment has lifted clear of the bust there is
+    /// nothing touching the skin, so the AO halo must be suppressed exactly as the indent's is.
+    /// <para/>
+    /// This pairs with <c>ApplyNormalIndent_LiftedOff_SuppressesTheIndent</c> deliberately: the two passes
+    /// describe the SAME contact, and gating only one of them is the bug this was written for — the indent
+    /// went quiet while the shadow stayed, leaving pale smudges on the skin under a garment that was no
+    /// longer against it.
+    /// </summary>
+    [Fact]
+    public void ApplyAmbientOcclusion_LiftedOff_SuppressesTheHalo()
+    {
+        int w = 3, h = 1;
+        var baseD = new byte[]
+        {
+            200, 200, 200, 255,
+            200, 200, 200, 255,
+            200, 200, 200, 255,
+        };
+        var strap   = new byte[] { 255, 0,   0 };
+        var blurred = new byte[] { 255, 200, 0 };
+        // p1 is in the halo AND fully lifted; p2 is in neither.
+        var lifted  = new byte[] { 0,   255, 0 };
+
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f,
+                                                coveredAbove: null, liftedOff: lifted);
+
+        Assert.Equal(200, baseD[4]);   // lifted clear: no contact, so no shadow
+
+        // ...and half-lifted shades half as much, so the suppression is a fade and not a switch — which is
+        // what lets the compositor feather it and get a gradient rather than a seam.
+        var half = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
+        CompositorService.ApplyAmbientOcclusion(half, strap, blurred, w, h, strength: 0.5f,
+                                                coveredAbove: null, liftedOff: new byte[] { 0, 128, 0 });
+        var none = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
+        CompositorService.ApplyAmbientOcclusion(none, strap, blurred, w, h, strength: 0.5f);
+        Assert.True(half[4] > none[4] && half[4] < 200,
+            $"half-lifted should shade between none ({none[4]}) and full (200), got {half[4]}");
+    }
+
+    /// <summary>
+    /// The separable maximum filter, against a brute-force max over the same window.
+    /// <para/>
+    /// Checked exhaustively rather than by a couple of cases because it is a block-decomposition algorithm
+    /// (van Herk): its whole risk is off-by-one indexing at block boundaries, which shows up for some
+    /// radii and positions and not others, and produces a mask that is merely a bit wrong rather than
+    /// obviously broken.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(8)]
+    public void MaxFilter_MatchesABruteForceWindow(int radius)
+    {
+        const int w = 23, h = 17;
+        var src = new byte[w * h];
+        var rng = new Random(1234 + radius);
+        for (int i = 0; i < src.Length; i++) src[i] = (byte)rng.Next(256);
+
+        var got = CompositorService.MaxFilter(src, w, h, radius);
+
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                byte want = 0;
+                for (int dy = -radius; dy <= radius; dy++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        int sx = Math.Clamp(x + dx, 0, w - 1), sy = Math.Clamp(y + dy, 0, h - 1);
+                        if (src[sy * w + sx] > want) want = src[sy * w + sx];
+                    }
+                // The clamped window may reach a little past the true one at the plane's edges, which can
+                // only raise the result — so the filter must never come out UNDER the brute-force answer.
+                Assert.True(got[y * w + x] >= want,
+                    $"r={radius} at ({x},{y}): {got[y * w + x]} < {want}");
+            }
+    }
+
+    [Fact]
+    public void MaxFilter_GrowsARegionByTheRadius()
+    {
+        // The property the caller actually depends on: a lifted spot suppresses everything within the
+        // shadow's own reach of it, so no halo cast by lifted cloth survives.
+        const int w = 41, h = 41, r = 6;
+        var src = new byte[w * h];
+        src[20 * w + 20] = 255;
+
+        var got = CompositorService.MaxFilter(src, w, h, r);
+
+        Assert.Equal(255, got[20 * w + 20]);
+        Assert.Equal(255, got[20 * w + (20 + r)]);       // exactly at the radius, still covered
+        Assert.Equal(255, got[(20 - r) * w + 20]);
+        Assert.Equal(0, got[20 * w + (20 + r + 1)]);     // one past it, untouched
+        Assert.Equal(0, got[(20 + r + 1) * w + 20]);
+    }
+
+    /// <summary>
+    /// End to end: a garment whose cloth has lifted must leave NO shadow anywhere, not a ring of it.
+    /// <para/>
+    /// The failure this pins is specific and was visible in game — the halo immediately beside the cloth
+    /// suppressed and its outer part left standing, so the skin showed a band of shadow with clean skin
+    /// between it and the garment casting it. It comes from growing the lift mask by less than the halo
+    /// actually reaches, which is <see cref="CompositorService.BlurCoveragePasses"/> box passes of the
+    /// radius, not one.
+    /// </summary>
+    [Fact]
+    public void LiftedCloth_LeavesNoRingOfShadow()
+    {
+        const int w = 96, h = 1, radius = 6;
+
+        // Cloth on the left half, skin on the right. The whole garment has lifted clear.
+        var strap = new byte[w * h];
+        for (int x = 0; x < 40; x++) strap[x] = 255;
+        var lift = new byte[w * h];
+        for (int x = 0; x < 40; x++) lift[x] = 255;
+
+        var blurred = CompositorService.BlurCoverage(strap, w, h, radius);
+        // Exactly what BustStandoff does: grow past the halo's reach by the feather's own bite, then
+        // feather. Growing by less leaves a ring — by 2r it is 12 texels of faint shadow standing off the
+        // cloth, which is what this was written against.
+        var grown = CompositorService.BlurCoverage(
+            CompositorService.MaxFilter(lift, w, h, radius * (CompositorService.BlurCoveragePasses + 1)),
+            w, h, radius, iterations: 1);
+
+        var baseD = new byte[w * h * 4];
+        for (int p = 0; p < w * h; p++) { baseD[p * 4] = baseD[p * 4 + 1] = baseD[p * 4 + 2] = 200; baseD[p * 4 + 3] = 255; }
+        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, 1f, null, grown);
+
+        // Nothing anywhere may be shaded: every texel the halo reaches is within the lifted cloth's reach.
+        int shaded = 0, worstX = -1, worst = 255;
+        for (int p = 0; p < w * h; p++)
+            if (baseD[p * 4] < 200) { shaded++; if (baseD[p * 4] < worst) { worst = baseD[p * 4]; worstX = p; } }
+        Assert.True(shaded == 0,
+            $"{shaded} texels still shaded under fully lifted cloth (darkest {worst} at x={worstX})");
+
+        // ...and the fixture is capable of showing shadow at all, so a pass that shades nothing for an
+        // unrelated reason cannot make this test vacuous.
+        var control = new byte[w * h * 4];
+        for (int p = 0; p < w * h; p++) { control[p * 4] = control[p * 4 + 1] = control[p * 4 + 2] = 200; control[p * 4 + 3] = 255; }
+        CompositorService.ApplyAmbientOcclusion(control, strap, blurred, w, h, 1f);
+        Assert.True(control.Where((_, i) => i % 4 == 0).Any(v => v < 200),
+            "the control shades nothing — this fixture proves nothing");
+    }
+
     // ── ApplyNormalIndent ───────────────────────────────────────────────────────
 
     [Fact]
@@ -853,6 +1407,43 @@ public class CompositorMathTests
         Assert.Equal(255, baseN[14]);
         Assert.Equal(128, baseN[9]);        // green untouched (single row → no vertical gradient)
         Assert.Equal(128, baseN[13]);
+    }
+
+    /// <summary>
+    /// The indent's half of the pair — see <c>ApplyAmbientOcclusion_LiftedOff_SuppressesTheHalo</c>. A
+    /// skindent is the mark cloth leaves where it bears on the body; lifted clear of the bust it bears on
+    /// nothing, and pressing a groove there draws the seam of a garment that is not touching.
+    /// </summary>
+    [Fact]
+    public void ApplyNormalIndent_LiftedOff_SuppressesTheIndent()
+    {
+        int w = 4, h = 1;
+        byte[] Fresh() => new byte[]
+        {
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+            128, 128, 255, 128,
+        };
+        var strap   = new byte[] { 255, 255, 0, 0 };
+        var blurred = new byte[] { 255, 192, 64, 0 };
+
+        var lifted = Fresh();
+        CompositorService.ApplyNormalIndent(lifted, blurred, strap, w, h, strength: 0.5f,
+            coveredAbove: null, radius: 6, inside: null,
+            liftedOff: new byte[] { 0, 0, 255, 255 });
+        Assert.Equal(128, lifted[8]);    // x2: lifted clear, so no groove
+        Assert.Equal(128, lifted[12]);   // x3: likewise
+
+        // Half-lifted leans half as far — a fade, not a switch, so the map can be feathered.
+        var partial = Fresh();
+        CompositorService.ApplyNormalIndent(partial, blurred, strap, w, h, strength: 0.5f,
+            coveredAbove: null, radius: 6, inside: null,
+            liftedOff: new byte[] { 0, 0, 128, 128 });
+        var full = Fresh();
+        CompositorService.ApplyNormalIndent(full, blurred, strap, w, h, strength: 0.5f);
+        Assert.True(partial[8] > full[8] && partial[8] < 128,
+            $"half-lifted should lean between full ({full[8]}) and none (128), got {partial[8]}");
     }
 
     [Fact]
@@ -889,8 +1480,10 @@ public class CompositorMathTests
     private static byte[] RGBA(byte r, byte g, byte b, byte a) => [r, g, b, a];
 
     private static ColorTableSubRow Row(
-        float r, float g, float b, float emissive = 0f, int opacity = 0) =>
-        new() { DiffuseR = r, DiffuseG = g, DiffuseB = b, Emissive = emissive, Opacity = opacity };
+        float r, float g, float b, float emissive = 0f, int opacity = 0,
+        RowBlend blend = RowBlend.Paint) =>
+        new() { DiffuseR = r, DiffuseG = g, DiffuseB = b, Emissive = emissive, Opacity = opacity,
+                Blend = blend };
 
     private static List<ColorTableRowPreset> Presets(int row, string? diffuseA = null, float emissiveA = 0f)
     {

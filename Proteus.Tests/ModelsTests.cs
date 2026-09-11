@@ -267,5 +267,48 @@ public class ModelsTests
         Assert.Equal(1f, sub.DiffuseB);
         Assert.Equal(0f, sub.Emissive);
         Assert.Equal(0,  sub.Opacity);
+        Assert.Equal(RowBlend.Paint, sub.Blend);
+    }
+
+    // ── Blend ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Every sidecar written before blend modes existed has to keep painting.</summary>
+    [Fact]
+    public void ColorTableSubRowPreset_MissingBlend_DefaultsToPaint()
+    {
+        var json = """{"Diffuse":"#FF0000","Opacity":50}""";
+        var sub  = JsonSerializer.Deserialize<ColorTableSubRowPreset>(json, CaseInsensitive);
+        Assert.NotNull(sub);
+        Assert.Equal(RowBlend.Paint, sub!.Blend);
+    }
+
+    /// <summary>Written as a NAME, not an ordinal — an int here would be unreadable and would break the
+    /// moment a mode is inserted.</summary>
+    [Fact]
+    public void ColorTableSubRowPreset_Blend_RoundTripsAsAString()
+    {
+        var sub  = new ColorTableSubRowPreset { Blend = RowBlend.Multiply };
+        var json = JsonSerializer.Serialize(sub);
+        Assert.Contains("\"Blend\":\"Multiply\"", json);
+
+        var loaded = JsonSerializer.Deserialize<ColorTableSubRowPreset>(json, CaseInsensitive);
+        Assert.Equal(RowBlend.Multiply, loaded!.Blend);
+    }
+
+    [Fact]
+    public void ColorTableSubRowPreset_Blend_IsCaseInsensitive()
+    {
+        var json = """{"blend":"screen"}""";
+        var sub  = JsonSerializer.Deserialize<ColorTableSubRowPreset>(json, CaseInsensitive);
+        Assert.Equal(RowBlend.Screen, sub!.Blend);
+    }
+
+    /// <summary>Clone is MemberwiseClone, which is what makes a new field carry across for free — and
+    /// that promise is only worth anything if something checks it.</summary>
+    [Fact]
+    public void ColorTableSubRowPreset_Clone_CarriesBlend()
+    {
+        var sub = new ColorTableSubRowPreset { Blend = RowBlend.Overlay };
+        Assert.Equal(RowBlend.Overlay, sub.Clone().Blend);
     }
 }

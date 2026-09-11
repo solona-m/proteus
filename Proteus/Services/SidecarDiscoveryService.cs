@@ -65,6 +65,82 @@ public record ResolvedContent(
     GearSettingsPreset? Glow = null
 );
 
+/// <summary>
+/// Whether Penumbra was asked which of a mod's options are on, and what came back. Three states rather
+/// than a bool because "we asked and Penumbra had nothing to say" and "we never needed to ask" are not
+/// the same fact, and only the first is a reason to distrust everything else in a
+/// <see cref="ResolutionDiagnostic"/>. A bool made the resolvers that short-circuit before the IPC hop —
+/// a flat overlay list, a pack with no groups — claim an answer they never went and got.
+/// </summary>
+public enum SettingsRead
+{
+    /// <summary>No IPC hop was needed: nothing about this mod depends on the selection.</summary>
+    NotAsked,
+    /// <summary>Penumbra answered.</summary>
+    Ok,
+    /// <summary>Penumbra was asked and did not answer — no collection, or the call failed. Nothing else
+    /// in the diagnostic can be trusted, because none of it could be determined.</summary>
+    Unavailable,
+}
+
+/// <summary>
+/// Why <see cref="SidecarDiscoveryService.ResolveActiveOverlays(OverlayEntry, out ResolutionDiagnostic)"/>
+/// or <see cref="SidecarDiscoveryService.ResolveActiveContent(OverlayEntry, out ResolutionDiagnostic)"/>
+/// resolved what it did. Every field here was already computed on the way to the answer and then thrown
+/// away, which is how a mod that resolves to NOTHING used to leave no trace at all: the resolvers return
+/// an empty list for four unrelated reasons and the caller could not tell them apart.
+/// <para/>
+/// One type for both halves of a pack. Overlays and content are selected the same way out of the same
+/// Penumbra groups, and a pack can ship both — so the caller <see cref="Merge"/>s the two and asks its
+/// questions once, rather than growing a second ladder that would have to agree with the first.
+/// <para/>
+/// Carried out rather than logged here on purpose. Whether an empty resolve matters depends on what the
+/// rest of the composite did — a mod with no overlays may still contribute masks or content — so only
+/// <see cref="CompositorService"/> can decide, and it needs the facts to say WHICH of the four it was.
+/// </summary>
+public readonly record struct ResolutionDiagnostic(
+    /// <summary>Whether the selection could be read at all. See <see cref="SettingsRead"/>.</summary>
+    SettingsRead Settings,
+    /// <summary>Groups in metadata.json that declare at least one option — the denominator the two lists
+    /// below are counted against.</summary>
+    int GroupCount,
+    /// <summary>Groups Penumbra knows about where the user has ticked nothing. The ordinary "you haven't
+    /// chosen anything yet" case.</summary>
+    IReadOnlyList<string> EmptyGroups,
+    /// <summary>Groups named in metadata.json that Penumbra's copy of the mod has no group for — renamed
+    /// or dropped when the pack was re-exported. Nothing in them can EVER be selected, so this one is an
+    /// authoring error rather than a user choice.</summary>
+    IReadOnlyList<string> MissingGroups,
+    /// <summary>The mod declares pieces or overlays that no option gates, so an empty result cannot be
+    /// the user's doing and "tick something" is never the advice.</summary>
+    bool Unconditional,
+    /// <summary>Every group name in Penumbra's own copy of the mod, as read from its meta.json on the way
+    /// to ordering the groups. Empty when the manifest was never read. Kept so a caller that needs to ask
+    /// whether some OTHER group exists — the convention-based "Masks" one, say — can answer it from a
+    /// parse that already happened instead of going back to disk.</summary>
+    IReadOnlyCollection<string> PenumbraGroups)
+{
+    /// <summary>The all-clear: what a resolve that had nothing to explain returns.</summary>
+    public static ResolutionDiagnostic None => new(SettingsRead.NotAsked, 0, [], [], false, []);
+
+    /// <summary>
+    /// The two halves of one pack as a single picture — overlays merged with content. Counts and lists
+    /// add; <see cref="Unconditional"/> is true if either half has ungated pieces; the worst
+    /// <see cref="Settings"/> wins, because one unreadable half makes the whole answer untrustworthy.
+    /// </summary>
+    public ResolutionDiagnostic Merge(ResolutionDiagnostic other) => new(
+        Settings  == SettingsRead.Unavailable || other.Settings == SettingsRead.Unavailable
+            ? SettingsRead.Unavailable
+            : Settings == SettingsRead.Ok || other.Settings == SettingsRead.Ok
+                ? SettingsRead.Ok
+                : SettingsRead.NotAsked,
+        GroupCount + other.GroupCount,
+        [.. EmptyGroups,   .. other.EmptyGroups],
+        [.. MissingGroups, .. other.MissingGroups],
+        Unconditional || other.Unconditional,
+        PenumbraGroups.Count > 0 ? PenumbraGroups : other.PenumbraGroups);
+}
+
 public class SidecarDiscoveryService
 {
     private readonly PenumbraBridge penumbra;
@@ -94,6 +170,34 @@ public class SidecarDiscoveryService
     /// update. Null until then, which <see cref="SeedDefaultEffects"/> treats as "nothing to seed yet".
     /// </summary>
     public string? DefaultEffectsDir { get; set; }
+
+    /// <summary>
+    /// Plugin assembly directory. Distinct from <see cref="DefaultEffectsDir"/>, which is the per-machine
+    /// cache the starter effects are downloaded into: this is where files that genuinely ride along with
+    /// the build live, and the only one of those is the authored toe caps under <c>Meshes</c>.
+    /// </summary>
+    public string? AssemblyDir { get; set; }
+
+    /// <summary>
+    /// Reserved option name inside the <see cref="MaskGroupName"/> group. <c>Masks/Toe Cap.png</c> is not
+    /// a transparency mask: it marks where the second-skin shell should web into one rounded cap instead
+    /// of following the body contour (the toes, so hosiery doesn't read as a toe sock). It therefore paints
+    /// nothing and carves no coverage — it is filtered out of every mask consumer here and routed to the
+    /// shell writer instead. Authored, selected and toggled exactly like any other mask.
+    /// </summary>
+    public const string ToeCapOptionName = "Toe Cap";
+
+    /// <summary>
+    /// Is this the reserved toe-cap option? Matched on letters and digits only, so "ToeCap", "Toe Cap",
+    /// "toe-cap" and "TOE_CAP" are all the same option. Getting this wrong is expensive — an unmatched
+    /// name silently falls through as an ordinary mask, which carves the garment away and paints a shell
+    /// in the mask colour — so the comparison is deliberately forgiving about how the author typed it.
+    /// </summary>
+    private static bool IsToeCapOption(string? option) =>
+        option != null && Squash(option) == Squash(ToeCapOptionName);
+
+    private static string Squash(string s) =>
+        new(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     public SidecarDiscoveryService(PenumbraBridge penumbra, IPluginLog log)
     {
@@ -163,13 +267,29 @@ public class SidecarDiscoveryService
     /// the top-level rows; falls back to top-level if the option has none.
     /// </summary>
     public List<ResolvedOverlay> ResolveActiveOverlays(OverlayEntry entry)
+        => ResolveActiveOverlays(entry, out _);
+
+    /// <summary>
+    /// <see cref="ResolveActiveOverlays(OverlayEntry)"/>, also reporting WHY it resolved what it did — see
+    /// <see cref="ResolutionDiagnostic"/>. Every fact in the diagnostic is a by-product of the walk below,
+    /// so this costs nothing the one-argument form did not already pay; the overload exists only so the
+    /// handful of callers that just want the overlays are not made to carry an <c>out</c> they ignore.
+    /// </summary>
+    public List<ResolvedOverlay> ResolveActiveOverlays(OverlayEntry entry, out ResolutionDiagnostic diag)
     {
         if (entry.Metadata.Overlays is { Count: > 0 })
+        {
+            diag = ResolutionDiagnostic.None with { Unconditional = true };
             return entry.Metadata.Overlays
                 .Select(d => new ResolvedOverlay(d, entry.Metadata.ColorTableRows, null, null))
                 .ToList();
+        }
 
-        if (entry.Metadata.OptionGroups == null) return [];
+        if (entry.Metadata.OptionGroups == null)
+        {
+            diag = ResolutionDiagnostic.None;
+            return [];
+        }
 
         var collId   = penumbra.GetPlayerCollectionId();
         var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
@@ -180,12 +300,26 @@ public class SidecarDiscoveryService
             entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
 
+        // The two halves of "resolved nothing". A group Penumbra HAS but nothing is ticked in is the
+        // user's doing and they can fix it; a group Penumbra has never heard of cannot be ticked at all
+        // and only the pack's author can fix it. Telling them apart is the whole point of the diagnostic.
+        var emptyGroups   = new List<string>();
+        var missingGroups = new List<string>();
+        int groupCount    = 0;
+
         var resolved = new List<ResolvedOverlay>();
         foreach (var group in entry.Metadata.OptionGroups)
         {
             if (group.Options.Count == 0) continue;
+            groupCount++;
 
-            int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
+            bool known = groupOrder.TryGetValue(group.PenumbraGroupName, out var n);
+            int order  = known ? n : int.MaxValue;
+
+            // Only meaningful when the group order was actually read: ReadGroupOrder returns empty both
+            // for a mod whose meta.json could not be read and for one with no groups, and calling every
+            // group "missing" because the file was locked would send the author after a phantom.
+            if (!known && groupOrder.Count > 0) missingGroups.Add(group.PenumbraGroupName);
 
             List<string>? selected = null;
             if (settings.HasValue)
@@ -198,7 +332,10 @@ public class SidecarDiscoveryService
                 active = group.Options.Where(o => selected.Any(s =>
                     string.Equals(o.Name, s, StringComparison.OrdinalIgnoreCase)));
             else
+            {
+                if (known || groupOrder.Count == 0) emptyGroups.Add(group.PenumbraGroupName);
                 continue;
+            }
 
             foreach (var opt in active)
             {
@@ -207,8 +344,47 @@ public class SidecarDiscoveryService
                     resolved.Add(new ResolvedOverlay(desc, rows, group.PenumbraGroupName, opt.Name, order));
             }
         }
+
+        if (missingGroups.Count > 0) AnnounceGroupMismatch(entry, missingGroups, groupOrder.Keys);
+
+        diag = new ResolutionDiagnostic(
+            settings.HasValue ? SettingsRead.Ok : SettingsRead.Unavailable,
+            groupCount, emptyGroups, missingGroups, false, groupOrder.Keys.ToList());
         return resolved;
     }
+
+    /// <summary>
+    /// Say once, per mod and group, that metadata.json names an option group Penumbra's copy of the mod
+    /// has not got. Nothing in such a group can ever be selected, so the pack is permanently short of
+    /// whatever lives there — and until now that was completely silent, because the resolver's answer for
+    /// "renamed on re-export" and for "you ticked nothing" was the same empty list.
+    /// <para/>
+    /// Announce-then-Debug, for the same reason <see cref="_toeCapAnnounced"/> is: this runs for every mod
+    /// on every composite, so an unguarded line would bury its own message in repetition.
+    /// </summary>
+    private void AnnounceGroupMismatch(OverlayEntry entry, List<string> missing, IEnumerable<string> penumbraGroups)
+    {
+        var have = string.Join(", ", penumbraGroups);
+        foreach (var group in missing)
+        {
+            if (_groupNameMismatch.TryAdd($"{entry.ModDirectory}\0{group}", 0))
+                log.Warning("[Proteus] {0}: its Proteus data names the option group \"{1}\", but Penumbra's "
+                          + "copy of this mod has no group by that name (it has [{2}]) — renamed or dropped "
+                          + "on re-export, so nothing in that group can ever be selected",
+                    entry.ModDirectory, group, have);
+            else
+                log.Debug("[Proteus] {0}: option group \"{1}\" is not in Penumbra's copy of this mod",
+                    entry.ModDirectory, group);
+        }
+    }
+
+    /// <summary>
+    /// Which (mod, group) pairs have already had their name mismatch announced at Warning this session.
+    /// Concurrent for the same reason <see cref="_toeCapAnnounced"/> is — composites resolve off the
+    /// framework thread and two can overlap.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _groupNameMismatch =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolve the geometry an imported content pack currently contributes: its unconditional
@@ -217,9 +393,34 @@ public class SidecarDiscoveryService
     /// which options are on, and Proteus only mirrors it.
     /// </summary>
     public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry)
+        => ResolveActiveContent(entry, out _);
+
+    /// <summary>
+    /// <see cref="ResolveActiveContent(OverlayEntry)"/>, also reporting WHY it resolved what it did — the
+    /// content-side twin of <see cref="ResolveActiveOverlays(OverlayEntry, out ResolutionDiagnostic)"/>,
+    /// filling the same <see cref="ResolutionDiagnostic"/> so a caller can merge the two.
+    /// <para/>
+    /// Without this an imported content pack was the one thing the "contributes nothing" explanation could
+    /// not explain: a geometry pack has no <see cref="ProteusMetadata.OptionGroups"/> at all, so the
+    /// overlay diagnostic described an empty pack that had nothing to say, and a freshly installed pack
+    /// with nothing ticked came out as the ladder's shrug rather than as the one-line answer it has.
+    /// </summary>
+    public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry, out ResolutionDiagnostic diag)
     {
         var meta = entry.Metadata;
-        if (!meta.HasContent) return [];
+        if (!meta.HasContent)
+        {
+            diag = ResolutionDiagnostic.None;
+            return [];
+        }
+
+        // Groups that could be selected in, and the two ways they end up contributing nothing. Counted
+        // from metadata rather than from the walk below, because that walk is skipped wholesale when the
+        // selection cannot be read — and a diagnostic that reported "no groups" there would say the pack
+        // was empty when the truth is that we never got to look.
+        int groupCount = meta.ContentGroups?.Count(g => g.Options.Count > 0) ?? 0;
+        var emptyGroups   = new List<string>();
+        var missingGroups = new List<string>();
 
         // Ask Penumbra only when there is something to ask about. A pack whose pieces are all unconditional
         // and ungated resolves without a single IPC hop, which is the same rule the sidecar pre-filter in
@@ -252,7 +453,20 @@ public class SidecarDiscoveryService
             if (Ungated(piece))
                 resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null, Glow: meta.ContentGlow));
 
-        if (meta.ContentGroups == null || !settings.HasValue) return resolved;
+        // How the read went, for both early returns below and for the full walk. Unconditional pieces are
+        // recorded whatever happens: a pack that ships ungated geometry can never be fixed by ticking
+        // something, so the ladder must never tell its wearer to go and tick something.
+        var settingsRead = !needsSettings ? SettingsRead.NotAsked
+                         : settings.HasValue ? SettingsRead.Ok
+                         : SettingsRead.Unavailable;
+        bool unconditional = meta.Content is { Count: > 0 };
+
+        if (meta.ContentGroups == null || !settings.HasValue)
+        {
+            diag = new ResolutionDiagnostic(
+                settingsRead, groupCount, emptyGroups, missingGroups, unconditional, []);
+            return resolved;
+        }
 
         var modRoot = entry.ModRoot;
         var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
@@ -261,10 +475,19 @@ public class SidecarDiscoveryService
         {
             if (group.Options.Count == 0) continue;
 
-            int order = groupOrder.TryGetValue(group.PenumbraGroupName, out var n) ? n : int.MaxValue;
+            bool known = groupOrder.TryGetValue(group.PenumbraGroupName, out var n);
+            int order  = known ? n : int.MaxValue;
+
+            // Same rule as the overlay resolver: a manifest that could not be read at all makes every
+            // group look renamed, which would send the author hunting a phantom.
+            if (!known && groupOrder.Count > 0) missingGroups.Add(group.PenumbraGroupName);
 
             var selected = Selection(group.PenumbraGroupName);
-            if (selected is not { Count: > 0 }) continue;
+            if (selected is not { Count: > 0 })
+            {
+                if (known || groupOrder.Count == 0) emptyGroups.Add(group.PenumbraGroupName);
+                continue;
+            }
 
             foreach (var opt in group.Options.Where(o => selected.Any(sel =>
                          string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
@@ -279,6 +502,11 @@ public class SidecarDiscoveryService
                             piece, rows, group.PenumbraGroupName, opt.Name, order, glow));
             }
         }
+
+        if (missingGroups.Count > 0) AnnounceGroupMismatch(entry, missingGroups, groupOrder.Keys);
+
+        diag = new ResolutionDiagnostic(
+            settingsRead, groupCount, emptyGroups, missingGroups, unconditional, groupOrder.Keys.ToList());
         return resolved;
     }
 
@@ -352,7 +580,7 @@ public class SidecarDiscoveryService
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var option in OrderByGroup(selected, order))
         {
-            if (string.IsNullOrWhiteSpace(option)) continue;
+            if (string.IsNullOrWhiteSpace(option) || IsToeCapOption(option)) continue;   // caps aren't masks
             var maskPath = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option));
             if (maskPath == null || !seen.Add(maskPath)) continue;
 
@@ -362,6 +590,104 @@ public class SidecarDiscoveryService
         }
         return result;
     }
+
+    /// <summary>
+    /// How the <see cref="MaskGroupName"/> group stands for this mod: whether the pack ships one at all,
+    /// and how many of its options are ticked (the reserved toe cap excluded, since it is not a mask).
+    /// <para/>
+    /// The two answers have to be separable. "This pack has no masks" is a fact about the pack; "you have
+    /// ticked none of its masks" is a fact about the user's Penumbra selection and is the single most
+    /// common reason a mask-shell pack renders nothing. <see cref="ResolveActiveMaskAssets"/> collapses
+    /// both to an empty list, which is right for its own job and useless for explaining a silent mod.
+    /// <para/>
+    /// <c>GroupPresent</c> is read from the mod's own meta.json rather than from Penumbra's settings,
+    /// because a group with nothing ticked need not appear in the settings dictionary at all — asking the
+    /// manifest cannot confuse "absent" with "empty".
+    /// </summary>
+    /// <param name="penumbraGroups">
+    /// The mod's group names if the caller already has them — <see cref="ResolutionDiagnostic.PenumbraGroups"/>
+    /// from a resolve earlier in the same composite. Supplying them answers <c>GroupPresent</c> outright and
+    /// skips a second parse of the very meta.json that produced them; null or empty falls back to reading it.
+    /// </param>
+    public (bool GroupPresent, int Selected) MaskSelectionState(
+        OverlayEntry entry, Guid collId, IReadOnlyCollection<string>? penumbraGroups = null)
+    {
+        bool present;
+        if (penumbraGroups is { Count: > 0 })
+        {
+            present = penumbraGroups.Contains(MaskGroupName, StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            var modRoot = Path.GetDirectoryName(
+                entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            present = modRoot != null && ReadMaskGroupOptionOrder(modRoot).Count > 0;
+        }
+
+        var settings = penumbra.GetModSettings(collId, entry.ModDirectory);
+        var selected = settings?.Options
+            .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+        int count = selected?.Count(o => !string.IsNullOrWhiteSpace(o) && !IsToeCapOption(o)) ?? 0;
+        return (present || count > 0, count);
+    }
+
+    /// <summary>
+    /// Path of this mod's toe-cap map when the reserved <see cref="ToeCapOptionName"/> option is selected
+    /// in the <see cref="MaskGroupName"/> group and its file exists — otherwise null. Resolves the file
+    /// under the option's own name, like every other mask, so the two never drift apart.
+    /// </summary>
+    public string? ResolveActiveToeCap(OverlayEntry entry)
+    {
+        var collId = penumbra.GetPlayerCollectionId();
+        return collId == null ? null : ResolveActiveToeCap(entry, collId.Value);
+    }
+
+    /// <summary>
+    /// <see cref="ResolveActiveToeCap(OverlayEntry)"/> against a collection id the caller already has.
+    /// A caller asking about every mod in the look would otherwise re-fetch the player's collection once
+    /// per mod, and the answer cannot change between two entries of the same composite.
+    /// </summary>
+    public string? ResolveActiveToeCap(OverlayEntry entry, Guid collId)
+    {
+        var settings = penumbra.GetModSettings(collId, entry.ModDirectory);
+        if (settings == null) return null;
+
+        var selected = settings.Value.Options
+            .FirstOrDefault(kv => string.Equals(kv.Key, MaskGroupName, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+        var option = selected?.FirstOrDefault(IsToeCapOption);
+        if (option == null) return null;   // not selected — the ordinary case, say nothing
+
+        var path = ResolveMaskAsset(Path.Combine(entry.SidecarRoot, MaskSubdir, option.Trim()));
+        if (path == null)
+            log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — no cap",
+                option, entry.SidecarRoot, MaskSubdir);
+        // Said out loud ONCE per mod and option, then dropped to Debug. The cap is the one option in this
+        // group that appears nowhere else — ResolveMaskPaths and ResolveActiveMaskAssets both strip it, so
+        // it is absent from the "masks=N [...]" lines and from the editor's mask list — and that silence is
+        // how a cap nobody selected went unnoticed while it promoted a whole look to cloth. But this method
+        // runs for every mod on every composite, so announcing it every time would turn the anomaly's own
+        // message into steady noise for the many people who ticked the cap deliberately. Announce, then be
+        // quiet; the Masks tab carries the same explanation for anyone who comes looking later.
+        else if (_toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0{option}", 0))
+            log.Information("[Proteus] toe cap \"{0}\" is selected in \"{1}\" — if you did not tick it, the "
+                          + "mod's option ORDER changed since the selection was saved (Penumbra stores it by "
+                          + "index); re-tick the group to re-sync it",
+                option, entry.ModDirectory);
+        else
+            log.Debug("[Proteus] toe cap \"{0}\" is selected in \"{1}\"", option, entry.ModDirectory);
+        return path;
+    }
+
+    /// <summary>
+    /// Which (mod, option) pairs have already had their toe cap announced at Information this session.
+    /// Concurrent because composites resolve this off the framework thread and two can overlap.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _toeCapAnnounced =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Pure mapping from selected mask-option names to existing <c>Masks/&lt;name&gt;.png</c> files
@@ -376,7 +702,7 @@ public class SidecarDiscoveryService
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var option in selectedOptions)
         {
-            if (string.IsNullOrWhiteSpace(option)) continue;
+            if (string.IsNullOrWhiteSpace(option) || IsToeCapOption(option)) continue;   // caps aren't masks
             var stem = Path.Combine(sidecarRoot, MaskSubdir, option);
             var path = ResolveMaskAsset(stem);
             if (path != null && seen.Add(path))

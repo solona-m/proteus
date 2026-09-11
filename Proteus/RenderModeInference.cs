@@ -62,11 +62,58 @@ public static class RenderModeInference
          || s.Metalness.GetValueOrDefault() > 0f
          || s.SphereMap.GetValueOrDefault() > 0
          || s.SphereIntensity.GetValueOrDefault() > 0f
+         // A weave lives in the colour table, and the skin layer has none: it BAKES textures through the
+         // compositor. Note "!= null" rather than the sphere's "> 0" — slice 0 is the game's own empty
+         // sphere but a REAL tile, so the sphere's idiom would make it unselectable in effect.
+         //
+         // TileScaleU/V are deliberately not here: a scale with no pattern to apply it to renders nothing.
+         || s.Tile != null
          || s.Emissive > 0f);
 
     /// <summary>Any Cloth feature (sphere/metal/specular/glow) is set across the option's rows.</summary>
     public static bool HasCloth(IEnumerable<ColorTableRowPreset> rows)
         => rows.Any(r => IsClothSub(r.SubRowA) || IsClothSub(r.SubRowB));
+
+    /// <summary>
+    /// Every sub-row the author configured here composites as a print, so the option carries colour and no
+    /// surface at all.
+    /// <para/>
+    /// Derived from the rows rather than taken as a parameter on purpose: <see cref="ShouldPromoteToGear"/>
+    /// already receives them, and the compositor and the editor must never be able to disagree about what
+    /// was composited.
+    /// </summary>
+    public static bool IsPrint(IEnumerable<ColorTableRowPreset> rows)
+    {
+        bool any = false;
+        foreach (var r in rows)
+        {
+            if (r.SubRowA is { } a) { if (a.Blend == RowBlend.Paint) return false; any = true; }
+            if (r.SubRowB is { } b) { if (b.Blend == RowBlend.Paint) return false; any = true; }
+        }
+        return any;
+    }
+
+    /// <summary>
+    /// Whether this mod asks for any pass that reshapes GEOMETRY — the feed for
+    /// <see cref="ShouldPromoteToGear"/>'s <c>geometryWanted</c>.
+    /// <para/>
+    /// ONE definition, because there were four copies of it spelled out inline (three in CompositorService,
+    /// one in StatusWindow) and every one of them listed three of the four features. <c>SmoothFold</c> was
+    /// added last and never reached any of them, so a mod that ticked only "Smooth between the legs" was
+    /// never promoted, never reached the second-skin phase, and the fold silently never ran — the exact
+    /// symptom this parameter exists to prevent.
+    /// <para/>
+    /// All four qualify on the same grounds: each moves vertices, and a skin layer has no vertices to move.
+    /// Two of them (<see cref="ProteusMetadata.SmoothNipples"/>, <see cref="ProteusMetadata.SmoothFold"/>)
+    /// relax the BODY rather than a shell, which does not exempt them — the body pass runs inside the
+    /// second-skin phase, so without a promoted layer there is no phase for it to run in.
+    /// </summary>
+    public static bool WantsGeometry(ProteusMetadata? md)
+        => md != null
+        && (md.BustBridge == true
+         || md.SmoothNipples == true
+         || md.CleftBridge == true
+         || md.SmoothFold == true);
 
     /// <summary>
     /// Whether a stored Skin overlay has to be composited as a gear shell instead. Two reasons, both
@@ -79,10 +126,24 @@ public static class RenderModeInference
     /// <item><paramref name="needsUnmirroredShell"/> — its art differs left from right and the body being
     /// worn is mirrored, so painting it into the skin would fold it in half. Only a shell has geometry of
     /// its own to send the two sides to two halves of the sheet.</item>
+    /// <item><paramref name="toeCapWanted"/> — a toe cap is selected somewhere in the look. The cap is
+    /// GEOMETRY: it rebuilds the toes as one rounded shape, and only a shell has geometry to rebuild.
+    /// Painted into the skin the option simply does nothing, which is what it looked like — a whole
+    /// composite with no second-skin phase at all, because every active overlay was a skin layer.</item>
+    /// <item><paramref name="geometryWanted"/> — this overlay's mod asks for one of the geometry passes
+    /// (see <see cref="WantsGeometry"/>), all of which are GEOMETRY, and for the same reason. Read off the
+    /// mod's sidecar rather than the option: each is one decision about the whole pack, and the ticks that
+    /// set them live in the mod-wide Geometry section.</item>
     /// </list>
-    /// A hand-pinned overlay is never promoted — the user's choice outranks the inference. <paramref
-    /// name="pinned"/> is passed in rather than read off the descriptor because a design binding can
-    /// override the pin, and the two callers learn that from different places.
+    /// A hand-pinned overlay is normally never promoted — the user's choice outranks the inference — and
+    /// <paramref name="geometryWanted"/> is the one thing that overrides the pin. Pinning an overlay to Skin
+    /// and then asking for a geometry pass is a contradiction rather than a preference: a skin layer is
+    /// painted into the body's textures and has no geometry to span or relax, so honouring the pin means
+    /// silently doing nothing at all. That is exactly how it presented — every flag set correctly, the mod
+    /// listed in the log as spanning, and no visible change anywhere.
+    /// <para/>
+    /// <paramref name="pinned"/> is passed in rather than read off the descriptor because a design binding
+    /// can override the pin, and the two callers learn that from different places.
     /// <para/>
     /// <paramref name="canShell"/> is the veto neither reason can override: it is false when the overlay
     /// paints something no shell can be cut from — gear, an accessory, a weapon, a mount — as opposed to the
@@ -97,11 +158,25 @@ public static class RenderModeInference
     /// </summary>
     public static bool ShouldPromoteToGear(OverlayLayer layer, bool pinned,
         IEnumerable<ColorTableRowPreset>? rows, bool aboveGear, bool canShell = true,
-        bool needsUnmirroredShell = false)
+        bool needsUnmirroredShell = false, bool toeCapWanted = false, bool geometryWanted = false)
         => layer == OverlayLayer.Skin
-        && !pinned
         && canShell
-        && (aboveGear || needsUnmirroredShell || HasCloth(rows ?? []));
+        // A print is never promoted: it has no coverage of its own to cut a shell from, and a shell would
+        // take it away from the very layers it exists to colour — they are composited into the skin, and it
+        // would no longer be there to reach them. It qualifies on every route otherwise, which is what makes
+        // this load-bearing rather than defensive: toeCapWanted promotes every shellable skin overlay in the
+        // look, so one toe cap would turn an opaque full-body print into a rainbow bodysuit.
+        //
+        // geometryWanted does NOT override this, unlike the pin. A pinned skin overlay that wants a chest
+        // pass is a contradiction and promoting it is what the author meant; a PRINT that wants one is a
+        // print, and giving it a shell of its own both invents a rainbow bodysuit and strips the colour
+        // from the layers it was there to tint. The chest pass still reaches the garment through whichever
+        // of the mod's layers is a real surface.
+        && !IsPrint(rows ?? [])
+        // The pin holds for every inferred route, and yields only to an explicit request for chest
+        // geometry — see the summary.
+        && (geometryWanted
+            || (!pinned && (aboveGear || needsUnmirroredShell || toeCapWanted || HasCloth(rows ?? []))));
 
     /// <summary>
     /// Which shader a PROMOTED overlay renders on. Beside <see cref="ShouldPromoteToGear"/> and for the same

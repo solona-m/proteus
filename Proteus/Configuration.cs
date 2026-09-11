@@ -56,7 +56,7 @@ public class Configuration : IPluginConfiguration
     /// brand-new config is stamped current and so never runs a migration written for settings it was
     /// never saved with.
     /// </summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -233,6 +233,41 @@ public class Configuration : IPluginConfiguration
     /// real glasses, or turning this off.
     /// </summary>
     public bool AutoInvisibleGlasses { get; set; } = true;
+
+    /// <summary>
+    /// When true, Proteus checks the hairstyle the player is actually wearing for hat compatibility and adds
+    /// it: <c>atr_kam</c> on the geometry above the hat line, which a hat hides outright, and a
+    /// <c>shp_hib</c> shape key pressing what remains against the skull on a fade that releases below.
+    /// Both are native to the game, so a patched hairstyle keeps working with Proteus turned off.
+    /// <para/>
+    /// ON BY DEFAULT. It was off at first because the edit is written INTO the hair mod's own files rather
+    /// than into a Proteus redirect, which means the automatic path modifies somebody else's mod folder
+    /// unattended — and that is not normally something to assume consent for. What makes it assumable here
+    /// is that the edit is reversible and says so: the author's files are copied to
+    /// <c>Proteus/hatcompat-backup/</c> before the first write, the change is undoable per hairstyle, and
+    /// each hairstyle it fits is reported in chat with both ways out (see
+    /// <c>HatCompatWatcher.Announce</c>). Left off, the overwhelmingly common outcome was a hat going
+    /// straight through modded hair and nobody knowing there was a setting for it.
+    /// <para/>
+    /// Writing into the mod is still the point of the design rather than an awkwardness of it: a patched
+    /// hairstyle keeps working with Proteus disabled, and travels with an export.
+    /// <para/>
+    /// Hairstyles whose author already shipped a hat shape are left alone entirely.
+    /// </summary>
+    public bool AutoHatCompat { get; set; } = true;
+
+    // There is deliberately no "the hat-compat notice has been shown" flag here. The chat line fires per
+    // HAIRSTYLE FITTED, which the patch record on disk already tracks exactly — see
+    // HatCompatWatcher.Announce. A once-ever flag was tried and is the wrong shape: it buys quiet by
+    // letting the tenth mod folder be edited as silently as if nothing had been said, and every edit after
+    // the first is the one the user has no way of learning about otherwise.
+
+    // HatCompatHidePonytails was removed. It tagged whole ponytails so the game dropped them under a hat,
+    // and it rested on telling a tail from a parting by geometry alone — a judgement wrong often enough that
+    // ticking the box could take most of a long hairstyle with it. What replaced it does not need the
+    // judgement: everything above the hat line is cut because a hat certainly hides it, and everything below
+    // is pressed on a fade that releases along each strand's own length. A key left in an old config file is
+    // ignored, which is the right outcome — there is nothing for it to turn on.
 
     // AutoEmperorRing was removed. It gated whether the reconcile would EQUIP an invisible carrier, but not
     // whether ChooseHosts would offer one as a host — so turning it off did not stop layers being assigned to
@@ -517,6 +552,19 @@ public class Configuration : IPluginConfiguration
         // Unconditional, not guarded on the old value being non-default: BOTH states are meaningful here,
         // and false -> true is exactly what a config that never touched the setting should get anyway.
         if (Version < 4) AutoRedraw = !DisableAutoRedraw;
+
+        // v4 -> v5: hat compatibility is on by default now, and existing configs have to be moved rather
+        // than left on the property default, which only a brand-new config ever sees. Everyone who had run
+        // the plugin before this would otherwise keep a hat going through their hair with no sign that
+        // anything had changed.
+        //
+        // Unconditional, because the stored false carries NO information: the setting shipped off, so
+        // "never touched it" and "tried it and turned it off" are the same byte on disk and there is
+        // nothing to tell them apart with. Someone in the second group is turned back on once, and the
+        // chat line that fires on the next fit tells them where to switch it off again — which is a worse
+        // outcome for them than for the many people in the first group who would never have found the
+        // setting at all. Anyone who had it ON is unaffected.
+        if (Version < 5) AutoHatCompat = true;
 
         Version = CurrentVersion;
     }
