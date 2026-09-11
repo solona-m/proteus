@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CheapLoc;
+using Proteus.Localization;
 
 namespace Proteus.Services;
 
@@ -70,6 +71,30 @@ internal sealed class MeshToggleItem
 
     /// <summary>Switch name → the IMC attribute letter it owns.</summary>
     [JsonPropertyName("Toggles")] public Dictionary<string, string> Toggles { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// True when <see cref="GroupName"/> names a group the MOD'S AUTHOR wrote and Proteus merged into,
+    /// rather than one Proteus created. Revert then takes our options back out and leaves it standing.
+    /// <para/>
+    /// Absent means "ours", and that is the entire migration story: no build that could adopt a group has
+    /// ever written this file, so every record already on disk describes a group Proteus made and must be
+    /// deleted whole — which is exactly what a missing field says. Nullable so
+    /// <see cref="MeshToggleService.WriteRecord"/>'s <c>WhenWritingNull</c> keeps it out of the ordinary
+    /// record entirely.
+    /// </summary>
+    [JsonPropertyName("AdoptedGroup")] public bool? AdoptedGroup { get; set; }
+
+    /// <summary>
+    /// The adopted group's <c>DefaultEntry</c> attribute mask as Proteus FIRST found it, so a revert can put
+    /// back the bits it cleared.
+    /// <para/>
+    /// Written once, on the write that adopted the group: a later write would record a mask our own bits had
+    /// already been cleared from, and reverting to that would leave them clear for good. Best effort rather
+    /// than exact — if the mod is edited between the write and the revert this restores what Proteus saw,
+    /// not what is on disk now. Harmless, because once the model is back from its backup no attribute name
+    /// uses the bit at all.
+    /// </summary>
+    [JsonPropertyName("AdoptedEntryMask")] public int? AdoptedEntryMask { get; set; }
 }
 
 /// <summary>
@@ -125,6 +150,12 @@ internal sealed class MeshToggleService
         if (toggles.Count == 0)
             return new Outcome(false, Loc.Localize("Parts.Write.Nothing", "No switches to write."), 0, []);
 
+        // Checked here as well as in the panel, because every write below this point goes through
+        // PenumbraModMeta, which throws on a pre-v4 folder — and a throw from the middle of Apply would
+        // land after models were already on disk. Answered up front, it is an ordinary refused Outcome.
+        if (PenumbraModMeta.IsLegacyFolder(modRoot))
+            return new Outcome(false, Strings.Parts.LegacyMod, 0, []);
+
         if (ContentSlot.Parse(model.GamePath) is not { } slot
             || ContentSlot.SetIdOf(slot.SetTag) is not { } setId)
             return new Outcome(false, string.Format(Loc.Localize("Parts.Write.NotAnItem.Fmt",
@@ -142,6 +173,14 @@ internal sealed class MeshToggleService
         var record = ReadRecord(modRoot) ?? new MeshToggleRecord();
         var item = record.Find(setId, equipSlot);
 
+        int variant = ImcEntrySource.VariantOf(siblings, slot.SetTag);
+
+        // The group these switches will live in. Proteus MERGES into a group the author already has for
+        // this item rather than writing a second one beside it — see WriteGroup for why outranking is not
+        // an option. `exceptGroup` is what stops a second write from finding the group the first one wrote
+        // and mistaking it for the author's.
+        var adopt = AdoptionTarget(modRoot, item, setId, equipSlot, variant);
+
         // A repeated name would overwrite the letter the first switch is remembered by, orphaning the
         // attribute it tagged: nothing would clear that bit any more, so its geometry would be stuck on
         // with no control over it at all.
@@ -150,6 +189,16 @@ internal sealed class MeshToggleService
             return new Outcome(false, string.Format(Loc.Localize("Parts.Write.DuplicateName.Fmt",
                 "This item already has a switch called \"{0}\". Give the new one a different name."),
                 dup.Key), 0, []);
+
+        // The same check against the AUTHOR'S option names, which is a different failure with the same
+        // shape. Merging drops every option whose name Proteus owns before appending its own, so a switch
+        // named after one of theirs would silently delete their option instead of adding ours beside it.
+        if (adopt is { } target
+            && AuthorOptionNames(target.Group, item) is var authorNames
+            && toggles.Select(t => t.Name).FirstOrDefault(authorNames.Contains) is { } taken)
+            return new Outcome(false, string.Format(Loc.Localize("Parts.Write.AuthorOptionName.Fmt",
+                "This mod's own \"{0}\" group already has an option called \"{1}\". Give the new switch a "
+              + "different name."), target.Name, taken), 0, []);
 
         // Two switches cannot both claim one submesh, because one of them takes it whole and the other only
         // part of it — and a submesh cannot be cut for the second while going as one piece for the first.
@@ -164,11 +213,22 @@ internal sealed class MeshToggleService
         // Two sources, and the second is not redundant. This model's own table normally carries every letter
         // an earlier write claimed, so reading it is usually enough — but only for the files that write
         // actually reached. A mod supplying one game path from two models whose triangle order differs has
-        // the second SKIPPED by SameShape, and adding a switch while that one is selected would find its
+        // the second SKIPPED by ClaimsLineUp, and adding a switch while that one is selected would find its
         // table empty and hand out a letter the item is already using. Both options would then carry the
         // same bit: ticking one would flip the other, and ticking both would XOR the bit back to nothing.
         var claimed = item?.Toggles.Values.Where(v => v.Length > 0).Select(v => v[0]).ToHashSet() ?? [];
         var free = ModelPartReader.FreeLetters(parts.AttributeNames).Where(c => !claimed.Contains(c)).ToList();
+
+        // Letters the author's own options already set are taken LAST. Their option masks are not rewritten
+        // — they are the author's — so an option whose mask happens to carry our bit would force our
+        // geometry on for as long as it is selected. A stable sort, so this only ever reorders the budget
+        // and never shrinks it: a letter they touch is still taken when nothing else is left.
+        if (adopt is { } pref)
+        {
+            ushort used = ImcEntrySource.BitsUsedByOptions(pref.Group);
+            free = free.OrderBy(c => (used >> (c - 'a')) & 1).ToList();
+        }
+
         if (free.Count < toggles.Count)
             return new Outcome(false, string.Format(Loc.Localize("Parts.Write.NoRoom.Fmt",
                 "This model has {0} switch slot(s) left and {1} were asked for."),
@@ -179,8 +239,13 @@ internal sealed class MeshToggleService
         // The item's entry as it stands. The mod's own IMC group wins over the game's file: if the author
         // already edits this entry, that edit is what the game sees, and rebuilding from vanilla would
         // silently revert it.
-        int variant = ImcEntrySource.VariantOf(siblings, slot.SetTag);
-        var entry = ImcEntrySource.FromMod(modRoot, setId, equipSlot)
+        //
+        // Taken from the adoption target directly when there is one, rather than through FromMod's own
+        // search. They agree — FromMod resolves the applied group the same way — but this is the entry
+        // about to be written BACK into that very group, so reading it from anywhere else would be one
+        // more chance for the two to drift.
+        var entry = (adopt is { } src ? ImcEntrySource.EntryOf(src.Group) : null)
+                 ?? ImcEntrySource.FromMod(modRoot, setId, equipSlot)
                  ?? ImcEntrySource.FromGame(readGameFile, model.GamePath, variant);
         if (entry is not { } baseEntry)
             return new Outcome(false, Loc.Localize("Parts.Write.NoImc",
@@ -204,12 +269,12 @@ internal sealed class MeshToggleService
             try { bytes = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
             catch { skipped.Add(rel); continue; }
 
-            // Only a file whose parts are laid out identically can take the same edit — the plan addresses
-            // meshes and submeshes by number, and a different model would take the tags on whatever geometry
-            // happened to sit at those numbers.
+            // Only a file that agrees about the geometry being CLAIMED can take the same edit — the plan
+            // addresses meshes and submeshes by number, and a different model would take the tags on
+            // whatever happened to sit at those numbers.
             var theirs = rel.Equals(model.File, StringComparison.OrdinalIgnoreCase)
                 ? parts : ModelPartReader.Read(bytes);
-            if (theirs == null || !SameShape(parts, theirs)) { skipped.Add(rel); continue; }
+            if (theirs == null || !ClaimsLineUp(theirs, toggles)) { skipped.Add(rel); continue; }
 
             try { patched[rel] = Apply(bytes, assigned, slotLetter); }
             catch (ModelAttributeWriter.ModelEditException ex)
@@ -248,7 +313,7 @@ internal sealed class MeshToggleService
 
             foreach (var (toggle, letter) in assigned) item.Toggles[toggle.Name] = letter.ToString();
 
-            WriteGroup(modRoot, item, baseEntry, variant);
+            WriteGroup(modRoot, item, baseEntry, variant, adopt);
             WriteRecord(modRoot, record);
         }
         catch (Exception ex)
@@ -258,6 +323,61 @@ internal sealed class MeshToggleService
         }
 
         return new Outcome(true, "", patched.Count, skipped, item.GroupName);
+    }
+
+    /// <summary>
+    /// The mod's own IMC group these switches should be merged into, or null when there is none to merge
+    /// into and Proteus should write its own.
+    /// <para/>
+    /// An item Proteus has already adopted a group for is looked up BY NAME, not by identity. That is
+    /// load-bearing: on a second write the item's <c>GroupName</c> IS the author's group, so the
+    /// exclude-my-own-group rule would hide it and Proteus would start writing a competing group again —
+    /// against the very group it merged into last time. A record that says "adopted" but whose group has
+    /// since gone (the user updated the mod under us) falls through to writing our own.
+    /// </summary>
+    /// <param name="variant">The variant this item is worn at, for the pinned-variant case below.</param>
+    private static PenumbraModMeta.GroupRef? AdoptionTarget(
+        string modRoot, MeshToggleItem? item, int setId, string equipSlot, int variant)
+    {
+        var found = item?.AdoptedGroup is true
+            ? ImcEntrySource.GroupNamed(modRoot, item.GroupName)
+            : ImcEntrySource.AppliedGroupFor(modRoot, setId, equipSlot, item?.GroupName);
+
+        if (found is not { } g) return null;
+
+        // A group pinned to ONE variant is not safe to adopt. Ours is AllVariants, so it collides with the
+        // author's on this set and slot whatever variant they named — which is why the identity match
+        // ignores Variant. The reverse is not symmetric: putting our switches inside a group scoped to a
+        // variant the item is not worn at means the geometry is tagged with a bit nothing ever sets, and a
+        // submesh whose attribute is never enabled does not draw. The part would simply be gone.
+        //
+        // Writing our own group instead is the lesser harm: its damage is confined to an entry this item
+        // is not worn at, where theirs is the one actually in effect.
+        bool allVariants = !g.Group.TryGetProperty("AllVariants", out var av)
+                        || av.ValueKind != JsonValueKind.False;
+        if (!allVariants
+            && g.Group.TryGetProperty("Identifier", out var id) && id.ValueKind == JsonValueKind.Object
+            && id.TryGetProperty("Variant", out var v) && v.TryGetInt32(out var pinned)
+            && pinned != variant)
+            return null;
+
+        return g;
+    }
+
+    /// <summary>
+    /// The option names in an adopted group that belong to its AUTHOR — everything Proteus does not already
+    /// own. Merging drops our own names before appending, so these are the ones a new switch must not be
+    /// named after: colliding with one would delete it rather than add beside it.
+    /// </summary>
+    private static HashSet<string> AuthorOptionNames(JsonElement group, MeshToggleItem? item)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (group.TryGetProperty("Options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+            foreach (var o in opts.EnumerateArray())
+                if (o.TryGetProperty("Name", out var n) && n.GetString() is { Length: > 0 } name)
+                    names.Add(name);
+        if (item != null) names.ExceptWith(item.Toggles.Keys);
+        return names;
     }
 
     /// <summary>
@@ -367,31 +487,58 @@ internal sealed class MeshToggleService
     }
 
     /// <summary>
-    /// Whether two models can take the same edit: the same parts, in the same order, addressing the same
-    /// triangles.
+    /// Whether <paramref name="sibling"/> can take the same edit: every part the switches CLAIM is the same
+    /// piece of geometry there, addressed the same way.
     /// <para/>
-    /// The ORDINALS are compared, not merely the counts, and that is the whole point of the check. A plan
-    /// names triangles by their position in a submesh's index range, so two size variants of a garment that
-    /// happen to agree on every count but order their triangles differently would take the tag on the wrong
-    /// geometry — the switch would hide a sleeve on one size and a hem on another. Vertex positions are
-    /// deliberately NOT compared: two sizes SHOULD differ there, and that difference moves nothing.
+    /// Only the claimed parts, and that matters more than it sounds. This used to compare the models WHOLE —
+    /// same part count, same everything, in the same order — which threw away perfectly good siblings over
+    /// geometry nobody was tagging. A real mod made the cost concrete: four sizes of one pair of trousers,
+    /// the belt identical in all four (mesh 2, submesh 2, 5,016 triangles), but one size built on a
+    /// different body mesh. The belt switch reached three sizes and silently did nothing on the fourth.
     /// <para/>
-    /// The attribute masks are compared too, for a reason the reference model never needs: a submesh the
-    /// author already tagged is kept out of the picker by <see cref="ModelPart.Toggleable"/>, but a SIBLING
-    /// file gets no such filter. Without this, a mod supplying one game path from two files — one of which
-    /// already tags a submesh — would have our bit OR'd onto it, leaving a submesh carrying two attributes,
-    /// which is exactly the multi-bit case this design refuses to make assumptions about.
+    /// Per claimed part the test is no weaker than it was, and the material makes it stronger:
+    /// <list type="bullet">
+    /// <item>The ORDINALS are compared, not merely the counts. A plan names triangles by their position in a
+    /// submesh's index range, so two sizes that agree on every count but order their triangles differently
+    /// would take the tag on the wrong geometry — hiding a sleeve on one size and a hem on another. Vertex
+    /// positions are deliberately NOT compared: two sizes SHOULD differ there, and that difference moves
+    /// nothing.</item>
+    /// <item>The MATERIAL is compared, which is the cheap guard against the coincidence this narrowing
+    /// makes newly possible — two unrelated pieces that happen to share a submesh number and a triangle
+    /// count. A garment's pieces are separated by material far more reliably than by index.</item>
+    /// <item>The ATTRIBUTE MASK is compared, and not because a second attribute is refused — stacking is the
+    /// point, see <see cref="ModelPart.AuthorSwitched"/>. It is that the two files would MEAN different
+    /// things: our bit is OR'd onto whatever is already there, so if the sibling's submesh sits behind
+    /// <c>atr_tv_j</c> and the reference's does not, the identical edit produces a switch that reads "…and
+    /// the author's unrelated switch is also on" in one file and not the other.</item>
+    /// </list>
+    /// An island claim is looked up by its island number too, so a submesh that splits differently in the
+    /// sibling is refused rather than guessed at.
     /// </summary>
-    private static bool SameShape(ModelParts a, ModelParts b)
-        => a.Parts.Count == b.Parts.Count
-        && a.Parts.Zip(b.Parts).All(p =>
-               p.First.Mesh == p.Second.Mesh
-            && p.First.Submesh == p.Second.Submesh
-            && p.First.Island == p.Second.Island
-            && p.First.AttributeMask == p.Second.AttributeMask
-            && p.First.Ordinals.AsSpan().SequenceEqual(p.Second.Ordinals));
+    private static bool ClaimsLineUp(ModelParts sibling, IReadOnlyList<Plan> toggles)
+    {
+        foreach (var claim in toggles.SelectMany(t => t.Parts))
+        {
+            var theirs = sibling.Parts.FirstOrDefault(
+                p => p.Mesh == claim.Mesh && p.Submesh == claim.Submesh && p.Island == claim.Island);
 
-    private static void WriteGroup(string modRoot, MeshToggleItem item, ImcEntry baseEntry, int variant)
+            if (theirs == null
+                || theirs.AttributeMask != claim.AttributeMask
+                || !string.Equals(theirs.Material, claim.Material, StringComparison.OrdinalIgnoreCase)
+                || !theirs.Ordinals.AsSpan().SequenceEqual(claim.Ordinals))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Put the item's switches into a Penumbra IMC group — the author's own where there is one, otherwise a
+    /// group of Proteus's own making.
+    /// </summary>
+    /// <param name="adopt">The author's group to merge into, or null. See <see cref="AdoptionTarget"/>.</param>
+    private static void WriteGroup(
+        string modRoot, MeshToggleItem item, ImcEntry baseEntry, int variant,
+        PenumbraModMeta.GroupRef? adopt)
     {
         ushort ours = 0;
         var options = new List<(string Name, ushort Mask)>();
@@ -407,6 +554,43 @@ internal sealed class MeshToggleService
         // name uses changes nothing about the item.
         var entry = baseEntry with { AttributeMask = (ushort)(baseEntry.AttributeMask & ~ours & 0x3FF) };
 
+        // ── the author already has a group for this item: merge into it ──────
+        //
+        // Two IMC groups for one identifier are not merged by Penumbra — it collects manipulations with
+        // `Groups.Index().Reverse().OrderByDescending(Priority)` and each calls MetaDictionary.TryAdd, so
+        // the FIRST group reached wins and every later one is discarded outright.
+        //
+        // Proteus used to answer that by outranking the author, which is only half a solution: it stops OUR
+        // switches from being the ones thrown away, and throws away theirs instead. Their options stay
+        // listed in the mod's settings and stop doing anything, and every bit they drove freezes at whatever
+        // our default entry says — so a skirt the author gated off by default is hidden for good, taking
+        // the bow we just cut out of it with it, while a skirt gated on is stuck on with a dead checkbox.
+        // The only outcome that is not broken for somebody is to put our switches in their group.
+        if (adopt is { } target)
+        {
+            item.AdoptedEntryMask ??= baseEntry.AttributeMask;
+            var previous = item.AdoptedGroup is true ? null : item.GroupName;
+
+            PenumbraModMeta.MergeImcGroup(
+                modRoot, target, options, item.Toggles.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                entry.AttributeMask, baseEntry);
+
+            item.GroupName = target.Name;
+            item.AdoptedGroup = true;
+
+            // A group Proteus wrote on an earlier build, for this same item, is now redundant — and worse
+            // than redundant: it is the thing that was killing the author's group. Removing it is the
+            // migration for a mod the outranking build already edited. The switches move under the
+            // author's group name, which Outcome.GroupName reports back to the user.
+            if (previous is { Length: > 0 }
+                && !string.Equals(previous, target.Name, StringComparison.OrdinalIgnoreCase)
+                && ImcEntrySource.GroupNamed(modRoot, previous) != null)
+                PenumbraModMeta.DeleteGroup(modRoot, previous);
+            return;
+        }
+
+        // ── nothing to merge into: our own group ─────────────────────────────
+
         // Every option ticked, so adding switches to a mod changes nothing until one is unticked.
         ulong allOn = options.Count >= 64 ? ulong.MaxValue : (1UL << options.Count) - 1;
 
@@ -414,13 +598,10 @@ internal sealed class MeshToggleService
             item.Slot is "Ears" or "Neck" or "Wrists" or "RFinger" or "LFinger" ? "Accessory" : "Equipment",
             item.SetId, variant, item.Slot);
 
-        // Above any IMC group the mod already has for this same item, because two of them are not merged:
-        // Penumbra collects manipulations with `Groups.Index().Reverse().OrderByDescending(Priority)` and
-        // each group calls MetaDictionary.TryAdd, so for one identifier the FIRST group reached wins and
-        // every later one is discarded outright. Sitting at priority 0 under an author's own IMC edit meant
-        // our group was never applied at all — the switches would be listed in the mod's settings and do
-        // nothing. Reversal already puts a later group first when priorities tie, so this only has to break
-        // the ties it cannot win.
+        // Still above any IMC group the mod has for this item, for the discard reason above. Reaching here
+        // means there was nothing to adopt — no group matched, or the only one is pinned to a variant this
+        // item is not worn at, where ours has to win the entry it does reach. Reversal already puts a later
+        // group first when priorities tie, so this only has to break the ties it cannot win.
         int priority = ImcEntrySource.MaxPriorityFor(modRoot, item.SetId, item.Slot, item.GroupName) + 1;
 
         // Last in the group array, which — through that same Reverse — is where a manipulation wants to be.
@@ -438,6 +619,13 @@ internal sealed class MeshToggleService
     /// and the record with them: deleting each backup as its model was restored meant that a throw from the
     /// group removal — a locked <c>meta.json</c> is enough — left the record naming backups that no longer
     /// existed, so a second attempt could only report them as missing.
+    /// <para/>
+    /// A group Proteus CREATED is deleted whole. A group it merged into belongs to the mod's author, so
+    /// only our options come back out of it — their options keep their default settings, with the bits
+    /// shifted back down as the options ahead of them go, and the <c>DefaultEntry</c> mask we cleared is
+    /// restored from <see cref="MeshToggleItem.AdoptedEntryMask"/>. An adopted group that is no longer
+    /// there at all is not an error, for the same reason <c>DeleteGroup</c> tolerates a missing name: the
+    /// point is to end up without our switches in it.
     /// </summary>
     public static Outcome Revert(string modRoot)
     {
@@ -462,7 +650,21 @@ internal sealed class MeshToggleService
 
         try
         {
-            foreach (var i in record.Items) PenumbraModMeta.DeleteGroup(modRoot, i.GroupName);
+            foreach (var i in record.Items)
+            {
+                if (i.AdoptedGroup is true && ImcEntrySource.GroupNamed(modRoot, i.GroupName) is { } theirs)
+                {
+                    // Merging with nothing of our own to add is the removal: the same option-and-bit
+                    // arithmetic, run in the other direction. False means every option in the group was
+                    // ours after all, which leaves the author with an empty group — delete it instead.
+                    if (!PenumbraModMeta.MergeImcGroup(
+                            modRoot, theirs, [], i.Toggles.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                            i.AdoptedEntryMask is { } m ? (ushort)(m & 0x3FF) : null, default))
+                        PenumbraModMeta.DeleteGroup(modRoot, i.GroupName);
+                    continue;
+                }
+                PenumbraModMeta.DeleteGroup(modRoot, i.GroupName);
+            }
         }
         catch (Exception ex)
         {

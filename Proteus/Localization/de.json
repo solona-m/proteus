@@ -1967,8 +1967,20 @@
     "message": "Schalter aus den markierten Teilen erstellen",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "Die Autorin bzw. der Autor des Mods hat dieses Teil bereits hinter einen eigenen Schalter gelegt, daher kann es keinen weiteren aufnehmen.",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "Autorenschalter",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "Dieser Mod liegt noch im alten Penumbra-Format vor, in das Proteus nicht schreibt. Aktiviere ihn einmal in Penumbra, damit er sich selbst aktualisiert, und komm dann zurück.",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "Die Autorin bzw. der Autor des Mods hat bereits einen Schalter auf diesem Teil. Dein Schalter kommt obendrauf: Das Teil erscheint nur, wenn beide eingeschaltet sind.",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "Dieses Teil trägt eine Markierung, die das Modell nicht benennt. Proteus kann daher nicht erkennen, was es bereits steuert, und riskiert keinen Schalter, der damit kollidiert.",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2052,7 +2064,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "Rückgängig gemacht. {0} Modelldatei(en) wiederhergestellt und die Optionsgruppe entfernt.",
+    "message": "Rückgängig gemacht. {0} Modelldatei(en) wiederhergestellt und die Schalter aus den Einstellungen dieses Mods entfernt.",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2085,6 +2097,10 @@
   },
   "Parts.Write.Btn": {
     "message": "Schalter in den Mod schreiben",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "Die mod-eigene Gruppe „{0}“ hat bereits eine Option namens „{1}“. Gib dem neuen Schalter einen anderen Namen.",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

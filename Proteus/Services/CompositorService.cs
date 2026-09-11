@@ -7677,6 +7677,12 @@ public class CompositorService : IDisposable
 
     // ── Managed mod helpers ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Whether this session has already settled the managed mod's manifest version. See
+    /// <see cref="EnsureManagedModExists"/> — the check is a one-shot because it sits on the composite path.
+    /// </summary>
+    private bool _managedModVersionChecked;
+
     private void EnsureManagedModExists()
     {
         // Keyed on the manifest, not the directory: without meta.json Penumbra doesn't register the mod
@@ -7684,8 +7690,24 @@ public class CompositorService : IDisposable
         // repair itself. Rewriting it is safe — every caller recomposites straight afterwards, which
         // restores the redirects this clears.
         var metaPath = Path.Combine(managedModDir, PenumbraModMeta.MetaFile);
-        if (File.Exists(metaPath)) return;
+        if (File.Exists(metaPath))
+        {
+            // Older builds stamped this folder — ours, entirely — as Penumbra v3, and PenumbraModMeta now
+            // refuses to write into one. Every composite rewrites these redirects, so a folder Penumbra had
+            // not happened to migrate for us would take the whole compositor down.
+            //
+            // Once per session, not once per composite: this runs on the composite path (see the caller at
+            // the top of the run), and MigrateToCurrent has to parse the manifest twice to decide it has
+            // nothing to do. The answer cannot change underneath us — nothing puts a v3 manifest back.
+            if (!_managedModVersionChecked)
+            {
+                _managedModVersionChecked = true;
+                PenumbraModMeta.MigrateToCurrent(managedModDir);
+            }
+            return;
+        }
 
+        _managedModVersionChecked = true;   // whatever we write below is current by construction
         var repairing = Directory.Exists(managedModDir);
         if (repairing)
             log.Warning("[Proteus] Managed mod at \"{0}\" was missing its {1} — recreating it",

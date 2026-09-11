@@ -550,8 +550,7 @@ public class LuminisImportTests
 
         var metadata = WriteAndRead(pack, dir, out _, out var defaultOn);
 
-        var group = JsonDocument.Parse(File.ReadAllText(
-            Directory.EnumerateFiles(dir.Path, "group_*.json").Single())).RootElement;
+        var group = Assert.Single(PenumbraModMeta.TryReadGroups(dir.Path)!).Group;
 
         Assert.Equal("Multi", group.GetProperty("Type").GetString());
         Assert.Equal(LuminisImportService.GroupName, group.GetProperty("Name").GetString());
@@ -635,12 +634,7 @@ public class LuminisImportTests
 
         // Penumbra flags a mod that redirects nothing as "changes nothing"; Proteus does the real
         // redirection itself at composite time, so the same harmless self-swap the Create tab uses.
-        // NewMetaJson pins the folder to the pre-v4 layout, where the key is "Swaps" (v4 renamed it to
-        // "FileSwaps" inside DefaultData) — accept either, since WriteRedirects picks by format.
-        var def = JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(dir.Path, PenumbraModMeta.LegacyDefaultMod))).RootElement;
-        var swaps = def.TryGetProperty("Swaps", out var s) ? s : def.GetProperty("FileSwaps");
-        Assert.True(swaps.EnumerateObject().Any());
+        Assert.True(meta.GetProperty("DefaultData").GetProperty("FileSwaps").EnumerateObject().Any());
     }
 
     /// <summary>RGBA8 straight out of a PNG the import wrote.</summary>

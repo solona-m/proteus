@@ -1572,8 +1572,25 @@ public sealed class PartsStrings
         "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +
         "one, or switch the whole part.");
 
-    public readonly string AlreadyGatedTip = Loc.Localize("Parts.AlreadyGated.Tip",
-        "The mod's author already put this part behind one of its own switches, so it cannot take another.");
+    /// <summary>
+    /// Hover on a part the author already switches. It can still take one of ours — the game draws a piece
+    /// only when ALL its attributes are on — so this states the stacking rather than refusing it.
+    /// </summary>
+    public readonly string StacksWithAuthorTip = Loc.Localize("Parts.StacksWithAuthor.Tip",
+        "The mod's author already has a switch on this part. A switch of yours stacks on top: the part " +
+        "shows only when both are on.");
+
+    /// <summary>The one case still refused — see <c>ModelPart.Toggleable</c>.</summary>
+    public readonly string UnreadableTagTip = Loc.Localize("Parts.UnreadableTag.Tip",
+        "This part is tagged with something the model does not name, so Proteus cannot tell what already " +
+        "controls it and will not risk a switch that collides with one.");
+
+    /// <summary>Dimmed marker on a row, so the stacking is visible without hovering.</summary>
+    public readonly string AuthorSwitchedTag = Loc.Localize("Parts.AuthorSwitched.Tag", "author switch");
+
+    public readonly string LegacyMod = Loc.Localize("Parts.LegacyMod",
+        "This mod is still in Penumbra's old layout, which Proteus will not write to. Enable it in " +
+        "Penumbra once so it updates itself, then come back.");
 
     /// <summary>Expander on a submesh row. {0} is how many separate pieces it holds.</summary>
     public readonly string ShowPiecesFmt = Loc.Localize("Parts.ShowPieces.Fmt", "{0} pieces ▾");
@@ -1621,8 +1638,12 @@ public sealed class PartsStrings
 
     public readonly string RevertBtn = Loc.Localize("Parts.Revert.Btn", "Undo — restore the original models");
 
+    /// <summary>
+    /// Deliberately does not promise the option GROUP was removed. When Proteus merged its switches into a
+    /// group the mod's author wrote, undoing takes the switches back out and leaves their group standing.
+    /// </summary>
     public readonly string RevertedFmt = Loc.Localize("Parts.Reverted.Fmt",
-        "Undone. {0} model file(s) restored, and the option group removed.");
+        "Undone. {0} model file(s) restored, and the switches removed from this mod's settings.");
 }
 
 /// <summary>The named-looks strip at the top of a mod's colour editor. See <see cref="Gui.PresetBar"/>.</summary>
