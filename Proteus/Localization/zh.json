@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0} 三角面",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "选择部位",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "点击模型的部位来选中它们，再为其添加开关。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "向外推",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "在模型上涂抹，把表面向外推出，让穿过衣物的身体重新被遮住。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "向内收",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同一把笔反向使用，适用于离身体太远的衣物。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。在列表中勾选某个部位可在涂抹时固定它。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "笔刷大小",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "笔刷的作用范围。中心最强，到边缘递减为零；笔刷大则推动大片起伏，\n笔刷小则只动一个小鼓包。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "强度",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "笔刷比这个模型的三角面（约 {0:F1} mm）还小，会把单个顶点拉成尖刺而不是推动表面。请调大一些。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大位移：{0:F2} mm / {1:F1} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "尚未移动任何部分。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "撤销一笔",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "重新开始",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "这只是预览 — 尚未向模组写入任何内容。保存功能还没做。",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "已勾选 {0} 个部件",
     "description": ""

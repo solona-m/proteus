@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0}三角形",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "パーツを選ぶ",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "モデルのパーツをクリックして選び、スイッチを付けます。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "外に押す",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "モデル上をなぞると表面が外側に押し出され、服から突き出た体が\nまた覚い隠れます。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "内に引く",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同じブラシの逆方向。体から離れすぎている服に使います。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。リストでパーツにチェックを入れると、そのパーツは動きません。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "ブラシの大きさ",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "ブラシが届く範囲。効きは中心が最も強く、端でゼロになります。大きければ\n広いうねりが、小さければ小さな膨らみが動きます。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "強さ",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "ブラシがこのモデルのポリゴン（約 {0:F1} mm）より小さいため、表面でなく頂点をトゲ状に引っ張ります。大きくしてください。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大移動量：{1:F1} mm 中 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "まだ何も動いていません。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "一筆分戻す",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "やり直す",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "これはプレビューです — MOD には何も書き込まれていません。保存は未実装です。",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0}個のパーツを選択中",
     "description": ""

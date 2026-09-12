@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0} тр.",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "Выбор частей",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Нажимайте на части модели, чтобы выбрать их и дать им переключатель.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Вытолкнуть",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Рисуйте по модели, чтобы вытолкнуть поверхность наружу, и тело,\nторчащее сквозь одежду, снова окажется закрыто.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Втянуть",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Та же кисть наоборот — для одежды, слишком отстающей от тела.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб. Галочка на части в списке удерживает её на месте.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Размер кисти",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Как далеко достаёт кисть. Сильнее всего в центре и сходит на нет\nу края: широкая двигает большой изгиб, узкая — маленький бугор.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Сила",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "Насколько поверхность смещается за мгновение рисования. Обычно лучше\nменьше: одежде достаточно отойти от тела на долю миллиметра, а одно\nи то же место всегда можно пройти ещё раз.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Кисть мельче треугольников этой модели (около {0:F1} мм), поэтому она будет вытягивать отдельные точки в шипы, а не двигать поверхность. Сделайте её больше.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Наибольшее смещение: {0:F2} мм из {1:F1} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Пока ничего не сдвинуто.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Отменить мазок",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Начать заново",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "Это только предпросмотр — в мод ничего не записано. Сохранение ещё не сделано.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "Отмечено частей: {0}",
     "description": ""
