@@ -442,8 +442,7 @@ public class EmissiveSkinImportTests
         Assert.All(names, n => Assert.Contains("—", n));
         Assert.Equal([names[1]], written.DefaultOn);
 
-        var group = JsonDocument.Parse(File.ReadAllText(
-            Directory.EnumerateFiles(dir.Path, "group_*.json").Single())).RootElement;
+        var group = Assert.Single(PenumbraModMeta.TryReadGroups(dir.Path)!).Group;
         Assert.Equal("Multi", group.GetProperty("Type").GetString());
         Assert.Equal(EmissiveSkinImportService.GroupName, group.GetProperty("Name").GetString());
         Assert.Equal(0b10, group.GetProperty("DefaultSettings").GetInt64());
@@ -482,14 +481,12 @@ public class EmissiveSkinImportTests
         Assert.Equal("Ram Ram", meta.GetProperty("Author").GetString());
         Assert.Contains("emissive skin pack", meta.GetProperty("Description").GetString());
 
-        var def = JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(dir.Path, PenumbraModMeta.LegacyDefaultMod))).RootElement;
+        var def = meta.GetProperty("DefaultData");
         Assert.Empty(def.GetProperty("Files").EnumerateObject());
 
         // Penumbra flags a mod that redirects nothing as "changes nothing", so the same harmless self-swap
-        // the Create tab uses. NewMetaJson pins the folder to the pre-v4 layout, where the key is "Swaps".
-        var swaps = def.TryGetProperty("Swaps", out var s) ? s : def.GetProperty("FileSwaps");
-        Assert.True(swaps.EnumerateObject().Any());
+        // the Create tab uses.
+        Assert.True(def.GetProperty("FileSwaps").EnumerateObject().Any());
     }
 
     /// <summary>

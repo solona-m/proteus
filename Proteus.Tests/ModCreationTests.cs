@@ -189,10 +189,9 @@ public class ModCreationTests
                 "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
                 diffuseSrc: diffuse, maskSrc: null, normalSrc: null, indexSrc: null);
 
-            // Penumbra manifest + default option exist. A new mod is written in the pre-v4 layout on
-            // purpose: every Penumbra reads it, and a newer one migrates it into meta.json on load.
+            // Penumbra manifest exists, at the current version — the default option lives inside it now.
             Assert.True(File.Exists(Path.Combine(root, "meta.json")));
-            Assert.True(File.Exists(Path.Combine(root, "default_mod.json")));
+            Assert.False(File.Exists(Path.Combine(root, "default_mod.json")));
 
             // The picked texture was copied into the sidecar, keeping its extension.
             Assert.True(File.Exists(Path.Combine(root, "Proteus", "overlays", "diffuse.png")));
@@ -217,18 +216,18 @@ public class ModCreationTests
                 Assert.Single(ov.MaterialGamePaths));
 
             var pmeta = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "meta.json")));
-            Assert.Equal(3, pmeta.RootElement.GetProperty("FileVersion").GetInt32());
+            Assert.Equal(PenumbraModMeta.SingleFileVersion,
+                pmeta.RootElement.GetProperty("FileVersion").GetInt32());
             Assert.Equal("My Tattoo", pmeta.RootElement.GetProperty("Name").GetString());
 
-            // default_mod.json: no file redirects, but a dummy self-swap of the target material so Penumbra
+            // DefaultData: no file redirects, but a dummy self-swap of the target material so Penumbra
             // doesn't flag the mod as changing nothing.
-            var def = JsonDocument.Parse(
-                File.ReadAllText(Path.Combine(root, "default_mod.json"))).RootElement;
+            var def = pmeta.RootElement.GetProperty("DefaultData");
             Assert.Equal(JsonValueKind.Object, def.GetProperty("Files").ValueKind);
             Assert.Empty(def.GetProperty("Files").EnumerateObject());
             Assert.Equal(JsonValueKind.Array, def.GetProperty("Manipulations").ValueKind);
             // Dummy self-swap on a harmless vanilla monster path (not the target body material).
-            var swaps = def.GetProperty("Swaps");
+            var swaps = def.GetProperty("FileSwaps");
             var swap = Assert.Single(swaps.EnumerateObject());
             Assert.Equal(
                 "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl", swap.Name);

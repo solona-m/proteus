@@ -943,12 +943,12 @@
     "message": "MODの書き込みに失敗しました: {0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "この顔テクスチャは左右に分かれている",
+  "Create.FaceAsymmetric.Label": {
+    "message": "この顔テクスチャは左右非対称",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "顔テクスチャを2つの半分として描いた場合にのみチェックしてください。キャラクターの右側を画像の右半分に、左側を左半分に描いたものです。\n通常の顔テクスチャは両方の頬に同じピクセルを使うため、片側だけの模様は存在できません。分割されたものはProteusが顔レイヤーとして描画します。\n通常の顔テクスチャではオフのままにしてください。",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "顔テクスチャを2つの半分として描いた場合に使います。キャラクターの右側を画像の右半分に、左側を左半分に描いたものです。\n通常の顔テクスチャは両方の頬に同じピクセルを使うため、片側だけの模様は存在できません。Proteusは代わりに顔自身のUVを倍幅のシートへ移し、肌の色とすべての表情を保ちます。\n選んだ画像がこの顔自身のテクスチャの2倍の幅のときは自動でオンになります。通常の顔テクスチャではオフのままにしてください。",
     "description": ""
   },
   "Create.Glow.Always": {
@@ -1995,8 +1995,20 @@
     "message": "チェックしたパーツからスイッチを作成",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "このパーツは作者が既に独自のスイッチに割り当てているため、追加できません。",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "作者スイッチ",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "このModはPenumbraの古い形式のままで、Proteusは書き込みません。一度Penumbraで有効にして更新させてから、あらためてお試しください。",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "このパーツには、Mod作者がすでにスイッチを設定しています。ここで追加するスイッチはその上に重なり、両方がオンのときだけパーツが表示されます。",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "このパーツには、モデルが名前を持たないタグが付いています。すでに何が制御しているか判別できないため、衝突する恐れのあるスイッチは追加しません。",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2080,7 +2092,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "元に戻しました。モデルファイル{0}個を復元し、オプショングループを削除しました。",
+    "message": "元に戻しました。{0}個のモデルファイルを復元し、このModの設定からスイッチを削除しました。",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2113,6 +2125,10 @@
   },
   "Parts.Write.Btn": {
     "message": "スイッチをMODに書き込む",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "このMod自身のグループ「{0}」には、すでに「{1}」というオプションがあります。新しいスイッチには別の名前を付けてください。",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

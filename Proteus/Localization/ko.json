@@ -943,12 +943,12 @@
     "message": "모드를 쓰지 못했습니다: {0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "이 얼굴 텍스처는 좌우로 나뉘어 있음",
+  "Create.FaceAsymmetric.Label": {
+    "message": "이 얼굴 텍스처는 좌우 비대칭",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "얼굴 텍스처를 두 개의 절반으로 그린 경우에만 선택하세요. 캐릭터의 오른쪽은 이미지의 오른쪽 절반에, 왼쪽은 왼쪽 절반에 그린 것입니다.\n일반 얼굴 텍스처는 양쪽 뺨에 같은 픽셀을 사용하므로 한쪽에만 있는 무늬는 존재할 수 없습니다. 나뉜 텍스처는 Proteus가 얼굴 레이어로 렌더링합니다.\n일반 얼굴 텍스처에서는 꺼 두세요.",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "얼굴 텍스처를 두 개의 절반으로 그린 경우에 사용합니다. 캐릭터의 오른쪽은 이미지의 오른쪽 절반에, 왼쪽은 왼쪽 절반에 그린 것입니다.\n일반 얼굴 텍스처는 양쪽 뾨에 같은 픽셀을 사용하므로 한쪽에만 있는 무달은 존재할 수 없습니다. 대신 Proteus가 얼굴 자체의 UV를 두 배 넓은 시트로 옮겨, 피부 톤과 모든 표정을 그대로 유지합니다.\n선택한 이미지가 이 얼굴 자체 텍스처보다 두 배 넥을 때 자동으로 켜집니다. 일반 얼굴 텍스처에서는 꾨 두세요.",
     "description": ""
   },
   "Create.Glow.Always": {
@@ -1995,8 +1995,20 @@
     "message": "선택한 부위로 스위치 만들기",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "모드 제작자가 이미 이 부위를 자체 스위치에 연결해 두어 추가할 수 없습니다.",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "제작자 스위치",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "이 모드는 아직 Penumbra의 옛 형식이라 Proteus가 기록하지 않습니다. Penumbra에서 한 번 활성화해 스스로 갱신되도록 한 뒤 다시 시도해 주세요.",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "이 부위에는 모드 제작자가 이미 스위치를 걸어 두었습니다. 여기서 추가하는 스위치는 그 위에 겹쳐지며, 둘 다 켜져 있을 때만 부위가 보입니다.",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "이 부위에는 모델이 이름을 갖고 있지 않은 태그가 붙어 있습니다. 무엇이 이미 제어하고 있는지 알 수 없어, 충돌할 수 있는 스위치는 추가하지 않습니다.",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2080,7 +2092,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "되돌렸습니다. 모델 파일 {0}개를 복원하고 옵션 그룹을 제거했습니다.",
+    "message": "되돌렸습니다. 모델 파일 {0}개를 복원하고 이 모드의 설정에서 스위치를 제거했습니다.",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2113,6 +2125,10 @@
   },
   "Parts.Write.Btn": {
     "message": "스위치를 모드에 기록",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "이 모드의 '{0}' 그룹에는 이미 '{1}' 옵션이 있습니다. 새 스위치에는 다른 이름을 지어 주세요.",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

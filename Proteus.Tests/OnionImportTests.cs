@@ -167,10 +167,8 @@ public class OnionImportTests
                 Assert.True(File.Exists(Path.Combine(root, "Proteus", ov.Diffuse!.Replace('/', Path.DirectorySeparatorChar))));
             }
 
-            // Penumbra side: a v3 group file with the detected layout as DefaultSettings.
-            var groupFile = Path.Combine(root, "group_001_body uv.json");
-            Assert.True(File.Exists(groupFile));
-            var gj = JsonDocument.Parse(File.ReadAllText(groupFile)).RootElement;
+            // Penumbra side: a group in the manifest with the detected layout as DefaultSettings.
+            var gj = Assert.Single(PenumbraModMeta.TryReadGroups(root)!).Group;
             Assert.Equal("Body UV", gj.GetProperty("Name").GetString());
             Assert.Equal("Single", gj.GetProperty("Type").GetString());
             Assert.Equal(1, gj.GetProperty("DefaultSettings").GetInt32());   // index of "gen3"
@@ -263,15 +261,14 @@ public class OnionImportTests
             Assert.Null(meta.OptionGroups);
             var ov = Assert.Single(meta.Overlays!);
             Assert.Equal("bibo", ov.SourceBodyType);
-            Assert.Empty(Directory.GetFiles(root, "group_*.json"));
+            Assert.Empty(PenumbraModMeta.TryReadGroups(root) ?? []);
 
             // Penumbra manifest + a default option carrying the harmless self-swap, as ModCreationService does.
             var pmeta = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "meta.json"))).RootElement;
-            Assert.Equal(3, pmeta.GetProperty("FileVersion").GetInt32());
+            Assert.Equal(PenumbraModMeta.SingleFileVersion, pmeta.GetProperty("FileVersion").GetInt32());
             Assert.Equal("1.0.0", pmeta.GetProperty("Version").GetString());
             Assert.Equal("https://example.invalid/x", pmeta.GetProperty("Website").GetString());
-            var def = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "default_mod.json"))).RootElement;
-            Assert.Single(def.GetProperty("Swaps").EnumerateObject());
+            Assert.Single(pmeta.GetProperty("DefaultData").GetProperty("FileSwaps").EnumerateObject());
         });
     }
 

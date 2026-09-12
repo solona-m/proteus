@@ -257,6 +257,20 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoHatCompat { get; set; }
 
+    /// <summary>
+    /// Render asymmetric FACE art by rewriting the character's own face model into the doubled sheet
+    /// layout, rather than cutting a second-skin shell for it. On by default, because the shell cannot
+    /// carry a face: it is emitted with its shape block zeroed, so it is a frozen duplicate of the head
+    /// riding a millimetre proud of a face that is still blinking and talking underneath — and a whole-face
+    /// texture is opaque, so every triangle of that duplicate survives the coverage trim.
+    /// <para/>
+    /// A switch rather than a constant because the feature edits the geometry the character is drawing.
+    /// Turned off, a doubled sheet falls back to the fold: it lands in the right place and loses a side,
+    /// which is where this stood before the rewrite existed. Nothing is written into anyone's mod — the
+    /// rewritten model is published into Proteus's own managed mod like every other output.
+    /// </summary>
+    public bool FaceUvInPlace { get; set; } = true;
+
     // There is deliberately no "the hat-compat notice has been shown" flag here. The chat line fires per
     // HAIRSTYLE FITTED, which the patch record on disk already tracks exactly — see
     // HatCompatWatcher.Announce. A once-ever flag was tried and is the wrong shape: it buys quiet by
