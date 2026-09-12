@@ -9806,7 +9806,7 @@ public static class SecondSkinWriter
     /// scenery through their character. So the constants stay tuned for how the result LOOKS, and this
     /// stays responsible for whether it exists.
     /// </summary>
-    private static void UnfoldTriangles(Vec3[] pos, Vec3[] delta, int[] tris, Action<string>? log)
+    internal static void UnfoldTriangles(Vec3[] pos, Vec3[] delta, int[] tris, Action<string>? log)
     {
         int vc = pos.Length;
         var keep = new float[vc];
@@ -9855,7 +9855,7 @@ public static class SecondSkinWriter
 
     /// <summary>A triangle's un-normalised normal: the cross product of two of its edges, whose direction
     /// says which way it faces and whose length is twice its area.</summary>
-    private static Vec3 TriNormal(Vec3 a, Vec3 b, Vec3 c)
+    internal static Vec3 TriNormal(Vec3 a, Vec3 b, Vec3 c)
     {
         float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
         float vx = c.X - a.X, vy = c.Y - a.Y, vz = c.Z - a.Z;
@@ -9880,7 +9880,7 @@ public static class SecondSkinWriter
     /// plain "clamp into the neighbour's window" also drags an untouched node along with a displaced one,
     /// which invents displacement where the region deliberately has none and unpins the boundary.
     /// </summary>
-    private static void LimitSlopeVector(Vec3[] v, Vec3[] pos, List<int>[] adj, int count, float maxSlope)
+    internal static void LimitSlopeVector(Vec3[] v, Vec3[] pos, List<int>[] adj, int count, float maxSlope)
     {
         for (int pass = 0; pass < BustSlopePasses; pass++)
         {
@@ -13645,6 +13645,18 @@ public static class SecondSkinWriter
     /// </remarks>
     internal static Vec3[] RelaxedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
                                           float[] nodeWeight, Vec3[] nodeNormal, ushort[] tris)
+        => RelaxedNormals(basePos, baseNrm, delta, nodeOf, nodeWeight, nodeNormal,
+                          Array.ConvertAll(tris, v => (int)v));
+
+    /// <inheritdoc cref="CapNormals"/>
+    /// <remarks>
+    /// The wide-index form. Every pass in this file works on ONE mesh, whose vertex count the format holds
+    /// in a u16, so a ushort triangle list is the natural shape there. A pass working on a whole model's
+    /// LOD0 meshes concatenated — see <c>MeshVolumeSolve</c> — runs past 65535 vertices on ordinary gear,
+    /// and truncating an index silently accumulates a face onto the wrong node.
+    /// </remarks>
+    internal static Vec3[] RelaxedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
+                                          float[] nodeWeight, Vec3[] nodeNormal, int[] tris)
     {
         int vc = basePos.Length;
         int nodeCount = nodeWeight.Length;
@@ -13659,8 +13671,8 @@ public static class SecondSkinWriter
         var seenFace = new HashSet<(int, int, int)>();
         for (int t = 0; t + 2 < tris.Length; t += 3)
         {
-            ushort ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
-            if (ia >= vc || ib >= vc || ic >= vc) continue;
+            int ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+            if (ia < 0 || ib < 0 || ic < 0 || ia >= vc || ib >= vc || ic >= vc) continue;
             int na = nodeOf[ia], nb = nodeOf[ib], nc = nodeOf[ic];
             if (na == nb || nb == nc || na == nc) continue;
 
@@ -13699,8 +13711,8 @@ public static class SecondSkinWriter
             var nbr = new List<int>[nodeCount];
             for (int t = 0; t + 2 < tris.Length; t += 3)
             {
-                ushort ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
-                if (ia >= vc || ib >= vc || ic >= vc) continue;
+                int ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+                if (ia < 0 || ib < 0 || ic < 0 || ia >= vc || ib >= vc || ic >= vc) continue;
                 int na = nodeOf[ia], nb = nodeOf[ib], nc = nodeOf[ic];
                 if (na == nb || nb == nc || na == nc) continue;
                 void Link(int a, int b)
@@ -13797,7 +13809,7 @@ public static class SecondSkinWriter
     /// decided per NODE, or two copies of the same point drift apart and the surface cracks open along
     /// the seam. One function so that grouping is structurally identical in both passes.
     /// </summary>
-    private static int[] WeldByPosition(Vec3[] pos, out int nodeCount)
+    internal static int[] WeldByPosition(Vec3[] pos, out int nodeCount)
     {
         var nodeOf = new int[pos.Length];
         var byPos = new Dictionary<(int, int, int), int>(pos.Length);
@@ -14452,7 +14464,7 @@ public static class SecondSkinWriter
     }
 
     /// <summary>Mean length of the edges touching the given nodes — the mesh's own resolution.</summary>
-    private static float MeanEdgeLength(Vec3[] pos, List<int>[] adj, List<int> nodes)
+    internal static float MeanEdgeLength(Vec3[] pos, List<int>[] adj, List<int> nodes)
     {
         float total = 0;
         int count = 0;

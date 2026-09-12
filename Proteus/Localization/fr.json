@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0} tris",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "Choisir des pièces",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Cliquez sur des pièces du modèle pour les choisir, puis donnez-leur un interrupteur.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Pousser dehors",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Peignez sur le modèle pour pousser la surface vers l'extérieur, afin qu'un\ncorps qui traverse un vêtement soit de nouveau couvert.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Tirer dedans",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Le même pinceau à l'envers, pour un vêtement qui s'écarte trop du corps.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer. Cochez une pièce dans la liste pour la maintenir immobile.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Taille du pinceau",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Jusqu'où porte le pinceau. L'effet est le plus fort au centre et s'annule\nau bord : un pinceau large déplace un galbe étendu, un pinceau étroit une\npetite bosse.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Force",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "De combien la surface bouge à chaque instant de peinture. Petit convient\ngénéralement : un vêtement n'a qu'à dégager le corps d'une fraction de\nmillimètre, et vous pouvez toujours repasser au même endroit.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Le pinceau est plus petit que les triangles de ce modèle (environ {0:F1} mm), il tirera donc des points isolés en pointes au lieu de déplacer la surface. Agrandissez-le.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Déplacement maximal : {0:F2} mm sur {1:F1} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Rien n'a encore été déplacé.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Annuler le trait",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Tout reprendre",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "Ceci n'est qu'un aperçu — rien n'a été écrit dans le mod. L'enregistrement n'est pas encore fait.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} pièce(s) cochée(s)",
     "description": ""

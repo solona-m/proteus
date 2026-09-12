@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0} tris",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "Elegir piezas",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Haz clic en piezas del modelo para elegirlas y darles un interruptor.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Empujar afuera",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Pinta sobre el modelo para empujar la superficie hacia fuera, y así cubrir\nun cuerpo que asoma a través de una prenda.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Tirar adentro",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "El mismo pincel al revés, para ropa que queda demasiado separada del cuerpo.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Arrastra sobre el modelo para pintar. Arrastra desde el fondo para girarlo, mayús-arrastrar para moverlo, rueda para acercar. Marca una pieza en la lista para mantenerla quieta.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Tamaño del pincel",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Hasta dónde llega el pincel. El efecto es más fuerte en el centro y se\nanula en el borde: uno ancho mueve una curva amplia y uno estrecho\nmueve un bulto pequeño.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Fuerza",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "Cuánto se mueve la superficie por instante de pintado. Lo pequeño suele ser\nlo correcto: la ropa solo tiene que salvar el cuerpo por una fracción de\nmilímetro, y siempre puedes volver a pintar el mismo sitio.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "El pincel es más pequeño que los triángulos de este modelo (unos {0:F1} mm), así que estirará puntos sueltos en picos en vez de mover la superficie. Hazlo más grande.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Desplazamiento máximo: {0:F2} mm de {1:F1} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Todavía no se ha movido nada.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Deshacer trazo",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Empezar de nuevo",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "Esto es solo una vista previa: no se ha escrito nada en el mod. Guardar aún no está hecho.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} pieza(s) marcada(s)",
     "description": ""

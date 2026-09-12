@@ -2099,6 +2099,74 @@
     "message": "{0} · {1:N0} tris",
     "description": "Material and size beside a part's checkbox. {0} is a .mtrl file name, {1} a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
   },
+  "Parts.Tool.Navigate": {
+    "message": "Pick parts",
+    "description": "Radio button above the model in Settings > Toggles."
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Click pieces of the model to choose them, then give them an on/off switch.",
+    "description": "Tooltip for the radio button."
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Push out",
+    "description": "Radio button above the model; selects the brush that pushes the surface outwards."
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Paint on the model to push the surface outwards, so a body that pokes\nthrough a piece of clothing is covered again.",
+    "description": "Tooltip for the radio button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Pull in",
+    "description": "Radio button above the model; the same brush in reverse."
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "The same brush in reverse, for clothing that stands too far off the body.",
+    "description": "Tooltip for the radio button."
+  },
+  "Parts.Brush.Help": {
+    "message": "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to zoom. Tick a part in the list to hold it still while you paint.",
+    "description": "Explains the brush gestures, shown under the model while a brush is selected."
+  },
+  "Parts.Brush.Size": {
+    "message": "Brush size",
+    "description": "Slider label. The value is shown in millimetres."
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "How far the brush reaches. The effect is strongest in the middle and fades\nto nothing at the edge, so a wide brush moves a broad swell and a narrow\none moves a small bump.",
+    "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Strength": {
+    "message": "Strength",
+    "description": "Slider label. The value is shown in millimetres."
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "How far the surface moves per moment of painting. Small is usually right:\nclothing only has to clear the body by a fraction of a millimetre, and you\ncan always paint over the same place again.",
+    "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single points into spikes instead of moving the surface. Make it larger.",
+    "description": "Warning when the brush is finer than the model's triangles. {0} is a length in millimetres."
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Furthest moved: {0:F2} mm of {1:F1} mm.",
+    "description": "Readout under the brush sliders. {0} is how far the furthest point has moved, {1} the limit, both in millimetres."
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Nothing has been moved yet.",
+    "description": "Readout under the brush sliders before anything has been painted."
+  },
+  "Parts.Brush.Undo": {
+    "message": "Undo stroke",
+    "description": "Button that takes back the last brush stroke."
+  },
+  "Parts.Brush.Reset": {
+    "message": "Start over",
+    "description": "Button that discards every brush stroke on this model."
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "This is a preview only — nothing has been written to the mod. Saving is not built yet.",
+    "description": "Warning that the brush is preview-only in this build."
+  },
   "Parts.Selected.Fmt": {
     "message": "{0} part(s) ticked",
     "description": "{0} is a count of the parts currently ticked in the list."

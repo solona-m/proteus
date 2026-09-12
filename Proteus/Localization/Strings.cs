@@ -1594,6 +1594,70 @@ public sealed class PartsStrings
     /// <summary>Material and size beside a part's checkbox. {0} is a file name, {1} a triangle count.</summary>
     public readonly string RowFmt = Loc.Localize("Parts.Row.Fmt", "{0} · {1:N0} tris");
 
+    // ── tools ───────────────────────────────────────────────────────────────
+
+    public readonly string ToolNavigate = Loc.Localize("Parts.Tool.Navigate", "Pick parts")
+                                        + "###partsToolNavigate";
+
+    public readonly string ToolNavigateTip = Loc.Localize("Parts.Tool.Navigate.Tip",
+        "Click pieces of the model to choose them, then give them an on/off switch.");
+
+    public readonly string ToolInflate = Loc.Localize("Parts.Tool.Inflate", "Push out")
+                                       + "###partsToolInflate";
+
+    public readonly string ToolInflateTip = Loc.Localize("Parts.Tool.Inflate.Tip",
+        "Paint on the model to push the surface outwards, so a body that pokes\n" +
+        "through a piece of clothing is covered again.");
+
+    public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Pull in")
+                                       + "###partsToolDeflate";
+
+    public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
+        "The same brush in reverse, for clothing that stands too far off the body.");
+
+    // ── the brush ───────────────────────────────────────────────────────────
+
+    public readonly string BrushHelp = Loc.Localize("Parts.Brush.Help",
+        "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to "
+      + "zoom. Tick a part in the list to hold it still while you paint.");
+
+    public readonly string BrushSize = Loc.Localize("Parts.Brush.Size", "Brush size")
+                                     + "###partsBrushSize";
+
+    public readonly string BrushSizeTip = Loc.Localize("Parts.Brush.Size.Tip",
+        "How far the brush reaches. The effect is strongest in the middle and fades\n" +
+        "to nothing at the edge, so a wide brush moves a broad swell and a narrow\n" +
+        "one moves a small bump.");
+
+    public readonly string BrushStrength = Loc.Localize("Parts.Brush.Strength", "Strength")
+                                         + "###partsBrushStrength";
+
+    public readonly string BrushStrengthTip = Loc.Localize("Parts.Brush.Strength.Tip",
+        "How far the surface moves per moment of painting. Small is usually right:\n" +
+        "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
+        "can always paint over the same place again.");
+
+    /// <summary>The brush is finer than the mesh. {0} is the model's average edge length in millimetres.</summary>
+    public readonly string BrushTooSmallFmt = Loc.Localize("Parts.Brush.TooSmall.Fmt",
+        "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single "
+      + "points into spikes instead of moving the surface. Make it larger.");
+
+    /// <summary>{0} is the furthest anything has moved, {1} the limit, both in millimetres.</summary>
+    public readonly string BrushMovedFmt = Loc.Localize("Parts.Brush.Moved.Fmt",
+        "Furthest moved: {0:F2} mm of {1:F1} mm.");
+
+    public readonly string BrushUntouched = Loc.Localize("Parts.Brush.Untouched",
+        "Nothing has been moved yet.");
+
+    public readonly string BrushUndo = Loc.Localize("Parts.Brush.Undo", "Undo stroke")
+                                     + "###partsBrushUndo";
+
+    public readonly string BrushReset = Loc.Localize("Parts.Brush.Reset", "Start over")
+                                      + "###partsBrushReset";
+
+    public readonly string BrushNotSavedYet = Loc.Localize("Parts.Brush.NotSavedYet",
+        "This is a preview only — nothing has been written to the mod. Saving is not built yet.");
+
     public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
         "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +
         "one, or switch the whole part.");

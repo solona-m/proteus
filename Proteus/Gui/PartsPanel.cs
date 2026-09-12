@@ -81,6 +81,34 @@ public sealed class PartsPanel
     private string? status;
     private bool statusIsError;
 
+    /// <summary>What a drag on the model does, and therefore which half of this tab is showing.</summary>
+    private enum Tool
+    {
+        /// <summary>Pick parts and stage switches — everything this tab did before there was a brush.</summary>
+        Navigate,
+
+        /// <summary>Push the surface out along its normals, to clear a body poking through a garment.</summary>
+        Inflate,
+
+        /// <summary>The same brush pulling in, for a garment that stands too far off.</summary>
+        Deflate,
+    }
+
+    private Tool tool = Tool.Navigate;
+
+    /// <summary>
+    /// The editable geometry of the model on screen, or null before one is picked. Rebuilt only when the
+    /// model changes — the weld and the boundary scan depend on topology, which a stroke never alters.
+    /// </summary>
+    private MeshVolumeSolve? volume;
+
+    /// <summary>Brush radius and per-dab strength, both in millimetres because that is how the problem is
+    /// described: "the hip pokes through by about a millimetre".</summary>
+    private float brushRadiusMm = 20f, brushStrengthMm = 0.05f;
+
+    /// <summary>Nodes the last dab actually reached, so a brush that is landing on nothing can say so.</summary>
+    private int lastReached;
+
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport,
         TextureLoader textureLoader, IPluginLog log)
@@ -164,11 +192,15 @@ public sealed class PartsPanel
                 ImGui.GetContentRegionAvail().Y - tailHeight - reserveBelow - ProteusStyle.S(4f),
                 ProteusStyle.S(200f));
 
+        DrawToolPicker();
         DrawParts(height);
 
         var tailTop = ImGui.GetCursorPosY();
         ImGui.Separator();
-        DrawStaging();
+        // One tail or the other, never both. Staging a switch and brushing geometry are different jobs with
+        // different meanings for the same ticked list, and showing both invites writing a switch while
+        // thinking about a brush.
+        if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
         tailHeight = ImGui.GetCursorPosY() - tailTop;
     }
 
@@ -356,6 +388,12 @@ public sealed class PartsPanel
             log.Warning(ex, "[Proteus] parts: could not read {0}", models[index].File);
             modelUnreadable = true;
         }
+        // The brush state belongs to the model, so it goes when the model does. Not carried across for the
+        // same reason staged switches are not: a displacement is per vertex, and another model's vertices
+        // are not these.
+        volume = parts != null ? new MeshVolumeSolve(parts) : null;
+        viewport.PositionOverride = null;
+
         if (parts != null) viewport.Show(ViewportKey, parts);
         else viewport.Clear();
     }
@@ -387,6 +425,13 @@ public sealed class PartsPanel
         viewport.Show(ViewportKey, model);
         viewport.Selected = ticked;
 
+        // Told every frame rather than on change: the mode also resets when a model is picked, and one place
+        // that always states the truth is cheaper to reason about than several that update it.
+        viewport.Mode = tool == Tool.Navigate
+            ? PartViewport.ViewportMode.Navigate
+            : PartViewport.ViewportMode.Brush;
+        viewport.BrushRadius = tool == Tool.Navigate ? 0f : brushRadiusMm / 1000f;
+
         // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
         // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
         // width the moment a scrollbar appears — and that closes a loop: scrollbar appears, row shortens,
@@ -397,6 +442,8 @@ public sealed class PartsPanel
         float width = MathF.Min(height * PartViewport.DefaultAspect,
                                 ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
+
+        PumpBrush();
 
         // Two different things to say, and only one of them is an apology. A part the author already
         // switches takes the click normally — the tooltip is there to explain that the new switch will
@@ -533,6 +580,131 @@ public sealed class PartsPanel
 
         if (!ticked.Add(label)) ticked.Remove(label);
         viewport.Recolour();
+    }
+
+    // ── the brush ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Which tool the drag belongs to, as three radio buttons above the model.
+    /// <para/>
+    /// An explicit mode rather than a modifier key. Turning the model and painting on it are both continuous
+    /// activities, so holding a key for one of them is miserable — and every modifier is already spoken for
+    /// anyway, shift on the pan.
+    /// </summary>
+    private void DrawToolPicker()
+    {
+        var ps = Strings.Parts;
+
+        foreach (var (value, label, tip) in new[]
+                 {
+                     (Tool.Navigate, ps.ToolNavigate, ps.ToolNavigateTip),
+                     (Tool.Inflate, ps.ToolInflate, ps.ToolInflateTip),
+                     (Tool.Deflate, ps.ToolDeflate, ps.ToolDeflateTip),
+                 })
+        {
+            if (value != Tool.Navigate) ImGui.SameLine();
+            if (ImGui.RadioButton(label, tool == value) && tool != value)
+            {
+                tool = value;
+                // The ticked list changes meaning with the tool — staged parts in Navigate, locked parts
+                // under a brush — so carrying a selection across would silently lock whatever the user had
+                // been staging, or stage whatever they had locked.
+                ticked.Clear();
+                viewport.Recolour();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
+        }
+        ImGui.Spacing();
+    }
+
+    /// <summary>
+    /// Turn what the viewport reports into strokes on the geometry.
+    /// <para/>
+    /// Polled rather than event-driven because ImGui is: the viewport says where the brush is and whether it
+    /// is down, and this decides what that means. Painting happens per frame while the button is held, and
+    /// the expensive passes run off the one frame the stroke ends.
+    /// </summary>
+    private void PumpBrush()
+    {
+        if (volume == null || tool == Tool.Navigate) return;
+
+        // Locked parts are the ticked ones while a brush is out — the list stops being a staging area and
+        // becomes "hold this still". Set every frame because the set is small and the alternative is
+        // tracking a dirty flag across the two places that can change it.
+        volume.SetLocked(ticked);
+
+        if (viewport.Painting && viewport.Cursor is { } at)
+        {
+            float step = brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f);
+            lastReached = volume.Paint(at, brushRadiusMm / 1000f, step);
+            if (lastReached > 0)
+            {
+                viewport.PositionOverride = volume.Positions();
+                viewport.GeometryChanged();
+            }
+        }
+
+        if (viewport.StrokeEnded)
+        {
+            volume.EndStroke();
+            viewport.PositionOverride = volume.Positions();
+            viewport.GeometryChanged();
+        }
+    }
+
+    private void DrawBrush()
+    {
+        var ps = Strings.Parts;
+
+        ImGui.Spacing();
+        ImGui.PushTextWrapPos(0);
+        ImGui.TextDisabled(ps.BrushHelp);
+        ImGui.PopTextWrapPos();
+        ImGui.Spacing();
+
+        float w = ProteusStyle.S(220f);
+        ImGui.SetNextItemWidth(w);
+        if (ImGui.SliderFloat(ps.BrushSize, ref brushRadiusMm, 2f, 80f, "%.0f mm"))
+            viewport.Recolour();
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip);
+
+        ImGui.SetNextItemWidth(w);
+        ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 0.5f, "%.2f mm");
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
+
+        // A radius that reaches barely more than one vertex moves a spike rather than a surface, and it
+        // looks from the outside exactly like the brush not working. Said against the mesh's OWN resolution,
+        // because "20 mm" means something different on a 2,000-triangle skirt and a 60,000-triangle coat.
+        if (volume is { MeanEdge: > 0f } v && brushRadiusMm / 1000f < v.MeanEdge * 1.5f)
+            ImGui.TextColored(ProteusStyle.Warn,
+                              string.Format(ps.BrushTooSmallFmt, v.MeanEdge * 1000f));
+
+        if (volume is { } vol)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(vol.Dirty
+                ? string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, MeshVolumeSolve.MaxDisplacement * 1000f)
+                : ps.BrushUntouched);
+
+            using (ImRaii.Disabled(!vol.CanUndo))
+                if (ImGui.Button(ps.BrushUndo)) { vol.Undo(); AfterBrushEdit(); }
+
+            ImGui.SameLine();
+            using (ImRaii.Disabled(!vol.Dirty))
+                if (ImGui.Button(ps.BrushReset)) { vol.Reset(); AfterBrushEdit(); }
+
+            // Nothing writes yet. Said out loud rather than left to be discovered, because the preview is
+            // convincing enough to be mistaken for a saved edit.
+            ImGui.Spacing();
+            ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
+        }
+    }
+
+    private void AfterBrushEdit()
+    {
+        if (volume == null) return;
+        viewport.PositionOverride = volume.Positions();
+        viewport.GeometryChanged();
     }
 
     // ── staging ─────────────────────────────────────────────────────────────
