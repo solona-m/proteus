@@ -181,9 +181,12 @@ public class StatusWindow : Window
     private long _createDetectNextTick;   // throttle the detect poll while the character isn't drawn yet
     private string? _createStatus;        // last create result message
     private bool _createStatusOk;
-    // The picked face texture is a doubled sheet (two sides of the head in the two halves). Author-declared,
-    // never probed — see the checkbox for why nothing in the image can tell the two layouts apart.
+    // The picked face texture is a doubled sheet (two sides of the head in the two halves). Auto-detected
+    // from the art's SHAPE against the face's own texture — see the checkbox — and locked to the user's
+    // answer the moment they touch it.
     private bool _createFaceSplit;
+    private bool _createFaceSplitLocked;      // an explicit tick — the detect never writes over it again
+    private string _createFaceSplitProbedFor = "";   // (material, first art) the current verdict belongs to
     // Whether the art glows and how. Never probed either: a transparent-background PNG is what an ordinary
     // tattoo looks like too, so nothing in the image says the author wanted it lit.
     private GlowStyle _createGlow = GlowStyle.None;
@@ -1579,7 +1582,17 @@ public class StatusWindow : Window
         // per pick rather than per frame, and off the frame thread because it decodes the picked diffuse
         // and the material's own. Only for a skin target: on gear or an accessory the question doesn't
         // arise, and the comparison it rests on would have nothing to compare against.
-        var wholeSkinKey = SlotEnabled("Diffuse") && SlotEnabled("Normal")
+        //
+        // A FACE target answers YES without being asked, and the probe is not run for it at all. Two
+        // reasons, and the second is the one that forced it: a face texture IS the face — nobody converts
+        // half a head — and the likeness test the probe rests on compares the art against the material's
+        // own diffuse, which a DOUBLED sheet cannot resemble because it is twice as wide. So the probe's
+        // answer for exactly the art this tab exists to convert would be "not a skin", and it would untick
+        // itself the moment the second file was picked.
+        bool faceTarget = IsFaceMaterial(_createMaterial);
+        var wholeSkinKey = faceTarget
+            ? "face " + _createMaterial
+            : SlotEnabled("Diffuse") && SlotEnabled("Normal")
                         && _createDiffuse.Length > 0 && _createNormal.Length > 0
                         && IsSkinMaterial(_createMaterial)
             ? _createMaterial + " " + _createDiffuse + " " + _createNormal
@@ -1587,11 +1600,15 @@ public class StatusWindow : Window
         if (!_createWholeSkinLocked && wholeSkinKey != _createWholeSkinProbedFor)
         {
             _createWholeSkinProbedFor = wholeSkinKey;
-            if (wholeSkinKey.Length == 0)
+            _createWholeSkinProbe = null;
+            if (faceTarget)
+            {
+                _createWholeSkin = true;
+            }
+            else if (wholeSkinKey.Length == 0)
             {
                 // Nothing to judge — a half-filled pair, or a target this can't apply to. Back to the
                 // default rather than leaving the last pick's verdict standing over different files.
-                _createWholeSkinProbe = null;
                 _createWholeSkin = false;
             }
             else
@@ -1621,20 +1638,41 @@ public class StatusWindow : Window
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(cs.WholeSkinTip);
 
-        // Face targets only, and never auto-detected: the two halves of an ORDINARY face texture are two
-        // regions of one face, not two sides of a head, so nothing in the image distinguishes the layouts.
-        // Only the author knows, which is why this is a plain tick with no probe behind it.
+        // Face targets only, and detected from the art's SHAPE.
+        //
+        // Nothing in the PIXELS tells the two layouts apart — the two halves of an ordinary face texture
+        // are two regions of one face, not two sides of a head — but the proportions do, because a doubled
+        // sheet is exactly twice as wide as the face's own. That is only a constant if you know the race:
+        // an Au Ra face sheet is square (2048², the horns take its right half) so doubled it is 2:1, while
+        // every other race's is 1024×2048 so doubled it is SQUARE. So the answer is not a fixed aspect but
+        // a comparison against the face the art targets, which is what LooksLikeDoubledFaceSheet makes.
+        //
+        // Keyed on the material and the first art file, so it runs once per pick rather than per frame, and
+        // on the frame thread because it reads two image HEADERS and decodes nothing.
         if (IsFaceMaterial(_createMaterial))
         {
-            ImGui.Checkbox(cs.FaceSplit, ref _createFaceSplit);
+            var firstArt = FirstCreateArt();
+            var splitKey = firstArt.Length == 0 ? "" : _createMaterial + " " + firstArt;
+            if (!_createFaceSplitLocked && splitKey != _createFaceSplitProbedFor)
+            {
+                _createFaceSplitProbedFor = splitKey;
+                // Nothing picked yet reverts to unticked rather than leaving the last pick's verdict
+                // standing over a file that is no longer there.
+                _createFaceSplit = splitKey.Length > 0
+                                && modCreation.LooksLikeDoubledFaceSheet(_createMaterial, firstArt);
+            }
+
+            if (ImGui.Checkbox(cs.FaceAsymmetric, ref _createFaceSplit))
+                _createFaceSplitLocked = true;   // an explicit answer — the detect never writes over it
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(cs.FaceSplitTip);
+                ImGui.SetTooltip(cs.FaceAsymmetricTip);
         }
         else if (_createFaceSplit)
         {
             // The target moved off a face; the tick described the old one and would otherwise declare a
             // body overlay to be in a face layout.
             _createFaceSplit = false;
+            _createFaceSplitProbedFor = "";
         }
 
         // ── glow ─────────────────────────────────────────────────────────────
@@ -1725,11 +1763,12 @@ public class StatusWindow : Window
                     _createWholeSkin = _createWholeSkinLocked = false;
                     _createWholeSkinProbedFor = "";
                     _createWholeSkinProbe = null;
-                    // Same rule, and it matters more here: nothing probes this one, and moving between two
-                    // FACE materials never trips the target-changed reset — so a tick left standing would
-                    // declare the next mod's ordinary face texture to be split, and un-mirror its two halves
-                    // onto the two sides of the head.
-                    _createFaceSplit = false;
+                    // Same rule, and it matters more here: a tick left standing would declare the NEXT mod's
+                    // ordinary face texture to be doubled, and send its two halves to the two sides of the
+                    // head. The lock goes with it, so the shape detect gets to answer for the next art
+                    // rather than being held to what this author said about the last.
+                    _createFaceSplit = _createFaceSplitLocked = false;
+                    _createFaceSplitProbedFor = "";
                     // Same rule again: the choice belonged to the art just consumed.
                     _createGlow = GlowStyle.None;
                 }
@@ -4652,10 +4691,30 @@ public class StatusWindow : Window
         && (p.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase)
          || p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The face specifically — the only surface with a split-left/right art layout to offer.</summary>
-    private static bool IsFaceMaterial(string p)
-        => p.StartsWith("chara/human/", StringComparison.OrdinalIgnoreCase)
-        && p.Contains("/obj/face/", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// The art file the shape detect judges: the first slot the user actually picked, in the order the rows
+    /// are drawn. Empty when nothing is picked, or when everything picked sits in a slot this material
+    /// hasn't got — that art is dropped on Create, so it must not decide anything here either.
+    /// </summary>
+    private string FirstCreateArt()
+    {
+        if (SlotEnabled("Diffuse") && _createDiffuse.Length > 0) return _createDiffuse;
+        if (SlotEnabled("Normal") && _createNormal.Length > 0) return _createNormal;
+        if (SlotEnabled("Mask") && _createMask.Length > 0) return _createMask;
+        if (SlotEnabled("Index") && _createIndex.Length > 0) return _createIndex;
+        return "";
+    }
+
+    /// <summary>
+    /// The face specifically — the only surface with a doubled art layout to offer.
+    /// <para/>
+    /// The SERVICE's definition, not a second path test of its own. The eyes ship inside the face folder
+    /// and would pass a bare <c>/obj/face/</c> check, but they are their own surface with their own shader:
+    /// under the loose test, picking the iris material auto-ticked "these textures are the whole skin" —
+    /// setting a normal REPLACE and skin-tone pass-through on an eye — and offered a doubled-sheet tick the
+    /// compositor would then refuse to honour, because its own face test excludes the iris.
+    /// </summary>
+    private static bool IsFaceMaterial(string p) => FaceUvDoublingService.IsFaceMaterial(p);
 
     /// <summary>Short "what is this" tag for a material path, the picker's left column. Path-derived only —
     /// no game data, so it's free to call while drawing.</summary>

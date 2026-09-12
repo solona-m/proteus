@@ -330,15 +330,17 @@ public sealed class CreateStrings
         "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
         "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
 
-    public readonly string FaceSplit = Loc.Localize("Create.FaceSplit.Label",
-        "This face texture is split left/right") + "###createFaceSplit";
+    public readonly string FaceAsymmetric = Loc.Localize("Create.FaceAsymmetric.Label",
+        "This face texture is asymmetric") + "###createFaceAsymmetric";
 
-    public readonly string FaceSplitTip = Loc.Localize("Create.FaceSplit.Tip",
-        "Tick this only for a face texture painted as TWO HALVES: the character's right side in " +
-        "the right half of the image, their left side in the left half.\n" +
+    public readonly string FaceAsymmetricTip = Loc.Localize("Create.FaceAsymmetric.Tip",
+        "For a face texture painted as TWO HALVES: the character's right side in the right half " +
+        "of the image, their left side in the left half.\n" +
         "An ordinary face texture gives both cheeks the same pixels, so a mark on one side alone " +
-        "cannot exist in it — Proteus renders a split one through a face layer instead.\n" +
-        "Leave this off for any normal face texture.");
+        "cannot exist in it. Proteus moves the face's own UVs onto a doubled sheet instead, which " +
+        "keeps the skin tone and every expression.\n" +
+        "Ticked for you when the picked image is twice as wide as this face's own texture. Leave it " +
+        "off for any ordinary face texture.");
 
     public readonly string Glow = Loc.Localize("Create.Glow.Label",
         "Make this art glow") + "###createGlow";

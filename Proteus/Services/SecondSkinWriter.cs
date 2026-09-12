@@ -5694,16 +5694,27 @@ public static class SecondSkinWriter
     /// will later drop, since those still hold the surface together.
     /// </summary>
     private static ushort[] MeshTriangles(Source src, ushort subIdx, ushort subCount)
+        => MeshTrianglesAt(src, src.Ib, subIdx, subCount);
+
+    /// <inheritdoc cref="MeshTriangles"/>
+    /// <param name="indexBase">
+    /// Where this LOD's index buffer starts. <see cref="Source.Ib"/> is LOD0's, which is all any other walk
+    /// in this file needs; <see cref="RewriteFaceUv0"/> reads LOD1 and LOD2 as well, and their submesh
+    /// offsets are relative to their OWN buffer — read through LOD0's they address another LOD's triangles.
+    /// </param>
+    private static ushort[] MeshTrianglesAt(Source src, int indexBase, ushort subIdx, ushort subCount)
     {
         var s = src.S;
         var tris = new List<ushort>();
         for (int su = 0; su < subCount; su++)
         {
             int ss = src.SubmeshStart + (subIdx + su) * 16;
+            if (ss + 8 > s.Length) break;
             uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
             for (uint t = 0; t + 2 < sc; t += 3)
             {
-                int p = src.Ib + (int)(so + t) * 2;
+                int p = indexBase + (int)(so + t) * 2;
+                if (p < 0 || p + 6 > s.Length) break;
                 tris.Add(BitConverter.ToUInt16(s, p));
                 tris.Add(BitConverter.ToUInt16(s, p + 2));
                 tris.Add(BitConverter.ToUInt16(s, p + 4));
@@ -10069,6 +10080,283 @@ public static class SecondSkinWriter
         log?.Invoke($"body smooth: {vertsMoved} vertex(es) across {meshesTouched} mesh(es), "
                   + $"moved by up to {most:0.#####}, {normalsWritten} normal(s) reshaded");
         return outBytes;
+    }
+
+    /// <summary>What <see cref="RewriteFaceUv0"/> actually did, for the log line that has to make a wrong
+    /// answer visible. <paramref name="Unsided"/> is the one to watch: on a real face it is 0, and anything
+    /// else means vertices were sent to the +X half on no evidence at all.</summary>
+    internal readonly record struct FaceUvStats(int MeshesTouched, int VerticesWritten, int LodsTouched,
+                                                int Conflicted, int Straddling, int MorphSided, int Unsided);
+
+    /// <summary>
+    /// Rewrite a FACE model's uv0 into the doubled (<see cref="UVRemapService.FaceSplitSpace"/>) layout, in
+    /// place, so the character's own face samples an un-mirrored sheet — the +X side into the right half,
+    /// the -X side into the left. Returns a modified copy, or null when nothing qualified.
+    /// <para/>
+    /// It exists because the alternative — cutting a second-skin shell — cannot carry a whole face. A shell
+    /// is emitted with its shape block zeroed (see the ModelHeader writes in the builder), so it is a frozen
+    /// duplicate of the head riding <see cref="BaseOffset"/> proud of a face that is still blinking and
+    /// talking underneath, and an opaque whole-face texture keeps every triangle of it. Moving the UVs of
+    /// the face the game is already drawing keeps the material, the skin tone, the expressions and the
+    /// geometry, and adds nothing to the scene.
+    /// <para/>
+    /// In place and LENGTH-NEUTRAL, exactly like <see cref="SmoothBodyNipples"/>: the file is cloned and
+    /// uv0 is overwritten where it sits, in the type the mesh already declares, so no offset in the header
+    /// moves and none of <c>ModelAttributeWriter</c>'s splice-and-shift machinery is needed. uv1 is never
+    /// touched — the common Half4/Float4 uv0 packs uv1 into its z/w lanes, and only x/y are written.
+    /// <para/>
+    /// TANGENTS ARE DELIBERATELY LEFT ALONE. The game shades with the tangent frame stored in the model.
+    /// Today the -X side's frame is already the mirror of its +X partner's and both sample the same texel;
+    /// the doubled sheet's left half is an exact pixel mirror of its right (<see cref="UVRemapService.ExpandMirrored"/>),
+    /// so after this rewrite that side reads texels of identical value through an unchanged frame and
+    /// symmetric art renders bit-for-bit as it does now. <see cref="RetangentMesh"/> refits frames for the
+    /// shell, whose triangles are re-cut; it must not be dragged in here.
+    /// <para/>
+    /// ALL-OR-NOTHING. Every LOD is rewritten or none is: a face that keeps vanilla UVs at LOD1 samples the
+    /// doubled sheet with the wrong coordinates the moment the camera pulls back, and that is invisible in
+    /// the mirror. Anything this cannot vouch for — a UV type it cannot write, a buffer span that does not
+    /// fit, a mesh whose UVs sit outside the [0,1] tile the affine assumes — returns null, and the caller
+    /// falls back to folding the sheet.
+    /// </summary>
+    /// <param name="keepMaterial">Which meshes to convert, by material name — the face material only.</param>
+    /// <param name="convert">
+    /// <c>UvConverter(FaceSpace, FaceSplitSpace, unmirror: true)</c>. Taken rather than built so the one
+    /// affine the shell path already uses is the one applied here (see <see cref="UVRemapService.UvConverter"/>).
+    /// </param>
+    internal static byte[]? RewriteFaceUv0(byte[] mdl, Func<string, bool> keepMaterial,
+                                           UVRemapService.UvConversion convert,
+                                           out FaceUvStats stats, Action<string>? log = null)
+    {
+        stats = default;
+        if (mdl is not { Length: > 0 }) return null;
+
+        Source src;
+        try { src = Parse(mdl); }
+        catch { return null; }
+
+        var s = src.S;
+        uint U32(int o) => BitConverter.ToUInt32(s, o);
+        ushort U16(int o) => BitConverter.ToUInt16(s, o);
+
+        // Each LOD's buffers are found from the FILE HEADER's own per-LOD arrays — vertexOffset[3] at 0x10
+        // and indexOffset[3] at 0x1C, of which Parse already reads [0] as Vb/Ib. Reading them per LOD is
+        // what makes LOD1/LOD2 reachable at all: every other walk in this file is bounded to LOD0 and uses
+        // src.Vb, which would address LOD1's meshes into LOD0's buffer.
+        int VertexBase(int l) => (int)U32(16 + l * 4);
+        int IndexBase(int l) => (int)U32(28 + l * 4);
+        long VertexBytes(int l) => U32(0x28 + l * 4);
+
+        // The header read, cross-checked against the one value Parse derived independently. If these
+        // disagree the layout is not what this method believes, and every write below would land in
+        // someone else's bytes.
+        if (mdl.Length < 0x44 || VertexBase(0) != src.Vb || IndexBase(0) != src.Ib) return null;
+
+        var matNames = ReadMaterialNames(s, src);
+        var outBytes = (byte[])mdl.Clone();
+        // A malformed LOD range that repeats LOD0's meshes would otherwise convert the same vertices twice
+        // — u -> 0.5 + u/2 applied twice is 0.75 + u/4, which is not a visible seam so much as a face
+        // wearing a quarter of its own texture.
+        var done = new HashSet<int>();
+        int meshes = 0, written = 0, lods = 0, conflicted = 0, straddled = 0, morphSided = 0, unsided = 0;
+        Span<float> tmp = stackalloc float[4];
+
+        for (int lod = 0; lod < 3; lod++)
+        {
+            int ls = src.LodStart + lod * 60;
+            if (ls + 60 > s.Length) break;
+            ushort mi = U16(ls), mc = U16(ls + 2);
+            if (mc == 0) continue;
+            int vbBase = VertexBase(lod), ibBase = IndexBase(lod);
+            if (vbBase <= 0 || ibBase <= 0) continue;      // a LOD the file does not actually carry
+            long vbBytes = VertexBytes(lod);
+            bool touchedLod = false;
+
+            int end = Math.Min(mi + mc, src.MeshCount);
+            for (int m = mi; m < end; m++)
+            {
+                if (!done.Add(m)) continue;
+                int mo = src.MeshStart + m * 36;
+                if (mo + 36 > s.Length) break;
+                ushort vc = U16(mo);
+                if (vc == 0) continue;
+                ushort matIdx = U16(mo + 8);
+                if (matIdx >= matNames.Count || !keepMaterial(matNames[matIdx])) continue;
+
+                var decl = m < src.Decls.Length ? src.Decls[m] : [];
+                VElem? pe = null, ue = null;
+                foreach (var el in decl)
+                {
+                    if (el.Usage == UsePosition) pe ??= el;
+                    else if (el.Usage == UseUV && el.UsageIndex == 0) ue ??= el;
+                }
+                if (pe is not { } pos || ue is not { } uvE) continue;
+                if (pos.Stream > 2 || uvE.Stream > 2) continue;
+
+                uint[] vbo = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+                byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
+                if (bs[pos.Stream] == 0 || bs[uvE.Stream] == 0) continue;
+
+                // Both spans, inside the file AND inside this LOD's own declared vertex buffer. A refusal
+                // here is all-or-nothing rather than a skip: a half-converted face is worse than none.
+                //
+                // Measured against what ReadTyped will ACTUALLY read for the type each element declares.
+                // A fixed 8 under-measures a Float3 position (12 bytes) and a Float4 uv (16), which lets a
+                // model through that then reads past the end of its own buffer; the blanket 16 the geometry
+                // reader uses over-measures the other way and would refuse a perfectly ordinary tightly
+                // packed buffer, whose last element ends exactly at the buffer's end.
+                bool Fits(VElem el)
+                {
+                    long rel = vbo[el.Stream] + (long)(vc - 1) * bs[el.Stream] + el.Offset + TypeWidth(el.Type);
+                    return vbBase + rel <= s.Length && (vbBytes <= 0 || rel <= vbBytes);
+                }
+                if (!Fits(pos) || !Fits(uvE)) return null;
+
+                int posAt = vbBase + (int)vbo[pos.Stream] + pos.Offset, posStride = bs[pos.Stream];
+                int uvAt = vbBase + (int)vbo[uvE.Stream] + uvE.Offset, uvStride = bs[uvE.Stream];
+
+                var x = new float[vc];
+                var uv = new (float U, float V)[vc];
+                float uLo = float.MaxValue, uHi = float.MinValue;
+                for (int i = 0; i < vc; i++)
+                {
+                    ReadTyped(s, posAt + i * posStride, pos.Type, tmp);
+                    x[i] = tmp[0];
+                    ReadTyped(s, uvAt + i * uvStride, uvE.Type, tmp);
+                    uv[i] = (tmp[0], tmp[1]);
+                    if (tmp[0] < uLo) uLo = tmp[0];
+                    if (tmp[0] > uHi) uHi = tmp[0];
+                }
+
+                // The affine reads u as a position in the [0,1] sheet. A mesh tiled outside it — the shell
+                // path shifts such a mesh onto the tile per mesh — would be sent somewhere this method has
+                // no business sending the player's own face, so refuse the whole model instead.
+                if (uLo < -UvTileSlack || uHi > 1f + UvTileSlack)
+                {
+                    log?.Invoke($"face uv: mesh {m} sits outside the [0,1] tile (u {uLo:F3}..{uHi:F3}) — "
+                              + "refusing to rewrite this model");
+                    return null;
+                }
+
+                ushort subIdx = U16(mo + 10), subCount = U16(mo + 12);
+                var tris = MeshTrianglesAt(src, ibBase, subIdx, subCount);
+                var sides = SurfaceMirror.AssignSides(x, tris, out int conf, out int strad);
+                conflicted += conf;
+                straddled += strad;
+
+                // Which vertices a triangle actually names. The rest are morph replacements: they live
+                // inside [0, vc) and the game swaps an index entry onto one when a shape is enabled, but no
+                // triangle references them as authored, so AssignSides has nothing to go on and leaves them
+                // at 0 — the +X branch. Half of every expression would jump to the other half of the sheet.
+                var claimed = new bool[vc];
+                foreach (var t in tris)
+                    if (t < vc) claimed[t] = true;
+
+                // So take the side of the vertex each one REPLACES. LOD0 only, because that is the LOD Parse
+                // reads shapes for; a LOD1/LOD2 morph vertex falls through to its own X below, which is the
+                // same answer everywhere except the midline band and is not resolvable at that distance.
+                if (lod == 0 && src.Shapes.Count > 0)
+                {
+                    uint meshStartIndex = U32(mo + 16);
+                    foreach (var entries in src.Shapes.Values)
+                        foreach (var e in entries)
+                        {
+                            if (e.MeshIndexOffset != meshStartIndex) continue;
+                            foreach (var (bIdx, rep) in e.Values)
+                            {
+                                if (rep >= vc || claimed[rep] || sides[rep] != 0) continue;
+                                int slot = ibBase + (int)(meshStartIndex + bIdx) * 2;
+                                if (slot < 0 || slot + 2 > s.Length) continue;
+                                ushort bv = U16(slot);
+                                if (bv >= vc || sides[bv] == 0) continue;
+                                sides[rep] = sides[bv];
+                                morphSided++;
+                            }
+                        }
+                }
+
+                // Anything still unplaced and named by no triangle answers from its own X. A vertex a
+                // triangle DID claim and that still reads 0 is genuinely disputed — two triangles on
+                // opposite sides — and keeps the documented +X default rather than being overruled here.
+                for (int i = 0; i < vc; i++)
+                {
+                    if (claimed[i] || sides[i] != 0) continue;
+                    sides[i] = x[i] > SurfaceMirror.Midline ? (sbyte)1
+                             : x[i] < -SurfaceMirror.Midline ? (sbyte)-1 : (sbyte)0;
+                    if (sides[i] == 0) unsided++;
+                }
+
+                for (int i = 0; i < vc; i++)
+                {
+                    if (convert(uv[i].U, uv[i].V, sides[i]) is not { } r) continue;   // unmapped: as authored
+                    // Clamped because the affine's ends land a rounding step outside the sheet, and a u of
+                    // 1.0005 does not clip — it WRAPS to the far edge and drags the triangle across the face.
+                    if (!WriteUv0(outBytes, uvAt + i * uvStride, uvE.Type,
+                                  Math.Clamp(r.U, 0f, 1f), r.V))
+                    {
+                        log?.Invoke($"face uv: mesh {m} declares a uv0 type ({uvE.Type}) this cannot write "
+                                  + "— refusing to rewrite this model");
+                        return null;
+                    }
+                    written++;
+                }
+                meshes++;
+                touchedLod = true;
+            }
+            if (touchedLod) lods++;
+        }
+
+        if (written == 0) return null;
+        stats = new FaceUvStats(meshes, written, lods, conflicted, straddled, morphSided, unsided);
+        log?.Invoke($"face uv: {written} vertex(es) across {meshes} mesh(es) in {lods} LOD(s) "
+                  + $"(conflicted {conflicted}, straddling {straddled}, morph-sided {morphSided}, "
+                  + $"unsided {unsided})");
+        return outBytes;
+    }
+
+    /// <summary>
+    /// How many bytes <see cref="ReadTyped"/> consumes for a vertex element of this type — the exact number,
+    /// so a bounds check neither passes a read that runs off the end nor refuses a buffer that simply ends
+    /// where its last element does. 16 (the widest) for a type it does not know, which is the conservative
+    /// direction for a check.
+    /// </summary>
+    private static int TypeWidth(byte type) => type switch
+    {
+        0 => 4,                      // Float1
+        1 => 8,                      // Float2
+        2 => 12,                     // Float3
+        3 => 16,                     // Float4
+        5 or 8 => 4,                 // Ubyte4 / Ubyte4n
+        6 or 9 or 13 or 16 => 4,     // Short2 / Short2n / Half2 / Ushort2
+        7 or 10 or 14 or 17 => 8,    // Short4 / Short4n / Half4 / Ushort4
+        _ => 16,
+    };
+
+    /// <summary>How far outside the [0,1] tile a face mesh's u may stray before
+    /// <see cref="RewriteFaceUv0"/> refuses it. A real face measures 0.003..0.989; this is for the
+    /// rounding at an island's edge, not for a tiled mesh.</summary>
+    private const float UvTileSlack = 0.01f;
+
+    /// <summary>
+    /// Write uv0 at <paramref name="off"/> in the type the mesh declares, leaving any third and fourth
+    /// component alone — those lanes are uv1 on the Half4/Float4 packing FFXIV uses, and the face's uv1 is
+    /// none of this method's business. False for a type it will not write, which the caller must treat as
+    /// a refusal of the whole model rather than of one mesh.
+    /// </summary>
+    internal static bool WriteUv0(byte[] a, int off, byte type, float u, float v)
+    {
+        switch (type)
+        {
+            case 1: case 3:        // Float2 / Float4
+                W32(a, off, (uint)BitConverter.SingleToInt32Bits(u));
+                W32(a, off + 4, (uint)BitConverter.SingleToInt32Bits(v));
+                return true;
+            case 13: case 14:      // Half2 / Half4
+                W16(a, off, Half(u));
+                W16(a, off + 2, Half(v));
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

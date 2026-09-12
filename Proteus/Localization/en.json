@@ -943,13 +943,13 @@
     "message": "Failed to write the mod: {0}",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Create.FaceSplit.Label": {
-    "message": "This face texture is split left/right",
-    "description": "Checkbox in the Create tab, shown only when the target material is a face. Keep the \"###createFaceSplit\" suffix out of the translation - it is not part of this string."
+  "Create.FaceAsymmetric.Label": {
+    "message": "This face texture is asymmetric",
+    "description": "Checkbox in the Create tab, shown only for a face material."
   },
-  "Create.FaceSplit.Tip": {
-    "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
-    "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  "Create.FaceAsymmetric.Tip": {
+    "message": "For a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it. Proteus moves the face's own UVs onto a doubled sheet instead, which keeps the skin tone and every expression.\nTicked for you when the picked image is twice as wide as this face's own texture. Leave it off for any ordinary face texture.",
+    "description": "Tooltip for the checkbox above. \"asymmetric\" means the character's left and right differ. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Create.Glow.Always": {
     "message": "Always glow",

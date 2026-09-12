@@ -943,12 +943,12 @@
     "message": "No se pudo escribir el mod: {0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "Esta textura de cara está dividida izquierda/derecha",
+  "Create.FaceAsymmetric.Label": {
+    "message": "Esta textura de cara es asimétrica",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "Marca esto solo para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella: Proteus renderiza una dividida a través de una capa de cara.\nDéjalo desmarcado para cualquier textura de cara normal.",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "Para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella. En su lugar, Proteus mueve los UV de la propia cara a una hoja doble, lo que conserva el tono de piel y todas las expresiones.\nSe marca automáticamente cuando la imagen elegida es el doble de ancha que la textura propia de esta cara. Déjalo desmarcado para cualquier textura de cara normal.",
     "description": ""
   },
   "Create.Glow.Always": {

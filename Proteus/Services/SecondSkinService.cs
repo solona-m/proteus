@@ -688,7 +688,12 @@ public sealed class SecondSkinService
     /// </summary>
     private readonly Dictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
 
-    private static bool WriteIfChanged(string path, byte[] data)
+    /// <summary>
+    /// Write only when the bytes differ, atomically. Internal because <see cref="FaceUvDoublingService"/>
+    /// publishes into the same managed <c>models/</c> folder under the same rules — a second copy of the
+    /// temp-file-and-retry dance would be one more place to get the game's open handle wrong.
+    /// </summary>
+    internal static bool WriteIfChanged(string path, byte[] data)
     {
         try
         {
@@ -878,7 +883,10 @@ public sealed class SecondSkinService
             () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
     }
 
-    private static ulong Hash(byte[] data)
+    /// <summary>Content hash for a published file's name. Internal for the same reason as
+    /// <see cref="WriteIfChanged"/>: content addressing is what keeps the game's model cache honest (see
+    /// <see cref="SmoothedBodyPath"/>), and every publisher must hash the same way.</summary>
+    internal static ulong Hash(byte[] data)
     {
         ulong h = 14695981039346656037;   // FNV-1a
         foreach (var b in data) { h ^= b; h *= 1099511628211; }
@@ -1112,6 +1120,16 @@ public sealed class SecondSkinService
         // Every mod in the look, not just those contributing a shell. A toe cap belongs to the foot, so
         // the mod that ships the map need not be the one wearing anything over the toes.
         IReadOnlyList<OverlayEntry>? allEntries = null,
+        // The PRISTINE bytes of any human part model Proteus has itself republished this composite — today
+        // only the faces FaceUvDoublingService rewrote into the doubled layout. Resolving such a path now
+        // answers with OUR model, and a shell cut from that would send its vertices through the doubling
+        // affine a second time; these are the bytes the user actually installed.
+        //
+        // Passed as bytes rather than resolved through resolveUpstream on purpose: that resolver remembers
+        // the last non-ours answer per path, and routing MODEL loads through it once published someone
+        // else's body mid-session (see the note by the bare-body load). This dictionary is built from the
+        // model we read moments ago, for the one path we know we masked.
+        IReadOnlyDictionary<string, byte[]>? pristineHumanModels = null,
         // The sheet size this build should bake at, when the caller has already worked it out. The
         // compositor has: it warms this phase's art in the background and the decode cache keys on the
         // target size, so a warm at any other size is not a cheaper warm, it is a wasted one. Passing the
@@ -2076,7 +2094,11 @@ public sealed class SecondSkinService
             byte[]? pickBytes = null;
             foreach (var cand in candidates)
             {
-                var bytes = textureLoader.LoadRawFile(penumbra.ResolvePlayer(cand), cand);
+                // Ours-this-composite first: a face we rewrote into the doubled layout resolves to that
+                // rewrite, and cutting a shell from it would double its UVs again.
+                var bytes = pristineHumanModels != null && pristineHumanModels.TryGetValue(cand, out var kept)
+                    ? kept
+                    : textureLoader.LoadRawFile(penumbra.ResolvePlayer(cand), cand);
                 if (bytes == null) continue;
                 pickBytes ??= bytes; pick ??= cand;      // first loadable, as the fallback
                 List<string> mats;
