@@ -108,15 +108,43 @@ public class ModelPartReaderTests
         Assert.Equal(many, parts.ShatteredSubmeshes["1.1"]);
     }
 
-    /// <summary>A submesh an IMC switch already drives is listed, so the user can see it, but not claimable.</summary>
+    /// <summary>
+    /// A submesh an IMC switch already drives is claimable, and says so.
+    /// <para/>
+    /// It used to be refused, on the grounds that the result needs two checkboxes to appear and the mod
+    /// already offers one of them. That refusal blocked the case the feature exists for — a bow welded into
+    /// a skirt the author DOES switch — so the part is now offered and the stacking is reported instead.
+    /// </summary>
     [Fact]
-    public void ASubmeshBehindTheModsOwnSwitch_IsNotToggleable()
+    public void ASubmeshBehindTheModsOwnSwitch_IsToggleable_AndSaysSo()
     {
         var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_tv_a"],
             Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(1))));
 
         Assert.True(parts!.Parts[0].Toggleable);
-        Assert.False(parts.Parts[1].Toggleable);
+        Assert.False(parts.Parts[0].AuthorSwitched);
+
+        Assert.True(parts.Parts[1].Toggleable);
+        Assert.True(parts.Parts[1].AuthorSwitched);
+    }
+
+    /// <summary>
+    /// The user's case, pinned: a bow inside a skirt the author switches. Every island inherits the
+    /// submesh's flag, because every island really is behind that switch — and stays behind it after
+    /// <c>ModelAttributeWriter.SplitSubmesh</c>, which copies the mask onto each record it cuts.
+    /// </summary>
+    [Fact]
+    public void AnIslandInheritsTheAuthorsSwitchFromItsSubmesh()
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_dv_a"],
+            Mesh(new SyntheticModel.Sub(1, Islands: 2))));
+
+        Assert.Equal(["1.1", "1.1.1", "1.1.2"], parts!.Parts.Select(p => p.Label));
+        Assert.All(parts.Parts, p =>
+        {
+            Assert.True(p.Toggleable);
+            Assert.True(p.AuthorSwitched);
+        });
     }
 
     /// <summary>
@@ -139,20 +167,29 @@ public class ModelPartReaderTests
 
         Assert.Equal(1u, parts!.Parts[0].AttributeMask);
         Assert.True(parts.Parts[0].Toggleable);
+        // And NOT reported as the author's doing: saying so about the shin of a pair of trousers was the
+        // untrue message this distinction exists to avoid.
+        Assert.False(parts.Parts[0].AuthorSwitched);
     }
 
-    /// <summary>One IMC switch anywhere in the mask is enough to refuse it, however many body tags sit
-    /// beside it — the pairing real mods use most.</summary>
+    /// <summary>One IMC switch anywhere in the mask is enough to report the stacking, however many body tags
+    /// sit beside it — the pairing real mods use most.</summary>
     [Fact]
-    public void ASubmeshMixingABodyAttributeWithAnImcSwitch_IsNotToggleable()
+    public void ASubmeshMixingABodyAttributeWithAnImcSwitch_IsToggleable_AndSaysSo()
     {
         var parts = ModelPartReader.Read(SyntheticModel.Build(["atr_sne", "atr_dv_a"],
             Mesh(new SyntheticModel.Sub(0b11))));
 
-        Assert.False(parts!.Parts[0].Toggleable);
+        Assert.True(parts!.Parts[0].Toggleable);
+        Assert.True(parts.Parts[0].AuthorSwitched);
     }
 
-    /// <summary>A bit with no name behind it is not a licence to add to a rule we cannot read.</summary>
+    /// <summary>
+    /// The one refusal left. A set bit the model declares no name for is a letter
+    /// <c>FreeLetters</c> cannot see, so the letter handed out for a new switch could be one the author's
+    /// IMC group already drives — and two options on one bit flip each other. Not reported as the author's
+    /// switch either: we do not know that it is.
+    /// </summary>
     [Fact]
     public void ASubmeshTaggedPastTheAttributeTable_IsNotToggleable()
     {
@@ -160,6 +197,7 @@ public class ModelPartReaderTests
             Mesh(new SyntheticModel.Sub(0b10))));
 
         Assert.False(parts!.Parts[0].Toggleable);
+        Assert.False(parts.Parts[0].AuthorSwitched);
     }
 
     [Fact]

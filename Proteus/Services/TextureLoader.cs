@@ -937,6 +937,38 @@ public class TextureLoader
          : (UVRemapService.ResizeBilinear(v.rgba, v.width, v.height, BaseTargetSize, BaseTargetSize),
             BaseTargetSize, BaseTargetSize);
 
+    /// <summary>Memo for <see cref="BaseNativeSize"/>'s game-data branch. Vanilla game data is immutable for
+    /// the session, which is the same reason <see cref="LoadBaseTexture"/> keys its own cache on the game
+    /// path alone.</summary>
+    private readonly ConcurrentDictionary<string, (int W, int H)?> nativeSizes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A base texture's NATIVE dimensions — what the file actually holds, before
+    /// <see cref="LoadBaseTexture"/> upscales it to <see cref="BaseTargetSize"/>.
+    /// <para/>
+    /// The upscale is why this is needed: it squares every base off at 4096, so a caller that has to know
+    /// the sheet's real ASPECT cannot get it from the loaded buffer. The doubled face layout is exactly such
+    /// a caller — a race whose face sheet is square (Au Ra, 2048²) doubles to 2:1, while every other race's
+    /// 1024×2048 doubles to square, and publishing both at 4096² would stretch one of them.
+    /// </summary>
+    public (int Width, int Height)? BaseNativeSize(string? diskPath, string gamePath)
+    {
+        if (diskPath != null && ProbeSize(diskPath) is { } onDisk) return onDisk;
+        return nativeSizes.GetOrAdd(gamePath, p =>
+        {
+            try
+            {
+                var tex = dataManager.GetFile<TexFile>(p);
+                return tex == null ? null : ((int, int)?)(tex.Header.Width, tex.Header.Height);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "[Proteus] Failed to read the native size of {0}", p);
+                return null;
+            }
+        });
+    }
+
     public (byte[] rgba, int width, int height)? LoadBaseTexture(string? diskPath, string gamePath)
     {
         if (diskPath != null && File.Exists(diskPath))

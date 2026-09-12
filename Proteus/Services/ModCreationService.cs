@@ -184,6 +184,89 @@ public sealed class ModCreationService
         return textureLoader.ResolveMtrlTexturesRaw(penumbra.ResolvePlayer(materialGamePath), materialGamePath);
     }
 
+    /// <summary>
+    /// Whether the picked art is a DOUBLED face sheet — the two sides of the head in the two halves of one
+    /// image — rather than a texture in the face's own layout.
+    /// <para/>
+    /// Judged by SHAPE, against the face the art targets. The pixels cannot answer it (the two halves of an
+    /// ordinary face texture are two regions of one face), but the proportions can, because a doubled sheet
+    /// is exactly twice as wide as the sheet it doubles. What that looks like depends on the race, which is
+    /// why this compares rather than testing a fixed aspect: an Au Ra face texture is 2048² — its horns
+    /// occupy the right half — so doubled it is 2:1, while every other race's is 1024×2048 and doubled it is
+    /// SQUARE. Resolution is irrelevant, since only the ratio is compared.
+    /// <para/>
+    /// Anything it cannot measure answers NO. A wrong "yes" sends the two halves of an ordinary face texture
+    /// to the two sides of the head, which is a mangled face; a wrong "no" is one tick the author can see
+    /// and set themselves.
+    /// </summary>
+    public bool LooksLikeDoubledFaceSheet(string materialTarget, string artPath)
+    {
+        try
+        {
+            if (TextureLoader.ProbeSize(artPath) is not { } art) return false;
+
+            // The material's own texture, as the reference layout. Any slot will do — every texture on one
+            // face material shares its UV layout, so they share its proportions.
+            var slots = ResolveMaterialSlots(materialTarget);
+            var slot = slots.Diffuse ?? slots.Normal ?? slots.Mask;
+            if (slot == null) return false;
+
+            // NEVER our own output. A face whose art is already rendered doubled has OUR sheet published at
+            // that path, and measuring against it reports the doubled shape as the face's native one — so
+            // the ratio comes out 1 and the box silently stops ticking. That is the second asymmetric face
+            // mod an author makes, which is exactly when they would least suspect the detect. Falling back
+            // to game data is right: the native layout is a property of the race, not of what is installed.
+            var disk = penumbra.ResolvePlayer(slot);
+            if (IsOwnOutput(disk)) disk = null;
+            if (textureLoader.BaseNativeSize(disk, slot) is not { } native) return false;
+
+            return IsDoubledAspect(art.Width, art.Height, native.Width, native.Height);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] could not judge whether {0} is a doubled face sheet", artPath);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a resolved disk path is a file Proteus itself published into the managed mod.
+    /// <para/>
+    /// The compositor has a far more careful version of this (it canonicalises, and answers "ours" when it
+    /// cannot tell, because compositing onto a previous composite is cumulative and silent). Here the stake
+    /// is one checkbox, so the cheap prefix test is enough — and it errs the other way on purpose: an
+    /// unanswerable path reads as NOT ours, which at worst measures a texture that is ours and leaves the
+    /// box unticked, the same outcome as any other failure to measure.
+    /// </summary>
+    private bool IsOwnOutput(string? diskPath)
+    {
+        if (string.IsNullOrEmpty(diskPath)) return false;
+        var root = penumbra.GetModDirectory();
+        if (string.IsNullOrEmpty(root)) return false;
+
+        var managed = Path.Combine(root, SidecarDiscoveryService.ManagedModDir)
+                          .Replace('/', Path.DirectorySeparatorChar)
+                          .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return diskPath.Replace('/', Path.DirectorySeparatorChar)
+                       .StartsWith(managed, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Is <paramref name="artW"/>×<paramref name="artH"/> twice as wide as a <paramref name="nativeW"/>×
+    /// <paramref name="nativeH"/> sheet, proportionally?
+    /// <para/>
+    /// The window is wide because the two answers are far apart: art in the face's own layout scores 1 and a
+    /// doubled sheet scores 2, so anything between 1.5 and 2.5 is unambiguous. It also has to absorb an
+    /// author rounding a sheet to the nearest power of two — 4096×2048 against a 2048² face is exactly 2,
+    /// but 3072-wide art against the same face is 1.5 and still meant as doubled.
+    /// </summary>
+    internal static bool IsDoubledAspect(int artW, int artH, int nativeW, int nativeH)
+    {
+        if (artW <= 0 || artH <= 0 || nativeW <= 0 || nativeH <= 0) return false;
+        double ratio = ((double)artW / artH) * ((double)nativeH / nativeW);
+        return ratio is >= 1.5 and <= 2.5;
+    }
+
     /// <summary>Alpha at or above this reads as opaque. Not 255: a whole-skin base exported through a lossy
     /// step lands a few counts short — the mod this was measured against bottoms out at 251 — and demanding
     /// the maximum would call it sheer.</summary>
@@ -789,8 +872,9 @@ public sealed class ModCreationService
         // one leaves a mod that loads in Penumbra and does nothing in Proteus.
         PenumbraModMeta.AtomicWrite(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
 
-        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. Written in the older
-        // layout on purpose: every Penumbra can read it, and a new one migrates it into meta.json on load.
+        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. It goes down BEFORE the
+        // redirects below, and that order is load-bearing now rather than incidental: PenumbraModMeta
+        // refuses to write into a pre-v4 folder, and a folder with no manifest at all reads as pre-v4.
         // Via AtomicWrite for durability — a manifest left truncated or zero-filled by a crash makes
         // Penumbra drop the whole mod, with only a parse error in its Messages tab to say why.
         PenumbraModMeta.AtomicWrite(

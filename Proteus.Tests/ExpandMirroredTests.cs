@@ -47,6 +47,44 @@ public class ExpandMirroredTests
     }
 
     /// <summary>
+    /// EXACT, byte for byte, in every channel and every row — and that is load-bearing rather than tidy.
+    /// <para/>
+    /// It is the reason <see cref="SecondSkinWriter.RewriteFaceUv0"/> leaves tangents alone. The game shades
+    /// with the tangent frame stored in the model; a -X vertex's frame is already the mirror of its +X
+    /// partner's and today both sample the same texel. After the rewrite that vertex reads the mirrored
+    /// half instead — so as long as the mirrored half holds identical VALUES, it reads the same numbers
+    /// through the same frame and symmetric art renders exactly as it does now. If this ever drifts to
+    /// "within a tolerance", that argument goes with it and the -X side starts shading differently.
+    /// </summary>
+    [Fact]
+    public void The_left_half_is_an_exact_mirror_of_the_right()
+    {
+        const int W = 128, H = 64;
+        var outp = UVRemapService.ExpandMirrored(Ramp(W / 2, H), W / 2, H, W, H);
+
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W / 2; x++)
+                for (int c = 0; c < 4; c++)
+                    Assert.Equal(outp[(y * W + x) * 4 + c], outp[(y * W + (W - 1 - x)) * 4 + c]);
+    }
+
+    /// <summary>
+    /// Expanding and folding back is the identity. The fold is what a doubled sheet falls back to when its
+    /// face model cannot be rewritten, so this is the guarantee that a mod's +X side does not MOVE when it
+    /// switches between the two paths — only its second side appears or disappears.
+    /// </summary>
+    [Fact]
+    public void Expand_then_fold_round_trips()
+    {
+        const int W = 64, H = 64;
+        var src = Ramp(W, H);
+        var folded = UVRemapService.CropRightHalf(UVRemapService.ExpandMirrored(src, W, H, W * 2, H), W * 2, H);
+
+        Assert.Equal(src.Length, folded.Length);
+        for (int i = 0; i < src.Length; i++) Assert.Equal(src[i], folded[i]);
+    }
+
+    /// <summary>
     /// The RIGHT half carries the source as authored: the un-mirror affine sends a +X vertex at u to
     /// 0.5 + u/2, so the right half must hold the source read left-to-right.
     /// </summary>

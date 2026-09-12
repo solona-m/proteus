@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Dalamud.Plugin.Services;
 using NSubstitute;
 using Proteus;
@@ -142,5 +144,85 @@ public class FaceSplitSpaceTests
             FaceArt(false, UVRemapService.FaceSplitSpace), wearingMirroredBody: true));
         Assert.False(CompositorService.NeedsUnmirroredShell(
             FaceArt(null, UVRemapService.FaceSplitSpace), wearingMirroredBody: true));
+    }
+
+    // ── handled in place ─────────────────────────────────────────────────────
+    // The shell is the fallback now, not the plan: the face's OWN model is rewritten to sample the doubled
+    // sheet (FaceUvDoublingService), which keeps its skin.shpk material, the wearer's tone, and every
+    // expression a shell would have frozen.
+
+    private static readonly string FaceMtrl =
+        "chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl";
+
+    private static IReadOnlySet<string> Handled(params string[] materials)
+        => new HashSet<string>(materials, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A material whose model was rewritten needs no shell — and must not get one, or the art
+    /// would render twice: once through the face and once through a duplicate floating in front of it.</summary>
+    [Fact]
+    public void A_face_handled_in_place_needs_no_shell()
+    {
+        Assert.False(CompositorService.NeedsUnmirroredShell(
+            FaceArt(true, UVRemapService.FaceSplitSpace), wearingMirroredBody: false, Handled(FaceMtrl)));
+    }
+
+    /// <summary>
+    /// ALL of an overlay's materials or none. A half-handled overlay would paint one surface through a
+    /// shell and the other through the skin at the same time — two renderings of one piece of art, at
+    /// different offsets, in different shaders.
+    /// </summary>
+    [Fact]
+    public void An_overlay_only_partly_handled_still_needs_its_shell()
+    {
+        var d = FaceArt(true, UVRemapService.FaceSplitSpace);
+        d.MaterialGamePaths =
+            [FaceMtrl, "chara/human/c0201/obj/face/f0002/material/mt_c0201f0002_fac_a.mtrl"];
+
+        Assert.True(CompositorService.NeedsUnmirroredShell(d, wearingMirroredBody: false, Handled(FaceMtrl)));
+    }
+
+    /// <summary>With nothing handled in place — the feature switched off, or the rewrite refused — the
+    /// shell is exactly what it always was.</summary>
+    [Fact]
+    public void Nothing_handled_in_place_is_todays_behaviour()
+    {
+        Assert.True(CompositorService.NeedsUnmirroredShell(
+            FaceArt(true, UVRemapService.FaceSplitSpace), wearingMirroredBody: false, Handled()));
+    }
+
+    // ── the half-float cost of living in the upper half of the sheet ─────────
+
+    /// <summary>
+    /// Face uv0 is half-precision in every vanilla model, and after the rewrite the whole face lives in
+    /// u ∈ [0.5, 1] — where a half's step is 2⁻¹¹ rather than the 2⁻¹² it had below 0.5. So the conversion
+    /// costs at most one texel of a 4096-wide sheet, and it is a smooth stretch rather than a seam: the
+    /// error varies continuously across a triangle.
+    /// </summary>
+    [Fact]
+    public void Half_precision_after_doubling_costs_at_most_one_texel_at_4096()
+    {
+        for (int i = 0; i <= 1000; i++)
+        {
+            float u = i / 1000f;
+            float doubled = 0.5f + u * 0.5f;
+            float stored = (float)(Half)doubled;
+            Assert.True(MathF.Abs(stored - doubled) * 4096f <= 1f,
+                $"u {u} stored as {stored}, {MathF.Abs(stored - doubled) * 4096f:F2} texels off");
+        }
+    }
+
+    /// <summary>
+    /// The two halves meet EXACTLY at the middle of the sheet: both sides' u = 0 maps to 0.5, which a half
+    /// stores without error. Anything else would open a hairline seam down the midline of the face, which
+    /// is the one place on a head nobody can avoid looking at.
+    /// </summary>
+    [Fact]
+    public void The_midline_closes_exactly()
+    {
+        var conv = Service().UvConverter(UVRemapService.FaceSpace, UVRemapService.FaceSplitSpace,
+                                         unmirror: true)!;
+        Assert.Equal(0.5f, conv(0f, 0.4f, 1)!.Value.U);
+        Assert.Equal(0.5f, conv(0f, 0.4f, -1)!.Value.U);
+        Assert.Equal(0.5f, (float)(Half)0.5f);
     }
 }

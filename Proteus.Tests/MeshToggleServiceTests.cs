@@ -551,6 +551,48 @@ public class MeshToggleServiceTests
         Assert.Equal([0u, 1u], other.Parts.Select(p => p.AttributeMask));
     }
 
+    /// <summary>
+    /// A sibling that differs only where nothing is being tagged IS patched.
+    /// <para/>
+    /// The check used to compare the two models whole, which threw away good siblings over geometry nobody
+    /// had claimed. Measured on a real mod: four sizes of one pair of trousers, the belt identical in every
+    /// one, but a different body mesh on the fourth — so the belt switch reached three sizes and silently
+    /// did nothing on the last.
+    /// </summary>
+    [Fact]
+    public void Write_PatchesASiblingThatDiffersOnlyWhereNothingIsClaimed()
+    {
+        const string otherRel = "items/other.mdl";
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0, TrianglesPerIsland: 3))));
+
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Multi\",\"Name\":\"Size\",\"Options\":["
+            + "{\"Name\":\"A\",\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}},"
+            + "{\"Name\":\"B\",\"Files\":{\"" + GamePath + "\":\"" + otherRel + "\"}}]}]}");
+        // Submesh 1.1 — the one being claimed — is identical. Only 1.2, which nobody tags, differs.
+        File.WriteAllBytes(Path.Combine(mod.Root, otherRel.Replace('/', Path.DirectorySeparatorChar)),
+            SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0, TrianglesPerIsland: 9))));
+
+        var redirects = Redirects(mod);
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var result = MeshToggleService.Write(
+            mod.Root, redirects.Single(r => r.File == ModelRel), parts,
+            [new MeshToggleService.Plan("Belt", [parts.Parts[0]])],
+            redirects, path => path == "chara/equipment/e0043/e0043.imc" ? Imc() : null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Empty(result.Skipped);
+        Assert.Equal(2, result.FilesPatched);
+        // Both files carry the switch, on the claimed submesh and nowhere else.
+        foreach (var rel in new[] { ModelRel, otherRel })
+        {
+            var m = ModelPartReader.Read(mod.Model(rel))!;
+            Assert.Equal(["atr_tv_a"], m.AttributeNames);
+            Assert.Equal([1u, 0u], m.Parts.Where(p => p.Island < 0).Select(p => p.AttributeMask));
+        }
+    }
+
     /// <summary>The record is a file a user may open; the legacy fields exist only to be read from an older
     /// one and must not reappear as nulls beside the real data.</summary>
     [Fact]
@@ -566,34 +608,281 @@ public class MeshToggleServiceTests
     }
 
     /// <summary>
-    /// Two IMC groups on one item are not merged — Penumbra keeps the first it reaches, ordered by
-    /// descending priority. Ours has to outrank an author's own edit for the same item, or it is never
-    /// applied at all and every switch is listed but inert.
+    /// The author's own IMC group for this item, with an option, a priority and a field Proteus has never
+    /// heard of. Used by the adoption tests below.
+    /// </summary>
+    private static void WriteAuthorImcGroup(Mod mod, string extra = "")
+        => File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Imc\",\"Name\":\"Straps\",\"Priority\":4,"
+            + "\"Page\":7,\"Description\":\"作者\",\"AllVariants\":true,\"OnlyAttributes\":true,"
+            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
+            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},\"DefaultSettings\":1,"
+            + "\"Options\":[{\"Name\":\"締める\",\"AttributeMask\":512}]" + extra + "}],"
+            + "\"DefaultData\":{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}}");
+
+    /// <summary>
+    /// Proteus MERGES into the author's IMC group rather than writing a second one beside it.
+    /// <para/>
+    /// It used to outrank them instead, which is only half a solution: Penumbra keeps one group per
+    /// identifier and discards the rest, so outranking the author does not overrule their group, it deletes
+    /// it. Their option would stay listed in the mod's settings doing nothing, and the bit it drove would
+    /// freeze at whatever our default entry said — which for a skirt gated off by default means the skirt,
+    /// and the bow just cut out of it, are hidden for good.
     /// </summary>
     [Fact]
-    public void Write_OutranksTheModsOwnImcGroupForTheSameItem()
+    public void Write_MergesIntoTheModsOwnImcGroupForTheSameItem()
     {
         using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
-        // The author's own IMC edit on the same set and slot, sitting above the default priority.
+        WriteAuthorImcGroup(mod);
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var outcome = Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]]));
+        Assert.True(outcome.Ok);
+
+        // One group, still theirs — and the user is told which one the switches landed in.
+        var groups = JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray().ToList();
+        var g = Assert.Single(groups);
+        Assert.Equal("Straps", g.GetProperty("Name").GetString());
+        Assert.Equal("Straps", outcome.GroupName);
+
+        // Every field Proteus does not own is carried through untouched, including one it cannot name.
+        Assert.Equal(4, g.GetProperty("Priority").GetInt32());
+        Assert.Equal(7, g.GetProperty("Page").GetInt32());
+        Assert.Equal("作者", g.GetProperty("Description").GetString());
+        Assert.Equal(43, g.GetProperty("Identifier").GetProperty("PrimaryId").GetInt32());
+
+        // Their option first, ours appended — and both ticked by default.
+        Assert.Equal(["締める", "Bow"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.Equal(0b11, g.GetProperty("DefaultSettings").GetInt32());
+
+        // Our bit is cleared from the default entry — the invariant that makes the option mean the same
+        // thing however Penumbra combines the two — while theirs and the material id are left alone.
+        int ourBit = g.GetProperty("Options")[1].GetProperty("AttributeMask").GetInt32();
+        int def = g.GetProperty("DefaultEntry").GetProperty("AttributeMask").GetInt32();
+        Assert.Equal(0, def & ourBit);
+        Assert.Equal(512, def & 512);
+        Assert.Equal(1, g.GetProperty("DefaultEntry").GetProperty("MaterialId").GetInt32());
+    }
+
+    /// <summary>
+    /// Writing twice must REPLACE our options in the adopted group, not append a second copy. The service
+    /// re-emits its whole switch set on every write, so a blind append would duplicate every earlier one.
+    /// </summary>
+    [Fact]
+    public void Write_TwiceIntoAnAdoptedGroup_ReplacesItsOwnOptions()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+        WriteAuthorImcGroup(mod);
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Belt", [parts.Parts[1]])).Ok);
+
+        var g = mod.Group("Straps");
+        Assert.Equal(["締める", "Bow", "Belt"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.Equal(0b111, g.GetProperty("DefaultSettings").GetInt32());
+    }
+
+    /// <summary>
+    /// A switch named after one of the author's own options would be DELETED rather than added: merging
+    /// drops every option Proteus owns before appending, and it owns anything sharing a name with a switch.
+    /// </summary>
+    [Fact]
+    public void Write_RefusesASwitchNamedAfterOneOfTheAuthorsOptions()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        WriteAuthorImcGroup(mod);
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var outcome = Write(mod, parts, new MeshToggleService.Plan("締める", [parts.Parts[0]]));
+
+        Assert.False(outcome.Ok);
+        Assert.Contains("締める", outcome.Message);
+        // Refused before anything was written: their option is still the only one.
+        Assert.Single(mod.Group("Straps").GetProperty("Options").EnumerateArray());
+    }
+
+    /// <summary>
+    /// A group pinned to ONE variant is not adopted. Ours is AllVariants, so it collides with the author's
+    /// on this set and slot whatever variant they named — but putting our switches INSIDE a group scoped to
+    /// a variant the item is not worn at means the geometry carries an attribute no entry ever enables, and
+    /// a submesh whose attributes are not all on does not draw. The part would simply be missing.
+    /// </summary>
+    [Fact]
+    public void Write_DoesNotAdoptAGroupPinnedToAnotherVariant()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
         File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
             "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Imc\",\"Name\":\"Straps\",\"Priority\":4,"
-            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
-            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},\"Options\":[{\"Name\":\"Hide\",\"AttributeMask\":512}]}],"
+            + "\"AllVariants\":false,"
+            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":3,\"EquipSlot\":\"Body\"},"
+            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},"
+            + "\"Options\":[{\"Name\":\"Hide\",\"AttributeMask\":512}]}],"
             + "\"DefaultData\":{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}}");
 
         var parts = ModelPartReader.Read(mod.Model())!;
         Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
 
-        Assert.True(mod.Group(MeshToggleService.GroupNameFor("Body")).GetProperty("Priority").GetInt32() > 4);
+        // Our own group, outranking theirs on the entry it does reach; theirs is left exactly as it was.
+        var ours = mod.Group(MeshToggleService.GroupNameFor("Body"));
+        Assert.True(ours.GetProperty("Priority").GetInt32() > 4);
+        Assert.Equal(["Hide"],
+            mod.Group("Straps").GetProperty("Options").EnumerateArray()
+                .Select(o => o.GetProperty("Name").GetString()));
     }
 
     /// <summary>
-    /// A v3 folder has no Groups array to count, and the sentinel that stood in for one overflowed the
-    /// legacy writer's ordinal arithmetic into a file called group_-2147483648_….json — which reads back as
-    /// an enormous NEGATIVE ordinal, sorting the group first rather than last.
+    /// A mod the outranking build already edited carries a Proteus group that is, right now, killing the
+    /// author's. The next write moves the switches into the author's group and removes the corpse.
     /// </summary>
     [Fact]
-    public void Write_OnALegacyFolder_NumbersTheGroupFileSanely()
+    public void Write_MovesAnEarlierProteusGroupIntoTheAuthorsGroup()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+
+        // First write with no author group at all: Proteus makes its own.
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+        Assert.Equal("Bow", mod.Group(MeshToggleService.GroupNameFor("Body"))
+            .GetProperty("Options")[0].GetProperty("Name").GetString());
+
+        // The author's group appears (a mod update), and the next write adopts it.
+        var meta = JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")));
+        var ourGroup = meta.RootElement.GetProperty("Groups").EnumerateArray()
+            .Single(g => g.GetProperty("Name").GetString() == MeshToggleService.GroupNameFor("Body"))
+            .GetRawText();
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Imc\",\"Name\":\"Straps\",\"Priority\":4,"
+            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
+            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},\"DefaultSettings\":1,"
+            + "\"Options\":[{\"Name\":\"Hide\",\"AttributeMask\":512}]}," + ourGroup + "],"
+            + "\"DefaultData\":{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}}");
+
+        parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Belt", [parts.Parts[1]])).Ok);
+
+        // One group left, the author's, carrying everything.
+        var groups = JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray().ToList();
+        var g = Assert.Single(groups);
+        Assert.Equal("Straps", g.GetProperty("Name").GetString());
+        Assert.Equal(["Hide", "Bow", "Belt"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+    }
+
+    /// <summary>
+    /// The whole point of the feature, end to end: a bow welded into a skirt the author ALREADY switches is
+    /// cut out and given a switch of its own.
+    /// <para/>
+    /// What proves it worked is the mask on the two submesh records afterwards. Both keep the author's bit
+    /// 0, and only the island cut out gains ours — which is what AND-stacking looks like on disk: the bow
+    /// draws when the author's skirt switch is on AND the new one is, and unticking the skirt takes the bow
+    /// with it.
+    /// </summary>
+    [Fact]
+    public void Write_SplitsAPartOutOfASubmeshTheAuthorAlreadySwitches()
+    {
+        using var mod = new Mod(SyntheticModel.Build(["atr_tv_a"],
+            Mesh(new SyntheticModel.Sub(0b1, Islands: 2, TrianglesPerIsland: 2))));
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        var bow = parts.Parts.Single(p => p.Label == "1.1.2");
+        Assert.True(bow.Toggleable);       // the refusal this change removed
+        Assert.True(bow.AuthorSwitched);
+
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [bow])).Ok);
+
+        var after = SecondSkinWriter.Parse(mod.Model());
+        Assert.Equal(["atr_tv_a", "atr_tv_b"], after.AttrNames);
+
+        // The split produced two records. Both still carry the author's bit; ours is on the bow alone.
+        var masks = ModelPartReader.Read(mod.Model())!.Parts
+            .Where(p => p.Island < 0).Select(p => p.AttributeMask).ToList();
+        Assert.Equal(2, masks.Count);
+        Assert.All(masks, m => Assert.Equal(1u, m & 1u));
+        Assert.Equal([1u, 0b11u], masks.OrderBy(m => m));
+    }
+
+    /// <summary>
+    /// A letter one of the author's own options already sets is taken LAST. Their option masks are not
+    /// rewritten, so an option carrying our bit would force our geometry on whenever it is selected.
+    /// </summary>
+    [Fact]
+    public void Write_PrefersALetterTheAuthorsOptionsDoNotTouch()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        // Their option drives bit 0 — the letter 'a', which is the one Proteus would otherwise hand out
+        // first since the model declares no attributes at all.
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock\",\"Groups\":[{\"Type\":\"Imc\",\"Name\":\"Straps\",\"Priority\":4,"
+            + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
+            + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},"
+            + "\"Options\":[{\"Name\":\"Hide\",\"AttributeMask\":1}]}],"
+            + "\"DefaultData\":{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}}");
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        Assert.Equal(["atr_tv_b"], SecondSkinWriter.Parse(mod.Model()).AttrNames);
+    }
+
+    /// <summary>
+    /// Undoing an adopted group takes OUR options back out and leaves the author's group standing — with
+    /// their default settings shifted back down as the options ahead of them go, and the default entry mask
+    /// restored to what Proteus first found.
+    /// </summary>
+    [Fact]
+    public void Revert_TakesOurOptionsOutOfAnAdoptedGroup_AndLeavesTheRest()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        WriteAuthorImcGroup(mod);
+        var original = mod.Model();
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+        Assert.True(MeshToggleService.Revert(mod.Root).Ok);
+
+        var g = mod.Group("Straps");
+        Assert.Equal(["締める"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.Equal(1, g.GetProperty("DefaultSettings").GetInt32());
+        Assert.Equal(4, g.GetProperty("Priority").GetInt32());
+        Assert.Equal(1023, g.GetProperty("DefaultEntry").GetProperty("AttributeMask").GetInt32());
+        Assert.Equal(original, mod.Model());
+    }
+
+    /// <summary>
+    /// A record written before adoption existed names a group Proteus MADE, and must still be deleted whole.
+    /// The absent AdoptedGroup field is what says so — which is the entire migration.
+    /// </summary>
+    [Fact]
+    public void Revert_OfARecordWrittenBeforeAdoption_StillDeletesTheGroup()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+
+        var parts = ModelPartReader.Read(mod.Model())!;
+        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+
+        // Strip the field a current build writes, leaving the shape an older one produced.
+        var recordPath = Path.Combine(mod.Root, "Proteus", MeshToggleService.RecordFile);
+        var record = File.ReadAllText(recordPath);
+        Assert.DoesNotContain("AdoptedGroup", record);   // never written for a group of our own
+
+        Assert.True(MeshToggleService.Revert(mod.Root).Ok);
+        Assert.Empty(JsonDocument.Parse(File.ReadAllText(Path.Combine(mod.Root, "meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray());
+    }
+
+    /// <summary>A pre-v4 folder is refused outright rather than half-written.</summary>
+    [Fact]
+    public void Write_OnALegacyFolder_IsRefused()
     {
         using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
         File.WriteAllText(Path.Combine(mod.Root, "meta.json"), "{\"FileVersion\":3,\"Name\":\"Frock\"}");
@@ -601,13 +890,12 @@ public class MeshToggleServiceTests
             "{\"Files\":{\"" + GamePath + "\":\"" + ModelRel + "\"}}");
 
         var parts = ModelPartReader.Read(mod.Model())!;
-        Assert.True(Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]])).Ok);
+        var before = File.ReadAllBytes(Path.Combine(mod.Root, ModelRel));
+        var outcome = Write(mod, parts, new MeshToggleService.Plan("Bow", [parts.Parts[0]]));
 
-        var file = Assert.Single(Directory.GetFiles(mod.Root, "group_*.json"));
-        var number = Path.GetFileNameWithoutExtension(file).Split('_')[1];
-        Assert.True(int.TryParse(number, out var n) && n is > 0 and < 1000, $"nonsense ordinal: {number}");
-        Assert.Equal("Imc", JsonDocument.Parse(File.ReadAllText(file)).RootElement
-            .GetProperty("Type").GetString());
+        Assert.False(outcome.Ok);
+        Assert.Empty(Directory.GetFiles(mod.Root, "group_*.json"));
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(mod.Root, ModelRel)));
     }
 
     /// <summary>

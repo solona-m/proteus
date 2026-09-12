@@ -33,31 +33,102 @@ internal static class ImcEntrySource
     /// <summary>
     /// The entry the mod itself declares for this item, or null if it declares none.
     /// <para/>
-    /// Matched on set AND slot: a mod can carry several IMC groups on one set that differ only by slot, and
-    /// taking the first would hand a pair of shoes the dress's entry.
+    /// Read off the group Penumbra would actually APPLY — see <see cref="AppliedGroupFor"/> — which is not
+    /// the same thing as the first one found. A mod carrying two IMC groups for one item has only one of
+    /// them in effect, and rebuilding from the loser's entry would state a mask the game never sees.
     /// </summary>
     public static ImcEntry? FromMod(string modRoot, int setId, string equipSlot)
-    {
-        foreach (var group in ImcGroups(modRoot))
-        {
-            if (!group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object)
-                continue;
-            if (Int(id, "PrimaryId") != setId) continue;
-            if (id.TryGetProperty("EquipSlot", out var es) && es.GetString() is { } slot
-                && !string.Equals(slot, equipSlot, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!group.TryGetProperty("DefaultEntry", out var e) || e.ValueKind != JsonValueKind.Object)
-                continue;
+        => AppliedGroupFor(modRoot, setId, equipSlot, null) is { } g ? EntryOf(g.Group) : null;
 
-            return new ImcEntry(
-                (byte)(Int(e, "MaterialId") ?? 1),
-                (byte)(Int(e, "DecalId") ?? 0),
-                (ushort)((Int(e, "AttributeMask") ?? 0) & 0x3FF),
-                (byte)(Int(e, "SoundId") ?? 0),
-                (byte)(Int(e, "VfxId") ?? 0),
-                (byte)(Int(e, "MaterialAnimationId") ?? 0));
+    /// <summary>One group's <c>DefaultEntry</c>, or null when it declares none.</summary>
+    public static ImcEntry? EntryOf(JsonElement group)
+    {
+        if (!group.TryGetProperty("DefaultEntry", out var e) || e.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return new ImcEntry(
+            (byte)(Int(e, "MaterialId") ?? 1),
+            (byte)(Int(e, "DecalId") ?? 0),
+            (ushort)((Int(e, "AttributeMask") ?? 0) & 0x3FF),
+            (byte)(Int(e, "SoundId") ?? 0),
+            (byte)(Int(e, "VfxId") ?? 0),
+            (byte)(Int(e, "MaterialAnimationId") ?? 0));
+    }
+
+    /// <summary>
+    /// Whether this group edits this item.
+    /// <para/>
+    /// Matched on set AND slot: a mod can carry several IMC groups on one set that differ only by slot, and
+    /// taking the first would hand a pair of shoes the dress's entry. <c>Variant</c> is deliberately NOT
+    /// compared — the groups Proteus writes are <c>AllVariants</c>, so they collide with an author's group
+    /// on this set and slot whatever variant it names.
+    /// </summary>
+    private static bool Matches(JsonElement group, int setId, string equipSlot)
+    {
+        if (!group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object)
+            return false;
+        if (Int(id, "PrimaryId") != setId) return false;
+        return !id.TryGetProperty("EquipSlot", out var es) || es.GetString() is not { } slot
+            || string.Equals(slot, equipSlot, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The mod's own IMC group for this item that Penumbra would actually apply, or null when it has none.
+    /// <para/>
+    /// Only one group per identifier survives: Penumbra collects manipulations with
+    /// <c>Groups.Index().Reverse().OrderByDescending(Priority)</c> and each calls
+    /// <c>MetaDictionary.TryAdd</c>, so the FIRST group reached wins and the rest are discarded outright.
+    /// That ordering is reproduced here — highest priority, and a later array position breaking a tie,
+    /// because <c>OrderByDescending</c> is stable and the reversal therefore decides equal priorities.
+    /// <para/>
+    /// Which matters because the losers are already dead. Merging switches into one of them would put them
+    /// in a group the game never reads, and they would be listed in the mod's settings doing nothing.
+    /// </summary>
+    /// <param name="exceptGroup">A group to ignore by name — the caller's own, so a second write does not
+    /// find the group it wrote last time and treat it as the author's.</param>
+    public static PenumbraModMeta.GroupRef? AppliedGroupFor(
+        string modRoot, int setId, string equipSlot, string? exceptGroup)
+    {
+        PenumbraModMeta.GroupRef? best = null;
+        int bestPriority = 0;
+        foreach (var g in ImcGroups(modRoot))
+        {
+            if (exceptGroup is { Length: > 0 }
+                && string.Equals(g.Name, exceptGroup, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!Matches(g.Group, setId, equipSlot)) continue;
+
+            int priority = Int(g.Group, "Priority") ?? 0;
+            if (best is { } b && (priority < bestPriority || (priority == bestPriority && g.Index < b.Index)))
+                continue;
+            best = g;
+            bestPriority = priority;
         }
+        return best;
+    }
+
+    /// <summary>The <c>Imc</c> group of this name, or null. What a revert has to edit its options back out of.</summary>
+    public static PenumbraModMeta.GroupRef? GroupNamed(string modRoot, string name)
+    {
+        foreach (var g in ImcGroups(modRoot))
+            if (string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase))
+                return g;
         return null;
+    }
+
+    /// <summary>
+    /// Every attribute bit any of this group's options sets.
+    /// <para/>
+    /// Used to prefer a letter the author's own options leave alone: an option whose mask happens to carry
+    /// the bit a new switch is given would force that geometry on whenever it is selected.
+    /// </summary>
+    public static ushort BitsUsedByOptions(JsonElement group)
+    {
+        ushort bits = 0;
+        if (group.TryGetProperty("Options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+            foreach (var o in opts.EnumerateArray())
+                bits |= (ushort)((Int(o, "AttributeMask") ?? 0) & 0x3FF);
+        return bits;
     }
 
     /// <summary>
@@ -67,19 +138,12 @@ internal static class ImcEntrySource
     /// </summary>
     public static (int SetId, string Slot)? IdentityOfGroup(string modRoot, string groupName)
     {
-        foreach (var group in ImcGroups(modRoot))
-        {
-            if (!group.TryGetProperty("Name", out var n)
-                || !string.Equals(n.GetString(), groupName, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object)
-                continue;
-            if (Int(id, "PrimaryId") is not { } setId) continue;
-            var slot = id.TryGetProperty("EquipSlot", out var es) ? es.GetString() : null;
-            if (slot is not { Length: > 0 }) continue;
-            return (setId, slot);
-        }
-        return null;
+        if (GroupNamed(modRoot, groupName) is not { } g) return null;
+        if (!g.Group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object)
+            return null;
+        if (Int(id, "PrimaryId") is not { } setId) return null;
+        var slot = id.TryGetProperty("EquipSlot", out var es) ? es.GetString() : null;
+        return slot is { Length: > 0 } ? (setId, slot) : null;
     }
 
     /// <summary>
@@ -90,43 +154,56 @@ internal static class ImcEntrySource
     /// (<c>MetaDictionary.TryAdd</c>) and discards the rest, and the order is descending priority. A group
     /// sitting below an author's own IMC edit for the same item is therefore not merely overruled, it is
     /// never applied at all: its switches would appear in the mod's settings and do nothing.
+    /// <para/>
+    /// This is now the FALLBACK, not the usual answer. <c>MeshToggleService</c> prefers to merge its
+    /// switches into the group the author already has (see <see cref="AppliedGroupFor"/>), and only writes
+    /// a competing group — which this prices — when there is nothing to merge into.
     /// </summary>
     public static int MaxPriorityFor(string modRoot, int setId, string slot, string exceptGroup)
     {
         int max = -1;
-        foreach (var group in ImcGroups(modRoot))
+        foreach (var g in ImcGroups(modRoot))
         {
-            if (group.TryGetProperty("Name", out var n)
-                && string.Equals(n.GetString(), exceptGroup, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!group.TryGetProperty("Identifier", out var id) || id.ValueKind != JsonValueKind.Object)
-                continue;
-            if (Int(id, "PrimaryId") != setId) continue;
-            if (id.TryGetProperty("EquipSlot", out var es) && es.GetString() is { } s
-                && !string.Equals(s, slot, StringComparison.OrdinalIgnoreCase))
-                continue;
-            max = Math.Max(max, Int(group, "Priority") ?? 0);
+            if (string.Equals(g.Name, exceptGroup, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!Matches(g.Group, setId, slot)) continue;
+            max = Math.Max(max, Int(g.Group, "Priority") ?? 0);
         }
         return max;
     }
 
-    /// <summary>Every <c>Imc</c> group in the mod, in either manifest layout.</summary>
-    private static IEnumerable<JsonElement> ImcGroups(string modRoot)
+    /// <summary>
+    /// Every <c>Imc</c> group in the mod, each with its position in the WHOLE <c>Groups</c> array.
+    /// <para/>
+    /// The index is the array position, not the position among Imc groups: it is what a rewrite passes back
+    /// to put a group where it was, and it is what breaks a priority tie in <see cref="AppliedGroupFor"/>.
+    /// Counting only the filtered ones would give both the wrong answer.
+    /// <para/>
+    /// v4 only. The pre-v4 <c>group_*.json</c> layout is not read here because nothing that consumes this
+    /// can act on it — every caller is on its way to a write, and <c>PenumbraModMeta</c> refuses a legacy
+    /// folder outright. A group with no <c>Name</c> is skipped for the same reason: a rewrite addresses it
+    /// by name, so one without a name cannot be put back.
+    /// </summary>
+    internal static List<PenumbraModMeta.GroupRef> ImcGroups(string modRoot)
     {
-        var groups = new List<JsonElement>();
+        var groups = new List<PenumbraModMeta.GroupRef>();
         try
         {
             var meta = Path.Combine(modRoot, PenumbraModMeta.MetaFile);
-            if (File.Exists(meta))
+            if (!File.Exists(meta)) return groups;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(meta));
+            if (!doc.RootElement.TryGetProperty("Groups", out var gs) || gs.ValueKind != JsonValueKind.Array)
+                return groups;
+
+            int index = 0;
+            foreach (var g in gs.EnumerateArray())
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(meta));
-                if (doc.RootElement.TryGetProperty("Groups", out var gs) && gs.ValueKind == JsonValueKind.Array)
-                    groups.AddRange(gs.EnumerateArray().Where(IsImc).Select(g => g.Clone()));
-            }
-            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json"))
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(file));
-                if (IsImc(doc.RootElement)) groups.Add(doc.RootElement.Clone());
+                int at = index++;
+                if (!IsImc(g)) continue;
+                if (!g.TryGetProperty("Name", out var n) || n.GetString() is not { Length: > 0 } name)
+                    continue;
+                // Clone: the JsonDocument is disposed when this method returns.
+                groups.Add(new PenumbraModMeta.GroupRef(name, at, g.Clone()));
             }
         }
         catch { /* unreadable — the caller falls through to the game's own entry */ }

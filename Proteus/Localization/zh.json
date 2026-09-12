@@ -943,12 +943,12 @@
     "message": "写入模组失败：{0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "这张脸部贴图按左右分成两半",
+  "Create.FaceAsymmetric.Label": {
+    "message": "这张脸部贴图是左右不对称的",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "仅当脸部贴图是按两半绘制时才勾选：角色的右侧画在图像的右半边，左侧画在左半边。\n普通脸部贴图让两侧脸颊使用相同的像素，因此只在一侧的标记无法存在——分成两半的贴图由 Proteus 通过脸部图层渲染。\n对任何普通脸部贴图请保持关闭。",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "用于按两半绘制的脸部贴图：角色的右侧画在图像的右半边，左侧画在左半边。\n普通脸部贴图让两侧脸颊使用相同的像素，因此只在一侧的标记无法存在。Proteus 会改为将脸部自身的 UV 移到一张加倍宽的贴图上，从而保留肤色和所有表情。\n当所选图像的宽度是该脸部自身贴图的两倍时，会自动勾选。对任何普通脸部贴图请保持关闭。",
     "description": ""
   },
   "Create.Glow.Always": {
@@ -1995,8 +1995,20 @@
     "message": "用勾选的部件创建开关",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "模组作者已将该部件绑定到自己的开关上，因此无法再添加一个。",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "作者开关",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "这个模组仍使用 Penumbra 的旧格式，Proteus 不会写入。请先在 Penumbra 中启用一次让它自行更新，然后再回来。",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "模组作者已经为这个部件设置了开关。你添加的开关会叠加在其之上：只有两者都开启时，该部件才会显示。",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "这个部件带有模型未命名的标记，Proteus 无法判断已经有什么在控制它，因此不会冒险添加可能冲突的开关。",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2080,7 +2092,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "已撤销。还原了 {0} 个模型文件，并移除了选项组。",
+    "message": "已撤销。已还原 {0} 个模型文件，并从该模组的设置中移除了开关。",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2113,6 +2125,10 @@
   },
   "Parts.Write.Btn": {
     "message": "将开关写入模组",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "该模组自带的「{0}」分组中已经有名为「{1}」的选项。请为新开关取一个不同的名称。",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

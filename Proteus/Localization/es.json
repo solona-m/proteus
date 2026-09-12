@@ -943,12 +943,12 @@
     "message": "No se pudo escribir el mod: {0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "Esta textura de cara está dividida izquierda/derecha",
+  "Create.FaceAsymmetric.Label": {
+    "message": "Esta textura de cara es asimétrica",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "Marca esto solo para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella: Proteus renderiza una dividida a través de una capa de cara.\nDéjalo desmarcado para cualquier textura de cara normal.",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "Para una textura de cara pintada como DOS MITADES: el lado derecho del personaje en la mitad derecha de la imagen, y su lado izquierdo en la mitad izquierda.\nUna textura de cara normal da a ambas mejillas los mismos píxeles, así que una marca en un solo lado no puede existir en ella. En su lugar, Proteus mueve los UV de la propia cara a una hoja doble, lo que conserva el tono de piel y todas las expresiones.\nSe marca automáticamente cuando la imagen elegida es el doble de ancha que la textura propia de esta cara. Déjalo desmarcado para cualquier textura de cara normal.",
     "description": ""
   },
   "Create.Glow.Always": {
@@ -1995,8 +1995,20 @@
     "message": "Crear un interruptor con las piezas marcadas",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "El autor del mod ya colocó esta pieza detrás de uno de sus propios interruptores, así que no puede admitir otro.",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "interruptor del autor",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "Este mod todavía usa el formato antiguo de Penumbra, en el que Proteus no escribe. Actívalo una vez en Penumbra para que se actualice solo y vuelve después.",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "La autora o el autor del mod ya tiene un interruptor en esta pieza. El tuyo se suma al suyo: la pieza solo se muestra cuando ambos están activados.",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "Esta pieza lleva una marca que el modelo no nombra, así que Proteus no puede saber qué la controla ya y no arriesgará un interruptor que choque con ella.",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2080,7 +2092,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "Deshecho. Se han restaurado {0} archivo(s) de modelo y se ha quitado el grupo de opciones.",
+    "message": "Deshecho. {0} archivo(s) de modelo restaurado(s) y los interruptores eliminados de los ajustes de este mod.",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2113,6 +2125,10 @@
   },
   "Parts.Write.Btn": {
     "message": "Escribir los interruptores en el mod",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "El propio grupo «{0}» de este mod ya tiene una opción llamada «{1}». Dale otro nombre al nuevo interruptor.",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

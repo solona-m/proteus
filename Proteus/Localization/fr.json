@@ -943,12 +943,12 @@
     "message": "Échec de l'écriture du mod : {0}",
     "description": ""
   },
-  "Create.FaceSplit.Label": {
-    "message": "Cette texture de visage est séparée gauche/droite",
+  "Create.FaceAsymmetric.Label": {
+    "message": "Cette texture de visage est asymétrique",
     "description": ""
   },
-  "Create.FaceSplit.Tip": {
-    "message": "Cochez ceci uniquement pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister — Proteus affiche une texture séparée via un calque de visage.\nLaissez ceci décoché pour toute texture de visage normale.",
+  "Create.FaceAsymmetric.Tip": {
+    "message": "Pour une texture de visage peinte en DEUX MOITIÉS : le côté droit du personnage dans la moitié droite de l'image, son côté gauche dans la moitié gauche.\nUne texture de visage ordinaire donne les mêmes pixels aux deux joues, donc une marque sur un seul côté ne peut pas y exister. Proteus déplace plutôt les UV du visage lui-même sur une planche doublée, ce qui préserve le teint et toutes les expressions.\nCoché pour vous lorsque l'image choisie est deux fois plus large que la texture propre de ce visage. Laissez-le décoché pour toute texture de visage ordinaire.",
     "description": ""
   },
   "Create.Glow.Always": {
@@ -1995,8 +1995,20 @@
     "message": "Créer un interrupteur à partir des pièces cochées",
     "description": ""
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "L'auteur du mod a déjà placé cette pièce derrière l'un de ses propres interrupteurs, elle ne peut donc pas en recevoir un autre.",
+  "Parts.AuthorSwitched.Tag": {
+    "message": "interrupteur de l'auteur",
+    "description": ""
+  },
+  "Parts.LegacyMod": {
+    "message": "Ce mod utilise encore l'ancien format de Penumbra, dans lequel Proteus n'écrit pas. Activez-le une fois dans Penumbra pour qu'il se mette à jour, puis revenez.",
+    "description": ""
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "L'auteur ou autrice du mod a déjà un interrupteur sur cette pièce. Le vôtre s'y ajoute : la pièce n'apparaît que si les deux sont activés.",
+    "description": ""
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "Cette pièce porte une étiquette que le modèle ne nomme pas : Proteus ne peut pas savoir ce qui la contrôle déjà et ne risquera pas un interrupteur qui entrerait en conflit.",
     "description": ""
   },
   "Parts.Budget.Fmt": {
@@ -2080,7 +2092,7 @@
     "description": ""
   },
   "Parts.Reverted.Fmt": {
-    "message": "Annulé. {0} fichier(s) de modèle restauré(s) et le groupe d'options supprimé.",
+    "message": "Annulé. {0} fichier(s) de modèle restauré(s), et les interrupteurs retirés des réglages de ce mod.",
     "description": ""
   },
   "Parts.Row.Fmt": {
@@ -2113,6 +2125,10 @@
   },
   "Parts.Write.Btn": {
     "message": "Écrire les interrupteurs dans le mod",
+    "description": ""
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "Le groupe « {0} » de ce mod possède déjà une option nommée « {1} ». Donnez un autre nom au nouvel interrupteur.",
     "description": ""
   },
   "Parts.Write.DuplicateName.Fmt": {

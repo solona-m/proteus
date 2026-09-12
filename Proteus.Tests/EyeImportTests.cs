@@ -495,8 +495,7 @@ public class EyeImportTests
 
         // The group arrives with the glow ticked — unlike the content importer's pieces, the animation is
         // the reason someone imported this.
-        var group = JsonDocument.Parse(File.ReadAllText(
-            Directory.EnumerateFiles(dir.Path, "group_*.json").Single())).RootElement;
+        var group = Assert.Single(PenumbraModMeta.TryReadGroups(dir.Path)!).Group;
         Assert.Equal("Multi", group.GetProperty("Type").GetString());
         Assert.Equal(EyeImportService.GroupName, group.GetProperty("Name").GetString());
         Assert.Equal(1, group.GetProperty("DefaultSettings").GetInt64());
@@ -543,6 +542,6 @@ public class EyeImportTests
 
         Assert.False(glow);
         Assert.False(File.Exists(Path.Combine(dir.Path, "Proteus", "metadata.json")));
-        Assert.Empty(Directory.EnumerateFiles(dir.Path, "group_*.json"));
+        Assert.Empty(PenumbraModMeta.TryReadGroups(dir.Path) ?? []);
     }
 }

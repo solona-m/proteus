@@ -943,13 +943,13 @@
     "message": "Failed to write the mod: {0}",
     "description": "Error message. Appears in the Create tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
-  "Create.FaceSplit.Label": {
-    "message": "This face texture is split left/right",
-    "description": "Checkbox in the Create tab, shown only when the target material is a face. Keep the \"###createFaceSplit\" suffix out of the translation - it is not part of this string."
+  "Create.FaceAsymmetric.Label": {
+    "message": "This face texture is asymmetric",
+    "description": "Checkbox in the Create tab, shown only for a face material."
   },
-  "Create.FaceSplit.Tip": {
-    "message": "Tick this only for a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it — Proteus renders a split one through a face layer instead.\nLeave this off for any normal face texture.",
-    "description": "Tooltip for the checkbox above. \"left\" and \"right\" are the character's own sides. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  "Create.FaceAsymmetric.Tip": {
+    "message": "For a face texture painted as TWO HALVES: the character's right side in the right half of the image, their left side in the left half.\nAn ordinary face texture gives both cheeks the same pixels, so a mark on one side alone cannot exist in it. Proteus moves the face's own UVs onto a doubled sheet instead, which keeps the skin tone and every expression.\nTicked for you when the picked image is twice as wide as this face's own texture. Leave it off for any ordinary face texture.",
+    "description": "Tooltip for the checkbox above. \"asymmetric\" means the character's left and right differ. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Create.Glow.Always": {
     "message": "Always glow",
@@ -1995,9 +1995,21 @@
     "message": "Make a switch from the ticked parts",
     "description": "Button. Creates one on/off switch covering every part currently ticked in the list above."
   },
-  "Parts.AlreadyGated.Tip": {
-    "message": "The mod's author already put this part behind one of its own switches, so it cannot take another.",
-    "description": "Tooltip on a part that cannot be picked, because the mod already controls its visibility."
+  "Parts.AuthorSwitched.Tag": {
+    "message": "author switch",
+    "description": "Dimmed marker at the end of a part row, meaning the mod's author already switches that part. Keep it short — it shares the row with a material name and a triangle count."
+  },
+  "Parts.LegacyMod": {
+    "message": "This mod is still in Penumbra's old layout, which Proteus will not write to. Enable it in Penumbra once so it updates itself, then come back.",
+    "description": "Shown when the chosen mod is still in Penumbra's pre-v4 folder layout, which Proteus reads but will not write to."
+  },
+  "Parts.StacksWithAuthor.Tip": {
+    "message": "The mod's author already has a switch on this part. A switch of yours stacks on top: the part shows only when both are on.",
+    "description": "Tooltip on a part the mod's author already switches. A switch added here stacks with theirs — the game draws a piece only when all of its attributes are on."
+  },
+  "Parts.UnreadableTag.Tip": {
+    "message": "This part is tagged with something the model does not name, so Proteus cannot tell what already controls it and will not risk a switch that collides with one.",
+    "description": "Tooltip on the one kind of part that still cannot be picked: its attribute mask sets a bit the model declares no name for."
   },
   "Parts.Budget.Fmt": {
     "message": "{0} of 10 switches left on this model",
@@ -2080,7 +2092,7 @@
     "description": "Shown when undo is asked for on a mod Proteus never edited."
   },
   "Parts.Reverted.Fmt": {
-    "message": "Undone. {0} model file(s) restored, and the option group removed.",
+    "message": "Undone. {0} model file(s) restored, and the switches removed from this mod's settings.",
     "description": "{0} is a count of model files restored."
   },
   "Parts.Row.Fmt": {
@@ -2114,6 +2126,10 @@
   "Parts.Write.Btn": {
     "message": "Write the switches into the mod",
     "description": "The button that actually edits the mod. Everything before this point is a preview."
+  },
+  "Parts.Write.AuthorOptionName.Fmt": {
+    "message": "This mod's own \"{0}\" group already has an option called \"{1}\". Give the new switch a different name.",
+    "description": "{0} is the mod's own option group name, {1} the colliding option name. Refused because merging our switches into that group would replace the author's option rather than add beside it."
   },
   "Parts.Write.DuplicateName.Fmt": {
     "message": "This item already has a switch called \"{0}\". Give the new one a different name.",
