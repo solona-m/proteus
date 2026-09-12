@@ -62,6 +62,7 @@ public class CompositorService : IDisposable
     private readonly DebounceGate recompositeGate = new();
     private readonly SecondSkinService secondSkin;
     private readonly UvSeamMapService seamMaps;
+    private readonly FaceUvDoublingService faceUv;
 
     private long _lastOwnRedrawTick = 0; // TickCount64 when we last called RedrawPlayer()
     private long _lastOwnReapplyTick = 0; // TickCount64 when we last called Glamourer ReapplyState()
@@ -564,6 +565,7 @@ public class CompositorService : IDisposable
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
                                                 ResolveUpstream);
         this.seamMaps  = new UvSeamMapService(log);
+        this.faceUv    = new FaceUvDoublingService(log, textureLoader, uvRemap);
 
         // Seeded before the first composite: the manifest on disk already masks last session's append
         // hosts, so PrimeUpstreamCache needs to know which they are before any shell has been rebuilt.
@@ -2652,6 +2654,15 @@ public class CompositorService : IDisposable
         foreach (var rel in skinRedirects.Values)
         {
             var disk = Path.Combine(managedModDir, rel.Replace('/', Path.DirectorySeparatorChar));
+            // A skin publish is not all textures any more: a doubled face puts its rewritten .mdl in the
+            // same manifest (see FaceUvDoublingService). AlreadyWritten parses a .tex header, which a model
+            // fails — and a permanent false here means the reuse path silently never fires again.
+            if (!disk.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
+            {
+                try { if (new FileInfo(disk) is { Exists: true, Length: > 0 }) continue; }
+                catch { /* unreadable — treat as missing, below */ }
+                return false;
+            }
             if (!AlreadyWritten(disk)) return false;
         }
         return true;
@@ -2817,6 +2828,11 @@ public class CompositorService : IDisposable
           .Append('\n');
         sb.Append("shape:").Append(BodyShapeSignature(_bodyShapeSnapshot)).Append('\n');
         sb.Append("bodytype:").Append(_lastCompositedBodyType).Append('\n');
+        // The face-doubling switch. It decides the LAYOUT every face texture is published in, so turning it
+        // off has to re-blend the face — otherwise the doubled textures stay published over a model that is
+        // no longer rewritten, which is the one combination that renders as nonsense rather than as a
+        // stale-but-valid face. `equip:` above already carries which face is drawn.
+        sb.Append("faceuv:").Append(config.FaceUvInPlace ? '1' : '0').Append('\n');
         sb.Append("charcodes:").Append(_lastCompositedCharCodes).Append('\n');
         sb.Append("glamcode:").Append(_glamourerCharCode).Append('\n');
         sb.Append("race:").Append(_drawnRaceCode).Append('\n');
@@ -3937,11 +3953,23 @@ public class CompositorService : IDisposable
             // longer promotes them.
             var capNarrowedMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // Filled by the face plan below, and read only by the promotion pass that runs after it. Declared
+            // here because a local function cannot capture a variable declared later in its block.
+            IReadOnlySet<string>? faceDoubledMaterials = null;
+
             // Shared with the editor so the two can't disagree about what was composited — see the static
             // NeedsUnmirroredShell. The hoisted `wearingMirroredBody` is passed rather than re-read, so every
             // overlay in this run is judged against one reading of the worn body.
             bool NeedsUnmirroredShell(OverlayDescriptor d)
-                => CompositorService.NeedsUnmirroredShell(d, wearingMirroredBody);
+                => CompositorService.NeedsUnmirroredShell(d, wearingMirroredBody, faceDoubledMaterials);
+
+            // Resolved ONCE, then walked twice. The face-doubling plan below has to be settled before the
+            // promotion pass can ask whether an overlay still needs a shell — and re-resolving to build it
+            // would repeat every mod's Penumbra settings IPC and its meta.json read, and re-announce a group
+            // mismatch that is meant to be said once. Each overlay carries its above-gear rank with it,
+            // because that is the one input the plan needs that only this pass can compute.
+            var resolvedEntries =
+                new List<(OverlayEntry Entry, IReadOnlyList<(ResolvedOverlay Overlay, bool AboveGear)> Overlays)>();
 
             foreach (var entry in entries)
             {
@@ -4022,10 +4050,28 @@ public class CompositorService : IDisposable
                         if (lowestGear == null || r.CompareTo(lowestGear.Value) > 0) lowestGear = r;
                     }
 
-                foreach (var overlay in overlays)
+                resolvedEntries.Add((entry, overlays
+                    .Select(o => (Overlay: o,
+                                  AboveGear: lowestGear.HasValue && Rank(o).CompareTo(lowestGear.Value) < 0))
+                    .ToList()));
+            }
+
+            // ── un-mirroring a face, in place ────────────────────────────────────────────────
+            // Asymmetric FACE art renders by moving the character's own face UVs into the doubled sheet,
+            // not by cutting a shell for it: a shell is emitted with no shape block, so it is a frozen
+            // duplicate of the head riding a millimetre proud of a face that is still blinking underneath.
+            // This runs BEFORE the promotion pass because its answer is what that pass asks — and before
+            // the material walk, because a material only publishes doubled textures if its model was
+            // actually rewritten. All three read this one plan, so they cannot disagree.
+            var facePlan = faceUv.Plan(resolvedEntries, _humanPartModels, penumbra.ResolvePlayer,
+                                       IsOwnOutput, managedModDir, config.FaceUvInPlace);
+            faceDoubledMaterials = facePlan.Materials;   // what NeedsUnmirroredShell reads, below
+
+            foreach (var (entry, entryOverlays) in resolvedEntries)
+            {
+                foreach (var (overlay, aboveGear) in entryOverlays)
                 {
                     var ov = overlay;
-                    bool aboveGear = lowestGear.HasValue && Rank(overlay).CompareTo(lowestGear.Value) < 0;
                     // A shell is cut from the body, so only a body-UV overlay has one to move onto (see
                     // CanRenderAsShell). An overlay that paints the face has to stay on its own material
                     // whatever its layer says — including a stored Gear layer, which the editor could write
@@ -4329,6 +4375,10 @@ public class CompositorService : IDisposable
             Directory.CreateDirectory(texturesDir);
 
             var redirects = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // The rewritten face models, into the SAME manifest as the doubled textures they belong with.
+            // One publish for both is what makes the pair atomic: a model redirect without its doubled
+            // textures (or the reverse) is a face sampling the wrong half of a sheet.
+            foreach (var (gamePath, relPath) in facePlan.ModelRedirects) redirects[gamePath] = relPath;
             int texturesPatched = 0;
             // Accumulated across the parallel per-material loop; published to _skinGlowTargets after it.
             var skinGlow = new ConcurrentDictionary<(string, string?, string?), List<Proteus.Interop.SkinGlowTarget>>();
@@ -4827,6 +4877,59 @@ public class CompositorService : IDisposable
                 }
 
                 var dstBodyType = UVRemapService.InferBodyType(mtrlGamePath);
+
+                // This material renders the DOUBLED face sheet: its own model was rewritten to sample one
+                // (see FaceUvDoublingService), so its bases are expanded into that layout, art declaring it
+                // is used unfolded, and vanilla-face-space art stacked beside it is expanded to match.
+                bool faceDoubled = facePlan.Materials.Contains(mtrlGamePath);
+
+                /// <summary>
+                /// Put a freshly loaded base into the doubled layout, and say what size it now is.
+                /// <para/>
+                /// The OUTPUT SIZE comes from the texture's NATIVE aspect, not from the loaded buffer:
+                /// LoadBaseTexture squares everything off at 4096 (see BaseTargetSize), and the doubled
+                /// sheet is twice as wide as the vanilla one. An Au Ra face sheet is 2048² — its horns take
+                /// the right half of it — so doubled it is 2:1 and publishes at 4096×2048; every other
+                /// race's is 1024×2048, so doubled it is square and publishes at 4096×4096. Either way each
+                /// half gets 2048 px, which is the Au Ra sheet's own width and twice everyone else's.
+                /// <para/>
+                /// ExpandMirrored resamples as it writes, so the base goes straight from the loaded buffer
+                /// into the doubled one with no intermediate.
+                /// </summary>
+                (byte[] Rgba, int W, int H) ToDoubled(byte[] rgba, int w, int h, string? texGamePath)
+                {
+                    int outW = TextureLoader.BaseTargetSize, outH = outW;
+                    if (texGamePath != null
+                        && textureLoader.BaseNativeSize(ResolveUpstream(texGamePath), texGamePath) is { } native
+                        && native.Width > 0 && native.Height > 0)
+                    {
+                        long want = (long)outW * native.Height / (2L * native.Width);
+                        int pow = 64;
+                        while (pow < want) pow <<= 1;
+                        outH = Math.Clamp(pow, 64, outW);
+                    }
+                    return (UVRemapService.ExpandMirrored(rgba, w, h, outW, outH), outW, outH);
+                }
+
+                /// <summary>
+                /// <see cref="LoadBaseNormal"/>, then into the doubled layout when this material is in it.
+                /// A wrapper because LoadBaseNormal is a class-level method and cannot see this material's
+                /// face state — and the normal is the slot that matters most here: it usually has no overlay
+                /// at all, so nothing else would ever put it in the layout its own model now samples.
+                /// </summary>
+                byte[] LoadBaseNormalHere(string gamePath, ref int w, ref int h)
+                {
+                    var n = LoadBaseNormal(gamePath, ref w, ref h);
+                    if (!faceDoubled || n is not { Length: > 0 }) return n;
+                    var d = ToDoubled(n, w, h, gamePath);
+                    w = d.W; h = d.H;
+                    return d.Rgba;
+                }
+                // What a FACE material's textures are in, this composite — null for everything else. Read by
+                // the art loads below, where "the destination space" has never had a name for a face.
+                string? dstFaceSpace = !FaceUvDoublingService.IsFaceMaterial(mtrlGamePath) ? null
+                                     : faceDoubled ? UVRemapService.FaceSplitSpace : UVRemapService.FaceSpace;
+
                 byte[]? RemapIfNeeded(byte[]? png, int w, int h, string? srcType, string? overlayPath = null,
                                       ResampleFilter filter = ResampleFilter.Auto)
                 {
@@ -4852,8 +4955,15 @@ public class CompositorService : IDisposable
                 byte[]? LoadRemapped(string path, int w, int h, string? srcType,
                                      ResampleFilter filter = ResampleFilter.Auto)
                 {
-                    if (srcType != null
-                        && string.Equals(srcType, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase))
+                    bool srcIsDoubledFace = srcType != null
+                        && string.Equals(srcType, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase);
+
+                    // A doubled sheet on a DOUBLED destination is already in the destination's layout: load it
+                    // whole at the output size and fold nothing. This is the whole point of the feature — the
+                    // author's second side survives because the face's own UVs were moved to meet it.
+                    if (srcIsDoubledFace && faceDoubled) return LoadPng(path, w, h, filter);
+
+                    if (srcIsDoubledFace)
                     {
                         // Timed as a LOAD, which is all it is: the same counter LoadPng feeds, so a folded
                         // sheet is not invisible to the phase numbers just because it skipped LoadPng.
@@ -4861,6 +4971,29 @@ public class CompositorService : IDisposable
                         try { return FoldFaceSplit(path, w, h, filter); }
                         finally { blendLoadStats.Stop(t0); }
                     }
+
+                    // The converse: art in the VANILLA face layout — declared, or undeclared on a face
+                    // material, which has always meant "already in the destination's space" — stacked on a
+                    // material that now renders doubled. Vanilla art describes BOTH sides with one sheet, so
+                    // both halves of the doubled one are entitled to it. Without this, a plain blush overlay
+                    // beside an asymmetric freckle sheet would be sampled at doubled coordinates and land on
+                    // a quarter of the face.
+                    if (faceDoubled
+                        && (srcType == null
+                            || string.Equals(srcType, UVRemapService.FaceSpace, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var t0 = PhaseCounter.Begin();
+                        try
+                        {
+                            // At HALF the output width, because that is the vanilla sheet this art is in;
+                            // ExpandMirrored then writes it into both halves at full size.
+                            var png = LoadPng(path, Math.Max(1, w / 2), h, filter);
+                            return png == null ? null
+                                 : UVRemapService.ExpandMirrored(png, Math.Max(1, w / 2), h, w, h);
+                        }
+                        finally { blendLoadStats.Stop(t0); }
+                    }
+
                     return RemapIfNeeded(LoadPng(path, w, h, filter), w, h, srcType, path, filter);
                 }
 
@@ -5008,7 +5141,10 @@ public class CompositorService : IDisposable
                 (byte[] W, byte[] T)? CombinedMaskAt(string modDir, int w, int h, string? srcBodyType = null)
                 {
                     if (!maskPathsByMod.TryGetValue(modDir, out var paths) || paths.Count == 0) return null;
-                    var bodyKey = $"{srcBodyType ?? ""}→{dstBodyType ?? ""}";
+                    // dstFaceSpace is in the key because dstBodyType is null for EVERY face material: without
+                    // it a doubled and an undoubled face material of the same size in one mod would share an
+                    // entry, and one of them would get the other's layout.
+                    var bodyKey = $"{srcBodyType ?? ""}→{dstBodyType ?? dstFaceSpace ?? ""}";
                     return combinedMaskCache.GetOrAdd((modDir, w, h, bodyKey), _ =>
                     {
                         int n = w * h;
@@ -5237,6 +5373,10 @@ public class CompositorService : IDisposable
                     var diffDisk = ResolveUpstream(texPaths.Diffuse);
                     var loaded = TimedLoadBaseTexture(diffDisk, texPaths.Diffuse);
                     if (loaded.HasValue) { baseD = loaded.Value.rgba; wD = loaded.Value.width; hD = loaded.Value.height; }
+                    // Into the doubled layout BEFORE anything else sees it — including SnapshotBaseDiffuse
+                    // below, so the "nothing blended" comparison still compares like with like.
+                    if (faceDoubled && baseD is { Length: > 0 })
+                        (baseD, wD, hD) = ToDoubled(baseD, wD, hD, texPaths.Diffuse);
                     baseD ??= Array.Empty<byte>();
 
                     // A skin mod's paths are invented (chara/bibo_mid_base.tex is in no game index), so there
@@ -5595,7 +5735,7 @@ public class CompositorService : IDisposable
                     // ── Step 2: load normal overlay; synthesize coverage if needed ──
                     if (desc.Normal != null && texPaths.Normal != null)
                     {
-                        baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                        baseN ??= LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
                             var normPath = Path.Combine(entry.SidecarRoot, desc.Normal);
@@ -5631,6 +5771,10 @@ public class CompositorService : IDisposable
                         {
                             var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
+                            // Into the doubled layout too — the mask is sampled with the same uv0 the
+                            // rewritten model now carries, so it cannot stay in the vanilla one.
+                            if (faceDoubled && baseM is { Length: > 0 })
+                                (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
                             baseM ??= Array.Empty<byte>();
                         }
                         if (baseM.Length > 0)
@@ -5992,7 +6136,7 @@ public class CompositorService : IDisposable
                     float skinMask = config.SkinColorSuppression * (desc.SkinToneMask ?? 1f);
                     if (desc.Diffuse != null && texPaths.Normal != null && skinMask > 0f && !purePrint)
                     {
-                        baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                        baseN ??= LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
                         if (baseN.Length > 0)
                         {
                             // AnyCoverage, not a null check: AllRowsPrint is a strict early-out that an
@@ -6024,6 +6168,10 @@ public class CompositorService : IDisposable
                         {
                             var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
                             if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
+                            // Into the doubled layout too — the mask is sampled with the same uv0 the
+                            // rewritten model now carries, so it cannot stay in the vanilla one.
+                            if (faceDoubled && baseM is { Length: > 0 })
+                                (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
                             baseM ??= Array.Empty<byte>();
                         }
                         if (baseM.Length > 0)
@@ -6063,7 +6211,7 @@ public class CompositorService : IDisposable
                     if (texPaths.Normal == null || !assets.Any(a => a.NormalPath != null)) continue;
                     lastSrcBodyTypeByMod.TryGetValue(modDir, out var maskSrcBodyType);
 
-                    baseN ??= LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                    baseN ??= LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
                     if (baseN.Length > 0)
                     {
                         // Snapshot before any mask relief — the combined masks-group coverage
@@ -6519,7 +6667,7 @@ public class CompositorService : IDisposable
                             if (baseN == null)
                             {
                                 aoLoadedNormal = true;
-                                baseN = LoadBaseNormal(texPaths.Normal, ref wN, ref hN);
+                                baseN = LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
                             }
                             if (baseN.Length > 0)
                             {
@@ -6580,6 +6728,26 @@ public class CompositorService : IDisposable
                     if (aoLoadedNormal && !aoIndentedNormal && baseN is { Length: > 0 }) baseN = null;
                 }
 
+                // A doubled material publishes EVERY slot its material declares, whether an overlay touched
+                // it or not. The normal is the case that forced this: a face overlay is usually diffuse-only,
+                // so nothing would have loaded the normal at all — and the model now samples the doubled
+                // sheet, so a normal left in the vanilla layout puts the face's relief on the wrong half of
+                // itself. Each load is a no-op when an earlier pass already did it.
+                if (faceDoubled)
+                {
+                    EnsureBaseDiffuse();
+                    if (texPaths.Normal != null) baseN ??= LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
+                    if (texPaths.Mask != null && baseM == null)
+                    {
+                        var mLoaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                        if (mLoaded.HasValue)
+                        {
+                            baseM = mLoaded.Value.rgba; wM = mLoaded.Value.width; hM = mLoaded.Value.height;
+                            (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
+                        }
+                    }
+                }
+
                 var baseName = SanitizeName(mtrlGamePath);
                 var channels = new System.Text.StringBuilder();
                 // WHICH game path each channel was published to. The material's texture paths are read out
@@ -6593,7 +6761,10 @@ public class CompositorService : IDisposable
                 // re-encode of its own pixels: lossy, pointless, and worst of all invisible, because a
                 // healthy-looking redirect is what a normal-only overlay and a BROKEN diffuse overlay both
                 // produced. Now the diffuse's absence from the redirects line below IS the signal.
-                if (!diffuseBlended && baseD is { Length: > 0 })
+                // …unless the RELAYOUT is the change. A doubled material's model was rewritten to sample the
+                // doubled sheet, so leaving the vanilla-layout base in place is not "no change", it is the
+                // face reading the wrong half of its own texture. Every slot must publish, blended or not.
+                if (!diffuseBlended && !faceDoubled && baseD is { Length: > 0 })
                 {
                     log.Debug("[Proteus] Nothing composited into the diffuse of {0} — leaving the base texture "
                             + "in place rather than republishing it", mtrlGamePath);
@@ -6616,7 +6787,10 @@ public class CompositorService : IDisposable
                 {
                     diffuseTag = TimedContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
 
-                    if (baseDiffuseTag != null && diffuseTag == baseDiffuseTag)
+                    // faceDoubled is exempt for the reason above — and it cannot trip this anyway, since the
+                    // base tag was taken before the expansion and the sizes differ. Stated rather than left
+                    // to that coincidence: the one thing this gate must never do is unpublish a relayout.
+                    if (!faceDoubled && baseDiffuseTag != null && diffuseTag == baseDiffuseTag)
                     {
                         if (diffuseContributors > 0)
                             log.Warning("[Proteus] Diffuse of {0} is byte-identical to the base skin after {1} "
@@ -7045,6 +7219,9 @@ public class CompositorService : IDisposable
                             entries.Concat(gearOverlays.Select(g => g.Entry))
                                    .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase)
                                    .Select(g => g.First()).ToList(),
+                            // The faces we rewrote this composite, as the user installed them. Without these
+                            // a shell cut from the same face would read OUR doubled model and double it again.
+                            facePlan.UpstreamModels,
                             // The size the prefetch above warmed at — see `gs`.
                             shellTexSize: gs);
                         if (shells != null)
@@ -7200,6 +7377,22 @@ public class CompositorService : IDisposable
                               + "publishing ({0:F0}ms in)", PhaseCounter.MsSince(tRunStart));
                 return;
             }
+
+            // A rewritten face model needs a full redraw for the same reason a shell's does: an in-place
+            // reload never re-fetches a .mdl, so the character would keep the model it already has. The
+            // SHRINK case matters as much as the grow — when the art goes away the redirect disappears and
+            // the face must reload its real model, or it keeps sampling a doubled sheet that is no longer
+            // published.
+            var faceUvPaths = new HashSet<string>(facePlan.ModelRedirects.Keys, StringComparer.OrdinalIgnoreCase);
+            if (facePlan.AnyModelChanged || !faceUvPaths.SetEquals(_lastFaceUvModelPaths))
+            {
+                nextNeedFullRedraw = true;
+                log.Debug("[Proteus] face uv: the set of rewritten face models changed ({0} now, {1} before) "
+                        + "— full redraw", faceUvPaths.Count, _lastFaceUvModelPaths.Count);
+            }
+            _lastFaceUvModelPaths = faceUvPaths;
+            // Shared with the editor, so its "Rendering as" badge cannot disagree with what was composited.
+            _faceDoubledMaterials = facePlan.Materials;
 
             _needFullRedraw    = nextNeedFullRedraw;
             _secondSkinActive  = nextSecondSkinActive;
@@ -9215,6 +9408,18 @@ public class CompositorService : IDisposable
     /// which only a full redraw does. Compared each composite to force one; an in-place reload can't do it.</summary>
     private HashSet<string> _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The face models rewritten into the doubled layout by the last composite. Compared, not just
+    /// stored: a set that SHRINKS has to force a redraw so the face reloads its real model.</summary>
+    private HashSet<string> _lastFaceUvModelPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The face materials the last composite rendered doubled — read by the editor's live
+    /// <see cref="NeedsUnmirroredShell(OverlayDescriptor)"/> so its badge says what was actually composited.
+    /// Volatile and replaced wholesale, never mutated, so a reader always sees one run's complete answer.
+    /// </summary>
+    private volatile IReadOnlySet<string> _faceDoubledMaterials =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The subset of <see cref="_lastShellHostPaths"/> we APPENDED into — the player's own worn item, whose
     /// model is read back as the base of the merge. These are the only published .mdl paths with an upstream
@@ -10648,7 +10853,16 @@ public class CompositorService : IDisposable
     /// question (see the instance overload) without re-deriving it. The compositor passes the value it
     /// hoisted once for the run; re-reading the live snapshot mid-run could answer two overlays differently.
     /// </summary>
-    internal static bool NeedsUnmirroredShell(OverlayDescriptor d, bool wearingMirroredBody)
+    /// <param name="faceHandledInPlace">
+    /// The face materials whose own model was rewritten into the doubled layout this composite (see
+    /// <see cref="FaceUvDoublingService"/>). Art painting those needs no shell at all — the face itself
+    /// samples the doubled sheet — and must not get one, or it would render twice.
+    /// <para/>
+    /// ALL of an overlay's materials or none: a half-handled overlay would paint its remaining surface
+    /// through a shell and this one through the skin at the same time.
+    /// </param>
+    internal static bool NeedsUnmirroredShell(OverlayDescriptor d, bool wearingMirroredBody,
+                                              IReadOnlySet<string>? faceHandledInPlace = null)
     {
         if (d.AsymmetricArt != true) return false;
         // The art has to have two sides to spread: art authored in a mirrored space itself has only one,
@@ -10659,7 +10873,10 @@ public class CompositorService : IDisposable
         // A doubled FACE sheet needs the shell unconditionally. The vanilla face layout is mirrored on every
         // character — there is no second face to be wearing — so unlike the body there is no "is the worn one
         // the mirrored one" question to ask, and activeBodyTypes never names a face anyway.
-        if (string.Equals(src, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(src, UVRemapService.FaceSplitSpace, StringComparison.OrdinalIgnoreCase))
+            return faceHandledInPlace == null
+                || d.MaterialGamePaths.Count == 0
+                || !d.MaterialGamePaths.All(faceHandledInPlace.Contains);
 
         return wearingMirroredBody;
     }
@@ -10730,7 +10947,9 @@ public class CompositorService : IDisposable
             var bt = UVRemapService.InferBodyType(m);
             if (bt != null) types.Add(bt);
         }
-        return NeedsUnmirroredShell(d, HasMirroredBodySurface(types));
+        // The last composite's doubled face materials, so the editor's badge says what was actually
+        // composited rather than what would have happened before the face's own UVs were rewritten.
+        return NeedsUnmirroredShell(d, HasMirroredBodySurface(types), _faceDoubledMaterials);
     }
 
     /// <summary>
