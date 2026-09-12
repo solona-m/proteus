@@ -675,6 +675,22 @@ public static class SecondSkinWriter
         public ushort Lod0MeshIndex, Lod0MeshCount;   // only LOD0 meshes are shelled
         public byte[] BoneBBoxes = [];    // BoneCount * 32
         public byte[] ModelBBoxes = [];   // 4 * 32
+
+        /// <summary>
+        /// Where those two blocks sit IN THE FILE, so an in-place edit can update them.
+        /// <para/>
+        /// The copies above are enough to merge models, which rebuilds the file around them. They are not
+        /// enough to edit one: a pass that moves vertices has to widen the stored extents where they lie,
+        /// and their position is only knowable from the walk that found them — it sits after the submesh
+        /// bone map and a variable run of padding, neither of which is recoverable from anything else in
+        /// <see cref="Source"/>.
+        /// <para/>
+        /// Why it matters that they be updated at all: understating a radius or a clip distance makes the
+        /// game cull the geometry while the body it belongs to is still on screen — the model blinking out
+        /// at an angle or a distance, with nothing in any log. An outward displacement is exactly the
+        /// direction that understates them.
+        /// </summary>
+        public int ModelBBoxAt, BoneBBoxAt;
         public float Radius, ModelClip, ShadowClip;
         public byte Flags1, Flags2;
         public byte[] Lods = [];          // 3 * 60
@@ -4341,10 +4357,12 @@ public static class SecondSkinWriter
 
         byte padding = s[p]; p += 1 + padding;
 
+        int modelBBAt = p;
         var modelBB = new byte[4 * BBoxSize];
         Array.Copy(s, p, modelBB, 0, Math.Min(modelBB.Length, s.Length - p));
         p += 4 * BBoxSize;
 
+        int boneBBAt = p;
         var boneBB = new byte[boneCount * BBoxSize];
         Array.Copy(s, p, boneBB, 0, Math.Min(boneBB.Length, s.Length - p));
 
@@ -4388,6 +4406,8 @@ public static class SecondSkinWriter
             ShapeBlock = shapeBlock,
             BoneBBoxes = boneBB,
             ModelBBoxes = modelBB,
+            ModelBBoxAt = modelBBAt,
+            BoneBBoxAt = boneBBAt,
             Radius = BitConverter.ToSingle(s, mh),
             ModelClip = BitConverter.ToSingle(s, mh + 28),
             ShadowClip = BitConverter.ToSingle(s, mh + 32),

@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "Это только предпросмотр — в мод ничего не записано. Сохранение ещё не сделано.",
+    "message": "не сохранено",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Сохранить в мод",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Записывает изменение в собственный файл модели мода, так что оно\nработает и с выключенным Proteus и уезжает вместе с модом.\nОригинал сначала копируется в Proteus/meshvolume-backup/ внутри\nмода, и всё можно отменить.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Сохранено. Поверхность смещена на {0:F2} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} точек, принадлежащих ползункам тела этой модели, не удалось сдвинуть вместе с ней — если включить такой ползунок, местами проникновение может вернуться.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Отменить сохранённое",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Возвращает каждую модель, изменённую кистью в этом моде, ровно\nв том виде, в каком её сделал автор.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "Моделей возвращено в авторский вид: {0}.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Ничего не нарисовано — сохранять нечего.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "Не удалось изменить {0}: {1}. Ничего не записано.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Запись не удалась: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Кисть ничего не меняла в этом моде.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: это было применено к той же модели после кисти, и возврат кисти сейчас отменит и его.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Ни одной исходной модели для восстановления не нашлось.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "переключатели частей",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "подгонку под шляпы",
     "description": ""
   },
   "Parts.Selected.Fmt": {

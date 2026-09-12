@@ -109,6 +109,10 @@ public sealed class PartsPanel
     /// <summary>Nodes the last dab actually reached, so a brush that is landing on nothing can say so.</summary>
     private int lastReached;
 
+    /// <summary>How many models in this mod the brush has already written, so the way back can be offered
+    /// only when there is something to go back from.</summary>
+    private int brushSaved;
+
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport,
         TextureLoader textureLoader, IPluginLog log)
@@ -275,6 +279,7 @@ public sealed class PartsPanel
         if (root == null) return;
 
         existing = MeshToggleService.ReadRecord(root);
+        brushSaved = MeshVolumeService.PatchedCount(root);
 
         // A pre-v4 folder is read-only to Proteus, so there is nothing useful to offer: every model would
         // be listed, clickable and staged, only for the write to refuse at the end. Answered before the
@@ -693,11 +698,76 @@ public sealed class PartsPanel
             using (ImRaii.Disabled(!vol.Dirty))
                 if (ImGui.Button(ps.BrushReset)) { vol.Reset(); AfterBrushEdit(); }
 
-            // Nothing writes yet. Said out loud rather than left to be discovered, because the preview is
-            // convincing enough to be mistaken for a saved edit.
             ImGui.Spacing();
-            ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
+            using (ImRaii.Disabled(!vol.Dirty))
+                if (ImGui.Button(ps.BrushSave)) SaveBrush();
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSaveTip);
+
+            // Said while there is something unsaved, rather than as a permanent notice: the preview is
+            // convincing enough to be mistaken for an edit that has already been written.
+            if (vol.Dirty)
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
+            }
+
+            if (brushSaved > 0)
+            {
+                ImGui.Spacing();
+                if (ImGui.Button(ps.BrushRevert)) RevertBrush();
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRevertTip);
+            }
         }
+    }
+
+    private void SaveBrush()
+    {
+        if (volume == null || parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
+
+        var rel = models[modelIndex].File;
+        byte[] bytes;
+        try { bytes = File.ReadAllBytes(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))); }
+        catch (Exception ex)
+        {
+            status = ex.Message;
+            statusIsError = true;
+            return;
+        }
+
+        var result = MeshVolumeService.Apply(root, rel, bytes, volume);
+        statusIsError = !result.Ok;
+        if (!result.Ok)
+        {
+            status = result.Message;
+            log.Warning("[Proteus] brush: {0}", result.Message);
+            return;
+        }
+
+        status = string.Format(Strings.Parts.BrushSavedFmt, volume.Worst * 1000f);
+
+        // Counted, not silent. A spare left behind means enabling that body slider puts the slots it
+        // rewires back where the author had them, which looks exactly like the brush having missed a patch.
+        if (result.UnmappedSpares > 0)
+        {
+            status += "\n" + string.Format(Strings.Parts.BrushSparesFmt, result.UnmappedSpares);
+            log.Warning("[Proteus] brush: {0} shape values could not be carried in {1}",
+                        result.UnmappedSpares, rel);
+        }
+
+        AfterModChange(root);
+    }
+
+    private void RevertBrush()
+    {
+        if (ModRoot() is not { } root) return;
+
+        var result = MeshVolumeService.Revert(root);
+        statusIsError = !result.Ok;
+        status = result.Ok
+            ? string.Format(Strings.Parts.BrushRevertedFmt, result.FilesWritten)
+            : result.Message;
+
+        AfterModChange(root);
     }
 
     private void AfterBrushEdit()
@@ -845,6 +915,7 @@ public sealed class PartsPanel
     private void AfterModChange(string root)
     {
         existing = MeshToggleService.ReadRecord(root);
+        brushSaved = MeshVolumeService.PatchedCount(root);
         viewport.Clear();   // so it rebuilds its pickable set against the edited model
         if (modelIndex >= 0) SelectModel(modelIndex);
 

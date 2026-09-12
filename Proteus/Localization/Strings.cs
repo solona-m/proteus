@@ -1656,7 +1656,36 @@ public sealed class PartsStrings
                                       + "###partsBrushReset";
 
     public readonly string BrushNotSavedYet = Loc.Localize("Parts.Brush.NotSavedYet",
-        "This is a preview only — nothing has been written to the mod. Saving is not built yet.");
+        "not saved yet");
+
+    public readonly string BrushSave = Loc.Localize("Parts.Brush.Save", "Save into the mod")
+                                     + "###partsBrushSave";
+
+    public readonly string BrushSaveTip = Loc.Localize("Parts.Brush.Save.Tip",
+        "Writes the change into the mod's own model file, so it keeps working with\n"
+      + "Proteus turned off and travels with the mod if you export it. The original\n"
+      + "is copied to Proteus/meshvolume-backup/ inside the mod first, and this can\n"
+      + "be undone.");
+
+    /// <summary>{0} is the furthest anything moved, in millimetres.</summary>
+    public readonly string BrushSavedFmt = Loc.Localize("Parts.Brush.Saved.Fmt",
+        "Saved. The surface was moved by up to {0:F2} mm.");
+
+    /// <summary>{0} is a count of shape values that could not be carried.</summary>
+    public readonly string BrushSparesFmt = Loc.Localize("Parts.Brush.Spares.Fmt",
+        "{0} points belonging to this model's body sliders could not be moved with it, so turning one of "
+      + "those sliders on may bring the clipping back in places.");
+
+    public readonly string BrushRevert = Loc.Localize("Parts.Brush.Revert", "Undo saved changes")
+                                       + "###partsBrushRevert";
+
+    public readonly string BrushRevertTip = Loc.Localize("Parts.Brush.Revert.Tip",
+        "Puts every model the brush has changed in this mod back exactly as its\n"
+      + "author made it.");
+
+    /// <summary>{0} is how many model files were put back.</summary>
+    public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",
+        "{0} model(s) put back as the author made them.");
 
     public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
         "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +

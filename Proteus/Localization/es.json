@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "Esto es solo una vista previa: no se ha escrito nada en el mod. Guardar aún no está hecho.",
+    "message": "sin guardar",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Guardar en el mod",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Escribe el cambio en el archivo de modelo del propio mod, así que sigue\nfuncionando con Proteus apagado y viaja con el mod si lo exportas. El\noriginal se copia antes a Proteus/meshvolume-backup/ dentro del mod, y\nesto se puede deshacer.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Guardado. La superficie se movió hasta {0:F2} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} puntos que pertenecen a los deslizadores de cuerpo de este modelo no pudieron moverse con él, así que activar uno de ellos puede devolver el problema en algunos sitios.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Deshacer lo guardado",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Devuelve cada modelo que el pincel ha cambiado en este mod exactamente\ncomo lo hizo su autor.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} modelo(s) devueltos tal como los hizo el autor.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "No se ha pintado nada, así que no hay nada que guardar.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "No se pudo editar {0}: {1}. No se ha escrito nada.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Falló la escritura: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "El pincel no ha cambiado nada en este mod.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Deshaz primero {0}: se aplicó al mismo modelo después del pincel, así que deshacer el pincel ahora también lo desharia.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "No se encontró ninguno de los modelos originales para restaurar.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "los interruptores de piezas",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "el ajuste de sombreros",
     "description": ""
   },
   "Parts.Selected.Fmt": {

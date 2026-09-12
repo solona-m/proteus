@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "这只是预览 — 尚未向模组写入任何内容。保存功能还没做。",
+    "message": "尚未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "保存到模组",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "将修改写入模组自己的模型文件，因此关掉 Proteus 也仍然有效，\n并且导出模组时会一起带走。原文件会先被复制到模组内的\nProteus/meshvolume-backup/，随时可以撤销。",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "已保存。表面最多移动了 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "有 {0} 个属于这个模型身材滑块的顶点无法随之移动，因此开启该滑块时，部分位置的穿模可能会重现。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "撤销已保存的修改",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "把笔刷在这个模组中修改过的每个模型，完全恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "已将 {0} 个模型恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "尚未涂抹任何内容，没有可保存的东西。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "无法编辑 {0}：{1}。未写入任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "写入失败：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "笔刷没有修改过这个模组的任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "请先撤销{0}：它是在笔刷之后应用到同一个模型上的，现在撤销笔刷会连带把它一起撤销。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "找不到任何可供恢复的原始模型。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "部位开关",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子适配",
     "description": ""
   },
   "Parts.Selected.Fmt": {
