@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "Ceci n'est qu'un aperçu — rien n'a été écrit dans le mod. L'enregistrement n'est pas encore fait.",
+    "message": "non enregistré",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Enregistrer dans le mod",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Écrit la modification dans le fichier de modèle du mod, elle continue donc\nde fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.\nL'original est d'abord copié dans Proteus/meshvolume-backup/ à l'intérieur\ndu mod, et cela peut être annulé.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Enregistré. La surface a été déplacée de {0:F2} mm au maximum.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} points appartenant aux curseurs de corps de ce modèle n'ont pas pu être déplacés avec lui ; activer l'un de ces curseurs peut donc faire revenir le problème par endroits.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Annuler les modifications",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Remet chaque modèle que le pinceau a modifié dans ce mod exactement comme\nson auteur l'avait fait.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} modèle(s) remis comme l'auteur les avait faits.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Rien n'a été peint, il n'y a donc rien à enregistrer.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} n'a pas pu être modifié : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Le pinceau n'a rien modifié dans ce mod.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Annulez d'abord {0} : appliqué au même modèle après le pinceau, remettre le pinceau maintenant l'annulerait aussi.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Aucun des modèles d'origine n'a pu être retrouvé pour être restauré.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "les interrupteurs de pièces",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "l'ajustement des chapeaux",
     "description": ""
   },
   "Parts.Selected.Fmt": {

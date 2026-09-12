@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "미리보기일 뿐이며 모드에는 아무것도 기록되지 않았습니다. 저장은 아직 만들지 않았습니다.",
+    "message": "아직 저장되지 않음",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "모드에 저장",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "변경을 모드 자신의 모델 파일에 기록하므로 Proteus를 꺼도 유지되고,\n모드를 내보내면 함께 따라갑니다. 원본은 먼저 모드 안의\nProteus/meshvolume-backup/ 에 복사되며, 언제든 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "저장했습니다. 표면이 억대 {0:F2} mm 움직였습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "이 모델의 바디 슬라이더에 속한 {0}개 지점을 함께 움직이지 못했습니다. 그 슬라이더를 햤면 일부 관통이 다시 나할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "저장된 변경 되돌리기",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "이 모드에서 봇이 바꿔 놓은 모든 모델을 제작자가 만든 상태로\n정확하게 되돌립니다.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "모델 {0}개를 제작자가 만들었던 상태로 되돌렸습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "츠한 것이 없어서 저장할 것도 없습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0}을 수정할 수 없었습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "기록 실패: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "이 모드에서 봇은 아무것도 바꾸지 않았습니다.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "먼저 {0}을 되돌리십시오. 봇 다음에 같은 모델에 적용되었으묀로, 지금 봇을 되돌리면 그것도 함께 사라집니다.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "되돌릴 원본 모델을 하나도 찾지 못했습니다.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "부프 스웬치",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "모자 맞추기",
     "description": ""
   },
   "Parts.Selected.Fmt": {

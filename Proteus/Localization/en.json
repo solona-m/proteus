@@ -2164,8 +2164,68 @@
     "description": "Button that discards every brush stroke on this model."
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "This is a preview only — nothing has been written to the mod. Saving is not built yet.",
+    "message": "not saved yet",
     "description": "Warning that the brush is preview-only in this build."
+  },
+  "Parts.Brush.Save": {
+    "message": "Save into the mod",
+    "description": "Button that writes the brush edit into the mod's model file."
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Writes the change into the mod's own model file, so it keeps working with\nProteus turned off and travels with the mod if you export it. The original\nis copied to Proteus/meshvolume-backup/ inside the mod first, and this can\nbe undone.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Saved. The surface was moved by up to {0:F2} mm.",
+    "description": "Shown after a successful save. {0} is a distance in millimetres."
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} points belonging to this model's body sliders could not be moved with it, so turning one of those sliders on may bring the clipping back in places.",
+    "description": "Shown after a save that could not carry every body-slider point. {0} is a count."
+  },
+  "Parts.Brush.Revert": {
+    "message": "Undo saved changes",
+    "description": "Button that puts every brushed model in the mod back."
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Puts every model the brush has changed in this mod back exactly as its\nauthor made it.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} model(s) put back as the author made them.",
+    "description": "Shown after undoing saved brush changes. {0} is a count of model files."
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Nothing has been painted, so there is nothing to save.",
+    "description": "Refusal when Save is pressed with nothing painted."
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} could not be edited: {1}. Nothing has been written.",
+    "description": "The model could not be edited. {0} is a file path, {1} the reason."
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Writing failed: {0}",
+    "description": "Writing to disk failed. {0} is the reason."
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "The brush has not changed anything in this mod.",
+    "description": "Refusal when there is nothing of the brush's to undo."
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Undo {0} first: it was applied to the same model after the brush was, so putting the brush back now would also undo it.",
+    "description": "Refusal when another feature edited the same model afterwards. {0} names that feature."
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "None of the original models could be found to restore.",
+    "description": "Refusal when the original models cannot be found."
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "part switches",
+    "description": "Names the part-switch feature inside MeshVolume.Revert.Blocked.Fmt."
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "hat fitting",
+    "description": "Names the hat-fitting feature inside MeshVolume.Revert.Blocked.Fmt."
   },
   "Parts.Selected.Fmt": {
     "message": "{0} part(s) ticked",

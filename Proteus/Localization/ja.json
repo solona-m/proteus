@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "これはプレビューです — MOD には何も書き込まれていません。保存は未実装です。",
+    "message": "未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "MOD に保存",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "変更を MOD 自身のモデルファイルに書き込みます。Proteus を切っても有効で、\nMOD を書き出しても付いていきます。元のファイルは先に MOD 内の\nProteus/meshvolume-backup/ にコピーされ、いつでも元に戻せます。",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "保存しました。表面は最大 {0:F2} mm 動きました。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "このモデルの体型スライダーに属する {0} 点を一緒に動かせませんでした。そのスライダーを有効にすると、一部で貫通が戻ることがあります。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "保存内容を元に戻す",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "この MOD でブラシが変更したすべてのモデルを、作者が作ったときの状態に\n正確に戻します。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} 件のモデルを作者の状態に戻しました。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "何も塗っていないので、保存するものがありません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} を編集できませんでした：{1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "書き込みに失敗しました：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "この MOD でブラシは何も変更していません。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。ブラシの後に同じモデルに適用されているため、ここでブラシを戻すとそれも消えてしまいます。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "復元する元のモデルが見つかりません。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "パーツのスイッチ",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子対応",
     "description": ""
   },
   "Parts.Selected.Fmt": {

@@ -2164,7 +2164,67 @@
     "description": ""
   },
   "Parts.Brush.NotSavedYet": {
-    "message": "Nur eine Vorschau — am Mod wurde nichts geändert. Das Speichern ist noch nicht gebaut.",
+    "message": "noch nicht gespeichert",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "In den Mod speichern",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Schreibt die Änderung in die Modelldatei des Mods, sodass sie auch bei\nabgeschaltetem Proteus wirkt und beim Exportieren erhalten bleibt. Das\nOriginal wird vorher nach Proteus/meshvolume-backup/ im Mod kopiert und\nlässt sich zurücknehmen.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Gespeichert. Die Oberfläche wurde um bis zu {0:F2} mm bewegt.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} Punkte, die zu den Körper-Reglern dieses Modells gehören, ließen sich nicht mitbewegen — wird einer dieser Regler aktiviert, kann das Durchdringen stellenweise zurückkommen.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Gespeichertes zurücknehmen",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Stellt jedes Modell, das der Pinsel in diesem Mod verändert hat, genau so\nwieder her, wie sein Autor es gemacht hat.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} Modell(e) wiederhergestellt, wie der Autor sie gemacht hat.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Es wurde nichts gemalt, also gibt es nichts zu speichern.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} konnte nicht bearbeitet werden: {1}. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Schreiben fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Der Pinsel hat in diesem Mod nichts verändert.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Nimm zuerst {0} zurück: es wurde nach dem Pinsel auf dasselbe Modell angewendet, also würde das Zurücknehmen des Pinsels es mit aufheben.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Keines der Originalmodelle war zum Wiederherstellen zu finden.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "die Teil-Schalter",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "die Hut-Anpassung",
     "description": ""
   },
   "Parts.Selected.Fmt": {
