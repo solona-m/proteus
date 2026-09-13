@@ -159,6 +159,10 @@
     "message": "[Proteus] Tu segunda piel se ha construido, pero el juego no la está dibujando. El accesorio que la sostiene está equipado y aun así el personaje no carga la versión de Proteus. Quítate ese accesorio y vuelve a ponértelo, o elige otro.",
     "description": ""
   },
+  "Chat.ShellNeedsRedraw": {
+    "message": "[Proteus] Tu segunda piel ha cambiado, pero el redibujado automático está desactivado, así que tu personaje sigue llevando la versión anterior. Cambia de zona o usa el botón Redraw de Penumbra para verla.",
+    "description": ""
+  },
   "Chat.UnclaimedRedirects.Fmt": {
     "message": "[Proteus] {0} de los archivos que publica Proteus no llegan al juego: no se resuelven a nada, lo que suele significar que el mod «Proteus» está desactivado en tu colección de Penumbra actual. Comprueba que esté activado allí.",
     "description": ""

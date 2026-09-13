@@ -159,6 +159,10 @@
     "message": "[Proteus] セカンドスキンは作成されましたが、ゲームが描画していません。土台となるアクセサリは装備されているのに、キャラクターがProteus版を読み込んでいません。そのアクセサリを外して付け直すか、別のものを選んでください。",
     "description": ""
   },
+  "Chat.ShellNeedsRedraw": {
+    "message": "[Proteus] セカンドスキンが変更されましたが、自動再描画がオフのため、キャラクターはまだ以前のバージョンを表示しています。エリアを移動するか、PenumbraのRedrawボタンで反映してください。",
+    "description": ""
+  },
   "Chat.UnclaimedRedirects.Fmt": {
     "message": "[Proteus] Proteusが公開しているファイルのうち{0}件がゲームに届いていません。まったく解決されていない状態で、たいていは現在のPenumbraコレクションで「Proteus」MODが無効になっていることを意味します。そこで有効になっているか確認してください。",
     "description": ""

@@ -159,6 +159,10 @@
     "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
     "description": ""
   },
+  "Chat.ShellNeedsRedraw": {
+    "message": "[Proteus] Deine zweite Haut hat sich geändert, aber das automatische Neuzeichnen ist aus, deshalb trägt dein Charakter noch die vorherige Version. Wechsle das Gebiet oder nutze Penumbras Redraw-Schaltfläche, um sie zu sehen.",
+    "description": ""
+  },
   "Chat.UnclaimedRedirects.Fmt": {
     "message": "[Proteus] {0} der von Proteus veröffentlichten Dateien erreichen das Spiel nicht — sie führen ins Leere, was meist bedeutet, dass der Mod „Proteus“ in deiner aktuellen Penumbra-Sammlung deaktiviert ist. Prüfe, ob er dort aktiviert ist.",
     "description": ""
