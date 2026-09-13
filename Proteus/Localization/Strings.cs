@@ -641,15 +641,18 @@ public sealed class SettingsStrings
         "composite with nothing changed still reports misses, raise this. Lower it if the\n" +
         "game starts paging. Released automatically after 60s idle.");
 
-    public readonly string ConnectorMeshes =
-        Loc.Localize("Settings.Output.ConnectorMeshes.Label", "Hide Connector Meshes");
+    public readonly string RedundantMeshes =
+        Loc.Localize("Settings.Output.RedundantMeshes.Label", "Hide redundant body meshes")
+        + "###hideRedundantMeshes";
 
-    public readonly string ConnectorMeshesTip = Loc.Localize("Settings.Output.ConnectorMeshes.Tip",
-        "Skip each body part's connector ring on the gear \"second skin\" — the small extra\n" +
-        "submesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\n" +
-        "that overlaps an already-complete body; on a sheer overlay the overlap doubles up and\n" +
-        "shows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\n" +
-        "skin, and hiding it would leave gaps.");
+    public readonly string RedundantMeshesTip = Loc.Localize("Settings.Output.RedundantMeshes.Tip",
+        "Skip skin the gear \"second skin\" would otherwise draw twice. Some bodies cover the\n" +
+        "same patch of themselves with two pieces of geometry — a small reinforcing ring at a\n" +
+        "joint (wrist/ankle/…) that the neighbouring part already draws, or a spare copy of a\n" +
+        "region sitting inside the one beside it. On a sheer overlay the overlap doubles up and\n" +
+        "shows as a more-opaque seam, or as a stocking drawn twice down the calf.\n\n" +
+        "Safe on any body: geometry is skipped only where something else demonstrably draws it.\n" +
+        "Turn it off if a patch of skin is missing from the shell.");
 }
 
 /// <summary>The Import tab's content-pack (.pmp) half — packs that ship their own meshes.</summary>

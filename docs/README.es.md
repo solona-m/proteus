@@ -132,7 +132,7 @@ Cosas que conviene saber:
 | Atenuación del tono de piel | Con cuánta fuerza resisten las superposiciones ser teñidas por tu tono de piel. |
 | Oclusión ambiental / Suavidad de la sombra / Skindenting | Intensidad global de la sombra de contacto y de la hendidura de normales alrededor de los bordes de las correas. |
 | Caché de texturas (MB) | Cuántos datos de textura decodificados mantener en memoria entre composiciones. |
-| Ocultar mallas de conexión | Omite los anillos de refuerzo de articulaciones de un cuerpo en la segunda piel. Solo hace falta para Neolithe. |
+| Ocultar mallas de cuerpo redundantes | Omite la piel que la segunda piel dibujaría dos veces: anillos de refuerzo de articulaciones que la parte vecina ya cubre, y copias sobrantes de una región. Activado por defecto, seguro en cualquier cuerpo. |
 
 Tres botones de aquí merecen mención:
 

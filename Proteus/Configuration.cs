@@ -17,12 +17,15 @@ public enum SiblingSynthesisMode
     AllBodies = 2,
 }
 
-/// <summary>Which body's redundant connector submeshes to skip when building the second-skin shell.</summary>
+/// <summary>
+/// Legacy storage for <see cref="Configuration.HideConnectorMeshes"/> — a setting that named one body mod
+/// because its heuristic had been shaped around that body. It is <see cref="Configuration.HideRedundantMeshes"/>
+/// now, a plain on/off that rests on evidence the geometry carries. Kept, with its member names, only so a
+/// config written by an older build still deserializes; renaming either would break that read for nothing.
+/// </summary>
 public enum ConnectorMeshMode
 {
-    /// <summary>Emit every skin submesh — the default, correct for vanilla/Bibo/etc.</summary>
     Off = 0,
-    /// <summary>Skip Neolithe's joint-connector submeshes, which overlap its already-complete body.</summary>
     Neolithe = 1,
 }
 
@@ -56,7 +59,7 @@ public class Configuration : IPluginConfiguration
     /// brand-new config is stamped current and so never runs a migration written for settings it was
     /// never saved with.
     /// </summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -187,11 +190,29 @@ public class Configuration : IPluginConfiguration
     public float AmbientOcclusionNormalDepth { get; set; } = 7f;
 
     /// <summary>
-    /// Skip a body's redundant connector rings when building the second-skin shell. Some bodies
-    /// (Neolithe) reinforce each joint (wrist/ankle/…) with a small extra submesh that overlaps an
-    /// already-complete main body; on a semi-transparent gear shell that overlap doubles the alpha and
-    /// shows as a more-opaque seam. The connector is the mesh's last submesh, so we drop that one only.
-    /// Off by default — on most bodies the last submesh is real skin.
+    /// Skip skin the second-skin shell would otherwise draw twice. A body can cover the same stretch of
+    /// itself with two pieces of geometry — a thin reinforcing ring at a joint that the neighbouring part
+    /// already draws, or a duplicate variant submesh sitting inside the one beside it — and on a
+    /// semi-transparent gear shell the overlap doubles the alpha: a more-opaque band at the wrist, or a
+    /// stocking drawn twice from the ankle to below the knee.
+    /// <para/>
+    /// ON BY DEFAULT, and body-agnostic. Neither rule assumes anything about which body is worn: a ring is
+    /// dropped only where another part demonstrably covers the same band, and a duplicate only where its
+    /// surface is already occupied by a sibling's. See <c>SecondSkinWriter.PlanConnectorDrops</c> for both
+    /// tests and the thresholds they use.
+    /// <para/>
+    /// The one case it cannot tell apart from a duplicate is an inner lining authored flush against the
+    /// skin — but a lining drawn under a sheer shell doubles the alpha in exactly the way this exists to
+    /// fix, so dropping it is the right answer there too.
+    /// </summary>
+    public bool HideRedundantMeshes { get; set; } = true;
+
+    /// <summary>
+    /// Legacy storage for the body-specific form of <see cref="HideRedundantMeshes"/>. Never read: the
+    /// v6 -> v7 migration turns the new setting on for everyone regardless, so there is nothing to carry
+    /// across. It stays a serialized property because deleting one does not delete what is already on
+    /// disk, and a property that reappears later meaning something else is a worse problem than an
+    /// unused one.
     /// </summary>
     public ConnectorMeshMode HideConnectorMeshes { get; set; } = ConnectorMeshMode.Off;
 
@@ -523,7 +544,12 @@ public class Configuration : IPluginConfiguration
     /// Carry a config written by an older build forward. Runs once at load, before any service reads a
     /// setting, and <see cref="Initialize"/> saves the result — so each step applies exactly once.
     /// </summary>
-    private void Migrate()
+    /// <remarks>
+    /// Internal rather than private so it can be tested. <see cref="Initialize"/> is the only caller in the
+    /// plugin, and it needs a live plugin interface to save through — which meant the one piece of code
+    /// whose whole job is to not lose somebody's settings had no test at all.
+    /// </remarks>
+    internal void Migrate()
     {
         // v1 -> v2: block compression is no longer on by default. Changing the property default reaches
         // only NEW configs, so without this every user who had already run the plugin would have stayed
@@ -567,6 +593,22 @@ public class Configuration : IPluginConfiguration
         // The v4 step is gone rather than kept and then reversed: running both would be writing a value
         // only to overwrite it, and a config at v4 should land on the property default like a new one.
         if (Version < 6) AutoHatCompat = false;
+
+        // v6 -> v7: the connector-mesh setting named a body mod and was off by default, so in practice it
+        // ran for almost nobody. Both its rules rest on measured evidence now rather than on a shape read
+        // off that one body, which is what makes it safe to run for everyone — so everyone gets it.
+        //
+        // Unconditional, and NOT carried across from the old enum, because the stored Off carries no
+        // information: the setting shipped off and named a body most users do not wear, so "never found
+        // this dropdown" and "tried it and set it back" are the same byte on disk. Reading it would switch
+        // the feature off for essentially every existing config on the strength of a choice almost none of
+        // them made.
+        //
+        // What it costs if that is wrong: a body region the shell no longer covers. That is visible
+        // immediately, the composite log names every drop and the reason for it, and the summary line
+        // names the setting to turn off. Against the doubled seams this removes for everyone who never
+        // knew the old dropdown existed, it is the right way round.
+        if (Version < 7) HideRedundantMeshes = true;
 
         Version = CurrentVersion;
     }

@@ -2327,12 +2327,12 @@
     "message": "对烘焙后的贴图进行块压缩（BC7），使每张贴图在硬盘和显存中的占用降至\n未压缩时的约四分之一。索引贴图保持未压缩，以保留其精确的行数值。\n关闭 = 不压缩（与之前逐字节相同）。",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Label": {
-    "message": "隐藏连接网格",
+  "Settings.Output.RedundantMeshes.Label": {
+    "message": "隐藏冗余的身体网格",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "在装备“第二层皮肤”上跳过各身体部位的连接环——即关节处（手腕／脚踝／……）\n那一小块额外的子网格。某些身体（Neolithe）会用一个环来加固关节，而该环与\n本已完整的身体重叠；在轻薄的叠加层上，这种重叠会叠加两次，显示为更不透明的\n接缝。其他身体请保持 Off——在那些身体上该子网格是真正的皮肤，隐藏它会留下缺口。",
+  "Settings.Output.RedundantMeshes.Tip": {
+    "message": "跳过装备“第二层皮肤”本来会重复绘制的皮肤。某些身体会用两块几何体覆盖同一\n处位置——相邻部件已经绘制的关节（手腕／脚踝／……）处的小加固环，或者嵌在\n旁边子网格里的一份多余的区域副本。在轻薄的叠加层上，这种重叠会叠加两次，\n显示为更不透明的接缝，或是小腿上被画了两次的长袜。\n\n在任何身体上都可安全使用：只有确实由其它几何体绘制的地方才会被跳过。\n如果外壳上缺少了一块皮肤，请关闭此项。",
     "description": ""
   },
   "Settings.Output.SharpAlpha.Label": {
