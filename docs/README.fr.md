@@ -132,7 +132,7 @@ Bon à savoir :
 | Atténuation de la teinte de peau | À quel point les calques résistent à être teintés par votre carnation. |
 | Occlusion ambiante / Douceur de l'ombre / Skindenting | Force globale de l'ombre de contact et du creux de normale autour des bords de sangle. |
 | Cache de textures (Mo) | Quantité de données de texture décodées gardées en mémoire entre deux compositions. |
-| Masquer les maillages de raccord | Ignore les anneaux de renfort d'articulation d'un corps sur la seconde peau. Utile uniquement pour Neolithe. |
+| Masquer les maillages de corps redondants | Ignore la peau que la seconde peau dessinerait deux fois : anneaux de renfort d'articulation qu'une partie voisine couvre déjà, et copies superflues d'une région. Activé par défaut, sûr sur n'importe quel corps. |
 
 Trois boutons ici méritent d'être connus :
 

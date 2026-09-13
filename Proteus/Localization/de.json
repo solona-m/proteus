@@ -2343,12 +2343,12 @@
     "message": "Komprimiert die gebackenen Texturen blockweise (BC7) und verkleinert jede auf etwa ein\nViertel ihrer unkomprimierten Größe auf der Festplatte und im VRAM. Die Index-Textur\nbleibt unkomprimiert, damit ihre exakten Zeilenwerte erhalten bleiben.\nAus = unkomprimiert (Byte-identisch wie zuvor).",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Label": {
-    "message": "Verbindungs-Meshes ausblenden",
+  "Settings.Output.RedundantMeshes.Label": {
+    "message": "Redundante Körper-Meshes ausblenden",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "Überspringt den Verbindungsring jedes Körperteils auf der „zweiten Haut“ der Ausrüstung —\ndas kleine zusätzliche Submesh an einem Gelenk (Handgelenk/Knöchel/…). Manche Körper\n(Neolithe) verstärken Gelenke mit einem Ring, der einen bereits vollständigen Körper\nüberlappt; bei einem durchsichtigen Overlay verdoppelt sich die Überlappung und zeigt\nsich als deckendere Naht. Lass es bei anderen Körpern auf Off — dort ist dieses Submesh\nechte Haut, und es auszublenden würde Lücken hinterlassen.",
+  "Settings.Output.RedundantMeshes.Tip": {
+    "message": "Überspringt Haut, die die „zweite Haut“ der Ausrüstung sonst doppelt zeichnen würde.\nManche Körper decken dieselbe Stelle mit zwei Geometrien ab — einem kleinen Ring an\neinem Gelenk (Handgelenk/Knöchel/…), den das Nachbarteil ohnehin zeichnet, oder einer\nzweiten Kopie einer Region in der daneben. Bei einem durchsichtigen Overlay verdoppelt\nsich das und zeigt sich als deckendere Naht oder doppelt gezeichneter Strumpf.\n\nAuf jedem Körper sicher: Geometrie wird nur dort übersprungen, wo nachweislich etwas\nanderes sie zeichnet. Schalte es aus, wenn auf der Hülle eine Hautstelle fehlt.",
     "description": ""
   },
   "Settings.Output.SharpAlpha.Label": {

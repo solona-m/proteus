@@ -2343,13 +2343,13 @@
     "message": "Block-compress the baked textures (BC7), cutting each to about a quarter of its\nuncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\nits exact row values. Off = uncompressed (byte-identical to before).",
     "description": "Tooltip. \"BC7\" and \"VRAM\" are technical terms - keep them. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Settings.Output.ConnectorMeshes.Label": {
-    "message": "Hide Connector Meshes",
-    "description": "Control label. Appears in the Settings tab."
+  "Settings.Output.RedundantMeshes.Label": {
+    "message": "Hide redundant body meshes",
+    "description": "Checkbox in Settings > Output."
   },
-  "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "Skip each body part's connector ring on the gear \"second skin\" — the small extra\nsubmesh at a joint (wrist/ankle/…). Some bodies (Neolithe) reinforce joints with a ring\nthat overlaps an already-complete body; on a sheer overlay the overlap doubles up and\nshows as a more-opaque seam. Leave Off for other bodies — there that submesh is real\nskin, and hiding it would leave gaps.",
-    "description": "\"Neolithe\" is a body mod's name. \"Off\" refers to the dropdown value of this same setting. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  "Settings.Output.RedundantMeshes.Tip": {
+    "message": "Skip skin the gear \"second skin\" would otherwise draw twice. Some bodies cover the\nsame patch of themselves with two pieces of geometry — a small reinforcing ring at a\njoint (wrist/ankle/…) that the neighbouring part already draws, or a spare copy of a\nregion sitting inside the one beside it. On a sheer overlay the overlap doubles up and\nshows as a more-opaque seam, or as a stocking drawn twice down the calf.\n\nSafe on any body: geometry is skipped only where something else demonstrably draws it.\nTurn it off if a patch of skin is missing from the shell.",
+    "description": "Tooltip. \"second skin\" is Proteus' own term for the gear-layer shell it builds - keep the quotes. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.Output.SharpAlpha.Label": {
     "message": "Sharp alpha (gpose sphere/metal)",

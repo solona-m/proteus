@@ -266,6 +266,14 @@ public sealed class SecondSkinService
     private string? lastCapDeclined, lastCapUsed;
 
     /// <summary>
+    /// The last redundancy tally reported, for the same reason as the cap messages above: the shell is
+    /// rebuilt on every equipment change, settings tweak and ambient trigger, and this line would otherwise
+    /// repeat several times a minute for the whole session. The Dalamud log is size-capped and stops
+    /// writing when it fills, so a line that says nothing new is spending someone else's diagnostics.
+    /// </summary>
+    private string? lastRedundant;
+
+    /// <summary>
     /// Files to redirect, plus the metadata edits that make the shells load.
     ///
     /// <paramref name="ShellChanged"/> is true when the model, a material OR a texture differs from what
@@ -536,6 +544,32 @@ public sealed class SecondSkinService
     internal static bool GovernsModel(IReadOnlyList<ContentAttributeGroup>? groups, string modelRel)
         => groups is { Count: > 0 } && groups.Any(g => Governs(g, modelRel));
 
+    /// <summary>
+    /// What the game has toggled on one drawn model — its enabled shape keys and switched-off variant
+    /// attributes, see <see cref="Interop.BodyShapeReader.ReadEnabledShapes"/>.
+    /// <para/>
+    /// The live walk keys each model by the file the game LOADED, and for a modded model that is the mod's own
+    /// file on disk: Neolithe's legs arrive as <c>…/default legs - smallclothes/gen c small.mdl</c>, not
+    /// <c>c0201e0000_dwn</c>. Asking by game path alone matched nothing on any modded body, which is why
+    /// neither its shape keys nor its variant attributes ever reached the shell.
+    /// <para/>
+    /// Full paths first, disk before game — the disk file IS what was loaded. The file-name stem only after
+    /// both miss, and the walk only records a stem no two drawn models share, so the fallback can come back
+    /// empty but never with another model's set.
+    /// </summary>
+    internal static HashSet<string>? LiveModelState(
+        IReadOnlyDictionary<string, HashSet<string>>? live, string gamePath, string? diskPath)
+    {
+        if (live == null) return null;
+        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.PathKey(diskPath), out var byDisk))
+            return byDisk;
+        if (live.TryGetValue(Interop.BodyShapeReader.PathKey(gamePath), out var byGame))
+            return byGame;
+        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.Stem(diskPath), out var byDiskStem))
+            return byDiskStem;
+        return live.TryGetValue(Interop.BodyShapeReader.Stem(gamePath), out var byGameStem) ? byGameStem : null;
+    }
+
     internal static IReadOnlySet<string>? HiddenAttributes(
         IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
         IReadOnlyDictionary<string, List<string>>? selected)
@@ -687,6 +721,58 @@ public sealed class SecondSkinService
     /// and would have to admit these.
     /// </summary>
     private readonly Dictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Each body part measured for the redundancy pass, against the exact bytes it was measured from.
+    /// <para/>
+    /// The measurement is intrinsic to the model and the shell is rebuilt on every equipment change, every
+    /// settings tweak and every ambient trigger — so without this, a body nobody has touched is re-decoded
+    /// several times a minute for an answer that cannot have moved.
+    /// <para/>
+    /// Validated TWICE, cheapest first. By reference, because a composite that re-resolves an unchanged mod
+    /// hands back the very same array (the same reasoning as
+    /// <c>FaceUvDoublingService._rewrites</c>); then by content hash, which is what catches a mod swapped
+    /// underneath one path and handed to us as a fresh array with the same bytes — or different ones.
+    /// <para/>
+    /// Session-lifetime and bounded by the number of body paths a character draws, so there is nothing to
+    /// evict: a part measures out at roughly 160 KB. Concurrent because composites overlap.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (byte[] Src, ulong Hash, SecondSkinWriter.ConnectorProfile P)>
+        _connectorProfiles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// This part's redundancy measurement, taken once. Null when the model cannot be read, which the
+    /// writer treats as "measure it yourself" and, failing that, as "drop nothing".
+    /// </summary>
+    private SecondSkinWriter.ConnectorProfile? ConnectorProfileFor(string path, byte[] bytes)
+        => CachedConnectorProfile(_connectorProfiles, path, bytes, b => SecondSkinWriter.ReadConnectorProfile(b));
+
+    /// <summary>
+    /// The cache's whole behaviour, as a function of its store — so the two-level validation can be tested
+    /// without standing up a service. <paramref name="read"/> is the measurement, counted by the test.
+    /// </summary>
+    internal static SecondSkinWriter.ConnectorProfile? CachedConnectorProfile(
+        ConcurrentDictionary<string, (byte[] Src, ulong Hash, SecondSkinWriter.ConnectorProfile P)> store,
+        string path, byte[] bytes, Func<byte[], SecondSkinWriter.ConnectorProfile?> read)
+    {
+        if (store.TryGetValue(path, out var e))
+        {
+            if (ReferenceEquals(e.Src, bytes)) return e.P;
+            ulong h = Hash(bytes);
+            if (h == e.Hash)
+            {
+                // Same content through a new array. Adopt the new one so the free reference check wins
+                // next time rather than re-hashing the model on every composite from here on.
+                store[path] = (bytes, h, e.P);
+                return e.P;
+            }
+        }
+
+        var profile = read(bytes);
+        if (profile == null) return null;
+        store[path] = (bytes, Hash(bytes), profile);
+        return profile;
+    }
 
     /// <summary>
     /// Write only when the bytes differ, atomically. Internal because <see cref="FaceUvDoublingService"/>
@@ -1603,9 +1689,8 @@ public sealed class SecondSkinService
                 part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024, shape,
                 bodyDisk ?? "(game data)");
 
-            // Shape keys enabled on this exact body model (matched by file stem, e.g. c0201e0000_dwn).
-            HashSet<string>? partShapes = null;
-            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(bodyGamePath), out partShapes);
+            // Shape keys enabled on this exact body model (matched by file stem — see LiveModelState).
+            var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);
 
             bodies.Add((bytes, partShapes, bodyGamePath, partType));
         }
@@ -1688,7 +1773,7 @@ public sealed class SecondSkinService
                     // so folding in the face and other stems costs nothing.
                     HashSet<string>? wholeShapes = null;
                     if (enabledBodyShapes != null
-                        && !enabledBodyShapes.TryGetValue(Interop.BodyShapeReader.Stem(whole.Path), out wholeShapes))
+                        && (wholeShapes = LiveModelState(enabledBodyShapes, whole.Path, whole.Disk)) == null)
                     {
                         wholeShapes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var set in enabledBodyShapes.Values) wholeShapes.UnionWith(set);
@@ -1785,9 +1870,10 @@ public sealed class SecondSkinService
         // Ask the geometry, not the body-type table — per PART, because a shell mixes them. A mod is free to
         // ship a body it calls vanilla and unwrap it however it likes, and un-mirroring one that is already
         // un-mirrored would tear it in half.
-        // Each part's LOD0 skin, decoded AT MOST ONCE. Two passes want it — the un-mirror check here and the
-        // connector bands below — and it is the most expensive read in this method, so neither pass gets to
-        // repeat it and neither pays for it when it isn't asked for.
+        // Each part's LOD0 skin, decoded AT MOST ONCE. The un-mirror check below is the only caller left —
+        // the redundancy pass used to share it, and now takes its own positions-only measurement instead
+        // (SecondSkinWriter.ReadConnectorProfile), which is both cheaper and cached across composites. Still
+        // memoised: this is the most expensive read in the method, and it is not paid when nothing asks.
         var partGeom = new (float[] Pos, float[] Uv)?[bodies.Count];
         var geomRead = new bool[bodies.Count];
         (float[] Pos, float[] Uv)? Geometry(int i)
@@ -1950,52 +2036,33 @@ public sealed class SecondSkinService
         // are grouped. The list is why the code beneath stops reading `bodies`/`cutCode`/`bodyType` as
         // ambient facts about "the" shell and asks a surface instead.
         //
-        // Every source is a BODY part, so all of them take the default body-skin mesh filter and the
-        // configured connector heuristic. Those were three arrays index-aligned with `bodies` by convention;
-        // see SecondSkinWriter.SourceSpec for why they are one thing now.
-        bool skipConnectors = config.HideConnectorMeshes == ConnectorMeshMode.Neolithe;
-
-        // The vertical extent of each part's skin, so the connector heuristic can ask whether a seam ring is
-        // actually redundant instead of assuming it. A ring at the top of the hands is covered by the legs
-        // above it; the neck ring on a garment's bundled torso has nothing above it and is real skin.
+        // Every source is a BODY part, so all of them take the default body-skin mesh filter and run the
+        // redundancy pass. Those were three arrays index-aligned with `bodies` by convention; see
+        // SecondSkinWriter.SourceSpec for why they are one thing now.
         //
-        // Only when the heuristic is actually going to run. This is a full LOD0 decode per part, and with the
-        // setting off nothing would ever read the answer — so the sources get a NULL band list, which is what
-        // tells the writer to keep its shape-only judgement rather than "nothing covers anything".
-        var partBands = new (float Lo, float Hi)?[bodies.Count];
-        if (skipConnectors)
-            for (int i = 0; i < bodies.Count; i++)
-            {
-                if (Geometry(i) is not { } g) continue;
-                float lo = float.MaxValue, hi = float.MinValue;
-                for (int k = 1; k < g.Pos.Length; k += 3)
-                {
-                    if (g.Pos[k] < lo) lo = g.Pos[k];
-                    if (g.Pos[k] > hi) hi = g.Pos[k];
-                }
-                if (lo <= hi) partBands[i] = (lo, hi);
-            }
-        List<(float Lo, float Hi)>? BandsExcept(int self)
-        {
-            if (!skipConnectors) return null;
-            var others = new List<(float Lo, float Hi)>(bodies.Count);
-            for (int k = 0; k < partBands.Length; k++)
-                if (k != self && partBands[k] is { } b) others.Add(b);
-            return others;
-        }
+        // The bands each part is judged against are NOT computed here any more. The writer already parses
+        // every source, so it derives them itself — which is also what lets it insist on evidence, because
+        // there is no longer a way for a caller to ask for a drop while supplying nothing to justify it.
+        // All this side supplies is the cached measurement, so a composite on every equipment change does
+        // not re-read a body that has not changed.
+        bool dropRedundant = config.HideRedundantMeshes;
         var bodySurface = new ResolvedSurface(
             new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty),
             bodies.Select((b, i) => new SecondSkinWriter.SourceSpec(
                 b.Bytes,
                 KeepMaterial: null,
-                EnabledShapes: b.Shapes,
+                EnabledShapes: Interop.BodyShapeReader.Split(b.Shapes).Shapes,
+                // The variant this body is drawing, when it ships more than one of a region — see
+                // BodyShapeReader.ReadEnabledShapes. Independent of the redundancy setting: this is not
+                // judging what is redundant, it is copying what the game draws.
+                HiddenAttributes: Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
                 UvConv: i < uvConverters.Count ? uvConverters[i] : null,
-                DropConnectors: skipConnectors,
+                DropConnectors: dropRedundant,
                 // Decided per part above: a gen2 part whose UV genuinely reads as mirrored AND fits one
                 // integer cell. A part already in the shell's asymmetric space converts (or doesn't) exactly
                 // as before, and must not pay for the side pass or have its UVs moved.
                 UnmirrorSides: i < unmirrorPart.Length && unmirrorPart[i],
-                OtherPartBands: BandsExcept(i))).ToList(),
+                Profile: dropRedundant ? ConnectorProfileFor(b.Path, b.Bytes) : null)).ToList(),
             bodies.Select(b => b.Path).ToList(),
             cutCode,
             bodyType);
@@ -2123,8 +2190,7 @@ public sealed class SecondSkinService
             if (haveGeom && hPos.Length >= 3)
                 shape = $"{hPos.Length / 3}v/{hTri.Length / 3}t";
 
-            HashSet<string>? partShapes = null;
-            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(pick), out partShapes);
+            var partShapes = LiveModelState(enabledBodyShapes, pick, penumbra.ResolvePlayer(pick));
 
             // Its own path's race code, with no vote: there is one source and it is authored at the
             // character's own race, which is exactly why it must be hosted with no deform.
@@ -2187,7 +2253,8 @@ public sealed class SecondSkinService
                 [new SecondSkinWriter.SourceSpec(
                     pickBytes,
                     KeepMaterial: keep,
-                    EnabledShapes: partShapes,
+                    EnabledShapes: Interop.BodyShapeReader.Split(partShapes).Shapes,
+                    HiddenAttributes: Interop.BodyShapeReader.Split(partShapes).HiddenAttributes,
                     // Null for ordinary face art, which is authored in the face's own layout. Non-null only
                     // for a doubled sheet, where the geometry — not the art — is what moves.
                     UvConv: faceConv,
@@ -3725,6 +3792,27 @@ public sealed class SecondSkinService
                 log.Information("[Proteus] second skin: toe cap {0}", capUsed);
             }
 
+            // What the redundancy pass took out. At INFORMATION, unlike the per-drop lines the writer
+            // sends to diag: those go to Debug, which is not guaranteed to be in a user's dalamud.log, and
+            // this setting is on by default now — so the one summary that would explain a missing patch of
+            // skin has to survive at the level people actually run at, and has to name the switch.
+            //
+            // Deduped on the tally, exactly as the two cap messages above are deduped, and for their
+            // reason: the shell rebuilds often and an unchanged answer is not worth a line. Keyed by host
+            // as well as by the numbers, so two hosts dropping different things both get said once.
+            if (stats.RedundantSubs > 0)
+            {
+                var tally = $"{host.Prefix}{host.SetId:D4}/{host.Slot}:{stats.RedundantSubs}/{stats.RedundantTris}";
+                if (lastRedundant != tally)
+                {
+                    lastRedundant = tally;
+                    log.Information("[Proteus] second skin: dropped {0} redundant submesh(es) ({1} triangles) "
+                                  + "as geometry the shell already draws — if a patch of skin is missing from "
+                                  + "the shell, turn off \"Hide redundant body meshes\" in Settings",
+                        stats.RedundantSubs, stats.RedundantTris);
+                }
+            }
+
             // Redirect the path the game ACTUALLY loads (host.ModelPath) for an equipped host. The Emperor
             // fallback has no resolved path to copy (ModelPath null), so its path is rebuilt here — in
             // cutCode space, matching the EQDP entry written below, which declares THAT race/gender to have
@@ -4056,8 +4144,9 @@ public sealed class SecondSkinService
             for (int i = 0; i < sources.Count; i++)
             {
                 var sp = sources[i];
-                sb.AppendLine($"source[{i}] dropConnectors={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
-                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")}");
+                sb.AppendLine($"source[{i}] dropRedundant={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
+                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")} "
+                            + $"hiddenAttrs={(sp.HiddenAttributes is { } ha ? string.Join(',', ha) : "")}");
             }
             for (int i = 0; i < layers.Count; i++)
             {

@@ -138,7 +138,7 @@ Things worth knowing:
 | Skin-tint suppression | How strongly overlays resist being tinted by your skin tone. |
 | Ambient occlusion / Shadow softness / Skindenting | Global strength of the contact shadow and normal indent around strap edges. |
 | Texture cache (MB) | How much decoded texture data to keep in memory between composites. |
-| Hide Connector Meshes | Skips a body's joint reinforcement rings on the second skin. Only needed for Neolithe. |
+| Hide redundant body meshes | Skips skin the second skin would otherwise draw twice — joint reinforcement rings a neighbouring part already covers, and spare copies of a region. On by default, safe on any body. |
 
 Three buttons here are worth knowing about:
 
