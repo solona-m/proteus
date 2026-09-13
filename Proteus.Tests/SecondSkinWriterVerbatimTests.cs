@@ -944,6 +944,13 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         o.WriteLine("join rings (0.1mm):");
         SecondSkinWriter.DescribeJoinRings(profiles, 0.0001f, s => o.WriteLine($"  {s}"));
 
+        // And the same stitching one level down, between REGIONS of one part — a thigh lapping over a
+        // knee is the same shape of problem as a top lapping over the legs.
+        o.WriteLine("internal rings (0.1mm):");
+        for (int i = 0; i < parts.Length; i++)
+            if (profiles[i] is { } pr)
+                SecondSkinWriter.DescribeInternalRings(pr, 0.0001f, s => o.WriteLine($"  source {i}: {s}"));
+
         // Every pair that shares any surface, and over what height. A band at one end is two regions
         // MEETING, which doubles the alpha exactly like a duplicate does but cannot be fixed by dropping
         // either one.

@@ -585,6 +585,11 @@ public static class SecondSkinWriter
     /// over positions and indices to work out which side each vertex is on, so it is only set when a layer
     /// actually needs it — see <see cref="SurfaceMirror.AssignSides"/>.
     /// </param>
+    /// <param name="HiddenAttributes">
+    /// Attribute names the game has switched off on this model, so a submesh carrying any of them is not
+    /// drawn and must not be copied — nor count as cover or as a join for the redundancy pass. This is how a
+    /// body ships two variants of one region (Neolithe's thin and thick calves) and lets an IMC option pick.
+    /// </param>
     public readonly record struct SourceSpec(
         byte[] Model,
         Func<string, bool>? KeepMaterial = null,
@@ -592,7 +597,8 @@ public static class SecondSkinWriter
         UVRemapService.UvConversion? UvConv = null,
         bool DropConnectors = false,
         bool UnmirrorSides = false,
-        ConnectorProfile? Profile = null);
+        ConnectorProfile? Profile = null,
+        IReadOnlySet<string>? HiddenAttributes = null);
 
     /// <summary>
     /// One entry of a mesh's vertex declaration: where and in what format a given attribute (Usage) sits
@@ -718,6 +724,9 @@ public static class SecondSkinWriter
         // See PlanJoinCut.
         public Dictionary<int, HashSet<ushort>>? JoinFlaps;
 
+        // Attributes the game is not drawing on this source — see SourceSpec.HiddenAttributes.
+        public IReadOnlySet<string>? HiddenAttrs;
+
         // Which of this source's meshes belong in the shell. Per-source: see SourceSpec.
         public Func<string, bool> Keep = IsBodySkinMaterial;
     }
@@ -801,6 +810,10 @@ public static class SecondSkinWriter
             parsed[i].UvConv = sources[i].UvConv;
             parsed[i].UnmirrorSides = sources[i].UnmirrorSides;
             parsed[i].Keep = sources[i].KeepMaterial ?? IsBodySkinMaterial;
+            parsed[i].HiddenAttrs = sources[i].HiddenAttributes is { Count: > 0 } ha ? ha : null;
+            if (parsed[i].HiddenAttrs != null)
+                diag?.Invoke($"source {i}: the game is not drawing [{string.Join(", ", parsed[i].HiddenAttrs!)}] "
+                           + "— those submeshes are left out");
             // Warn only on the failure case: an enabled shape the .mdl doesn't actually contain (nothing to
             // bake). The success path is silent — the shell simply follows the body.
             if (en == null || en.Count == 0 || diag == null) continue;
@@ -859,8 +872,20 @@ public static class SecondSkinWriter
             // itself a candidate still has to be in the pool as cover.
             var all = new ConnectorProfile?[sources.Count];
             for (int i = 0; i < sources.Count; i++)
+            {
                 all[i] = UsableProfile(sources[i].Profile, parsed[i], i)
                       ?? ReadConnectorProfile(sources[i].Model, parsed[i].Keep);
+                // A submesh the game is not drawing is not there, for either pass: not a candidate, not
+                // cover, and not one side of a join. Filtered out of the measurement rather than threaded
+                // through both planners, because the measurement is cached per MODEL and which variant is
+                // drawn is not a property of the model. Neolithe's two calves are the case — each 62-66%
+                // coincident with the other, both kept, and only one of them real at any moment.
+                if (all[i] is { } measured && parsed[i].HiddenAttrs is { } hidden)
+                {
+                    var src = parsed[i];
+                    all[i] = measured.Without(mask => IsHidden(src, mask, hidden));
+                }
+            }
 
             for (int i = 0; i < sources.Count; i++)
             {
@@ -868,10 +893,8 @@ public static class SecondSkinWriter
                 var others = new List<ConnectorProfile.Box>(sources.Count);
                 for (int k = 0; k < all.Length; k++)
                     if (k != i && all[k]?.PartBox is { } b) others.Add(b);
-                // No hidden-attribute filter on this path: a SOURCE is a body the character is drawing,
-                // and the pack's own hide toggles ride on imported content geometry, which never reaches
-                // here. PlanConnectorDrops still takes the hook, because the day a body source gets
-                // toggles, a submesh the game is not drawing must not count as cover.
+                // No hidden-attribute filter here: the submeshes the game is not drawing were already taken
+                // out of the measurement above.
                 parsed[i].DropSubmeshes = PlanConnectorDrops(
                     profile, others, isHidden: null, diag, $"source {i}", out int subs, out int tris);
                 redundantSubs += subs;
@@ -1879,8 +1902,10 @@ public static class SecondSkinWriter
                     continue;
                 }
 
-                // Switched off by one of the pack's own toggles — see ContentGeometry.HiddenAttributes.
-                if (hiddenAttrs is { Count: > 0 } && IsHidden(src, U32(ss + 8), hiddenAttrs))
+                // Switched off by one of the pack's own toggles — see ContentGeometry.HiddenAttributes — or,
+                // on a body, not drawn by the game — see SourceSpec.HiddenAttributes.
+                if ((hiddenAttrs is { Count: > 0 } && IsHidden(src, U32(ss + 8), hiddenAttrs))
+                    || (src.HiddenAttrs is { } srcHidden && IsHidden(src, U32(ss + 8), srcHidden)))
                 {
                     hiddenSubs++;
                     SkipSubmesh(sc);
@@ -4766,6 +4791,67 @@ public static class SecondSkinWriter
         public Box? PartBox { get; init; }
 
         public int Vertices { get; init; }
+
+        /// <summary>
+        /// This measurement with the submeshes <paramref name="hidden"/> names (by attribute mask) taken out,
+        /// as if the model had never carried them: their triangles and vertex windows go, every mesh's largest
+        /// submesh and the part's extent are re-taken from what is left, and a mesh left with nothing goes
+        /// too. Positions are shared, not copied — a vertex no remaining triangle names is simply unused.
+        /// Returns this instance when nothing is hidden.
+        /// </summary>
+        public ConnectorProfile Without(Func<uint, bool> hidden)
+        {
+            bool any = false;
+            foreach (var sb in Subs) if (hidden(sb.AttrMask)) { any = true; break; }
+            if (!any) return this;
+
+            var meshes = new List<MeshProfile>(Meshes.Length);
+            var subs = new List<Sub>(Subs.Length);
+            var part = Box.Nothing;
+            int totalVerts = 0;
+            foreach (var mesh in Meshes)
+            {
+                var tris = new List<ushort>(mesh.Tris.Length);
+                var subVerts = new List<ushort>(mesh.SubVerts.Length);
+                int subFirst = subs.Count, largest = 0;
+                for (int k = 0; k < mesh.SubCount; k++)
+                {
+                    var sb = Subs[mesh.SubFirst + k];
+                    if (hidden(sb.AttrMask)) continue;
+                    int triFirst = tris.Count / 3, vertFirst = subVerts.Count;
+                    for (int c = sb.TriFirst * 3; c < (sb.TriFirst + sb.TriCount) * 3; c++) tris.Add(mesh.Tris[c]);
+                    for (int v = sb.VertFirst; v < sb.VertFirst + sb.VertCount; v++) subVerts.Add(mesh.SubVerts[v]);
+                    if (sb.Triangles > largest) largest = sb.Triangles;
+                    subs.Add(sb with { TriFirst = triFirst, VertFirst = vertFirst });
+                }
+                if (tris.Count == 0) { subs.RemoveRange(subFirst, subs.Count - subFirst); continue; }
+
+                // Same rule as ReadConnectorProfile: substantial submeshes only.
+                for (int k = subFirst; k < subs.Count; k++)
+                {
+                    var sb = subs[k];
+                    if (sb.Box.Empty || sb.Triangles < largest / 10) continue;
+                    part = new Box(
+                        MathF.Min(part.MinX, sb.Box.MinX), MathF.Min(part.MinY, sb.Box.MinY),
+                        MathF.Min(part.MinZ, sb.Box.MinZ), MathF.Max(part.MaxX, sb.Box.MaxX),
+                        MathF.Max(part.MaxY, sb.Box.MaxY), MathF.Max(part.MaxZ, sb.Box.MaxZ));
+                }
+                totalVerts += subVerts.Count;
+                meshes.Add(mesh with
+                {
+                    LargestSubTriangles = largest, Tris = tris.ToArray(), SubVerts = subVerts.ToArray(),
+                    SubFirst = subFirst, SubCount = subs.Count - subFirst,
+                });
+            }
+
+            return new ConnectorProfile
+            {
+                Meshes = meshes.ToArray(),
+                Subs = subs.ToArray(),
+                PartBox = part.Empty ? null : part,
+                Vertices = totalVerts,
+            };
+        }
     }
 
     /// <summary>
@@ -5167,6 +5253,16 @@ public static class SecondSkinWriter
     private const float FlapShare = 0.25f;
 
     /// <summary>
+    /// What fraction of an inner-join component's vertices must sit BEHIND its neighbour's surface for it
+    /// to count as a lap tucked under that neighbour.
+    /// <para/>
+    /// Measured across the inner rings of three bodies: the one true lap (Bibo+'s thigh inside its knee)
+    /// is 54 of 54 — 100%. The nearest thing that is not a lap is 92%, and it is excluded independently by
+    /// the size condition this is paired with. Nothing else passes 82%. The bar sits in that gap.
+    /// </summary>
+    private const float FlapBehind = 0.95f;
+
+    /// <summary>
     /// Which of each part's vertices belong to geometry another part already draws — the flap each part
     /// carries past the ring it is joined on.
     /// <para/>
@@ -5207,13 +5303,20 @@ public static class SecondSkinWriter
         {
             if (profiles[i] is not { } p) continue;
             foreach (var mesh in p.Meshes)
+            {
+                // Only vertices a triangle uses. A profile with submeshes taken out (ConnectorProfile.Without)
+                // still holds their positions, and a vertex nothing draws must not make a ring.
+                var used = new bool[mesh.Pos.Length / 3];
+                foreach (ushort u in mesh.Tris) if (u < used.Length) used[u] = true;
                 for (int v = 0; v < mesh.Pos.Length / 3; v++)
                 {
+                    if (!used[v]) continue;
                     var q = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
                     var key = VCell(q);
                     if (!vgrid.TryGetValue(key, out var list)) vgrid[key] = list = [];
                     list.Add((i, q));
                 }
+            }
         }
 
         // Every part's SURFACE, for the coverage judgement, tagged by part.
@@ -5239,19 +5342,61 @@ public static class SecondSkinWriter
                 int nv = mesh.Pos.Length / 3, nt = mesh.Tris.Length / 3;
                 if (nt == 0) continue;
 
-                // ── 1. the ring ────────────────────────────────────────────────────────────────────
+                // ── 1. the rings ───────────────────────────────────────────────────────────────────
+                // TWO kinds, and they are judged differently below, so which is which is kept.
+                //
+                //  · a PART ring joins this part to another one — a waist, a wrist, an ankle;
+                //  · an INNER ring joins two REGIONS of this part to each other — a thigh to a knee, a
+                //    knee to a shin. A body laps those over each other exactly as it laps the parts, and
+                //    measured on Bibo+ the thigh runs six centimetres down inside the knee.
                 var ring = new bool[nv];
-                for (int v = 0; v < nv; v++)
+                var partRing = new bool[nv];
+
+                // Which submeshes each vertex belongs to, so a shared position can be told from a UV seam:
+                // a seam duplicates a vertex WITHIN one submesh, a stitch is between two.
+                var subsOf = new Dictionary<ushort, HashSet<int>>();
+                for (int k = 0; k < mesh.SubCount; k++)
+                {
+                    var sb = profile.Subs[mesh.SubFirst + k];
+                    for (int i = sb.VertFirst; i < sb.VertFirst + sb.VertCount; i++)
+                    {
+                        if (!subsOf.TryGetValue(mesh.SubVerts[i], out var set))
+                            subsOf[mesh.SubVerts[i]] = set = [];
+                        set.Add(sb.Index);
+                    }
+                }
+
+                var here = new Dictionary<(long, long, long), List<ushort>>();
+                for (ushort v = 0; v < nv; v++)
+                {
+                    var key = VCell(new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]));
+                    if (!here.TryGetValue(key, out var list)) here[key] = list = [];
+                    list.Add(v);
+                }
+
+                for (ushort v = 0; v < nv; v++)
                 {
                     var q = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
                     var (cx, cy, cz) = VCell(q);
-                    for (long dx = -1; dx <= 1 && !ring[v]; dx++)
-                    for (long dy = -1; dy <= 1 && !ring[v]; dy++)
-                    for (long dz = -1; dz <= 1 && !ring[v]; dz++)
+                    for (long dx = -1; dx <= 1; dx++)
+                    for (long dy = -1; dy <= 1; dy++)
+                    for (long dz = -1; dz <= 1; dz++)
                     {
-                        if (!vgrid.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
-                        foreach (var (osrc, op) in list)
-                            if (osrc != src && Dist(q, op) <= JoinWeld) { ring[v] = true; break; }
+                        var key = (cx + dx, cy + dy, cz + dz);
+                        if (vgrid.TryGetValue(key, out var others))
+                            foreach (var (osrc, op) in others)
+                                if (osrc != src && Dist(q, op) <= JoinWeld)
+                                { ring[v] = partRing[v] = true; break; }
+
+                        if (!here.TryGetValue(key, out var mine)) continue;
+                        foreach (ushort w in mine)
+                        {
+                            if (w == v || Dist(q, new Vec3(mesh.Pos[w * 3], mesh.Pos[w * 3 + 1],
+                                                           mesh.Pos[w * 3 + 2])) > JoinWeld) continue;
+                            if (subsOf.TryGetValue(v, out var sv) && subsOf.TryGetValue(w, out var sw)
+                                && !sv.Overlaps(sw))
+                                ring[v] = true;
+                        }
                     }
                 }
 
@@ -5298,10 +5443,7 @@ public static class SecondSkinWriter
                         }
                     }
                 }
-                int ringCount = 0;
-                foreach (bool r in ring) if (r) ringCount++;
                 if (comps < 2) continue;   // nothing was split off, so there is no flap
-                _ = ringCount;
 
                 // ── 3. the judgement ───────────────────────────────────────────────────────────────
                 var members = new List<int>[comps];
@@ -5329,16 +5471,31 @@ public static class SecondSkinWriter
                         set.Add(comp[t]);
                     }
 
+                // This mesh's own surface, tagged by component, so a component can ask what the REST of the
+                // mesh draws. Needed for the inner rings: the size test that settles a part join would
+                // delete a neck here — 250 triangles against a 10280-triangle torso is a fifth of a
+                // quarter — and a neck is not a margin, it is the only thing drawing that band.
+                var own = new CoverGrid(coverEps);
+                for (int t = 0; t < nt; t++)
+                {
+                    ushort ia = mesh.Tris[t * 3], ib = mesh.Tris[t * 3 + 1], ic = mesh.Tris[t * 3 + 2];
+                    own.Add(new Vec3(mesh.Pos[ia * 3], mesh.Pos[ia * 3 + 1], mesh.Pos[ia * 3 + 2]),
+                            new Vec3(mesh.Pos[ib * 3], mesh.Pos[ib * 3 + 1], mesh.Pos[ib * 3 + 2]),
+                            new Vec3(mesh.Pos[ic * 3], mesh.Pos[ic * 3 + 1], mesh.Pos[ic * 3 + 2]), comp[t]);
+                }
+
                 for (int i = 0; i < comps; i++)
                 {
                     // The biggest thing this component shares a ring with. Sidedness, decided by mass:
                     // of the two surfaces meeting at a join, the one that carries on into the body is the
                     // part's own, and the one that stops a few centimetres later is the margin it laps
                     // over its neighbour with.
-                    int rival = 0;
+                    int rival = 0, rivalIdx = -1;
+                    bool onPartRing = false;
                     foreach (ushort v in verts[i])
                     {
                         if (!ring[v]) continue;
+                        if (partRing[v]) onPartRing = true;
                         var (cx, cy, cz) = VCell(new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1],
                                                           mesh.Pos[v * 3 + 2]));
                         // The neighbourhood, because two coincident vertices can still land either side of
@@ -5349,25 +5506,62 @@ public static class SecondSkinWriter
                         {
                             if (!atRing.TryGetValue((cx + dx, cy + dy, cz + dz), out var set)) continue;
                             foreach (int j in set)
-                                if (j != i && members[j].Count > rival) rival = members[j].Count;
+                                if (j != i && members[j].Count > rival)
+                                { rival = members[j].Count; rivalIdx = j; }
                         }
                     }
                     if (rival == 0) continue;                               // meets no ring
-                    if (members[i].Count >= rival * FlapShare) continue;    // this side IS the body
 
-                    // Reported with the coverage figure, which is NOT what decided it. A flap commonly
-                    // tucks INSIDE the body rather than lying on the neighbour's outer surface — measured
-                    // at the waist, 0 of 25 of its vertices are within 5 mm of anything the other part
-                    // draws — so asking "is this already drawn?" answers no for geometry that is plainly
-                    // redundant. Which side of the ring it is on is the question that has an answer.
-                    int covered = 0, tested = 0;
+                    // How much of this component another part, or another region of this same mesh,
+                    // already draws. Both figures, because the two kinds of join answer differently.
+                    int covered = 0, tested = 0, byOwn = 0;
                     foreach (ushort v in verts[i])
                     {
                         if (ring[v]) continue;
                         tested++;
                         var q = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
                         if (surface.CoveredBy(q, exclude: src) >= 0) covered++;
+                        if (own.CoveredBy(q, exclude: i) >= 0) byOwn++;
                     }
+                    if (tested == 0) continue;
+
+                    // A PART join is settled by size, and deliberately not by coverage: the margin tucks
+                    // INSIDE the neighbour rather than lying on its outer surface — measured at the waist,
+                    // 0 of 25 of its vertices are within 5 mm of anything the legs draw — so asking "is
+                    // this already drawn?" answers no for geometry that is plainly redundant.
+                    //
+                    // An INNER join has two shapes of redundancy, and each needs its own evidence.
+                    //
+                    //  · a band lying ON its neighbour's surface — a wrist or ankle connector redrawn by
+                    //    the region beside it. Coverage finds it: measured ~100% within 5 mm on Neolithe's
+                    //    and Rue+'s wrists and ankles.
+                    //
+                    //  · a lap TUCKED UNDER its neighbour's surface — Bibo+'s thigh, which carries on past
+                    //    the ring and runs six centimetres down inside the knee. Coverage misses it for the
+                    //    same reason it missed the part flaps: behind is not the same as near, and the lap
+                    //    sits further in than 5 mm. The sign of the offset from the nearest surface finds
+                    //    it instead, and it is decisive — 54 of 54 of its vertices are behind the knee.
+                    //
+                    // The second is held to BOTH a high bar and a size condition, because what it has to
+                    // stay clear of is close. Across the inner rings of three bodies the next-highest
+                    // behind-fraction after the true lap's 100% is 92% — a Rue+ hand region whose "rival"
+                    // is a single triangle, so plainly not a join it laps. The size condition excludes it
+                    // outright; the bar keeps a margin even without it. Neolithe's shoulder, which has no
+                    // inner geometry, sits at 70%; its genital insert, inside the thigh's bounding box but
+                    // protruding from its surface, at 15%. Only the thigh lap clears both.
+                    bool isFlap;
+                    if (onPartRing)
+                        isFlap = members[i].Count < rival * FlapShare;
+                    else if (byOwn >= tested * FlapCovered)
+                        isFlap = true;
+                    else if (rivalIdx >= 0 && members[i].Count < rival * FlapShare)
+                    {
+                        var (behind, of) = BehindFraction(mesh, verts[i], ring, members[rivalIdx]);
+                        isFlap = of > 0 && behind >= of * FlapBehind;
+                    }
+                    else
+                        isFlap = false;
+                    if (!isFlap) continue;
 
                     if (!del[src].TryGetValue(mesh.Index, out var flap))
                         del[src][mesh.Index] = flap = [];
@@ -5382,9 +5576,10 @@ public static class SecondSkinWriter
                         if (y > hi) hi = y;
                     }
                     diag?.Invoke($"join cut: source {src} mesh {mesh.Index} — a {members[i].Count}-triangle "
-                               + $"flap past a join it shares with {rival} triangles of this part's own "
-                               + $"surface, over y {lo:F3}..{hi:F3} ({covered}/{tested} of it also within "
-                               + "reach of another part)");
+                               + $"flap past {(onPartRing ? "a part join" : "an inner join")} it shares "
+                               + $"with {rival} triangles, over y {lo:F3}..{hi:F3} "
+                               + $"({covered}/{tested} drawn by another part, {byOwn}/{tested} by this "
+                               + "mesh's own other regions)");
                 }
             }
         }
@@ -5405,6 +5600,121 @@ public static class SecondSkinWriter
     /// a diffuse spread over centimetres would mean the parts are merely near each other and there is no
     /// authored join to cut at.
     /// </summary>
+    /// <summary>
+    /// How many of a component's vertices sit BEHIND the surface of another component — inside the body
+    /// rather than on it.
+    /// <para/>
+    /// The one question that says what a lap IS, and the one none of the distance or box tests could
+    /// answer. A part laps its neighbour by continuing past their shared ring and tucking under the
+    /// neighbour's skin; anything else that happens to be nearby — a neck carrying on past the torso, a
+    /// piece of anatomy protruding from a thigh — is in FRONT of it. Distance cannot tell behind from
+    /// beside, and a bounding box cannot tell either.
+    /// <para/>
+    /// Sign of <c>(p - closest) . n</c> against the nearest triangle, with the face normal taken from the
+    /// winding. Ring vertices are skipped: they are shared by construction and sit exactly on the surface,
+    /// so their sign is noise.
+    /// </summary>
+    private static (int Behind, int Of) BehindFraction(
+        ConnectorProfile.MeshProfile mesh, IEnumerable<ushort> verts, bool[] ring, List<int> against)
+    {
+        int behind = 0, of = 0;
+        foreach (ushort v in verts)
+        {
+            if (ring[v]) continue;
+            var p = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
+            float best = float.MaxValue;
+            float sign = 0f;
+            foreach (int t in against)
+            {
+                ushort ia = mesh.Tris[t * 3], ib = mesh.Tris[t * 3 + 1], ic = mesh.Tris[t * 3 + 2];
+                var a = new Vec3(mesh.Pos[ia * 3], mesh.Pos[ia * 3 + 1], mesh.Pos[ia * 3 + 2]);
+                var b = new Vec3(mesh.Pos[ib * 3], mesh.Pos[ib * 3 + 1], mesh.Pos[ib * 3 + 2]);
+                var c = new Vec3(mesh.Pos[ic * 3], mesh.Pos[ic * 3 + 1], mesh.Pos[ic * 3 + 2]);
+                var q = ClosestOnTriangle(p, a, b, c);
+                float d = Dist(p, q);
+                if (d >= best) continue;
+                best = d;
+                float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
+                float wx = c.X - a.X, wy = c.Y - a.Y, wz = c.Z - a.Z;
+                float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+                sign = (p.X - q.X) * nx + (p.Y - q.Y) * ny + (p.Z - q.Z) * nz;
+            }
+            of++;
+            if (best < float.MaxValue && sign < 0f) behind++;
+        }
+        return (behind, of);
+    }
+
+    /// <summary>
+    /// Rings INSIDE one part: positions two different submeshes of the same mesh both carry a vertex at.
+    /// <para/>
+    /// The same stitching as between parts, one level down. A body splits a limb into regions behind
+    /// attribute bits — a thigh, a knee, a shin — and laps each over the next exactly as it laps the top
+    /// over the legs. Measured on Bibo+, the thigh region runs from y 1.049 down to 0.703 while the knee
+    /// region runs up to 0.772, so seven centimetres of thigh sits inside the knee.
+    /// <para/>
+    /// Reported rather than acted on, because the between-parts case had a property this one may not: the
+    /// lap there is its own component, split off by the ring. Here the thigh's surface carries on THROUGH
+    /// the ring, so whether the ring is a closed loop of mesh edges — something a flood fill can cut at —
+    /// is the question that decides whether the same machinery reaches it.
+    /// </summary>
+    internal static void DescribeInternalRings(ConnectorProfile profile, float weld, Action<string> report)
+    {
+        foreach (var mesh in profile.Meshes)
+        {
+            if (mesh.SubCount < 2) continue;
+
+            // Which submeshes each vertex belongs to.
+            var subsOf = new Dictionary<ushort, HashSet<int>>();
+            for (int k = 0; k < mesh.SubCount; k++)
+            {
+                var sub = profile.Subs[mesh.SubFirst + k];
+                for (int i = sub.VertFirst; i < sub.VertFirst + sub.VertCount; i++)
+                {
+                    ushort v = mesh.SubVerts[i];
+                    if (!subsOf.TryGetValue(v, out var set)) subsOf[v] = set = [];
+                    set.Add(sub.Index);
+                }
+            }
+
+            var at = new Dictionary<(long, long, long), List<ushort>>();
+            (long, long, long) Cell(int v) => ((long)MathF.Floor(mesh.Pos[v * 3] / weld),
+                                               (long)MathF.Floor(mesh.Pos[v * 3 + 1] / weld),
+                                               (long)MathF.Floor(mesh.Pos[v * 3 + 2] / weld));
+            foreach (var v in subsOf.Keys)
+            {
+                var key = Cell(v);
+                if (!at.TryGetValue(key, out var list)) at[key] = list = [];
+                list.Add(v);
+            }
+
+            // Pairs at one position belonging to DIFFERENT submeshes — the stitch between two regions,
+            // as opposed to a UV seam, which duplicates a vertex within one submesh.
+            var pairs = new Dictionary<(int, int), (int Count, float Lo, float Hi)>();
+            foreach (var list in at.Values)
+            {
+                if (list.Count < 2) continue;
+                for (int i = 0; i < list.Count; i++)
+                for (int j = i + 1; j < list.Count; j++)
+                foreach (int sa in subsOf[list[i]])
+                foreach (int sb in subsOf[list[j]])
+                {
+                    if (sa == sb) continue;
+                    var key = sa < sb ? (sa, sb) : (sb, sa);
+                    float y = mesh.Pos[list[i] * 3 + 1];
+                    var got = pairs.TryGetValue(key, out var g)
+                        ? g : (Count: 0, Lo: float.MaxValue, Hi: float.MinValue);
+                    pairs[key] = (got.Count + 1, MathF.Min(got.Lo, y), MathF.Max(got.Hi, y));
+                }
+            }
+
+            foreach (var ((sa, sb), (n, lo, hi)) in pairs.OrderByDescending(p => p.Value.Count))
+                if (n > 10)
+                    report($"mesh {mesh.Index}: sub {sa} and sub {sb} share {n} vertex position(s), "
+                         + $"over y {lo:F3}..{hi:F3}");
+        }
+    }
+
     internal static void DescribeJoinRings(IReadOnlyList<ConnectorProfile?> profiles, float weld,
                                            Action<string> report)
     {
