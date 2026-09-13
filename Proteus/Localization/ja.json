@@ -2104,7 +2104,7 @@
     "description": ""
   },
   "Parts.Tool.Navigate": {
-    "message": "パーツを選ぶ",
+    "message": "パーツの切り替え",
     "description": ""
   },
   "Parts.Tool.Navigate.Tip": {

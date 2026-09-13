@@ -1599,7 +1599,7 @@ public sealed class PartsStrings
 
     // ── tools ───────────────────────────────────────────────────────────────
 
-    public readonly string ToolNavigate = Loc.Localize("Parts.Tool.Navigate", "Pick parts")
+    public readonly string ToolNavigate = Loc.Localize("Parts.Tool.Navigate", "Toggle Parts")
                                         + "###partsToolNavigate";
 
     public readonly string ToolNavigateTip = Loc.Localize("Parts.Tool.Navigate.Tip",
