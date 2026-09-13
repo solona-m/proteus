@@ -2104,7 +2104,7 @@
     "description": "Material and size beside a part's checkbox. {0} is a .mtrl file name, {1} a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
   },
   "Parts.Tool.Navigate": {
-    "message": "Pick parts",
+    "message": "Toggle Parts",
     "description": "Tool button in the side panel of the Studio tab."
   },
   "Parts.Tool.Navigate.Tip": {

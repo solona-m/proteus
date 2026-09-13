@@ -2104,7 +2104,7 @@
     "description": ""
   },
   "Parts.Tool.Navigate": {
-    "message": "부프 선택",
+    "message": "부품 토글",
     "description": ""
   },
   "Parts.Tool.Navigate.Tip": {

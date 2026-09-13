@@ -2104,7 +2104,7 @@
     "description": ""
   },
   "Parts.Tool.Navigate": {
-    "message": "Выбор частей",
+    "message": "Переключение частей",
     "description": ""
   },
   "Parts.Tool.Navigate.Tip": {

@@ -2104,7 +2104,7 @@
     "description": ""
   },
   "Parts.Tool.Navigate": {
-    "message": "选择部位",
+    "message": "切换部位",
     "description": ""
   },
   "Parts.Tool.Navigate.Tip": {
