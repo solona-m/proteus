@@ -2343,12 +2343,12 @@
     "message": "Comprime por bloques las texturas generadas (BC7), reduciendo cada una a alrededor de\nun cuarto de su tamaño sin comprimir en disco y en VRAM. La textura de índice queda\nsin comprimir para conservar sus valores de fila exactos.\nDesactivado = sin comprimir (idéntico byte a byte al anterior).",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Label": {
-    "message": "Ocultar mallas de conexión",
+  "Settings.Output.RedundantMeshes.Label": {
+    "message": "Ocultar mallas de cuerpo redundantes",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "Omite el anillo de conexión de cada parte del cuerpo en la «segunda piel» del equipo:\nla pequeña submalla adicional de una articulación (muñeca/tobillo/…). Algunos cuerpos\n(Neolithe) refuerzan las articulaciones con un anillo que se solapa con un cuerpo ya\ncompleto; en una superposición translúcida ese solape se duplica y se ve como una\ncostura más opaca. Déjalo en Off para otros cuerpos: ahí esa submalla es piel real,\ny ocultarla dejaría huecos.",
+  "Settings.Output.RedundantMeshes.Tip": {
+    "message": "Omite la piel que la «segunda piel» del equipo dibujaría dos veces. Algunos cuerpos\ncubren la misma zona con dos geometrías: un pequeño anillo de refuerzo en una\narticulación (muñeca/tobillo/…) que la parte vecina ya dibuja, o una copia de una\nregión dentro de la que tiene al lado. En una superposición translúcida ese solape\nse duplica y se ve como una costura más opaca, o como una media dibujada dos veces.\n\nSeguro en cualquier cuerpo: solo se omite la geometría que otra cosa dibuja de forma\ndemostrable. Desactívalo si falta una zona de piel en la cáscara.",
     "description": ""
   },
   "Settings.Output.SharpAlpha.Label": {

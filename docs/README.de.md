@@ -132,7 +132,7 @@ Wissenswertes:
 | Hautton-Unterdrückung | Wie stark sich Overlays dagegen wehren, von deinem Hautton eingefärbt zu werden. |
 | Ambient Occlusion / Schattenweichheit / Skindenting | Globale Stärke des Kontaktschattens und der Normal-Vertiefung rund um Riemenkanten. |
 | Texturcache (MB) | Wie viele dekodierte Texturdaten zwischen zwei Kompositionen im Speicher gehalten werden. |
-| Verbindungs-Meshes ausblenden | Lässt die Gelenkverstärkungsringe eines Körpers auf der zweiten Haut weg. Nur für Neolithe nötig. |
+| Redundante Körper-Meshes ausblenden | Lässt Haut weg, die die zweite Haut sonst doppelt zeichnen würde — Gelenkverstärkungsringe, die ein Nachbarteil ohnehin abdeckt, und zweite Kopien einer Region. Standardmäßig an, auf jedem Körper sicher. |
 
 Drei Schaltflächen hier sind erwähnenswert:
 

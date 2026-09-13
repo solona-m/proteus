@@ -42,8 +42,19 @@ internal static class SyntheticModel
     /// island share a corner POSITION but never a vertex index, which is the case that matters — a real
     /// model duplicates vertices along every UV seam, so connectivity is only visible by position and an
     /// index-based split would report every triangle as its own island.
+    /// <para/>
+    /// <paramref name="OffsetX"/> and its siblings move the whole submesh, and they are what lets a test say
+    /// whether two submeshes are the SAME surface. Without them every submesh of a mesh is emitted at the
+    /// same coordinates, because a triangle's position depends only on its index within its own submesh — so
+    /// each one is exactly coincident with the first N triangles of every larger sibling, and any test of
+    /// "does something else already draw this?" passes for a reason the test did not intend.
+    /// <para/>
+    /// With <paramref name="Islands"/> = 1 a submesh of N triangles spans Y in
+    /// [<paramref name="OffsetY"/>, <paramref name="OffsetY"/> + N] — the convention every band assertion
+    /// here is written against.
     /// </summary>
-    internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1)
+    internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1,
+                               float OffsetX = 0f, float OffsetY = 0f, float OffsetZ = 0f)
     {
         internal int TriangleCount => Islands * TrianglesPerIsland;
     }
@@ -145,9 +156,9 @@ internal static class SyntheticModel
                     for (int v = 0; v < 3; v++)
                     {
                         var vtx = new byte[Stride];
-                        BitConverter.GetBytes(v == 0 ? ix : ix + 1f).CopyTo(vtx, 0);
-                        BitConverter.GetBytes(v == 0 ? 0f : j + (v == 2 ? 1f : 0f)).CopyTo(vtx, 4);
-                        BitConverter.GetBytes(0f).CopyTo(vtx, 8);
+                        BitConverter.GetBytes((v == 0 ? ix : ix + 1f) + sub.OffsetX).CopyTo(vtx, 0);
+                        BitConverter.GetBytes((v == 0 ? 0f : j + (v == 2 ? 1f : 0f)) + sub.OffsetY).CopyTo(vtx, 4);
+                        BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
                         BitConverter.GetBytes(v == 0 ? 0f : 0.5f).CopyTo(vtx, 12);
                         BitConverter.GetBytes(v == 2 ? 0.5f : 0f).CopyTo(vtx, 16);
                         vBuf.Write(vtx);

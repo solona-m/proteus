@@ -1413,28 +1413,18 @@ public class StatusWindow : Window
         ImGui.SameLine();
         ImGuiComponents.HelpMarker(s.TextureCacheTip);
 
-        // Hide a body's redundant connector meshes on the gear shell (see Configuration).
-        var connMode = config.HideConnectorMeshes;
-        ImGui.SetNextItemWidth(ProteusStyle.S(140f));
-        // The enum values (Off / Neolithe) stay untranslated: "Neolithe" is a body mod's name, and "Off"
-        // beside it would read oddly translated alone.
-        if (ImGui.BeginCombo(s.ConnectorMeshes, connMode.ToString()))
+        // Skip skin the gear shell would otherwise draw twice (see Configuration).
+        var hideRedundant = config.HideRedundantMeshes;
+        if (ImGui.Checkbox(s.RedundantMeshes, ref hideRedundant))
         {
-            foreach (var opt in new[] { ConnectorMeshMode.Off, ConnectorMeshMode.Neolithe })
-            {
-                if (ImGui.Selectable(opt.ToString(), opt == connMode) && opt != connMode)
-                {
-                    config.HideConnectorMeshes = opt;
-                    config.Save();
-                    compositor.TriggerRecomposite("connector-meshes");
-                }
-            }
-            ImGui.EndCombo();
+            config.HideRedundantMeshes = hideRedundant;
+            config.Save();
+            compositor.TriggerRecomposite("redundant-meshes");
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(s.ConnectorMeshesTip);
+            ImGui.SetTooltip(s.RedundantMeshesTip);
         ImGui.SameLine();
-        ImGuiComponents.HelpMarker(s.ConnectorMeshesTip);
+        ImGuiComponents.HelpMarker(s.RedundantMeshesTip);
     }
 
     /// <summary>Author a basic skin-overlay mod: name + author + up to three textures → a new Penumbra mod.</summary>

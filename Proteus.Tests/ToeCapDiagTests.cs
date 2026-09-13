@@ -29,6 +29,247 @@ public class ToeCapDiagTests
     public ToeCapDiagTests(ITestOutputHelper o) => this.o = o;
 
     /// <summary>
+    /// Export the shell the GAME last built, and the body parts it was cut from, as .obj on the Desktop.
+    /// <para/>
+    /// For looking at the geometry directly instead of reading pixels off a screenshot — which is how a
+    /// band across the thighs got diagnosed three different ways without anyone opening the mesh. The
+    /// shell is what shipped, so a hole in it is a hole here; the sources are beside it because "is this
+    /// missing from the shell or missing from the body?" is the first question worth answering.
+    /// <para/>
+    /// Does nothing until a build in game has filled %TEMP%\proteus-shell-dump.
+    /// </summary>
+    [Fact]
+    public void ExportGameShellForInspection()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dump)) return;
+
+        var outDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "OneDrive", "Desktop", "proteus-shell");
+        Directory.CreateDirectory(outDir);
+
+        // The BODY as the game draws it, under the shell, by its real name. Proteus keeps the user's own
+        // models here — the bytes it read as its sources — so this is the skin, not a re-derivation of it.
+        // Exported beside the shell because the only way to judge a band on a thigh is to see whether the
+        // body has it too.
+        var upstream = Environment.GetEnvironmentVariable("PROTEUS_UPSTREAM")
+                    ?? @"E:\Penumbradt\Proteus\models\upstream";
+        if (Directory.Exists(upstream))
+            foreach (var mdl in Directory.GetFiles(upstream, "*.mdl"))
+            {
+                var leaf = Path.GetFileNameWithoutExtension(mdl);
+                // Only what this character is actually wearing: the four e0000 skin parts. The rest of the
+                // folder is every gear model Proteus has ever read.
+                if (!leaf.Contains("e0000")) continue;
+                string part = leaf.EndsWith("_top") ? "body_top"
+                            : leaf.EndsWith("_dwn") ? "body_legs"
+                            : leaf.EndsWith("_glv") ? "body_hands"
+                            : leaf.EndsWith("_sho") ? "body_feet" : "body_" + leaf;
+                try
+                {
+                    WriteObj(File.ReadAllBytes(mdl), Path.Combine(outDir, part + ".obj"));
+                    File.Copy(mdl, Path.Combine(outDir, part + ".mdl"), overwrite: true);
+                    o.WriteLine($"{part}.obj  <- {leaf}.mdl");
+                }
+                catch (Exception ex) { o.WriteLine($"{part}: {ex.Message}"); }
+            }
+
+        int written = 0;
+        foreach (var mdl in Directory.GetFiles(dump, "host*.mdl").OrderBy(p => p))
+        {
+            var name = Path.GetFileNameWithoutExtension(mdl);
+            try
+            {
+                var bytes = File.ReadAllBytes(mdl);
+                WriteObj(bytes, Path.Combine(outDir, name + ".obj"));
+                File.Copy(mdl, Path.Combine(outDir, name + ".mdl"), overwrite: true);
+                written++;
+                o.WriteLine($"{name}.obj  <- {mdl} ({bytes.Length / 1024} KB, "
+                          + $"{File.GetLastWriteTime(mdl):yyyy-MM-dd HH:mm})");
+            }
+            catch (Exception ex)
+            {
+                o.WriteLine($"{name}: {ex.Message}");
+            }
+        }
+        o.WriteLine($"wrote {written} model(s) to {outDir}");
+
+        // Where the shell has an OPEN EDGE, by height. An edge used by one triangle is a border: some are
+        // meant (each part ends somewhere, and the shell is cut to the overlay's coverage), but a hole
+        // opened by removing surface shows as a cluster at one height that nothing explains.
+        //
+        // Worth having next to the export because it answers in numbers what a screenshot only suggests —
+        // a smooth band on a thigh is either a hole or the art, and the two look identical at 4x zoom.
+        // Against the SOURCE the shell was cut from, which is what makes the number mean something. Every
+        // model has open edges where a part ends and where a UV seam splits it, and the body has those
+        // too — so the question is never "are there open edges here" but "are there MORE than the body
+        // had". A seam shows the same count in both. Surface that was removed shows only in the shell.
+        var shell = Path.Combine(dump, "host0_shell.mdl");
+        if (!File.Exists(shell)) return;
+        var shellBands = OpenEdgesByHeight(File.ReadAllBytes(shell));
+
+        var bodyBands = new SortedDictionary<int, int>();
+        for (int i = 0; ; i++)
+        {
+            var body = Path.Combine(dump, $"host0_body{i}.mdl");
+            if (!File.Exists(body)) break;
+            foreach (var (band, n) in OpenEdgesByHeight(File.ReadAllBytes(body)))
+                bodyBands[band] = bodyBands.GetValueOrDefault(band) + n;
+        }
+
+        o.WriteLine("open edges by height (5cm bands) — shell vs the bodies it was cut from:");
+        foreach (var band in shellBands.Keys.Union(bodyBands.Keys).OrderBy(b => b))
+        {
+            int s = shellBands.GetValueOrDefault(band), b2 = bodyBands.GetValueOrDefault(band);
+            if (s < 20 && b2 < 20) continue;
+            o.WriteLine($"  y {band / 20f:F2}..{(band + 1) / 20f:F2} — shell {s}, bodies {b2}"
+                      + (s > b2 + 20 ? $"   <-- {s - b2} MORE in the shell" : ""));
+        }
+
+        // Do coincident vertices AGREE about which way the surface faces?
+        //
+        // A shell is the body displaced along its normals, so two vertices at the same position with
+        // different normals are pushed to different places — the surface tears open along the seam
+        // between them without a single triangle being removed. The toe-cap join hit exactly this and
+        // records it: "the join can be watertight and still show a line", measured there at 32 of 219
+        // pairs disagreeing, worst 7.2 degrees, "which on a glossy stocking is exactly the seam".
+        //
+        // Measured on the BODY, because that is what the push is applied to.
+        o.WriteLine("coincident vertices whose normals disagree, by height (body sources):");
+        for (int i = 0; ; i++)
+        {
+            var body = Path.Combine(dump, $"host0_body{i}.mdl");
+            if (!File.Exists(body)) break;
+            foreach (var line in NormalSplits(File.ReadAllBytes(body)))
+                o.WriteLine($"  body{i}: {line}");
+        }
+    }
+
+    /// <summary>Pairs of vertices at the same position whose stored normals differ, bucketed by height and
+    /// reported with the worst disagreement in each band.</summary>
+    private static IEnumerable<string> NormalSplits(byte[] m)
+    {
+        if (!SecondSkinWriter.TryReadLod0Geometry(m, out var pos, out _, out _, out _, out var nrm))
+            yield break;
+
+        var at = new Dictionary<(long, long, long), List<int>>();
+        const float Q = 0.0001f;
+        for (int v = 0; v < pos.Length / 3; v++)
+        {
+            var key = ((long)MathF.Floor(pos[v * 3] / Q),
+                       (long)MathF.Floor(pos[v * 3 + 1] / Q),
+                       (long)MathF.Floor(pos[v * 3 + 2] / Q));
+            if (!at.TryGetValue(key, out var list)) at[key] = list = [];
+            list.Add(v);
+        }
+
+        var count = new SortedDictionary<int, int>();
+        var worst = new SortedDictionary<int, float>();
+        foreach (var list in at.Values)
+        {
+            if (list.Count < 2) continue;
+            for (int i = 0; i < list.Count; i++)
+            for (int j = i + 1; j < list.Count; j++)
+            {
+                int a = list[i], b = list[j];
+                float dot = nrm[a * 3] * nrm[b * 3] + nrm[a * 3 + 1] * nrm[b * 3 + 1]
+                          + nrm[a * 3 + 2] * nrm[b * 3 + 2];
+                float deg = MathF.Acos(Math.Clamp(dot, -1f, 1f)) * 180f / MathF.PI;
+                if (deg < 1f) continue;
+                int band = (int)MathF.Floor(pos[a * 3 + 1] * 20);
+                count[band] = count.GetValueOrDefault(band) + 1;
+                if (deg > worst.GetValueOrDefault(band)) worst[band] = deg;
+            }
+        }
+        foreach (var (band, n) in count)
+            if (n > 10)
+                yield return $"y {band / 20f:F2}..{(band + 1) / 20f:F2} — {n} pair(s), worst {worst[band]:F1} deg";
+    }
+
+    /// <summary>Open (single-use) edges of a model's LOD0, counted into 5cm height bands.</summary>
+    private static SortedDictionary<int, int> OpenEdgesByHeight(byte[] m)
+    {
+        var edges = new Dictionary<(int, int), int>();
+        var pos = new Dictionary<int, float>();
+        ForEachTriangle(m, (a, b, c, ya, yb, yc) =>
+        {
+            pos[a] = ya; pos[b] = yb; pos[c] = yc;
+            Bump(a, b); Bump(b, c); Bump(c, a);
+            void Bump(int x, int y)
+            {
+                var e = x < y ? (x, y) : (y, x);
+                edges[e] = edges.GetValueOrDefault(e) + 1;
+            }
+        });
+
+        var bands = new SortedDictionary<int, int>();
+        foreach (var (e, n) in edges)
+        {
+            if (n != 1) continue;
+            float y = 0.5f * (pos[e.Item1] + pos[e.Item2]);
+            int band = (int)MathF.Floor(y * 20);
+            bands[band] = bands.GetValueOrDefault(band) + 1;
+        }
+        return bands;
+    }
+
+    /// <summary>Walk a model's LOD0 triangles, handing each corner's index and Y to the caller.</summary>
+    private static void ForEachTriangle(byte[] m, Action<int, int, int, float, float, float> onTri)
+    {
+        ushort U16(int x) => BitConverter.ToUInt16(m, x);
+        uint U32(int x) => BitConverter.ToUInt32(m, x);
+
+        int declCount = U16(12);
+        int declEnd = 0x44 + declCount * 17 * 8;
+        int mh = declEnd + 8 + (int)U32(declEnd + 4);
+        int meshCount = U16(mh + 4);
+        int elemCount = U16(mh + 24);
+        byte flags2 = m[mh + 27];
+        int lodStart = mh + 56 + elemCount * 32;
+        int meshStart = lodStart + 3 * 60 + ((flags2 & 0x10) != 0 ? 3 * 40 : 0);
+        uint vtxOff = U32(16), idxOff = U32(28);
+
+        int vbase = 0;
+        for (int mi = 0; mi < meshCount; mi++)
+        {
+            int mo = meshStart + mi * 36;
+            ushort vc = U16(mo);
+            uint idxCount = U32(mo + 4), startIdx = U32(mo + 16);
+            uint[] vOff = { U32(mo + 20), U32(mo + 24), U32(mo + 28) };
+            byte[] str = { m[mo + 32], m[mo + 33], m[mo + 34] };
+
+            int db = 0x44 + mi * 17 * 8;
+            int ps = -1, po = 0, pt = 0;
+            for (int e = 0; e < 17; e++)
+            {
+                int x = db + e * 8;
+                if (m[x] == 0xFF) break;
+                if (m[x + 3] == 0) { ps = m[x]; po = m[x + 1]; pt = m[x + 2]; break; }
+            }
+            if (ps < 0) { vbase += vc; continue; }
+
+            float YOf(int i)
+            {
+                int a = (int)(vtxOff + vOff[ps]) + i * str[ps] + po;
+                return pt == 14 ? (float)BitConverter.ToHalf(m, a + 2) : BitConverter.ToSingle(m, a + 4);
+            }
+
+            for (uint i = 0; i + 2 < idxCount; i += 3)
+            {
+                int ia = (int)(idxOff + (startIdx + i) * 2);
+                if (ia + 6 > m.Length) break;
+                int a = BitConverter.ToUInt16(m, ia);
+                int b = BitConverter.ToUInt16(m, ia + 2);
+                int c = BitConverter.ToUInt16(m, ia + 4);
+                if (a >= vc || b >= vc || c >= vc) continue;
+                onTri(vbase + a, vbase + b, vbase + c, YOf(a), YOf(b), YOf(c));
+            }
+            vbase += vc;
+        }
+    }
+
+    /// <summary>
     /// Rebuild the shell from the inputs the GAME used, dumped by SecondSkinService.DumpShellInputs into
     /// %TEMP%\proteus-shell-dump. Approximating those inputs here — one body instead of several, no shape
     /// keys, no connector-mesh mode, a mask baked by hand rather than remapped into this body's UV — is
@@ -47,7 +288,11 @@ public class ToeCapDiagTests
             var text = File.ReadAllLines(info);
             foreach (var l in text) o.WriteLine(l);
 
-            bool skip = Array.Exists(text, l => l == "skipConnectors=True");
+            // Matched against the field the dump ACTUALLY writes, per source, since the flag went
+            // per-source. The old test looked for a bare "skipConnectors=True" line that stopped being
+            // written then, so this replayed with the pass off no matter what the shell was built with —
+            // exactly the kind of silent divergence the class doc above warns about.
+            bool skip = Array.Exists(text, l => l.Contains("dropRedundant=True"));
             var bodies = new List<byte[]>();
             for (int i = 0; File.Exists($"{pre}body{i}.mdl"); i++) bodies.Add(File.ReadAllBytes($"{pre}body{i}.mdl"));
             if (bodies.Count == 0) continue;
