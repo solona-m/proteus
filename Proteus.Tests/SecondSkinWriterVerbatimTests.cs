@@ -794,6 +794,44 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         Validate(keptBytes);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void A_lone_neolithe_part_loses_nothing_to_the_join_cut(int part)
+    {
+        // The join cut's lap rule once read a connector ring that runs PAST the end of the region it is
+        // stitched to as tucked BEHIND it: the ring's closest points were clamped to that region's rim, and
+        // the sign against a rim triangle is meaningless. Alone, the top lost both wrist rings (120 tri), the
+        // hands theirs and the feet their ankle ring — every one a band nothing else draws. A lone part has
+        // no neighbour to lap, and Neolithe has no inner lap either, so nothing at all may be cut.
+        var path = Array.Find(Bodies, b => b.Body == "Neolithe").Parts[part];
+        if (!File.Exists(path)) return;
+
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        var lines = new List<string>();
+        SecondSkinWriter.Build(new[] { File.ReadAllBytes(path) }, layers, null, true, out var stats, diag: lines.Add);
+
+        foreach (var l in lines) if (l.Contains("join cut")) o.WriteLine(l);
+        Assert.Equal(0, stats.TrimmedTris);
+    }
+
+    [Fact]
+    public void A_lone_part_still_loses_a_true_lap()
+    {
+        // The other side of the rule above: Bibo+'s thigh runs six centimetres down inside its knee, every
+        // vertex of it behind a face of the knee. Worn alone the legs must still lose it, or the fix for the
+        // rings has simply switched the lap rule off.
+        var path = Array.Find(Bodies, b => b.Body == "Bibo+").Parts[1];
+        if (!File.Exists(path)) return;
+
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        SecondSkinWriter.Build(new[] { File.ReadAllBytes(path) }, layers, null, true, out var stats);
+
+        Assert.True(stats.TrimmedTris > 0, "the thigh lap inside the knee was not cut");
+    }
+
     [Fact]
     public void A_real_layout_loses_the_wrist_ring_and_keeps_the_neck()
     {
