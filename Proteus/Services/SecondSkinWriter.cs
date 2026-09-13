@@ -864,7 +864,7 @@ public static class SecondSkinWriter
             return supplied;
         }
 
-        int redundantSubs = 0, redundantTris = 0, trimmedTris = 0;
+        int redundantSubs = 0, redundantTris = 0;
         if (sources.Any(s => s.DropConnectors))
         {
             // EVERY source measured, not only the ones running the submesh pass. The overlap trim below is
@@ -883,7 +883,7 @@ public static class SecondSkinWriter
                 if (all[i] is { } measured && parsed[i].HiddenAttrs is { } hidden)
                 {
                     var src = parsed[i];
-                    all[i] = measured.Without(mask => IsHidden(src, mask, hidden));
+                    all[i] = measured.Without(sub => IsHidden(src, sub.AttrMask, hidden));
                 }
             }
 
@@ -896,7 +896,8 @@ public static class SecondSkinWriter
                 // No hidden-attribute filter here: the submeshes the game is not drawing were already taken
                 // out of the measurement above.
                 parsed[i].DropSubmeshes = PlanConnectorDrops(
-                    profile, others, isHidden: null, diag, $"source {i}", out int subs, out int tris);
+                    profile, others, isHidden: null, diag, $"source {i}", out int subs, out int tris,
+                    variantBits: VariantBits(parsed[i]));
                 redundantSubs += subs;
                 redundantTris += tris;
             }
@@ -912,9 +913,14 @@ public static class SecondSkinWriter
             // 8-10% of a submesh whose other 90% is the only thing drawing a whole region of the leg.
             // The unit has to be the TRIANGLE.
             // The submesh pass has already run, so its verdicts are handed over: a submesh about to be
-            // deleted must not act as cover for the cut.
-            var dropSets = new IReadOnlySet<(int Mesh, int Sub)>?[sources.Count];
-            for (int i = 0; i < sources.Count; i++) dropSets[i] = parsed[i].DropSubmeshes;
+            // deleted draws nothing, so it must not be cover, a ring, or a piece for the cut to judge. Left
+            // in, a duplicate the pass dropped still "covered" the copy it kept, and the cut deleted that
+            // copy too — leaving nothing to draw the region at all.
+            var joinInput = new ConnectorProfile?[sources.Count];
+            for (int i = 0; i < sources.Count; i++)
+                joinInput[i] = all[i] is { } measured && parsed[i].DropSubmeshes is { Count: > 0 } dropped
+                    ? measured.Without(sub => dropped.Contains((sub.Mesh, sub.Index)))
+                    : all[i];
 
             // Cut at the JOIN, not at a distance contour. The parts are stitched to each other on a ring
             // of shared vertices, authored to a tenth of a millimetre, and that ring is the boundary — so
@@ -924,7 +930,7 @@ public static class SecondSkinWriter
             // Every imprecision came off the character as bare skin: the waist, wrist, thigh and ankle
             // rendered as wide smooth strips with no shell over them at all, which is worse than the thin
             // doubled line it set out to remove.
-            var flaps = PlanJoinCut(all, CoincidenceEps, diag, out trimmedTris);
+            var flaps = PlanJoinCut(joinInput, CoincidenceEps, diag, out _);
             for (int i = 0; i < sources.Count; i++) parsed[i].JoinFlaps = flaps[i];
         }
 
@@ -1915,6 +1921,8 @@ public static class SecondSkinWriter
                 {
                     int p = src.Ib + (int)(so + t) * 2;
                     ushort a = BitConverter.ToUInt16(s, p), b = BitConverter.ToUInt16(s, p + 2), c = BitConverter.ToUInt16(s, p + 4);
+                    // As stored, before the cap projection or a shape bake rewrites them — see the join cut below.
+                    ushort rawA = a, rawB = b, rawC = c;
 
                     if (capUv is { } cplan)
                     {
@@ -1947,10 +1955,13 @@ public static class SecondSkinWriter
                     // triangle against the same ring has its other corners in the bulk and stays. That is
                     // what makes the two parts end on exactly the same vertices.
                     //
-                    // Raw indices, before the shape bake and the cap projection rewrite them: the ring was
-                    // measured on the unmorphed model, and a morph moves a vertex a fraction of a
-                    // millimetre, not across a join.
-                    if (joinFlap != null && (joinFlap.Contains(a) || joinFlap.Contains(b) || joinFlap.Contains(c)))
+                    // RAW indices, not the ones the shape bake just wrote. A shape key redirects a corner to a
+                    // morph vertex that no base triangle names, so it is never in the flap set — tested after
+                    // the bake, a flap triangle whose corners were all morphed survived, and a waist shape key
+                    // brought the waist seam straight back. The ring was measured on the unmorphed model, and
+                    // a morph moves a vertex a fraction of a millimetre, not across a join.
+                    if (joinFlap != null
+                        && (joinFlap.Contains(rawA) || joinFlap.Contains(rawB) || joinFlap.Contains(rawC)))
                     { trimmedOut++; continue; }
 
                     if (cov != null && !AnyVisible(cov, uv[a], uv[b], uv[c])) continue;
@@ -4198,8 +4209,12 @@ public static class SecondSkinWriter
                        + (uvUnmapped > 0 ? $", {uvUnmapped / layers.Count} left as authored (no correspondence)" : "")
                        + $", {uvRetangented / layers.Count} mesh(es) re-tangented");
 
+        // The trim is counted in the emit loop, which runs once per SHELL layer (a content layer brings its
+        // own meshes and never reaches it) — so divided back out like the figures above, or a five-layer
+        // shell reports five times the triangles it actually cut.
+        int shellLayers = layers.Count(l => l.Geometry.Count == 0);
         stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut, capDeclined, capUsed,
-                          redundantSubs, redundantTris, trimmedOut);
+                          redundantSubs, redundantTris, shellLayers > 0 ? trimmedOut / shellLayers : 0);
         return o;
     }
 
@@ -4287,6 +4302,37 @@ public static class SecondSkinWriter
     /// <paramref name="hidden"/> and never the reason a submesh goes. Its sleeve submeshes are tagged
     /// <c>atr_tv_f + atr_ude</c> and correctly follow <c>atr_tv_f</c> alone.
     /// </summary>
+    /// <summary>
+    /// <c>atr_</c>, a slot letter, <c>v_</c>, then a part letter a–j: the attribute names an IMC attribute
+    /// mask switches (see <c>MeshToggleService.AttributeSlotLetter</c>). Everything else — <c>atr_sne</c>,
+    /// <c>atr_hij</c> — is driven by what gear is worn.
+    /// </summary>
+    public static bool IsVariantAttribute(string? name)
+        => name is { Length: 8 } n
+           && n.StartsWith("atr_", StringComparison.Ordinal)
+           && n[5] == 'v' && n[6] == '_'
+           && n[7] is >= 'a' and <= 'j';
+
+    /// <summary>The bits of this model's submesh attribute masks that name an IMC variant attribute.</summary>
+    internal static uint VariantBits(Source src)
+    {
+        uint bits = 0;
+        for (int i = 0; i < 32 && i < src.AttrNames.Length; i++)
+            if (IsVariantAttribute(src.AttrNames[i])) bits |= 1u << i;
+        return bits;
+    }
+
+    /// <summary>
+    /// Are these two submeshes alternatives — each tagged with a variant the other does not carry, so an IMC
+    /// option decides which one is drawn? One whose variants are a SUBSET of the other's is not: that is a
+    /// piece drawn "only with" the other (see <see cref="IsHidden"/>), and the two can be drawn together.
+    /// </summary>
+    internal static bool Alternatives(uint a, uint b, uint variantBits)
+    {
+        uint av = a & variantBits, bv = b & variantBits;
+        return av != 0 && bv != 0 && (av & bv) != av && (av & bv) != bv;
+    }
+
     private static bool IsHidden(Source src, uint mask, IReadOnlySet<string> hidden)
     {
         if (mask == 0) return false;
@@ -4793,16 +4839,17 @@ public static class SecondSkinWriter
         public int Vertices { get; init; }
 
         /// <summary>
-        /// This measurement with the submeshes <paramref name="hidden"/> names (by attribute mask) taken out,
-        /// as if the model had never carried them: their triangles and vertex windows go, every mesh's largest
-        /// submesh and the part's extent are re-taken from what is left, and a mesh left with nothing goes
-        /// too. Positions are shared, not copied — a vertex no remaining triangle names is simply unused.
-        /// Returns this instance when nothing is hidden.
+        /// This measurement with the submeshes <paramref name="hidden"/> picks out taken out, as if the model
+        /// had never carried them: their triangles and vertex windows go, every mesh's largest submesh and the
+        /// part's extent are re-taken from what is left, and a mesh left with nothing goes too. Positions are
+        /// shared, not copied — a vertex no remaining triangle names is simply unused. Every remaining
+        /// submesh keeps its own mesh and submesh index, so a drop set keyed on them still addresses it.
+        /// Returns this instance when nothing is removed.
         /// </summary>
-        public ConnectorProfile Without(Func<uint, bool> hidden)
+        public ConnectorProfile Without(Func<Sub, bool> hidden)
         {
             bool any = false;
-            foreach (var sb in Subs) if (hidden(sb.AttrMask)) { any = true; break; }
+            foreach (var sb in Subs) if (hidden(sb)) { any = true; break; }
             if (!any) return this;
 
             var meshes = new List<MeshProfile>(Meshes.Length);
@@ -4817,7 +4864,7 @@ public static class SecondSkinWriter
                 for (int k = 0; k < mesh.SubCount; k++)
                 {
                     var sb = Subs[mesh.SubFirst + k];
-                    if (hidden(sb.AttrMask)) continue;
+                    if (hidden(sb)) continue;
                     int triFirst = tris.Count / 3, vertFirst = subVerts.Count;
                     for (int c = sb.TriFirst * 3; c < (sb.TriFirst + sb.TriCount) * 3; c++) tris.Add(mesh.Tris[c]);
                     for (int v = sb.VertFirst; v < sb.VertFirst + sb.VertCount; v++) subVerts.Add(mesh.SubVerts[v]);
@@ -5084,10 +5131,15 @@ public static class SecondSkinWriter
     /// How close a vertex must sit to other geometry to count as already drawn. Defaults to
     /// <see cref="CoincidenceEps"/>; overridable only so the gated report can sweep it across real bodies.
     /// </param>
+    /// <param name="variantBits">
+    /// Which bits of a submesh's attribute mask are IMC variant attributes (<c>atr_dv_a</c>) — see
+    /// <see cref="VariantBits"/>. Two submeshes carrying different variants are alternatives, and neither is
+    /// cover for the other. Zero knows of no variants.
+    /// </param>
     internal static HashSet<(int Mesh, int Sub)> PlanConnectorDrops(
         ConnectorProfile profile, IReadOnlyList<ConnectorProfile.Box> otherPartBoxes,
         Func<uint, bool>? isHidden, Action<string>? diag, string label,
-        out int droppedSubs, out int droppedTris, float eps = CoincidenceEps)
+        out int droppedSubs, out int droppedTris, float eps = CoincidenceEps, uint variantBits = 0)
     {
         var drops = new HashSet<(int Mesh, int Sub)>();
         droppedSubs = 0; droppedTris = 0;
@@ -5139,6 +5191,7 @@ public static class SecondSkinWriter
 
             var cover = new CoverGrid(eps);
             int kept = 0;
+            var keptSubs = new List<int>();
             var partDrops = new List<int>();
 
             foreach (int si in live)
@@ -5160,7 +5213,20 @@ public static class SecondSkinWriter
                 }
                 else
                 {
-                    float frac = cover.CoveredFraction(profile, meshOf, si, out string by, out int bestHits);
+                    // A kept sibling that is this submesh's VARIANT is not cover for it. The game draws one
+                    // of the two, and which one is an IMC option — so dropping this one for being coincident
+                    // with the other drops the one the game may be drawing, and the region goes bare. When
+                    // the caller knows which variant is live, the other was already taken out of the profile;
+                    // this is for when it does not.
+                    var against = cover;
+                    if (variantBits != 0 && keptSubs.Any(k => Alternatives(sub.AttrMask, profile.Subs[k].AttrMask, variantBits)))
+                    {
+                        against = new CoverGrid(eps);
+                        foreach (int k in keptSubs)
+                            if (!Alternatives(sub.AttrMask, profile.Subs[k].AttrMask, variantBits))
+                                against.AddSub(profile, meshOf, k);
+                    }
+                    float frac = against.CoveredFraction(profile, meshOf, si, out string by, out int bestHits);
                     drop = sub.VertCount >= MinCoincidenceVerts && frac >= CoincidenceFraction;
                     why = $"rule=coincident, {frac * 100:F0}% of {sub.VertCount} vertices within "
                         + $"{eps * 1000:F1}mm of {by} ({bestHits} hit)";
@@ -5180,6 +5246,7 @@ public static class SecondSkinWriter
                 else
                 {
                     kept++;
+                    keptSubs.Add(si);
                     cover.AddSub(profile, meshOf, si);
                 }
             }
@@ -5513,17 +5580,26 @@ public static class SecondSkinWriter
                     if (rival == 0) continue;                               // meets no ring
 
                     // How much of this component another part, or another region of this same mesh,
-                    // already draws. Both figures, because the two kinds of join answer differently.
+                    // already draws. Both figures, because the two kinds of join answer differently. For the
+                    // second, also WHICH region draws most of it — see the one-way rule below.
                     int covered = 0, tested = 0, byOwn = 0;
+                    var ownCredit = new Dictionary<int, int>();
                     foreach (ushort v in verts[i])
                     {
                         if (ring[v]) continue;
                         tested++;
                         var q = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
                         if (surface.CoveredBy(q, exclude: src) >= 0) covered++;
-                        if (own.CoveredBy(q, exclude: i) >= 0) byOwn++;
+                        if (own.CoveredBy(q, exclude: i) is var ownTag and >= 0)
+                        {
+                            byOwn++;
+                            ownCredit[ownTag] = ownCredit.TryGetValue(ownTag, out var n) ? n + 1 : 1;
+                        }
                     }
                     if (tested == 0) continue;
+                    int ownBy = -1;
+                    foreach (var (tag, n) in ownCredit)
+                        if (ownBy < 0 || n > ownCredit[ownBy]) ownBy = tag;
 
                     // A PART join is settled by size, and deliberately not by coverage: the margin tucks
                     // INSIDE the neighbour rather than lying on its outer surface — measured at the waist,
@@ -5549,10 +5625,17 @@ public static class SecondSkinWriter
                     // outright; the bar keeps a margin even without it. Neolithe's shoulder, which has no
                     // inner geometry, sits at 70%; its genital insert, inside the thigh's bounding box but
                     // protruding from its surface, at 15%. Only the thigh lap clears both.
+                    //
+                    // The coverage rule runs ONE WAY. Two same-sized regions redrawing the same surface each
+                    // cover the other completely, and asked symmetrically both went, leaving nothing to draw
+                    // it. A region is cut only in favour of a BIGGER one — or, between equals, the lower
+                    // index — so of any such pair exactly one survives.
                     bool isFlap;
                     if (onPartRing)
                         isFlap = members[i].Count < rival * FlapShare;
-                    else if (byOwn >= tested * FlapCovered)
+                    else if (byOwn >= tested * FlapCovered && ownBy >= 0
+                             && (members[i].Count < members[ownBy].Count
+                                 || (members[i].Count == members[ownBy].Count && i > ownBy)))
                         isFlap = true;
                     else if (rivalIdx >= 0 && members[i].Count < rival * FlapShare)
                     {
@@ -5614,31 +5697,101 @@ public static class SecondSkinWriter
     /// winding. Ring vertices are skipped: they are shared by construction and sit exactly on the surface,
     /// so their sign is noise.
     /// </summary>
+    /// <remarks>
+    /// The nearest triangle is found through a grid searched outward in shells, not by walking every one:
+    /// a piece may be a quarter the size of a 10000-triangle neighbour, and the walk was every vertex against
+    /// every triangle, on every composite. The answer is unchanged — the search stops only once no unvisited
+    /// cell can hold anything closer, falls back to the full walk when nothing is near at all, and breaks a
+    /// distance tie by <paramref name="against"/> order exactly as the walk did.
+    /// </remarks>
     private static (int Behind, int Of) BehindFraction(
         ConnectorProfile.MeshProfile mesh, IEnumerable<ushort> verts, bool[] ring, List<int> against)
     {
+        const float H = 0.01f;          // cell size: a centimetre, against body edges of a few millimetres
+        const long MaxCells = 4096;     // a triangle stamping more than this is walked linearly instead
+        const int MaxShells = 8;        // beyond this, nothing is near — do the full walk
+
+        Vec3 Corner(int t, int k)
+        {
+            int i = mesh.Tris[t * 3 + k];
+            return new Vec3(mesh.Pos[i * 3], mesh.Pos[i * 3 + 1], mesh.Pos[i * 3 + 2]);
+        }
+        static bool Usable(float v) => float.IsFinite(v) && MathF.Abs(v) < 1000f;
+        static long Cell(float v) => (long)MathF.Floor(v / H);
+
+        // Bucket the neighbour, by position in `against` so the tie-break can see the original order.
+        var cells = new Dictionary<(long, long, long), List<int>>();
+        var linear = new List<int>();
+        for (int k = 0; k < against.Count; k++)
+        {
+            var (a, b, c) = (Corner(against[k], 0), Corner(against[k], 1), Corner(against[k], 2));
+            float mnx = MathF.Min(a.X, MathF.Min(b.X, c.X)), mxx = MathF.Max(a.X, MathF.Max(b.X, c.X));
+            float mny = MathF.Min(a.Y, MathF.Min(b.Y, c.Y)), mxy = MathF.Max(a.Y, MathF.Max(b.Y, c.Y));
+            float mnz = MathF.Min(a.Z, MathF.Min(b.Z, c.Z)), mxz = MathF.Max(a.Z, MathF.Max(b.Z, c.Z));
+            if (!Usable(mnx) || !Usable(mxx) || !Usable(mny) || !Usable(mxy) || !Usable(mnz) || !Usable(mxz))
+            { linear.Add(k); continue; }
+            long x0 = Cell(mnx), x1 = Cell(mxx), y0 = Cell(mny), y1 = Cell(mxy), z0 = Cell(mnz), z1 = Cell(mxz);
+            if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > MaxCells) { linear.Add(k); continue; }
+            for (long x = x0; x <= x1; x++)
+            for (long y = y0; y <= y1; y++)
+            for (long z = z0; z <= z1; z++)
+            {
+                if (!cells.TryGetValue((x, y, z), out var list)) cells[(x, y, z)] = list = [];
+                list.Add(k);
+            }
+        }
+
+        var seen = new int[against.Count];
+        int query = 0;
         int behind = 0, of = 0;
         foreach (ushort v in verts)
         {
             if (ring[v]) continue;
             var p = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
             float best = float.MaxValue;
+            int bestOrder = int.MaxValue;
             float sign = 0f;
-            foreach (int t in against)
+            query++;
+
+            void Test(int k)
             {
-                ushort ia = mesh.Tris[t * 3], ib = mesh.Tris[t * 3 + 1], ic = mesh.Tris[t * 3 + 2];
-                var a = new Vec3(mesh.Pos[ia * 3], mesh.Pos[ia * 3 + 1], mesh.Pos[ia * 3 + 2]);
-                var b = new Vec3(mesh.Pos[ib * 3], mesh.Pos[ib * 3 + 1], mesh.Pos[ib * 3 + 2]);
-                var c = new Vec3(mesh.Pos[ic * 3], mesh.Pos[ic * 3 + 1], mesh.Pos[ic * 3 + 2]);
+                if (seen[k] == query) return;
+                seen[k] = query;
+                var (a, b, c) = (Corner(against[k], 0), Corner(against[k], 1), Corner(against[k], 2));
                 var q = ClosestOnTriangle(p, a, b, c);
                 float d = Dist(p, q);
-                if (d >= best) continue;
+                if (d > best || (d == best && k > bestOrder)) return;
                 best = d;
+                bestOrder = k;
                 float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z;
                 float wx = c.X - a.X, wy = c.Y - a.Y, wz = c.Z - a.Z;
                 float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
                 sign = (p.X - q.X) * nx + (p.Y - q.Y) * ny + (p.Z - q.Z) * nz;
             }
+
+            foreach (int k in linear) Test(k);
+            bool settled = false;
+            if (cells.Count > 0 && Usable(p.X) && Usable(p.Y) && Usable(p.Z))
+            {
+                long cx = Cell(p.X), cy = Cell(p.Y), cz = Cell(p.Z);
+                for (int r = 0; r <= MaxShells && !settled; r++)
+                {
+                    for (int dx = -r; dx <= r; dx++)
+                    for (int dy = -r; dy <= r; dy++)
+                    for (int dz = -r; dz <= r; dz++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Max(Math.Abs(dy), Math.Abs(dz))) != r) continue;
+                        if (cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var list))
+                            foreach (int k in list) Test(k);
+                    }
+                    // Every cell not yet visited is at least r cells away, so nothing in it is closer than
+                    // r*H. Strictly closer, so a tie at exactly that distance still gets looked at.
+                    settled = best < r * H;
+                }
+            }
+            if (!settled)
+                for (int k = 0; k < against.Count; k++) Test(k);
+
             of++;
             if (best < float.MaxValue && sign < 0f) behind++;
         }
