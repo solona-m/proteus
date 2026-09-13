@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "Empujar afuera",
+    "message": "Tirar afuera",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "Tirar adentro",
+    "message": "Empujar adentro",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "Arrastra sobre el modelo para pintar. Arrastra desde el fondo para girarlo, mayús-arrastrar para moverlo, rueda para acercar. Marca una pieza en la lista para mantenerla quieta.",
+    "message": "Arrastra sobre el modelo para pintar. Arrastra desde el fondo para girarlo, mayús-arrastrar para moverlo, rueda para acercar.",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "el ajuste de sombreros",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "el pincel",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Deshaz primero {0}: cambió el mismo modelo después, así que deshacer esto ahora también lo desharía.",
     "description": ""
   },
   "Parts.Selected.Fmt": {

@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "Pousser dehors",
+    "message": "Tirer dehors",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "Tirer dedans",
+    "message": "Pousser dedans",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer. Cochez une pièce dans la liste pour la maintenir immobile.",
+    "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer.",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "l'ajustement des chapeaux",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "le pinceau",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Annulez d'abord {0} : il a modifié le même modèle après, donc annuler ceci maintenant l'annulerait aussi.",
     "description": ""
   },
   "Parts.Selected.Fmt": {

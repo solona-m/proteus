@@ -1602,14 +1602,14 @@ public sealed class PartsStrings
     public readonly string ToolNavigateTip = Loc.Localize("Parts.Tool.Navigate.Tip",
         "Click pieces of the model to choose them, then give them an on/off switch.");
 
-    public readonly string ToolInflate = Loc.Localize("Parts.Tool.Inflate", "Push out")
+    public readonly string ToolInflate = Loc.Localize("Parts.Tool.Inflate", "Pull out")
                                        + "###partsToolInflate";
 
     public readonly string ToolInflateTip = Loc.Localize("Parts.Tool.Inflate.Tip",
         "Paint on the model to push the surface outwards, so a body that pokes\n" +
         "through a piece of clothing is covered again.");
 
-    public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Pull in")
+    public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Push in")
                                        + "###partsToolDeflate";
 
     public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
@@ -1619,7 +1619,7 @@ public sealed class PartsStrings
 
     public readonly string BrushHelp = Loc.Localize("Parts.Brush.Help",
         "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to "
-      + "zoom. Tick a part in the list to hold it still while you paint.");
+      + "zoom.");
 
     public readonly string BrushSize = Loc.Localize("Parts.Brush.Size", "Brush size")
                                      + "###partsBrushSize";

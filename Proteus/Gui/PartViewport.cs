@@ -120,6 +120,16 @@ public sealed class PartViewport : IDisposable
     /// </summary>
     private List<string?> parentOf = [];
 
+    /// <summary>
+    /// For each pickable part, whether the brush may move it — false for skin, which the brush never moves
+    /// (see <c>MeshVolumeSolve</c>) and so is never tinted: a falloff blob across the body would promise an
+    /// edit that is not going to happen.
+    /// <para/>
+    /// Worked out once per model in <see cref="Show"/>. It used to be rebuilt inside the colouring pass, which
+    /// runs on every cursor move over the model, re-running a string test on every part's material each time.
+    /// </summary>
+    private bool[] brushable = [];
+
     private Vector2 dragFrom;
     private bool dragging, dragMoved;
 
@@ -232,6 +242,7 @@ public sealed class PartViewport : IDisposable
         parentOf = pickable
             .Select(p => p.Island >= 0 && submeshLabel.TryGetValue((p.Mesh, p.Submesh), out var l) ? l : null)
             .ToList();
+        brushable = pickable.Select(p => !SecondSkinWriter.IsBodySkinMaterial(p.Material)).ToArray();
 
         yaw = MathF.PI; pitch = 0.15f; zoom = 1f; pan = Vector2.Zero;
         geometryDirty = coloursDirty = true;
@@ -250,6 +261,7 @@ public sealed class PartViewport : IDisposable
         renderedKey = null;
         pickable = [];
         parentOf = [];
+        brushable = [];
         Hovered = null;
     }
 
@@ -588,6 +600,7 @@ public sealed class PartViewport : IDisposable
         var centre = Cursor ?? Vector3.Zero;
         float r2 = BrushRadius * BrushRadius;
 
+
         for (int i = 0; i < id.Length; i++)
         {
             int at = i * 4;
@@ -600,7 +613,7 @@ public sealed class PartViewport : IDisposable
             var (r, g, b) = tint[part];
             int s = shade[i];
 
-            if (brushing)
+            if (brushing && part < brushable.Length && brushable[part])
             {
                 float d2 = (hit[i] - centre).LengthSquared();
                 if (d2 < r2)

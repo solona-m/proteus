@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "Вытолкнуть",
+    "message": "Вытянуть",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "Втянуть",
+    "message": "Вдавить",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб. Галочка на части в списке удерживает её на месте.",
+    "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб.",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "подгонку под шляпы",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "кисть",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: оно изменило ту же модель позже, и отмена сейчас отменит и его.",
     "description": ""
   },
   "Parts.Selected.Fmt": {

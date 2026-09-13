@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "밖으로 밀기",
+    "message": "밖으로 당기기",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "안으로 당기기",
+    "message": "안으로 밀기",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "모델 위에서 드래그하면 츠합니다. 배경에서 드래그하면 회전, Shift+드래그는 이동, 스크롤은 확대입니다. 목록에서 부프를 체킬하면 그 부프는 움직이지 않습니다.",
+    "message": "모델 위에서 드래그하면 칠합니다. 배경에서 드래그하면 회전, Shift+드래그는 이동, 스크롤은 확대입니다.",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "모자 맞추기",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "봇",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "먼저 {0}을 되돌리십시오. 그것이 이후에 같은 모델을 바꾸었으므로, 지금 이것을 되돌리면 그것도 함께 사라집니다.",
     "description": ""
   },
   "Parts.Selected.Fmt": {
