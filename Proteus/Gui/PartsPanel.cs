@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
 using Proteus.Interop;
@@ -92,6 +94,12 @@ public sealed class PartsPanel
 
         /// <summary>The same brush pulling in, for a garment that stands too far off.</summary>
         Deflate,
+
+        /// <summary>Smooth the surface under the brush — lumps the garment shipped with, or a rough pull.</summary>
+        Relax,
+
+        /// <summary>Stretch cloth straight across a hollow — a cleft or crease — instead of into it.</summary>
+        Bridge,
     }
 
     private Tool tool = Tool.Navigate;
@@ -105,6 +113,30 @@ public sealed class PartsPanel
     /// <summary>Brush radius and per-dab strength, both in millimetres because that is how the problem is
     /// described: "the hip pokes through by about a millimetre".</summary>
     private float brushRadiusMm = 200f, brushStrengthMm = 0.05f;
+
+    /// <summary>
+    /// The bridge brush's own size, smaller than the others'. A bridge spans the hollow under the brush, so a
+    /// brush far wider than the crack reaches past it onto the curves either side and bridges between those
+    /// too; starting it near the width of the thing it is for keeps the span where it was meant.
+    /// </summary>
+    private float bridgeRadiusMm = 70f;
+
+    /// <summary>The size the current tool paints with — the bridge keeps its own, see above.</summary>
+    private ref float ActiveRadiusMm => ref tool == Tool.Bridge ? ref bridgeRadiusMm : ref brushRadiusMm;
+
+    /// <summary>
+    /// The relax brush's strength, as a percentage — how far each moment of painting moves the surface toward
+    /// its neighbours. Its own field rather than <see cref="brushStrengthMm"/>, which is a distance: switching
+    /// tools must not reinterpret 0.05 mm as 0.05 %.
+    /// </summary>
+    private float relaxRatePercent = 30f;
+
+    /// <summary>
+    /// The bridge brush's rate, as a percentage — how much of the remaining gap each moment of painting
+    /// closes. Its own field, and far lower than relax's: a bridge closes the gap it measures each dab, so a
+    /// high rate fills a crack before there is time to see how far it should go.
+    /// </summary>
+    private float bridgeRatePercent = 5f;
 
     /// <summary>How many models in this mod the brush has already written, so the way back can be offered
     /// only when there is something to go back from.</summary>
@@ -130,11 +162,6 @@ public sealed class PartsPanel
         this.log = log;
     }
 
-    /// <summary>
-    /// Height of everything drawn BELOW the model row, measured on the previous frame — see <see cref="Draw"/>.
-    /// Zero until the first frame has been drawn, which is the signal to use the fixed height instead.
-    /// </summary>
-    private float tailHeight;
 
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
@@ -202,27 +229,59 @@ public sealed class PartsPanel
         // switch — the same expression grows without bound until it hits MaximumSize, which is why the fixed
         // height has to remain the path for every non-fill frame rather than being replaced by it.
         //
-        // The tail is measured rather than predicted: DrawStaging's height depends on how many toggles are
-        // pending and on how the warnings wrap. A frame late is fine — adding a pending row leaves the model
-        // one row too tall for a single frame, and nothing else reads it.
+        // Nothing is drawn below the row any more — the controls moved into the side panel — so there is no
+        // tail to measure and leave room for: the row takes all the height the window has.
         float height = ProteusStyle.S(360f);
-        if (fillHeight && tailHeight > 0f)
-            height = MathF.Max(
-                ImGui.GetContentRegionAvail().Y - tailHeight - reserveBelow - ProteusStyle.S(4f),
-                ProteusStyle.S(200f));
+        if (fillHeight)
+            height = MathF.Max(ImGui.GetContentRegionAvail().Y - reserveBelow - ProteusStyle.S(4f),
+                               ProteusStyle.S(200f));
 
         ShowingModel = true;
-        DrawToolPicker();
-        DrawParts(height);
+        HandleUndoShortcut();
 
-        var tailTop = ImGui.GetCursorPosY();
-        ImGui.Separator();
-        // One tail or the other, never both. Staging a switch and brushing geometry are different jobs with
-        // different meanings for the same ticked list, and showing both invites writing a switch while
-        // thinking about a brush.
-        if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
-        tailHeight = ImGui.GetCursorPosY() - tailTop;
+        // The tools and their controls down the LEFT, beside the model rather than under it. Under it, every
+        // slider and button cost the model its height, and a model you paint on wants all the height there is.
+        // One set of controls or the other, never both: staging a switch and brushing geometry are different
+        // jobs, and showing both invites writing a switch while thinking about a brush.
+        using (var side = ImRaii.Child("##partsSide", new Vector2(ProteusStyle.S(SidePanelWidth), height), true))
+        {
+            if (side)
+            {
+                DrawToolPicker();
+                ImGui.Separator();
+                if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
+            }
+        }
+        ImGui.SameLine();
+        DrawParts(height);
     }
+
+    /// <summary>Width of the tool panel left of the model, before UI scaling.</summary>
+    private const float SidePanelWidth = 250f;
+
+    /// <summary>
+    /// Ctrl+Z takes back the last brush stroke — the same as the Undo stroke button, saving and redrawing at
+    /// once.
+    /// <para/>
+    /// Only while this window has focus, so Ctrl+Z pressed in the game or in another plugin does nothing here;
+    /// never while a text box has the keyboard, where Ctrl+Z belongs to the text; and never mid-stroke, where
+    /// it would undo the stroke still being painted out from under the brush. Nor while picking parts, where
+    /// no brush controls are showing and Ctrl+Z would read as taking back a tick, not rewriting the model.
+    /// </summary>
+    private void HandleUndoShortcut()
+    {
+        if (tool == Tool.Navigate || volume is not { CanUndo: true } vol || viewport.Painting) return;
+        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)) return;
+        var io = ImGui.GetIO();
+        if (io.WantTextInput || !io.KeyCtrl || !ImGui.IsKeyPressed(ImGuiKey.Z, false)) return;
+
+        vol.Undo();
+        AfterBrushEdit();
+        SaveBrush();
+    }
+
+    /// <summary>A button size spanning the rest of the current row at the normal button height.</summary>
+    private static Vector2 FullWidth() => new(ImGui.GetContentRegionAvail().X, ImGui.GetFrameHeight());
 
     // ── pickers ─────────────────────────────────────────────────────────────
 
@@ -533,7 +592,7 @@ public sealed class PartsPanel
         viewport.Mode = tool == Tool.Navigate
             ? PartViewport.ViewportMode.Navigate
             : PartViewport.ViewportMode.Brush;
-        viewport.BrushRadius = tool == Tool.Navigate ? 0f : brushRadiusMm / 1000f;
+        viewport.BrushRadius = tool == Tool.Navigate ? 0f : ActiveRadiusMm / 1000f;
 
         // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
         // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
@@ -703,15 +762,26 @@ public sealed class PartsPanel
     {
         var ps = Strings.Parts;
 
-        foreach (var (value, label, tip) in new[]
+        foreach (var (value, icon, label, tip) in new[]
                  {
-                     (Tool.Navigate, ps.ToolNavigate, ps.ToolNavigateTip),
-                     (Tool.Inflate, ps.ToolInflate, ps.ToolInflateTip),
-                     (Tool.Deflate, ps.ToolDeflate, ps.ToolDeflateTip),
+                     (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
+                     (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
+                     (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
+                     (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
+                     (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
                  })
         {
-            if (value != Tool.Navigate) ImGui.SameLine();
-            if (ImGui.RadioButton(label, tool == value) && tool != value)
+            // Stacked, one per row: the panel is a narrow column, and four buttons side by side do not fit it.
+            // An icon button per tool, highlighted when current — the project's "this is the selection" style.
+            // IconButtonWithText draws the text itself, so the ###id the label carries for ImGui is cut off
+            // and supplied as a pushed id instead; passed whole it would be printed.
+            bool clicked;
+            var text = label.Split("###")[0];
+            using (ImRaii.PushId((int)value))
+            using (ProteusStyle.Selected(tool == value))
+                clicked = ImGuiComponents.IconButtonWithText(icon, text, FullWidth());
+
+            if (clicked && tool != value)
             {
                 // Before leaving the brush, so a pending edit cannot land on top of a switch written in the
                 // meantime — a save rewrites the whole model from the bytes the brush was opened on.
@@ -740,8 +810,15 @@ public sealed class PartsPanel
 
         if (viewport.Painting && viewport.Cursor is { } at)
         {
-            float step = brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f);
-            if (volume.Paint(at, brushRadiusMm / 1000f, step) > 0)
+            float radius = ActiveRadiusMm / 1000f;
+            int moved = tool switch
+            {
+                Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f),
+                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, viewport.ToViewer),
+                _           => volume.Paint(at, radius,
+                                            brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f)),
+            };
+            if (moved > 0)
             {
                 viewport.PositionOverride = volume.Positions();
                 viewport.GeometryChanged();
@@ -750,7 +827,7 @@ public sealed class PartsPanel
 
         if (viewport.StrokeEnded)
         {
-            volume.EndStroke();
+            volume.EndStroke(bridge: tool == Tool.Bridge);
             viewport.PositionOverride = volume.Positions();
             viewport.GeometryChanged();
             brushChangedAt = Environment.TickCount64;
@@ -758,7 +835,7 @@ public sealed class PartsPanel
     }
 
     /// <summary>How long after the last change the brush writes itself into the mod.</summary>
-    private const long AutosaveMs = 3000;
+    private const long AutosaveMs = 1500;
 
     /// <summary>
     /// Save the brush once it has been left alone for <see cref="AutosaveMs"/>, then have Penumbra reload the
@@ -800,20 +877,39 @@ public sealed class PartsPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        float w = ProteusStyle.S(220f);
+        // A share of the side panel rather than a fixed width, so the label printed to the right of each slider
+        // still fits inside the column instead of being clipped by it.
+        float w = ImGui.GetContentRegionAvail().X * 0.55f;
         ImGui.SetNextItemWidth(w);
-        if (ImGui.SliderFloat(ps.BrushSize, ref brushRadiusMm, 20f, 300f, "%.0f mm"))
+        if (ImGui.SliderFloat(ps.BrushSize, ref ActiveRadiusMm, 20f, 300f, "%.0f mm"))
             viewport.Recolour();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip);
 
+        // One Strength slider, meaning a distance for the pull and push brushes and a rate for relax. Separate
+        // values underneath, so neither is misread when the tool changes.
         ImGui.SetNextItemWidth(w);
-        ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 0.5f, "%.2f mm");
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
+        // Relax and bridge are both a rate — part of a gap closed each moment — but each keeps its own value,
+        // since a comfortable relax rate fills a crack with the bridge almost instantly.
+        if (tool == Tool.Relax)
+        {
+            ImGui.SliderFloat(ps.BrushStrength, ref relaxRatePercent, 5f, 100f, "%.0f%%");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRelaxRateTip);
+        }
+        else if (tool == Tool.Bridge)
+        {
+            ImGui.SliderFloat(ps.BrushStrength, ref bridgeRatePercent, 1f, 100f, "%.0f%%");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushBridgeRateTip);
+        }
+        else
+        {
+            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 0.5f, "%.2f mm");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
+        }
 
         // A radius that reaches barely more than one vertex moves a spike rather than a surface, and it
         // looks from the outside exactly like the brush not working. Said against the mesh's OWN resolution,
         // because "20 mm" means something different on a 2,000-triangle skirt and a 60,000-triangle coat.
-        if (volume is { MeanEdge: > 0f } v && brushRadiusMm / 1000f < v.MeanEdge * 1.5f)
+        if (volume is { MeanEdge: > 0f } v && ActiveRadiusMm / 1000f < v.MeanEdge * 1.5f)
             ImGui.TextColored(ProteusStyle.Warn,
                               string.Format(ps.BrushTooSmallFmt, v.MeanEdge * 1000f));
 
@@ -824,33 +920,31 @@ public sealed class PartsPanel
                 ? string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, MeshVolumeSolve.MaxDisplacement * 1000f)
                 : ps.BrushUntouched);
 
-            using (ImRaii.Disabled(!vol.CanUndo))
-                if (ImGui.Button(ps.BrushUndo)) { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
-
             // Undo and start-over save and redraw AT ONCE rather than on the debounce. The debounce exists to
             // batch a run of strokes into one save; an undo is a single deliberate click whose whole point is
-            // to see the character put back, and three seconds of it still wearing the mistake reads as the
+            // to see the character put back, and seconds of it still wearing the mistake reads as the
             // button not working.
-            ImGui.SameLine();
+            //
+            // Every button full width, one per row, so the column reads as a stack of actions rather than a
+            // ragged edge of differently-sized labels.
+            using (ImRaii.Disabled(!vol.CanUndo))
+                if (ImGui.Button(ps.BrushUndo, FullWidth())) { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
+
             using (ImRaii.Disabled(!vol.Dirty))
-                if (ImGui.Button(ps.BrushReset)) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
+                if (ImGui.Button(ps.BrushReset, FullWidth())) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
             // Saving happens on its own a few seconds after the last change. The button is for not waiting.
             ImGui.Spacing();
             using (ImRaii.Disabled(brushChangedAt < 0))
-                if (ImGui.Button(ps.BrushSave)) SaveBrush();
+                if (ImGui.Button(ps.BrushSave, FullWidth())) SaveBrush();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSaveTip);
 
-            if (brushChangedAt >= 0)
-            {
-                ImGui.SameLine();
-                ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
-            }
+            if (brushChangedAt >= 0) ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
 
             if (brushSaved > 0)
             {
                 ImGui.Spacing();
-                if (ImGui.Button(ps.BrushRevert)) RevertBrush();
+                if (ImGui.Button(ps.BrushRevert, FullWidth())) RevertBrush();
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRevertTip);
             }
         }
@@ -966,13 +1060,13 @@ public sealed class PartsPanel
             ImGui.TextDisabled(string.Format(ps.BudgetFmt, left));
         }
 
-        ImGui.SetNextItemWidth(ProteusStyle.S(220f));
+        // The Add button on its own line: in the side panel a name box and a button side by side do not fit.
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.6f);
         ImGui.InputText(ps.ToggleName, ref toggleName, 64);
-        ImGui.SameLine();
 
         bool canAdd = left > 0 && ticked.Count > 0 && !string.IsNullOrWhiteSpace(toggleName);
         using (ImRaii.Disabled(!canAdd))
-            if (ImGui.Button(ps.AddBtn))
+            if (ImGui.Button(ps.AddBtn, FullWidth()))
             {
                 pending.Add((toggleName.Trim(), [.. ticked]));
                 ticked.Clear();
@@ -989,15 +1083,16 @@ public sealed class PartsPanel
         for (int i = 0; i < pending.Count; i++)
         {
             var (name, list) = pending[i];
+            // Wrapped, since a switch's part list runs long and the side panel is narrow.
+            ImGui.PushTextWrapPos(0);
             ImGui.TextUnformatted(string.Format(ps.PendingFmt, name, string.Join(", ", list)));
-            ImGui.SameLine();
-            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}")) { pending.RemoveAt(i); break; }
+            ImGui.PopTextWrapPos();
+            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}", FullWidth())) { pending.RemoveAt(i); break; }
         }
 
         ImGui.Spacing();
-        if (ImGui.Button(ps.WriteBtn)) Commit();
+        if (ImGui.Button(ps.WriteBtn, FullWidth())) Commit();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.WriteTip);
-        ImGui.SameLine();
         ImGui.TextColored(ProteusStyle.Warn, ps.NotWrittenYet);
     }
 

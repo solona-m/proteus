@@ -105,14 +105,22 @@ public class StackDepthTests
         };
 
         float worst = 0f;
+        int relaxed = 0;
         OnSmallStack(() =>
         {
             var solve = new MeshVolumeSolve(model);
             solve.Paint(new Vector3(0.57f, 0f, 0.57f), 2f, 0.002f);   // covers the whole grid
             solve.EndStroke();
             worst = solve.Worst;
+
+            // The relax and bridge brushes' per-dab loops over the whole model, on the same small stack.
+            relaxed = solve.Relax(new Vector3(0.57f, 0f, 0.57f), 2f, 1f);
+            solve.EndStroke();
+            solve.Bridge(new Vector3(0.57f, 0f, 0.57f), 2f, 1f, Vector3.UnitY);
+            solve.EndStroke(bridge: true);
         });
 
         Assert.True(worst > 0f);
+        Assert.True(relaxed > 100_000 / 2);
     }
 }

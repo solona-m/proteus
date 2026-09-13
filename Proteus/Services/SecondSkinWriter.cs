@@ -11444,7 +11444,10 @@ public static class SecondSkinWriter
     /// scenery through their character. So the constants stay tuned for how the result LOOKS, and this
     /// stays responsible for whether it exists.
     /// </summary>
-    internal static void UnfoldTriangles(Vec3[] pos, Vec3[] delta, int[] tris, Action<string>? log)
+    /// <param name="allowCollapse">Only a triangle that has turned over AND kept enough area to be seen counts
+    /// as folded; one flattened to a sliver is left alone. For a caller that flattens surfaces on purpose.</param>
+    internal static void UnfoldTriangles(Vec3[] pos, Vec3[] delta, int[] tris, Action<string>? log,
+                                         bool allowCollapse = false)
     {
         int vc = pos.Length;
         var keep = new float[vc];
@@ -11469,8 +11472,9 @@ public static class SecondSkinWriter
                 if (area0 <= 1e-12f) continue;      // already degenerate; not this pass's doing
 
                 var n1 = TriNormal(At(a), At(b), At(c));
-                bool folded = n0.X * n1.X + n0.Y * n1.Y + n0.Z * n1.Z <= 0f
-                           || Len(n1) < area0 * UnfoldMinArea;
+                bool turned = n0.X * n1.X + n0.Y * n1.Y + n0.Z * n1.Z <= 0f;
+                bool collapsed = Len(n1) < area0 * UnfoldMinArea;
+                bool folded = allowCollapse ? turned && !collapsed : turned || collapsed;
                 if (!folded) continue;
 
                 keep[a] *= 0.5f; keep[b] *= 0.5f; keep[c] *= 0.5f;

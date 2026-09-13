@@ -2127,6 +2127,30 @@
     "message": "同じブラシの逆方向。体から離れすぎている服に使います。",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "ならす",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "モデルをなぞると表面がなめらかになります — 服にもともとある凸凹や、\nでこぼこになった引き出しに。3ds Max のリラックスと同じく縮みます：曲面は平らになり、布は体の方へ沈むことがあります。",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐになめらかになります。\n\n裾のような開いた縁の近くでは、縁が少し内側へ寄ります。",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "橋渡し",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "くぼみ（お尻の割れ目やしわ）を横切るように塗ると、布が体に沿って\n沈み込まず、まっすぐ張り渡されます。持ち上げるだけで、丸みのある\n部分の形はそのままです。",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "塗っている間に布がくぼみを張り渡す速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐに隙間が埋まります。",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "トグル",
+    "message": "スタジオ",
     "description": ""
   },
   "Tab.Settings": {

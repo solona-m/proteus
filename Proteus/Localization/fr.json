@@ -2127,6 +2127,30 @@
     "message": "Le même pinceau à l'envers, pour un vêtement qui s'écarte trop du corps.",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "Lisser",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Peignez sur le modèle pour lisser la surface — bosses d'origine du vêtement\nou traction restée irrégulière. Comme le relax de 3ds Max, il rétracte : les courbes s'aplatissent et le tissu peut s'enfoncer vers le corps.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "La vitesse à laquelle la surface se lisse pendant que vous peignez. Faible est\ndoux et facile à maîtriser ; élevé lisse presque aussitôt.\n\nPrès d'un bord ouvert, comme un ourlet, le lissage ramène légèrement le bord vers l'intérieur.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Pont",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Peignez en travers d'un creux — le sillon entre les fesses, un pli — pour\ntendre le tissu droit par-dessus au lieu de suivre le corps dedans. Il ne fait\nque soulever et laisse aux zones arrondies leur forme.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "La vitesse à laquelle le tissu monte pour enjamber le creux pendant que vous\npeignez. Faible est doux et facile à maîtriser ; élevé comble l'écart presque aussitôt.",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer.",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Interrupteurs",
+    "message": "Studio",
     "description": ""
   },
   "Tab.Settings": {
