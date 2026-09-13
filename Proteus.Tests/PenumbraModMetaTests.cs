@@ -27,24 +27,76 @@ public class PenumbraModMetaTests
     private static readonly Dictionary<string, string> OneRedirect =
         new() { ["chara/foo_d.tex"] = @"textures\foo_d.tex" };
 
+    /// <summary>
+    /// Every writer refuses a pre-v4 folder outright, and does so without touching it. Proteus reads that
+    /// layout but does not write it; Penumbra migrates such a folder itself the moment it loads it.
+    /// </summary>
     [Fact]
-    public void WriteRedirects_on_a_v3_folder_writes_default_mod_json_and_leaves_meta_alone()
+    public void EveryWriter_refuses_a_v3_folder_and_changes_nothing()
+    {
+        using var tmp = new TempDir();
+        var meta = """{"FileVersion":3,"Name":"Proteus","Author":"Proteus"}""";
+        File.WriteAllText(tmp.File("meta.json"), meta);
+
+        Assert.Throws<PenumbraModMeta.LegacyFolderException>(
+            () => PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect));
+        Assert.Throws<PenumbraModMeta.LegacyFolderException>(
+            () => PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Fabric", ["velvet"], 0));
+        Assert.Throws<PenumbraModMeta.LegacyFolderException>(
+            () => PenumbraModMeta.WriteMultiSelectGroup(tmp.Path, 0, "Pieces", ["bow"]));
+        Assert.Throws<PenumbraModMeta.LegacyFolderException>(
+            () => PenumbraModMeta.DeleteGroup(tmp.Path, "Fabric"));
+        Assert.Throws<PenumbraModMeta.LegacyFolderException>(
+            () => PenumbraModMeta.MergeImcGroup(
+                tmp.Path, new PenumbraModMeta.GroupRef("Straps", 0, default),
+                [("Bow", 4)], new HashSet<string>(), null, default));
+
+        // Refused, not half-done: the folder is exactly as it was.
+        Assert.Equal(meta, File.ReadAllText(tmp.File("meta.json")));
+        Assert.False(File.Exists(tmp.File("default_mod.json")));
+        Assert.Empty(Directory.EnumerateFiles(tmp.Path, "group_*.json"));
+    }
+
+    /// <summary>
+    /// A folder Proteus owns is migrated rather than refused. The managed mod is rewritten on every
+    /// composite, so refusing one an older build stamped v3 would take the compositor down with it.
+    /// </summary>
+    [Fact]
+    public void MigrateToCurrent_folds_a_v3_folder_into_the_manifest()
     {
         using var tmp = new TempDir();
         File.WriteAllText(tmp.File("meta.json"),
-            """{"FileVersion":3,"Name":"Proteus","Author":"Proteus"}""");
+            """{"FileVersion":3,"Name":"Proteus","ModTags":["keep"]}""");
+        File.WriteAllText(tmp.File("default_mod.json"),
+            """{"Files":{"chara/foo_d.tex":"textures\\foo_d.tex"},"Swaps":{"a":"b"},"Manipulations":[]}""");
 
-        PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect);
+        PenumbraModMeta.MigrateToCurrent(tmp.Path);
 
-        // The redirect lands where an older Penumbra actually looks for it.
-        var def = JsonDocument.Parse(File.ReadAllText(tmp.File("default_mod.json"))).RootElement;
-        Assert.Equal(@"textures\foo_d.tex",
-            def.GetProperty("Files").GetProperty("chara/foo_d.tex").GetString());
-
-        // meta.json is untouched — no surprise upgrade to a format this Penumbra can't read.
         var meta = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement;
-        Assert.Equal(3, meta.GetProperty("FileVersion").GetInt32());
-        Assert.False(meta.TryGetProperty("DefaultData", out _));
+        Assert.Equal(4, meta.GetProperty("FileVersion").GetInt32());
+        var dd = meta.GetProperty("DefaultData");
+        Assert.Equal(@"textures\foo_d.tex", dd.GetProperty("Files").GetProperty("chara/foo_d.tex").GetString());
+        // Swaps carried across under the name v4 gave them.
+        Assert.Equal("b", dd.GetProperty("FileSwaps").GetProperty("a").GetString());
+        Assert.Equal("keep", Assert.Single(meta.GetProperty("ModTags").EnumerateArray()).GetString());
+        Assert.False(File.Exists(tmp.File("default_mod.json")));
+
+        // And the folder is now writable, which is the whole point.
+        PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect);
+        Assert.False(PenumbraModMeta.IsLegacyFolder(tmp.Path));
+    }
+
+    /// <summary>A v4 folder is left alone — the migration is a no-op, not a rewrite.</summary>
+    [Fact]
+    public void MigrateToCurrent_leaves_a_v4_folder_untouched()
+    {
+        using var tmp = new TempDir();
+        var meta = """{"FileVersion":4,"Identifier":"abc-123","Name":"Proteus"}""";
+        File.WriteAllText(tmp.File("meta.json"), meta);
+
+        PenumbraModMeta.MigrateToCurrent(tmp.Path);
+
+        Assert.Equal(meta, File.ReadAllText(tmp.File("meta.json")));
     }
 
     [Fact]
@@ -68,22 +120,29 @@ public class PenumbraModMetaTests
         Assert.False(File.Exists(tmp.File("default_mod.json")));
     }
 
-    // A folder Proteus has just created, before Penumbra has ever loaded (and possibly migrated) it.
+    /// <summary>
+    /// A folder Proteus is in the middle of creating has no manifest yet, and <c>ReadFileVersion</c> reports
+    /// one of those as v3. It must not be mistaken for an old mod and refused its own first write — which is
+    /// why the legacy check asks <c>HasReadableManifest</c> first.
+    /// </summary>
     [Fact]
-    public void WriteRedirects_with_no_manifest_at_all_uses_the_legacy_layout()
+    public void WriteRedirects_with_no_manifest_at_all_creates_a_v4_one()
     {
         using var tmp = new TempDir();
 
         PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect);
 
-        Assert.True(File.Exists(tmp.File("default_mod.json")));
+        var meta = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement;
+        Assert.Equal(4, meta.GetProperty("FileVersion").GetInt32());
+        Assert.Equal(@"textures\foo_d.tex",
+            meta.GetProperty("DefaultData").GetProperty("Files").GetProperty("chara/foo_d.tex").GetString());
+        Assert.False(File.Exists(tmp.File("default_mod.json")));
     }
 
-    // A second-skin shell needs its EQDP entry to survive whichever format it is written in — without it
-    // the accessory the shell rides on loads the wrong race/gender model. The two writers serialize
-    // manipulations by different mechanisms, so both are pinned here: the legacy path hands an
-    // IReadOnlyList<object> to the serializer (which resolves the runtime type only because the declared
-    // element type is exactly `object`), the v4 path writes each element with an explicit GetType().
+    // A second-skin shell needs its EQDP entry to survive being written out — without it the accessory the
+    // shell rides on loads the wrong race/gender model. Pinned because the writer resolves each element's
+    // runtime type explicitly, and an object[] that lost its shape on the way through would produce an
+    // EQDP row that parses and does nothing.
     private static readonly IReadOnlyList<object> Eqdp =
     [
         new
@@ -104,18 +163,6 @@ public class PenumbraModMetaTests
     }
 
     [Fact]
-    public void WriteRedirects_keeps_manipulation_contents_on_the_v3_path()
-    {
-        using var tmp = new TempDir();
-        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Proteus"}""");
-
-        PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect, manipulations: Eqdp);
-
-        var def = JsonDocument.Parse(File.ReadAllText(tmp.File("default_mod.json"))).RootElement;
-        AssertEqdpRoundTripped(def.GetProperty("Manipulations"));
-    }
-
-    [Fact]
     public void WriteRedirects_keeps_manipulation_contents_on_the_v4_path()
     {
         using var tmp = new TempDir();
@@ -127,13 +174,17 @@ public class PenumbraModMetaTests
         AssertEqdpRoundTripped(meta.GetProperty("DefaultData").GetProperty("Manipulations"));
     }
 
+    /// <summary>
+    /// New folders are created at the current version. They used to be stamped v3 so that every Penumbra
+    /// could read them, which also made Proteus the biggest writer of the format it now refuses — and left
+    /// every folder it created one its own writers would decline until Penumbra migrated it.
+    /// </summary>
     [Fact]
-    public void NewMetaJson_is_written_in_the_universally_readable_format()
+    public void NewMetaJson_is_written_at_the_current_version()
     {
         var doc = JsonDocument.Parse(PenumbraModMeta.NewMetaJson("Mod", "Me", "desc")).RootElement;
-        Assert.Equal(3, doc.GetProperty("FileVersion").GetInt32());
+        Assert.Equal(PenumbraModMeta.SingleFileVersion, doc.GetProperty("FileVersion").GetInt32());
         Assert.Equal("Mod", doc.GetProperty("Name").GetString());
-        Assert.False(doc.TryGetProperty("DefaultData", out _));
     }
 
     [Theory]
@@ -152,13 +203,11 @@ public class PenumbraModMetaTests
     // path) and then put it back exactly as it was. Anything it drops on the way through is a redirect or
     // an EQDP row that silently stops applying, so both directions are pinned here.
 
-    [Theory]
-    [InlineData(3)]
-    [InlineData(4)]
-    public void TryReadDefaultData_round_trips_files_and_manipulations(int fileVersion)
+    [Fact]
+    public void TryReadDefaultData_round_trips_files_and_manipulations()
     {
         using var tmp = new TempDir();
-        File.WriteAllText(tmp.File("meta.json"), $$"""{"FileVersion":{{fileVersion}},"Name":"Proteus"}""");
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":4,"Name":"Proteus"}""");
         PenumbraModMeta.WriteRedirects(tmp.Path, "Proteus", OneRedirect, manipulations: Eqdp);
 
         var read = PenumbraModMeta.TryReadDefaultData(tmp.Path);
@@ -174,12 +223,25 @@ public class PenumbraModMetaTests
         Assert.NotNull(again);
         Assert.Equal(read.Value.Files, again!.Value.Files);
 
-        var written = fileVersion >= 4
-            ? JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement
-                  .GetProperty("DefaultData").GetProperty("Manipulations")
-            : JsonDocument.Parse(File.ReadAllText(tmp.File("default_mod.json"))).RootElement
-                  .GetProperty("Manipulations");
-        AssertEqdpRoundTripped(written);
+        AssertEqdpRoundTripped(JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement
+            .GetProperty("DefaultData").GetProperty("Manipulations"));
+    }
+
+    /// <summary>
+    /// Reading the pre-v4 layout is still supported even though writing it is not — a <c>.pmp</c> from a
+    /// mod site is frequently v3 inside, and a composite has to know what such a folder publishes.
+    /// </summary>
+    [Fact]
+    public void TryReadDefaultData_still_reads_the_v3_layout()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Proteus"}""");
+        File.WriteAllText(tmp.File("default_mod.json"),
+            """{"Files":{"chara/foo_d.tex":"textures\\foo_d.tex"},"Swaps":{},"Manipulations":[]}""");
+
+        var read = PenumbraModMeta.TryReadDefaultData(tmp.Path);
+        Assert.NotNull(read);
+        Assert.Equal(@"textures\foo_d.tex", read!.Value.Files["chara/foo_d.tex"]);
     }
 
     [Fact]
@@ -210,27 +272,138 @@ public class PenumbraModMetaTests
     }
 
     [Fact]
-    public void WriteSingleSelectGroup_writes_non_ascii_names_as_themselves_in_both_formats()
+    public void WriteSingleSelectGroup_writes_non_ascii_names_as_themselves()
     {
-        foreach (var fileVersion in new[] { 3, 4 })
-        {
-            using var tmp = new TempDir();
-            File.WriteAllText(tmp.File("meta.json"),
-                $$"""{"FileVersion":{{fileVersion}},"Name":"彩绘比基尼"}""");
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":4,"Name":"彩绘比基尼"}""");
 
-            PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Style", ["正常", "光沢"], 0);
+        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Style", ["正常", "光沢"], 0);
 
-            // v4 splices into meta.json; v3 leaves it alone and drops a group_NNN_ file beside it.
-            var written = File.ReadAllText(fileVersion >= 4
-                ? tmp.File("meta.json")
-                : Directory.EnumerateFiles(tmp.Path, "group_*.json").Single());
-            Assert.Contains("正常", written);
-            Assert.DoesNotContain("\\u", written);
+        var written = File.ReadAllText(tmp.File("meta.json"));
+        Assert.Contains("正常", written);
+        Assert.DoesNotContain("\\u", written);
 
-            // The v4 rewrite copies untouched fields through as JsonElements, which are re-escaped by the
-            // WRITER's encoder — so the mod's own name is only safe if that writer was configured too.
-            if (fileVersion >= 4) Assert.Contains("彩绘比基尼", File.ReadAllText(tmp.File("meta.json")));
-        }
+        // The rewrite copies untouched fields through as JsonElements, which are re-escaped by the WRITER's
+        // encoder — so the mod's own name is only safe if that writer was configured too.
+        Assert.Contains("彩绘比基尼", written);
+    }
+
+    // ── Merging into a group the mod's author wrote ──────────────────────────
+
+    private static void WriteImcFixture(TempDir tmp) => File.WriteAllText(tmp.File("meta.json"), """
+        {"FileVersion":4,"Identifier":"abc-123","Name":"Frock","Groups":[
+          {"Name":"First","Type":"Single"},
+          {"Type":"Imc","Name":"Straps","Priority":4,"Page":7,"Unknown":{"deep":[1,2]},
+           "Identifier":{"ObjectType":"Equipment","PrimaryId":43,"Variant":1,"EquipSlot":"Body"},
+           "DefaultEntry":{"MaterialId":6,"AttributeMask":1023},"DefaultSettings":5,
+           "Options":[{"Name":"A","AttributeMask":1},{"Name":"Mine","AttributeMask":2},
+                      {"Name":"C","AttributeMask":4}]},
+          {"Name":"Last","Type":"Single"}]}
+        """);
+
+    /// <summary>
+    /// A merged group goes back at its own ordinal. The writer replaces by NAME and splices at an INDEX, so
+    /// passing the group's own index is only a no-op on position because the same-named group is dropped
+    /// from the array first — worth pinning, since getting it wrong reorders the mod's settings silently.
+    /// </summary>
+    [Fact]
+    public void MergeImcGroup_keeps_the_groups_position_and_every_field_it_does_not_own()
+    {
+        using var tmp = new TempDir();
+        WriteImcFixture(tmp);
+
+        var target = ImcEntrySource.GroupNamed(tmp.Path, "Straps")!.Value;
+        Assert.True(PenumbraModMeta.MergeImcGroup(
+            tmp.Path, target, [("Bow", 64)], new HashSet<string>(), 959, default));
+
+        var groups = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray().ToList();
+        Assert.Equal(["First", "Straps", "Last"], groups.Select(g => g.GetProperty("Name").GetString()));
+
+        var g = groups[1];
+        Assert.Equal(4, g.GetProperty("Priority").GetInt32());
+        Assert.Equal(7, g.GetProperty("Page").GetInt32());
+        // A field this file has never heard of survives whole, nested values and all.
+        Assert.Equal(2, g.GetProperty("Unknown").GetProperty("deep")[1].GetInt32());
+        // DefaultEntry keeps every field but the mask it was told to change.
+        Assert.Equal(6, g.GetProperty("DefaultEntry").GetProperty("MaterialId").GetInt32());
+        Assert.Equal(959, g.GetProperty("DefaultEntry").GetProperty("AttributeMask").GetInt32());
+        Assert.Equal(["A", "Mine", "C", "Bow"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+    }
+
+    /// <summary>
+    /// DefaultSettings is a bitmask over option INDEX, so dropping an option shifts every bit above it down.
+    /// The fixture ticks options 0 and 2 (5 = 0b101); removing option 1 must leave them ticked at their new
+    /// positions 0 and 1, and anything appended ships ticked.
+    /// </summary>
+    [Fact]
+    public void MergeImcGroup_shifts_default_settings_when_options_are_removed()
+    {
+        using var tmp = new TempDir();
+        WriteImcFixture(tmp);
+
+        var target = ImcEntrySource.GroupNamed(tmp.Path, "Straps")!.Value;
+        Assert.True(PenumbraModMeta.MergeImcGroup(
+            tmp.Path, target, [("Bow", 64)],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Mine" }, null, default));
+
+        var g = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray()
+            .Single(x => x.GetProperty("Name").GetString() == "Straps");
+
+        Assert.Equal(["A", "C", "Bow"],
+            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.Equal(0b111, g.GetProperty("DefaultSettings").GetInt32());
+        // Null mask means "leave it alone".
+        Assert.Equal(1023, g.GetProperty("DefaultEntry").GetProperty("AttributeMask").GetInt32());
+    }
+
+    /// <summary>
+    /// Removing every option would leave the author with an empty group, which Penumbra shows as a selector
+    /// with nothing in it. Reported rather than written, so the caller can delete it instead.
+    /// </summary>
+    [Fact]
+    public void MergeImcGroup_refuses_to_empty_a_group()
+    {
+        using var tmp = new TempDir();
+        WriteImcFixture(tmp);
+
+        var target = ImcEntrySource.GroupNamed(tmp.Path, "Straps")!.Value;
+        var before = File.ReadAllText(tmp.File("meta.json"));
+
+        Assert.False(PenumbraModMeta.MergeImcGroup(
+            tmp.Path, target, [],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "A", "Mine", "C" }, null, default));
+
+        Assert.Equal(before, File.ReadAllText(tmp.File("meta.json")));
+    }
+
+    /// <summary>
+    /// Only one IMC group per identifier survives in Penumbra — the highest priority, and among equals the
+    /// one later in the array, because it iterates the groups reversed before a stable sort by priority.
+    /// Merging into any other would be merging into a group the game never reads.
+    /// </summary>
+    [Fact]
+    public void AppliedGroupFor_picks_the_one_Penumbra_would_keep()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Frock","Groups":[
+              {"Type":"Imc","Name":"Low","Priority":1,
+               "Identifier":{"PrimaryId":43,"EquipSlot":"Body"},"Options":[]},
+              {"Type":"Imc","Name":"TieFirst","Priority":9,
+               "Identifier":{"PrimaryId":43,"EquipSlot":"Body"},"Options":[]},
+              {"Type":"Imc","Name":"TieLast","Priority":9,
+               "Identifier":{"PrimaryId":43,"EquipSlot":"Body"},"Options":[]},
+              {"Type":"Imc","Name":"OtherSlot","Priority":99,
+               "Identifier":{"PrimaryId":43,"EquipSlot":"Legs"},"Options":[]}]}
+            """);
+
+        Assert.Equal("TieLast", ImcEntrySource.AppliedGroupFor(tmp.Path, 43, "Body", null)!.Value.Name);
+        // Excluding one by name is how a second write avoids adopting the group it wrote last time.
+        Assert.Equal("TieFirst", ImcEntrySource.AppliedGroupFor(tmp.Path, 43, "Body", "TieLast")!.Value.Name);
+        Assert.Null(ImcEntrySource.AppliedGroupFor(tmp.Path, 43, "Feet", null));
     }
 
     [Fact]
@@ -245,17 +418,15 @@ public class PenumbraModMetaTests
     // ── Option groups ────────────────────────────────────────────────────────
 
     [Fact]
-    public void WriteSingleSelectGroup_on_a_v3_folder_writes_a_numbered_group_file()
+    public void WriteSingleSelectGroup_writes_the_group_into_the_manifest()
     {
         using var tmp = new TempDir();
-        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
+        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":4,"Name":"Ven"}""");
 
         PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", ["bibo", "gen3"], 1);
 
-        // group_001_… : ReadGroupOrder takes the ordinal from THIS number on an unmigrated folder.
-        var file = tmp.File("group_001_body uv.json");
-        Assert.True(File.Exists(file));
-        var g = JsonDocument.Parse(File.ReadAllText(file)).RootElement;
+        var g = Assert.Single(JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
+            .RootElement.GetProperty("Groups").EnumerateArray());
         Assert.Equal("Body UV", g.GetProperty("Name").GetString());
         Assert.Equal("Single", g.GetProperty("Type").GetString());
         Assert.Equal(1, g.GetProperty("DefaultSettings").GetInt32());
@@ -263,10 +434,7 @@ public class PenumbraModMetaTests
             g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
         // Options carry no redirects — the group exists so Penumbra shows a selector.
         Assert.Empty(g.GetProperty("Options")[0].GetProperty("Files").EnumerateObject());
-
-        // v3 stays v3: no surprise upgrade to a format an older Penumbra can't read.
-        Assert.Equal(3, JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json")))
-            .RootElement.GetProperty("FileVersion").GetInt32());
+        Assert.Empty(Directory.EnumerateFiles(tmp.Path, "group_*.json"));
     }
 
     [Fact]
@@ -316,64 +484,9 @@ public class PenumbraModMetaTests
     }
 
     [Fact]
-    public void WriteSingleSelectGroup_on_a_v3_folder_replaces_a_same_named_group_at_another_ordinal()
+    public void WriteSingleSelectGroup_puts_an_out_of_range_ordinal_last()
     {
-        using var tmp = new TempDir();
-        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
-        File.WriteAllText(tmp.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
-        File.WriteAllText(tmp.File("group_003_body uv.json"),
-            """{"Name":"Body UV","Type":"Single","Options":[{"Name":"stale"}]}""");
-
-        // Writing the same group at another ordinal changes its filename. Without deleting the old file the
-        // folder would hold TWO groups named "Body UV", and ReadGroupOrder's name→number map would take
-        // whichever file the directory enumeration yielded last.
-        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 1, "Body UV", ["bibo", "gen3"], 0);
-
-        Assert.False(File.Exists(tmp.File("group_003_body uv.json")));
-        Assert.True(File.Exists(tmp.File("group_002_body uv.json")));
-        Assert.True(File.Exists(tmp.File("group_001_fabric.json")));   // someone else's group is untouched
-
-        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
-        Assert.Equal(2, order["Body UV"]);
-        Assert.Equal(1, order["Fabric"]);
-        var g = JsonDocument.Parse(File.ReadAllText(tmp.File("group_002_body uv.json"))).RootElement;
-        Assert.Equal(["bibo", "gen3"],
-            g.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
-    }
-
-    [Fact]
-    public void WriteSingleSelectGroup_on_a_v3_folder_never_collides_with_another_groups_number()
-    {
-        using var tmp = new TempDir();
-        File.WriteAllText(tmp.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
-        File.WriteAllText(tmp.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
-        File.WriteAllText(tmp.File("group_002_trim.json"), """{"Name":"Trim","Type":"Single","Options":[]}""");
-
-        // Ordinal 0 is taken. v3 cannot insert BEFORE another author's group without renumbering their
-        // files, so it walks up to the first free number instead — two files numbered 001 would make
-        // ReadGroupOrder report both groups at the same ordinal.
-        PenumbraModMeta.WriteSingleSelectGroup(tmp.Path, 0, "Body UV", ["bibo"], 0);
-
-        Assert.True(File.Exists(tmp.File("group_003_body uv.json")));
-        var order = SidecarDiscoveryService.ReadGroupOrder(tmp.Path);
-        Assert.Equal([1, 2, 3], new[] { order["Fabric"], order["Trim"], order["Body UV"] });
-        Assert.Equal(2, JsonDocument.Parse(File.ReadAllText(tmp.File("group_003_body uv.json")))
-            .RootElement.GetProperty("Priority").GetInt32());
-    }
-
-    [Fact]
-    public void WriteSingleSelectGroup_puts_an_out_of_range_ordinal_last_in_both_formats()
-    {
-        // v3: 99 is free, so it is taken verbatim — and 100 sorts after the existing 001 either way.
-        using var v3 = new TempDir();
-        File.WriteAllText(v3.File("meta.json"), """{"FileVersion":3,"Name":"Ven"}""");
-        File.WriteAllText(v3.File("group_001_fabric.json"), """{"Name":"Fabric","Type":"Single","Options":[]}""");
-        PenumbraModMeta.WriteSingleSelectGroup(v3.Path, 99, "Body UV", ["bibo"], 0);
-
-        var v3Order = SidecarDiscoveryService.ReadGroupOrder(v3.Path);
-        Assert.True(v3Order["Body UV"] > v3Order["Fabric"]);
-
-        // v4: appended, so also last. The formats need not produce the same NUMBER — only the same order.
+        // Appended, so last.
         using var v4 = new TempDir();
         File.WriteAllText(v4.File("meta.json"), """
             {"FileVersion":4,"Identifier":"abc-123","Name":"Ven","Groups":[{"Name":"Fabric","Type":"Single"}]}

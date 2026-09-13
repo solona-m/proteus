@@ -16,13 +16,22 @@ namespace Proteus.Services;
 /// gone — but the meaning is unchanged: lower = higher priority.
 ///
 /// Reads are two-tier everywhere: v4 first, falling back to the v3 layout for folders an older Penumbra
-/// wrote and never migrated.
+/// wrote and never migrated. That tier stays — a <c>.pmp</c> downloaded from a mod site is frequently v3
+/// inside, and it is not Proteus's to rewrite.
 ///
-/// Writes follow whatever format the mod folder is ALREADY in, because the two are not mutually legible:
-/// a Penumbra new enough to read <c>DefaultData</c> migrates a v3 folder up on load, but an older one has
-/// never heard of <c>DefaultData</c> and silently applies no redirects at all. Writing v4 unconditionally
-/// therefore breaks users on an older Penumbra with a completely clean log. New folders are created as v3
-/// for the same reason: it is the format both understand, and a newer Penumbra upgrades it on first load.
+/// WRITES ARE v4 ONLY, and there are two halves to that:
+/// <list type="bullet">
+/// <item>Proteus never AUTHORS v3. <see cref="NewMetaJson"/> stamps <see cref="SingleFileVersion"/>, and
+/// the format-specific writers below have no legacy arm left to take.</item>
+/// <item>Proteus never EDITS a v3 folder. Every write entry point refuses one through
+/// <see cref="IsLegacyFolder"/> — see <see cref="LegacyFolderException"/> for why it throws rather than
+/// quietly doing nothing.</item>
+/// </list>
+/// Writes used to follow whatever format the folder was already in, on the reasoning that the two are not
+/// mutually legible and a Penumbra too old for <c>DefaultData</c> would silently apply no redirects at
+/// all. That Penumbra is gone. What remains true is the half that makes the refusal cheap for the user: a
+/// current Penumbra migrates a v3 folder up on load, so the fix for a folder Proteus declines is simply to
+/// let Penumbra see it once.
 /// </summary>
 internal static class PenumbraModMeta
 {
@@ -31,7 +40,11 @@ internal static class PenumbraModMeta
 
     /// <summary>The version that moved groups and the default option into meta.json.</summary>
     public const int SingleFileVersion = 4;
-    /// <summary>What we create new folders as — readable by every Penumbra, upgraded in place by new ones.</summary>
+    /// <summary>
+    /// The format Proteus reads but will not write. Also what <see cref="FileVersionOf"/> reports for a
+    /// manifest that declares no version at all, which is why <see cref="IsLegacyFolder"/> asks
+    /// <see cref="HasReadableManifest"/> first — "no manifest yet" is a folder being created, not an old one.
+    /// </summary>
     public const int LegacyFileVersion = 3;
 
     // Encoder: these are Penumbra's own files, and Penumbra writes non-ASCII names as themselves. Without
@@ -57,6 +70,108 @@ internal static class PenumbraModMeta
             return doc.RootElement.ValueKind == JsonValueKind.Object;
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// Thrown when a write is asked for against a mod folder still in Penumbra's pre-v4 layout.
+    /// <para/>
+    /// An exception rather than a quiet no-op, and that is deliberate. This file's whole history is failures
+    /// that looked like success — a v4 manifest an old Penumbra read as empty, a stale <c>default_mod.json</c>
+    /// mistaken for the live set — where the log stayed clean and the user's mod simply did nothing. A write
+    /// that cannot happen has to say so loudly enough that a caller is forced to have an answer for it.
+    /// </summary>
+    public sealed class LegacyFolderException(string modRoot)
+        : InvalidOperationException(
+            $"{modRoot} is a pre-v{SingleFileVersion} Penumbra mod folder, which Proteus does not write to.");
+
+    /// <summary>
+    /// Whether this folder is one Proteus will read but not edit — see the type remarks.
+    /// <para/>
+    /// <see cref="HasReadableManifest"/> comes first and is load-bearing: <see cref="ReadFileVersion"/>
+    /// collapses "no manifest" and "unreadable manifest" into <see cref="LegacyFileVersion"/>, so without it
+    /// every folder an importer is part-way through creating would refuse its own first write.
+    /// </summary>
+    public static bool IsLegacyFolder(string modRoot)
+        => HasReadableManifest(modRoot) && ReadFileVersion(modRoot) < SingleFileVersion;
+
+    /// <summary>
+    /// Read the manifest, and throw <see cref="LegacyFolderException"/> if the folder is one Proteus will not
+    /// write to. Every writer's way in — it hands back the manifest it read so the write can preserve the
+    /// keys it does not own without parsing the file again.
+    /// <para/>
+    /// One read, not three. <see cref="IsLegacyFolder"/> parses twice by itself — once to ask whether a
+    /// manifest is even there, once for its version — and the writers then parsed a third time to get the
+    /// keys. That is billed on every composite: the compositor rewrites the managed mod's redirects through
+    /// <see cref="WriteRedirects"/> on every run, and that manifest grows with the redirect set.
+    /// <para/>
+    /// Guards the point where a writer commits to a format, not the top of the method — a call that would
+    /// write nothing anyway (no options, no redirects) stays the no-op it always was rather than becoming
+    /// a throw.
+    /// </summary>
+    private static Dictionary<string, JsonElement> ReadManifestForWrite(string modRoot)
+    {
+        var manifest = ReadManifest(modRoot, out bool readable);
+        // Readable FIRST, for the reason IsLegacyFolder documents: FileVersionOf reports a manifest that is
+        // missing and one that declares no version as the same thing, and a folder an importer is part-way
+        // through creating has no manifest at all.
+        if (readable && FileVersionOf(manifest) < SingleFileVersion)
+            throw new LegacyFolderException(modRoot);
+        return manifest;
+    }
+
+    /// <summary>
+    /// Bring a folder PROTEUS OWNS up to <see cref="SingleFileVersion"/>, folding its
+    /// <c>default_mod.json</c> into <c>DefaultData</c> and preserving every other key. A no-op on a folder
+    /// already at v4 or with no manifest at all.
+    /// <para/>
+    /// Only for folders Proteus created — the managed mod, and anything the importers or the Create tab
+    /// laid down. Every one of those was stamped v3 by a build older than this one, and the managed mod in
+    /// particular is rewritten on EVERY composite, so leaving them to <see cref="ReadManifestForWrite"/> would
+    /// break compositing outright for anyone whose Penumbra had not happened to migrate the folder first.
+    /// <para/>
+    /// Deliberately NOT used on a mod belonging to someone else. Refusing a stranger's folder is a choice
+    /// about not rewriting what we did not write; migrating it silently is the opposite of that, and
+    /// Penumbra does it properly — groups and all — the moment it loads the mod.
+    /// <para/>
+    /// Groups are not folded, because a folder Proteus owns has none in the v3 layout: every group writer
+    /// here has always gone through <see cref="WriteGroupIntoManifest"/> on a v4 folder or a legacy file on
+    /// a v3 one, and the mods that carry Proteus groups are v4 by construction.
+    /// </summary>
+    public static void MigrateToCurrent(string modRoot)
+    {
+        if (!IsLegacyFolder(modRoot)) return;
+
+        var manifest = ReadManifest(modRoot);
+        var (files, manips) = TryReadDefaultData(modRoot)
+                           ?? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), []);
+
+        // Swaps, under its v3 name. WriteDefaultData writes it back as FileSwaps, which is the rename v4
+        // made — reading it here is the only place the old spelling still has to be understood.
+        var swaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var legacy = Path.Combine(modRoot, LegacyDefaultMod);
+            if (File.Exists(legacy))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(legacy));
+                if (doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("Swaps", out var s)
+                    && s.ValueKind == JsonValueKind.Object)
+                    foreach (var p in s.EnumerateObject())
+                        if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { } to)
+                            swaps[p.Name] = to;
+            }
+        }
+        catch { /* unreadable — the redirects above are still worth carrying over */ }
+
+        var name = manifest.TryGetValue("Name", out var n) && n.ValueKind == JsonValueKind.String
+            ? n.GetString() ?? Path.GetFileName(modRoot)
+            : Path.GetFileName(modRoot);
+
+        // WriteDefaultData stamps SingleFileVersion and preserves every key it does not own, so this is the
+        // migration in one call. CleanLegacyFiles then drops the default_mod.json it just absorbed.
+        WriteDefaultData(modRoot, name, manifest, files, swaps, manips);
+        CleanLegacyFiles(modRoot);
     }
 
     /// <summary>
@@ -340,16 +455,27 @@ internal static class PenumbraModMeta
     /// parse meta.json twice.
     /// </summary>
     private static Dictionary<string, JsonElement> ReadManifest(string modRoot)
+        => ReadManifest(modRoot, out _);
+
+    /// <inheritdoc cref="ReadManifest(string)"/>
+    /// <param name="readable">Whether a manifest was actually there and parsed as an object — what
+    /// <see cref="HasReadableManifest"/> answers, returned alongside the contents so a caller that needs
+    /// both does not read the file twice. An empty dictionary alone cannot say: a folder with no manifest
+    /// and one holding <c>{}</c> both produce one, and only the second is a mod Proteus must refuse.</param>
+    private static Dictionary<string, JsonElement> ReadManifest(string modRoot, out bool readable)
     {
+        readable = false;
         var preserved = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         try
         {
             var path = Path.Combine(modRoot, MetaFile);
             if (!File.Exists(path)) return preserved;
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                foreach (var p in doc.RootElement.EnumerateObject())
-                    preserved[p.Name] = p.Value.Clone();
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return preserved;
+
+            readable = true;
+            foreach (var p in doc.RootElement.EnumerateObject())
+                preserved[p.Name] = p.Value.Clone();
         }
         catch { /* unreadable — caller falls back to the older, universally-legible format */ }
         return preserved;
@@ -368,14 +494,21 @@ internal static class PenumbraModMeta
     public static int ReadFileVersion(string modRoot)
         => FileVersionOf(ReadManifest(modRoot));
 
-    /// <summary>A fresh manifest. See the type remarks for why this is v3 and not v4.</summary>
+    /// <summary>
+    /// A fresh manifest, at <see cref="SingleFileVersion"/>. See the type remarks.
+    /// <para/>
+    /// This is the one every importer and <c>ModCreationService</c> writes before its first
+    /// <see cref="WriteRedirects"/>, so it is also what keeps those folders clear of
+    /// <see cref="IsLegacyFolder"/>: the manifest exists and already declares v4 by the time any writer
+    /// looks at it.
+    /// </summary>
     /// <param name="version">The mod's own version string, when the source carries one (an imported pack).</param>
     /// <param name="website">The mod's home page, when the source carries one.</param>
     public static string NewMetaJson(string name, string author, string description,
         string? version = null, string? website = null)
         => JsonSerializer.Serialize(new
         {
-            FileVersion = LegacyFileVersion,
+            FileVersion = SingleFileVersion,
             Name        = name,
             Author      = author,
             Description = description,
@@ -503,73 +636,193 @@ internal static class PenumbraModMeta
 
         if (index < 0) index = 0;
 
-        var manifest = ReadManifest(modRoot);
-        if (FileVersionOf(manifest) >= SingleFileVersion)
-            WriteGroupIntoManifest(modRoot, manifest, index, name, _ => group);
-        else
-            WriteLegacyGroupFile(modRoot, index, name, _ => group);
+        WriteGroupIntoManifest(modRoot, ReadManifestForWrite(modRoot), index, name, _ => group);
     }
 
     /// <summary>
-    /// How many option groups the mod has, in either layout — what a caller wanting to append one at the end
-    /// should pass as its ordinal.
+    /// Put <paramref name="ours"/> into an IMC group the mod ALREADY has, leaving everything else about the
+    /// group exactly as its author wrote it.
     /// <para/>
-    /// Exists because <see cref="TryReadGroups"/> answers null on a v3 folder, where there is no
-    /// <c>Groups</c> array to count, and callers were reaching for a sentinel instead.
+    /// The alternative — writing a second group at a higher priority — cannot work, and that is the whole
+    /// reason this exists. Penumbra keeps only one group per IMC identifier (see
+    /// <see cref="ImcEntrySource.AppliedGroupFor"/>), so outranking an author's group does not overrule it,
+    /// it deletes it: their switches stay listed in the mod's settings and stop doing anything, and every
+    /// bit they drove freezes at whatever the surviving group's default says.
+    /// <para/>
+    /// Every property the group has is carried over as its raw <see cref="JsonElement"/> —
+    /// <c>Priority</c>, <c>Identifier</c>, <c>AllVariants</c>, <c>OnlyAttributes</c>, <c>Description</c>,
+    /// <c>Image</c>, <c>Page</c>, and anything a future Penumbra adds that this file has never heard of.
+    /// Only <c>Options</c>, <c>DefaultSettings</c> and <c>DefaultEntry.AttributeMask</c> are rewritten.
     /// </summary>
-    public static int GroupCount(string modRoot)
+    /// <param name="target">The group as read. Rewritten in place, at its own ordinal and under its own name.</param>
+    /// <param name="ours">Our options, in the order they should appear, each carrying a single bit.</param>
+    /// <param name="ownedNames">Option names Proteus owns. Dropped BEFORE <paramref name="ours"/> is
+    /// appended, which is what makes writing twice replace our options rather than duplicate them — the
+    /// caller re-emits its whole set every time.</param>
+    /// <param name="entryMask">What <c>DefaultEntry</c>'s <c>AttributeMask</c> becomes: our bits cleared on
+    /// a write, the author's original restored on a revert. Null leaves it as it is.</param>
+    /// <param name="entryIfAbsent">Used only when the group carries no <c>DefaultEntry</c> object at all,
+    /// which Penumbra's own serializer never produces. One has to exist for the invariant
+    /// <see cref="WriteImcGroup"/> documents: our bit must sit OUTSIDE the default mask, or the option's
+    /// meaning depends on whether Penumbra combines by OR or by XOR.</param>
+    /// <returns>False when the merge would leave the group with no options at all — nothing is written, and
+    /// the caller deletes the group instead.</returns>
+    internal static bool MergeImcGroup(
+        string modRoot, GroupRef target,
+        IReadOnlyList<(string Name, ushort Mask)> ours,
+        IReadOnlySet<string> ownedNames,
+        ushort? entryMask,
+        ImcEntry entryIfAbsent)
     {
-        if (TryReadGroups(modRoot) is { } groups) return groups.Count;
-        try { return Directory.EnumerateFiles(modRoot, "group_*.json").Count(); }
-        catch { return 0; }
+        // Read — and refuse — up front, then hand the same manifest to the write below. The refusal has to
+        // come before any of the option work, so a folder this will not touch is turned away rather than
+        // rebuilt and then turned away; reusing the one read is what keeps that free.
+        var manifest = ReadManifestForWrite(modRoot);
+
+        // Kept options, each with the index it USED to sit at, so DefaultSettings can follow them.
+        var kept = new List<(JsonElement Option, int OldIndex)>();
+        if (target.Group.TryGetProperty("Options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+        {
+            int at = 0;
+            foreach (var o in opts.EnumerateArray())
+            {
+                int old = at++;
+                var name = o.TryGetProperty("Name", out var n) ? n.GetString() : null;
+                if (name != null && ownedNames.Contains(name)) continue;
+                kept.Add((o, old));
+            }
+        }
+        if (kept.Count == 0 && ours.Count == 0) return false;
+
+        // DefaultSettings is a bitmask over option INDEX, so removing an option shifts every bit above it.
+        // Rebuilt rather than masked: each survivor carries its old bit to its new position, and everything
+        // of ours ships ticked — the same rule WriteImcGroup applies, so adding switches to a mod changes
+        // nothing about how it looks until one is unticked.
+        ulong oldDefaults = target.Group.TryGetProperty("DefaultSettings", out var ds)
+                         && ds.ValueKind == JsonValueKind.Number && ds.TryGetUInt64(out var v) ? v : 0;
+        ulong defaults = 0;
+        for (int i = 0; i < kept.Count; i++)
+            if (kept[i].OldIndex < 64 && (oldDefaults & (1UL << kept[i].OldIndex)) != 0)
+                defaults |= 1UL << i;
+        for (int i = 0; i < ours.Count; i++)
+        {
+            int at = kept.Count + i;
+            if (at < 64) defaults |= 1UL << at;
+        }
+
+        var options = new List<object>(kept.Count + ours.Count);
+        foreach (var (o, _) in kept) options.Add(o);
+        foreach (var (name, mask) in ours)
+            options.Add(new Dictionary<string, object> { ["Name"] = name, ["AttributeMask"] = mask });
+
+        var merged = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var p in target.Group.EnumerateObject())
+            if (p.Name is not ("Options" or "DefaultSettings" or "DefaultEntry"))
+                merged[p.Name] = p.Value;
+
+        merged["DefaultSettings"] = defaults;
+        merged["Options"] = options;
+        if (MergedEntry(target.Group, entryMask, entryIfAbsent) is { } defaultEntry)
+            merged["DefaultEntry"] = defaultEntry;
+
+        // Replaced by name and spliced at its own ordinal, which together are a no-op on position:
+        // WriteGroupIntoManifest drops the same-named group from the array first, so every group before
+        // this one keeps its index and inserting at that index puts it back exactly where it was.
+        WriteGroupIntoManifest(modRoot, manifest, target.Index, target.Name, _ => merged);
+        return true;
     }
+
+    /// <summary>
+    /// The group's own <c>DefaultEntry</c> with its attribute mask replaced, or a fresh one from
+    /// <paramref name="fallback"/> when it has none. Every other field is carried over untouched: Penumbra
+    /// replaces the whole entry, so inventing a <c>MaterialId</c> would point the item at a different
+    /// material variant folder.
+    /// </summary>
+    private static object? MergedEntry(JsonElement group, ushort? mask, ImcEntry fallback)
+    {
+        // No entry and nothing to put in one. Only a WRITE needs the invariant that our bit sits outside
+        // the default mask; a revert is taking options out, and synthesising an entry from a default-valued
+        // fallback would hand the item MaterialId 0 — pointing it at a material folder that does not exist.
+        if (mask is null
+            && (!group.TryGetProperty("DefaultEntry", out var none) || none.ValueKind != JsonValueKind.Object))
+            return null;
+
+        if (!group.TryGetProperty("DefaultEntry", out var e) || e.ValueKind != JsonValueKind.Object)
+            return new Dictionary<string, object>
+            {
+                ["MaterialId"] = fallback.MaterialId,
+                ["DecalId"] = fallback.DecalId,
+                ["VfxId"] = fallback.VfxId,
+                ["MaterialAnimationId"] = fallback.MaterialAnimationId,
+                ["AttributeMask"] = (ushort)((mask ?? fallback.AttributeMask) & 0x3FF),
+                ["SoundId"] = fallback.SoundId,
+            };
+
+        var entry = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var p in e.EnumerateObject())
+            if (p.Name != "AttributeMask")
+                entry[p.Name] = p.Value;
+
+        entry["AttributeMask"] = mask is { } m
+            ? (ushort)(m & 0x3FF)
+            : (ushort)((e.TryGetProperty("AttributeMask", out var a) && a.TryGetInt32(out var cur) ? cur : 0)
+                       & 0x3FF);
+        return entry;
+    }
+
+    /// <summary>
+    /// How many option groups the mod has — what a caller wanting to append one at the end should pass as
+    /// its ordinal.
+    /// <para/>
+    /// Zero covers both "no groups" and "no readable <c>Groups</c> array", which is the same answer for the
+    /// only thing this is used for: a folder with nothing to count appends at the front, and a folder that
+    /// is v3 never reaches a writer at all.
+    /// </summary>
+    public static int GroupCount(string modRoot) => TryReadGroups(modRoot)?.Count ?? 0;
 
     /// <summary>Which item an IMC edit names. Equipment and accessories only — see <see cref="ImcEntrySource.ImcPathFor"/>.</summary>
     public readonly record struct ImcIdentifier(string ObjectType, int PrimaryId, int Variant, string EquipSlot);
 
     /// <summary>
-    /// Remove the group of this name, in whichever layout the folder is in. Used to undo a group Proteus
-    /// wrote; a name that isn't there is not an error, since the point is to end up without it.
+    /// One option group as it sits in the manifest, with what a rewrite needs to put it back where it was.
+    /// </summary>
+    /// <param name="Index">Its position in the whole <c>Groups</c> array — not its position among groups of
+    /// its own kind, which is what a filtered enumeration would otherwise hand back.</param>
+    /// <param name="Group">The raw element. Carried whole so a rewrite can preserve every field it does not
+    /// itself own — see <see cref="MergeImcGroup"/>.</param>
+    public readonly record struct GroupRef(string Name, int Index, JsonElement Group);
+
+    /// <summary>
+    /// Remove the group of this name. Used to undo a group Proteus wrote; a name that isn't there is not an
+    /// error, since the point is to end up without it.
     /// </summary>
     public static void DeleteGroup(string modRoot, string name)
     {
-        var manifest = ReadManifest(modRoot);
-        if (FileVersionOf(manifest) >= SingleFileVersion)
-        {
-            if (!manifest.TryGetValue("Groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
-                return;
-            var others = groups.EnumerateArray()
-                .Where(g => !(g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
-                              && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            using var stream = new MemoryStream();
-            using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
-            {
-                w.WriteStartObject();
-                foreach (var (key, value) in manifest)
-                {
-                    if (key == "Groups") continue;
-                    w.WritePropertyName(key);
-                    value.WriteTo(w);
-                }
-                w.WritePropertyName("Groups");
-                w.WriteStartArray();
-                foreach (var g in others) g.WriteTo(w);
-                w.WriteEndArray();
-                w.WriteEndObject();
-            }
-            AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        var manifest = ReadManifestForWrite(modRoot);
+        if (!manifest.TryGetValue("Groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
             return;
-        }
+        var others = groups.EnumerateArray()
+            .Where(g => !(g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                          && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
 
-        try
+        using var stream = new MemoryStream();
+        using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
         {
-            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json").ToList())
-                if (string.Equals(GroupNameOf(file), name, StringComparison.OrdinalIgnoreCase))
-                    File.Delete(file);
+            w.WriteStartObject();
+            foreach (var (key, value) in manifest)
+            {
+                if (key == "Groups") continue;
+                w.WritePropertyName(key);
+                value.WriteTo(w);
+            }
+            w.WritePropertyName("Groups");
+            w.WriteStartArray();
+            foreach (var g in others) g.WriteTo(w);
+            w.WriteEndArray();
+            w.WriteEndObject();
         }
-        catch { /* nothing to remove, or not ours to remove */ }
+        AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
     }
 
     private static void Write(
@@ -577,96 +830,12 @@ internal static class PenumbraModMeta
     {
         if (index < 0) index = 0;
 
-        var manifest = ReadManifest(modRoot);
-        if (FileVersionOf(manifest) >= SingleFileVersion)
-            WriteGroupIntoManifest(modRoot, manifest, index, name,
-                slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
-        else
-            WriteLegacyGroupFile(modRoot, index, name,
-                slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
+        WriteGroupIntoManifest(modRoot, ReadManifestForWrite(modRoot), index, name,
+            slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
     }
 
     /// <summary>
-    /// The pre-v4 form: one <c>group_NNN_name.json</c> per group. Two things this has to get right:
-    /// <list type="bullet">
-    /// <item>Any earlier file for the SAME group name is deleted first. Writing at a different ordinal
-    /// changes the filename, and leaving the old file behind would give Penumbra two groups of the same
-    /// name and make the ordinal <c>ReadGroupOrder</c> derives depend on directory enumeration order. The
-    /// v4 branch replaces by name for the same reason.</item>
-    /// <item>The number must not collide with a group Proteus didn't write, for exactly the same reason —
-    /// two files numbered 001 make <c>ReadGroupOrder</c> report both at ordinal 1. The requested number is
-    /// therefore taken only if free, and otherwise the search walks UP. Walking up rather than renumbering
-    /// the folder is deliberate: renaming another author's group files to make room is not this method's
-    /// to do, and a half-completed renumber would leave their mod broken.</item>
-    /// </list>
-    /// </summary>
-    /// <param name="build">Builds the group object once its final ordinal is known. A factory rather than a
-    /// ready-made object because the plain group writes its ordinal into its own <c>Priority</c>, and that
-    /// ordinal is only settled here.</param>
-    private static void WriteLegacyGroupFile(
-        string modRoot, int index, string name, Func<int, object> build)
-    {
-        // Clamped before it is ever added to. A caller asking for "past the end" with int.MaxValue would
-        // otherwise wrap through int.MinValue into a file called group_-2147483648_name.json, which
-        // ReadGroupOrder then reads as an enormous NEGATIVE ordinal — the group would sort first, the exact
-        // opposite of what a past-the-end request means. The private Write dispatcher clamps the low side
-        // for the same reason; this is the high one.
-        index = Math.Clamp(index, 0, 9998);
-
-        var taken = new HashSet<int>();
-        try
-        {
-            // ToList: the enumeration is being deleted from. Every file carrying this group's name goes,
-            // the one we're about to write included — AtomicWrite recreates it.
-            foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json").ToList())
-            {
-                if (string.Equals(GroupNameOf(file), name, StringComparison.OrdinalIgnoreCase))
-                {
-                    try { File.Delete(file); } catch { /* AtomicWrite still overwrites a same-named file */ }
-                    continue;
-                }
-                // Same parse ReadGroupOrder uses: group_002_fabric.json -> 2. A file we can't read a number
-                // out of can't be collided with either, so it simply doesn't reserve one.
-                var parts = Path.GetFileNameWithoutExtension(file).Split('_');
-                if (parts.Length >= 2 && int.TryParse(parts[1], out var n)) taken.Add(n);
-            }
-        }
-        catch { /* modRoot missing or unreadable — the write below creates what it needs */ }
-
-        var number = index + 1;
-        while (taken.Contains(number)) number++;
-
-        AtomicWrite(
-            Path.Combine(modRoot, LegacyGroupFileName(number - 1, name)),
-            JsonSerializer.Serialize(build(number - 1), WriteOptions));
-    }
-
-    /// <summary>The <c>Name</c> inside a v3 group file, or null when it can't be read.</summary>
-    private static string? GroupNameOf(string groupFile)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(File.ReadAllText(groupFile));
-            return doc.RootElement.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
-                ? n.GetString()
-                : null;
-        }
-        catch { return null; /* malformed — leave it alone rather than delete something unread */ }
-    }
-
-    /// <summary>
-    /// The v3 group filename: <c>group_001_stocking pattern.json</c>. Penumbra reads the name from the
-    /// file's <c>Name</c> field, not the filename, so the sanitisation here only has to produce something
-    /// the filesystem accepts.
-    /// </summary>
-    private static string LegacyGroupFileName(int index, string name)
-    {
-        var safe = new string(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
-        return $"group_{index + 1:000}_{safe.ToLowerInvariant()}.json";
-    }
-
-    /// <summary>
-    /// The shape both formats share. <c>DefaultSettings</c> is the selected option's INDEX for a Single
+    /// The shape a group has on disk. <c>DefaultSettings</c> is the selected option's INDEX for a Single
     /// group (it is a bitmask only for Multi), and each option carries no redirects of its own.
     /// </summary>
     private static object BuildGroup(
@@ -750,12 +919,11 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Writes the mod's always-applied redirects in whatever format the folder is already in: the
-    /// <c>DefaultData</c> object for v4+, a separate <c>default_mod.json</c> for older Penumbra.
+    /// Writes the mod's always-applied redirects into the manifest's <c>DefaultData</c> object.
     ///
-    /// This is the ONLY entry point for writing redirects. The format-specific writers are private on
-    /// purpose — calling one directly skips this dispatch, which is exactly how overlays silently stop
-    /// applying for anyone on the other format.
+    /// This is the ONLY entry point for writing redirects. <see cref="WriteDefaultData"/> is private on
+    /// purpose — calling it directly skips the legacy refusal, which is how a v3 folder would end up with
+    /// a <c>DefaultData</c> its own Penumbra has never heard of and silently ignores.
     /// </summary>
     public static void WriteRedirects(
         string modRoot, string modName,
@@ -763,37 +931,10 @@ internal static class PenumbraModMeta
         IDictionary<string, string>? swaps = null,
         IReadOnlyList<object>? manipulations = null)
     {
-        var manifest = ReadManifest(modRoot);
-        if (FileVersionOf(manifest) >= SingleFileVersion)
-        {
-            WriteDefaultData(modRoot, modName, manifest, files, swaps, manipulations);
-            // Penumbra migrated this folder itself; drop the default_mod.json it left behind so a stale
-            // copy can't be mistaken for the live redirect set.
-            CleanLegacyFiles(modRoot);
-        }
-        else
-        {
-            WriteLegacyDefaultMod(modRoot, files, swaps, manipulations);
-        }
-    }
-
-    /// <summary>
-    /// The pre-v4 <c>default_mod.json</c>: <c>{ "Files": {…}, "Swaps": {…}, "Manipulations": [] }</c>.
-    /// Note the key is <c>Swaps</c> here; v4 renamed it to <c>FileSwaps</c> inside <c>DefaultData</c>.
-    /// </summary>
-    private static void WriteLegacyDefaultMod(
-        string modRoot,
-        IDictionary<string, string> files,
-        IDictionary<string, string>? swaps = null,
-        IReadOnlyList<object>? manipulations = null)
-    {
-        var obj = new
-        {
-            Files         = files,
-            Swaps         = swaps ?? new Dictionary<string, string>(),
-            Manipulations = manipulations ?? Array.Empty<object>(),
-        };
-        AtomicWrite(Path.Combine(modRoot, LegacyDefaultMod), JsonSerializer.Serialize(obj, WriteOptions));
+        WriteDefaultData(modRoot, modName, ReadManifestForWrite(modRoot), files, swaps, manipulations);
+        // A folder Penumbra migrated keeps its old default_mod.json; drop it so a stale copy can't be
+        // mistaken for the live redirect set.
+        CleanLegacyFiles(modRoot);
     }
 
     /// <summary>
