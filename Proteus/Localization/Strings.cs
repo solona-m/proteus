@@ -1597,6 +1597,99 @@ public sealed class PartsStrings
     /// <summary>Material and size beside a part's checkbox. {0} is a file name, {1} a triangle count.</summary>
     public readonly string RowFmt = Loc.Localize("Parts.Row.Fmt", "{0} · {1:N0} tris");
 
+    // ── tools ───────────────────────────────────────────────────────────────
+
+    public readonly string ToolNavigate = Loc.Localize("Parts.Tool.Navigate", "Pick parts")
+                                        + "###partsToolNavigate";
+
+    public readonly string ToolNavigateTip = Loc.Localize("Parts.Tool.Navigate.Tip",
+        "Click pieces of the model to choose them, then give them an on/off switch.");
+
+    public readonly string ToolInflate = Loc.Localize("Parts.Tool.Inflate", "Pull out")
+                                       + "###partsToolInflate";
+
+    public readonly string ToolInflateTip = Loc.Localize("Parts.Tool.Inflate.Tip",
+        "Paint on the model to push the surface outwards, so a body that pokes\n" +
+        "through a piece of clothing is covered again.");
+
+    public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Push in")
+                                       + "###partsToolDeflate";
+
+    public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
+        "The same brush in reverse, for clothing that stands too far off the body.");
+
+    // ── the brush ───────────────────────────────────────────────────────────
+
+    public readonly string BrushHelp = Loc.Localize("Parts.Brush.Help",
+        "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to "
+      + "zoom.");
+
+    public readonly string BrushSize = Loc.Localize("Parts.Brush.Size", "Brush size")
+                                     + "###partsBrushSize";
+
+    public readonly string BrushSizeTip = Loc.Localize("Parts.Brush.Size.Tip",
+        "How far the brush reaches. The effect is strongest in the middle and fades\n" +
+        "to nothing at the edge, so a wide brush moves a broad swell and a narrow\n" +
+        "one moves a small bump.");
+
+    public readonly string BrushStrength = Loc.Localize("Parts.Brush.Strength", "Strength")
+                                         + "###partsBrushStrength";
+
+    public readonly string BrushStrengthTip = Loc.Localize("Parts.Brush.Strength.Tip",
+        "How far the surface moves per moment of painting. Small is usually right:\n" +
+        "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
+        "can always paint over the same place again.");
+
+    /// <summary>The brush is finer than the mesh. {0} is the model's average edge length in millimetres.</summary>
+    public readonly string BrushTooSmallFmt = Loc.Localize("Parts.Brush.TooSmall.Fmt",
+        "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single "
+      + "points into spikes instead of moving the surface. Make it larger.");
+
+    /// <summary>{0} is the furthest anything has moved, {1} the limit, both in millimetres.</summary>
+    public readonly string BrushMovedFmt = Loc.Localize("Parts.Brush.Moved.Fmt",
+        "Furthest moved: {0:F2} mm of {1:F1} mm.");
+
+    public readonly string BrushUntouched = Loc.Localize("Parts.Brush.Untouched",
+        "Nothing has been moved yet.");
+
+    public readonly string BrushUndo = Loc.Localize("Parts.Brush.Undo", "Undo stroke")
+                                     + "###partsBrushUndo";
+
+    public readonly string BrushReset = Loc.Localize("Parts.Brush.Reset", "Start over")
+                                      + "###partsBrushReset";
+
+    public readonly string BrushNotSavedYet = Loc.Localize("Parts.Brush.NotSavedYet",
+        "not saved yet");
+
+    public readonly string BrushSave = Loc.Localize("Parts.Brush.Save", "Save into the mod")
+                                     + "###partsBrushSave";
+
+    public readonly string BrushSaveTip = Loc.Localize("Parts.Brush.Save.Tip",
+        "Writes the change into the mod's own model file, so it keeps working with\n"
+      + "Proteus turned off and travels with the mod if you export it. The original\n"
+      + "is copied to Proteus/meshvolume-backup/ inside the mod first, and this can\n"
+      + "be undone.");
+
+    /// <summary>{0} is the furthest anything moved, in millimetres.</summary>
+    public readonly string BrushSavedFmt = Loc.Localize("Parts.Brush.Saved.Fmt",
+        "Saved. The surface was moved by up to {0:F2} mm.");
+
+    /// <summary>{0} is a count of shape values that could not be carried.</summary>
+    public readonly string BrushSparesFmt = Loc.Localize("Parts.Brush.Spares.Fmt",
+        "{0} points belonging to this model's body sliders could not be moved with it, so turning one of "
+      + "those sliders on may bring the clipping back in places.");
+
+    public readonly string BrushRevert = Loc.Localize("Parts.Brush.Revert", "Undo saved changes")
+                                       + "###partsBrushRevert";
+
+    public readonly string BrushRevertTip = Loc.Localize("Parts.Brush.Revert.Tip",
+        "Puts every model the brush has changed in this mod back exactly as its\n"
+      + "author made it.");
+
+    /// <summary>{0} is how many model files were put back.</summary>
+    public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",
+        "{0} model(s) put back as the author made them.");
+
     public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
         "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +
         "one, or switch the whole part.");

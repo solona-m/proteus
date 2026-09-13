@@ -502,7 +502,7 @@ public static class ModelAttributeWriter
     /// shape is then structurally perfect and moves the hair nowhere, which is the worst kind of bug to go
     /// looking for. Half2 is excluded deliberately even though it is a case there — it has no z.
     /// </summary>
-    private static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
+    internal static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
 
     /// <summary>
     /// Add a shape key (a morph target) named <paramref name="shapeName"/>, moving the named vertices of the

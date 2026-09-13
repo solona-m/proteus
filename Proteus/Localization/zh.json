@@ -2103,6 +2103,142 @@
     "message": "{0} · {1:N0} 三角面",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "选择部位",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "点击模型的部位来选中它们，再为其添加开关。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "向外拉",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "在模型上涂抹，把表面向外推出，让穿过衣物的身体重新被遮住。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "向内推",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同一把笔反向使用，适用于离身体太远的衣物。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "笔刷大小",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "笔刷的作用范围。中心最强，到边缘递减为零；笔刷大则推动大片起伏，\n笔刷小则只动一个小鼓包。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "强度",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "笔刷比这个模型的三角面（约 {0:F1} mm）还小，会把单个顶点拉成尖刺而不是推动表面。请调大一些。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大位移：{0:F2} mm / {1:F1} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "尚未移动任何部分。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "撤销一笔",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "重新开始",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "尚未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "保存到模组",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "将修改写入模组自己的模型文件，因此关掉 Proteus 也仍然有效，\n并且导出模组时会一起带走。原文件会先被复制到模组内的\nProteus/meshvolume-backup/，随时可以撤销。",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "已保存。表面最多移动了 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "有 {0} 个属于这个模型身材滑块的顶点无法随之移动，因此开启该滑块时，部分位置的穿模可能会重现。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "撤销已保存的修改",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "把笔刷在这个模组中修改过的每个模型，完全恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "已将 {0} 个模型恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "尚未涂抹任何内容，没有可保存的东西。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "无法编辑 {0}：{1}。未写入任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "写入失败：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "笔刷没有修改过这个模组的任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "请先撤销{0}：它是在笔刷之后应用到同一个模型上的，现在撤销笔刷会连带把它一起撤销。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "找不到任何可供恢复的原始模型。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "部位开关",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子适配",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "笔刷",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "请先撤销{0}：它在此之后修改了同一个模型，现在撤销这个会连带把它一起撤销。",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "已勾选 {0} 个部件",
     "description": ""

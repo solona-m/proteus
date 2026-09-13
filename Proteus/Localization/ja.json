@@ -2103,6 +2103,142 @@
     "message": "{0} · {1:N0}三角形",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "パーツを選ぶ",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "モデルのパーツをクリックして選び、スイッチを付けます。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "外に引く",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "モデル上をなぞると表面が外側に押し出され、服から突き出た体が\nまた覚い隠れます。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "内に押す",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同じブラシの逆方向。体から離れすぎている服に使います。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "ブラシの大きさ",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "ブラシが届く範囲。効きは中心が最も強く、端でゼロになります。大きければ\n広いうねりが、小さければ小さな膨らみが動きます。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "強さ",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "ブラシがこのモデルのポリゴン（約 {0:F1} mm）より小さいため、表面でなく頂点をトゲ状に引っ張ります。大きくしてください。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大移動量：{1:F1} mm 中 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "まだ何も動いていません。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "一筆分戻す",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "やり直す",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "MOD に保存",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "変更を MOD 自身のモデルファイルに書き込みます。Proteus を切っても有効で、\nMOD を書き出しても付いていきます。元のファイルは先に MOD 内の\nProteus/meshvolume-backup/ にコピーされ、いつでも元に戻せます。",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "保存しました。表面は最大 {0:F2} mm 動きました。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "このモデルの体型スライダーに属する {0} 点を一緒に動かせませんでした。そのスライダーを有効にすると、一部で貫通が戻ることがあります。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "保存内容を元に戻す",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "この MOD でブラシが変更したすべてのモデルを、作者が作ったときの状態に\n正確に戻します。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} 件のモデルを作者の状態に戻しました。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "何も塗っていないので、保存するものがありません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} を編集できませんでした：{1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "書き込みに失敗しました：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "この MOD でブラシは何も変更していません。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。ブラシの後に同じモデルに適用されているため、ここでブラシを戻すとそれも消えてしまいます。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "復元する元のモデルが見つかりません。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "パーツのスイッチ",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子対応",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "ブラシ",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。その後に同じモデルを変更しているため、今これを戻すとそれも消えてしまいます。",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "{0}個のパーツを選択中",
     "description": ""

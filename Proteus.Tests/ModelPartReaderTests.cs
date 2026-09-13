@@ -13,6 +13,41 @@ public class ModelPartReaderTests
     private static SyntheticModel.Mesh Mesh(params SyntheticModel.Sub[] subs)
         => new("/mt_test.mtrl", subs);
 
+    /// <summary>
+    /// The spans name the MODEL's mesh index, skipping meshes the reader skipped, so a vertex found in the
+    /// concatenated array can be written back to the right mesh's own buffer.
+    /// <para/>
+    /// The empty mesh in front is the whole point. An author starting from a stock model routinely deletes
+    /// the vanilla geometry and adds their own, leaving a mesh with no vertices — the reader passes over it
+    /// without spending an ordinal, so the concatenated array's first run belongs to model mesh 1, not 0.
+    /// Anything that guessed the mapping from position in the list would write every vertex one mesh out of
+    /// register, which miscompiles into nothing and skins the model to the wrong bones.
+    /// </summary>
+    [Fact]
+    public void MeshSpans_NameTheModelMesh_SkippingEmptyOnes()
+    {
+        var parts = ModelPartReader.Read(SyntheticModel.Build([],
+            Mesh(),                                     // emptied by its author: no submeshes, no vertices
+            Mesh(new SyntheticModel.Sub(0)),
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))));
+
+        Assert.NotNull(parts);
+
+        // Mesh 0 contributed nothing, so the runs start at model mesh 1.
+        Assert.Equal([1, 2], parts!.MeshSpans.Select(s => s.Mesh));
+
+        // Contiguous, in order, and covering exactly the concatenated array.
+        Assert.Equal(0, parts.MeshSpans[0].BaseVertex);
+        Assert.Equal(3, parts.MeshSpans[0].Count);          // one triangle
+        Assert.Equal(3, parts.MeshSpans[1].BaseVertex);
+        Assert.Equal(6, parts.MeshSpans[1].Count);          // two triangles
+        Assert.Equal(parts.Positions.Length / 3, parts.MeshSpans.Sum(s => s.Count));
+
+        // And the normals array is in step with the positions, vertex for vertex — the one invariant the
+        // brush relies on when it asks which way "out" is for a given point.
+        Assert.Equal(parts.Positions.Length, parts.Normals.Length);
+    }
+
     [Fact]
     public void EachSubmesh_IsAPart()
     {
