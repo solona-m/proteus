@@ -1002,11 +1002,13 @@ public sealed class SecondSkinService
     /// <summary>The mirrored vanilla layout, compared the way every other body-type string in here is.</summary>
     private static bool IsGen2(string? uv) => string.Equals(uv, "gen2", StringComparison.OrdinalIgnoreCase);
 
-    private static string? SkinBodyType(byte[] model)
+    internal static string? SkinBodyType(byte[] model)
     {
         try
         {
-            return SecondSkinWriter.MaterialNames(model)
+            // DRAWN materials, not declared ones: an emptied vanilla mesh still bound to _a.mtrl ahead of
+            // the real _bibo skin made a bibo part read as vanilla, and the gen2 gate dropped it.
+            return SecondSkinWriter.DrawnMaterialNames(model)
                 .Select(SecondSkinWriter.SkinMaterialBodyType)
                 .FirstOrDefault(t => t != null);
         }
