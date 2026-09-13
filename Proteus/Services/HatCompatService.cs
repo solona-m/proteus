@@ -488,6 +488,12 @@ public static class HatCompatService
             return new Outcome(false, Loc.Localize("HatCompat.Revert.Nothing",
                 "This mod has no Proteus hat-compatibility edits to undo."), 0);
 
+        // Refused before anything is restored, while a feature that edited the same model LATER still holds
+        // its own backup of it — see ModelBackupOrder. Restoring ours would silently undo that edit too.
+        foreach (var rel in wanted)
+            if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } later)
+                return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
+
         var restoredFrom = new List<string>();
         var skipped = new List<string>();
         foreach (var rel in wanted)

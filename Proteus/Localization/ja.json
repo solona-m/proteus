@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "外に押す",
+    "message": "外に引く",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "内に引く",
+    "message": "内に押す",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。リストでパーツにチェックを入れると、そのパーツは動きません。",
+    "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "帽子対応",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "ブラシ",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。その後に同じモデルを変更しているため、今これを戻すとそれも消えてしまいます。",
     "description": ""
   },
   "Parts.Selected.Fmt": {

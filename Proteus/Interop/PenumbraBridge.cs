@@ -248,6 +248,32 @@ public class PenumbraBridge : IDisposable
     }
 
     /// <summary>
+    /// The FILES the local player's models are actually loaded from, or null when unavailable — the
+    /// resolved side of the same map the getters above read the game-path side of.
+    /// <para/>
+    /// A file under Penumbra's mods folder names the mod supplying it, which is how the Toggles tab knows
+    /// which mods are being worn right now. Resolved paths rather than game paths because a game path says
+    /// what is drawn, not who provides it: the same <c>e6116_met.mdl</c> comes from the game or from any one
+    /// of several mods depending on the collection.
+    /// </summary>
+    public HashSet<string>? GetActivePlayerModelFiles()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return null;
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (resolved, gamePaths) in dict)
+                foreach (var p in gamePaths)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)) { files.Add(resolved); break; }
+            return files;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (model files)"); return null; }
+    }
+
+    /// <summary>
     /// Both path sets from ONE GetGameObjectResourcePaths call.
     /// <para/>
     /// The two getters above make the same IPC call and differ only in which extension they keep, so asking

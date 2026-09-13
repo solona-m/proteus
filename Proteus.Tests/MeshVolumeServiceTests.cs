@@ -14,8 +14,8 @@ namespace Proteus.Tests;
 /// <para/>
 /// The displacement is produced by a real <see cref="MeshVolumeSolve"/>, but over a triangle list built here
 /// rather than the file's own. <see cref="SyntheticModel"/> emits isolated triangles that share corner
-/// positions and no indices — every edge of that is a boundary, so the brush correctly refuses to move any
-/// of it, and a writer test needs something moved. The positions, the normals and above all the
+/// positions and no indices, which gives the solve no connected surface to work over. The positions, the
+/// normals and above all the
 /// <see cref="ModelParts.MeshSpans"/> come from the real reader, so the mapping under test — concatenated
 /// vertex back to a mesh's own buffer — is the real one.
 /// </summary>

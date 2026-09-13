@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "向外推",
+    "message": "向外拉",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "向内收",
+    "message": "向内推",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。在列表中勾选某个部位可在涂抹时固定它。",
+    "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "帽子适配",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "笔刷",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "请先撤销{0}：它在此之后修改了同一个模型，现在撤销这个会连带把它一起撤销。",
     "description": ""
   },
   "Parts.Selected.Fmt": {

@@ -2108,7 +2108,7 @@
     "description": ""
   },
   "Parts.Tool.Inflate": {
-    "message": "Hinausdrücken",
+    "message": "Herausziehen",
     "description": ""
   },
   "Parts.Tool.Inflate.Tip": {
@@ -2116,7 +2116,7 @@
     "description": ""
   },
   "Parts.Tool.Deflate": {
-    "message": "Hineinziehen",
+    "message": "Hineindrücken",
     "description": ""
   },
   "Parts.Tool.Deflate.Tip": {
@@ -2124,7 +2124,7 @@
     "description": ""
   },
   "Parts.Brush.Help": {
-    "message": "Zieh auf dem Modell, um zu malen. Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt. Häkchen an einem Teil in der Liste hält es beim Malen fest.",
+    "message": "Zieh auf dem Modell, um zu malen. Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt.",
     "description": ""
   },
   "Parts.Brush.Size": {
@@ -2225,6 +2225,14 @@
   },
   "MeshVolume.Feature.HatCompat": {
     "message": "die Hut-Anpassung",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "den Pinsel",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Nimm zuerst {0} zurück: es hat dasselbe Modell danach verändert, also würde das Zurücknehmen jetzt es mit aufheben.",
     "description": ""
   },
   "Parts.Selected.Fmt": {

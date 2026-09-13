@@ -104,14 +104,20 @@ public sealed class PartsPanel
 
     /// <summary>Brush radius and per-dab strength, both in millimetres because that is how the problem is
     /// described: "the hip pokes through by about a millimetre".</summary>
-    private float brushRadiusMm = 20f, brushStrengthMm = 0.05f;
-
-    /// <summary>Nodes the last dab actually reached, so a brush that is landing on nothing can say so.</summary>
-    private int lastReached;
+    private float brushRadiusMm = 200f, brushStrengthMm = 0.05f;
 
     /// <summary>How many models in this mod the brush has already written, so the way back can be offered
     /// only when there is something to go back from.</summary>
     private int brushSaved;
+
+    /// <summary>
+    /// The model's bytes as they were when the brush was opened on it. Every save is these plus the whole
+    /// edit so far — see <see cref="MeshVolumeService.Apply"/> — so saving repeatedly never stacks.
+    /// </summary>
+    private byte[]? brushBase;
+
+    /// <summary>When the brush last changed something not yet saved, as a tick count; -1 when nothing waits.</summary>
+    private long brushChangedAt = -1;
 
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport,
@@ -133,12 +139,21 @@ public sealed class PartsPanel
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
 
+    /// <summary>
+    /// Whether the last <see cref="Draw"/> drew the model viewer. The window reads the moment this turns on
+    /// to grow itself, since the viewer is what the room is for and the size that suits a mod picker is far
+    /// too small to paint on.
+    /// </summary>
+    public bool ShowingModel { get; private set; }
+
     /// <param name="fillHeight">Whether the model row may take all the height that is left. True only while
     /// the window is user-resizable, which it is only on this tab — see the remarks on the computation.</param>
     /// <param name="reserveBelow">Height the window itself still needs under the tab content (its footer).</param>
     public void Draw(bool fillHeight, float reserveBelow)
     {
         var ps = Strings.Parts;
+        ShowingModel = false;
+        TickAutosave();
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -196,6 +211,7 @@ public sealed class PartsPanel
                 ImGui.GetContentRegionAvail().Y - tailHeight - reserveBelow - ProteusStyle.S(4f),
                 ProteusStyle.S(200f));
 
+        ShowingModel = true;
         DrawToolPicker();
         DrawParts(height);
 
@@ -213,7 +229,13 @@ public sealed class PartsPanel
     private void DrawModPicker()
     {
         var ps = Strings.Parts;
-        mods ??= penumbra.GetAllMods() ?? [];
+        // Proteus's own output mod is left out. It is rebuilt from scratch on every composite, so a switch or a
+        // brush edit written into it lasts until the next one — and because the character is always drawing
+        // it, it would otherwise head the worn list above the garments someone actually came here to fix.
+        mods ??= (penumbra.GetAllMods() ?? [])
+            .Where(m => !string.Equals(m.Key, SidecarDiscoveryService.ManagedModDir,
+                                       StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(m => m.Key, m => m.Value);
 
         var width = ProteusStyle.S(340f);
         ImGui.SetNextItemWidth(width);
@@ -230,14 +252,25 @@ public sealed class PartsPanel
         // Fresh filter each open, with the caret already in the box so the list can just be typed at.
         // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
         bool appearing = ImGui.IsWindowAppearing();
-        if (appearing) modFilter = "";
+        if (appearing)
+        {
+            modFilter = "";
+            // Asked once per open, not per frame: it is an IPC round trip over every resource the character
+            // has loaded, and what is worn does not change while someone is reading a list.
+            equippedMods = EquippedModDirectories();
+        }
         ImGui.SetNextItemWidth(-1);
         if (appearing) ImGui.SetKeyboardFocusHere();
         ImGui.InputTextWithHint("##partsFilter", Strings.Export.FilterHint, ref modFilter, 64);
         ImGui.Separator();
 
+        // Worn mods first, then everything else, each alphabetical. A garment that clips is almost always one
+        // being worn, and finding it among several hundred installed mods is the slowest part of fixing it.
         int shown = 0;
-        foreach (var (dir, label) in mods.OrderBy(m => m.Value, StringComparer.OrdinalIgnoreCase))
+        bool anyEquippedShown = false, separated = false;
+        foreach (var (dir, label) in mods
+                     .OrderBy(m => equippedMods.Contains(m.Key) ? 0 : 1)
+                     .ThenBy(m => m.Value, StringComparer.OrdinalIgnoreCase))
         {
             // Folder as well as name. The two routinely differ — Penumbra's folder is a sanitised form of
             // the name, and either can be renamed — so filtering on the label alone hides mods someone is
@@ -247,11 +280,17 @@ public sealed class PartsPanel
                 && dir?.Contains(modFilter, StringComparison.OrdinalIgnoreCase) != true)
                 continue;
 
+            bool worn = equippedMods.Contains(dir);
+            if (worn) anyEquippedShown = true;
+            else if (anyEquippedShown && !separated) { ImGui.Separator(); separated = true; }
+
             shown++;
             // ##dir: two mods can share a display name, and duplicate ImGui ids would route the click to
             // the wrong row.
-            if (ImGui.Selectable($"{label}##{dir}", dir == modDir) && dir != modDir)
-                SelectMod(dir);
+            bool picked;
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Ok, worn))
+                picked = ImGui.Selectable($"{label}##{dir}", dir == modDir);
+            if (picked && dir != modDir) SelectMod(dir);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(dir);
         }
         if (shown == 0)
@@ -260,8 +299,46 @@ public sealed class PartsPanel
         ImGui.EndCombo();
     }
 
+    /// <summary>Mod folders supplying a model the character is drawing right now — see
+    /// <see cref="EquippedModDirectories"/>. Refreshed each time the mod picker opens.</summary>
+    private HashSet<string> equippedMods = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Which installed mods the character is wearing, by folder name: every mod that a currently loaded
+    /// model file is being read from.
+    /// <para/>
+    /// Models, not textures or materials, because this tab edits models — a mod that only recolours the gear
+    /// being worn has nothing here to pick. Empty rather than null when Penumbra cannot answer, so the list
+    /// simply falls back to alphabetical.
+    /// </summary>
+    private HashSet<string> EquippedModDirectories()
+        => WornFiles().Select(w => w.Mod).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Files inside this mod that the character is drawing, relative to the mod root with forward
+    /// slashes — the spelling <see cref="PenumbraModMeta.Redirect.File"/> is compared in. Refreshed each
+    /// time the model picker opens.</summary>
+    private HashSet<string> wornModels = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every loaded model file that lives in a mod, as the mod's folder name and the file's path inside it.
+    /// Empty when Penumbra cannot answer, so both pickers fall back to plain lists.
+    /// </summary>
+    private List<(string Mod, string Rel)> WornFiles()
+    {
+        var found = new List<(string, string)>();
+        if (penumbra.GetModDirectory() is not { } root || penumbra.GetActivePlayerModelFiles() is not { } files)
+            return found;
+
+        foreach (var file in files)
+            if (HatCompatService.InMods(file, root, out var modRoot, out var rel))
+                found.Add((Path.GetFileName(modRoot), rel));
+        return found;
+    }
+
     private void SelectMod(string dir)
     {
+        FlushPending();   // before modDir changes, which the save needs to find the file
+        brushChangedAt = -1;
         modDir = dir;
         modelIndex = -1;
         parts = null;
@@ -318,9 +395,23 @@ public sealed class PartsPanel
         var current = modelIndex >= 0 ? modelLabels[modelIndex] : ps.PickModel;
         if (ImGui.BeginCombo(ps.Model + "##partsModel", current))
         {
+            // Once per open, for the same reason as the mod picker: an IPC walk of everything loaded.
+            if (ImGui.IsWindowAppearing())
+                wornModels = WornFiles().Where(w => string.Equals(w.Mod, modDir, StringComparison.OrdinalIgnoreCase))
+                                        .Select(w => w.Rel)
+                                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             for (int i = 0; i < models.Count; i++)
-                if (ImGui.Selectable(modelLabels[i] + "##m" + i, i == modelIndex) && i != modelIndex)
-                    SelectModel(i);
+            {
+                // Green for the file the character is drawing right now — the option actually selected in
+                // Penumbra for what is being worn. A mod offering five sizes of one garment lists five rows
+                // that differ by one word, and the one that matters is the one on screen.
+                bool worn = wornModels.Contains(models[i].File.Replace('\\', '/'));
+                bool picked;
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Ok, worn))
+                    picked = ImGui.Selectable(modelLabels[i] + "##m" + i, i == modelIndex);
+                if (picked && i != modelIndex) SelectModel(i);
+            }
             ImGui.EndCombo();
         }
     }
@@ -365,6 +456,12 @@ public sealed class PartsPanel
 
     private void SelectModel(int index)
     {
+        // A pending edit belongs to the model being replaced. If its save fails it cannot follow onto the next
+        // one — its bytes and its undo history go with the old model — so the waiting flag is dropped either
+        // way; the failure is already on the status line.
+        FlushPending();
+        brushChangedAt = -1;
+        brushBase = null;
         modelIndex = index;
         ticked.Clear();
         expanded.Clear();
@@ -385,6 +482,7 @@ public sealed class PartsPanel
             var bytes = File.ReadAllBytes(Path.Combine(root,
                 models[index].File.Replace('/', Path.DirectorySeparatorChar)));
             parts = ModelPartReader.Read(bytes);
+            brushBase = bytes;
             modelUnreadable = parts == null;
             freeLetters = parts == null ? 0 : ModelPartReader.FreeLetters(parts.AttributeNames).Count;
         }
@@ -444,11 +542,16 @@ public sealed class PartsPanel
         // where the content just barely fits. Capping only the image leaves the row's height a function of
         // avail.Y alone; a wide-and-short model is simply letterboxed shorter than the list beside it, which
         // reads fine because SameLine tops them out together.
-        float width = MathF.Min(height * PartViewport.DefaultAspect,
-                                ImGui.GetContentRegionAvail().X * 0.55f);
+        // Under a brush the part list is hidden and the model takes the whole row: the list is for choosing
+        // parts to switch, and while painting it is only in the way of the thing being painted.
+        bool brushing = tool != Tool.Navigate;
+        float width = brushing
+            ? ImGui.GetContentRegionAvail().X
+            : MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
 
         PumpBrush();
+        if (brushing) return;
 
         // Two different things to say, and only one of them is an apology. A part the author already
         // switches takes the click normally — the tooltip is there to explain that the new switch will
@@ -610,10 +713,12 @@ public sealed class PartsPanel
             if (value != Tool.Navigate) ImGui.SameLine();
             if (ImGui.RadioButton(label, tool == value) && tool != value)
             {
+                // Before leaving the brush, so a pending edit cannot land on top of a switch written in the
+                // meantime — a save rewrites the whole model from the bytes the brush was opened on.
+                FlushPending();
                 tool = value;
-                // The ticked list changes meaning with the tool — staged parts in Navigate, locked parts
-                // under a brush — so carrying a selection across would silently lock whatever the user had
-                // been staging, or stage whatever they had locked.
+                // Staged parts are a Pick-parts thing; the brush hides the list, so a selection carried into it
+                // would sit there invisibly and reappear half-forgotten on the way back.
                 ticked.Clear();
                 viewport.Recolour();
             }
@@ -633,16 +738,10 @@ public sealed class PartsPanel
     {
         if (volume == null || tool == Tool.Navigate) return;
 
-        // Locked parts are the ticked ones while a brush is out — the list stops being a staging area and
-        // becomes "hold this still". Set every frame because the set is small and the alternative is
-        // tracking a dirty flag across the two places that can change it.
-        volume.SetLocked(ticked);
-
         if (viewport.Painting && viewport.Cursor is { } at)
         {
             float step = brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f);
-            lastReached = volume.Paint(at, brushRadiusMm / 1000f, step);
-            if (lastReached > 0)
+            if (volume.Paint(at, brushRadiusMm / 1000f, step) > 0)
             {
                 viewport.PositionOverride = volume.Positions();
                 viewport.GeometryChanged();
@@ -654,7 +753,41 @@ public sealed class PartsPanel
             volume.EndStroke();
             viewport.PositionOverride = volume.Positions();
             viewport.GeometryChanged();
+            brushChangedAt = Environment.TickCount64;
         }
+    }
+
+    /// <summary>How long after the last change the brush writes itself into the mod.</summary>
+    private const long AutosaveMs = 3000;
+
+    /// <summary>
+    /// Save the brush once it has been left alone for <see cref="AutosaveMs"/>, then have Penumbra reload the
+    /// mod and redraw the character so the edit is on screen in game, not just in the viewer.
+    /// <para/>
+    /// Debounced from the LAST change rather than timed from the first, so a run of strokes saves once at the
+    /// end instead of once per stroke — each save is a full rewrite of the model plus a redraw of the
+    /// character, which is far too heavy to do between dabs. Never while the brush is held down.
+    /// </summary>
+    private void TickAutosave()
+    {
+        if (brushChangedAt < 0 || viewport.Painting) return;
+        if (Environment.TickCount64 - brushChangedAt < AutosaveMs) return;
+        SaveBrush();
+    }
+
+    /// <summary>
+    /// Save now if anything is waiting. Called before anything that replaces the model on screen or writes to
+    /// the same file — a pending edit belongs to that model and those bytes — and by the window when the
+    /// Toggles tab stops being drawn, since the autosave timer only runs while it is.
+    /// </summary>
+    /// <param name="refreshGame">Reload the mod in Penumbra and redraw the character afterwards. False only
+    /// while the plugin is being torn down, when the file still has to land but nothing should be poked.</param>
+    /// <returns>True when nothing is left waiting — including when there was nothing to save. False means a
+    /// save was attempted and failed, and the caller must not go on to write the same file.</returns>
+    public bool FlushPending(bool refreshGame = true)
+    {
+        if (brushChangedAt >= 0) SaveBrush(refreshGame);
+        return brushChangedAt < 0;
     }
 
     private void DrawBrush()
@@ -669,7 +802,7 @@ public sealed class PartsPanel
 
         float w = ProteusStyle.S(220f);
         ImGui.SetNextItemWidth(w);
-        if (ImGui.SliderFloat(ps.BrushSize, ref brushRadiusMm, 2f, 80f, "%.0f mm"))
+        if (ImGui.SliderFloat(ps.BrushSize, ref brushRadiusMm, 20f, 300f, "%.0f mm"))
             viewport.Recolour();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip);
 
@@ -692,20 +825,23 @@ public sealed class PartsPanel
                 : ps.BrushUntouched);
 
             using (ImRaii.Disabled(!vol.CanUndo))
-                if (ImGui.Button(ps.BrushUndo)) { vol.Undo(); AfterBrushEdit(); }
+                if (ImGui.Button(ps.BrushUndo)) { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
 
+            // Undo and start-over save and redraw AT ONCE rather than on the debounce. The debounce exists to
+            // batch a run of strokes into one save; an undo is a single deliberate click whose whole point is
+            // to see the character put back, and three seconds of it still wearing the mistake reads as the
+            // button not working.
             ImGui.SameLine();
             using (ImRaii.Disabled(!vol.Dirty))
-                if (ImGui.Button(ps.BrushReset)) { vol.Reset(); AfterBrushEdit(); }
+                if (ImGui.Button(ps.BrushReset)) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
+            // Saving happens on its own a few seconds after the last change. The button is for not waiting.
             ImGui.Spacing();
-            using (ImRaii.Disabled(!vol.Dirty))
+            using (ImRaii.Disabled(brushChangedAt < 0))
                 if (ImGui.Button(ps.BrushSave)) SaveBrush();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSaveTip);
 
-            // Said while there is something unsaved, rather than as a permanent notice: the preview is
-            // convincing enough to be mistaken for an edit that has already been written.
-            if (vol.Dirty)
+            if (brushChangedAt >= 0)
             {
                 ImGui.SameLine();
                 ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
@@ -720,28 +856,42 @@ public sealed class PartsPanel
         }
     }
 
-    private void SaveBrush()
+    private void SaveBrush(bool refreshGame = true)
     {
-        if (volume == null || parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
-
-        var rel = models[modelIndex].File;
-        byte[] bytes;
-        try { bytes = File.ReadAllBytes(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))); }
-        catch (Exception ex)
+        if (volume == null || brushBase == null || modelIndex < 0 || modDir == null
+            || ModRoot() is not { } root)
         {
-            status = ex.Message;
-            statusIsError = true;
+            brushChangedAt = -1;   // nothing on screen to save; there is no edit to keep waiting for
             return;
         }
 
-        var result = MeshVolumeService.Apply(root, rel, bytes, volume);
+        var rel = models[modelIndex].File;
+
+        // Undone back to nothing on a model never saved: there is nothing in the mod to put right.
+        if (!volume.Dirty && !MeshVolumeService.IsPatched(root, rel))
+        {
+            brushChangedAt = -1;
+            return;
+        }
+
+        // From the bytes the brush was opened on, not the file on disk — see Apply. Written even when the
+        // edit is now empty, so undoing everything also takes the last save back out of the mod.
+        var result = MeshVolumeService.Apply(root, rel, brushBase, volume, writeUntouched: true);
         statusIsError = !result.Ok;
         if (!result.Ok)
         {
             status = result.Message;
             log.Warning("[Proteus] brush: {0}", result.Message);
+
+            // STILL WAITING, re-armed for another full debounce rather than cleared. Clearing it here meant a
+            // save that failed — Penumbra holding the file past AtomicWrite's retries — was never tried again,
+            // and the "not saved yet" notice vanished, so the viewer went on showing an edit the mod did not
+            // have. Retried on the debounce rather than every frame, so a file that stays locked costs one
+            // attempt every few seconds instead of one per frame.
+            brushChangedAt = Environment.TickCount64;
             return;
         }
+        brushChangedAt = -1;
 
         status = string.Format(Strings.Parts.BrushSavedFmt, volume.Worst * 1000f);
 
@@ -753,13 +903,24 @@ public sealed class PartsPanel
             log.Warning("[Proteus] brush: {0} shape values could not be carried in {1}",
                         result.UnmappedSpares, rel);
         }
+        brushSaved = MeshVolumeService.PatchedCount(root);
 
-        AfterModChange(root);
+        // NOT AfterModChange. That re-reads the model and rebuilds everything from it, which would throw
+        // away the brush's undo history on every autosave and rebuild the solve on the just-saved bytes —
+        // so the next save would add the whole edit on top of itself. The solve, the viewer and the undo
+        // stack all stay; only the game needs telling.
+        //
+        // Reload BEFORE the redraw, in that order: a redraw alone re-resolves the path and is handed back the
+        // bytes Penumbra still has in memory — see HatCompatWatcher, which learned it the hard way.
+        if (!refreshGame) return;
+        penumbra.ReloadModDirectory(modDir);
+        compositor.RedrawForChangedModel();
     }
 
     private void RevertBrush()
     {
         if (ModRoot() is not { } root) return;
+        brushChangedAt = -1;   // an edit waiting to save must not land on top of the restore
 
         var result = MeshVolumeService.Revert(root);
         statusIsError = !result.Ok;
@@ -768,6 +929,11 @@ public sealed class PartsPanel
             : result.Message;
 
         AfterModChange(root);
+
+        // AfterModChange reloads the mod and recomposites, but a recomposite is about skin, not gear — the
+        // character would keep the brushed model it has cached until something else redrew it. Same pairing
+        // as a save: reload (done above), then redraw.
+        if (result.Ok) compositor.RedrawForChangedModel();
     }
 
     private void AfterBrushEdit()
@@ -775,6 +941,7 @@ public sealed class PartsPanel
         if (volume == null) return;
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
+        brushChangedAt = Environment.TickCount64;
     }
 
     // ── staging ─────────────────────────────────────────────────────────────
@@ -862,6 +1029,10 @@ public sealed class PartsPanel
 
     private void Commit()
     {
+        // The switch is written into the same file the brush saves, and a brush save rewrites the WHOLE model
+        // from the bytes the brush was opened on — so a brush edit still waiting would later land on top of
+        // the switch and erase it. Saved first, and if that save fails the switch is not written at all.
+        if (!FlushPending()) return;
         var ps = Strings.Parts;
         if (parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
 
@@ -895,6 +1066,13 @@ public sealed class PartsPanel
     private void Revert()
     {
         if (ModRoot() is not { } root) return;
+
+        // Same reason as Commit, from the other side. Without this, a brush edit waiting to save was flushed
+        // by the model reload AFTER the restore — from bytes that still carried the switches — and put the
+        // split submeshes and their attributes straight back into a mod whose group had just been deleted.
+        // Saved first, so the restore order check sees the brush as the later edit and refuses to undo
+        // under it; and if the save fails, nothing is restored.
+        if (!FlushPending()) return;
 
         var result = MeshToggleService.Revert(root);
         statusIsError = !result.Ok;

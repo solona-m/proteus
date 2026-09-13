@@ -11,9 +11,9 @@ namespace Proteus.Tests;
 /// The brush's geometry, against a mesh built here rather than a <c>.mdl</c>.
 /// <para/>
 /// <see cref="SyntheticModel"/> deliberately emits isolated triangles that share corner POSITIONS and no
-/// indices, which is the right fixture for the island split and exactly the wrong one here: every edge of it
-/// is used by one triangle, so every node is a hole rim and the brush correctly refuses to move any of it.
-/// A displacement pass needs a surface with an interior, so these build one — <see cref="ModelParts"/> is
+/// indices, which is the right fixture for the island split and the wrong one here: its triangles share no
+/// edges, so there is no neighbourhood for the slope limit or the normals to work over. A displacement pass
+/// needs a connected surface, so these build one — <see cref="ModelParts"/> is
 /// public and its members are init-only, so the solve can be fed directly without a file in the way.
 /// </summary>
 public class MeshVolumeSolveTests
@@ -53,10 +53,10 @@ public class MeshVolumeSolveTests
     }
 
     private static ModelParts Assemble(List<float> pos, List<float> nrm, List<int> tris,
-                                       int[]? secondPart = null)
+                                       int[]? secondPart = null, string secondMaterial = "/mt_test.mtrl")
     {
         var parts = new List<ModelPart> { Part(0, 0, "1.1", tris.ToArray()) };
-        if (secondPart != null) parts.Add(Part(0, 1, "1.2", secondPart));
+        if (secondPart != null) parts.Add(Part(0, 1, "1.2", secondPart, secondMaterial));
 
         return new ModelParts
         {
@@ -71,13 +71,14 @@ public class MeshVolumeSolveTests
         };
     }
 
-    private static ModelPart Part(int mesh, int submesh, string label, int[] tris) => new()
+    private static ModelPart Part(int mesh, int submesh, string label, int[] tris,
+                                  string material = "/mt_test.mtrl") => new()
     {
         Mesh = mesh,
         Submesh = submesh,
         Island = -1,
         Label = label,
-        Material = "/mt_test.mtrl",
+        Material = material,
         Triangles = tris,
         Ordinals = [.. Enumerable.Range(0, tris.Length / 3)],
         AttributeMask = 0,
@@ -126,35 +127,28 @@ public class MeshVolumeSolveTests
     }
 
     /// <summary>
-    /// The rim of the surface never moves, however hard it is brushed.
+    /// Open edges move like everything else.
     /// <para/>
-    /// The case this protects is not the test grid's edge but a garment's: a body arrives as several model
-    /// files and welding never sees across the join, so the ring a top shares with a pair of trousers is a
-    /// one-use edge in both. Moving it on one side alone tears the two apart, and an authored socket gets
-    /// prised open into a visible gash.
+    /// They used to be pinned, to keep a seam shared with another model file from tearing — but a garment's
+    /// hem, neckline and sleeve ends are open edges too, and pinning them made the brush refuse to pull cloth
+    /// away anywhere near one. This holds the brush to moving them.
     /// </summary>
     [Fact]
-    public void NeverMovesTheRim()
+    public void MovesOpenEdges()
     {
         var (model, index) = Grid(9);
         var solve = new MeshVolumeSolve(model);
 
-        // Centred on a corner and wide enough to cover the whole grid, so every rim node is well inside the
-        // brush and only the pin can be keeping it still.
+        // Wide enough to cover the whole grid at full weight near the corner it is centred on.
         solve.Paint(At(model.Positions, index[0, 0]), 1f, 0.002f);
         solve.EndStroke();
 
         var after = solve.Positions();
         for (int k = 0; k < 9; k++)
         {
-            Assert.Equal(0f, At(after, index[0, k]).Y, 1e-9f);
-            Assert.Equal(0f, At(after, index[8, k]).Y, 1e-9f);
-            Assert.Equal(0f, At(after, index[k, 0]).Y, 1e-9f);
-            Assert.Equal(0f, At(after, index[k, 8]).Y, 1e-9f);
+            Assert.True(At(after, index[0, k]).Y > 0f, $"edge node [0,{k}] did not move");
+            Assert.True(At(after, index[k, 0]).Y > 0f, $"edge node [{k},0] did not move");
         }
-
-        // The interior did move, or this test would pass on a brush that does nothing at all.
-        Assert.True(At(after, index[4, 4]).Y > 0f);
     }
 
     /// <summary>
@@ -196,32 +190,100 @@ public class MeshVolumeSolveTests
         Assert.True(At(after, original).Y > 0f);
     }
 
-    /// <summary>A locked part holds still — what the list beside the viewport is for while a brush is out.</summary>
+    /// <summary>
+    /// Skin never moves, locked or not — the brush is for pushing clothing clear of the body, and a garment
+    /// model routinely carries the body underneath it. Cloth right beside it still moves.
+    /// </summary>
     [Fact]
-    public void LeavesLockedPartsAlone()
+    public void NeverMovesSkin()
     {
         var (model, index) = Grid(11);
 
-        // Split the grid's triangles into two parts so one of them can be locked. Every triangle touching
-        // the middle column goes to the second part.
+        // Every triangle touching the middle node becomes a body-skin part; the rest stays cloth.
         var all = model.Parts[0].Triangles;
-        var first = new List<int>();
-        var second = new List<int>();
+        var cloth = new List<int>();
+        var body = new List<int>();
         int mid = index[5, 5];
         for (int t = 0; t + 2 < all.Length; t += 3)
         {
-            var target = all[t] == mid || all[t + 1] == mid || all[t + 2] == mid ? second : first;
+            var target = all[t] == mid || all[t + 1] == mid || all[t + 2] == mid ? body : cloth;
             target.AddRange([all[t], all[t + 1], all[t + 2]]);
         }
 
-        var split = Assemble(model.Positions.ToList(), model.Normals.ToList(), first, second.ToArray());
+        var split = Assemble(model.Positions.ToList(), model.Normals.ToList(), cloth, body.ToArray(),
+                             "/mt_c0201b0001_b.mtrl");
+        Assert.True(SecondSkinWriter.IsBodySkinMaterial("/mt_c0201b0001_b.mtrl"));
         var solve = new MeshVolumeSolve(split);
-        solve.SetLocked(new HashSet<string>(StringComparer.Ordinal) { "1.2" });
 
         solve.Paint(At(split.Positions, mid), 0.04f, 0.001f);
         solve.EndStroke();
 
-        Assert.Equal(0f, At(solve.Positions(), mid).Y, 1e-9f);
+        var after = solve.Positions();
+        Assert.Equal(Vector3.Zero, At(after, mid) - At(split.Positions, mid));
+
+        // In any direction: cloth beside skin in the same plane is pulled away from it sideways, not up.
+        var moved = At(after, index[5, 8]) - At(split.Positions, index[5, 8]);
+        Assert.True(moved.Length() > 0f, "cloth inside the brush should still have moved");
+    }
+
+    /// <summary>
+    /// Cloth pulls AWAY FROM THE SKIN, not along its own normal.
+    /// <para/>
+    /// The case from game: the hem of a pair of shorts has normals pointing down the leg, and pulling along
+    /// them slid the hem down instead of lifting it off the thigh. Here the cloth sits 10 mm above a skin
+    /// sheet with its normals deliberately pointing sideways; it must move up, away from the skin.
+    /// <para/>
+    /// And it must still be there after the stroke ends — the slope limit that used to run on release pulled
+    /// most of a pull back, which read in game as the cloth snapping back when the button came up.
+    /// </summary>
+    [Fact]
+    public void PullsAwayFromSkinNotAlongTheNormalAndKeepsItOnRelease()
+    {
+        const int n = 9;
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var cloth = new List<int>();
+        var body = new List<int>();
+
+        // Two sheets over the same XZ square: skin at y = 0, cloth at y = 10 mm.
+        int Sheet(float y, float nx, float ny, List<int> tris)
+        {
+            int start = pos.Count / 3;
+            for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                pos.AddRange([i * Spacing, y, j * Spacing]);
+                nrm.AddRange([nx, ny, 0f]);
+            }
+            for (int i = 0; i + 1 < n; i++)
+            for (int j = 0; j + 1 < n; j++)
+            {
+                int a = start + i * n + j, b = start + (i + 1) * n + j;
+                int c = start + i * n + j + 1, d = start + (i + 1) * n + j + 1;
+                tris.AddRange([a, b, d, a, d, c]);
+            }
+            return start;
+        }
+
+        Sheet(0f, 0f, 1f, body);
+        int clothStart = Sheet(0.01f, 1f, 0f, cloth);      // normals along +X: the "hem pointing the wrong way"
+
+        var model = Assemble(pos, nrm, cloth, body.ToArray(), "/mt_c0201b0001_bibo.mtrl");
+        var solve = new MeshVolumeSolve(model);
+
+        int middle = clothStart + 4 * n + 4;
+        solve.Paint(At(model.Positions, middle), 0.2f, 0.004f);
+        var during = At(solve.Positions(), middle) - At(model.Positions, middle);
+        solve.EndStroke();
+        var after = At(solve.Positions(), middle) - At(model.Positions, middle);
+
+        Assert.True(after.Y > 0.003f, $"cloth should lift off the skin, moved {after}");
+        Assert.True(MathF.Abs(after.X) < after.Y * 0.2f, $"cloth followed its sideways normal: {after}");
+
+        // Nothing meaningful taken back when the stroke ended. The light smoothing that runs on release may
+        // nudge a point, but it is a Taubin pass that does not shrink — unlike the slope limit it replaced,
+        // which took back most of the pull.
+        Assert.True(after.Y > during.Y * 0.97f, $"the pull snapped back on release: {during.Y} -> {after.Y}");
     }
 
     /// <summary>

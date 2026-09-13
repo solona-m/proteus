@@ -634,6 +634,12 @@ internal sealed class MeshToggleService
             return new Outcome(false, Loc.Localize("Parts.Revert.Nothing",
                 "This mod has no Proteus switches to remove."), 0, []);
 
+        // Refused before anything is restored, while a feature that edited the same model LATER still holds
+        // its own backup of it — see ModelBackupOrder. Restoring ours would silently undo that edit too.
+        foreach (var rel in record.Items.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase))
+            if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } later)
+                return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0, []);
+
         var skipped = new List<string>();
         var restoredFrom = new List<string>();
         foreach (var rel in record.Items.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase))

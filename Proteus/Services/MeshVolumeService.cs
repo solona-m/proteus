@@ -55,10 +55,16 @@ internal static class MeshVolumeService
     /// <summary>
     /// Apply the brush to one model and write it into the mod.
     /// </summary>
-    public static Outcome Apply(string modRoot, string rel, byte[] mdl, MeshVolumeSolve solve)
+    /// <param name="mdl">The bytes the solve was BUILT FROM — not whatever is on disk now. The panel saves
+    /// repeatedly as strokes come in, and each save is those bytes plus the whole edit so far; starting from
+    /// the file on disk would apply every earlier stroke a second time on every save.</param>
+    /// <param name="writeUntouched">Write even when nothing is painted. An autosave after undoing back to
+    /// nothing has to put the unpainted model back, or the last saved edit stays in the mod.</param>
+    public static Outcome Apply(string modRoot, string rel, byte[] mdl, MeshVolumeSolve solve,
+                                bool writeUntouched = false)
     {
         rel = Rel(rel);
-        if (!solve.Dirty)
+        if (!solve.Dirty && !writeUntouched)
             return new Outcome(false, Loc.Localize("MeshVolume.Apply.Nothing",
                 "Nothing has been painted, so there is nothing to save."), 0);
 
@@ -401,7 +407,7 @@ internal static class MeshVolumeService
                 "The brush has not changed anything in this mod."), 0);
 
         foreach (var rel in record.Files)
-            if (BlockedBy(modRoot, rel) is { } other)
+            if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } other)
                 return new Outcome(false, string.Format(Loc.Localize("MeshVolume.Revert.Blocked.Fmt",
                     "Undo {0} first: it was applied to the same model after the brush was, so putting the "
                   + "brush back now would also undo it."), other), 0);
@@ -443,34 +449,6 @@ internal static class MeshVolumeService
 
         _ = reason;
         return new Outcome(true, "", restored);
-    }
-
-    /// <summary>
-    /// The feature that must be undone before this one, or null. Decided by backup age, because a backup is
-    /// taken the moment a feature first edits the file — so the newest backup belongs to whatever ran last.
-    /// </summary>
-    private static string? BlockedBy(string modRoot, string rel)
-    {
-        var mine = BackupTime(modRoot, BackupSubdir, rel);
-        if (mine == null) return null;
-
-        foreach (var (dir, name) in new[]
-                 {
-                     (MeshToggleService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Toggles", "part switches")),
-                     (HatCompatService.BackupSubdir, Loc.Localize("MeshVolume.Feature.HatCompat", "hat fitting")),
-                 })
-        {
-            var theirs = BackupTime(modRoot, dir, rel);
-            if (theirs > mine) return name;
-        }
-        return null;
-    }
-
-    private static DateTime? BackupTime(string modRoot, string subdir, string rel)
-    {
-        var at = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, Native(rel));
-        try { return File.Exists(at) ? File.GetLastWriteTimeUtc(at) : null; }
-        catch (IOException) { return null; }
     }
 
     /// <summary>Copy the author's file aside, ONCE — a second pass must not overwrite the pristine copy.</summary>

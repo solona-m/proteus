@@ -34,20 +34,32 @@ internal sealed class MeshVolumeSolve
     /// <para/>
     /// A cap rather than a warning because a stroke accumulates per frame: a held button on a fast machine
     /// applies hundreds of dabs a second, and a stuck drag or a moment's inattention would otherwise balloon
-    /// a garment into a sphere. Five millimetres is far more than clipping needs — the shell layers this
-    /// project ships sit a single millimetre off the skin — and it is still small enough to be undone by eye.
+    /// a garment into a sphere.
+    /// <para/>
+    /// Ten centimetres. It started at five millimetres, on the reasoning that clearing a body poking through
+    /// needs only a fraction of that — and in use that read as the brush refusing to pull cloth away from
+    /// the skin, because pulling a garment visibly OFF the body is a different job from clearing a clip and
+    /// wants far more room. Undo per stroke is what makes a generous ceiling safe.
     /// </summary>
-    public const float MaxDisplacement = 0.005f;
+    public const float MaxDisplacement = 0.1f;
 
     /// <summary>
-    /// How much more displacement one node may carry than its neighbour, as a fraction of the edge between
-    /// them, before <see cref="SecondSkinWriter.LimitSlopeVector"/> pulls it back.
-    /// <para/>
-    /// The same value the crotch-fold relax settled on for a vector displacement, and tighter than the
-    /// scalar sweep's because a limit applied independently in three axes lets neighbours differ by root
-    /// three times as much in the worst direction — including straight through one another.
+    /// Cell size of the grid skin points are bucketed into when aiming the pull, in metres. Big enough that
+    /// the 3×3×3 neighbourhood of a cloth point reliably holds the skin beneath it; small enough that a point
+    /// does not scan the whole body.
     /// </summary>
-    private const float MaxSlope = 1.0f;
+    private const float SkinCell = 0.03f;
+
+    /// <summary>How many cells out the skin search reaches, in turn: a hand's width, a forearm's, a long skirt's.</summary>
+    private static readonly int[] SkinReach = [1, 3, 8];
+
+    /// <summary>
+    /// Rounds of the light smoothing run over each finished stroke — see <see cref="SmoothStroke"/>. Each
+    /// round is a Taubin pair: a step toward the neighbours' average, then a slightly larger step back out.
+    /// </summary>
+    private const int SmoothRounds = 2;
+    private const float SmoothLambda = 0.5f, SmoothMu = -0.53f;
+    private static readonly float[] TaubinSteps = [SmoothLambda, SmoothMu];
 
     private readonly Vec3[] basePos;
     private readonly Vec3[] baseNrm;
@@ -64,23 +76,46 @@ internal sealed class MeshVolumeSolve
     private readonly Vec3[] nodeAt;
 
     /// <summary>
-    /// The direction a node inflates along: its vertices' authored normals, averaged and renormalised.
-    /// <para/>
-    /// The author's normals rather than normals derived from the faces, because they are what the surface is
-    /// actually shaded by and they already encode which side is out. Face accumulation is the fallback for
-    /// a mesh that declares no usable normal at all, where there is nothing else to go on.
-    /// <para/>
-    /// Refreshed from the deformed surface at the end of every stroke. That is not tidiness: inside a
-    /// concavity the normals point sideways ACROSS the gap rather than out of it, so repeatedly inflating
-    /// one spot along the directions it started with drives the two walls apart instead of pushing the
-    /// surface outward.
+    /// Each node's authored normal: its vertices' normals, averaged and renormalised, or the faces' when the
+    /// mesh declares none. What the normal rebuild blends back toward — NOT the direction the brush pulls,
+    /// which is <see cref="pullDir"/>.
     /// </summary>
     private readonly Vec3[] nodeNormal;
 
-    /// <summary>Nodes on the rim of a hole, which never move. See the constructor.</summary>
-    private readonly bool[] frozen;
+    /// <summary>
+    /// The direction the brush moves each node: straight AWAY FROM THE NEAREST SKIN, where the model carries
+    /// skin, and along the node's normal only where it does not.
+    /// <para/>
+    /// Pulling along each point's own normal is what Outfit Studio's inflate does, and on clothing it is
+    /// wrong in two ways that were both seen in game. A hem's normals point DOWN, so pulling a pair of shorts
+    /// out moved the hem down the leg instead of away from it. And cloth is a thin shell with an inside and
+    /// an outside whose normals point opposite ways, so pulling moved the two layers apart — outside out,
+    /// inside into the leg — and anything that then evened out neighbours dragged the whole patch back when
+    /// the stroke ended. Away-from-skin gives both layers and the hem between them one shared direction,
+    /// which is the direction the user means by "pull away".
+    /// <para/>
+    /// Aimed once, from the author's positions: skin never moves, and cloth pulled along the line away from
+    /// it is still on that line.
+    /// </summary>
+    private readonly Vec3[] pullDir;
 
-    private bool[] locked;
+    /// <summary>Nodes whose pull was aimed from skin rather than from their normal.</summary>
+    private readonly bool[] aimedFromSkin;
+
+    /// <summary>The pulls as first aimed, so starting over also forgets the re-aiming strokes did.</summary>
+    private readonly Vec3[] initialPull;
+
+    /// <summary>
+    /// Nodes belonging to SKIN, which the brush never moves. The tool is for pushing clothing clear of the
+    /// body, and a garment model routinely carries the body underneath it — push that out along with the
+    /// cloth and the clipping simply moves with it.
+    /// <para/>
+    /// Skin is decided by material, with <see cref="SecondSkinWriter.IsBodySkinMaterial"/>: the same test
+    /// the second skin uses, measured against real bodies, so smallclothes, nails and piercings on a body
+    /// model are not mistaken for it. A cloth vertex sitting exactly on a skin vertex welds into the same
+    /// node and is held with it — moving only one copy of a shared point would split the two apart.
+    /// </summary>
+    private readonly bool[] skin;
 
     private Vec3[] nodeDelta;
 
@@ -100,7 +135,6 @@ internal sealed class MeshVolumeSolve
     private readonly List<Dictionary<int, (Vec3 Delta, float Weight)>> undo = [];
     private Dictionary<int, (Vec3 Delta, float Weight)>? stroke;
 
-    private readonly Dictionary<string, int[]> partVertices;
 
     public MeshVolumeSolve(ModelParts model)
     {
@@ -158,25 +192,17 @@ internal sealed class MeshVolumeSolve
             Link(nodeTris[t + 2], nodeTris[t]);
         }
 
-        // THE RIM OF A HOLE NEVER MOVES. An edge used by exactly one face is a boundary, and there are three
-        // things it can be, none of which this may touch: the seam where the next model file's geometry
-        // continues (a body arrives as several models and welding never sees across the join), an authored
-        // socket whose far side is not ours at all, or the open end of a garment. Measured on one body, a
-        // relax that moved 14 such vertices prised an 8-edge crotch socket open into a visible gash.
-        frozen = new bool[nodeCount];
-        var edgeUse = new Dictionary<long, int>();
-        for (int t = 0; t + 2 < nodeTris.Length; t += 3)
-            for (int k = 0; k < 3; k++)
-            {
-                int a = nodeTris[t + k], b = nodeTris[t + (k + 1) % 3];
-                long key = a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
-                edgeUse[key] = edgeUse.TryGetValue(key, out var c) ? c + 1 : 1;
-            }
-        foreach (var (key, uses) in edgeUse)
+        // Open edges MOVE. They used to be pinned — an edge used by one face can be the seam where the next
+        // model file continues, and moving one side of that tears the join — but a garment's hem, neckline and
+        // sleeve ends are open edges too, and pinning them made the brush refuse to pull cloth away anywhere
+        // near one: the slope limit then held every node a few triangles in to a few millimetres. A torn seam
+        // is visible and undoable per stroke; a brush that will not pull a hem out has no workaround.
+        skin = new bool[nodeCount];
+        foreach (var part in model.Parts)
         {
-            if (uses != 1) continue;
-            frozen[(int)(key >> 32)] = true;
-            frozen[(int)(key & 0xFFFFFFFF)] = true;
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+                if (v >= 0 && v < vc) skin[nodeOf[v]] = true;
         }
 
         nodeNormal = new Vec3[nodeCount];
@@ -212,18 +238,84 @@ internal sealed class MeshVolumeSolve
                     nodeNormal[n] = Unit(face[n]);
         }
 
+        pullDir = (Vec3[])nodeNormal.Clone();
+        aimedFromSkin = new bool[nodeCount];
+        AimAwayFromSkin();
+        initialPull = (Vec3[])pullDir.Clone();
+
         nodeDelta = new Vec3[nodeCount];
         nodeWeight = new float[nodeCount];
-        locked = new bool[nodeCount];
         vertDelta = new Vec3[vc];
         vertNrm = (Vec3[])baseNrm.Clone();
 
-        partVertices = model.Parts.ToDictionary(
-            p => p.Label,
-            p => p.Triangles.Distinct().Where(v => v >= 0 && v < vc).ToArray(),
-            StringComparer.Ordinal);
-
         MeanEdge = SecondSkinWriter.MeanEdgeLength(nodeAt, adj, Enumerable.Range(0, nodeCount).ToList());
+    }
+
+    /// <summary>
+    /// Point every cloth node's pull away from the skin around it — see <see cref="pullDir"/>.
+    /// <para/>
+    /// The direction is the field of the nearby skin points, each pushing the cloth point away with a weight
+    /// of one over the distance squared, rather than the direction to the single nearest one. Nearest-point
+    /// jitters from vertex to vertex of the skin mesh — a few degrees either way at every step — and a
+    /// displacement tens of millimetres long turns a few degrees into a visibly rough surface. The field is
+    /// smooth by construction, is dominated by the skin right under the cloth, and where the cloth hangs
+    /// between two limbs points away from both.
+    /// <para/>
+    /// Searched outward in rings so a point close to the body pays for its own cell neighbourhood only, and a
+    /// point hanging far off it — the flare of a skirt — still finds skin. A model with no skin at all leaves
+    /// every direction on its normal.
+    /// </summary>
+    private void AimAwayFromSkin()
+    {
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (!skin[n]) continue;
+            var key = Cell(nodeAt[n]);
+            if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
+            list.Add(n);
+        }
+        if (grid.Count == 0) return;
+
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (skin[n]) continue;
+            var p = nodeAt[n];
+            var (cx, cy, cz) = Cell(p);
+            double fx = 0, fy = 0, fz = 0;
+            bool found = false;
+
+            // Rings of 1, 3 and 8 cells: a hand's width, then a forearm's, then far enough for a long skirt.
+            foreach (int reach in SkinReach)
+            {
+                for (int x = cx - reach; x <= cx + reach; x++)
+                for (int y = cy - reach; y <= cy + reach; y++)
+                for (int z = cz - reach; z <= cz + reach; z++)
+                {
+                    if (!grid.TryGetValue((x, y, z), out var near)) continue;
+                    foreach (int s in near)
+                    {
+                        double dx = p.X - nodeAt[s].X, dy = p.Y - nodeAt[s].Y, dz = p.Z - nodeAt[s].Z;
+                        double d2 = dx * dx + dy * dy + dz * dz;
+                        if (d2 < 1e-12) continue;
+                        double w = 1.0 / (d2 * Math.Sqrt(d2));      // unit direction over distance squared
+                        fx += dx * w; fy += dy * w; fz += dz * w;
+                        found = true;
+                    }
+                }
+                if (found) break;
+                fx = fy = fz = 0;
+            }
+            if (!found) continue;
+
+            var dir = Unit(new Vec3((float)fx, (float)fy, (float)fz));
+            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
+            pullDir[n] = dir;
+            aimedFromSkin[n] = true;
+        }
+
+        static (int, int, int) Cell(Vec3 v)
+            => ((int)MathF.Floor(v.X / SkinCell), (int)MathF.Floor(v.Y / SkinCell), (int)MathF.Floor(v.Z / SkinCell));
     }
 
     public IReadOnlyList<MeshSpan> Spans { get; }
@@ -257,23 +349,6 @@ internal sealed class MeshVolumeSolve
     }
 
     /// <summary>
-    /// Parts the brush may not touch, by label. The part list beside the viewport is a lock list rather than
-    /// a selection: the thing a user needs while brushing a hip is for the belt over it to hold still.
-    /// </summary>
-    public void SetLocked(IReadOnlySet<string> labels)
-    {
-        var next = new bool[nodeCount];
-        foreach (var label in labels)
-        {
-            if (!partVertices.TryGetValue(label, out var vs)) continue;
-            foreach (int v in vs) next[nodeOf[v]] = true;
-        }
-        locked = next;
-    }
-
-    public void BeginStroke() => stroke = [];
-
-    /// <summary>
     /// One dab: push every node inside the brush out along its own normal, by <paramref name="strength"/>
     /// scaled by the falloff. Negative strength pulls in.
     /// </summary>
@@ -289,7 +364,7 @@ internal sealed class MeshVolumeSolve
 
         for (int n = 0; n < nodeCount; n++)
         {
-            if (frozen[n] || locked[n]) continue;
+            if (skin[n]) continue;
 
             float dx = nodeAt[n].X - c.X, dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
             float d2 = dx * dx + dy * dy + dz * dz;
@@ -298,7 +373,7 @@ internal sealed class MeshVolumeSolve
             float w = Falloff(MathF.Sqrt(d2) / radius);
             if (w <= 0f) continue;
 
-            var dir = nodeNormal[n];
+            var dir = pullDir[n];
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
 
             // Recorded before the first change of this stroke, not on every dab: a stroke drags over the
@@ -350,8 +425,51 @@ internal sealed class MeshVolumeSolve
     {
         var touched = stroke;
         stroke = null;
-        if (touched is { Count: > 0 }) undo.Add(touched);
+        if (touched is { Count: > 0 })
+        {
+            undo.Add(touched);
+            SmoothStroke(touched.Keys);
+        }
         Settle();
+    }
+
+    /// <summary>
+    /// Smooth the displacement of the nodes one stroke touched, lightly.
+    /// <para/>
+    /// TAUBIN, not a plain average, and that choice is the whole difference between this and the slope limit
+    /// it replaced. Averaging a displacement toward its neighbours also shrinks it — the peak of a pull sinks
+    /// toward the untouched cloth around it — and that shrinking was exactly the snap-back seen in game when
+    /// the button came up. A Taubin pair steps toward the average and then a touch further back out, which
+    /// takes the roughness out of a stroke (the jitter of dabs landing frame by frame) while leaving its bulk
+    /// where the user put it.
+    /// <para/>
+    /// Only the stroke's own nodes are written, so each stroke is smoothed once rather than every earlier one
+    /// being smoothed again each time — and so undo, which restores exactly those nodes, stays exact.
+    /// Neighbours outside the stroke are read, so its rim blends into what is already there. Skin nodes are
+    /// neither written nor, since their displacement is zero, able to drag anything along.
+    /// </summary>
+    private void SmoothStroke(IEnumerable<int> touched)
+    {
+        var nodes = touched.Where(n => !skin[n] && adj[n].Count > 0).ToArray();
+        if (nodes.Length == 0) return;
+
+        var next = new Vec3[nodes.Length];
+        for (int round = 0; round < SmoothRounds; round++)
+        foreach (float step in TaubinSteps)
+        {
+            for (int i = 0; i < nodes.Length; i++)
+            {
+                int n = nodes[i];
+                float sx = 0f, sy = 0f, sz = 0f;
+                foreach (int k in adj[n]) { sx += nodeDelta[k].X; sy += nodeDelta[k].Y; sz += nodeDelta[k].Z; }
+                float inv = 1f / adj[n].Count;
+                var d = nodeDelta[n];
+                next[i] = new Vec3(d.X + (sx * inv - d.X) * step,
+                                   d.Y + (sy * inv - d.Y) * step,
+                                   d.Z + (sz * inv - d.Z) * step);
+            }
+            for (int i = 0; i < nodes.Length; i++) nodeDelta[nodes[i]] = next[i];
+        }
     }
 
     public void Undo()
@@ -368,6 +486,7 @@ internal sealed class MeshVolumeSolve
     {
         Array.Clear(nodeDelta);
         Array.Clear(nodeWeight);
+        Array.Copy(initialPull, pullDir, nodeCount);
         undo.Clear();
         stroke = null;
         Dirty = false;
@@ -376,36 +495,38 @@ internal sealed class MeshVolumeSolve
 
     private void Settle()
     {
-        // Both passes at NODE level. LimitSlopeVector only ever pulls a displacement toward zero, so it
-        // cannot invent movement on an untouched node or unpin the boundary.
-        SecondSkinWriter.LimitSlopeVector(nodeDelta, nodeAt, adj, nodeCount, MaxSlope);
+        // NO SLOPE LIMIT. It used to run here, and it is what made a pull snap back on release: it evens out
+        // neighbours by pulling the larger displacement toward the smaller, and on a hem or a thin double-sided
+        // garment neighbouring nodes legitimately differ a lot — so it quietly took back most of what the user
+        // had just painted, only once they let go. Smoothing is SmoothStroke's job now, which does not shrink;
+        // what the limit guarded against, faces passing through one another, is the unfold's.
         SecondSkinWriter.UnfoldTriangles(nodeAt, nodeDelta, nodeTris, null);
 
-        // Frozen nodes again, AFTER both passes. Neither pass knows about the boundary, and the slope limit
-        // reaches across an edge — so a rim node beside a heavily brushed one can be dragged off zero by a
-        // pass whose whole job is to reduce differences.
+        // Skin again, after the unfold, which knows nothing about it.
         for (int n = 0; n < nodeCount; n++)
-            if (frozen[n] || locked[n]) { nodeDelta[n] = default; nodeWeight[n] = 0f; }
+            if (skin[n]) { nodeDelta[n] = default; nodeWeight[n] = 0f; }
 
         Spread();
 
         vertNrm = SecondSkinWriter.RelaxedNormals(
             basePos, baseNrm, vertDelta, nodeOf, nodeWeight, nodeNormal, tris);
 
-        // Re-aim for the next stroke, from the surface as it now is — see nodeNormal. Only where something
-        // moved: elsewhere the authored normal is still the best answer and re-deriving it would drift.
+        // Re-aim, for the next stroke, the pulls that follow a normal — from the surface as it now is. Inside a
+        // concavity normals point sideways ACROSS the gap, so repeatedly pulling one spot along the directions
+        // it started with drives the walls apart instead of outward. Pulls aimed from skin are left alone:
+        // the skin has not moved, and a point pulled away from it is still on the same line.
         var accum = new Vec3[nodeCount];
         for (int i = 0; i < vertDelta.Length; i++)
         {
             int n = nodeOf[i];
-            if (nodeWeight[n] <= 0f) continue;
+            if (nodeWeight[n] <= 0f || aimedFromSkin[n]) continue;
             accum[n] = new Vec3(accum[n].X + vertNrm[i].X, accum[n].Y + vertNrm[i].Y, accum[n].Z + vertNrm[i].Z);
         }
         for (int n = 0; n < nodeCount; n++)
         {
-            if (nodeWeight[n] <= 0f) continue;
+            if (nodeWeight[n] <= 0f || aimedFromSkin[n]) continue;
             var u = Unit(accum[n]);
-            if (u.X != 0f || u.Y != 0f || u.Z != 0f) nodeNormal[n] = u;
+            if (u.X != 0f || u.Y != 0f || u.Z != 0f) pullDir[n] = u;
         }
     }
 
