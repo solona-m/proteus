@@ -3189,6 +3189,37 @@ public class CompositorService : IDisposable
     private bool IsOurGlassesWorn(int ourSet) => CurrentMetSets().Contains(ourSet);
 
     /// <summary>
+    /// Whether the pair on the player's face is our carrier ITEM, not merely a pair drawing its model.
+    /// <para/>
+    /// The carrier is Glasses row 1, model e5501 — and e5501 is also the White and Grey Oval Spectacles, so
+    /// matching the model set alone took those off the moment the player put them on, calling them ours.
+    /// Glamourer's state names the item exactly; the model set is kept as a precondition because it is free
+    /// and settles the common "some other pair entirely" case without an IPC.
+    /// <para/>
+    /// When Glamourer's state cannot be read, falls back to whether we remember equipping it — never to the
+    /// model alone. Any thread: the state read is marshalled onto the framework thread.
+    /// </summary>
+    private bool IsOurGlassesItemWorn(InvisibleGlasses.Identity g)
+    {
+        if (!IsOurGlassesWorn(g.ModelSet)) return false;
+
+        ulong? bonusId = null;
+        try
+        {
+            bonusId = Plugin.Framework.RunOnFrameworkThread(
+                () => glamourer.GetObjectState(0)?["Bonus"]?["Glasses"]?["BonusId"]?.ToObject<ulong?>())
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            log.Debug("[Proteus] invisible glasses: Glamourer state read failed ({0})", ex.GetType().Name);
+        }
+
+        // Glamourer packs a bonus item as (type << 48) | row id.
+        return bonusId is { } id ? (id & 0x0000_FFFF_FFFF_FFFFUL) == g.ItemId : _injectedGlasses;
+    }
+
+    /// <summary>
     /// Keep the invisible-glasses injection in line with the current composite. When the feature is on and a
     /// shell is being built but NO glasses/helmet are worn, have Glamourer equip our invisible pair so the
     /// shell can ride the facewear slot (captured as "_met" and hosted like any worn glasses). Pull OUR
@@ -3227,7 +3258,7 @@ public class CompositorService : IDisposable
             // only facewear it will host on is a carrier — ours, or an invisible item we may as well treat
             // as ours. Adopt it, so teardown and design matching both know this pair is Proteus's doing
             // even across a plugin reload that lost the flag while the item stayed equipped.
-            if (IsOurGlassesWorn(g.ModelSet)) _injectedGlasses = true;
+            if (IsOurGlassesItemWorn(g)) _injectedGlasses = true;
 
             var sinceInject = unchecked(Environment.TickCount64 - _lastGlassesInjectTick);
             if (MetSnapshotKnown && !AnyMetWorn() && sinceInject <= GlassesInjectCooldownMs)
@@ -3266,7 +3297,7 @@ public class CompositorService : IDisposable
             }
         }
         else if ((!config.AutoInvisibleGlasses || !gearWanted || (shellBuilt && !hostedOnFacewear))
-                 && IsOurGlassesWorn(g.ModelSet))
+                 && IsOurGlassesItemWorn(g))
         {
             // Feature off, nothing to host at all, or a shell built and went to a different host — in that
             // last case our carrier is still on the player's face but no longer redirected to the shell, so
@@ -3539,7 +3570,7 @@ public class CompositorService : IDisposable
     public void RemoveInjectedGlasses()
     {
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
-        bool ours = IsOurGlassesWorn(g.ModelSet) || (!MetSnapshotKnown && _injectedGlasses);
+        bool ours = IsOurGlassesItemWorn(g) || (!MetSnapshotKnown && _injectedGlasses);
         if (ours && SetGlassesOnFramework(0))
             _injectedGlasses = false;
     }
@@ -7294,11 +7325,49 @@ public class CompositorService : IDisposable
                         // — hiding the carrier item's frames — rather than appending. See ChooseHost.
                         int? invisibleGlassesSet = config.AutoInvisibleGlasses
                             ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet : null;
+                        // The chooser knows our pair only by model set, and a player's Oval Spectacles share
+                        // it — handed the set, it would REPLACE their pair's model with the shell and make
+                        // the glasses they just put on vanish. A pair on our set that is not our item hides
+                        // the set from it; with a pair worn, the pending-injection route it also gates cannot
+                        // apply anyway.
+                        if (invisibleGlassesSet is int ourSet && IsOurGlassesWorn(ourSet)
+                            && InvisibleGlasses.Resolve(Plugin.DataManager, log) is { } ourGlasses
+                            && !IsOurGlassesItemWorn(ourGlasses))
+                            invisibleGlassesSet = null;
 
                         // Snapshot the volatile shape set ONCE: the shell is baked from it and its change
                         // signature is derived from it, so both must see the same value even if a concurrent
                         // post-settle read swaps _bodyShapeSnapshot mid-build.
                         var bodyShapes = _bodyShapeSnapshot;
+
+                        // The host material folder, read NOW rather than off activeMtrl. That snapshot is
+                        // stamped at the redraw that swaps an accessory in, before the accessory's materials
+                        // load, so a freshly worn host is absent from it — and published under the wrong
+                        // v#### on every composite, since each one's own redraw stamps it early again. A fresh
+                        // walk catches the materials that have landed since; the slot variants answer for a
+                        // host whose materials still have not. Used ONLY for the folder: the rest of this
+                        // composite keyed off activeMtrl and must keep agreeing with itself.
+                        HashSet<string>? hostMtrl = activeMtrl;
+                        List<Interop.EquippedSlotVariants.Slot>? slotVariants = null;
+                        try
+                        {
+                            var live = Plugin.Framework.RunOnFrameworkThread(() =>
+                            {
+                                var player = Plugin.ObjectTable.LocalPlayer;
+                                return (Materials: penumbra.GetActivePlayerMaterialPaths(),
+                                        Slots: Interop.EquippedSlotVariants.Read(player?.Address ?? 0));
+                            }).GetAwaiter().GetResult();
+                            // Empty is a mid-teardown walk; the snapshot is the better answer then.
+                            if (live.Materials is { Count: > 0 }) hostMtrl = live.Materials;
+                            slotVariants = live.Slots;
+                        }
+                        // Everything, cancellation included, for the reason the equipped-model retry above
+                        // gives: a throw here would cost the whole shell for a read that has a fallback.
+                        catch (Exception ex)
+                        {
+                            log.Debug("[Proteus] second skin: live host-variant read could not run ({0})",
+                                ex.GetType().Name);
+                        }
 
                         // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling —
                         // EXCEPT for a mod whose art has to be un-mirrored. That opt-in asks "may Proteus
@@ -7310,7 +7379,7 @@ public class CompositorService : IDisposable
                             modDir => unmirrorMods.Contains(modDir)
                                    || config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
-                            _drawnRaceCode, activeMtrl,
+                            _drawnRaceCode, hostMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
                             InvisibleGlasses.Resolve(Plugin.DataManager, log)?.Variant,
                             _humanPartModels, contentLayers,
@@ -7323,7 +7392,8 @@ public class CompositorService : IDisposable
                             // a shell cut from the same face would read OUR doubled model and double it again.
                             facePlan.UpstreamModels,
                             // The size the prefetch above warmed at — see `gs`.
-                            shellTexSize: gs);
+                            shellTexSize: gs,
+                            equippedSlotVariants: slotVariants);
                         if (shells != null)
                         {
                             shellBuilt = true;
