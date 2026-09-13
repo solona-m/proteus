@@ -160,11 +160,23 @@ public sealed class PartsPanel
     /// </summary>
     private bool showModelView;
 
-    /// <summary>Waiting for a click on the character to choose the garment to edit.</summary>
-    private bool picking;
-
     /// <summary>Where strokes come from this frame.</summary>
     private IBrushSurface Surface => showModelView ? viewport : liveBrush;
+
+    /// <summary>Puts the edit on the character while painting on it — see <see cref="LiveBrushPreview"/>.</summary>
+    private readonly LiveBrushPreview preview;
+
+    /// <summary>The solve has changed since the character last showed it.</summary>
+    private bool previewDirty;
+
+    private long lastPreviewAt;
+
+    /// <summary>
+    /// Least time between previews while the brush is down. Each is a model rebuild, a file write and a gear
+    /// reload; faster than this the reloads queue behind one another and the character lags further behind
+    /// the brush rather than closer.
+    /// </summary>
+    private const long PreviewIntervalMs = 150;
 
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport, LiveBrush liveBrush,
@@ -174,6 +186,8 @@ public sealed class PartsPanel
         this.compositor = compositor;
         this.viewport = viewport;
         this.liveBrush = liveBrush;
+        preview = new LiveBrushPreview(penumbra, compositor, log);
+        LiveBrushPreview.CleanUp();
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -203,6 +217,12 @@ public sealed class PartsPanel
         ImGui.TextDisabled(ps.Intro);
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
+
+        if (modDir == null && !autoPicked)
+        {
+            autoPicked = true;
+            AutoPickWorn();
+        }
 
         DrawLivePick();
         DrawModPicker();
@@ -248,7 +268,11 @@ public sealed class PartsPanel
         //
         // Nothing is drawn below the row any more — the controls moved into the side panel — so there is no
         // tail to measure and leave room for: the row takes all the height the window has.
-        float height = ProteusStyle.S(360f);
+        // Not a fixed height when the window is fitting itself: the side panel's own content, measured last frame,
+        // so the fit leaves every control on screen instead of behind the panel's scrollbar.
+        // Plus the same 4 px the fill branch below takes off, so the row the window was fitted to is exactly the
+        // row fill mode hands back — and the panel is not left a sliver short, with a scrollbar, once it does.
+        float height = MathF.Max(ProteusStyle.S(360f), sidePanelContent + ProteusStyle.S(4f));
         if (fillHeight)
             height = MathF.Max(ImGui.GetContentRegionAvail().Y - reserveBelow - ProteusStyle.S(4f),
                                ProteusStyle.S(200f));
@@ -268,6 +292,7 @@ public sealed class PartsPanel
                 if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref showModelView))
                 {
                     FlushPending();   // a stroke's pending save belongs to the surface it was painted on
+                    EndLivePreview(refreshGame: true);
                     viewport.Recolour();
                 }
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.ShowModelViewTip);
@@ -276,6 +301,9 @@ public sealed class PartsPanel
                 DrawToolPicker();
                 ImGui.Separator();
                 if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
+
+                // Window-local, so it already counts any scroll; plus the panel's bottom padding and border.
+                sidePanelContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
             }
         }
 
@@ -297,31 +325,163 @@ public sealed class PartsPanel
         }
 
         PumpBrush();
+        TickLivePreview();
     }
 
     /// <summary>
-    /// The button that chooses a garment by clicking it on the character, and the pick itself.
+    /// Put the edit on the character when it has changed: throttled while the brush is down, at once when it is
+    /// not (the settled stroke, an undo). Painting in the viewer needs none of this — the viewer is its preview.
+    /// </summary>
+    private void TickLivePreview()
+    {
+        if (showModelView || !previewDirty || preview.Busy) return;
+        if (volume == null || brushBase == null || modelIndex < 0) { previewDirty = false; return; }
+        bool customizePart = TargetIsCustomizePart;
+
+        // This kind of part turned out not to reload in place (found out after a push, once the save had already
+        // counted on it): show the finished stroke the old way, once the brush is up — preview taken down first,
+        // so the redraw loads the saved file and not the last preview that did not land.
+        if (preview.UnsupportedFor(customizePart))
+        {
+            if (Surface.Painting) return;
+            previewDirty = false;
+            if (preview.Active) preview.End(redraw: true);
+            else compositor.RedrawForChangedModel();
+            return;
+        }
+
+        long now = Environment.TickCount64;
+        if (Surface.Painting && now - lastPreviewAt < PreviewIntervalMs) return;
+
+        byte[] bytes;
+        try { bytes = MeshVolumeService.Inflate(brushBase, volume).Model; }
+        catch (Exception ex)
+        {
+            // The save will say the same thing properly; the preview just stops trying.
+            log.Warning("[Proteus] live brush: preview could not build the model: {0}", ex.Message);
+            previewDirty = false;
+            return;
+        }
+
+        // Every game path the mod points at this file — the one the character is drawing is among them.
+        var file = models[modelIndex].File.Replace('\\', '/');
+        var gamePaths = redirects
+            .Where(r => string.Equals(r.File.Replace('\\', '/'), file, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.GamePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (preview.Push(bytes, gamePaths, customizePart))
+        {
+            previewDirty = false;
+            lastPreviewAt = now;
+        }
+    }
+
+    /// <summary>The model being edited is hair, face, ears or tail rather than gear — reloaded a different way.</summary>
+    private bool TargetIsCustomizePart
+        => modelIndex >= 0 && modelIndex < models.Count && LiveBrushPreview.IsCustomizePart(models[modelIndex].GamePath);
+
+    /// <summary>
+    /// Take the preview off the character, so it draws the mod's own (saved) file again. Before anything that
+    /// changes which model or which file the preview stands in for.
+    /// </summary>
+    private void EndLivePreview(bool refreshGame)
+    {
+        previewDirty = false;
+        preview.End(redraw: refreshGame);
+    }
+
+    /// <summary>
+    /// The tab is being left, closed or torn down: save anything waiting and take the preview down.
+    /// </summary>
+    /// <param name="refreshGame">False on teardown, when nothing should be poked beyond landing the file.</param>
+    public void Leave(bool refreshGame = true)
+    {
+        FlushPending(refreshGame);
+        EndLivePreview(refreshGame);
+        autoPicked = false;   // the next visit may find different gear on
+    }
+
+    /// <summary>
+    /// Choosing a garment by clicking it on the character — always on while painting on the character, with a
+    /// line above the mod picker saying so.
     /// <para/>
-    /// Above the mod picker because it replaces it: finding the right mod among hundreds, then the right model
-    /// among its sizes, is the slowest part of fixing a clip, and the character already knows the answer.
+    /// Always on, not behind a button, because it replaces the pickers: finding the right mod among hundreds,
+    /// then the right model among its sizes, is the slowest part of fixing a clip, and the character already
+    /// knows the answer. It does not fight the brush: a click on the garment being brushed paints, and only a
+    /// click on a DIFFERENT worn garment switches to it (see LiveBrush.Update).
     /// </summary>
     private void DrawLivePick()
     {
-        var ps = Strings.Parts;
-        using (ProteusStyle.Selected(picking))
-            if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Crosshairs, picking ? ps.LivePicking : ps.LivePick))
-                picking = !picking;
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.LivePickTip);
-
-        if (picking && penumbra.GetModDirectory() is { } modsRoot)
-            liveBrush.ArmPick(modsRoot, OnLivePicked);
+        if (showModelView || penumbra.GetModDirectory() is not { } modsRoot) return;
+        liveBrush.ArmPick(modsRoot, OnLivePicked);
+        ImGui.TextDisabled(Strings.Parts.LivePickTip);
         ImGui.Spacing();
     }
 
-    /// <summary>A garment was clicked on the character: open its mod and model.</summary>
+    /// <summary>
+    /// Open the model of the chosen mod that the character is wearing — the row the model picker shows green —
+    /// so picking a mod lands on the size actually on screen instead of an empty model box. When several of the
+    /// mod's models are worn, the same slot order as <see cref="AutoPickWorn"/>: body, legs, hands, feet, head.
+    /// Nothing is chosen when the mod is not being worn.
+    /// </summary>
+    private void SelectWornModel()
+    {
+        if (modDir == null || models.Count == 0) return;
+        var worn = WornFiles()
+            .Where(w => string.Equals(w.Mod, modDir, StringComparison.OrdinalIgnoreCase))
+            .Select(w => w.Rel)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (worn.Count == 0) return;
+
+        int best = -1, bestRank = int.MaxValue;
+        for (int i = 0; i < models.Count; i++)
+        {
+            if (!worn.Contains(models[i].File.Replace('\\', '/'))) continue;
+            int rank = Array.FindIndex(AutoPickSlots, s => models[i].GamePath.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+            if (rank < 0) rank = AutoPickSlots.Length;
+            if (rank < bestRank) { best = i; bestRank = rank; }
+        }
+        if (best >= 0) SelectModel(best);
+    }
+
+    /// <summary>Tried once per visit to the tab, so a choice the user clears is not forced back on them.</summary>
+    private bool autoPicked;
+
+    /// <summary>Which worn slot to open first when the tab is entered with nothing chosen: body, then legs.</summary>
+    private static readonly string[] AutoPickSlots = ["_top.mdl", "_dwn.mdl", "_glv.mdl", "_sho.mdl", "_met.mdl"];
+
+    /// <summary>
+    /// Open the garment most likely to be the one needing a fix, so the tab arrives ready to paint: the worn
+    /// chest piece if it comes from a mod, else the legs, then hands, feet and head — and the exact file the
+    /// character is wearing, which for a mod offering sizes is the size selected in Penumbra.
+    /// </summary>
+    private void AutoPickWorn()
+    {
+        if (penumbra.GetModDirectory() is not { } root
+            || penumbra.GetActivePlayerModelFiles() is not { } files
+            || penumbra.GetActivePlayerModelGamePaths() is not { } gamePaths)
+            return;
+
+        string? best = null;
+        int bestRank = int.MaxValue;
+        foreach (var file in files)
+        {
+            if (!gamePaths.TryGetValue(BodyShapeReader.PathKey(file), out var gamePath)) continue;
+            int rank = Array.FindIndex(AutoPickSlots, s => gamePath.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+            if (rank < 0 || rank >= bestRank) continue;
+            if (!HatCompatService.InMods(file, root, out var modRoot, out _)) continue;
+            if (string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+                continue;
+            best = file;
+            bestRank = rank;
+        }
+        if (best != null) OnLivePicked(best);
+    }
+
+    /// <summary>A garment was clicked on the character (or chosen for them on entry): open its mod and model.</summary>
     private void OnLivePicked(string file)
     {
-        picking = false;
         if (penumbra.GetModDirectory() is not { } modsRoot
             || !HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
             return;
@@ -338,11 +498,17 @@ public sealed class PartsPanel
             return;
         }
         if (index != modelIndex) SelectModel(index);
-        if (tool == Tool.Navigate) tool = Tool.Inflate;   // they clicked it to fix it
     }
 
     /// <summary>Width of the tool panel left of the model, before UI scaling.</summary>
     private const float SidePanelWidth = 250f;
+
+    /// <summary>How tall the side panel's controls came out last frame, scaled — the height it asks for while the
+    /// window fits itself to the tab.</summary>
+    private float sidePanelContent;
+
+    /// <summary>How tall the tab's controls need to be, so the window can fit itself again when they grow.</summary>
+    public float ControlsHeight => sidePanelContent;
 
     /// <summary>
     /// Ctrl+Z takes back the last brush stroke — the same as the Undo stroke button, saving and redrawing at
@@ -438,7 +604,11 @@ public sealed class PartsPanel
             bool picked;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Ok, worn))
                 picked = ImGui.Selectable($"{label}##{dir}", dir == modDir);
-            if (picked && dir != modDir) SelectMod(dir);
+            if (picked && dir != modDir)
+            {
+                SelectMod(dir);
+                SelectWornModel();
+            }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(dir);
         }
         if (shown == 0)
@@ -486,6 +656,7 @@ public sealed class PartsPanel
     private void SelectMod(string dir)
     {
         FlushPending();   // before modDir changes, which the save needs to find the file
+        EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         modDir = dir;
         modelIndex = -1;
@@ -608,6 +779,7 @@ public sealed class PartsPanel
         // one — its bytes and its undo history go with the old model — so the waiting flag is dropped either
         // way; the failure is already on the status line.
         FlushPending();
+        EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         brushBase = null;
         modelIndex = index;
@@ -910,12 +1082,14 @@ public sealed class PartsPanel
                 Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f),
                 Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer),
                 _           => volume.Paint(at, radius,
-                                            brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f)),
+                                            brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f),
+                                            surface.ToViewer),
             };
             if (moved > 0)
             {
                 viewport.PositionOverride = volume.Positions();
                 viewport.GeometryChanged();
+                previewDirty = !showModelView;
             }
         }
 
@@ -1002,7 +1176,7 @@ public sealed class PartsPanel
         }
         else
         {
-            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 0.5f, "%.2f mm");
+            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 1f, "%.2f mm");
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
         }
 
@@ -1017,7 +1191,7 @@ public sealed class PartsPanel
         {
             ImGui.Spacing();
             ImGui.TextDisabled(vol.Dirty
-                ? string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, MeshVolumeSolve.MaxDisplacement * 1000f)
+                ? string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, vol.MaxDisplacement * 1000f)
                 : ps.BrushUntouched);
 
             // Undo and start-over save and redraw AT ONCE rather than on the debounce. The debounce exists to
@@ -1108,14 +1282,20 @@ public sealed class PartsPanel
         // bytes Penumbra still has in memory — see HatCompatWatcher, which learned it the hard way.
         if (!refreshGame) return;
         penumbra.ReloadModDirectory(modDir);
-        if (showModelView) compositor.RedrawForChangedModel();
-        else compositor.ReloadChangedGear();
+
+        // On the character, the preview shows the saved state: a new file, reloaded in place, no redraw. The
+        // mod's own file cannot be shown that way — the game hands back the model it has cached under that
+        // path — so everywhere else, and wherever Glamourer cannot reload in place, it is a full redraw.
+        if (!showModelView && !preview.UnsupportedFor(TargetIsCustomizePart)) previewDirty = true;
+        else if (preview.Active) EndLivePreview(refreshGame: true);
+        else compositor.RedrawForChangedModel();
     }
 
     private void RevertBrush()
     {
         if (ModRoot() is not { } root) return;
         brushChangedAt = -1;   // an edit waiting to save must not land on top of the restore
+        EndLivePreview(refreshGame: false);   // the redraw below replaces it with the restored file
 
         var result = MeshVolumeService.Revert(root);
         statusIsError = !result.Ok;

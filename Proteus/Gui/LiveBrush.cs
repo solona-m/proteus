@@ -130,8 +130,11 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
         try
         {
-            if (pickArmed) UpdatePick();
-            else UpdateBrush();
+            // The brush has first claim on the mouse. Picking only answers where the brush does not: over a
+            // different worn garment, or with no brush tool selected — so a click on the garment being edited
+            // paints it, and a click on anything else worn opens that instead.
+            if (brushArmed) UpdateBrush();
+            if (pickArmed && !Painting && !Hovering) UpdatePick(brushArmed ? targetKey : null);
         }
         catch (Exception ex)
         {
@@ -213,10 +216,14 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (model == null || model->ModelResourceHandle == null) continue;
             var handle = model->ModelResourceHandle;
             var name = handle->FileName.ToString();
-            if (string.IsNullOrEmpty(name) || BodyShapeReader.PathKey(name) != targetKey) continue;
+            // While painting, the character draws the brush's preview in place of the mod's file — the same
+            // garment, same vertex order, under a different name.
+            if (string.IsNullOrEmpty(name)
+                || (BodyShapeReader.PathKey(name) != targetKey && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))))
+                continue;
 
             var shapes = EnabledShapes(model, handle);
-            var key = targetKey + "|" + string.Join(",", shapes);
+            var key = targetKey + "|" + string.Join(",", shapes);   // the target, not the file: a new preview is not a new mesh
             if (key != meshKey)
             {
                 meshKey = key;
@@ -336,7 +343,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
     // ── pick mode ──────────────────────────────────────────────────────────
 
-    private void UpdatePick()
+    /// <param name="exclude">The garment the brush is on, which the brush answers for; null for none.</param>
+    private void UpdatePick(string? exclude)
     {
         var cb = LiveCharacter.Player(objects);
         if (cb == null || modsRoot == null || !pose.Read(cb) || !ScreenProjection.TryCapture(out var projection)) return;
@@ -353,6 +361,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             var name = handle->FileName.ToString();
             if (string.IsNullOrEmpty(name)) continue;
             var file = LiveCharacter.FilePath(name);
+            if (BodyShapeReader.PathKey(file) == exclude) continue;
             if (!HatCompatService.InMods(file, modsRoot, out _, out _)) continue;
 
             var shapes = EnabledShapes(model, handle);
@@ -388,10 +397,6 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             dl.AddText(s + origin + new Vector2(14, -8), 0xE0FFFFFFu, Path.GetFileName(bestFile!));
         }
 
-        if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-        {
-            pickArmedFrame = -10;
-            onPicked?.Invoke(bestFile!);
-        }
+        if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) onPicked?.Invoke(bestFile!);
     }
 }

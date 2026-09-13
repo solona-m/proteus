@@ -41,7 +41,21 @@ internal sealed class MeshVolumeSolve
     /// the skin, because pulling a garment visibly OFF the body is a different job from clearing a clip and
     /// wants far more room. Undo per stroke is what makes a generous ceiling safe.
     /// </summary>
-    public const float MaxDisplacement = 0.1f;
+    public const float GarmentMaxDisplacement = 0.1f;
+
+    /// <summary>
+    /// The same ceiling for hair, twice as far. Restyling hair — pushing a fringe back, lifting a ponytail
+    /// clear of the shoulders — moves strands much further than clearing a garment off the body does.
+    /// </summary>
+    public const float HairMaxDisplacement = 0.2f;
+
+    /// <summary>This model's ceiling: <see cref="HairMaxDisplacement"/> for a hairstyle, else
+    /// <see cref="GarmentMaxDisplacement"/>.</summary>
+    public float MaxDisplacement { get; }
+
+    /// <summary>A model is hair when it draws with a hair material (<c>mt_c0201h0162_hir_a.mtrl</c>).</summary>
+    internal static bool IsHairMaterial(string material)
+        => material.Contains("_hir", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Cell size of the grid skin points are bucketed into when aiming the pull, in metres. Big enough that
@@ -249,6 +263,7 @@ internal sealed class MeshVolumeSolve
         vertNrm = (Vec3[])baseNrm.Clone();
 
         MeanEdge = SecondSkinWriter.MeanEdgeLength(nodeAt, adj, Enumerable.Range(0, nodeCount).ToList());
+        MaxDisplacement = model.Parts.Any(p => IsHairMaterial(p.Material)) ? HairMaxDisplacement : GarmentMaxDisplacement;
     }
 
     /// <summary>
@@ -267,7 +282,7 @@ internal sealed class MeshVolumeSolve
     /// </summary>
     private void AimAwayFromSkin()
     {
-        var grid = new Dictionary<(int, int, int), List<int>>();
+        var grid = skinGrid;
         for (int n = 0; n < nodeCount; n++)
         {
             if (!skin[n]) continue;
@@ -313,9 +328,85 @@ internal sealed class MeshVolumeSolve
             pullDir[n] = dir;
             aimedFromSkin[n] = true;
         }
+    }
 
-        static (int, int, int) Cell(Vec3 v)
-            => ((int)MathF.Floor(v.X / SkinCell), (int)MathF.Floor(v.Y / SkinCell), (int)MathF.Floor(v.Z / SkinCell));
+    /// <summary>Skin nodes bucketed by <see cref="SkinCell"/>, filled once by <see cref="AimAwayFromSkin"/>.
+    /// Skin never moves, so the buckets never go stale.</summary>
+    private readonly Dictionary<(int, int, int), List<int>> skinGrid = [];
+
+    private static (int, int, int) Cell(Vec3 v)
+        => ((int)MathF.Floor(v.X / SkinCell), (int)MathF.Floor(v.Y / SkinCell), (int)MathF.Floor(v.Z / SkinCell));
+
+    /// <summary>
+    /// The clearance relax keeps between cloth and the skin under it. Small: enough that the two surfaces do not
+    /// fight over the same depth, not so much that it reads as the brush refusing to lie the cloth down.
+    /// </summary>
+    private const float SkinFloorGap = 0.001f;
+
+    /// <summary>
+    /// Each cloth node's height above the skin beneath it in the author's model, or NaN where no skin is within
+    /// reach; computed on first use. A node the author already had closer than <see cref="SkinFloorGap"/> — or
+    /// through the skin — keeps that as its floor: relax holds it where it was rather than shoving it out.
+    /// </summary>
+    private float[]? restClearance;
+
+    /// <summary>
+    /// The nearest skin node to <paramref name="p"/> within one grid cell each way (at least
+    /// <see cref="SkinCell"/>), and the point's height above it along that skin's outward normal.
+    /// </summary>
+    private bool SkinBeneath(Vec3 p, out int skinNode, out float height)
+    {
+        skinNode = -1;
+        height = 0f;
+        if (skinGrid.Count == 0) return false;
+
+        var (cx, cy, cz) = Cell(p);
+        float best = float.MaxValue;
+        for (int x = cx - 1; x <= cx + 1; x++)
+        for (int y = cy - 1; y <= cy + 1; y++)
+        for (int z = cz - 1; z <= cz + 1; z++)
+        {
+            if (!skinGrid.TryGetValue((x, y, z), out var near)) continue;
+            foreach (int s in near)
+            {
+                float dx = p.X - nodeAt[s].X, dy = p.Y - nodeAt[s].Y, dz = p.Z - nodeAt[s].Z;
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < best) { best = d2; skinNode = s; }
+            }
+        }
+        if (skinNode < 0) return false;
+
+        var nrm = nodeNormal[skinNode];
+        if (nrm.X == 0f && nrm.Y == 0f && nrm.Z == 0f) { skinNode = -1; return false; }
+        height = (p.X - nodeAt[skinNode].X) * nrm.X + (p.Y - nodeAt[skinNode].Y) * nrm.Y
+               + (p.Z - nodeAt[skinNode].Z) * nrm.Z;
+        return true;
+    }
+
+    /// <summary>
+    /// Lift a relaxed cloth node back above the skin under it, if it has sunk below the floor. Where the model
+    /// carries no skin beneath the point — most garments cut the body away wherever they cover it — nothing is
+    /// known to collide with, and the node is left to sink.
+    /// </summary>
+    private Vec3 KeepAboveSkin(int n, Vec3 delta)
+    {
+        var p = new Vec3(nodeAt[n].X + delta.X, nodeAt[n].Y + delta.Y, nodeAt[n].Z + delta.Z);
+        if (!SkinBeneath(p, out int s, out float height)) return delta;
+
+        if (restClearance == null)
+        {
+            restClearance = new float[nodeCount];
+            Array.Fill(restClearance, float.NaN);
+        }
+        if (float.IsNaN(restClearance[n]))
+            restClearance[n] = SkinBeneath(nodeAt[n], out _, out float rest) ? rest : SkinFloorGap;
+
+        float floor = MathF.Min(SkinFloorGap, restClearance[n]);
+        if (height >= floor) return delta;
+
+        var nrm = nodeNormal[s];
+        float lift = floor - height;
+        return new Vec3(delta.X + nrm.X * lift, delta.Y + nrm.Y * lift, delta.Z + nrm.Z * lift);
     }
 
     public IReadOnlyList<MeshSpan> Spans { get; }
@@ -352,11 +443,18 @@ internal sealed class MeshVolumeSolve
     /// One dab: push every node inside the brush out along its own normal, by <paramref name="strength"/>
     /// scaled by the falloff. Negative strength pulls in.
     /// </summary>
+    /// <param name="toViewer">Unit direction toward the viewer, in model space: the "out" for a node that has
+    /// no direction of its own. A double-sided surface — hair is built entirely of cards drawn front and back
+    /// on the same positions — welds each point's two copies into one node whose normals cancel exactly, and
+    /// with no skin in the model to push away from either, that node has nothing to move along. Measured on a
+    /// real hairstyle: 22,876 of 22,896 nodes. Out is then toward the camera and in is away from it, which is
+    /// what pushing on the side being looked at means. Zero leaves such nodes where they are.</param>
     /// <returns>How many nodes moved, so a stroke that is reaching nothing can say so.</returns>
-    public int Paint(Vector3 centre, float radius, float strength)
+    public int Paint(Vector3 centre, float radius, float strength, Vector3 toViewer = default)
     {
         if (radius <= 0f || strength == 0f) return 0;
         stroke ??= [];
+        var viewer = Unit(new Vec3(toViewer.X, toViewer.Y, toViewer.Z));
 
         var c = new Vec3(centre.X, centre.Y, centre.Z);
         float r2 = radius * radius;
@@ -374,6 +472,7 @@ internal sealed class MeshVolumeSolve
             if (w <= 0f) continue;
 
             var dir = pullDir[n];
+            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) dir = viewer;   // double-sided: see toViewer
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
 
             // Recorded before the first change of this stroke, not on every dab: a stroke drags over the
@@ -425,7 +524,9 @@ internal sealed class MeshVolumeSolve
     /// A PLAIN AVERAGE per dab, on positions, the way 3ds Max's relax works: each node steps toward its
     /// neighbours' average and nothing steps it back. That shrinks — a curved surface flattens and pulls in
     /// on itself, and cloth over a curve sinks toward the body — and that is deliberate: it is what users
-    /// coming from Max expect the brush to do. The stroke-end smoothing of a pull (<see cref="SmoothStroke"/>)
+    /// coming from Max expect the brush to do — except onto skin the model itself carries: there it stops
+    /// <see cref="SkinFloorGap"/> above it (<see cref="KeepAboveSkin"/>), and only where the model has no skin
+    /// beneath does it sink freely. The stroke-end smoothing of a pull (<see cref="SmoothStroke"/>)
     /// is still a Taubin pair, because there shrinking would undo the pull. The full 3-D step, tangential
     /// part included: most of what makes a relax look smooth is tangential, and a normal-only step leaves
     /// the facets.
@@ -483,9 +584,9 @@ internal sealed class MeshVolumeSolve
 
             // One step toward the average, half the way at full rate — Max's default relax value of 0.5.
             float f = SmoothLambda * rate * weights[i];
-            next[i] = new Vec3(d.X + (sx * inv - px) * f,
-                               d.Y + (sy * inv - py) * f,
-                               d.Z + (sz * inv - pz) * f);
+            next[i] = KeepAboveSkin(n, new Vec3(d.X + (sx * inv - px) * f,
+                                                d.Y + (sy * inv - py) * f,
+                                                d.Z + (sz * inv - pz) * f));
         }
         for (int i = 0; i < nodes.Count; i++) nodeDelta[nodes[i]] = next[i];
 

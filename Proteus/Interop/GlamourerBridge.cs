@@ -385,9 +385,21 @@ public class GlamourerBridge : IDisposable
 
     private bool WithinOwnReapplyEcho()
     {
+        if (Environment.TickCount64 < Interlocked.Read(ref ownEchoUntil)) return true;
         var since = unchecked(Environment.TickCount64 - Interlocked.Read(ref lastOwnReapplyTick));
         return since >= 0 && since < OwnReapplyEchoMs;
     }
+
+    /// <summary>Until this tick, a reapply of the local player is one Proteus caused without calling it itself.</summary>
+    private long ownEchoUntil;
+
+    /// <summary>
+    /// Glamourer is about to reapply the local player ON ITS OWN, because of something Proteus changed — it
+    /// reapplies every actor in a collection a few frames after a Penumbra temporary mod changes there. Treat
+    /// that reapply's signals as our own echo until <paramref name="untilTick"/>, exactly as if Proteus had
+    /// called <see cref="ReapplyPlayerState"/>.
+    /// </summary>
+    public void ExpectOwnReapplyUntil(long untilTick) => Interlocked.Exchange(ref ownEchoUntil, untilTick);
 
     /// <summary>
     /// How long ago someone other than Proteus had Glamourer reapply the local player's state, or

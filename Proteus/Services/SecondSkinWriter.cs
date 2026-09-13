@@ -15410,10 +15410,20 @@ public static class SecondSkinWriter
 
             // Blend against the NODE-averaged source normal, not this vertex's own, so welded copies
             // land on identical bytes; the weight fade rejoins the untouched shell without a crease.
-            outN[i] = Normalize(new Vec3(
+            var blended = Normalize(new Vec3(
                 src.X + (fresh.X - src.X) * w,
                 src.Y + (fresh.Y - src.Y) * w,
                 src.Z + (fresh.Z - src.Z) * w)) ?? baseNrm[i];
+
+            // Facing kept PER VERTEX. A double-sided surface — hair cards, a skirt's lining drawn on the same
+            // positions — welds its front and back copies into one node, and their normals point opposite
+            // ways; handing both copies the node's one answer shades one side inside out. A vertex whose own
+            // normal disagrees with the result takes it reversed. On an ordinary surface the two agree and
+            // nothing changes.
+            var own = baseNrm[i];
+            if (own.X * blended.X + own.Y * blended.Y + own.Z * blended.Z < 0f)
+                blended = new Vec3(-blended.X, -blended.Y, -blended.Z);
+            outN[i] = blended;
         }
         return outN;
     }

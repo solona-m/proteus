@@ -2163,16 +2163,8 @@
     "message": "キャラクターではなく、このウィンドウのモデル上で塗ります。",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "キャラクターから選ぶ",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "キャラクターの装備をクリックすると、そのModとモデルをここで開きます。",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "キャラクターの装備をクリックしてください…（もう一度クリックでキャンセル）",
     "description": ""
   },
   "Parts.Live.Hint": {
