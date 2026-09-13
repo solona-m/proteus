@@ -1223,7 +1223,11 @@ public sealed class SecondSkinService
         // re-probe the same files against a tree that may have moved underneath (a mask toggled, a file
         // replaced), and a disagreement puts every decode back on the composite thread. Null recomputes,
         // which is right for tests and any caller with no prefetch to keep in step with.
-        int? shellTexSize = null)
+        int? shellTexSize = null,
+        // The item variant of every drawn gear slot, off the draw object. Read for one thing: which material
+        // folder a worn host loads under when none of its materials are in activeMaterials yet — see
+        // VariantFolderFor.
+        IReadOnlyList<Interop.EquippedSlotVariants.Slot>? equippedSlotVariants = null)
     {
         int contentIn = contentLayers?.Count ?? 0;
 
@@ -1262,11 +1266,99 @@ public sealed class SecondSkinService
         // the redirect resolved perfectly (nothing else claims that path), the model was ours and drew, and
         // only the appended meshes silently had no material.
         //
-        // Read from the live resource tree rather than guessed, so it is whatever the game actually asked
-        // for. A CARRIER is the case the tree cannot answer — it is equipped after the shell is built — so
-        // those pass their variant in from their item sheet; see HostAccessory.KnownVariant.
+        // Two sources, in this order:
+        //
+        //   1. The live resource tree — the SLOT's own material, if the game has loaded one. It is whatever
+        //      the game actually asked for, Penumbra's IMC edits and all, so nothing outranks it.
+        //   2. The item's variant through its IMC entry. The tree cannot answer for an accessory equipped
+        //      moments ago: the material list is stamped at the redraw that swaps the item in, before its
+        //      materials load, and every rebuild's own redraw stamps it early again — so a freshly worn
+        //      variant-5 bracelet published under v0001 on every composite, and re-equipping it changed
+        //      nothing. The variant comes off the draw object (equippedSlotVariants) for a worn host, or
+        //      off the item sheet for a carrier (KnownVariant); the IMC entry turns it into the folder.
+        //      This reads the IMC file Penumbra resolves, which covers a mod replacing the file but NOT an
+        //      IMC meta edit — those are applied in memory — which is why the tree still goes first.
+        //
+        // When both answer and disagree the tree wins, and the disagreement is logged: it is an IMC meta
+        // edit on the host, and the line is what explains a later composite that loses the tree answer.
+        var variantMemo = new Dictionary<(int, string, string), string>();
         string VariantFolderFor(HostAccessory h)
         {
+            var key = (h.SetId, h.Slot, h.Tree);
+            lock (variantMemo)
+            {
+                if (variantMemo.TryGetValue(key, out var memo)) return memo;
+                var folder = ResolveVariantFolder(h);
+                variantMemo[key] = folder;
+                return folder;
+            }
+        }
+
+        string ResolveVariantFolder(HostAccessory h)
+        {
+            var fromItem = ItemVariantFolder(h);
+            var fromTree = TreeVariantFolder(h, out bool exact);
+
+            if (exact && fromTree is { } drawn)
+            {
+                if (fromItem is { } f && !string.Equals(f.Folder, drawn, StringComparison.OrdinalIgnoreCase))
+                    log.Information("[Proteus] host {0}{1:D4}/{2}: material folder {3} from the drawn materials, "
+                                  + "but item variant {4} maps to {5} through its IMC file — an IMC edit, going "
+                                  + "with the drawn one", h.Prefix, h.SetId, h.Slot, drawn, f.Variant, f.Folder);
+                return drawn;
+            }
+            if (fromItem is { } item)
+            {
+                log.Information("[Proteus] host {0}{1:D4}/{2}: material folder {3} from item variant {4} "
+                              + "({5}) — none of its materials are drawn yet", h.Prefix, h.SetId, h.Slot,
+                    item.Folder, item.Variant, item.Source);
+                return item.Folder;
+            }
+            if (fromTree != null) return fromTree;
+
+            log.Warning("[Proteus] host {0}{1:D4}/{2}: no drawn material and no item variant to read its "
+                      + "material folder from — publishing under v0001, which only renders if the item is "
+                      + "variant 1", h.Prefix, h.SetId, h.Slot);
+            return "v0001";
+        }
+
+        // The item variant, and the folder its IMC entry names. Null when no variant is known for this host.
+        (string Folder, int Variant, string Source)? ItemVariantFolder(HostAccessory h)
+        {
+            int variant;
+            string source;
+            if (h.KnownVariant is { } known)
+            {
+                variant = known;
+                source = "item sheet";
+            }
+            else if (equippedSlotVariants?.FirstOrDefault(s => s.SetId == h.SetId
+                         && string.Equals(s.Suffix, h.Slot, StringComparison.OrdinalIgnoreCase)) is { SetId: > 0 } worn)
+            {
+                variant = worn.Variant;
+                source = "drawn slot";
+            }
+            else return null;
+
+            // Facewear keeps the variant as the folder, as it always has and as renders in game. Whether its
+            // material goes through an IMC entry at all is unverified, and a met host is only ever a facewear
+            // carrier, so reading the head slot of a guessed .imc could only turn a working answer wrong.
+            if (h.Tree == "equipment" && h.Slot == "met")
+                return ($"v{variant:D4}", variant, source);
+
+            var modelPath = h.ModelPath ?? $"chara/{h.Tree}/{h.Prefix}{h.SetId:D4}/model/c0101{h.Prefix}{h.SetId:D4}_{h.Slot}.mdl";
+            var entry = ImcEntrySource.FromGame(p => textureLoader.LoadRawFile(penumbra.ResolvePlayer(p), p),
+                modelPath, variant);
+            // No readable IMC: the variant number itself, which is what the folder is for every item whose
+            // entry was not repointed — far better odds than v0001.
+            int materialId = entry is { MaterialId: > 0 } e ? e.MaterialId : variant;
+            return ($"v{materialId:D4}", variant, entry == null ? $"{source}, no IMC" : $"{source}, IMC");
+        }
+
+        // What the drawn materials say. `exact` is set only when a material of THIS slot answered.
+        string? TreeVariantFolder(HostAccessory h, out bool exact)
+        {
+            exact = false;
             var dir = $"chara/{h.Tree}/{h.Prefix}{h.SetId:D4}/material/v";
 
             // The variant belongs to the EQUIPPED ITEM IN THIS SLOT, not to the set, so only a material the
@@ -1290,14 +1382,17 @@ public sealed class SecondSkinService
                     int end = m.IndexOf('/', dir.Length);
                     if (end <= dir.Length) continue;
                     var folder = m[(dir.Length - 1)..end];
-                    if (m.Contains(slotTag, StringComparison.OrdinalIgnoreCase)) return folder;
+                    if (m.Contains(slotTag, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exact = true;
+                        return folder;
+                    }
                     if (setVariant == null) setVariant = folder;
                     else if (!string.Equals(setVariant, folder, StringComparison.OrdinalIgnoreCase))
                         setDisagrees = true;
                 }
 
-            if (setVariant != null && !setDisagrees) return setVariant;
-            return h.KnownVariant is { } v ? $"v{v:D4}" : "v0001";
+            return setVariant != null && !setDisagrees ? setVariant : null;
         }
 
         // A mask OCCLUDES everything beneath it (matches CompositorService.MaskAdds): in a mask's territory
@@ -5285,10 +5380,11 @@ public sealed class SecondSkinService
     private readonly record struct HostAccessory(
         int SetId, string Slot, string EqdpSlot, byte[]? BaseModel, int BaseMatCount, string Tree, char Prefix,
         string? ModelPath = null,
-        // The material variant to publish under, when the live resource tree cannot answer. Only a CARRIER
-        // needs this: it is equipped after the shell is built, so its materials are not in the tree yet and
-        // VariantFolderFor would fall back to v0001 — wrong for any carrier item that is not variant 1, and
-        // wrong in a way that renders nothing at all. Null for worn hosts, which the tree does answer for.
+        // The ITEM variant, off the item sheet, for a CARRIER — an item Proteus picked, so the variant is known
+        // without looking. A carrier is equipped after the shell is built, so neither the drawn materials nor
+        // the drawn slot can answer for it. Null for the player's own items, whose variant VariantFolderFor
+        // reads off the draw object instead. Either way it is an item variant, not a folder: the IMC entry
+        // maps one to the other.
         int? KnownVariant = null);
 
     /// <summary>
@@ -5465,7 +5561,11 @@ public sealed class SecondSkinService
             {
                 log.Information("[Proteus] host: glasses/head e{0:D4} (met, REPLACE — {1}, base {2} B)",
                     c.SetId, ours ? "our injected pair" : "degenerate base", c.Bytes.Length);
-                hosts.Add(new HostAccessory(c.SetId, "met", "Head", null, 0, "equipment", 'e', metPath));
+                // Our pair's variant is known from its sheet, worn or not — the same variant the pending host
+                // below carries. Without it a worn pair fell back to the drawn materials, which miss for the
+                // same reason they miss a freshly equipped accessory.
+                hosts.Add(new HostAccessory(c.SetId, "met", "Head", null, 0, "equipment", 'e', metPath,
+                    KnownVariant: ours ? invisibleGlassesVariant : null));
                 break;
             }
             log.Information("[Proteus] host: glasses/head e{0:D4} is the player's own pair ({1} material(s), "
