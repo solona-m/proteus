@@ -933,6 +933,7 @@ public class CompositorService : IDisposable
         // value derived from the collection we were just told has changed.
         _upstreamUnsettled.Clear();
         _upstreamSettled.Clear();
+        _upstreamIsGameData.Clear();
         if (_upstreamByGamePath.IsEmpty) return;
         _upstreamByGamePath.Clear();
         log.Debug("[Proteus] upstream cache cleared ({0})", reason);
@@ -1969,7 +1970,8 @@ public class CompositorService : IDisposable
         // If gear shells were active, a hosted accessory's model is redirected to our merged model. An
         // in-place reload won't reload that .mdl, so the shell would linger on the accessory after the
         // redirect clears — force a FULL redraw to reload the accessory's original model.
-        bool restoreAccessory = _secondSkinActive;
+        // A rewritten skin material is the same case for the body: it names a texture only our manifest serves.
+        bool restoreAccessory = _secondSkinActive || _lastSkinMaterialRedirects.Count > 0;
 
         Task.Run(() =>
         {
@@ -1987,6 +1989,7 @@ public class CompositorService : IDisposable
                 // at any more, with no way to tell the plugin actually switched off.
                 ReloadAndRedraw(userRequested: true);   // character reverts to un-composited
                 _secondSkinActive = false;
+                _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
                 ClearShellLocators();   // the shell is off the character; nothing left for them to describe
 
                 if (collId.HasValue)
@@ -3784,9 +3787,10 @@ public class CompositorService : IDisposable
                 // on the accessory (same reasoning as the plugin-disable path). Clear the host tracking too,
                 // so the next shell build compares against an empty set. This early return skips the normal
                 // reset/drop-detection at the end of the method, hence doing it explicitly here.
-                if (_secondSkinActive) _needFullRedraw = true;
+                if (_secondSkinActive || _lastSkinMaterialRedirects.Count > 0) _needFullRedraw = true;
                 _secondSkinActive = false;
                 _lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
+                _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
                 // …and the UI-facing locators, for the same reason: this return skips the gear phase that
                 // would otherwise publish them, so without this they keep describing the shell that was
                 // standing before the last mod was switched off.
@@ -4373,6 +4377,9 @@ public class CompositorService : IDisposable
 
             var texturesDir = texturesDirEarly;
             Directory.CreateDirectory(texturesDir);
+            // Skin materials rewritten to stop naming a shared texture — see IsSharedTexturePath. Created on
+            // first use, not here: almost no composite needs one.
+            var skinMaterialsDir = Path.Combine(managedModDir, "materials");
 
             var redirects = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             // The rewritten face models, into the SAME manifest as the doubled textures they belong with.
@@ -5401,6 +5408,33 @@ public class CompositorService : IDisposable
                         baseDiffuseTag = TimedContentTag(baseD, wD, hD, encSalt, OutputFormatVersion);
                 }
 
+                // Load the base mask at most once, leaving Array.Empty behind on failure as the memo that it was
+                // tried. Every overlay's mask art is resampled to THIS buffer's size, so its size is the bake's
+                // resolution.
+                //
+                // A shared placeholder (chara/common/texture/skin_mask.tex) is one flat colour at whatever tiny
+                // size a flat colour needs, so baking at its size would squash the art into a smear. It carries
+                // no detail to lose, so it is brought up to the diffuse's size first — the body's real
+                // resolution, and the layout the mask is sampled in (already doubled, for a doubled face).
+                void EnsureBaseMask()
+                {
+                    if (baseM != null || texPaths.Mask == null) return;
+                    var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
+                    if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
+                    if (faceDoubled && baseM is { Length: > 0 })
+                        (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
+
+                    if (baseM is { Length: > 0 } && IsSharedTexturePath(texPaths.Mask)
+                     && EnsureBaseDiffuse() != null && (long)wD * hD > (long)wM * hM)
+                    {
+                        log.Debug("[Proteus] Base mask of {0} is the shared placeholder {1} at {2}x{3} — baking at "
+                                + "the diffuse's {4}x{5} instead", mtrlGamePath, texPaths.Mask, wM, hM, wD, hD);
+                        baseM = textureLoader.ScaleRgba(baseM, wM, hM, wD, hD);
+                        wM = wD; hM = hD;
+                    }
+                    baseM ??= Array.Empty<byte>();
+                }
+
                 // Captured per mod as the loop below runs, for the Masks-driven relief pass
                 // afterwards (masks are mod-level, not tied to one overlay descriptor).
                 var lastSrcBodyTypeByMod = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -5767,17 +5801,10 @@ public class CompositorService : IDisposable
                     // map) has no covSrc and is skipped entirely below.
                     if (covSrc == null && desc.Mask != null && texPaths.Mask != null)
                     {
-                        if (baseM == null)
-                        {
-                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
-                            if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
-                            // Into the doubled layout too — the mask is sampled with the same uv0 the
-                            // rewritten model now carries, so it cannot stay in the vanilla one.
-                            if (faceDoubled && baseM is { Length: > 0 })
-                                (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
-                            baseM ??= Array.Empty<byte>();
-                        }
-                        if (baseM.Length > 0)
+                        // Into the doubled layout too, inside EnsureBaseMask — the mask is sampled with the same
+                        // uv0 the rewritten model now carries, so it cannot stay in the vanilla one.
+                        EnsureBaseMask();
+                        if (baseM!.Length > 0)
                         {
                             var maskPath3 = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var maskOv = LoadRemapped(maskPath3, wM, hM, srcBodyType);
@@ -6164,17 +6191,8 @@ public class CompositorService : IDisposable
                     // ── Phase D: mask texture composite ───────────────────────
                     if (desc.Mask != null && texPaths.Mask != null)
                     {
-                        if (baseM == null)
-                        {
-                            var loaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
-                            if (loaded.HasValue) { baseM = loaded.Value.rgba; wM = loaded.Value.width; hM = loaded.Value.height; }
-                            // Into the doubled layout too — the mask is sampled with the same uv0 the
-                            // rewritten model now carries, so it cannot stay in the vanilla one.
-                            if (faceDoubled && baseM is { Length: > 0 })
-                                (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
-                            baseM ??= Array.Empty<byte>();
-                        }
-                        if (baseM.Length > 0)
+                        EnsureBaseMask();
+                        if (baseM!.Length > 0)
                         {
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = LoadRemapped(maskPathD, wM, hM, srcBodyType);
@@ -6737,15 +6755,7 @@ public class CompositorService : IDisposable
                 {
                     EnsureBaseDiffuse();
                     if (texPaths.Normal != null) baseN ??= LoadBaseNormalHere(texPaths.Normal, ref wN, ref hN);
-                    if (texPaths.Mask != null && baseM == null)
-                    {
-                        var mLoaded = TimedLoadBaseTexture(ResolveUpstream(texPaths.Mask), texPaths.Mask);
-                        if (mLoaded.HasValue)
-                        {
-                            baseM = mLoaded.Value.rgba; wM = mLoaded.Value.width; hM = mLoaded.Value.height;
-                            (baseM, wM, hM) = ToDoubled(baseM, wM, hM, texPaths.Mask);
-                        }
-                    }
+                    EnsureBaseMask();
                 }
 
                 var baseName = SanitizeName(mtrlGamePath);
@@ -6811,6 +6821,20 @@ public class CompositorService : IDisposable
                     }
                 }
 
+                // The game path each slot is published AT. Normally the one the material names — but a material
+                // can name a texture every character shares (vanilla skin names chara/common/texture/skin_mask.tex
+                // for its mask), and redirecting that paints this wearer's bake onto everyone, or is refused by
+                // Penumbra and paints nothing. Those slots publish at a private path instead, and the material is
+                // rewritten below to name it. Recorded only once the texture is really written, so the material
+                // never names a path nothing serves.
+                var retarget = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                string PublishKey(string texPath, string slot)
+                    => IsSharedTexturePath(texPath) ? OwnedTexturePath(mtrlGamePath, slot) : texPath;
+                void Published(string texPath, string key)
+                {
+                    if (!string.Equals(texPath, key, StringComparison.OrdinalIgnoreCase)) retarget[texPath] = key;
+                }
+
                 if (baseD is { Length: > 0 } && texPaths.Diffuse != null)
                 {
                     var tag = diffuseTag!;
@@ -6820,9 +6844,11 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseD, wD, hD, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Diffuse] = relPath; Interlocked.Increment(ref texturesPatched);
+                        var key = PublishKey(texPaths.Diffuse, "d");
+                        redirects[key] = relPath; Interlocked.Increment(ref texturesPatched);
+                        Published(texPaths.Diffuse, key);
                         channels.Append(" diffuse(").Append(diffuseContributors).Append(')');
-                        published.Add($"{texPaths.Diffuse} -> {relPath}");
+                        published.Add($"{key} -> {relPath}");
 
                         // Publish the glow recipes captured during the diffuse phase, now that the on-disk
                         // path (what the live texture resource reports) is known.
@@ -6842,9 +6868,11 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseN, wN, hN, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Normal] = relPath; Interlocked.Increment(ref texturesPatched);
+                        var key = PublishKey(texPaths.Normal, "n");
+                        redirects[key] = relPath; Interlocked.Increment(ref texturesPatched);
+                        Published(texPaths.Normal, key);
                         channels.Append(" normal(").Append(normalContributors).Append(')');
-                        published.Add($"{texPaths.Normal} -> {relPath}");
+                        published.Add($"{key} -> {relPath}");
                     }
                 }
                 if (baseM is { Length: > 0 } && texPaths.Mask != null)
@@ -6855,9 +6883,81 @@ public class CompositorService : IDisposable
                     if (AlreadyWritten(outPath)
                      || textureLoader.WriteTex(baseM, wM, hM, outPath, compress ? TexEncoding.Bc7 : TexEncoding.Uncompressed))
                     {
-                        redirects[texPaths.Mask] = relPath; Interlocked.Increment(ref texturesPatched);
+                        var key = PublishKey(texPaths.Mask, "m");
+                        redirects[key] = relPath; Interlocked.Increment(ref texturesPatched);
+                        Published(texPaths.Mask, key);
                         channels.Append(" mask(").Append(maskContributors).Append(')');
-                        published.Add($"{texPaths.Mask} -> {relPath}");
+                        published.Add($"{key} -> {relPath}");
+                    }
+                }
+
+                // A slot moved off a shared texture only reaches the character through a copy of the material
+                // that names the new path. If that copy cannot be made, the slot is withdrawn: its private
+                // redirect is inert without the material, and the alternative — redirecting the shared file —
+                // is the bug this exists to stop.
+                if (retarget.Count > 0)
+                {
+                    string? materialRel = null;
+                    // Once we redirect the material, our own manifest masks it, so the base only comes from the
+                    // remembered upstream. With none remembered (a prime that never settled), ResolveUpstream
+                    // returns null and LoadRawFile would quietly read VANILLA — and the copy would then be
+                    // published over the body mod's own material, taking its skin shader settings with it.
+                    // null alone is not the tell: a material no mod provides has the game's file as its real
+                    // upstream. Two places know that. The prime records it in _upstreamIsGameData — but a
+                    // material that was never masked when first resolved is never primed, because
+                    // ResolveUpstreamCore remembers Penumbra's answer for an unredirected path, which is the game
+                    // path echoed back. That echo is the same verdict, and without honouring it a vanilla
+                    // material refused here every other composite, withdrawing and republishing its copy with a
+                    // full redraw each time.
+                    var liveMaterial = mtrlDisk == null ? penumbra.ResolvePlayer(mtrlGamePath) : null;
+                    bool upstreamIsGame = _upstreamIsGameData.ContainsKey(mtrlGamePath)
+                        || (_upstreamByGamePath.TryGetValue(mtrlGamePath, out var remembered)
+                            && string.Equals(remembered, mtrlGamePath, StringComparison.OrdinalIgnoreCase));
+                    bool upstreamUnknown = liveMaterial != null && IsOwnOutput(liveMaterial) && !upstreamIsGame;
+                    if (upstreamUnknown)
+                    {
+                        log.Warning("[Proteus] {0} resolves to our own copy and its real upstream is not known yet "
+                                  + "— not rewriting it from the game's vanilla file; retried next composite",
+                            mtrlGamePath);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var raw = textureLoader.LoadRawFile(mtrlDisk, mtrlGamePath);
+                            if (raw != null && TextureLoader.RetargetTexturePaths(raw, retarget) is { } rewritten)
+                            {
+                                var name = baseName + "_" + TimedContentTag(rewritten, OutputFormatVersion) + ".mtrl";
+                                var outPath = Path.Combine(skinMaterialsDir, name);
+                                if (!File.Exists(outPath))
+                                {
+                                    Directory.CreateDirectory(skinMaterialsDir);
+                                    PenumbraModMeta.AtomicWrite(outPath, rewritten);
+                                }
+                                materialRel = "materials/" + name;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Warning(ex, "[Proteus] Failed to write a private copy of {0}", mtrlGamePath);
+                        }
+                    }
+
+                    if (materialRel != null)
+                    {
+                        redirects[mtrlGamePath] = materialRel;
+                        published.Add($"{mtrlGamePath} -> {materialRel} (names {string.Join(", ", retarget.Values)})");
+                    }
+                    else
+                    {
+                        foreach (var (shared, owned) in retarget)
+                        {
+                            redirects.TryRemove(owned, out _);
+                            published.RemoveAll(p => p.StartsWith(owned + " ", StringComparison.OrdinalIgnoreCase));
+                            log.Warning("[Proteus] {0} names the shared texture {1}, and it could not be rewritten "
+                                      + "to name a private copy — leaving that slot un-composited rather than "
+                                      + "redirecting a file every character samples", mtrlGamePath, shared);
+                        }
                     }
                 }
 
@@ -7391,6 +7491,23 @@ public class CompositorService : IDisposable
                         + "— full redraw", faceUvPaths.Count, _lastFaceUvModelPaths.Count);
             }
             _lastFaceUvModelPaths = faceUvPaths;
+
+            // Same again for skin materials rewritten off a shared texture. The rewrite names a texture path
+            // only our manifest serves, and an in-place reload re-requests textures without reloading the
+            // material — so a material that stays loaded after its redirect is withdrawn asks for a path
+            // nothing answers. Compared by value as well as key: a changed upstream material is a new copy.
+            var skinMaterials = skinRedirectsThisRun
+                .Where(kv => kv.Key.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+            if (skinMaterials.Count != _lastSkinMaterialRedirects.Count
+             || skinMaterials.Any(kv => !_lastSkinMaterialRedirects.TryGetValue(kv.Key, out var was)
+                                     || !string.Equals(was, kv.Value, StringComparison.OrdinalIgnoreCase)))
+            {
+                nextNeedFullRedraw = true;
+                log.Debug("[Proteus] skin materials: the rewritten set changed ({0} now, {1} before) — full redraw",
+                    skinMaterials.Count, _lastSkinMaterialRedirects.Count);
+            }
+            _lastSkinMaterialRedirects = skinMaterials;
             // Shared with the editor, so its "Rendering as" badge cannot disagree with what was composited.
             _faceDoubledMaterials = facePlan.Materials;
 
@@ -8977,6 +9094,18 @@ public class CompositorService : IDisposable
     private readonly ConcurrentDictionary<string, byte> _upstreamSettled = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Base paths a settled read showed NO mod provides — the game's own file is the upstream.
+    /// <para/>
+    /// <see cref="_upstreamByGamePath"/> cannot say this: it only holds disk files, so "the upstream is
+    /// vanilla" and "the upstream was never learned" both leave it empty, and both make
+    /// <see cref="ResolveUpstream"/> return null. Reading the game's file is right for the first and wrong for
+    /// the second, and it is only harmless to confuse them for a texture. A rewritten skin MATERIAL copied from
+    /// the wrong one is published over the body mod's own — so that write asks this set which it is.
+    /// Cleared with the rest of the upstream memo.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _upstreamIsGameData = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Resolve <paramref name="paths"/> to their real upstreams while our own redirects are narrowed away,
     /// waiting until the answer STOPS CHANGING rather than accepting the first non-Proteus value.
     ///
@@ -9010,6 +9139,10 @@ public class CompositorService : IDisposable
         var unmasked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         List<string>? stuck = null;
         int samples  = 0;
+
+        // Re-established below by a read that settles on "nobody provides this". A path that fails to settle
+        // this time must not keep an earlier verdict, for the same reason _upstreamSettled is dropped.
+        foreach (var p in paths) _upstreamIsGameData.TryRemove(p, out _);
 
         // Two failure modes, reported separately because they mean different things: a path Penumbra never
         // unmasked says the reload didn't reach it, while a path that kept changing says the collection was
@@ -9068,6 +9201,7 @@ public class CompositorService : IDisposable
                     && string.Equals(prev, value, StringComparison.OrdinalIgnoreCase))
                 {
                     if (value != null) settled[p] = value;
+                    else _upstreamIsGameData[p] = 0;
                     pending.RemoveAt(i);
                     continue;
                 }
@@ -9143,11 +9277,16 @@ public class CompositorService : IDisposable
         // narrow below would drop its redirect for the width of the prime, and since the EQDP rows are
         // carried across, the game would load the real (invisible) Emperor ring and the shell would blink
         // out. That is why this tests the append set rather than the extension.
+        //
+        // Paths under OwnedTextureRoot are write-only too, and worse to admit: Proteus invented them, so no mod
+        // is behind them and the prime could never settle one — it would narrow the manifest on every
+        // composite waiting for an upstream that does not exist.
         var appendHosts = _appendHostModelPaths;
         bool IsReadableBase(string p)
-            => (!p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
-             && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
-            || appendHosts.Contains(p);
+            => !p.StartsWith(OwnedTextureRoot, StringComparison.OrdinalIgnoreCase)
+            && ((!p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
+              && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
+             || appendHosts.Contains(p));
 
         List<string> baseKeys;
 
@@ -9411,6 +9550,10 @@ public class CompositorService : IDisposable
     /// <summary>The face models rewritten into the doubled layout by the last composite. Compared, not just
     /// stored: a set that SHRINKS has to force a redraw so the face reloads its real model.</summary>
     private HashSet<string> _lastFaceUvModelPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Skin material game path → the rewritten copy the last composite published. Any change forces
+    /// a full redraw, and so does withdrawing them: the copy names a texture only our manifest serves.</summary>
+    private Dictionary<string, string> _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The face materials the last composite rendered doubled — read by the editor's live
@@ -12197,6 +12340,39 @@ public class CompositorService : IDisposable
         foreach (var ch in Path.GetInvalidFileNameChars())
             name = name.Replace(ch, '_');
         return name;
+    }
+
+    /// <summary>
+    /// A texture EVERY material that names it samples — <c>chara/common/texture/skin_mask.tex</c>, the
+    /// solid-colour placeholders, the eye maps. Redirecting one is never a per-character edit: it lands on
+    /// every character and material in the collection. Penumbra refuses the worst of them outright
+    /// ("Reserved File Redirection") and drops the redirect, so a vanilla skin material's composited mask
+    /// never applied at all; the rest it serves, and leaks.
+    /// </summary>
+    internal static bool IsSharedTexturePath(string gamePath)
+        => gamePath.StartsWith("chara/common/", StringComparison.OrdinalIgnoreCase)
+        || gamePath.StartsWith("common/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Root of the texture game paths Proteus invents. No mod provides them, so nothing upstream
+    /// is behind them — see <see cref="PrimeUpstreamCache"/>. Under <c>chara/</c> because the game picks
+    /// the resource category from the first segment; Bibo's <c>chara/bibo_mid_base.tex</c> is the same
+    /// shape.</summary>
+    internal const string OwnedTextureRoot = "chara/proteus/";
+
+    /// <summary>
+    /// The private game path a composite publishes <paramref name="slot"/> of <paramref name="mtrlGamePath"/>
+    /// at, in place of a shared texture the material named (see <see cref="IsSharedTexturePath"/>).
+    /// <para/>
+    /// Stable per material and slot, NOT content-addressed: it is written into a rewritten copy of the
+    /// material, so a name that changed with the pixels would rewrite the material on every slider move. The
+    /// disk file it redirects to is content-addressed like every other output, which is what the game's
+    /// cache keys on. The hash is of the full material path, since the stem alone repeats across folders.
+    /// </summary>
+    internal static string OwnedTexturePath(string mtrlGamePath, string slot)
+    {
+        var lower = mtrlGamePath.Replace('\\', '/').ToLowerInvariant();
+        var hash = (uint)SecondSkinService.Hash(System.Text.Encoding.UTF8.GetBytes(lower));
+        return $"{OwnedTextureRoot}{SanitizeName(lower)}_{hash:x8}_{slot}.tex";
     }
 
     /// <summary>

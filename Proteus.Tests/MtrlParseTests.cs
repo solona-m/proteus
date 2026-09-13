@@ -335,6 +335,81 @@ public class MtrlParseTests
     }
 
     /// <summary>
+    /// The skin compositor's escape from a shared texture: a vanilla skin material names
+    /// <c>chara/common/texture/skin_mask.tex</c>, which cannot be redirected per character, so the material
+    /// is rewritten to name a private path instead. Every table between the string table and the samplers
+    /// is populated here, because the rewrite grows the string table and all of them shift.
+    /// </summary>
+    [Fact]
+    public void RetargetMovesOnlyTheNamedTexture()
+    {
+        var mtrl = BuildMtrl([
+            (Diffuse, "chara/human/c0201/obj/body/b0001/texture/c0201b0001_base.tex"),
+            (Normal,  "chara/human/c0201/obj/body/b0001/texture/c0201b0001_norm.tex"),
+            (Mask,    "chara/common/texture/skin_mask.tex"),
+        ], dataSetSize: 2048, additionalSize: 4, shaderKeyCount: 2, constantCount: 5, shaderPackage: "skin.shpk",
+           colorSetCount: 1);
+
+        var owned = "chara/proteus/mt_c0201b0001_a_0123abcd_m.tex";
+        var rewritten = TextureLoader.RetargetTexturePaths(mtrl,
+            new Dictionary<string, string> { ["chara/common/texture/skin_mask.tex"] = owned });
+
+        Assert.NotNull(rewritten);
+        var p = TextureLoader.ParseMtrlBytes(rewritten!);
+        Assert.True(p.Parsed);
+        Assert.Equal(owned, p.Mask);
+        Assert.Equal("chara/human/c0201/obj/body/b0001/texture/c0201b0001_base.tex", p.Diffuse);
+        Assert.Equal("chara/human/c0201/obj/body/b0001/texture/c0201b0001_norm.tex", p.Normal);
+        Assert.Equal(TextureLoader.GetMtrlInfo(mtrl).shader, TextureLoader.GetMtrlInfo(rewritten!).shader);
+        Assert.Equal(TextureLoader.ParseMtrlBytes(mtrl).HasColorTable, p.HasColorTable);
+        Assert.Equal(0, (rewritten!.Length - mtrl.Length) % 4);   // the table's alignment is kept
+    }
+
+    /// <summary>Nothing to move means no copy: the caller takes null as "leave the material alone".</summary>
+    [Fact]
+    public void RetargetWithNoMatchReturnsNull()
+    {
+        var mtrl = BuildMtrl([(Mask, "chara/x/tex/m.tex")]);
+        Assert.Null(TextureLoader.RetargetTexturePaths(mtrl,
+            new Dictionary<string, string> { ["chara/common/texture/skin_mask.tex"] = "chara/proteus/x_m.tex" }));
+        Assert.Null(TextureLoader.RetargetTexturePaths(new byte[8],
+            new Dictionary<string, string> { ["chara/x/tex/m.tex"] = "chara/proteus/x_m.tex" }));
+    }
+
+    /// <summary>
+    /// The rewrite against a REAL material, for the reason <see cref="MatchesARealMaterialFile"/> gives: its
+    /// uvSetCount=2 / colorSetCount=1 / additionalDataSize=4 is a layout the builder never produces. The
+    /// colour table after the string table must still be found where the writer looks for it.
+    /// </summary>
+    [Fact]
+    public void RetargetSurvivesARealMaterialFile()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl");
+        var mtrl = File.ReadAllBytes(path);
+
+        var rewritten = TextureLoader.RetargetTexturePaths(mtrl, new Dictionary<string, string>
+        {
+            ["chara/equipment/e0051/texture/v01_c0201e0051_top_m.tex"] = "chara/proteus/top_m.tex",
+        });
+
+        Assert.NotNull(rewritten);
+        var p = TextureLoader.ParseMtrlBytes(rewritten!);
+        Assert.Equal("chara/proteus/top_m.tex", p.Mask);
+        Assert.Equal("chara/equipment/e0051/texture/v01_c0201e0051_top_n.tex",  p.Normal);
+        Assert.Equal("chara/equipment/e0051/texture/v01_c0201e0051_top_id.tex", p.Index);
+        Assert.True(p.HasColorTable);
+        Assert.Equal(TextureLoader.GetMtrlInfo(mtrl), TextureLoader.GetMtrlInfo(rewritten!), MtrlInfoComparer.Instance);
+    }
+
+    private sealed class MtrlInfoComparer : IEqualityComparer<(string shader, uint[] constIds)>
+    {
+        public static readonly MtrlInfoComparer Instance = new();
+        public bool Equals((string shader, uint[] constIds) a, (string shader, uint[] constIds) b)
+            => a.shader == b.shader && a.constIds.AsSpan().SequenceEqual(b.constIds);
+        public int GetHashCode((string shader, uint[] constIds) x) => x.shader.GetHashCode();
+    }
+
+    /// <summary>
     /// Pins the divergence that justifies this parser existing at all, by asserting BOTH sides rather than
     /// comparing them.
     /// <para/>

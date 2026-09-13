@@ -673,6 +673,79 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// A copy of a material whose texture table names different files: every texture whose path is a key
+    /// of <paramref name="retarget"/> is pointed at that key's value. Null when nothing matched or the file
+    /// could not be walked — the caller must then leave the material alone.
+    /// <para/>
+    /// Keys are compared the way <see cref="ParseMtrlBytes"/> reports paths (a leading <c>--</c> stripped),
+    /// so a path read out of that parser can be passed straight back in.
+    /// <para/>
+    /// The new strings are APPENDED to the string table rather than spliced over the old ones. Splicing
+    /// would move every string after it, and the UV-set names, colour-set names and shader package name all
+    /// hold offsets into that table. Appending moves none of them: only the retargeted texture entries get
+    /// a new offset, and the orphaned old string costs a few bytes. Everything after the table is addressed
+    /// relative to its own block, so it shifts along intact.
+    /// </summary>
+    internal static byte[]? RetargetTexturePaths(byte[] b, IReadOnlyDictionary<string, string> retarget)
+    {
+        const int HeaderSize = 0x10;
+        if (b.Length < HeaderSize || retarget.Count == 0) return null;
+
+        ushort fileSize        = BitConverter.ToUInt16(b, 0x04);
+        ushort stringTableSize = BitConverter.ToUInt16(b, 0x08);
+        byte   textureCount    = b[0x0C];
+        byte   uvSetCount      = b[0x0D];
+        byte   colorSetCount   = b[0x0E];
+
+        int stringsAt = HeaderSize + textureCount * 4 + uvSetCount * 4 + colorSetCount * 4;
+        int stringsEnd = stringsAt + stringTableSize;
+        if (stringsEnd > b.Length) return null;
+
+        var appended  = new List<byte>();
+        var offsetOf  = new Dictionary<string, int>(StringComparer.Ordinal);   // one copy per distinct target
+        var newOffset = new Dictionary<int, int>();                            // texture index → new offset
+        for (int i = 0; i < textureCount; i++)
+        {
+            int at = stringsAt + BitConverter.ToUInt16(b, HeaderSize + i * 4);
+            if (at >= stringsEnd) continue;
+            int end = at;
+            while (end < stringsEnd && b[end] != 0) end++;
+            var path = Encoding.UTF8.GetString(b, at, end - at);
+            if (path.StartsWith("--", StringComparison.Ordinal)) path = path[2..];
+            if (!retarget.TryGetValue(path, out var target)) continue;
+
+            if (!offsetOf.TryGetValue(target, out var off))
+            {
+                off = stringTableSize + appended.Count;
+                appended.AddRange(Encoding.UTF8.GetBytes(target));
+                appended.Add(0);
+                offsetOf[target] = off;
+            }
+            newOffset[i] = off;
+        }
+        if (newOffset.Count == 0) return null;
+
+        // Padded on its own account, so the table keeps whatever alignment it had.
+        while (appended.Count % 4 != 0) appended.Add(0);
+        // Every size and offset involved is a u16 (each new offset is below the new table size); a material
+        // this large does not exist, but a wrapped offset would name garbage rather than fail.
+        if (stringTableSize + appended.Count > ushort.MaxValue || fileSize + appended.Count > ushort.MaxValue)
+            return null;
+
+        var result = new byte[b.Length + appended.Count];
+        Array.Copy(b, 0, result, 0, stringsEnd);
+        appended.CopyTo(result, stringsEnd);
+        Array.Copy(b, stringsEnd, result, stringsEnd + appended.Count, b.Length - stringsEnd);
+
+        BitConverter.TryWriteBytes(result.AsSpan(0x04), (ushort)(fileSize + appended.Count));
+        BitConverter.TryWriteBytes(result.AsSpan(0x08), (ushort)(stringTableSize + appended.Count));
+        // The low half of each texture entry is the offset; the high half is flags, left as they were.
+        foreach (var (i, off) in newOffset)
+            BitConverter.TryWriteBytes(result.AsSpan(HeaderSize + i * 4), (ushort)off);
+        return result;
+    }
+
+    /// <summary>
     /// Whether an on-disk <c>.tex</c> stores its pixels uncompressed, or null when the file cannot be read.
     /// <para/>
     /// Asked before trusting a texture whose VALUES carry meaning rather than colour. An <c>_id</c> texture's
