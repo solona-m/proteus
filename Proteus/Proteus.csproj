@@ -23,7 +23,7 @@
 
   <PropertyGroup>
     <Version>$(ProteusVersion)</Version>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -160,6 +160,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Penumbra.Api\Penumbra.Api.csproj" />
     <ProjectReference Include="..\Glamourer\Glamourer.Api\Glamourer.Api.csproj" />
+    <!-- Posing worn models on the live character; shared with other plugins, AGPL-3.0-or-later. -->
+    <ProjectReference Include="..\XivLiveMesh\XivLiveMesh.csproj" />
   </ItemGroup>
 
   <Import Project="Sdk.targets" Sdk="Dalamud.NET.Sdk" />

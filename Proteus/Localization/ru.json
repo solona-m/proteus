@@ -2155,6 +2155,46 @@
     "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб.",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "Показать модель",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Рисовать на модели в этом окне, а не на персонаже.",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "Выбрать на персонаже",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Щёлкните по одежде персонажа, чтобы открыть здесь её мод и модель.",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "Щёлкните по одежде персонажа… (щёлкните снова для отмены)",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Рисуйте прямо на персонаже. Удерживайте Alt, чтобы двигать камеру. Каждый мазок сохраняется, когда отпускаете кнопку.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Эта модель сейчас не надета на персонажа. Наденьте её или включите «Показать модель».",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Эта модель не совпадает с моделью на персонаже. Включите «Показать модель», чтобы рисовать здесь.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Сейчас на персонаже рисовать нельзя.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} не входит в модели, которые публикует этот мод.",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "Размер кисти",
     "description": ""

@@ -2155,6 +2155,46 @@
     "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer.",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "Afficher le modèle",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Peindre sur le modèle dans cette fenêtre plutôt que sur votre personnage.",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "Choisir sur le personnage",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Cliquez sur un vêtement de votre personnage pour ouvrir ici son mod et son modèle.",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "Cliquez sur un vêtement de votre personnage… (cliquez à nouveau pour annuler)",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Peignez sur votre personnage. Maintenez Alt pour déplacer la caméra. Chaque trait est enregistré au relâchement.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Ce modèle n'est pas porté par votre personnage. Portez-le ou activez Afficher le modèle.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Ce modèle ne correspond pas à celui de votre personnage. Activez Afficher le modèle pour le peindre ici.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Votre personnage n'est pas disponible pour peindre pour le moment.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} ne fait pas partie des modèles publiés par ce mod.",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "Taille du pinceau",
     "description": ""

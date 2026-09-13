@@ -2155,6 +2155,46 @@
     "message": "Zieh auf dem Modell, um zu malen. Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt.",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "Modellansicht zeigen",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Auf dem Modell in diesem Fenster malen statt auf deinem Charakter.",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "Am Charakter wählen",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Klicke ein Kleidungsstück an deinem Charakter an, um seine Mod und sein Modell hier zu öffnen.",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "Klicke ein Kleidungsstück an deinem Charakter an… (erneut klicken zum Abbrechen)",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Male auf deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jeder Strich wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Dieses Modell ist gerade nicht an deinem Charakter. Zieh es an oder schalte die Modellansicht ein.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Dieses Modell passt nicht zu dem an deinem Charakter. Schalte die Modellansicht ein, um es hier zu bemalen.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Dein Charakter ist gerade nicht zum Bemalen verfügbar.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} ist keines der Modelle, die diese Mod bereitstellt.",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "Pinselgröße",
     "description": ""

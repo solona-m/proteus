@@ -274,6 +274,32 @@ public class PenumbraBridge : IDisposable
     }
 
     /// <summary>
+    /// Each file the local player's models are loaded from, keyed by <see cref="BodyShapeReader.PathKey"/>, with
+    /// the model game path it stands in for — or null when unavailable. A modded file's own name need not say
+    /// which race the model was authored for; the game path it replaces always does.
+    /// </summary>
+    public Dictionary<string, string>? GetActivePlayerModelGamePaths()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return null;
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (resolved, gamePaths) in dict)
+                foreach (var p in gamePaths)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+                    {
+                        map.TryAdd(BodyShapeReader.PathKey(resolved), p);
+                        break;
+                    }
+            return map;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (model game paths)"); return null; }
+    }
+
+    /// <summary>
     /// Both path sets from ONE GetGameObjectResourcePaths call.
     /// <para/>
     /// The two getters above make the same IPC call and differ only in which extension they keep, so asking

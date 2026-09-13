@@ -26,7 +26,7 @@ namespace Proteus.Gui;
 /// lookup rather than a ray cast against a triangle soup — no bounding hierarchy, no epsilon, and it cannot
 /// disagree with what is on screen, because it IS what is on screen.
 /// </summary>
-public sealed class PartViewport : IDisposable
+public sealed class PartViewport : IDisposable, IBrushSurface
 {
     /// <summary>
     /// The shape the viewport had when it was a fixed size, and still the shape it starts at. Public because

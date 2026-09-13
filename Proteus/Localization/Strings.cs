@@ -1649,6 +1649,34 @@ public sealed class PartsStrings
         "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to "
       + "zoom.");
 
+    public readonly string ShowModelView = Loc.Localize("Parts.ShowModelView", "Show model view");
+
+    public readonly string ShowModelViewTip = Loc.Localize("Parts.ShowModelView.Tip",
+        "Paint on the model in this window instead of on your character.");
+
+    public readonly string LivePick = Loc.Localize("Parts.Live.Pick", "Pick on character");
+
+    public readonly string LivePickTip = Loc.Localize("Parts.Live.Pick.Tip",
+        "Click a garment on your character to open its mod and model here.");
+
+    public readonly string LivePicking = Loc.Localize("Parts.Live.Picking",
+        "Click a garment on your character… (click again to cancel)");
+
+    public readonly string LiveHint = Loc.Localize("Parts.Live.Hint",
+        "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.");
+
+    public readonly string LiveNotWorn = Loc.Localize("Parts.Live.NotWorn",
+        "This model is not on your character right now. Wear it, or turn on Show model view.");
+
+    public readonly string LiveUnreadable = Loc.Localize("Parts.Live.Unreadable",
+        "This model could not be matched to the one on your character. Turn on Show model view to paint it here.");
+
+    public readonly string LiveNoCharacter = Loc.Localize("Parts.Live.NoCharacter",
+        "Your character is not available to paint on right now.");
+
+    public readonly string LivePickedNotListedFmt = Loc.Localize("Parts.Live.PickedNotListed.Fmt",
+        "{0} is not one of the models this mod publishes.");
+
     public readonly string BrushSize = Loc.Localize("Parts.Brush.Size", "Brush size")
                                      + "###partsBrushSize";
 
