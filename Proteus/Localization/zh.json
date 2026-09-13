@@ -2163,16 +2163,8 @@
     "message": "在此窗口的模型上绘制，而不是在你的角色上。",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "在角色上选取",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "点击角色身上的服装，在此打开它的模组和模型。",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "点击角色身上的服装……（再次点击取消）",
     "description": ""
   },
   "Parts.Live.Hint": {

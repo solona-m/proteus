@@ -356,8 +356,15 @@ public class Configuration : IPluginConfiguration
     public string? GlamourerDesignDirOverride { get; set; } = null;
 
     /// <summary>
-    /// Size the user dragged the window to on the Toggles tab, which is the only tab that is resizable —
-    /// every other one is AlwaysAutoResize and has no size of its own to remember.
+    /// The user has dragged the status window to a size of their own. Until they do, it fits itself to each
+    /// tab's controls when the tab changes; from then on it keeps <see cref="TogglesWindowWidth"/> ×
+    /// <see cref="TogglesWindowHeight"/>.
+    /// </summary>
+    public bool WindowUserSized { get; set; } = false;
+
+    /// <summary>
+    /// Size the user dragged the status window to — named for the Toggles tab, which was once the only
+    /// resizable one; it is now the window's size on every tab once <see cref="WindowUserSized"/> is set.
     /// <para/>
     /// UNSCALED, like <c>StatusWindow.SizeConstraints</c>: Dalamud's window host multiplies both by the
     /// global UI scale itself, so storing a scaled size would compound the scale on every restore. Clamped

@@ -227,6 +227,151 @@ public class MeshVolumeSolveTests
     }
 
     /// <summary>
+    /// A double-sided surface — the way hair is built: every card drawn twice on the same positions, the back
+    /// copy wound the other way with normals pointing down. Welded, each point's two normals cancel, so the
+    /// brush has no direction of its own there; it pushes along the viewer instead. And the rebuilt normals
+    /// must keep each side facing its own way, or one side of the hair shades inside out after any edit.
+    /// </summary>
+    [Fact]
+    public void ADoubleSidedSurfacePushesAlongTheViewerAndKeepsBothFacings()
+    {
+        const int n = 9;
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var tris = new List<int>();
+        for (int side = 0; side < 2; side++)
+        {
+            int start = pos.Count / 3;
+            for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                pos.AddRange([i * Spacing, 0f, j * Spacing]);
+                nrm.AddRange([0f, side == 0 ? 1f : -1f, 0f]);
+            }
+            for (int i = 0; i + 1 < n; i++)
+            for (int j = 0; j + 1 < n; j++)
+            {
+                int a = start + i * n + j, b = start + (i + 1) * n + j;
+                int c = start + i * n + j + 1, d = start + (i + 1) * n + j + 1;
+                if (side == 0) tris.AddRange([a, b, d, a, d, c]);
+                else tris.AddRange([a, d, b, a, c, d]);
+            }
+        }
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+        int front = 4 * n + 4, back = n * n + 4 * n + 4;
+
+        // No direction of its own and no viewer: nothing to push along, so nothing moves.
+        Assert.Equal(0, solve.Paint(At(model.Positions, front), 0.03f, -0.002f));
+
+        // Pushed in, seen from above: away from the viewer, both copies together.
+        Assert.True(solve.Paint(At(model.Positions, front), 0.03f, -0.002f, Vector3.UnitY) > 0);
+        solve.EndStroke();
+        var after = solve.Positions();
+        Assert.True(At(after, front).Y < -0.001f, $"the surface did not push in: {At(after, front).Y * 1000f:F2} mm");
+        Assert.Equal(At(after, front), At(after, back));
+
+        Assert.True(solve.NormalAt(front).Y > 0.5f, $"the front copy should still face up: {solve.NormalAt(front)}");
+        Assert.True(solve.NormalAt(back).Y < -0.5f, $"the back copy should still face down: {solve.NormalAt(back)}");
+    }
+
+    /// <summary>
+    /// A cloth dome over a flat skin sheet, its crest 10 mm up and its rim 15 mm INTO the skin (clipping, as
+    /// garments do), with the skin as part of the model or not. Deep enough that relaxing it freely takes the
+    /// crest below the floor, so keeping it up is the floor's doing and not the shape's.
+    /// </summary>
+    private static (ModelParts Model, int ClothStart, int N) DomeOverSkin(bool withSkin)
+    {
+        const int n = 13;
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var cloth = new List<int>();
+        var body = new List<int>();
+
+        int Sheet(Func<int, int, float> height, List<int> tris)
+        {
+            int start = pos.Count / 3;
+            for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                pos.AddRange([i * Spacing, height(i, j), j * Spacing]);
+                nrm.AddRange([0f, 1f, 0f]);
+            }
+            for (int i = 0; i + 1 < n; i++)
+            for (int j = 0; j + 1 < n; j++)
+            {
+                int a = start + i * n + j, b = start + (i + 1) * n + j;
+                int c = start + i * n + j + 1, d = start + (i + 1) * n + j + 1;
+                tris.AddRange([a, b, d, a, d, c]);
+            }
+            return start;
+        }
+
+        if (withSkin) Sheet((_, _) => 0f, body);
+        int clothStart = Sheet((i, j) =>
+        {
+            float u = (i - 6) / 6f, v = (j - 6) / 6f;
+            return 0.025f * MathF.Max(0f, 1f - u * u - v * v) - 0.015f;
+        }, cloth);
+
+        var model = withSkin ? Assemble(pos, nrm, cloth, body.ToArray(), "/mt_c0201b0001_bibo.mtrl")
+                             : Assemble(pos, nrm, cloth);
+        return (model, clothStart, n);
+    }
+
+    /// <summary>
+    /// Relax shrinks cloth toward the body — but not into skin the model carries. Every cloth point that started
+    /// above the skin stays at least the 1 mm floor above it however long the brush is held, while the rim the
+    /// author already had clipping is held where it was rather than pushed out.
+    /// </summary>
+    [Fact]
+    public void RelaxKeepsClothAboveSkinTheModelCarries()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: true);
+        var solve = new MeshVolumeSolve(model);
+        var centre = At(model.Positions, clothStart + 6 * n + 6);
+
+        for (int d = 0; d < 300; d++) solve.Relax(centre, 0.2f, 1f);
+        var during = solve.Positions().ToArray();
+        solve.EndStroke();
+        var after = solve.Positions();
+
+        for (int v = clothStart; v < clothStart + n * n; v++)
+        {
+            float rest = At(model.Positions, v).Y;
+            if (rest < 0.001f) continue;
+            Assert.True(At(during, v).Y >= 0.001f - 1e-5f, $"vertex {v} sank into the skin while painting: {At(during, v).Y * 1000f:F2} mm");
+            Assert.True(At(after, v).Y >= 0.0005f, $"vertex {v} sank into the skin on release: {At(after, v).Y * 1000f:F2} mm");
+        }
+    }
+
+    /// <summary>The same dome with no skin in the model has nothing to stop on, and sinks — the brush is still a
+    /// shrinking relax wherever the body is not known.</summary>
+    [Fact]
+    public void RelaxSinksWhereTheModelHasNoSkin()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: false);
+        var solve = new MeshVolumeSolve(model);
+        int crest = clothStart + 6 * n + 6;
+
+        for (int d = 0; d < 300; d++) solve.Relax(At(model.Positions, crest), 0.2f, 1f);
+        Assert.True(At(solve.Positions(), crest).Y < 0.0005f, $"the crest stayed up at {At(solve.Positions(), crest).Y * 1000f:F2} mm");
+    }
+
+    /// <summary>With the skin in the model, the same stroke leaves the crest on the floor.</summary>
+    [Fact]
+    public void RelaxStopsTheCrestOnTheSkinFloor()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: true);
+        var solve = new MeshVolumeSolve(model);
+        int crest = clothStart + 6 * n + 6;
+
+        for (int d = 0; d < 300; d++) solve.Relax(At(model.Positions, crest), 0.2f, 1f);
+        float y = At(solve.Positions(), crest).Y;
+        Assert.True(y >= 0.001f - 1e-5f && y < 0.003f, $"the crest should rest on the 1 mm floor, is at {y * 1000f:F2} mm");
+    }
+
+    /// <summary>
     /// Cloth pulls AWAY FROM THE SKIN, not along its own normal.
     /// <para/>
     /// The case from game: the hem of a pair of shorts has normals pointing down the leg, and pulling along
@@ -653,9 +798,25 @@ public class MeshVolumeSolveTests
         var centre = At(model.Positions, index[5, 5]);
         for (int i = 0; i < 500; i++) solve.Paint(centre, 0.04f, 0.001f);
 
-        Assert.True(solve.Worst <= MeshVolumeSolve.MaxDisplacement + 1e-6f,
-                    $"worst {solve.Worst} exceeded the {MeshVolumeSolve.MaxDisplacement} cap");
-        Assert.Equal(MeshVolumeSolve.MaxDisplacement, At(solve.Positions(), index[5, 5]).Y, 1e-5f);
+        Assert.Equal(MeshVolumeSolve.GarmentMaxDisplacement, solve.MaxDisplacement);
+        Assert.True(solve.Worst <= solve.MaxDisplacement + 1e-6f,
+                    $"worst {solve.Worst} exceeded the {solve.MaxDisplacement} cap");
+        Assert.Equal(solve.MaxDisplacement, At(solve.Positions(), index[5, 5]).Y, 1e-5f);
+    }
+
+    /// <summary>Hair gets twice the room a garment does — restyling moves strands much further.</summary>
+    [Fact]
+    public void HairMayMoveTwiceAsFar()
+    {
+        var (grid, index) = Grid(11);
+        var model = Assemble([.. grid.Positions], [.. grid.Normals], [], [.. grid.Parts[0].Triangles],
+                             "/mt_c0201h0162_hir_a.mtrl");
+        var solve = new MeshVolumeSolve(model);
+        Assert.Equal(MeshVolumeSolve.HairMaxDisplacement, solve.MaxDisplacement);
+
+        var centre = At(model.Positions, index[5, 5]);
+        for (int i = 0; i < 500; i++) solve.Paint(centre, 0.04f, 0.001f);
+        Assert.Equal(0.2f, At(solve.Positions(), index[5, 5]).Y, 1e-5f);
     }
 
     /// <summary>Undo puts a stroke back where it found the surface, not back to flat.</summary>

@@ -2163,16 +2163,8 @@
     "message": "Pintar sobre el modelo en esta ventana en lugar de sobre tu personaje.",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "Elegir en el personaje",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "Haz clic en una prenda de tu personaje para abrir aquí su mod y su modelo.",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "Haz clic en una prenda de tu personaje… (haz clic de nuevo para cancelar)",
     "description": ""
   },
   "Parts.Live.Hint": {

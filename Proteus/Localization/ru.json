@@ -2163,16 +2163,8 @@
     "message": "Рисовать на модели в этом окне, а не на персонаже.",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "Выбрать на персонаже",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "Щёлкните по одежде персонажа, чтобы открыть здесь её мод и модель.",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "Щёлкните по одежде персонажа… (щёлкните снова для отмены)",
     "description": ""
   },
   "Parts.Live.Hint": {

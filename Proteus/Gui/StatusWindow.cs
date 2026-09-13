@@ -76,27 +76,32 @@ public class StatusWindow : Window
     // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
     private bool _forceSettingsTab;
 
-    // ── the Toggles tab's resizable mode ────────────────────────────────────────────────────────────────
-    // Which tab drew last frame. It cannot be anything but last frame's: a tab's selection is only known
-    // once BeginTabItem has run, which is inside Draw, which is after Begin has already read Flags. So the
-    // mode is applied one frame late — a single frame of auto-fit on the way in, which reads as a window
-    // opening at a remembered size rather than as a glitch.
-    private bool _togglesTabActive;
-    // What PreDraw actually did last frame, which is what tells an ENTRY apart from a frame already in the
-    // mode. Driven off this rather than off a tab click because ImGui remembers the selected tab in its ini:
-    // the very first frame after a game restart is an entry too, with no click anywhere.
-    private bool _resizableActive;
-    private bool _restoreSize;
-    private bool _restoreAutoFit;
-    // Live window size in the resizable mode, UNSCALED — the host multiplies Size by the global scale, so a
-    // scaled value stored here would compound the scale on every restore.
+    // ── sizing ─────────────────────────────────────────────────────────────────────────────────────────
+    // The window is always resizable. Until the user drags it, it fits itself to each tab's controls when
+    // the tab changes (a few frames of AlwaysAutoResize, then the grip back); once they have, it keeps their
+    // size. See PreDraw.
+    //
+    // Whether the Studio tab drew last frame — the edge that means it was left.
+    private bool _studioDrawn;
+    // Which tab drew last frame and this frame, so a change can be seen. A tab's selection is only known once
+    // BeginTabItem has run inside Draw, so the fit it triggers starts the frame after.
+    private string? _lastTab, _tabDrawn;
+    // Frames left in the current auto-fit; 0 when not fitting.
+    private int _fitFrames;
+    // The Studio controls' height the window was last fitted to; reset when the tab changes.
+    private float _studioFitHeight;
+    // The first frame of a fit, which also resets the width — see PreDraw.
+    private bool _fitStarting;
+    // Put the user's remembered size back on the next PreDraw (first open).
+    private bool _restoreSize = true;
+    // Frames during which a size change is the plugin's own doing (a restore, a fit, growing for the viewer)
+    // and not the user dragging.
+    private int _ownResizeFrames;
+    // Live window size, UNSCALED — the host multiplies Size by the global scale, so a scaled value stored
+    // here would compound the scale on every restore.
     private Vector2 _togglesSize;
     private bool _sizeDirty;
     private long _sizeChangedAt;
-    // The size the AUTO-FITTING tabs last settled at, unscaled — handed back on the way out of the Toggles
-    // tab. Null until an auto-fitting tab has drawn once, which a config opening straight onto Toggles can
-    // put off indefinitely.
-    private Vector2? _autoFitSize;
     // Height DrawLastResult took last frame, so the Toggles tab knows how much to leave under itself.
     private float _footerReserve;
 
@@ -447,123 +452,110 @@ public class StatusWindow : Window
     };
 
     /// <summary>
-    /// What the window is on the Toggles tab, which is the one tab worth resizing: it is a model you click
-    /// parts on beside a list of them, and both are better bigger.
+    /// What the window is whenever it is not in the middle of fitting itself: resizable by the user.
     /// </summary>
     /// <remarks>
-    /// 560 wide rather than the 520 above because this tab spends 55% of its width on the model — at 520 the
-    /// list beside it is left with about 200px, which is not a list anyone can read. It stays ≥ 520 so
-    /// <see cref="BrandHeader"/>'s width floor, which is fed from <see cref="AutoFitConstraints"/>'s minimum,
-    /// means the same thing in both modes. 560 tall is the tab summed at its own minimum row height, so the
-    /// vertical scrollbar is a genuine edge case rather than the normal state.
+    /// The same 520 floor as <see cref="AutoFitConstraints"/>, so <see cref="BrandHeader"/>'s width floor means
+    /// the same thing either way; short, because a sparse tab fitted to its controls should not be padded out.
     /// <para/>
     /// A finite maximum rather than <c>float.MaxValue</c>: the host multiplies it by the global scale, and
     /// an infinity is harder to reason about later than a number no monitor reaches.
     /// </remarks>
     private static readonly WindowSizeConstraints ResizableConstraints = new()
     {
-        MinimumSize = new Vector2(560, 560),
+        MinimumSize = new Vector2(520, 160),
         MaximumSize = new Vector2(4000, 3000),
     };
 
+    /// <summary>Frames of auto-fit per fit — see <see cref="PreDraw"/>.</summary>
+    private const int FitFrameCount = 4;
+
+    /// <summary>Fit the window to the current tab, unless the user has given it a size of their own.</summary>
+    private void StartFit()
+    {
+        if (config.WindowUserSized) return;
+        _fitFrames = FitFrameCount;
+        _fitStarting = true;
+    }
+
     /// <summary>
-    /// Pick the window's mode for this frame: auto-fitting everywhere, resizable on the Toggles tab.
+    /// Size the window for this frame. It is always resizable; until the user drags it, it fits itself to the
+    /// current tab's controls whenever the tab changes, and once they have, it keeps their size.
     /// </summary>
     /// <remarks>
     /// This is the hook that can do it. Dalamud's window host runs <c>PreDraw</c>, then applies
     /// <see cref="Window.Size"/> / <see cref="Window.SizeConstraints"/>, then reads <see cref="Window.Flags"/>
     /// and calls <c>Begin</c> — so all three land in the same frame from here.
     /// <para/>
-    /// <see cref="Window.Flags"/> is assigned in BOTH branches every frame, not cleared once on the way in:
-    /// it is a plain property, and clearing the bit only on the transition would mean auto-fit never came
-    /// back. <see cref="Window.Size"/> is released here rather than at the end of <see cref="Draw"/> because
-    /// Draw does not run on a collapsed window — releasing it there would leave a window collapsed on the
-    /// Toggles tab pinned to <c>ImGuiCond.Always</c> forever, unresizable.
+    /// A fit is a few frames of <c>AlwaysAutoResize</c> (which has no grip) and then the flag comes off again, so
+    /// the window is left at its fitted size with the grip back. Several frames, not one: auto-fit measures the
+    /// content drawn the frame before, so the first frame only starts the measurement.
+    /// <para/>
+    /// <see cref="Window.Flags"/> is assigned every frame, not only on transitions: it is a plain property, and
+    /// clearing the bit only once would leave a missed frame stuck auto-fitting. <see cref="Window.Size"/> is
+    /// released here rather than at the end of <see cref="Draw"/> because Draw does not run on a collapsed
+    /// window — releasing it there would leave a collapsed window pinned to <c>ImGuiCond.Always</c> for good.
     /// <para/>
     /// One thing this cannot beat: Dalamud's own title-bar "pin" ORs in <c>NoResize</c>, so a pinned window
-    /// has no grip here either. That is the pin working, not this failing.
+    /// has no grip either. That is the pin working, not this failing.
     /// <para/>
-    /// LEAVING the tab needs an explicit size for a reason that is not symmetric with entering it. An
-    /// auto-fitting window measures the content it drew, and roughly twenty <c>PushTextWrapPos(0)</c> calls
-    /// across the other tabs wrap at the CONTENT EDGE — so a wrapped paragraph is exactly as wide as the
-    /// window already is, and the measured width equals the current width at any width. That is a fixed
-    /// point the window can climb but never fall from. It is a different thing from the width floor in
-    /// <see cref="AutoFitConstraints"/>, which decides how narrow the window may START; this decides that it
-    /// never comes back down. Harmless while nothing could widen the window past its own fit;
-    /// now the Toggles tab can, and every other tab would keep the dragged width (up to MaximumSize) for the
-    /// rest of the session. Handing back the size the auto-fitting tabs last settled at re-measures the
-    /// wrapping against that width instead, which lands exactly where they were before.
+    /// THE RATCHET. An auto-fitting window measures the content it drew, and roughly twenty
+    /// <c>PushTextWrapPos(0)</c> calls across the tabs wrap at the CONTENT EDGE — so a wrapped paragraph is
+    /// exactly as wide as the window already is, and the measured width equals the current width at any width.
+    /// Fitting from a wide window therefore keeps it wide. Each fit starts by putting the width back to
+    /// <see cref="AutoFitConstraints"/>'s floor, so the paragraphs are measured from there.
     /// </remarks>
     public override void PreDraw()
     {
         FlushPendingSize();
+        if (_ownResizeFrames > 0) _ownResizeFrames--;
 
-        if (_togglesTabActive)
+        // Released by default, so the grip moves the edge instead of being overwritten each frame.
+        Size = null;
+
+        if (_restoreSize)
         {
-            if (!_resizableActive) _restoreSize = true;
-            _resizableActive = true;
-
-            Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
-            SizeConstraints = ResizableConstraints;
-
-            if (_restoreSize)
+            _restoreSize = false;
+            if (config.WindowUserSized)
             {
-                _restoreSize = false;
-                _togglesSize = ClampToResizable(
-                    new Vector2(config.TogglesWindowWidth, config.TogglesWindowHeight));
+                _togglesSize = ClampToResizable(new Vector2(config.TogglesWindowWidth, config.TogglesWindowHeight));
                 Size = _togglesSize;
                 SizeCondition = ImGuiCond.Always;
+                _ownResizeFrames = 3;
             }
             else
             {
-                // Released, so the grip actually moves the edge instead of being overwritten each frame.
-                Size = null;
+                StartFit();
             }
+        }
 
-            if (_growForModel)
+        if (_fitFrames > 0)
+        {
+            _fitFrames--;
+            Flags |= ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = AutoFitConstraints;
+            _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
+
+            // The first frame puts the width back to the floor before fitting — see the remarks on the ratchet:
+            // wrapped paragraphs measure as wide as the window already is, so fitting from a wide window would
+            // keep it wide. The height is left as it is; auto-fit settles it.
+            if (_fitStarting)
             {
-                _growForModel = false;
-                GrowForModel();
+                _fitStarting = false;
+                Size = new Vector2(AutoFitConstraints.MinimumSize.X, MathF.Max(_togglesSize.Y, AutoFitConstraints.MinimumSize.Y));
+                SizeCondition = ImGuiCond.Always;
             }
         }
         else
         {
-            // Leaving the tab, which needs a size of its own even though what we are going back to fits
-            // itself — see the remarks on the ratchet.
-            if (_resizableActive)
-            {
-                _restoreAutoFit = true;
-                // The brush's autosave runs off the tab's own drawing, so leaving the tab would park a pending
-                // edit until the tab is next opened. Saved on the way out instead.
-                parts.FlushPending();
-            }
-            _resizableActive = false;
+            Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = ResizableConstraints;
+        }
 
-            Flags |= ImGuiWindowFlags.AlwaysAutoResize;
-            SizeConstraints = AutoFitConstraints;
-
-            if (_restoreAutoFit)
-            {
-                _restoreAutoFit = false;
-                // Width is the axis that ratchets, so it is the one being put back. The fallback resets it
-                // to the floor, which costs one narrow frame and is still better than staying stuck at
-                // whatever the user dragged to.
-                var fit = _autoFitSize ?? new Vector2(AutoFitConstraints.MinimumSize.X, _togglesSize.Y);
-
-                // The height is pinned to whichever is TALLER, and that is not cosmetic. The remembered fit
-                // belongs to the tab we left from, which may be sparser than the one we are landing on — and
-                // a pinned frame too short for its content raises a vertical scrollbar, whose width comes off
-                // the wrap edge. The paragraphs would then measure a scrollbar narrower, and since the fixed
-                // point below never climbs back down, the window would keep those pixels for good and lose
-                // another set on the next round trip. Too tall costs one frame that auto-fit immediately
-                // corrects; too short is permanent. The constraints clamp this back to MaximumSize anyway.
-                Size = new Vector2(fit.X, MathF.Max(fit.Y, _togglesSize.Y));
-                SizeCondition = ImGuiCond.Always;
-            }
-            else
-            {
-                Size = null;
-            }
+        if (_growForModel)
+        {
+            _growForModel = false;
+            GrowForModel();
         }
     }
 
@@ -592,10 +584,14 @@ public class StatusWindow : Window
         if (grown == _togglesSize) return;
 
         _togglesSize = grown;
-        _sizeDirty = true;
-        _sizeChangedAt = Environment.TickCount64;
+        if (config.WindowUserSized)
+        {
+            _sizeDirty = true;
+            _sizeChangedAt = Environment.TickCount64;
+        }
         Size = grown;
         SizeCondition = ImGuiCond.Always;
+        _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
         _keepOnScreen = true;
     }
 
@@ -637,15 +633,15 @@ public class StatusWindow : Window
         FlushPendingSize();
         // The brush's autosave timer only runs while the Toggles tab draws, so a stroke made in the last
         // moments before closing would otherwise wait, unsaved, until the window next opens — or be lost for
-        // good if the game closes first.
-        parts.FlushPending();
+        // good if the game closes first. The live preview comes down with it.
+        parts.Leave();
     }
 
     /// <summary>
     /// Write any brush edit still waiting to save, without reloading the mod or redrawing — for the plugin's
     /// own teardown, where the file must land but nothing else should be touched.
     /// </summary>
-    public void FlushPendingBrush() => parts.FlushPending(refreshGame: false);
+    public void FlushPendingBrush() => parts.Leave(refreshGame: false);
 
     /// <summary>Open the window with the Settings tab selected (the plugin-installer gear icon).</summary>
     public void OpenToSettings()
@@ -697,10 +693,10 @@ public class StatusWindow : Window
         // release it or the user could never collapse the window again.
         Collapsed = null;
 
-        // Which tab is selected is answered below, by the tab that draws. Clearing it first means a frame in
-        // which no tab draws at all — an empty tab bar, a tab removed by a future edit — falls back to
-        // auto-fit rather than leaving the window stuck resizable with nothing in it.
-        _togglesTabActive = false;
+        // Which tab is selected is answered below, by the tab that draws.
+        _tabDrawn = null;
+        bool studioWasDrawn = _studioDrawn;
+        _studioDrawn = false;
 
         // The dragged size, read back where ImGui has already applied this frame's grip movement. Stored
         // unscaled, since PreDraw hands it back to a host that scales it. The threshold is only there to
@@ -720,22 +716,23 @@ public class StatusWindow : Window
             if (fit != pos) ImGui.SetWindowPos(fit);
         }
 
-        if (_resizableActive)
         {
             var live = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
             if (MathF.Abs(live.X - _togglesSize.X) > 0.5f || MathF.Abs(live.Y - _togglesSize.Y) > 0.5f)
             {
-                _togglesSize   = live;
-                _sizeDirty     = true;
-                _sizeChangedAt = Environment.TickCount64;
+                _togglesSize = live;
+
+                // A change nobody here asked for, made with the mouse held, is the user dragging the grip: from
+                // now on the window keeps their size and stops fitting itself to each tab.
+                if (_fitFrames == 0 && _ownResizeFrames == 0 && ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                    config.WindowUserSized = true;
+
+                if (config.WindowUserSized)
+                {
+                    _sizeDirty     = true;
+                    _sizeChangedAt = Environment.TickCount64;
+                }
             }
-        }
-        else
-        {
-            // What the auto-fitting tabs settled at, so leaving the Toggles tab can put it back. Read every
-            // frame rather than once on the way in: the fit legitimately moves as content changes, and the
-            // value wanted is the last one, not the one from whenever the user first opened Toggles.
-            _autoFitSize = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
         }
 
         // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
@@ -787,26 +784,38 @@ public class StatusWindow : Window
                 DrawTabBarRefresh(barTop);
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Mods, "mods"))
-                    if (t) DrawModsTab();
+                    if (t) { _tabDrawn = "mods"; DrawModsTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
-                    if (t) DrawBindingsTab();
+                    if (t) { _tabDrawn = "bindings"; DrawBindingsTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
-                    if (t) DrawCreateTab();
+                    if (t) { _tabDrawn = "create"; DrawCreateTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
-                    if (t) DrawImportTab();
+                    if (t) { _tabDrawn = "import"; DrawImportTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
-                    if (t) DrawExportTab();
+                    if (t) { _tabDrawn = "export"; DrawExportTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
                     if (t)
                     {
-                        // The one tab that asks for a resizable window; PreDraw grants it next frame.
-                        _togglesTabActive = true;
-                        parts.Draw(fillHeight: _resizableActive, reserveBelow: _footerReserve);
+                        _tabDrawn = "toggles";
+                        _studioDrawn = true;
+                        // The model row may take all the height left only while the window is NOT auto-fitting:
+                        // under AlwaysAutoResize, a row sized from the window's height grows the window, which
+                        // grows the row, without bound.
+                        parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
+
+                        // The controls grew past what the window was fitted to — a garment opened on entry, a
+                        // brush tool with more controls picked — so fit again, or the new buttons sit below the
+                        // bottom edge. Grow only; a shorter panel keeps the room it had.
+                        if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)
+                        {
+                            _studioFitHeight = parts.ControlsHeight;
+                            StartFit();
+                        }
 
                         // The viewer appearing is the moment the window is too small, not the tab opening:
                         // a mod picker fits in the remembered size, a model you paint on does not.
@@ -818,10 +827,21 @@ public class StatusWindow : Window
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
                 {
                     _forceSettingsTab = false;
-                    if (t) DrawSettingsTab();
+                    if (t) { _tabDrawn = "settings"; DrawSettingsTab(); }
                 }
             }
         }
+
+        // A different tab than last frame: fit to its controls, unless the user has sized the window.
+        if (_tabDrawn != null && _tabDrawn != _lastTab)
+        {
+            if (_lastTab != null) StartFit();
+            _lastTab = _tabDrawn;
+            _studioFitHeight = 0f;
+        }
+
+        // Left the Studio tab this frame: save anything waiting and take the live preview down.
+        if (studioWasDrawn && !_studioDrawn) parts.Leave();
 
         // Measured, not guessed, so the Toggles tab knows how much of the window is still spoken for below
         // it. It over-reads by one ItemSpacing.Y, which is the safe direction: the tab leaves a few pixels

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -28,6 +29,11 @@ public class PenumbraBridge : IDisposable
     private readonly RedrawObject redrawObject;
     private readonly OpenMainWindow openMainWindow;
     private readonly GetGameObjectResourcePaths getGameObjectResourcePaths;
+    private readonly AddTemporaryMod addTemporaryMod;
+    private readonly RemoveTemporaryMod removeTemporaryMod;
+
+    /// <summary>When this bridge last changed a temporary mod, so Penumbra's echo of it can be dropped.</summary>
+    private long lastOwnTemporaryModTick;
 
     private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
     private readonly EventSubscriber<string> modAddedSub;
@@ -72,9 +78,20 @@ public class PenumbraBridge : IDisposable
         redrawObject = new RedrawObject(pluginInterface);
         openMainWindow = new OpenMainWindow(pluginInterface);
         getGameObjectResourcePaths = new GetGameObjectResourcePaths(pluginInterface);
+        addTemporaryMod = new AddTemporaryMod(pluginInterface);
+        removeTemporaryMod = new RemoveTemporaryMod(pluginInterface);
 
         modSettingChangedSub = Penumbra.Api.IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
-            (change, collId, modDir, inherited) => ModSettingChanged?.Invoke(change, collId, modDir, inherited));
+            (change, collId, modDir, inherited) =>
+            {
+                // Our own temporary-mod change coming back. The live brush swaps its preview several times a
+                // second, and every listener here — the compositor, the hat watcher — would otherwise treat each
+                // swap as the player's mod setup changing. Penumbra reports a temporary mod with no directory.
+                if (change == ModSettingChange.TemporaryMod && string.IsNullOrEmpty(modDir)
+                    && unchecked(Environment.TickCount64 - Interlocked.Read(ref lastOwnTemporaryModTick)) < 1000)
+                    return;
+                ModSettingChanged?.Invoke(change, collId, modDir, inherited);
+            });
         modAddedSub = Penumbra.Api.IpcSubscribers.ModAdded.Subscriber(pluginInterface,
             modDir => ModAdded?.Invoke(modDir));
         modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
@@ -388,6 +405,38 @@ public class PenumbraBridge : IDisposable
     /// Penumbra absent, or the IPC threw — which callers need in order to know whether to expect the
     /// redraw's downstream echoes (see <c>CompositorService.StampOwnRedraw</c>).
     /// </summary>
+    /// <summary>
+    /// Add or replace a temporary mod in the local player's collection: <paramref name="paths"/> maps game paths
+    /// to files on disk. Re-adding the same tag and priority swaps its redirects in place. Nothing is written to
+    /// any mod, and Penumbra forgets it on its own restart.
+    /// </summary>
+    public bool SetPlayerTemporaryMod(string tag, Dictionary<string, string> paths, int priority)
+    {
+        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        try
+        {
+            Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);   // before: the echo can be synchronous
+            var ec = addTemporaryMod.Invoke(tag, collection, paths, string.Empty, priority);
+            if (ec == PenumbraApiEc.Success) return true;
+            log.Warning("[Proteus] AddTemporaryMod {0} -> {1}", tag, ec);
+            return false;
+        }
+        catch (Exception ex) { log.Error(ex, "AddTemporaryMod failed"); return false; }
+    }
+
+    /// <summary>Remove a temporary mod added by <see cref="SetPlayerTemporaryMod"/>.</summary>
+    public bool RemovePlayerTemporaryMod(string tag, int priority)
+    {
+        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        try
+        {
+            Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);
+            var ec = removeTemporaryMod.Invoke(tag, collection, priority);
+            return ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged;
+        }
+        catch (Exception ex) { log.Error(ex, "RemoveTemporaryMod failed"); return false; }
+    }
+
     public bool RedrawPlayer()
     {
         if (!IsAvailable) return false;

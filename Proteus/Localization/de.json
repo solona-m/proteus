@@ -2163,16 +2163,8 @@
     "message": "Auf dem Modell in diesem Fenster malen statt auf deinem Charakter.",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "Am Charakter wählen",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "Klicke ein Kleidungsstück an deinem Charakter an, um seine Mod und sein Modell hier zu öffnen.",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "Klicke ein Kleidungsstück an deinem Charakter an… (erneut klicken zum Abbrechen)",
     "description": ""
   },
   "Parts.Live.Hint": {

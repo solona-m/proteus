@@ -2163,16 +2163,8 @@
     "message": "캐릭터 대신 이 창의 모델 위에 칠합니다.",
     "description": ""
   },
-  "Parts.Live.Pick": {
-    "message": "캐릭터에서 선택",
-    "description": ""
-  },
   "Parts.Live.Pick.Tip": {
     "message": "캐릭터의 장비를 클릭하면 해당 모드와 모델을 여기에서 엽니다.",
-    "description": ""
-  },
-  "Parts.Live.Picking": {
-    "message": "캐릭터의 장비를 클릭하세요… (다시 클릭하면 취소)",
     "description": ""
   },
   "Parts.Live.Hint": {

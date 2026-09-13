@@ -2163,17 +2163,9 @@
     "message": "Paint on the model in this window instead of on your character.",
     "description": "Tooltip for the checkbox. Keep the line break; the tooltip is not wrapped."
   },
-  "Parts.Live.Pick": {
-    "message": "Pick on character",
-    "description": "Button: start picking a garment by clicking it on the character."
-  },
   "Parts.Live.Pick.Tip": {
     "message": "Click a garment on your character to open its mod and model here.",
     "description": "Tooltip for the pick button."
-  },
-  "Parts.Live.Picking": {
-    "message": "Click a garment on your character… (click again to cancel)",
-    "description": "Shown while waiting for the click. Replaces the button's text."
   },
   "Parts.Live.Hint": {
     "message": "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.",

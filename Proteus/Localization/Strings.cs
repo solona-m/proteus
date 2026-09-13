@@ -1654,13 +1654,8 @@ public sealed class PartsStrings
     public readonly string ShowModelViewTip = Loc.Localize("Parts.ShowModelView.Tip",
         "Paint on the model in this window instead of on your character.");
 
-    public readonly string LivePick = Loc.Localize("Parts.Live.Pick", "Pick on character");
-
     public readonly string LivePickTip = Loc.Localize("Parts.Live.Pick.Tip",
         "Click a garment on your character to open its mod and model here.");
-
-    public readonly string LivePicking = Loc.Localize("Parts.Live.Picking",
-        "Click a garment on your character… (click again to cancel)");
 
     public readonly string LiveHint = Loc.Localize("Parts.Live.Hint",
         "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.");

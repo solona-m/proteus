@@ -1527,6 +1527,7 @@ public class CompositorService : IDisposable
         // StateChanged(Reapply), which lands here. Ignore events within a short window of our call.
         var msSinceReapply = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnReapplyTick));
         if (msSinceReapply >= 0 && msSinceReapply < 250) return;
+        if (Environment.TickCount64 < Interlocked.Read(ref _glamourerEchoUntil)) return;   // see ExpectGlamourerGearReload
 
         // (Invisible-glasses re-assert needs no bookkeeping here: a design that reverts our ApplyFlag.Once
         // glasses just empties the slot, and the recomposite this triggers re-injects. Ownership is derived
@@ -9760,6 +9761,27 @@ public class CompositorService : IDisposable
              + $"hair='{hair ?? "(none)"}' resolved='{file ?? "(null)"}'";
     }
 
+    /// <summary>Until this tick, Glamourer state changes are the echo of a reload Proteus caused.</summary>
+    private long _glamourerEchoUntil;
+
+    /// <summary>
+    /// A Penumbra temporary mod was just changed in the player's collection, and Glamourer — when it is running —
+    /// reloads the player's gear in place by itself a few frames later: it reapplies every actor in a collection
+    /// whose temporary mods change. So the live brush does NOT reapply as well; that reloaded the gear twice per
+    /// preview. This only marks the coming reapply as our own echo, so neither the compositor nor design binding
+    /// takes it for the player applying something.
+    /// </summary>
+    /// <returns>False when Glamourer is not available to do the reload.</returns>
+    public bool ExpectGlamourerGearReload()
+    {
+        if (!glamourer.IsAvailable) return false;
+        // A second, not the usual 250 ms: Glamourer waits five FRAMES, which at a low frame rate is well past that.
+        long until = Environment.TickCount64 + 1000;
+        Interlocked.Exchange(ref _glamourerEchoUntil, until);
+        glamourer.ExpectOwnReapplyUntil(until);
+        return true;
+    }
+
     /// <summary>
     /// Redraw the player so the game re-reads a model file that changed on disk, and do nothing else.
     /// <para/>
@@ -9773,30 +9795,6 @@ public class CompositorService : IDisposable
     /// composite. Nothing about a hairstyle touches the composite, so that was a full skin rebuild bought
     /// for nothing every time the player changed hair.
     /// </summary>
-    /// <summary>
-    /// Have the game re-read a gear model that changed on disk, in place where possible: Glamourer reapplies the
-    /// player's equipment, which reloads each slot without despawning the character, and only when that is
-    /// unavailable does this fall back to a full redraw. For the live brush, which reloads after every stroke
-    /// while the user is looking straight at the character — a full redraw each time flashes it out.
-    /// As with <see cref="RedrawForChangedModel"/>, the caller has already told Penumbra to reload the mod.
-    /// </summary>
-    public void ReloadChangedGear()
-    {
-        Task.Run(() =>
-        {
-            try
-            {
-                Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
-                if (Plugin.Framework.RunOnFrameworkThread(glamourer.ReapplyPlayerState).GetAwaiter().GetResult())
-                    return;
-                StampOwnRedraw();
-                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
-                    CancelOwnRedrawEcho();
-            }
-            catch (Exception ex) { log.Error(ex, "[Proteus] in-place reload for a changed model failed"); }
-        });
-    }
-
     public void RedrawForChangedModel()
     {
         Task.Run(() =>
