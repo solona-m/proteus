@@ -2127,6 +2127,30 @@
     "message": "同一把笔反向使用，适用于离身体太远的衣物。",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "平滑",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "在模型上涂抹即可平滑表面 — 衣物自带的凹凸，或拉得不平的地方。\n与 3ds Max 的松弛一样会收缩：曲面会变平，布料可能向身体下沉。",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "涂抹时表面变平滑的速度。低则柔和易控，高则几乎立刻平滑。\n\n靠近开放边缘（如下摆）时，平滑会把边缘稍微向内收。",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "搭桥",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "横跨凹陷处（臀沟、褶皱）涂抹，让布料笔直地绷过去，而不是顺着\n身体陷进去。它只会抬升，并保留圆润部位原有的形状。",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "涂抹时布料升起横跨凹陷的速度。低则柔和易控，高则几乎立刻填平空隙。",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "开关",
+    "message": "工作室",
     "description": ""
   },
   "Tab.Settings": {
