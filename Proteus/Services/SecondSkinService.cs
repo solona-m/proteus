@@ -544,6 +544,27 @@ public sealed class SecondSkinService
     internal static bool GovernsModel(IReadOnlyList<ContentAttributeGroup>? groups, string modelRel)
         => groups is { Count: > 0 } && groups.Any(g => Governs(g, modelRel));
 
+    /// <summary>
+    /// What the game has toggled on one drawn model — its enabled shape keys and switched-off variant
+    /// attributes, see <see cref="Interop.BodyShapeReader.ReadEnabledShapes"/>.
+    /// <para/>
+    /// The live walk keys each model by the stem of the file the game LOADED, and for a modded model that is
+    /// the mod's own file on disk: Neolithe's legs arrive as <c>gen c small</c>, not <c>c0201e0000_dwn</c>. So
+    /// the game path's stem only finds a vanilla model, and the resolved disk path is tried as well. Asking by
+    /// game path alone matched nothing on any modded body, which is why neither its shape keys nor its
+    /// variant attributes ever reached the shell.
+    /// </summary>
+    internal static HashSet<string>? LiveModelState(
+        IReadOnlyDictionary<string, HashSet<string>>? live, string gamePath, string? diskPath)
+    {
+        if (live == null) return null;
+        // The disk file first when there is one: it IS what the game loaded, while a game-path stem could
+        // belong to some other drawn model that happens to share it.
+        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.Stem(diskPath), out var byDisk))
+            return byDisk;
+        return live.TryGetValue(Interop.BodyShapeReader.Stem(gamePath), out var byGame) ? byGame : null;
+    }
+
     internal static IReadOnlySet<string>? HiddenAttributes(
         IReadOnlyList<ContentAttributeGroup>? groups, string modelRel, IReadOnlyList<string> attrNames,
         IReadOnlyDictionary<string, List<string>>? selected)
@@ -1645,9 +1666,8 @@ public sealed class SecondSkinService
                 part, partType ?? "(unknown)", bodyGamePath, bytes.Length / 1024, shape,
                 bodyDisk ?? "(game data)");
 
-            // Shape keys enabled on this exact body model (matched by file stem, e.g. c0201e0000_dwn).
-            HashSet<string>? partShapes = null;
-            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(bodyGamePath), out partShapes);
+            // Shape keys enabled on this exact body model (matched by file stem — see LiveModelState).
+            var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);
 
             bodies.Add((bytes, partShapes, bodyGamePath, partType));
         }
@@ -1730,7 +1750,7 @@ public sealed class SecondSkinService
                     // so folding in the face and other stems costs nothing.
                     HashSet<string>? wholeShapes = null;
                     if (enabledBodyShapes != null
-                        && !enabledBodyShapes.TryGetValue(Interop.BodyShapeReader.Stem(whole.Path), out wholeShapes))
+                        && (wholeShapes = LiveModelState(enabledBodyShapes, whole.Path, whole.Disk)) == null)
                     {
                         wholeShapes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var set in enabledBodyShapes.Values) wholeShapes.UnionWith(set);
@@ -2008,7 +2028,11 @@ public sealed class SecondSkinService
             bodies.Select((b, i) => new SecondSkinWriter.SourceSpec(
                 b.Bytes,
                 KeepMaterial: null,
-                EnabledShapes: b.Shapes,
+                EnabledShapes: Interop.BodyShapeReader.Split(b.Shapes).Shapes,
+                // The variant this body is drawing, when it ships more than one of a region — see
+                // BodyShapeReader.ReadEnabledShapes. Independent of the redundancy setting: this is not
+                // judging what is redundant, it is copying what the game draws.
+                HiddenAttributes: Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
                 UvConv: i < uvConverters.Count ? uvConverters[i] : null,
                 DropConnectors: dropRedundant,
                 // Decided per part above: a gen2 part whose UV genuinely reads as mirrored AND fits one
@@ -2139,8 +2163,7 @@ public sealed class SecondSkinService
             if (haveGeom && hPos.Length >= 3)
                 shape = $"{hPos.Length / 3}v/{hTri.Length / 3}t";
 
-            HashSet<string>? partShapes = null;
-            enabledBodyShapes?.TryGetValue(Interop.BodyShapeReader.Stem(pick), out partShapes);
+            var partShapes = LiveModelState(enabledBodyShapes, pick, penumbra.ResolvePlayer(pick));
 
             // Its own path's race code, with no vote: there is one source and it is authored at the
             // character's own race, which is exactly why it must be hosted with no deform.
@@ -2203,7 +2226,8 @@ public sealed class SecondSkinService
                 [new SecondSkinWriter.SourceSpec(
                     pickBytes,
                     KeepMaterial: keep,
-                    EnabledShapes: partShapes,
+                    EnabledShapes: Interop.BodyShapeReader.Split(partShapes).Shapes,
+                    HiddenAttributes: Interop.BodyShapeReader.Split(partShapes).HiddenAttributes,
                     // Null for ordinary face art, which is authored in the face's own layout. Non-null only
                     // for a doubled sheet, where the geometry — not the art — is what moves.
                     UvConv: faceConv,
@@ -4094,7 +4118,8 @@ public sealed class SecondSkinService
             {
                 var sp = sources[i];
                 sb.AppendLine($"source[{i}] dropRedundant={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
-                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")}");
+                            + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")} "
+                            + $"hiddenAttrs={(sp.HiddenAttributes is { } ha ? string.Join(',', ha) : "")}");
             }
             for (int i = 0; i < layers.Count; i++)
             {
