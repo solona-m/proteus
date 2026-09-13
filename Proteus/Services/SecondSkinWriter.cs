@@ -8910,15 +8910,19 @@ public static class SecondSkinWriter
                 (tanAdj.TryGetValue(a, out var la) ? la : tanAdj[a] = new HashSet<int>()).Add(b);
                 (tanAdj.TryGetValue(b, out var lb) ? lb : tanAdj[b] = new HashSet<int>()).Add(a);
             }
+            // A local function per corner rather than `foreach (int n in stackalloc[] { na, nb, nc })` in the
+            // loops below: a stackalloc is only freed when the method returns, so one inside a loop grows the
+            // frame every iteration — see RelaxedNormals, where exactly that overflowed the stack.
+            void TanFace(int n, int a, int b, int c)
+                => (tanFaces.TryGetValue(n, out var lf) ? lf : tanFaces[n] = new List<(int, int, int)>())
+                    .Add((a, b, c));
             var capTri = new List<(int A, int B, int C)>(newTris.Count);
             foreach (var (ta, tb, tc) in newTris)
             {
                 int na = nodeOf[ta], nb = nodeOf[tb], nc = nodeOf[tc];
                 capTri.Add((na, nb, nc));
                 TanEdge(na, nb); TanEdge(nb, nc); TanEdge(nc, na);
-                foreach (int n in stackalloc[] { na, nb, nc })
-                    (tanFaces.TryGetValue(n, out var lf) ? lf : tanFaces[n] = new List<(int, int, int)>())
-                        .Add((na, nb, nc));
+                TanFace(na, na, nb, nc); TanFace(nb, na, nb, nc); TanFace(nc, na, nb, nc);
             }
 
             // The surviving shell around the cap joins the graph too — without it a cap vertex on the
@@ -8930,9 +8934,7 @@ public static class SecondSkinWriter
                 int na = nodeOf[tris[t]], nb = nodeOf[tris[t + 1]], nc = nodeOf[tris[t + 2]];
                 if (cutNode[na] || cutNode[nb] || cutNode[nc]) continue;
                 TanEdge(na, nb); TanEdge(nb, nc); TanEdge(nc, na);
-                foreach (int n in stackalloc[] { na, nb, nc })
-                    (tanFaces.TryGetValue(n, out var lf2) ? lf2 : tanFaces[n] = new List<(int, int, int)>())
-                        .Add((na, nb, nc));
+                TanFace(na, na, nb, nc); TanFace(nb, na, nb, nc); TanFace(nc, na, nb, nc);
             }
 
             Vec3 Now(int n) => new(start[n].X + target[n].X, start[n].Y + target[n].Y, start[n].Z + target[n].Z);
@@ -12098,16 +12100,18 @@ public static class SecondSkinWriter
         // How much each node is relaxed: full at a nipple, nothing at the disc's edge.
         var amount = new float[count];
         int touched = 0;
+        // Per nipple through a local function, not `foreach (int nip in stackalloc[] { nipL, nipR })` inside
+        // the node loop: a stackalloc is only freed when the method returns, so that grew the frame once per
+        // region node — see RelaxedNormals, where the same pattern overflowed the game's stack.
+        float Reach(int n, int nip)
+        {
+            if (nip < 0) return 0f;
+            float r = Across(n, nip) / radius;
+            return r >= 1f ? 0f : 1f - Smoothstep(r);
+        }
         foreach (int n in region)
         {
-            float best = 0f;
-            foreach (int nip in stackalloc[] { nipL, nipR })
-            {
-                if (nip < 0) continue;
-                float r = Across(n, nip) / radius;
-                if (r >= 1f) continue;
-                best = MathF.Max(best, 1f - Smoothstep(r));
-            }
+            float best = MathF.Max(Reach(n, nipL), Reach(n, nipR));
             if (best <= 0f) continue;
             amount[n] = best * w[n];
             touched++;
@@ -15293,8 +15297,14 @@ public static class SecondSkinWriter
             float cxp = uy * wz - uz * wy, cyp = uz * wx - ux * wz, czp = ux * wy - uy * wx;
             if (cxp * cxp + cyp * cyp + czp * czp <= 1e-24f) continue;   // collapsed: no direction to give
 
-            foreach (int n in stackalloc[] { na, nb, nc })
-                accum[n] = new Vec3(accum[n].X + cxp, accum[n].Y + cyp, accum[n].Z + czp);
+            // Unrolled, NOT `foreach (int n in stackalloc[] { na, nb, nc })`. A stackalloc is only freed when
+            // the METHOD returns, so inside this loop it grew the frame by a few bytes per face and never gave
+            // them back — and the analyzer that catches `Span<T> x = stackalloc` in a loop does not catch the
+            // foreach form. Harmless while every caller passed one mesh; the brush passes a whole model, and
+            // ~60,000 faces of it overflowed the game's 1 MB render-thread stack, which .NET cannot catch.
+            accum[na] = new Vec3(accum[na].X + cxp, accum[na].Y + cyp, accum[na].Z + czp);
+            accum[nb] = new Vec3(accum[nb].X + cxp, accum[nb].Y + cyp, accum[nb].Z + czp);
+            accum[nc] = new Vec3(accum[nc].X + cxp, accum[nc].Y + cyp, accum[nc].Z + czp);
         }
 
         // SMOOTH THE NORMAL FIELD. Everything above gives each node the area-weighted sum of the faces
