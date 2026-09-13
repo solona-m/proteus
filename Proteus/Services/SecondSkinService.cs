@@ -548,21 +548,26 @@ public sealed class SecondSkinService
     /// What the game has toggled on one drawn model — its enabled shape keys and switched-off variant
     /// attributes, see <see cref="Interop.BodyShapeReader.ReadEnabledShapes"/>.
     /// <para/>
-    /// The live walk keys each model by the stem of the file the game LOADED, and for a modded model that is
-    /// the mod's own file on disk: Neolithe's legs arrive as <c>gen c small</c>, not <c>c0201e0000_dwn</c>. So
-    /// the game path's stem only finds a vanilla model, and the resolved disk path is tried as well. Asking by
-    /// game path alone matched nothing on any modded body, which is why neither its shape keys nor its
-    /// variant attributes ever reached the shell.
+    /// The live walk keys each model by the file the game LOADED, and for a modded model that is the mod's own
+    /// file on disk: Neolithe's legs arrive as <c>…/default legs - smallclothes/gen c small.mdl</c>, not
+    /// <c>c0201e0000_dwn</c>. Asking by game path alone matched nothing on any modded body, which is why
+    /// neither its shape keys nor its variant attributes ever reached the shell.
+    /// <para/>
+    /// Full paths first, disk before game — the disk file IS what was loaded. The file-name stem only after
+    /// both miss, and the walk only records a stem no two drawn models share, so the fallback can come back
+    /// empty but never with another model's set.
     /// </summary>
     internal static HashSet<string>? LiveModelState(
         IReadOnlyDictionary<string, HashSet<string>>? live, string gamePath, string? diskPath)
     {
         if (live == null) return null;
-        // The disk file first when there is one: it IS what the game loaded, while a game-path stem could
-        // belong to some other drawn model that happens to share it.
-        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.Stem(diskPath), out var byDisk))
+        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.PathKey(diskPath), out var byDisk))
             return byDisk;
-        return live.TryGetValue(Interop.BodyShapeReader.Stem(gamePath), out var byGame) ? byGame : null;
+        if (live.TryGetValue(Interop.BodyShapeReader.PathKey(gamePath), out var byGame))
+            return byGame;
+        if (diskPath != null && live.TryGetValue(Interop.BodyShapeReader.Stem(diskPath), out var byDiskStem))
+            return byDiskStem;
+        return live.TryGetValue(Interop.BodyShapeReader.Stem(gamePath), out var byGameStem) ? byGameStem : null;
     }
 
     internal static IReadOnlySet<string>? HiddenAttributes(

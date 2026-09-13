@@ -27,11 +27,18 @@ public static unsafe class BodyShapeReader
     public const string HiddenAttributePrefix = "!";
 
     /// <summary>
-    /// Map of each drawn model's file-name STEM (e.g. <c>c0201e0000_dwn</c>) to the set of shape-key names
-    /// currently enabled on it. Empty when the player isn't drawable this frame. Keyed by stem, not full
-    /// path, so a shell part matches whether the live resource reports a disk path or a game path — both
-    /// end in the same <c>c{race}{slot}.mdl</c>. Scoped per model so only the shapes enabled on THAT body
-    /// are baked, never a connector shape enabled on some other model.
+    /// Map of each drawn model to the set of shape-key names currently enabled on it. Empty when the player
+    /// isn't drawable this frame. Scoped per model so only the shapes enabled on THAT body are baked, never a
+    /// connector shape enabled on some other model.
+    /// <para/>
+    /// Keyed TWICE: by the full path of the file the game loaded (<see cref="PathKey"/>), and by its file-name
+    /// stem (<see cref="Stem"/>) wherever that stem is unambiguous. The path is the real identity. For a
+    /// modded model it is the mod's file on disk, whose NAME is whatever the author chose — Neolithe ships
+    /// <c>SFW Medium.mdl</c> in four different leg folders — so two drawn models can share a stem, and keyed
+    /// by stem alone the last one walked silently took the other's set. A stem two drawn models share is
+    /// left out entirely, including when one of them has nothing enabled, because a lookup that misses on the
+    /// path would otherwise land on the wrong model's set rather than on "nothing". See
+    /// <c>SecondSkinService.LiveModelState</c>.
     /// <para/>
     /// Also in each set, prefixed with <see cref="HiddenAttributePrefix"/>: the model's IMC variant attributes
     /// (<c>atr_dv_b</c>) the game has switched OFF. A body can ship two versions of one region and let an IMC
@@ -57,6 +64,11 @@ public static unsafe class BodyShapeReader
         if (draw == null || draw->GetObjectType() != ObjectType.CharacterBase) return result;
 
         var cb = (CharacterBase*)draw;
+        // Every drawn model's stem and the path it came from — models with nothing enabled too, since those
+        // make a stem ambiguous just the same.
+        var stemOwner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var byStem = new List<(string Stem, HashSet<string> Set)>();
         foreach (var modelPtr in cb->ModelsSpan)
         {
             var model = modelPtr.Value;
@@ -67,6 +79,11 @@ public static unsafe class BodyShapeReader
 
             var name = handle->FileName.ToString();
             if (string.IsNullOrEmpty(name)) continue;
+
+            string full = PathKey(name), stem = Stem(name);
+            if (!stemOwner.TryAdd(stem, full)
+                && !string.Equals(stemOwner[stem], full, StringComparison.OrdinalIgnoreCase))
+                ambiguous.Add(stem);
 
             // ModelResourceHandle.Shapes maps shape NAME -> its index; a bit set in the mask means that
             // index's shape is enabled. Collect the names of the set bits.
@@ -90,25 +107,35 @@ public static unsafe class BodyShapeReader
                 int idx = kv.Item2;
                 if (idx < 0 || idx >= 32 || (attrMask & (1u << idx)) != 0) continue;
                 var attrName = kv.Item1.ToString();
-                if (IsVariantAttribute(attrName)) enabled.Add(HiddenAttributePrefix + attrName);
+                if (Services.SecondSkinWriter.IsVariantAttribute(attrName))
+                    enabled.Add(HiddenAttributePrefix + attrName);
             }
 
             if (enabled.Count > 0)
-                result[Stem(name)] = enabled;
+            {
+                result[full] = enabled;
+                byStem.Add((stem, enabled));
+            }
         }
+
+        // A path always contains a separator and a stem never does, so the two kinds of key cannot collide.
+        foreach (var (stem, set) in byStem)
+            if (!ambiguous.Contains(stem)) result.TryAdd(stem, set);
 
         return result;
     }
 
     /// <summary>
-    /// <c>atr_</c>, a slot letter, <c>v_</c>, then a part letter a–j: the names an IMC attribute mask
-    /// switches (see <c>MeshToggleService.AttributeSlotLetter</c>).
+    /// A model path as a lookup key: lower-cased, forward slashes, and without the <c>|…|</c> prefix Penumbra
+    /// puts in front of a path it redirected. The same key whether it came from the live resource or from a
+    /// path Penumbra resolved for us.
     /// </summary>
-    public static bool IsVariantAttribute(string? name)
-        => name is { Length: 8 } n
-           && n.StartsWith("atr_", StringComparison.Ordinal)
-           && n[5] == 'v' && n[6] == '_'
-           && n[7] is >= 'a' and <= 'j';
+    public static string PathKey(string path)
+    {
+        var s = path.Trim().Trim('"');
+        if (s.StartsWith('|') && s.IndexOf('|', 1) is var close and > 0) s = s[(close + 1)..];
+        return s.Replace('\\', '/').ToLowerInvariant();
+    }
 
     /// <summary>
     /// Split one model's set back into what it carries: the enabled shape keys, and the variant attributes
