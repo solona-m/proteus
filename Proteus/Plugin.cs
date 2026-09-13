@@ -26,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
     /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
     /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 781;
+    public const int BuildNumber = 785;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
@@ -74,6 +74,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ShellColorsetApplier shellColorset;
     private readonly SceneLightService sceneLight;
     private readonly ShellCoverageFade shellCoverageFade;
+    private readonly Gui.LiveMeshOverlay liveMesh;
+    private readonly Gui.LiveBrush liveBrush;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -225,7 +227,8 @@ public sealed class Plugin : IDalamudPlugin
 
         // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
         partViewport = new Gui.PartViewport(TextureProvider, log);
-        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, textureLoader, log);
+        liveBrush = new Gui.LiveBrush(ObjectTable, DataManager, penumbra, log);
+        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, liveBrush, textureLoader, log);
 
         // Subscribes to the hairstyle change on construction, so it works with the window shut — which is
         // the whole point of it being a service and not part of the panel that draws its findings.
@@ -235,6 +238,8 @@ public sealed class Plugin : IDalamudPlugin
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
             textureLoader, partsPanel, hatCompat);
+
+        liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
@@ -333,6 +338,10 @@ public sealed class Plugin : IDalamudPlugin
         // and Dalamud stops calling a CLOSED window's Draw — so pumping this from the window itself would
         // strand a mod that finished copying after the user closed Proteus. See StatusWindow.TickImport.
         statusWindow.TickImport();
+        liveMesh.Draw();
+        // Before the windows: the Studio tab reads this frame's stroke from it, and "is the mouse over a
+        // window" has to be asked outside of any one window.
+        liveBrush.Update();
         windowSystem.Draw();
     }
 
@@ -347,6 +356,14 @@ public sealed class Plugin : IDalamudPlugin
         // this plugin's diagnostics reads the .mdl on disk, which cannot tell a stale or redirected
         // resource from a correct one.
         var a = args.Trim();
+
+        // "/proteus livemesh [filter|off|nodeform|deform]" — draw a worn model posed on the CPU over the character.
+        if (a.StartsWith("livemesh", StringComparison.OrdinalIgnoreCase))
+        {
+            ChatGui.Print($"[Proteus] {liveMesh.Command(a[8..])}");
+            return;
+        }
+
         if (a.StartsWith("models", StringComparison.OrdinalIgnoreCase))
         {
             var filter = a.Length > 6 ? a[6..].Trim() : "";

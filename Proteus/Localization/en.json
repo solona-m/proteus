@@ -2155,6 +2155,46 @@
     "message": "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to zoom.",
     "description": "Explains the brush gestures, shown under the model while a brush is selected."
   },
+  "Parts.ShowModelView": {
+    "message": "Show model view",
+    "description": "Checkbox in the Studio tab's side panel."
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Paint on the model in this window instead of on your character.",
+    "description": "Tooltip for the checkbox. Keep the line break; the tooltip is not wrapped."
+  },
+  "Parts.Live.Pick": {
+    "message": "Pick on character",
+    "description": "Button: start picking a garment by clicking it on the character."
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Click a garment on your character to open its mod and model here.",
+    "description": "Tooltip for the pick button."
+  },
+  "Parts.Live.Picking": {
+    "message": "Click a garment on your character… (click again to cancel)",
+    "description": "Shown while waiting for the click. Replaces the button's text."
+  },
+  "Parts.Live.Hint": {
+    "message": "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.",
+    "description": "Shown above the brush controls when painting on the character."
+  },
+  "Parts.Live.NotWorn": {
+    "message": "This model is not on your character right now. Wear it, or turn on Show model view.",
+    "description": "Warning when the chosen model is not being drawn on the character."
+  },
+  "Parts.Live.Unreadable": {
+    "message": "This model could not be matched to the one on your character. Turn on Show model view to paint it here.",
+    "description": "Warning when the model on the character does not match the file."
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Your character is not available to paint on right now.",
+    "description": "Warning when there is no character to paint on (loading, cutscene)."
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} is not one of the models this mod publishes.",
+    "description": "{0} is a file name."
+  },
   "Parts.Brush.Size": {
     "message": "Brush size",
     "description": "Slider label. The value is shown in millimetres."

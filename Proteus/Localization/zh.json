@@ -2155,6 +2155,46 @@
     "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "显示模型视图",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "在此窗口的模型上绘制，而不是在你的角色上。",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "在角色上选取",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "点击角色身上的服装，在此打开它的模组和模型。",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "点击角色身上的服装……（再次点击取消）",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "直接在角色上绘制。按住 Alt 可移动镜头。每一笔在松开时保存。",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "你的角色当前没有穿着此模型。请穿上它，或打开显示模型视图。",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "此模型与角色身上的模型不匹配。打开显示模型视图即可在此绘制。",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "当前无法在角色上绘制。",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} 不是此模组发布的模型。",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "笔刷大小",
     "description": ""

@@ -2155,6 +2155,46 @@
     "message": "Arrastra sobre el modelo para pintar. Arrastra desde el fondo para girarlo, mayús-arrastrar para moverlo, rueda para acercar.",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "Mostrar modelo",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Pintar sobre el modelo en esta ventana en lugar de sobre tu personaje.",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "Elegir en el personaje",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Haz clic en una prenda de tu personaje para abrir aquí su mod y su modelo.",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "Haz clic en una prenda de tu personaje… (haz clic de nuevo para cancelar)",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Pinta sobre tu personaje. Mantén Alt para mover la cámara. Cada trazo se guarda al soltar.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Este modelo no está en tu personaje ahora. Póntelo o activa Mostrar modelo.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Este modelo no coincide con el de tu personaje. Activa Mostrar modelo para pintarlo aquí.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Tu personaje no está disponible para pintar en este momento.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} no es uno de los modelos que publica este mod.",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "Tamaño del pincel",
     "description": ""

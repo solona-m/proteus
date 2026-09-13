@@ -38,8 +38,8 @@
       "StbImageSharp": {
         "type": "Direct",
         "requested": "[2.*, )",
-        "resolved": "2.30.15",
-        "contentHash": "7QqbupVhz2kcFUPTgMw4iHR9rYDHGundzzee19Mwmd1typ2Lnv8EVJcLJxlkeBM2+4ex0NwsMtdbGSJctp1XCQ=="
+        "resolved": "2.30.16",
+        "contentHash": "qg1i+NHihXVKLKYacGKrauhSQIGL31eBWcTC4Vc7jnGmBFj87LkRuCdXB5aDZisWMRnB6x2mcfwYXQxMWEG/lw=="
       },
       "StbImageWriteSharp": {
         "type": "Direct",
@@ -51,6 +51,9 @@
         "type": "Project"
       },
       "penumbra.api": {
+        "type": "Project"
+      },
+      "xivlivemesh": {
         "type": "Project"
       }
     },

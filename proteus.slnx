@@ -6,4 +6,5 @@
     <Platform Project="x64" />
   </Project>
   <Project Path="Proteus/Proteus.csproj" />
+  <Project Path="XivLiveMesh/XivLiveMesh.csproj" />
 </Solution>

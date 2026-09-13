@@ -2155,6 +2155,46 @@
     "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。",
     "description": ""
   },
+  "Parts.ShowModelView": {
+    "message": "モデル表示",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "キャラクターではなく、このウィンドウのモデル上で塗ります。",
+    "description": ""
+  },
+  "Parts.Live.Pick": {
+    "message": "キャラクターから選ぶ",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "キャラクターの装備をクリックすると、そのModとモデルをここで開きます。",
+    "description": ""
+  },
+  "Parts.Live.Picking": {
+    "message": "キャラクターの装備をクリックしてください…（もう一度クリックでキャンセル）",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "キャラクターの上で塗ります。Altを押しながらでカメラを動かせます。ストロークは離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "このモデルは今キャラクターに表示されていません。装備するか、モデル表示をオンにしてください。",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "このモデルはキャラクター上のものと一致しません。ここで塗るにはモデル表示をオンにしてください。",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "今はキャラクターに塗ることができません。",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} はこのModが公開しているモデルではありません。",
+    "description": ""
+  },
   "Parts.Brush.Size": {
     "message": "ブラシの大きさ",
     "description": ""

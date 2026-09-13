@@ -32,6 +32,7 @@ public sealed class PartsPanel
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
     private readonly PartViewport viewport;
+    private readonly LiveBrush liveBrush;
     private readonly TextureLoader textureLoader;
     private readonly IPluginLog log;
 
@@ -151,13 +152,28 @@ public sealed class PartsPanel
     /// <summary>When the brush last changed something not yet saved, as a tick count; -1 when nothing waits.</summary>
     private long brushChangedAt = -1;
 
+    /// <summary>
+    /// Paint in the model viewer in this window rather than on the character in the game world. Off by default:
+    /// the character is what the edit is for, and painting it directly shows the result in its own lighting
+    /// and pose. The viewer stays for anything the character cannot show — a part hidden under another, a
+    /// garment not currently worn.
+    /// </summary>
+    private bool showModelView;
+
+    /// <summary>Waiting for a click on the character to choose the garment to edit.</summary>
+    private bool picking;
+
+    /// <summary>Where strokes come from this frame.</summary>
+    private IBrushSurface Surface => showModelView ? viewport : liveBrush;
+
     public PartsPanel(
-        PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport,
+        PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport, LiveBrush liveBrush,
         TextureLoader textureLoader, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
         this.viewport = viewport;
+        this.liveBrush = liveBrush;
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -188,6 +204,7 @@ public sealed class PartsPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
+        DrawLivePick();
         DrawModPicker();
         if (modDir == null) return;
 
@@ -236,7 +253,8 @@ public sealed class PartsPanel
             height = MathF.Max(ImGui.GetContentRegionAvail().Y - reserveBelow - ProteusStyle.S(4f),
                                ProteusStyle.S(200f));
 
-        ShowingModel = true;
+        // The window grows for the viewer only; controls alone fit the size it already is.
+        ShowingModel = showModelView;
         HandleUndoShortcut();
 
         // The tools and their controls down the LEFT, beside the model rather than under it. Under it, every
@@ -247,13 +265,80 @@ public sealed class PartsPanel
         {
             if (side)
             {
+                if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref showModelView))
+                {
+                    FlushPending();   // a stroke's pending save belongs to the surface it was painted on
+                    viewport.Recolour();
+                }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(Strings.Parts.ShowModelViewTip);
+                ImGui.Separator();
+
                 DrawToolPicker();
                 ImGui.Separator();
                 if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
             }
         }
-        ImGui.SameLine();
-        DrawParts(height);
+
+        if (showModelView)
+        {
+            ImGui.SameLine();
+            DrawParts(height);
+        }
+        else if (tool == Tool.Navigate)
+        {
+            // Without the viewer, picking parts for a switch is done from the list alone.
+            ImGui.SameLine();
+            DrawPartList(parts, height);
+        }
+        else if (volume != null && brushBase != null && ModRoot() is { } root)
+        {
+            liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
+                               brushBase, volume, ActiveRadiusMm / 1000f);
+        }
+
+        PumpBrush();
+    }
+
+    /// <summary>
+    /// The button that chooses a garment by clicking it on the character, and the pick itself.
+    /// <para/>
+    /// Above the mod picker because it replaces it: finding the right mod among hundreds, then the right model
+    /// among its sizes, is the slowest part of fixing a clip, and the character already knows the answer.
+    /// </summary>
+    private void DrawLivePick()
+    {
+        var ps = Strings.Parts;
+        using (ProteusStyle.Selected(picking))
+            if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Crosshairs, picking ? ps.LivePicking : ps.LivePick))
+                picking = !picking;
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.LivePickTip);
+
+        if (picking && penumbra.GetModDirectory() is { } modsRoot)
+            liveBrush.ArmPick(modsRoot, OnLivePicked);
+        ImGui.Spacing();
+    }
+
+    /// <summary>A garment was clicked on the character: open its mod and model.</summary>
+    private void OnLivePicked(string file)
+    {
+        picking = false;
+        if (penumbra.GetModDirectory() is not { } modsRoot
+            || !HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
+            return;
+
+        var dir = Path.GetFileName(modRoot);
+        if (!string.Equals(dir, modDir, StringComparison.OrdinalIgnoreCase)) SelectMod(dir);
+
+        var wanted = rel.Replace('\\', '/');
+        int index = models.FindIndex(m => string.Equals(m.File.Replace('\\', '/'), wanted, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            status = string.Format(Strings.Parts.LivePickedNotListedFmt, Path.GetFileName(file));
+            statusIsError = true;
+            return;
+        }
+        if (index != modelIndex) SelectModel(index);
+        if (tool == Tool.Navigate) tool = Tool.Inflate;   // they clicked it to fix it
     }
 
     /// <summary>Width of the tool panel left of the model, before UI scaling.</summary>
@@ -270,8 +355,12 @@ public sealed class PartsPanel
     /// </summary>
     private void HandleUndoShortcut()
     {
-        if (tool == Tool.Navigate || volume is not { CanUndo: true } vol || viewport.Painting) return;
-        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)) return;
+        if (tool == Tool.Navigate || volume is not { CanUndo: true } vol || Surface.Painting) return;
+        // Painting on the character clicks into the game world, which takes focus away from every window —
+        // so there, "no window has focus" counts too. Ctrl+Z means nothing to the game itself.
+        bool focused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)
+                    || (!showModelView && !ImGui.IsWindowFocused(ImGuiFocusedFlags.AnyWindow));
+        if (!focused) return;
         var io = ImGui.GetIO();
         if (io.WantTextInput || !io.KeyCtrl || !ImGui.IsKeyPressed(ImGuiKey.Z, false)) return;
 
@@ -608,8 +697,6 @@ public sealed class PartsPanel
             ? ImGui.GetContentRegionAvail().X
             : MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
-
-        PumpBrush();
         if (brushing) return;
 
         // Two different things to say, and only one of them is an apology. A part the author already
@@ -624,6 +711,12 @@ public sealed class PartsPanel
         }
 
         ImGui.SameLine();
+        DrawPartList(model, height);
+    }
+
+    private void DrawPartList(ModelParts model, float height)
+    {
+        var ps = Strings.Parts;
 
         // A horizontal scrollbar, because the width is no longer the window's to choose. A row is a checkbox
         // with the part's label, its material's filename, a triangle count and sometimes an expander; the
@@ -807,14 +900,15 @@ public sealed class PartsPanel
     private void PumpBrush()
     {
         if (volume == null || tool == Tool.Navigate) return;
+        var surface = Surface;
 
-        if (viewport.Painting && viewport.Cursor is { } at)
+        if (surface.Painting && surface.Cursor is { } at)
         {
             float radius = ActiveRadiusMm / 1000f;
             int moved = tool switch
             {
                 Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f),
-                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, viewport.ToViewer),
+                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer),
                 _           => volume.Paint(at, radius,
                                             brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f)),
             };
@@ -825,12 +919,16 @@ public sealed class PartsPanel
             }
         }
 
-        if (viewport.StrokeEnded)
+        if (surface.StrokeEnded)
         {
             volume.EndStroke(bridge: tool == Tool.Bridge);
             viewport.PositionOverride = volume.Positions();
             viewport.GeometryChanged();
             brushChangedAt = Environment.TickCount64;
+
+            // On the character, the character IS the preview: save and reload the garment as soon as the
+            // stroke is done rather than after the viewer's debounce, or the pull would sit invisible.
+            if (!showModelView) SaveBrush();
         }
     }
 
@@ -847,7 +945,7 @@ public sealed class PartsPanel
     /// </summary>
     private void TickAutosave()
     {
-        if (brushChangedAt < 0 || viewport.Painting) return;
+        if (brushChangedAt < 0 || Surface.Painting) return;
         if (Environment.TickCount64 - brushChangedAt < AutosaveMs) return;
         SaveBrush();
     }
@@ -873,7 +971,9 @@ public sealed class PartsPanel
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
-        ImGui.TextDisabled(ps.BrushHelp);
+        if (showModelView) ImGui.TextDisabled(ps.BrushHelp);
+        else if (liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
+        else ImGui.TextDisabled(ps.LiveHint);
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
@@ -1008,7 +1108,8 @@ public sealed class PartsPanel
         // bytes Penumbra still has in memory — see HatCompatWatcher, which learned it the hard way.
         if (!refreshGame) return;
         penumbra.ReloadModDirectory(modDir);
-        compositor.RedrawForChangedModel();
+        if (showModelView) compositor.RedrawForChangedModel();
+        else compositor.ReloadChangedGear();
     }
 
     private void RevertBrush()
