@@ -5324,8 +5324,9 @@ public static class SecondSkinWriter
     /// to count as a lap tucked under that neighbour.
     /// <para/>
     /// Measured across the inner rings of three bodies: the one true lap (Bibo+'s thigh inside its knee)
-    /// is 54 of 54 — 100%. The nearest thing that is not a lap is 92%, and it is excluded independently by
-    /// the size condition this is paired with. Nothing else passes 82%. The bar sits in that gap.
+    /// is 54 of 54 — 100%. Before <see cref="BehindFraction"/> required the closest point to be on a face,
+    /// connector rings running past their neighbour's end scored 100% too; counted on faces, nothing that
+    /// is not a lap scores above 0. The bar sits in that gap.
     /// </summary>
     private const float FlapBehind = 0.95f;
 
@@ -5616,7 +5617,9 @@ public static class SecondSkinWriter
                     //    the ring and runs six centimetres down inside the knee. Coverage misses it for the
                     //    same reason it missed the part flaps: behind is not the same as near, and the lap
                     //    sits further in than 5 mm. The sign of the offset from the nearest surface finds
-                    //    it instead, and it is decisive — 54 of 54 of its vertices are behind the knee.
+                    //    it instead, and it is decisive — 54 of 54 of its vertices are behind the knee. Behind
+                    //    a FACE of it: a wrist ring that carries on past the forearm's end is "behind" the
+                    //    rim too, by a sign that means nothing there. See BehindFraction.
                     //
                     // The second is held to BOTH a high bar and a size condition, because what it has to
                     // stay clear of is close. Across the inner rings of three bodies the next-highest
@@ -5696,6 +5699,15 @@ public static class SecondSkinWriter
     /// Sign of <c>(p - closest) . n</c> against the nearest triangle, with the face normal taken from the
     /// winding. Ring vertices are skipped: they are shared by construction and sit exactly on the surface,
     /// so their sign is noise.
+    /// <para/>
+    /// A vertex counts only when its closest point is on the triangle's FACE. A lap lies over its neighbour,
+    /// so it projects onto it; a connector ring that carries on PAST the end of its neighbour projects onto
+    /// nothing, its closest point is clamped to the neighbour's rim, and the sign against a rim triangle's
+    /// plane says nothing about inside or out. A wrist tapers, so the ring came out "behind" every time.
+    /// Measured: Bibo+'s thigh lap is 54 of 54 behind on a face; Neolithe's wrist rings on the top and the
+    /// hands, and its ankle ring on the feet, were 31/31, 31/31 and 27/27 behind, and 0 of any of them on a
+    /// face — so a lone top, hand or foot lost its connector rings, the bare band this pass exists to avoid.
+    /// Nothing else on three bodies has a single vertex behind on a face.
     /// </summary>
     /// <remarks>
     /// The nearest triangle is found through a grid searched outward in shells, not by walking every one:
@@ -5751,6 +5763,7 @@ public static class SecondSkinWriter
             float best = float.MaxValue;
             int bestOrder = int.MaxValue;
             float sign = 0f;
+            bool onFace = false;
             query++;
 
             void Test(int k)
@@ -5767,6 +5780,9 @@ public static class SecondSkinWriter
                 float wx = c.X - a.X, wy = c.Y - a.Y, wz = c.Z - a.Z;
                 float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
                 sign = (p.X - q.X) * nx + (p.Y - q.Y) * ny + (p.Z - q.Z) * nz;
+                // The closest point is on the FACE when the offset to it runs along the normal, and clamped to
+                // an edge or corner when it does not. Within about 6 degrees, to allow for float noise.
+                onFace = sign * sign >= 0.99f * d * d * (nx * nx + ny * ny + nz * nz);
             }
 
             foreach (int k in linear) Test(k);
@@ -5793,7 +5809,7 @@ public static class SecondSkinWriter
                 for (int k = 0; k < against.Count; k++) Test(k);
 
             of++;
-            if (best < float.MaxValue && sign < 0f) behind++;
+            if (best < float.MaxValue && onFace && sign < 0f) behind++;
         }
         return (behind, of);
     }
