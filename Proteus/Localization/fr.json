@@ -2327,12 +2327,12 @@
     "message": "Compresse par blocs les textures générées (BC7), réduisant chacune à environ un quart\nde sa taille non compressée sur le disque et en VRAM. La texture d'index reste non\ncompressée afin de conserver ses valeurs de ligne exactes.\nDésactivé = non compressé (identique octet pour octet à avant).",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Label": {
-    "message": "Masquer les maillages de raccord",
+  "Settings.Output.RedundantMeshes.Label": {
+    "message": "Masquer les maillages de corps redondants",
     "description": ""
   },
-  "Settings.Output.ConnectorMeshes.Tip": {
-    "message": "Ignore l'anneau de raccord de chaque partie du corps sur la « seconde peau » de\nl'équipement — le petit sous-maillage supplémentaire au niveau d'une articulation\n(poignet/cheville/…). Certains corps (Neolithe) renforcent les articulations par un\nanneau qui chevauche un corps déjà complet ; sur un calque transparent, le chevauchement\nse double et apparaît comme une couture plus opaque. Laissez sur Off pour les autres\ncorps — là, ce sous-maillage est de la vraie peau, et le masquer laisserait des trous.",
+  "Settings.Output.RedundantMeshes.Tip": {
+    "message": "Ignore la peau que la « seconde peau » de l'équipement dessinerait deux fois. Certains\ncorps couvrent la même zone avec deux géométries : un petit anneau de renfort à une\narticulation (poignet/cheville/…) que la partie voisine dessine déjà, ou une copie\nd'une région à l'intérieur de celle d'à côté. Sur un calque transparent, ce\nchevauchement se double et apparaît comme une couture plus opaque.\n\nSûr sur n'importe quel corps : la géométrie n'est ignorée que là où autre chose la\ndessine de façon démontrable. Désactivez-le s'il manque une zone de peau sur la coque.",
     "description": ""
   },
   "Settings.Output.SharpAlpha.Label": {

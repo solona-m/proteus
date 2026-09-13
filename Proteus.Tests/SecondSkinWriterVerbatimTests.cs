@@ -14,14 +14,51 @@ namespace Proteus.Tests;
 /// (position/normal/uv/blend all fit), so the model is at least self-consistent before an in-game test.
 /// Skipped automatically when the local Neolithe model isn't present.
 /// </summary>
-public class SecondSkinWriterVerbatimTests
+public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper o)
 {
     private const string NeoTop =
         @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes\0201e0000_top.mdl";
+    /// <summary>The other parts of the SAME body, so the redundancy pass can be measured against a layout a
+    /// character actually wears rather than two tops stacked on each other.</summary>
+    private const string NeoLegs =
+        @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\SFW Medium.mdl";
+    private const string NeoHands =
+        @"E:\Penumbradt\Neolithe [ALL IN ONE]\HANDS\Hands short.mdl";
+
     private const string BiboTop =
         @"E:\Penumbradt\Bibo+\Breasts - Small Clothes\Nude - Large\chara\equipment\e0000\model\c0201e0000_top.mdl";
     private const string HostRing =
         @"E:\Penumbradt\classic gold\classic gold accessories\rings\chara\accessory\a0001\model\c0201a0001_rir.mdl";
+
+    /// <summary>
+    /// A whole body, as the four parts a character wears at once. The redundancy pass is only answerable
+    /// against a LAYOUT — a seam ring is redundant because the neighbouring part draws it — so a body
+    /// measured one part at a time is not being measured at all.
+    /// </summary>
+    private static readonly (string Body, string[] Parts)[] Bodies =
+    [
+        ("Neolithe",
+        [
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes\0201e0000_top.mdl",
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes\SFW Medium.mdl",
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\HANDS\Hands short.mdl",
+            @"E:\Penumbradt\Neolithe [ALL IN ONE]\FEET\Feet.mdl",
+        ]),
+        ("Bibo+",
+        [
+            @"E:\Penumbradt\Bibo+\Breasts - Small Clothes\Nude - Large\chara\equipment\e0000\model\c0201e0000_top.mdl",
+            @"E:\Penumbradt\Bibo+\Bottoms - Small Clothes\Type A - Medium\chara\equipment\e0000\model\c0201e0000_dwn.mdl",
+            @"E:\Penumbradt\Bibo+\Hands\Small Clothes\chara\equipment\e0000\model\c0201e0000_glv.mdl",
+            @"E:\Penumbradt\Bibo+\Feet\Small Clothes\chara\equipment\e0000\model\c0201e0000_sho.mdl",
+        ]),
+        ("Rue+",
+        [
+            @"E:\Penumbradt\hs-Rue+-2.2.7-y0f\files\chest - smallclothes\medium\chara\equipment\e0000\model\c0201e0000_top.mdl",
+            @"E:\Penumbradt\hs-Rue+-2.2.7-y0f\files\legs - smallclothes\yanilla - a\chara\equipment\e0000\model\c0201e0000_dwn.mdl",
+            @"E:\Penumbradt\hs-Rue+-2.2.7-y0f\files\Hands - Smallclothes\Short Nails\chara\equipment\e0000\model\c0201e0000_glv.mdl",
+            @"E:\Penumbradt\hs-Rue+-2.2.7-y0f\files\Feet - Smallclothes\Rue Feet\chara\equipment\e0000\model\c0201e0000_sho.mdl",
+        ]),
+    ];
 
     [Fact]
     public void Verbatim_output_is_structurally_consistent()
@@ -734,23 +771,187 @@ public class SecondSkinWriterVerbatimTests
     }
 
     [Fact]
-    public void Skipping_connectors_drops_geometry_on_neolithe()
+    public void A_lone_part_keeps_its_connector_rings_on_a_real_body()
     {
-        // Neolithe's skin mesh carries joint-connector submeshes (atr_nek/hij/ude/…) that overlap its
-        // complete main body. With skipConnectors on, those submeshes are dropped, so the shell has
-        // strictly fewer triangles and submeshes than the default build.
+        // Neolithe's top carries joint-connector submeshes (atr_nek/hij/ude/…) beside its complete main
+        // body — the neck ring is 250 triangles of a 10280-triangle mesh, the wrist ring 120.
+        //
+        // Alone, NOTHING of it goes, and that is the point of this test rather than an absence of one. A
+        // ring is redundant because a NEIGHBOURING PART draws the same band; with no neighbour there is no
+        // such band, and dropping one anyway leaves the wearer a bare neck. The old pass did exactly that
+        // whenever the caller supplied no part layout, and this build has no way left to ask for it.
         if (!File.Exists(NeoTop)) return;
 
         var body = File.ReadAllBytes(NeoTop);
         var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
 
         SecondSkinWriter.Build(new[] { body }, layers, null, false, out var full);
-        var trimmedBytes = SecondSkinWriter.Build(new[] { body }, layers, null, true, out var trimmed);
+        var keptBytes = SecondSkinWriter.Build(new[] { body }, layers, null, true, out var kept);
 
-        Assert.True(trimmed.TrianglesOut < full.TrianglesOut, "connector skip removed no triangles");
-        Assert.True(trimmed.Submeshes < full.Submeshes, "connector skip removed no submeshes");
+        Assert.Equal(full.TrianglesOut, kept.TrianglesOut);
+        Assert.Equal(full.Submeshes, kept.Submeshes);
+        Assert.Equal(0, kept.RedundantSubs);
+        Validate(keptBytes);
+    }
+
+    [Fact]
+    public void A_real_layout_loses_the_wrist_ring_and_keeps_the_neck()
+    {
+        // The top with the legs and hands of the SAME body beside it — the arrangement a character
+        // actually wears, and the only one that can answer whether this rule is safe on by default.
+        //
+        // What it finds, measured: exactly ONE submesh goes, the 120-triangle wrist connector at
+        // y 0.995..1.027, which the hands draw. The 250-triangle neck ring (y 1.397..1.451) survives
+        // because nothing else reaches that high, and the 840-triangle shoulder region (y 1.001..1.115)
+        // survives because no other part encloses it. Both would be lost to a comparison that asked only
+        // about height, and a bare neck is the regression this rule has produced before.
+        if (!File.Exists(NeoTop) || !File.Exists(NeoLegs) || !File.Exists(NeoHands)) return;
+
+        var neo = File.ReadAllBytes(NeoTop);
+        var legs = File.ReadAllBytes(NeoLegs);
+        var hands = File.ReadAllBytes(NeoHands);
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+
+        SecondSkinWriter.Build(new[] { neo, legs, hands }, layers, null, false, out var full);
+        var trimmedBytes = SecondSkinWriter.Build(
+            new[]
+            {
+                new SecondSkinWriter.SourceSpec(neo,   DropConnectors: true),
+                new SecondSkinWriter.SourceSpec(legs,  DropConnectors: false),
+                new SecondSkinWriter.SourceSpec(hands, DropConnectors: false),
+            },
+            layers, null, out var trimmed);
+
+        Assert.Equal(1, trimmed.RedundantSubs);
+        Assert.Equal(120, trimmed.RedundantTris);
+
+        // The overlap cut was also at this shell, and its counter is deliberately NOT in the same units:
+        // it counts triangles TOUCHED, and cutting one straddling triangle replaces it with one or two
+        // smaller ones. So the output's triangle count is no longer the input minus a sum — it is the
+        // input, minus what was dropped, minus the covered part of what was cut, plus the pieces the cut
+        // left behind. There is no arithmetic identity to assert, and asserting one anyway is how a test
+        // starts encoding the shape of a bug.
+        //
+        // What IS exact is the drop, so that is what this holds to: one submesh, the wrist ring, 120
+        // triangles. The cut is measured on its own in the gated report.
+        // The join cut is also at this shell, removing each part's margin past the ring it is stitched on.
+        // It is counted separately and in different units from the submesh drop, so there is no arithmetic
+        // identity between the two and the counts below hold only to the drop.
+        Assert.True(trimmed.TrimmedTris > 0, "no flap was found at any join");
+        Assert.True(full.Submeshes - trimmed.Submeshes >= trimmed.RedundantSubs * layers.Length,
+            "fewer submeshes went missing than the plan says it dropped");
         Assert.True(trimmed.Meshes > 0, "the main body must survive");
         Validate(trimmedBytes);
+    }
+
+    /// <summary>
+    /// What the pass actually finds on each body installed here, printed rather than asserted.
+    /// <para/>
+    /// The thresholds — 3 mm, 90%, a tenth of the mesh — were reasoned from ONE body's vertex spacing, and
+    /// a reasoned number is not a measured one. Running the same pass across bodies that do and do not have
+    /// the defect is what says whether they generalise: a duplicate should score near 100 and nothing else
+    /// should come close, and a body with no doubled geometry should lose nothing but true joint rings.
+    /// <para/>
+    /// Every part runs the pass, exactly as the service configures it — the shell is cut from all of them
+    /// at once and each is judged against the others.
+    /// </summary>
+    [Theory]
+    [InlineData("Neolithe")]
+    [InlineData("Bibo+")]
+    [InlineData("Rue+")]
+    public void Report_what_the_redundancy_pass_finds_on(string bodyName)
+    {
+        var parts = Array.Find(Bodies, b => b.Body == bodyName).Parts;
+        if (parts == null || !Array.TrueForAll(parts, File.Exists)) return;
+
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        var lines = new List<string>();
+        var sources = parts
+            .Select(p => new SecondSkinWriter.SourceSpec(File.ReadAllBytes(p), DropConnectors: true))
+            .ToList();
+
+        SecondSkinWriter.Build(sources, layers, null, out var stats, lines.Add);
+
+        o.WriteLine($"=== {bodyName}: {sources.Count} part(s) ===");
+        for (int i = 0; i < parts.Length; i++)
+        {
+            o.WriteLine($"source {i}: {Path.GetFileName(parts[i])}");
+            if (SecondSkinWriter.ReadConnectorProfile(sources[i].Model) is not { } profile)
+            {
+                o.WriteLine("  (no skin geometry)");
+                continue;
+            }
+            // The attribute NAMES, not just the mask. A bare "attrs 0x41" cannot tell a joint seam from a
+            // mutually-exclusive body variant, and that distinction is the open question about this pass:
+            // two variants of one region are coincident by construction, and only one of them is drawn.
+            var attrNames = SecondSkinWriter.AttributeNames(sources[i].Model);
+            string Attrs(uint mask)
+            {
+                if (mask == 0) return "none";
+                var names = new List<string>();
+                for (int bit = 0; bit < 32 && bit < attrNames.Count; bit++)
+                    if ((mask & (1u << bit)) != 0) names.Add(attrNames[bit]);
+                return names.Count == 0 ? $"0x{mask:x}" : string.Join(',', names);
+            }
+
+            foreach (var mesh in profile.Meshes)
+            {
+                o.WriteLine($"  mesh {mesh.Index}: largest submesh {mesh.LargestSubTriangles} tri");
+                for (int k = 0; k < mesh.SubCount; k++)
+                {
+                    var sub = profile.Subs[mesh.SubFirst + k];
+                    o.WriteLine($"    sub {sub.Index}: {sub.Triangles} tri, "
+                              + $"x {sub.Box.MinX:F3}..{sub.Box.MaxX:F3}, "
+                              + $"y {sub.Box.MinY:F3}..{sub.Box.MaxY:F3}, "
+                              + $"z {sub.Box.MinZ:F3}..{sub.Box.MaxZ:F3}, attrs [{Attrs(sub.AttrMask)}]");
+                }
+            }
+        }
+
+        foreach (var l in lines)
+            if (l.Contains("redundant") || l.Contains("overlap") || l.Contains("join ")) o.WriteLine(l);
+        o.WriteLine($"TOTAL: dropped {stats.RedundantSubs} submesh(es) / {stats.RedundantTris} tri, "
+                  + $"{stats.TrimmedTris} tri cut or dropped as a second layer, of {stats.TrianglesIn} in");
+
+        // What the distance threshold is actually buying. A connector band does not sit ON the skin — it
+        // sits slightly proud of it, which is its job — so the question is whether its coverage jumps to
+        // near-total at some small distance (a displaced copy) or creeps up slowly (a different surface).
+        // Sweeping it here is what makes 3 mm a measured number rather than a reasoned one.
+        o.WriteLine("coverage by distance:");
+        var boxes = new List<SecondSkinWriter.ConnectorProfile.Box>();
+        var profiles = new SecondSkinWriter.ConnectorProfile?[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+        {
+            profiles[i] = SecondSkinWriter.ReadConnectorProfile(sources[i].Model);
+            if (profiles[i]?.PartBox is { } pb) boxes.Add(pb);
+        }
+        foreach (float mm in new[] { 2f, 3f, 4f, 5f, 6f, 8f })
+        {
+            int subs = 0, tris = 0;
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (profiles[i] is not { } pr) continue;
+                var others = boxes.Where((_, k) => k != i).ToList();
+                SecondSkinWriter.PlanConnectorDrops(pr, others, null, null, $"source {i}",
+                    out int s2, out int t2, eps: mm / 1000f);
+                subs += s2; tris += t2;
+            }
+            o.WriteLine($"  {mm:F0}mm: {subs} submesh(es), {tris} triangle(s)");
+        }
+
+        // Are the parts stitched to each other at an authored ring of shared vertices? If so the seam has
+        // an exact boundary and no distance field is needed to find it.
+        o.WriteLine("join rings (0.1mm):");
+        SecondSkinWriter.DescribeJoinRings(profiles, 0.0001f, s => o.WriteLine($"  {s}"));
+
+        // Every pair that shares any surface, and over what height. A band at one end is two regions
+        // MEETING, which doubles the alpha exactly like a duplicate does but cannot be fixed by dropping
+        // either one.
+        o.WriteLine("overlaps:");
+        for (int i = 0; i < parts.Length; i++)
+            if (profiles[i] is { } pr)
+                SecondSkinWriter.DescribeOverlaps(pr, 0.005f,
+                    s => o.WriteLine($"  source {i}: {s}"));
     }
 
     /// <summary>
@@ -806,9 +1007,14 @@ public class SecondSkinWriterVerbatimTests
     public void SourceSpec_api_matches_the_legacy_api_byte_for_byte()
     {
         // The whole safety argument for collapsing the parallel arrays (enabled shapes, uv converters, one
-        // shared connector flag) into SourceSpec: the same inputs must still produce the same model. Run
+        // shared redundancy flag) into SourceSpec: the same inputs must still produce the same model. Run
         // over a MERGED build, since misalignment between per-source arrays is exactly what could not
         // happen with one source.
+        //
+        // Stronger than it was. The legacy overload used to pass no part layout at all and take a
+        // shape-only shortcut the SourceSpec path never took, so "identical" held over two rules that were
+        // not the same rule. The writer derives the layout from the sources now, so both really do run the
+        // same pass on the same evidence.
         if (!File.Exists(NeoTop) || !File.Exists(BiboTop)) return;
 
         var neo = File.ReadAllBytes(NeoTop);
@@ -833,28 +1039,44 @@ public class SecondSkinWriterVerbatimTests
     [Fact]
     public void DropConnectors_is_per_source()
     {
-        // The connector heuristic is Neolithe-tuned ("under 200 triangles, and the last submesh") and is
-        // wrong for anything that is not a body. Proving it is now per-source is what lets a face or tail
-        // source sit beside a body one without being eaten by it.
+        // The pass is per-source because its seam-ring rule reads a part as one of SEVERAL — it drops a ring
+        // because a neighbouring part draws the same band, which means nothing for a lone face, tail or ear.
+        // Proving the flag is honoured per source is what lets one of those sit beside a body source without
+        // being eaten by it.
         if (!File.Exists(NeoTop) || !File.Exists(BiboTop)) return;
 
         var neo = File.ReadAllBytes(NeoTop);
         var bibo = File.ReadAllBytes(BiboTop);
         var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
 
-        SecondSkinWriter.Build(new[] { neo, bibo }, layers, null, false, out var neither);
-        SecondSkinWriter.Build(new[] { neo, bibo }, layers, null, true, out var both);
-        SecondSkinWriter.Build(
-            new[]
-            {
-                new SecondSkinWriter.SourceSpec(neo,  DropConnectors: true),
-                new SecondSkinWriter.SourceSpec(bibo, DropConnectors: false),
-            },
-            layers, null, out var onlyNeo);
+        SecondSkinWriter.Stats Run(bool neoOn, bool biboOn)
+        {
+            SecondSkinWriter.Build(
+                new[]
+                {
+                    new SecondSkinWriter.SourceSpec(neo,  DropConnectors: neoOn),
+                    new SecondSkinWriter.SourceSpec(bibo, DropConnectors: biboOn),
+                },
+                layers, null, out var st);
+            return st;
+        }
 
-        // Trimming one source of the two lands strictly between trimming neither and trimming both.
+        var neither = Run(false, false);
+        var onlyNeo = Run(true, false);
+        var onlyBibo = Run(false, true);
+        var both = Run(true, true);
+
+        // Each source's drops are decided by ITS OWN flag, and so are additive. Asserted as an equality
+        // rather than as "trimming both removes more than trimming one", which was the old shape: that
+        // silently assumed BOTH bodies have redundant geometry, and Bibo+ measures out with none at all —
+        // which is the right answer for it, and made the inequality fail for a good reason.
+        Assert.Equal(0, neither.RedundantSubs);
+        Assert.Equal(both.RedundantSubs, onlyNeo.RedundantSubs + onlyBibo.RedundantSubs);
+        Assert.Equal(both.RedundantTris, onlyNeo.RedundantTris + onlyBibo.RedundantTris);
+
+        // And the flagged source really is trimmed, so the equality above is not two zeroes agreeing.
+        Assert.True(onlyNeo.RedundantSubs > 0, "the flagged source was not trimmed at all");
         Assert.True(onlyNeo.TrianglesOut < neither.TrianglesOut, "the trimmed source kept every triangle");
-        Assert.True(onlyNeo.TrianglesOut > both.TrianglesOut, "the untrimmed source was trimmed anyway");
     }
 
     [Fact]
