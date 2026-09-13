@@ -2147,6 +2147,42 @@
     "message": "Male quer über eine Vertiefung — die Falte zwischen den Backen, eine Kerbe —,\num den Stoff gerade darüber zu spannen, statt ihn dem Körper hinein folgen zu\nlassen. Es hebt nur an und lässt gerundete Stellen in ihrer Form.",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "Wind",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Male, wo der Wind dieses Kleidungsstück bewegt; Rot zeigt, wie stark.\nEs wird in die zweite Vertexfarbe des Modells geschrieben.",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Menge",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Wie viel Wind gemalt wird. 0 % entfernt ihn, ebenso Strg gedrückt halten beim Malen.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Rate",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "Wie schnell der gemalte Wind beim Malen die Menge erreicht.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "Dieses Modell hat noch keinen Windkanal. Er wird beim Speichern des ersten Strichs hinzugefügt.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "Die erste Vertexfarbe dieses Modells ist nicht weiß, was der Windeffekt erwartet. Proteus lässt sie, wie der Autor sie gemacht hat.",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Wind konnte {0} Mesh(es) nicht hinzugefügt werden: Dort ist kein Platz für ein weiteres Vertexattribut.",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "Wie schnell sich der Stoff beim Malen über die Vertiefung hebt. Niedrig ist\nsanft und gut zu steuern; hoch schließt die Lücke fast sofort.",
     "description": ""

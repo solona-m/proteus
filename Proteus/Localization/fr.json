@@ -2147,6 +2147,42 @@
     "message": "Peignez en travers d'un creux — le sillon entre les fesses, un pli — pour\ntendre le tissu droit par-dessus au lieu de suivre le corps dedans. Il ne fait\nque soulever et laisse aux zones arrondies leur forme.",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "Vent",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Peignez là où le vent fait bouger ce vêtement ; le rouge indique l'intensité.\nC'est écrit dans la deuxième couleur de sommet du modèle.",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Quantité",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Quantité de vent à peindre. 0 % l'efface, tout comme maintenir Ctrl en peignant.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Vitesse",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "À quelle vitesse le vent peint atteint la quantité pendant que vous peignez.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "Ce modèle n'a pas encore de canal de vent. Il est ajouté à l'enregistrement du premier trait.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "La première couleur de sommet de ce modèle n'est pas blanche, ce qu'attend l'effet de vent. Proteus la laisse telle que l'auteur l'a faite.",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Le vent n'a pas pu être ajouté à {0} maillage(s) : il n'y a plus de place pour un autre attribut de sommet.",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "La vitesse à laquelle le tissu monte pour enjamber le creux pendant que vous\npeignez. Faible est doux et facile à maîtriser ; élevé comble l'écart presque aussitôt.",
     "description": ""

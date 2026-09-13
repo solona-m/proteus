@@ -45,10 +45,15 @@ internal static class MeshVolumeService
     /// <param name="UnmappedSpares">Shape-key replacement vertices whose base vertex could not be found, so
     /// they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
     /// looks exactly like the brush having missed a patch — hence a count rather than silence.</param>
-    public sealed record Outcome(bool Ok, string Message, int FilesWritten, int UnmappedSpares = 0);
+    /// <param name="WindMeshesRefused">Meshes wind could not be written to because the wind channel could not
+    /// be added — every declaration slot used, or a vertex record already at the format's size limit.</param>
+    public sealed record Outcome(bool Ok, string Message, int FilesWritten, int UnmappedSpares = 0,
+                                 int WindMeshesRefused = 0);
 
     /// <summary>The bytes of one edited model, plus what the caller needs to warn about.</summary>
-    internal sealed record Written(byte[] Model, int UnmappedSpares, bool HasOtherLods);
+    /// <param name="WindChannel">What adding the wind channel did, when wind was painted; null otherwise.</param>
+    internal sealed record Written(byte[] Model, int UnmappedSpares, bool HasOtherLods,
+                                   VertexColorWriter.Report? WindChannel = null);
 
     private const int BBoxSize = 32;   // min Vec4 then max Vec4
 
@@ -100,7 +105,7 @@ internal static class MeshVolumeService
                 Loc.Localize("MeshVolume.Apply.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0);
         }
 
-        return new Outcome(true, "", 1, written.UnmappedSpares);
+        return new Outcome(true, "", 1, written.UnmappedSpares, written.WindChannel?.MeshesRefused ?? 0);
     }
 
     /// <summary>
@@ -173,8 +178,19 @@ internal static class MeshVolumeService
         int unmapped = CarrySpares(o, mdl, src, spanOf, solve);
         GrowExtents(o, src, solve.Worst);
 
+        // WIND LAST, because adding the channel changes the file's length and every in-place write above
+        // addresses the original layout. Only when wind was actually painted: a model the user only pulled keeps
+        // its vertex layout exactly as the author shipped it.
+        VertexColorWriter.Report? wind = null;
+        if (solve.WindEdited)
+        {
+            o = VertexColorWriter.EnsureSecondColor(o, out var report);
+            VertexColorWriter.WriteWind(o, solve.Spans, solve.WindAt);
+            wind = report;
+        }
+
         ushort lodCount = BitConverter.ToUInt16(mdl, src.Mh + 22);
-        return new Written(o, unmapped, lodCount > 1);
+        return new Written(o, unmapped, lodCount > 1, wind);
     }
 
     /// <summary>

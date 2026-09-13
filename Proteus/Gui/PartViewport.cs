@@ -147,6 +147,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         depth = new float[bufW * bufH];
         rgba = new byte[bufW * bufH * 4];
         hit = new Vector3[bufW * bufH];
+        scalar = new float[bufW * bufH];
     }
 
     /// <summary>Parts the user has ticked, by label — drawn in the accent colour.</summary>
@@ -227,6 +228,16 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// the zoom every time the user let go of the brush.
     /// </summary>
     public float[]? PositionOverride { get; set; }
+
+    /// <summary>
+    /// A 0..1 value per vertex (indexed like <see cref="ModelParts.Positions"/>) drawn as a red wash over the
+    /// model, or null for none — the wind brush's painted amount. Read when the geometry is projected, so set
+    /// <see cref="GeometryChanged"/> after the values change.
+    /// </summary>
+    public Func<int, float>? VertexScalar { get; set; }
+
+    /// <summary>Per pixel: <see cref="VertexScalar"/> interpolated across the surface the pixel shows.</summary>
+    private float[] scalar = [];
 
     public void Dispose()
     {
@@ -483,6 +494,16 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         var screen = new Vector3[vertices];
         var valid = new bool[vertices];
         var world = new Vector3[vertices];
+
+        // The wash's values, read once per vertex here rather than per pixel in the fill.
+        var scalarOf = VertexScalar;
+        float[]? perVertex = null;
+        if (scalarOf != null)
+        {
+            perVertex = new float[vertices];
+            for (int i = 0; i < vertices; i++) perVertex[i] = scalarOf(i);
+        }
+        Array.Clear(scalar);
         for (int i = 0; i < vertices; i++)
         {
             var p = new Vector3(source[i * 3], source[i * 3 + 1], source[i * 3 + 2]);
@@ -531,14 +552,16 @@ public sealed class PartViewport : IDisposable, IBrushSurface
                     byte lit = (byte)(60 + 195 * MathF.Min(lambert, 1f));
 
                     FillTriangle(screen[ia], screen[ib], screen[ic],
-                                 world[ia], world[ib], world[ic], part, lit, yLo, yHi);
+                                 world[ia], world[ib], world[ic], part, lit, yLo, yHi,
+                                 perVertex?[ia] ?? 0f, perVertex?[ib] ?? 0f, perVertex?[ic] ?? 0f);
                 }
             }
         });
     }
 
     private void FillTriangle(Vector3 a, Vector3 b, Vector3 c,
-                              Vector3 wa, Vector3 wb, Vector3 wc, int part, byte lit, int yLo, int yHi)
+                              Vector3 wa, Vector3 wb, Vector3 wc, int part, byte lit, int yLo, int yHi,
+                              float sa, float sb, float sc)
     {
         float area = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
         if (MathF.Abs(area) < 1e-6f) return;
@@ -573,6 +596,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             // perspective-correct, so this is a hair off where the true surface point is — by well under a
             // pixel's worth of geometry at these depths, against a brush radius measured in millimetres.
             hit[at] = wa * w1 + wb * w2 + wc * w0;
+            scalar[at] = sa * w1 + sb * w2 + sc * w0;
         }
     }
 
@@ -619,6 +643,15 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             }
             var (r, g, b) = tint[part];
             int s = shade[i];
+
+            // The wind wash, under the brush blob: red by how much the painted amount is.
+            if (VertexScalar != null && scalar[i] > 0f && part < brushable.Length && brushable[part])
+            {
+                float k = MathF.Min(scalar[i], 1f) * 0.75f;
+                r = (int)(r + (235 - r) * k);
+                g = (int)(g + (40 - g) * k);
+                b = (int)(b + (40 - b) * k);
+            }
 
             if (brushing && part < brushable.Length && brushable[part])
             {

@@ -2147,6 +2147,42 @@
     "message": "Pinta a través de un hueco — la hendidura entre los glúteos, un pliegue —\npara tensar la tela recta por encima en lugar de seguir el cuerpo hacia dentro.\nSolo levanta, y deja a las zonas redondeadas su propia forma.",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "Viento",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Pinta dónde el viento mueve esta prenda; el rojo indica cuánto.\nSe escribe en el segundo color de vértice del modelo.",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Cantidad",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Cuánto viento pintar. 0 % lo borra, igual que mantener Ctrl al pintar.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Velocidad",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "Qué tan rápido el viento pintado alcanza la cantidad mientras pintas.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "Este modelo aún no tiene canal de viento. Se añade al guardar el primer trazo.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "El primer color de vértice de este modelo no es blanco, que es lo que espera el efecto de viento. Proteus lo deja como lo hizo el autor.",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "No se pudo añadir viento a {0} malla(s): no hay espacio para otro atributo de vértice.",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "Qué tan rápido sube la tela para cubrir el hueco mientras pintas. Bajo es suave\ny fácil de controlar; alto cierra la separación casi al instante.",
     "description": ""

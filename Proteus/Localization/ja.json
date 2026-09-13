@@ -2147,6 +2147,42 @@
     "message": "くぼみ（お尻の割れ目やしわ）を横切るように塗ると、布が体に沿って\n沈み込まず、まっすぐ張り渡されます。持ち上げるだけで、丸みのある\n部分の形はそのままです。",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "風",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "この装備を風が揺らす場所を塗ります。赤の濃さが揺れの強さです。\nモデルの2番目の頂点カラーに書き込まれます。",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "量",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "塗る風の量。0% で消去します。塗りながら Ctrl を押しても消去できます。",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "速さ",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "塗っている間に風が設定量に達する速さ。",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "このモデルにはまだ風チャンネルがありません。最初のストロークの保存時に追加されます。",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "このモデルの1番目の頂点カラーが白ではありません。風の効果は白を想定しています。Proteus は作者のままにします。",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "{0} 個のメッシュに風を追加できませんでした：頂点属性を追加する余地がありません。",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "塗っている間に布がくぼみを張り渡す速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐに隙間が埋まります。",
     "description": ""

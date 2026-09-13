@@ -1631,6 +1631,32 @@ public sealed class PartsStrings
         "cloth straight over it instead of following the body down into it. It only\n" +
         "ever lifts, and leaves rounded areas their own shape.");
 
+    public readonly string ToolWind = Loc.Localize("Parts.Tool.Wind", "Wind")
+                                    + "###partsToolWind";
+
+    public readonly string ToolWindTip = Loc.Localize("Parts.Tool.Wind.Tip",
+        "Paint where the wind moves this garment; red shows how much.\n" +
+        "It is written into the model's second vertex colour.");
+
+    public readonly string BrushWindAmount = Loc.Localize("Parts.Brush.WindAmount", "Amount");
+
+    public readonly string BrushWindAmountTip = Loc.Localize("Parts.Brush.WindAmount.Tip",
+        "How much wind to paint. 0% erases it, and so does holding Ctrl while painting.");
+
+    public readonly string BrushWindRate = Loc.Localize("Parts.Brush.WindRate", "Rate");
+
+    public readonly string BrushWindRateTip = Loc.Localize("Parts.Brush.WindRate.Tip",
+        "How quickly the painted wind reaches the amount while you paint.");
+
+    public readonly string WindAddsChannel = Loc.Localize("Parts.Wind.AddsChannel",
+        "This model has no wind channel yet. One is added when the first stroke saves.");
+
+    public readonly string WindFirstColorNotWhite = Loc.Localize("Parts.Wind.FirstColorNotWhite",
+        "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.");
+
+    public readonly string WindRefusedFmt = Loc.Localize("Parts.Wind.Refused.Fmt",
+        "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.");
+
     public readonly string BrushBridgeRateTip = Loc.Localize("Parts.Brush.BridgeRate.Tip",
         "How quickly the cloth rises to span the hollow while you paint. Low is gentle\n" +
         "and easy to control; high closes the gap almost at once.");

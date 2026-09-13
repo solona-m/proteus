@@ -2147,6 +2147,42 @@
     "message": "움푸한 곳(엉덩이 골, 주름)을 가로질러 칠하면 천이 몸을 따라\n들어가지 않고 곳게 걸쳐집니다. 들어 올리기만 하며, 둥근 부분의\n모양은 그대로 둡니다.",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "바람",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "바람이 이 장비를 흔드는 곳을 칠합니다. 빨간색이 흔들림의 정도입니다.\n모델의 두 번째 버텍스 컬러에 기록됩니다.",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "양",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "칠할 바람의 양. 0%는 지우며, 칠하는 동안 Ctrl을 누르고 있어도 지워집니다.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "속도",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "칠하는 동안 바람이 설정한 양에 도달하는 속도.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "이 모델에는 아직 바람 채널이 없습니다. 첫 획을 저장할 때 추가됩니다.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "이 모델의 첫 번째 버텍스 컬러가 흰색이 아닙니다. 바람 효과는 흰색을 기대합니다. Proteus는 제작자가 만든 그대로 둡니다.",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "{0}개 메시에 바람을 추가하지 못했습니다: 버텍스 속성을 더 넣을 공간이 없습니다.",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "칠하는 동안 천이 움푸한 곳을 걸쳐 올라가는 속도. 낮으면 부드럽고\n조절하기 쉽고, 높으면 거의 즉시 틈이 메워집니다.",
     "description": ""

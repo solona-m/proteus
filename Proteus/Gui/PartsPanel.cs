@@ -101,6 +101,9 @@ public sealed class PartsPanel
 
         /// <summary>Stretch cloth straight across a hollow — a cleft or crease — instead of into it.</summary>
         Bridge,
+
+        /// <summary>Paint how much the wind sways the garment — the red of its second vertex colour.</summary>
+        Wind,
     }
 
     private Tool tool = Tool.Navigate;
@@ -123,7 +126,24 @@ public sealed class PartsPanel
     private float bridgeRadiusMm = 70f;
 
     /// <summary>The size the current tool paints with — the bridge keeps its own, see above.</summary>
-    private ref float ActiveRadiusMm => ref tool == Tool.Bridge ? ref bridgeRadiusMm : ref brushRadiusMm;
+    private ref float ActiveRadiusMm
+        => ref tool == Tool.Bridge ? ref bridgeRadiusMm
+             : ref (tool == Tool.Wind ? ref windRadiusMm : ref brushRadiusMm);
+
+    /// <summary>The open model's wind lookup for the viewer's wash, made once per model rather than per frame.</summary>
+    private Func<int, float>? windAt;
+
+    /// <summary>The wind brush's own size — see <see cref="windAmountPercent"/>.</summary>
+    private float windRadiusMm = 150f;
+
+    /// <summary>
+    /// The wind being painted, as a percentage of full sway: each dab moves the surface toward it. Its own field,
+    /// like each brush's strength, so switching tools never reinterprets another brush's number.
+    /// </summary>
+    private float windAmountPercent = 50f;
+
+    /// <summary>How much of the way to <see cref="windAmountPercent"/> each moment of painting goes.</summary>
+    private float windRatePercent = 20f;
 
     /// <summary>
     /// The relax brush's strength, as a percentage — how far each moment of painting moves the surface toward
@@ -321,7 +341,7 @@ public sealed class PartsPanel
         else if (volume != null && brushBase != null && ModRoot() is { } root)
         {
             liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
-                               brushBase, volume, ActiveRadiusMm / 1000f);
+                               brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind);
         }
 
         PumpBrush();
@@ -815,6 +835,7 @@ public sealed class PartsPanel
         // same reason staged switches are not: a displacement is per vertex, and another model's vertices
         // are not these.
         volume = parts != null ? new MeshVolumeSolve(parts) : null;
+        windAt = volume != null ? volume.WindAt : null;
         viewport.PositionOverride = null;
 
         if (parts != null) viewport.Show(ViewportKey, parts);
@@ -854,6 +875,7 @@ public sealed class PartsPanel
             ? PartViewport.ViewportMode.Navigate
             : PartViewport.ViewportMode.Brush;
         viewport.BrushRadius = tool == Tool.Navigate ? 0f : ActiveRadiusMm / 1000f;
+        viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
 
         // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
         // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
@@ -1034,6 +1056,7 @@ public sealed class PartsPanel
                      (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
                      (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
+                     (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
                  })
         {
             // Stacked, one per row: the panel is a narrow column, and four buttons side by side do not fit it.
@@ -1056,6 +1079,7 @@ public sealed class PartsPanel
                 // would sit there invisibly and reappear half-forgotten on the way back.
                 ticked.Clear();
                 viewport.Recolour();
+                viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
         }
@@ -1081,6 +1105,9 @@ public sealed class PartsPanel
             {
                 Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f),
                 Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer),
+                // Ctrl held paints toward none: the eraser, without a second tool or reaching for the slider.
+                Tool.Wind   => volume.PaintWind(at, radius, ImGui.GetIO().KeyCtrl ? 0f : windAmountPercent / 100f,
+                                                windRatePercent / 100f),
                 _           => volume.Paint(at, radius,
                                             brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f),
                                             surface.ToViewer),
@@ -1095,7 +1122,7 @@ public sealed class PartsPanel
 
         if (surface.StrokeEnded)
         {
-            volume.EndStroke(bridge: tool == Tool.Bridge);
+            volume.EndStroke(bridge: tool == Tool.Bridge, wind: tool == Tool.Wind);
             viewport.PositionOverride = volume.Positions();
             viewport.GeometryChanged();
             brushChangedAt = Environment.TickCount64;
@@ -1173,6 +1200,22 @@ public sealed class PartsPanel
         {
             ImGui.SliderFloat(ps.BrushStrength, ref bridgeRatePercent, 1f, 100f, "%.0f%%");
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushBridgeRateTip);
+        }
+        else if (tool == Tool.Wind)
+        {
+            ImGui.SliderFloat(ps.BrushWindAmount, ref windAmountPercent, 0f, 100f, "%.0f%%");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushWindAmountTip);
+            ImGui.SetNextItemWidth(w);
+            ImGui.SliderFloat(ps.BrushWindRate, ref windRatePercent, 1f, 100f, "%.0f%%");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushWindRateTip);
+
+            // What saving will do to the file, said before it happens rather than discovered after.
+            ImGui.PushTextWrapPos(0);
+            if (volume is { HasWindChannel: false })
+                ImGui.TextDisabled(ps.WindAddsChannel);
+            if (parts is { FirstColorNotWhite: true })
+                ImGui.TextColored(ProteusStyle.Warn, ps.WindFirstColorNotWhite);
+            ImGui.PopTextWrapPos();
         }
         else
         {
@@ -1262,6 +1305,14 @@ public sealed class PartsPanel
         brushChangedAt = -1;
 
         status = string.Format(Strings.Parts.BrushSavedFmt, volume.Worst * 1000f);
+
+        // Wind that could not land, said rather than left to look like the brush missing.
+        if (result.WindMeshesRefused > 0)
+        {
+            status += "\n" + string.Format(Strings.Parts.WindRefusedFmt, result.WindMeshesRefused);
+            log.Warning("[Proteus] brush: wind channel could not be added to {0} mesh(es) of {1}",
+                        result.WindMeshesRefused, rel);
+        }
 
         // Counted, not silent. A spare left behind means enabling that body slider puts the slots it
         // rewires back where the author had them, which looks exactly like the brush having missed a patch.
