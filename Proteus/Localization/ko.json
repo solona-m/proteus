@@ -2103,6 +2103,142 @@
     "message": "{0} · {1:N0} 삼각형",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "부프 선택",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "모델의 부프를 클릭해 선택하고 스웬치를 달아 줍니다.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "밖으로 당기기",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "모델 위에 츠하면 표면이 밖으로 밀려나가, 옷을 통해 튜어나오는\n몸이 다시 가려집니다.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "안으로 밀기",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "같은 봇을 반대로. 몸에서 너무 뜨는 옷에 생니다.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "모델 위에서 드래그하면 칠합니다. 배경에서 드래그하면 회전, Shift+드래그는 이동, 스크롤은 확대입니다.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "봇 크기",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "봇이 닿는 범위. 가운데가 가장 세고 허리에서 0이 됩니다. 넓으면\n넓은 곱선이, 좁으면 작은 혁이 움직입니다.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "세기",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "츠하는 사이 표면이 움직이는 양. 보통 작은 것이 알맞습니다. 옷은 몸에서\n밀리미턼의 일부만 뜨면 되고, 같은 자리를 여러 번 다시 츠할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "봇이 이 모델의 샼각형(약 {0:F1} mm)보다 작아서 표면을 움직이는 대신 점하나를 가시처럼 당깁니다. 더 크게 하십시오.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "가장 큰 이동: {1:F1} mm 중 {0:F2} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "아직 아무것도 움직이지 않았습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "한 획 되돌리기",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "처음부터",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "아직 저장되지 않음",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "모드에 저장",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "변경을 모드 자신의 모델 파일에 기록하므로 Proteus를 꺼도 유지되고,\n모드를 내보내면 함께 따라갑니다. 원본은 먼저 모드 안의\nProteus/meshvolume-backup/ 에 복사되며, 언제든 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "저장했습니다. 표면이 억대 {0:F2} mm 움직였습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "이 모델의 바디 슬라이더에 속한 {0}개 지점을 함께 움직이지 못했습니다. 그 슬라이더를 햤면 일부 관통이 다시 나할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "저장된 변경 되돌리기",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "이 모드에서 봇이 바꿔 놓은 모든 모델을 제작자가 만든 상태로\n정확하게 되돌립니다.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "모델 {0}개를 제작자가 만들었던 상태로 되돌렸습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "츠한 것이 없어서 저장할 것도 없습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0}을 수정할 수 없었습니다: {1}. 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "기록 실패: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "이 모드에서 봇은 아무것도 바꾸지 않았습니다.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "먼저 {0}을 되돌리십시오. 봇 다음에 같은 모델에 적용되었으묀로, 지금 봇을 되돌리면 그것도 함께 사라집니다.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "되돌릴 원본 모델을 하나도 찾지 못했습니다.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "부프 스웬치",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "모자 맞추기",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "봇",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "먼저 {0}을 되돌리십시오. 그것이 이후에 같은 모델을 바꾸었으므로, 지금 이것을 되돌리면 그것도 함께 사라집니다.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "부위 {0}개 선택됨",
     "description": ""

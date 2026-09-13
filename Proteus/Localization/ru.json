@@ -2103,6 +2103,142 @@
     "message": "{0} · {1:N0} тр.",
     "description": ""
   },
+  "Parts.Tool.Navigate": {
+    "message": "Выбор частей",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Нажимайте на части модели, чтобы выбрать их и дать им переключатель.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Вытянуть",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Рисуйте по модели, чтобы вытолкнуть поверхность наружу, и тело,\nторчащее сквозь одежду, снова окажется закрыто.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Вдавить",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Та же кисть наоборот — для одежды, слишком отстающей от тела.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Размер кисти",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Как далеко достаёт кисть. Сильнее всего в центре и сходит на нет\nу края: широкая двигает большой изгиб, узкая — маленький бугор.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Сила",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "Насколько поверхность смещается за мгновение рисования. Обычно лучше\nменьше: одежде достаточно отойти от тела на долю миллиметра, а одно\nи то же место всегда можно пройти ещё раз.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Кисть мельче треугольников этой модели (около {0:F1} мм), поэтому она будет вытягивать отдельные точки в шипы, а не двигать поверхность. Сделайте её больше.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Наибольшее смещение: {0:F2} мм из {1:F1} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Пока ничего не сдвинуто.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Отменить мазок",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Начать заново",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "не сохранено",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Сохранить в мод",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Записывает изменение в собственный файл модели мода, так что оно\nработает и с выключенным Proteus и уезжает вместе с модом.\nОригинал сначала копируется в Proteus/meshvolume-backup/ внутри\nмода, и всё можно отменить.",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Сохранено. Поверхность смещена на {0:F2} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} точек, принадлежащих ползункам тела этой модели, не удалось сдвинуть вместе с ней — если включить такой ползунок, местами проникновение может вернуться.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Отменить сохранённое",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Возвращает каждую модель, изменённую кистью в этом моде, ровно\nв том виде, в каком её сделал автор.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "Моделей возвращено в авторский вид: {0}.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Ничего не нарисовано — сохранять нечего.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "Не удалось изменить {0}: {1}. Ничего не записано.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Запись не удалась: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Кисть ничего не меняла в этом моде.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: это было применено к той же модели после кисти, и возврат кисти сейчас отменит и его.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Ни одной исходной модели для восстановления не нашлось.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "переключатели частей",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "подгонку под шляпы",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "кисть",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: оно изменило ту же модель позже, и отмена сейчас отменит и его.",
+    "description": ""
+  },
   "Parts.Selected.Fmt": {
     "message": "Отмечено частей: {0}",
     "description": ""

@@ -100,6 +100,15 @@ public class StatusWindow : Window
     // Height DrawLastResult took last frame, so the Toggles tab knows how much to leave under itself.
     private float _footerReserve;
 
+    // Whether the Toggles tab's model viewer was on screen last frame, so its APPEARANCE can be told apart
+    // from it simply still being there. Only updated while that tab draws: leaving the tab and coming back to
+    // a model already open is not the viewer loading, and must not undo a size the user chose since.
+    private bool _modelWasShowing;
+    // One-shot: grow the window next PreDraw, because the model viewer just appeared.
+    private bool _growForModel;
+    // One-shot: once the grown size has landed, pull the window back on screen if it now hangs off an edge.
+    private bool _keepOnScreen;
+
     // Key: absolute index-texture path → 1-based row numbers that appear in it.
     // Cleared per-entry on each popup open so option switches are reflected.
     private readonly Dictionary<string, ContentIndexTexture.Scan> _indexRowCache = new();
@@ -510,12 +519,24 @@ public class StatusWindow : Window
                 // Released, so the grip actually moves the edge instead of being overwritten each frame.
                 Size = null;
             }
+
+            if (_growForModel)
+            {
+                _growForModel = false;
+                GrowForModel();
+            }
         }
         else
         {
             // Leaving the tab, which needs a size of its own even though what we are going back to fits
             // itself — see the remarks on the ratchet.
-            if (_resizableActive) _restoreAutoFit = true;
+            if (_resizableActive)
+            {
+                _restoreAutoFit = true;
+                // The brush's autosave runs off the tab's own drawing, so leaving the tab would park a pending
+                // edit until the tab is next opened. Saved on the way out instead.
+                parts.FlushPending();
+            }
             _resizableActive = false;
 
             Flags |= ImGuiWindowFlags.AlwaysAutoResize;
@@ -544,6 +565,38 @@ public class StatusWindow : Window
                 Size = null;
             }
         }
+    }
+
+    /// <summary>
+    /// Grow the window to at least half the screen's width and height — a quarter of its area — because the
+    /// model viewer has just appeared and painting on a model wants room.
+    /// </summary>
+    /// <remarks>
+    /// GROW ONLY, per axis. A window the user has already dragged larger than this keeps its size, and so
+    /// does whichever axis already exceeds the target; the point is to rescue a window too small to use, not
+    /// to impose a size on one someone chose.
+    /// <para/>
+    /// Fires once per appearance of the viewer rather than every time a model is picked, so resizing the
+    /// window smaller and then switching models is not fought — see <see cref="_modelWasShowing"/>.
+    /// <para/>
+    /// Through <see cref="_togglesSize"/>, so the grown size is also what gets remembered: the next time the
+    /// tab opens it comes back at the size the viewer was given rather than shrinking to the old one.
+    /// </remarks>
+    private void GrowForModel()
+    {
+        float scale = ImGuiHelpers.GlobalScale;
+        var screen = ImGuiHelpers.MainViewport.Size / scale;     // unscaled, like every size stored here
+        var target = ClampToResizable(screen * 0.5f);
+
+        var grown = new Vector2(MathF.Max(_togglesSize.X, target.X), MathF.Max(_togglesSize.Y, target.Y));
+        if (grown == _togglesSize) return;
+
+        _togglesSize = grown;
+        _sizeDirty = true;
+        _sizeChangedAt = Environment.TickCount64;
+        Size = grown;
+        SizeCondition = ImGuiCond.Always;
+        _keepOnScreen = true;
     }
 
     private static Vector2 ClampToResizable(Vector2 size)
@@ -579,7 +632,20 @@ public class StatusWindow : Window
         config.Save();
     }
 
-    public override void OnClose() => FlushPendingSize();
+    public override void OnClose()
+    {
+        FlushPendingSize();
+        // The brush's autosave timer only runs while the Toggles tab draws, so a stroke made in the last
+        // moments before closing would otherwise wait, unsaved, until the window next opens — or be lost for
+        // good if the game closes first.
+        parts.FlushPending();
+    }
+
+    /// <summary>
+    /// Write any brush edit still waiting to save, without reloading the mod or redrawing — for the plugin's
+    /// own teardown, where the file must land but nothing else should be touched.
+    /// </summary>
+    public void FlushPendingBrush() => parts.FlushPending(refreshGame: false);
 
     /// <summary>Open the window with the Settings tab selected (the plugin-installer gear icon).</summary>
     public void OpenToSettings()
@@ -639,6 +705,21 @@ public class StatusWindow : Window
         // The dragged size, read back where ImGui has already applied this frame's grip movement. Stored
         // unscaled, since PreDraw hands it back to a host that scales it. The threshold is only there to
         // keep sub-pixel jitter from marking the config dirty forever.
+        // A window grown in place from near the right or bottom edge would hang half off the screen. Done here
+        // rather than in PreDraw because this is the first moment the new size has actually been applied, so
+        // position and size are read together and in the same pixels.
+        if (_keepOnScreen)
+        {
+            _keepOnScreen = false;
+            var vp = ImGuiHelpers.MainViewport;
+            var pos = ImGui.GetWindowPos();
+            var size = ImGui.GetWindowSize();
+            var fit = new Vector2(
+                Math.Clamp(pos.X, vp.Pos.X, MathF.Max(vp.Pos.X, vp.Pos.X + vp.Size.X - size.X)),
+                Math.Clamp(pos.Y, vp.Pos.Y, MathF.Max(vp.Pos.Y, vp.Pos.Y + vp.Size.Y - size.Y)));
+            if (fit != pos) ImGui.SetWindowPos(fit);
+        }
+
         if (_resizableActive)
         {
             var live = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
@@ -726,6 +807,11 @@ public class StatusWindow : Window
                         // The one tab that asks for a resizable window; PreDraw grants it next frame.
                         _togglesTabActive = true;
                         parts.Draw(fillHeight: _resizableActive, reserveBelow: _footerReserve);
+
+                        // The viewer appearing is the moment the window is too small, not the tab opening:
+                        // a mod picker fits in the remembered size, a model you paint on does not.
+                        if (parts.ShowingModel && !_modelWasShowing) _growForModel = true;
+                        _modelWasShowing = parts.ShowingModel;
                     }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
