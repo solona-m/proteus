@@ -160,6 +160,18 @@ public sealed class ModelParts
     /// </summary>
     public required IReadOnlyList<MeshSpan> MeshSpans { get; init; }
 
+    /// <summary>
+    /// Each vertex's wind — the red of its second vertex colour, 0..1 — in the same order as
+    /// <see cref="Positions"/>; 0 where the mesh has no second colour. Empty when not read.
+    /// </summary>
+    public float[] Wind { get; init; } = [];
+
+    /// <summary>Every mesh already carries the second vertex colour, so painting wind adds nothing to the file.</summary>
+    public bool HasWindChannel { get; init; }
+
+    /// <summary>Some mesh's first vertex colour is not white, which the wind effect expects.</summary>
+    public bool FirstColorNotWhite { get; init; }
+
     public required IReadOnlyList<ModelPart> Parts { get; init; }
 
     /// <summary>The model's attribute names. What a new toggle has to avoid colliding with — see
@@ -399,11 +411,19 @@ public static class ModelPartReader
 
         if (parts.Count == 0) return null;
 
+        // Wind per vertex, by span, so it lines up with Positions however many meshes were skipped above.
+        var wind = new float[pos.Count / 3];
+        foreach (var span in spans)
+            VertexColorWriter.ReadWind(s, src, span.Mesh, span.Count, wind, span.BaseVertex);
+
         var (min, max) = Bounds(pos, null);
         return new ModelParts
         {
             Positions = pos.ToArray(),
             Normals = nrm.ToArray(),
+            Wind = wind,
+            HasWindChannel = spans.All(sp => src.Decls[sp.Mesh].Any(VertexColorWriter.IsSecondColor)),
+            FirstColorNotWhite = VertexColorWriter.FirstColorNotWhite(src),
             MeshSpans = spans,
             Parts = parts,
             AttributeNames = src.AttrNames,

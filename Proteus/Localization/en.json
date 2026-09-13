@@ -2147,6 +2147,42 @@
     "message": "Paint across a hollow — the cleft between cheeks, a crease — to stretch the\ncloth straight over it instead of following the body down into it. It only\never lifts, and leaves rounded areas their own shape.",
     "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Wind": {
+    "message": "Wind",
+    "description": "Tool button in the Studio side panel."
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Paint where the wind moves this garment; red shows how much.\nIt is written into the model's second vertex colour.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Amount",
+    "description": "Slider label: how much wind the brush paints."
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "How much wind to paint. 0% erases it, and so does holding Ctrl while painting.",
+    "description": "Tooltip for the amount slider."
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Rate",
+    "description": "Slider label: how fast painting reaches the amount."
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "How quickly the painted wind reaches the amount while you paint.",
+    "description": "Tooltip for the rate slider."
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "This model has no wind channel yet. One is added when the first stroke saves.",
+    "description": "Note under the wind sliders when the model has no second vertex colour yet."
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.",
+    "description": "Warning under the wind sliders."
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.",
+    "description": "{0} is a number of meshes."
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "How quickly the cloth rises to span the hollow while you paint. Low is gentle\nand easy to control; high closes the gap almost at once.",
     "description": "Tooltip for the Strength slider while Bridge is selected. Keep the line breaks; the tooltip is not wrapped."

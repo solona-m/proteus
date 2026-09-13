@@ -27,7 +27,7 @@ internal sealed class MeshVolumeSolve
     /// Bump when the geometry this produces changes, so a model edited by an older build can be recognised
     /// and redone from the author's own backup. Same contract as <c>HatCompatSolve.Version</c>.
     /// </summary>
-    public const int Version = 1;
+    public const int Version = 2;   // 2: wind painted into the second vertex colour
 
     /// <summary>
     /// The furthest any one point may end up from where its author put it, however long the brush is held.
@@ -146,8 +146,18 @@ internal sealed class MeshVolumeSolve
     private Vec3[] vertDelta;
     private Vec3[] vertNrm;
 
-    private readonly List<Dictionary<int, (Vec3 Delta, float Weight)>> undo = [];
-    private Dictionary<int, (Vec3 Delta, float Weight)>? stroke;
+    /// <summary>
+    /// Each node's wind, 0..1: the red of the second vertex colour, which the game reads as how much the wind
+    /// moves that point. Per node like everything else here, so both copies of a UV seam — and both faces of a
+    /// double-sided hair card — sway together.
+    /// </summary>
+    private readonly float[] nodeWind;
+
+    /// <summary>The wind the model arrived with, for Start over and for telling whether wind was edited.</summary>
+    private readonly float[] initialWind;
+
+    private readonly List<Dictionary<int, (Vec3 Delta, float Weight, float Wind)>> undo = [];
+    private Dictionary<int, (Vec3 Delta, float Weight, float Wind)>? stroke;
 
 
     public MeshVolumeSolve(ModelParts model)
@@ -261,6 +271,14 @@ internal sealed class MeshVolumeSolve
         nodeWeight = new float[nodeCount];
         vertDelta = new Vec3[vc];
         vertNrm = (Vec3[])baseNrm.Clone();
+
+        // The strongest of a node's vertices: where two copies of one point disagree, the one that sways wins, so
+        // opening a model never quietly stills part of it.
+        nodeWind = new float[nodeCount];
+        for (int i = 0; i < vc && i < model.Wind.Length; i++)
+            nodeWind[nodeOf[i]] = MathF.Max(nodeWind[nodeOf[i]], Math.Clamp(model.Wind[i], 0f, 1f));
+        initialWind = (float[])nodeWind.Clone();
+        HasWindChannel = model.HasWindChannel;
 
         MeanEdge = SecondSkinWriter.MeanEdgeLength(nodeAt, adj, Enumerable.Range(0, nodeCount).ToList());
         MaxDisplacement = model.Parts.Any(p => IsHairMaterial(p.Material)) ? HairMaxDisplacement : GarmentMaxDisplacement;
@@ -416,6 +434,71 @@ internal sealed class MeshVolumeSolve
 
     public bool Dirty { get; private set; }
 
+    /// <summary>The model already carried the wind channel when it was opened.</summary>
+    public bool HasWindChannel { get; }
+
+    /// <summary>Any node's wind differs from what the model arrived with.</summary>
+    public bool WindEdited
+    {
+        get
+        {
+            for (int n = 0; n < nodeCount; n++)
+                if (nodeWind[n] != initialWind[n]) return true;
+            return false;
+        }
+    }
+
+    /// <summary>Bumped whenever any wind value changes, so a view can tell when to rebuild what it draws.</summary>
+    public int WindVersion { get; private set; }
+
+    /// <summary>Wind at vertex <paramref name="vertex"/> (indexed like <see cref="ModelParts.Positions"/>), 0..1.</summary>
+    public float WindAt(int vertex) => nodeWind[nodeOf[vertex]];
+
+    /// <summary>
+    /// One dab of the wind brush: move each node's wind toward <paramref name="target"/> by
+    /// <paramref name="rate"/>, scaled by the falloff — strongest in the middle, nothing at the rim. Skin is never
+    /// painted: it is not what sways.
+    /// </summary>
+    /// <param name="target">0..1: the amount being painted; 0 erases.</param>
+    /// <param name="rate">0..1: how much of the remaining difference each dab closes at the middle of the brush.</param>
+    /// <returns>How many nodes changed.</returns>
+    public int PaintWind(Vector3 centre, float radius, float target, float rate)
+    {
+        if (radius <= 0f || rate <= 0f) return 0;
+        stroke ??= [];
+        target = Math.Clamp(target, 0f, 1f);
+        rate = Math.Clamp(rate, 0f, 1f);
+
+        float r2 = radius * radius;
+        int changed = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (skin[n]) continue;
+            float dx = nodeAt[n].X - centre.X, dy = nodeAt[n].Y - centre.Y, dz = nodeAt[n].Z - centre.Z;
+            float d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 >= r2) continue;
+            float w = Falloff(MathF.Sqrt(d2) / radius);
+            if (w <= 0f) continue;
+
+            float next = Math.Clamp(nodeWind[n] + (target - nodeWind[n]) * rate * w, 0f, 1f);
+            // Settle exactly on the target once within a 255th — the file stores a byte, and an asymptote that
+            // never arrives would leave "erased" wind reading 1/255 forever.
+            if (MathF.Abs(next - target) < 0.5f / 255f) next = target;
+            if (next == nodeWind[n]) continue;
+
+            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
+            nodeWind[n] = next;
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            WindVersion++;
+            Dirty = true;
+        }
+        return changed;
+    }
+
     /// <summary>The largest distance any point has been moved, in metres.</summary>
     public float Worst { get; private set; }
 
@@ -477,7 +560,7 @@ internal sealed class MeshVolumeSolve
 
             // Recorded before the first change of this stroke, not on every dab: a stroke drags over the
             // same node many times and undo has to return it to where the stroke FOUND it.
-            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n]));
+            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));
 
             float step = strength * w;
             var next = new Vec3(nodeDelta[n].X + dir.X * step,
@@ -565,7 +648,7 @@ internal sealed class MeshVolumeSolve
         if (nodes.Count == 0) return 0;
 
         // Recorded before the first change of this stroke — see Paint.
-        foreach (int n in nodes) stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n]));
+        foreach (int n in nodes) stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));
 
         var next = Scratch(ref relaxNext, nodes.Count);
         for (int i = 0; i < nodes.Count; i++)
@@ -887,7 +970,7 @@ internal sealed class MeshVolumeSolve
             if (step <= 1e-7f) continue;
             int n = nodes[i];
 
-            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n]));   // before the first change — see Paint
+            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
 
             var next = new Vec3(nodeDelta[n].X + axis.X * step,
                                 nodeDelta[n].Y + axis.Y * step,
@@ -920,11 +1003,18 @@ internal sealed class MeshVolumeSolve
     /// pulling in the very thing they are pushing out while they hold the button.
     /// </summary>
     /// <param name="bridge">The stroke was the bridge brush, which is finished differently — see below.</param>
-    public void EndStroke(bool bridge = false)
+    /// <param name="wind">The stroke only painted wind: nothing moved, so there is nothing to smooth, unfold or
+    /// re-light — it is recorded for undo and that is all.</param>
+    public void EndStroke(bool bridge = false, bool wind = false)
     {
         var touched = stroke;
         stroke = null;
         bridgeAxis = null;
+        if (wind)
+        {
+            if (touched is { Count: > 0 }) undo.Add(touched);
+            return;
+        }
         if (touched is not { Count: > 0 })
         {
             Settle(null);
@@ -961,7 +1051,7 @@ internal sealed class MeshVolumeSolve
     /// stroke did not move add nothing, so the stroke's rim blends out to zero, and undo — which restores
     /// exactly the stroke's nodes — stays exact. Skin is never written.
     /// </summary>
-    private void SmoothStroke(Dictionary<int, (Vec3 Delta, float Weight)> strokeStart)
+    private void SmoothStroke(Dictionary<int, (Vec3 Delta, float Weight, float Wind)> strokeStart)
     {
         var nodes = strokeStart.Keys.Where(n => !skin[n] && adj[n].Count > 0).ToArray();
         if (nodes.Length == 0) return;
@@ -1000,16 +1090,27 @@ internal sealed class MeshVolumeSolve
         if (undo.Count == 0) return;
         var last = undo[^1];
         undo.RemoveAt(undo.Count - 1);
-        foreach (var (n, was) in last) { nodeDelta[n] = was.Delta; nodeWeight[n] = was.Weight; }
-        // No unfold: the displacement restored here was already settled when its own stroke ended.
-        Settle(null);
-        Dirty = undo.Count > 0 || nodeDelta.Any(d => d.X != 0f || d.Y != 0f || d.Z != 0f);
+        bool moved = false;
+        foreach (var (n, was) in last)
+        {
+            moved |= nodeDelta[n] != was.Delta;
+            nodeDelta[n] = was.Delta;
+            nodeWeight[n] = was.Weight;
+            nodeWind[n] = was.Wind;
+        }
+        WindVersion++;
+        // No unfold: the displacement restored here was already settled when its own stroke ended. Nor any
+        // settling at all for a stroke that only painted wind — there is no geometry to re-light.
+        if (moved) Settle(null);
+        Dirty = undo.Count > 0 || nodeDelta.Any(d => d.X != 0f || d.Y != 0f || d.Z != 0f) || WindEdited;
     }
 
     public void Reset()
     {
         Array.Clear(nodeDelta);
         Array.Clear(nodeWeight);
+        Array.Copy(initialWind, nodeWind, nodeCount);
+        WindVersion++;
         Array.Copy(initialPull, pullDir, nodeCount);
         undo.Clear();
         stroke = null;
@@ -1021,7 +1122,7 @@ internal sealed class MeshVolumeSolve
     /// <param name="strokeStart">The stroke just ending — each node it moved, with the displacement it had
     /// before — whose own movement gets the fold check; null for none.</param>
     /// <param name="allowCollapse">The stroke was a bridge — see <see cref="UnfoldStroke"/>.</param>
-    private void Settle(Dictionary<int, (Vec3 Delta, float Weight)>? strokeStart, bool allowCollapse = false)
+    private void Settle(Dictionary<int, (Vec3 Delta, float Weight, float Wind)>? strokeStart, bool allowCollapse = false)
     {
         // NO SLOPE LIMIT. It used to run here, and it is what made a pull snap back on release: it evens out
         // neighbours by pulling the larger displacement toward the smaller, and on a hem or a thin double-sided
@@ -1074,7 +1175,7 @@ internal sealed class MeshVolumeSolve
     /// nothing, and nothing can turn over as seen from outside. A steep wall's footprint is only a sliver,
     /// though, and a wall tipped past upright would be a real overhang — which is what this still catches.
     /// </summary>
-    private void UnfoldStroke(Dictionary<int, (Vec3 Delta, float Weight)> strokeStart, bool allowCollapse)
+    private void UnfoldStroke(Dictionary<int, (Vec3 Delta, float Weight, float Wind)> strokeStart, bool allowCollapse)
     {
         var around = new List<int>();
         for (int t = 0; t + 2 < nodeTris.Length; t += 3)

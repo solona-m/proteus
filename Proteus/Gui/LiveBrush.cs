@@ -93,14 +93,31 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <param name="modelFile">The model file on disk, as the mod supplies it.</param>
     /// <param name="modelBytes">Its bytes as the brush opened it — the file the edit's vertex order belongs to.</param>
     /// <param name="brushRadius">In the model's units (metres).</param>
-    internal void ArmBrush(string modelFile, byte[] modelBytes, MeshVolumeSolve solve, float brushRadius)
+    /// <param name="showWind">Draw the painted wind over the garment — while the wind brush is the tool.</param>
+    internal void ArmBrush(string modelFile, byte[] modelBytes, MeshVolumeSolve solve, float brushRadius,
+                           bool showWind = false)
     {
         brushArmedFrame = ImGui.GetFrameCount();
         targetKey = BodyShapeReader.PathKey(modelFile);
         targetBytes = modelBytes;
         volume = solve;
         radius = brushRadius;
+        this.showWind = showWind;
     }
+
+    // ── the wind wash ──
+    private bool showWind;
+
+    /// <summary>Triangles with any painted wind, rebuilt when the wind or the mesh changes rather than per frame.</summary>
+    private readonly List<int> windTriangles = [];
+    private int windTrianglesVersion = -1;
+    private SkinnedMesh? windTrianglesMesh;
+
+    /// <summary>Most wash triangles drawn per frame; beyond it every n-th, so a fully painted dense garment stays smooth.</summary>
+    private const int MaxWashTriangles = 40000;
+
+    /// <summary>Wash opacity at full wind: enough to read, not so much the garment underneath disappears.</summary>
+    private const float WashOpacity = 0.45f;
 
     /// <summary>Keep pick mode live for this frame: the next click on a worn garment names its file.</summary>
     public void ArmPick(string penumbraModsRoot, Action<string> picked)
@@ -160,6 +177,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         FillEdited(m);
         if (!pbdTried) { pbdTried = true; pbd = LiveCharacter.LoadPbd(penumbra, data, log); }
         poser.Pose(m, pose, pbd, world, 0, edited);
+
+        // The wash first, so the ring lies on top of it, and whether or not the mouse is over the garment.
+        if (showWind) DrawWindWash(projection, m);
 
         var io = ImGui.GetIO();
         var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
@@ -338,6 +358,49 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (w <= 0f || !projection.WorldToScreen(world[v], out var s)) continue;
             dl.AddCircleFilled(s + origin, 1.5f, ((uint)(w * 0x38) << 24) | 0x5A5AFFu);
             drawn++;
+        }
+    }
+
+    /// <summary>
+    /// The painted wind as a translucent red over the garment, stronger where there is more — the whole painted
+    /// area, not only what the brush is over. Wind is per vertex; a triangle takes the average of its corners.
+    /// </summary>
+    private void DrawWindWash(ScreenProjection projection, SkinnedMesh m)
+    {
+        if (volume == null) return;
+        var solve = volume;
+
+        if (windTrianglesVersion != solve.WindVersion || !ReferenceEquals(windTrianglesMesh, m))
+        {
+            windTriangles.Clear();
+            var baseTris = m.BaseTriangles;
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                int o = t * 3;
+                if (solve.WindAt(baseTris[o]) > 0f || solve.WindAt(baseTris[o + 1]) > 0f || solve.WindAt(baseTris[o + 2]) > 0f)
+                    windTriangles.Add(t);
+            }
+            windTrianglesVersion = solve.WindVersion;
+            windTrianglesMesh = m;
+        }
+        if (windTriangles.Count == 0) return;
+
+        var dl = ImGui.GetBackgroundDrawList();
+        var origin = ImGui.GetMainViewport().Pos;
+        var tris = m.Triangles;
+        var bases = m.BaseTriangles;
+        int stride = Math.Max(1, windTriangles.Count / MaxWashTriangles);
+        for (int i = 0; i < windTriangles.Count; i += stride)
+        {
+            int o = windTriangles[i] * 3;
+            float wind = (solve.WindAt(bases[o]) + solve.WindAt(bases[o + 1]) + solve.WindAt(bases[o + 2])) / 3f;
+            uint alpha = (uint)(Math.Clamp(wind, 0f, 1f) * WashOpacity * 255f);
+            if (alpha == 0) continue;
+            if (!projection.WorldToScreen(world[tris[o]], out var a)) continue;
+            if (!projection.WorldToScreen(world[tris[o + 1]], out var b)) continue;
+            if (!projection.WorldToScreen(world[tris[o + 2]], out var c)) continue;
+            dl.AddTriangleFilled(a + origin, b + origin, c + origin, (alpha << 24) | 0x002828EBu);   // ABGR: red
         }
     }
 

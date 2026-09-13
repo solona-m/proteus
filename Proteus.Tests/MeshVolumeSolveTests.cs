@@ -529,6 +529,62 @@ public class MeshVolumeSolveTests
         Assert.Equal(At(split.Positions, bump), At(solve.Positions(), bump));
     }
 
+    /// <summary>
+    /// The wind brush moves wind toward the amount by the rate and the falloff — full in the middle, less toward
+    /// the rim, nothing beyond it — and painting toward 0 erases. Nothing moves while it paints.
+    /// </summary>
+    [Fact]
+    public void WindPaintsTowardTheAmountAndErases()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        int middle = index[5, 5], near = index[5, 7], outside = index[0, 0];
+        var centre = At(model.Positions, middle);
+
+        solve.PaintWind(centre, 0.04f, 1f, 0.5f);
+        Assert.Equal(0.5f, solve.WindAt(middle), 1e-4f);
+        Assert.True(solve.WindAt(near) > 0f && solve.WindAt(near) < 0.5f, $"near the rim: {solve.WindAt(near)}");
+        Assert.Equal(0f, solve.WindAt(outside));
+
+        for (int i = 0; i < 40; i++) solve.PaintWind(centre, 0.04f, 1f, 0.5f);
+        Assert.Equal(1f, solve.WindAt(middle));   // settles exactly, not one byte short
+
+        for (int i = 0; i < 40; i++) solve.PaintWind(centre, 0.04f, 0f, 0.5f);
+        Assert.Equal(0f, solve.WindAt(middle));
+        solve.EndStroke(wind: true);
+
+        Assert.Equal(model.Positions, solve.Positions());
+    }
+
+    /// <summary>Wind is never painted onto skin — it is the garment that sways.</summary>
+    [Fact]
+    public void WindNeverPaintsSkin()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: true);
+        var solve = new MeshVolumeSolve(model);
+        solve.PaintWind(At(model.Positions, clothStart + 6 * n + 6), 1f, 1f, 1f);
+
+        for (int v = 0; v < clothStart; v++) Assert.Equal(0f, solve.WindAt(v));
+        Assert.True(solve.WindAt(clothStart + 6 * n + 6) > 0.9f);
+    }
+
+    /// <summary>Undo takes a wind stroke back exactly, and leaves the model unedited.</summary>
+    [Fact]
+    public void WindUndoIsExact()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.PaintWind(At(model.Positions, index[5, 5]), 0.05f, 0.7f, 1f);
+        solve.EndStroke(wind: true);
+        Assert.True(solve.WindEdited);
+        Assert.True(solve.Dirty);
+
+        solve.Undo();
+        for (int v = 0; v < model.Positions.Length / 3; v++) Assert.Equal(0f, solve.WindAt(v));
+        Assert.False(solve.WindEdited);
+        Assert.False(solve.Dirty);
+    }
+
     /// <summary>Undoing a relax stroke puts the surface back exactly.</summary>
     [Fact]
     public void RelaxUndoIsExact()

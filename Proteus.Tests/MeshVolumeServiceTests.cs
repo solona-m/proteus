@@ -277,6 +277,52 @@ public class MeshVolumeServiceTests
         Assert.Contains("format", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Painted wind is saved into the model: the file gains the wind channel it did not have, reading it back
+    /// gives the painted amount on every vertex, and the geometry is exactly what it was.
+    /// </summary>
+    [Fact]
+    public void PaintedWindIsSavedIntoAnAddedChannel()
+    {
+        var (mdl, solve, model) = Setup();
+        Assert.False(ModelPartReader.Read(mdl)!.HasWindChannel);
+
+        var centre = new Vector3(model.Positions[0], model.Positions[1], model.Positions[2]);
+        Assert.True(solve.PaintWind(centre, 10f, 0.8f, 1f) > 0);
+        solve.EndStroke(wind: true);
+        Assert.True(solve.WindEdited);
+
+        var written = MeshVolumeService.Inflate(mdl, solve);
+        Assert.NotNull(written.WindChannel);
+        Assert.Equal(1, written.WindChannel!.Value.MeshesAdded);
+
+        var back = ModelPartReader.Read(written.Model)!;
+        Assert.True(back.HasWindChannel);
+        Assert.Equal(ModelPartReader.Read(mdl)!.Positions, back.Positions);
+        for (int v = 0; v < back.Wind.Length; v++)
+            Assert.Equal(solve.WindAt(v), back.Wind[v], 1f / 255f);
+
+        // Opened again, the painted wind is what the brush starts from.
+        var reopened = new MeshVolumeSolve(back);
+        Assert.False(reopened.WindEdited);
+        Assert.True(reopened.HasWindChannel);
+        Assert.Equal(solve.WindAt(0), reopened.WindAt(0), 1f / 255f);
+    }
+
+    /// <summary>A model only pulled — no wind painted — keeps its vertex layout exactly as the author shipped it.</summary>
+    [Fact]
+    public void UnpaintedWindAddsNoChannel()
+    {
+        var (mdl, solve, model) = Setup();
+        var centre = new Vector3(model.Positions[0], model.Positions[1], model.Positions[2]);
+        solve.Paint(centre, 10f, 0.002f);
+        solve.EndStroke();
+
+        var written = MeshVolumeService.Inflate(mdl, solve);
+        Assert.Null(written.WindChannel);
+        Assert.Equal(mdl.Length, written.Model.Length);
+    }
+
     /// <summary>Nothing painted, nothing saved — and the refusal is not an error the user has to clear.</summary>
     [Fact]
     public void RefusesToSaveAnUntouchedModel()

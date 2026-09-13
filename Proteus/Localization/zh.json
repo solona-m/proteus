@@ -2147,6 +2147,42 @@
     "message": "横跨凹陷处（臀沟、褶皱）涂抹，让布料笔直地绷过去，而不是顺着\n身体陷进去。它只会抬升，并保留圆润部位原有的形状。",
     "description": ""
   },
+  "Parts.Tool.Wind": {
+    "message": "风",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "绘制风吹动这件服装的位置；红色越深摆动越强。\n写入模型的第二个顶点颜色。",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "强度",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "要绘制的风量。0% 会擦除，绘制时按住 Ctrl 也会擦除。",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "速度",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "绘制时风量达到设定值的速度。",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "此模型还没有风通道。保存第一笔时会添加。",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "此模型的第一个顶点颜色不是白色，而风效果需要白色。Proteus 会保持作者原样。",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "无法为 {0} 个网格添加风：那里没有空间再放一个顶点属性。",
+    "description": ""
+  },
   "Parts.Brush.BridgeRate.Tip": {
     "message": "涂抹时布料升起横跨凹陷的速度。低则柔和易控，高则几乎立刻填平空隙。",
     "description": ""
