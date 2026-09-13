@@ -247,6 +247,33 @@ public static class SecondSkinWriter
     public static List<string> MaterialNames(byte[] s) => ReadMaterialNames(s, Parse(s));
 
     /// <summary>
+    /// The material names at least one LOD0 mesh actually draws with, in declaration order.
+    /// <para/>
+    /// A model can DECLARE a material nothing draws: an author starts from a stock model, deletes the
+    /// vanilla body and adds their own, and the emptied mesh keeps its vanilla binding. [HS] Heart Breaker
+    /// declares <c>mt_c0201b0001_a.mtrl</c> on a zero-vertex mesh ahead of the <c>_bibo</c> skin that
+    /// carries all 7713 vertices, so reading the declared list called a bibo part vanilla and dropped it
+    /// from the shell. Header-only — no vertex is decoded — unlike
+    /// <see cref="SecondSkinService.UsedMaterialNames"/>, which reads geometry once per material.
+    /// </summary>
+    public static List<string> DrawnMaterialNames(byte[] s)
+    {
+        var src = Parse(s);
+        var names = ReadMaterialNames(s, src);
+        var drawn = new bool[names.Count];
+        int end = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
+        for (int m = src.Lod0MeshIndex; m < end; m++)
+        {
+            int mo = src.MeshStart + m * 36;
+            if (mo + 36 > s.Length) break;
+            if (BitConverter.ToUInt16(s, mo) == 0 || BitConverter.ToUInt32(s, mo + 4) < 3) continue;
+            ushort mat = BitConverter.ToUInt16(s, mo + 8);
+            if (mat < drawn.Length) drawn[mat] = true;
+        }
+        return names.Where((_, i) => drawn[i]).ToList();
+    }
+
+    /// <summary>
     /// The model's attribute names, in the order its submesh masks index them — bit <c>i</c> of a submesh's
     /// mask means entry <c>i</c> here.
     /// <para/>
