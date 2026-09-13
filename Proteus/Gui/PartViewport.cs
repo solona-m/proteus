@@ -192,6 +192,13 @@ public sealed class PartViewport : IDisposable
     /// </summary>
     public Vector3? Cursor { get; private set; }
 
+    /// <summary>
+    /// Unit direction from the model toward the camera — the side of the model being looked at, and so the
+    /// side being painted. The bridge brush falls back on it where the surface cannot say which way is out.
+    /// </summary>
+    public Vector3 ToViewer => Vector3.Normalize(new Vector3(
+        MathF.Cos(pitch) * MathF.Sin(yaw), MathF.Sin(pitch), MathF.Cos(pitch) * MathF.Cos(yaw)));
+
     /// <summary>The brush is down and being dragged across the model right now.</summary>
     public bool Painting { get; private set; }
 

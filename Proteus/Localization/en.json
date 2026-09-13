@@ -2105,7 +2105,7 @@
   },
   "Parts.Tool.Navigate": {
     "message": "Pick parts",
-    "description": "Radio button above the model in Settings > Toggles."
+    "description": "Tool button in the side panel of the Studio tab."
   },
   "Parts.Tool.Navigate.Tip": {
     "message": "Click pieces of the model to choose them, then give them an on/off switch.",
@@ -2126,6 +2126,30 @@
   "Parts.Tool.Deflate.Tip": {
     "message": "The same brush in reverse, for clothing that stands too far off the body.",
     "description": "Tooltip for the radio button."
+  },
+  "Parts.Tool.Relax": {
+    "message": "Relax",
+    "description": "Icon button above the model; selects the brush that smooths the surface."
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Paint on the model to smooth the surface — lumps the clothing came with, or a\npull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\ncloth can sink toward the body.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.\n\nNear an open edge, like a hem, relaxing draws the edge slightly inward.",
+    "description": "Tooltip for the Strength slider while Relax is selected. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Bridge",
+    "description": "Icon button in the brush panel; selects the brush that stretches cloth across a hollow."
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Paint across a hollow — the cleft between cheeks, a crease — to stretch the\ncloth straight over it instead of following the body down into it. It only\never lifts, and leaves rounded areas their own shape.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "How quickly the cloth rises to span the hollow while you paint. Low is gentle\nand easy to control; high closes the gap almost at once.",
+    "description": "Tooltip for the Strength slider while Bridge is selected. Keep the line breaks; the tooltip is not wrapped."
   },
   "Parts.Brush.Help": {
     "message": "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to zoom.",
@@ -2588,7 +2612,7 @@
     "description": "Main tab: the list of Penumbra mods Proteus composites."
   },
   "Tab.Parts": {
-    "message": "Toggles",
+    "message": "Studio",
     "description": "Tab label. Very tight space - one short word."
   },
   "Tab.Settings": {
