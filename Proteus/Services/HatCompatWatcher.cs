@@ -55,11 +55,17 @@ public sealed class HatCompatWatcher : IDisposable
     /// <summary>When the poll may next ask, as a tick count.</summary>
     private long nextPoll;
 
-    /// <summary>How many polls between heartbeat log lines — see <see cref="OnFrameworkUpdate"/>.</summary>
-    private const int HeartbeatPolls = 15;
+    /// <summary>
+    /// How many polls an unchanged reading goes between heartbeat log lines — see
+    /// <see cref="OnFrameworkUpdate"/>. A changed reading reports on the next poll regardless.
+    /// </summary>
+    private const int HeartbeatPolls = 300;
 
     /// <summary>Polls remaining before the next heartbeat. Starts at 1 so the first poll reports.</summary>
     private int beats = 1;
+
+    /// <summary>The reading the last heartbeat reported, so a repeat of it can stay quiet.</summary>
+    private string? beatKey;
 
     /// <summary>How many consecutive empty readings it takes to believe the hair really is gone.</summary>
     private const int BlanksBeforeNone = 2;
@@ -174,10 +180,12 @@ public sealed class HatCompatWatcher : IDisposable
 
         // A heartbeat, so that "nothing happened" can be told apart from "nothing is running". Without it
         // a silent poll and a poll that finds no hair look identical in the log, and they were confused
-        // for each other once already.
-        if (--beats <= 0)
+        // for each other once already. Only a changed reading reports straight away; an unchanged one
+        // reports every few minutes, which proves the poll is alive without repeating itself all session.
+        if (--beats <= 0 || key != beatKey)
         {
             beats = HeartbeatPolls;
+            beatKey = key;
             log.Debug("hat compat: watching — key={0}  {1}", key ?? "(null)", compositor.HatCompatDiag());
         }
 
