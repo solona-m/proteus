@@ -63,8 +63,8 @@ public sealed class ModelPart
     public int TriangleCount => Triangles.Length / 3;
 
     /// <summary>
-    /// Whether a toggle may claim this part — true unless one of the item's own ten IMC switches already
-    /// governs it.
+    /// Whether a toggle may claim this part. Almost always true — the one refusal left is a mask bit with
+    /// no name behind it.
     /// <para/>
     /// A submesh draws only when ALL of its attributes are enabled, so adding one is purely additive: the
     /// geometry keeps every condition it had and gains "…and this switch is on". That was worth settling
@@ -80,13 +80,39 @@ public sealed class ModelPart
     /// submeshes are doing by accident. <c>atr_gv_a + atr_gv_e</c> settles it from the other side: two part
     /// switches on one submesh is a sentence only AND can finish.
     /// <para/>
-    /// What is still refused is a part an IMC switch already drives — see
-    /// <c>SecondSkinService.PartAttributeBit</c> for which names those are. Not because it would break
-    /// anything, but because the result is a part needing two checkboxes to appear, and the mod already
-    /// offers one of them. Body-suppression attributes (<c>atr_hiz</c>, <c>atr_sne</c>, <c>atr_hij</c>,
-    /// <c>atr_ude</c>, <c>atr_nek</c>) and the rest answer to no IMC bit and so do not count.
+    /// That evidence is load-bearing now rather than a footnote. A part the author already switches used to
+    /// be refused here — not because it would break anything, but because the result needs two checkboxes
+    /// to appear and the mod already offered one of them. Two checkboxes turns out to be exactly what is
+    /// wanted: the case this feature exists for is a bow welded into a skirt the author DOES switch, and
+    /// refusing it left the one piece a user most wants to separate as the one piece they could not. See
+    /// <see cref="AuthorSwitched"/>, which now carries that fact as information rather than a veto.
+    /// <para/>
+    /// A bit past the end of the attribute-name table is still refused, and for a sharper reason than "we
+    /// cannot read it". <see cref="ModelPartReader.FreeLetters"/> derives the ten-letter budget from the
+    /// names the model DECLARES, so a set bit no name backs is a letter the budget cannot see — and the
+    /// letter handed out for a new switch could be one the author's IMC group is already driving. Two
+    /// options on one bit flip each other, which is the failure
+    /// <c>Write_DoesNotReuseALetterTheItemAlreadyClaimed</c> exists to prevent.
     /// </summary>
     public required bool Toggleable { get; init; }
+
+    /// <summary>
+    /// At least one of this part's attributes is an IMC part switch — a name ending <c>_a</c>..<c>_j</c>,
+    /// see <c>SecondSkinService.PartAttributeBit</c> — so the mod's author already has a checkbox over this
+    /// geometry. Informational: a switch added here stacks on top, under the AND rule above.
+    /// <para/>
+    /// Body-suppression attributes (<c>atr_hiz</c>, <c>atr_sne</c>, <c>atr_hij</c>, <c>atr_ude</c>,
+    /// <c>atr_nek</c>) and the rest answer to no IMC bit, so they do not count — telling a user their author
+    /// had switched the shin of their trousers was the untrue message this distinction exists to avoid.
+    /// <para/>
+    /// An island inherits this from its submesh verbatim, which is correct rather than approximate: the
+    /// island really is behind the author's switch, and <c>ModelAttributeWriter.SplitSubmesh</c> copies the
+    /// original mask onto every record it cuts, so it still is after the split.
+    /// <para/>
+    /// Not <c>required</c>, so callers that synthesize a part for their own purposes — see
+    /// <c>HatCompatSolve</c> — keep the right default without restating it.
+    /// </summary>
+    public bool AuthorSwitched { get; init; }
 }
 
 /// <summary>Everything one model offers, read once.</summary>
@@ -241,16 +267,18 @@ public static class ModelPartReader
                 uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
                 uint mask = BitConverter.ToUInt32(s, ss + 8);
 
-                // Which of this submesh's attributes are IMC switches — see ModelPart.Toggleable. A bit with
-                // no name behind it is treated as one, because an unreadable tag is not a licence to add to
-                // a rule we cannot read.
-                bool toggleable = true;
-                for (int b = 0; b < 32 && toggleable; b++)
+                // Two different questions off one walk of the mask — see ModelPart.Toggleable and
+                // ModelPart.AuthorSwitched. An IMC switch the author already has over this geometry is
+                // reported; a bit with no name behind it is refused. No short-circuit: both answers are
+                // wanted, so every set bit has to be looked at.
+                bool authorSwitched = false, unnamed = false;
+                for (int b = 0; b < 32; b++)
                 {
                     if ((mask & (1u << b)) == 0) continue;
-                    toggleable = b < src.AttrNames.Length
-                              && SecondSkinService.PartAttributeBit(src.AttrNames[b]) == null;
+                    if (b >= src.AttrNames.Length) unnamed = true;
+                    else if (SecondSkinService.PartAttributeBit(src.AttrNames[b]) != null) authorSwitched = true;
                 }
+                bool toggleable = !unnamed;
 
                 var tris = new List<int>((int)sc);
                 var ordinals = new List<int>((int)sc / 3);
@@ -272,7 +300,7 @@ public static class ModelPartReader
                 var label = $"{ordinal}.{su + 1}";
                 var triArr = tris.ToArray();
                 var ordArr = ordinals.ToArray();
-                parts.Add(Make(m, su, -1, label, material, triArr, ordArr, mask, toggleable, pos));
+                parts.Add(Make(m, su, -1, label, material, triArr, ordArr, mask, toggleable, authorSwitched, pos));
 
                 // Islands are offered only when they say something the submesh row does not. One island IS
                 // the submesh, and a shattered submesh is reported rather than listed — see MaxIslands.
@@ -291,7 +319,7 @@ public static class ModelPartReader
                 {
                     parts.Add(Make(m, su, i, $"{label}.{i + 1}", material,
                         [.. island.SelectMany(k => new[] { triArr[k * 3], triArr[k * 3 + 1], triArr[k * 3 + 2] })],
-                        [.. island.Select(k => ordArr[k])], mask, toggleable, pos));
+                        [.. island.Select(k => ordArr[k])], mask, toggleable, authorSwitched, pos));
                     i++;
                 }
             }
@@ -313,12 +341,13 @@ public static class ModelPartReader
 
     private static ModelPart Make(
         int mesh, int submesh, int island, string label, string material, int[] triangles, int[] ordinals,
-        uint mask, bool toggleable, List<float> pos)
+        uint mask, bool toggleable, bool authorSwitched, List<float> pos)
     {
         var (min, max) = Bounds(pos, triangles);
         return new ModelPart
         {
             Toggleable = toggleable,
+            AuthorSwitched = authorSwitched,
             Mesh = mesh,
             Submesh = submesh,
             Island = island,

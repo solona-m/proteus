@@ -67,6 +67,10 @@ public sealed class PartsPanel
     private int freeLetters;
     private bool modelUnreadable;
 
+    /// <summary>The picked mod is in Penumbra's pre-v4 layout, which Proteus reads but will not write —
+    /// see <see cref="PenumbraModMeta.IsLegacyFolder"/>. Nothing below the mod picker is drawn for one.</summary>
+    private bool modIsLegacy;
+
     private readonly HashSet<string> ticked = new(StringComparer.Ordinal);
     /// <summary>Submeshes whose islands are listed out. See <see cref="DrawPartRows"/>.</summary>
     private readonly HashSet<(int Mesh, int Submesh)> expanded = [];
@@ -112,6 +116,22 @@ public sealed class PartsPanel
 
         DrawModPicker();
         if (modDir == null) return;
+
+        if (modIsLegacy)
+        {
+            ImGui.Spacing();
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, ps.LegacyMod);
+            ImGui.PopTextWrapPos();
+
+            // Undo still offered. An older Proteus DID write into folders like this one, so a mod here may
+            // carry switches of ours — and hiding the button would leave the one person who needs it most
+            // with no way out. The models come back either way; only removing the option group can fail,
+            // and it says so.
+            DrawExisting();
+            DrawStatus();
+            return;
+        }
 
         DrawExisting();
         DrawStatus();
@@ -210,6 +230,7 @@ public sealed class PartsPanel
         modelIndex = -1;
         parts = null;
         modelUnreadable = false;
+        modIsLegacy = false;
         ticked.Clear();
         expanded.Clear();
         pending.Clear();
@@ -222,6 +243,12 @@ public sealed class PartsPanel
         if (root == null) return;
 
         existing = MeshToggleService.ReadRecord(root);
+
+        // A pre-v4 folder is read-only to Proteus, so there is nothing useful to offer: every model would
+        // be listed, clickable and staged, only for the write to refuse at the end. Answered before the
+        // list is built instead — the message says how to fix it, and Penumbra does the fixing.
+        modIsLegacy = PenumbraModMeta.IsLegacyFolder(root);
+        if (modIsLegacy) return;
 
         // Models the mod PUBLISHES, not files lying in its folder. That is the list that matters: a model
         // nothing redirects to is dead weight the author left behind, and — the part that decides the whole
@@ -348,8 +375,9 @@ public sealed class PartsPanel
     /// part, hovering a row lights that part up on the model.
     /// <para/>
     /// The list is still here, and not just as a fallback. It is the only place that can show a part which
-    /// is entirely hidden behind another, say what material a part draws with, or say that the author has
-    /// already put one behind a switch of their own.
+    /// is entirely hidden behind another, say what material a part draws with, or mark the parts that
+    /// already answer to a switch of the author's — where a switch added here stacks, and both have to be
+    /// on for the part to draw.
     /// </summary>
     private void DrawParts(float height)
     {
@@ -370,12 +398,16 @@ public sealed class PartsPanel
                                 ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
 
-        // The model gives every sign that a click will work — the part lights up, the cursor becomes a hand
-        // — and then quietly absorbs it when the author already gates that geometry. The list says so with a
-        // disabled checkbox and a tooltip; without this the model says nothing at all.
+        // Two different things to say, and only one of them is an apology. A part the author already
+        // switches takes the click normally — the tooltip is there to explain that the new switch will
+        // stack rather than replace. A part with an unreadable tag is the one the model still lights up,
+        // hand-cursors and then quietly absorbs, so without this it says nothing at all.
         if (viewport.PointerOverModel && viewport.Hovered is { } hot
-            && model.Parts.FirstOrDefault(p => p.Label == hot) is { Toggleable: false })
-            ImGui.SetTooltip(ps.AlreadyGatedTip);
+            && model.Parts.FirstOrDefault(p => p.Label == hot) is { } hovered)
+        {
+            if (!hovered.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
+            else if (hovered.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
+        }
 
         ImGui.SameLine();
 
@@ -454,6 +486,16 @@ public sealed class PartsPanel
                 Path.GetFileName(part.Material.TrimStart('/')), part.TriangleCount));
             if (ImGui.IsItemHovered()) hoveredRow = part.Label;
 
+            // Marked on the row, not left to the tooltip. The stacking changes what ticking this box means
+            // — the part will need the author's switch on as well — and that is worth knowing while
+            // choosing, not only after hovering the one row you already suspected.
+            if (part.AuthorSwitched)
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled(ps.AuthorSwitchedTag);
+                if (ImGui.IsItemHovered()) hoveredRow = part.Label;
+            }
+
             // The expander sits on the SUBMESH row, because that is the thing being broken up.
             if (!isIsland && islands.TryGetValue(owner, out var count))
             {
@@ -468,8 +510,11 @@ public sealed class PartsPanel
 
             if (isIsland) ImGui.Unindent(ProteusStyle.S(12f));
 
-            if (hoveredRow == part.Label && !part.Toggleable)
-                ImGui.SetTooltip(ps.AlreadyGatedTip);
+            if (hoveredRow == part.Label)
+            {
+                if (!part.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
+                else if (part.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
+            }
         }
 
         // Only override the viewport's own hover when the cursor is actually over a row; otherwise the
