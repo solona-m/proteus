@@ -286,6 +286,358 @@ public class MeshVolumeSolveTests
         Assert.True(after.Y > during.Y * 0.97f, $"the pull snapped back on release: {during.Y} -> {after.Y}");
     }
 
+    /// <summary>A grid with one interior node raised, as a lump the garment arrived with.</summary>
+    private static (ModelParts Model, int[,] Index, int Bump) Bumped(float height)
+    {
+        var (grid, index) = Grid(11);
+        var pos = grid.Positions.ToArray();
+        int bump = index[5, 5];
+        pos[bump * 3 + 1] = height;
+        return (Assemble(pos.ToList(), grid.Normals.ToList(), grid.Parts[0].Triangles.ToList()), index, bump);
+    }
+
+    /// <summary>Relax flattens a lump the model shipped with.</summary>
+    [Fact]
+    public void RelaxFlattensALump()
+    {
+        const float height = 0.01f;
+        var (model, _, bump) = Bumped(height);
+        var solve = new MeshVolumeSolve(model);
+
+        for (int i = 0; i < 10; i++) solve.Relax(At(model.Positions, bump), 0.04f, 1f);
+        solve.EndStroke();
+
+        var after = solve.Positions();
+        Assert.True(At(after, bump).Y < height * 0.8f, $"the lump did not flatten: {At(after, bump).Y}");
+    }
+
+    /// <summary>
+    /// Relax shrinks, the way 3ds Max's does: relaxing the top of a dome sinks its crest. A Taubin pair
+    /// would hold the crest where it is (or nudge it up), so this pins the plain-average behaviour.
+    /// </summary>
+    [Fact]
+    public void RelaxShrinksADomeLikeMax()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, (i, j) =>
+        {
+            float x = (i - 10) * Spacing, z = (j - 10) * Spacing;
+            return -2f * (x * x + z * z);            // a cap, highest in the middle
+        }, 1f);
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+        int crest = 10 * n + 10;
+
+        for (int d = 0; d < 20; d++) solve.Relax(At(model.Positions, crest), 0.08f, 1f);
+        solve.EndStroke();
+
+        float sank = -At(solve.Positions(), crest).Y;
+        Assert.True(sank > 0.0005f, $"the crest sank only {sank * 1000f:F3} mm");
+    }
+
+    /// <summary>A pull that came out sharp is softened: the peak comes down toward the cloth around it.</summary>
+    [Fact]
+    public void RelaxSoftensASharpPull()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        int peak = index[5, 5], side = index[5, 6];
+
+        // A narrow, strong pull — about one cell wide — leaves a spike.
+        solve.Paint(At(model.Positions, peak), 0.012f, 0.004f);
+        solve.EndStroke();
+        // A COPY: Positions() refills and returns one buffer every call, so holding the array itself would
+        // silently turn "before" into "after".
+        var pulled = solve.Positions().ToArray();
+        float stepBefore = At(pulled, peak).Y - At(pulled, side).Y;
+        Assert.True(stepBefore > 0f);
+
+        for (int i = 0; i < 10; i++) solve.Relax(At(model.Positions, peak), 0.04f, 1f);
+        solve.EndStroke();
+        var relaxed = solve.Positions();
+
+        Assert.True(At(relaxed, peak).Y < At(pulled, peak).Y, "the peak did not come down");
+        Assert.True(At(relaxed, peak).Y - At(relaxed, side).Y < stepBefore, "the pull did not soften");
+    }
+
+    /// <summary>Skin never moves under the relax brush either.</summary>
+    [Fact]
+    public void RelaxNeverMovesSkin()
+    {
+        var (model, _, bump) = Bumped(0.01f);
+        var all = model.Parts[0].Triangles;
+        var cloth = new List<int>();
+        var body = new List<int>();
+        for (int t = 0; t + 2 < all.Length; t += 3)
+        {
+            var target = all[t] == bump || all[t + 1] == bump || all[t + 2] == bump ? body : cloth;
+            target.AddRange([all[t], all[t + 1], all[t + 2]]);
+        }
+
+        var split = Assemble(model.Positions.ToList(), model.Normals.ToList(), cloth, body.ToArray(),
+                             "/mt_c0201b0001_b.mtrl");
+        var solve = new MeshVolumeSolve(split);
+
+        for (int i = 0; i < 10; i++) solve.Relax(At(split.Positions, bump), 0.04f, 1f);
+        solve.EndStroke();
+
+        Assert.Equal(At(split.Positions, bump), At(solve.Positions(), bump));
+    }
+
+    /// <summary>Undoing a relax stroke puts the surface back exactly.</summary>
+    [Fact]
+    public void RelaxUndoIsExact()
+    {
+        var (model, _, bump) = Bumped(0.01f);
+        var solve = new MeshVolumeSolve(model);
+
+        for (int i = 0; i < 10; i++) solve.Relax(At(model.Positions, bump), 0.04f, 1f);
+        solve.EndStroke();
+        Assert.True(solve.Dirty);
+
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < model.Positions.Length / 3; v++)
+            Assert.Equal(At(model.Positions, v), At(back, v));
+    }
+
+    /// <summary>
+    /// A sheet over an n×n grid shaped by <paramref name="height"/>, its normals all pointing
+    /// <paramref name="normalY"/> — the way to build a groove, a dome, or the lining under an outer layer.
+    /// </summary>
+    private static (List<float> Pos, List<float> Nrm, List<int> Tris, int Start) Sheet(
+        int n, Func<int, int, float> height, float normalY,
+        List<float>? pos = null, List<float>? nrm = null, List<int>? tris = null)
+    {
+        pos ??= [];
+        nrm ??= [];
+        tris ??= [];
+        int start = pos.Count / 3;
+        for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+        {
+            pos.AddRange([i * Spacing, height(i, j), j * Spacing]);
+            nrm.AddRange([0f, normalY, 0f]);
+        }
+        for (int i = 0; i + 1 < n; i++)
+        for (int j = 0; j + 1 < n; j++)
+        {
+            int a = start + i * n + j, b = start + (i + 1) * n + j;
+            int c = start + i * n + j + 1, d = start + (i + 1) * n + j + 1;
+            tris.AddRange([a, b, d, a, d, c]);
+        }
+        return (pos, nrm, tris, start);
+    }
+
+    /// <summary>A V groove 8 mm deep and 80 mm across, running the length of the sheet: the cleft.</summary>
+    private static float Groove(int i, int j) => -0.008f * MathF.Max(0f, 1f - MathF.Abs(i - 10) / 4f);
+
+    /// <summary>
+    /// Bridge fills a groove between two flat sides, and it gets all the way: the relaxations tried on a
+    /// cleavage stalled because a saddle's curvatures cancel, and the first bridge construction stalled because
+    /// a point near the rim read the rim as the top of the cloth. This holds it to actually closing the gap.
+    /// </summary>
+    [Fact]
+    public void BridgeSpansAGroove()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, Groove, 1f);
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+
+        int bottom = 10 * n + 10;
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, bottom), 0.15f, 1f, Vector3.UnitY);
+        solve.EndStroke(bridge: true);
+
+        var after = solve.Positions();
+        Assert.True(At(after, bottom).Y > -0.008f * 0.25f,
+                    $"the groove was not spanned: bottom at {At(after, bottom).Y * 1000f:F2} mm of -8 mm");
+
+        // Only ever lifts.
+        for (int v = 0; v < model.Positions.Length / 3; v++)
+            Assert.True(At(after, v).Y >= At(model.Positions, v).Y - 1e-6f, $"vertex {v} was lowered");
+    }
+
+    /// <summary>
+    /// A bridge stays where it was painted when the button comes up. The stroke-end smoothing and unfold both
+    /// suit a pull and both took a bridge back — the smoothing flattens a narrow band of lift, and the unfold
+    /// reads a crack wall laid flat into the span as a collapsed triangle — which read in game as the cloth
+    /// snapping back down into the crack.
+    /// <para/>
+    /// A deep, narrow groove, because that is the case that trips both.
+    /// </summary>
+    [Fact]
+    public void BridgeDoesNotSnapBackOnRelease()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, (i, j) => i == 10 ? -0.03f : 0f, 1f);
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+        int bottom = 10 * n + 10;
+
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, bottom), 0.15f, 1f, Vector3.UnitY);
+        float lifted = At(solve.Positions(), bottom).Y - At(model.Positions, bottom).Y;
+        Assert.True(lifted > 0.01f, $"the groove did not lift: {lifted * 1000f:F2} mm");
+
+        solve.EndStroke(bridge: true);
+        float kept = At(solve.Positions(), bottom).Y - At(model.Positions, bottom).Y;
+        Assert.True(kept > lifted * 0.98f, $"the bridge snapped back on release: {lifted * 1000f:F2} -> {kept * 1000f:F2} mm");
+    }
+
+    /// <summary>
+    /// A channel with VERTICAL walls, 60 mm deep and 20 mm across, run along Z: the profile steps along X at the
+    /// rim, drops straight down, crosses the floor, and climbs straight back up. Seen from above a wall has no
+    /// footprint, so bridging the channel squashes each wall to a sliver — the shape that used to read as a
+    /// collapsed triangle to every later stroke.
+    /// </summary>
+    private static (ModelParts Model, int Floor) Channel()
+    {
+        const int cols = 21;
+        var profile = new List<(float X, float Y)>();
+        for (int k = 0; k <= 9; k++) profile.Add((k * Spacing, 0f));
+        profile.Add((9 * Spacing, -0.06f));
+        profile.Add((11 * Spacing, -0.06f));
+        for (int k = 11; k <= 20; k++) profile.Add((k * Spacing, 0f));
+
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var tris = new List<int>();
+        int rows = profile.Count;
+        for (int r = 0; r < rows; r++)
+        for (int j = 0; j < cols; j++)
+        {
+            pos.AddRange([profile[r].X, profile[r].Y, j * Spacing]);
+            nrm.AddRange([0f, 1f, 0f]);
+        }
+        for (int r = 0; r + 1 < rows; r++)
+        for (int j = 0; j + 1 < cols; j++)
+        {
+            int a = r * cols + j, b = (r + 1) * cols + j, c = r * cols + j + 1, d = (r + 1) * cols + j + 1;
+            tris.AddRange([a, b, d, a, d, c]);
+        }
+        return (Assemble(pos, nrm, tris), 10 * cols + 10);
+    }
+
+    /// <summary>
+    /// A bridge spans up to the rim and no higher. Beside a vertical wall the slope correction once read the rim
+    /// as higher than it was, and dab after dab chased that phantom until the rim stood 97 mm up.
+    /// </summary>
+    private static void AssertNothingAboveTheRim(float[] positions)
+    {
+        for (int v = 0; v < positions.Length / 3; v++)
+            Assert.True(At(positions, v).Y < 0.0005f, $"vertex {v} rose above the rim to {At(positions, v).Y * 1000f:F2} mm");
+    }
+
+    /// <summary>
+    /// A later pull over a bridge leaves the bridge up. The pull's fold check used to judge every triangle
+    /// against the AUTHOR'S shape and halve whole displacements, so the bridge's squashed walls read as
+    /// collapsed and the pull's release dropped the span back into the channel.
+    /// </summary>
+    [Fact]
+    public void APullOverABridgeDoesNotTakeItBack()
+    {
+        var (model, floor) = Channel();
+        var solve = new MeshVolumeSolve(model);
+
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, floor), 0.15f, 1f, Vector3.UnitY);
+        solve.EndStroke(bridge: true);
+        float bridged = At(solve.Positions(), floor).Y - At(model.Positions, floor).Y;
+        Assert.True(bridged > 0.05f, $"the channel did not bridge: {bridged * 1000f:F2} mm");
+        AssertNothingAboveTheRim(solve.Positions());
+
+        solve.Paint(At(model.Positions, floor), 0.15f, 0.0002f);
+        solve.EndStroke();
+        float kept = At(solve.Positions(), floor).Y - At(model.Positions, floor).Y;
+        Assert.True(kept > bridged * 0.98f, $"the pull took the bridge back: {bridged * 1000f:F2} -> {kept * 1000f:F2} mm");
+    }
+
+    /// <summary>
+    /// Undo after a small pull beside a bridge puts every point back exactly — including the bridge's points
+    /// just outside the pull, which the old fold check scaled back without recording them.
+    /// </summary>
+    [Fact]
+    public void UndoIsExactAfterAPullBesideABridge()
+    {
+        var (model, floor) = Channel();
+        var solve = new MeshVolumeSolve(model);
+
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, floor), 0.15f, 1f, Vector3.UnitY);
+        solve.EndStroke(bridge: true);
+        var bridged = solve.Positions().ToArray();
+        AssertNothingAboveTheRim(bridged);
+
+        solve.Paint(At(model.Positions, floor), 0.025f, 0.002f);
+        solve.EndStroke();
+        solve.Undo();
+
+        var back = solve.Positions();
+        for (int v = 0; v < bridged.Length / 3; v++)
+            Assert.Equal(At(bridged, v), At(back, v));
+    }
+
+    /// <summary>A rounded surface is already on its own hull, so bridging it changes nothing — each cheek keeps
+    /// its curve.</summary>
+    [Fact]
+    public void BridgeLeavesADomeAlone()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, (i, j) =>
+        {
+            float x = (i - 10) * Spacing, z = (j - 10) * Spacing;
+            return -2f * (x * x + z * z);            // a cap, highest in the middle
+        }, 1f);
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+
+        for (int d = 0; d < 10; d++) solve.Bridge(At(model.Positions, 10 * n + 10), 0.15f, 1f, Vector3.UnitY);
+
+        Assert.True(solve.Worst < 0.0002f, $"a convex surface moved {solve.Worst * 1000f:F3} mm");
+    }
+
+    /// <summary>
+    /// A lining stays a lining. The outer layer spans the groove and the inward-facing layer 2 mm beneath it
+    /// rises with it, rather than being pressed up into the outer surface.
+    /// </summary>
+    [Fact]
+    public void BridgeMovesALiningWithTheOuterLayer()
+    {
+        const int n = 21;
+        var outer = Sheet(n, Groove, 1f);
+        var inner = Sheet(n, (i, j) => Groove(i, j) - 0.002f, -1f, outer.Pos, outer.Nrm, outer.Tris);
+        var model = Assemble(inner.Pos, inner.Nrm, inner.Tris);
+        var solve = new MeshVolumeSolve(model);
+
+        int outerBottom = outer.Start + 10 * n + 10, innerBottom = inner.Start + 10 * n + 10;
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, outerBottom), 0.15f, 1f, Vector3.UnitY);
+
+        var after = solve.Positions();
+        Assert.True(At(after, outerBottom).Y > -0.008f * 0.5f, "the outer layer did not span");
+        float gap = At(after, outerBottom).Y - At(after, innerBottom).Y;
+        Assert.InRange(gap, 0.0015f, 0.0025f);
+    }
+
+    /// <summary>Skin never moves under the bridge either.</summary>
+    [Fact]
+    public void BridgeNeverMovesSkin()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, Groove, 1f);
+        int bottom = 10 * n + 10;
+        var cloth = new List<int>();
+        var body = new List<int>();
+        for (int t = 0; t + 2 < tris.Count; t += 3)
+        {
+            var target = tris[t] == bottom || tris[t + 1] == bottom || tris[t + 2] == bottom ? body : cloth;
+            target.AddRange([tris[t], tris[t + 1], tris[t + 2]]);
+        }
+        var model = Assemble(pos, nrm, cloth, body.ToArray(), "/mt_c0201b0001_b.mtrl");
+        var solve = new MeshVolumeSolve(model);
+
+        for (int d = 0; d < 10; d++) solve.Bridge(At(model.Positions, bottom), 0.15f, 1f, Vector3.UnitY);
+
+        Assert.Equal(At(model.Positions, bottom), At(solve.Positions(), bottom));
+    }
+
     /// <summary>
     /// Holding the brush down cannot walk a vertex away without limit.
     /// <para/>

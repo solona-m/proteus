@@ -191,7 +191,7 @@ public sealed class TabStrings
     public readonly string Bindings = Loc.Localize("Tab.Bindings", "Bindings");
     public readonly string Create   = Loc.Localize("Tab.Create", "Create");
     public readonly string Import   = Loc.Localize("Tab.Import", "Import");
-    public readonly string Parts    = Loc.Localize("Tab.Parts", "Toggles");
+    public readonly string Parts    = Loc.Localize("Tab.Parts", "Studio");
     public readonly string Export   = Loc.Localize("Tab.Export", "Export");
     public readonly string Settings = Loc.Localize("Tab.Settings", "Settings");
 }
@@ -1614,6 +1614,31 @@ public sealed class PartsStrings
 
     public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Push in")
                                        + "###partsToolDeflate";
+
+    public readonly string ToolRelax = Loc.Localize("Parts.Tool.Relax", "Relax")
+                                     + "###partsToolRelax";
+
+    public readonly string ToolRelaxTip = Loc.Localize("Parts.Tool.Relax.Tip",
+        "Paint on the model to smooth the surface — lumps the clothing came with, or a\n" +
+        "pull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\n" +
+        "cloth can sink toward the body.");
+
+    public readonly string ToolBridge = Loc.Localize("Parts.Tool.Bridge", "Bridge")
+                                      + "###partsToolBridge";
+
+    public readonly string ToolBridgeTip = Loc.Localize("Parts.Tool.Bridge.Tip",
+        "Paint across a hollow — the cleft between cheeks, a crease — to stretch the\n" +
+        "cloth straight over it instead of following the body down into it. It only\n" +
+        "ever lifts, and leaves rounded areas their own shape.");
+
+    public readonly string BrushBridgeRateTip = Loc.Localize("Parts.Brush.BridgeRate.Tip",
+        "How quickly the cloth rises to span the hollow while you paint. Low is gentle\n" +
+        "and easy to control; high closes the gap almost at once.");
+
+    public readonly string BrushRelaxRateTip = Loc.Localize("Parts.Brush.RelaxRate.Tip",
+        "How quickly the surface smooths while you paint. Low is gentle and easy to\n" +
+        "control; high smooths almost at once.\n\n" +
+        "Near an open edge, like a hem, relaxing draws the edge slightly inward.");
 
     public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
         "The same brush in reverse, for clothing that stands too far off the body.");

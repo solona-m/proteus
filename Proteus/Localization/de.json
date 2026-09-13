@@ -2127,6 +2127,30 @@
     "message": "Derselbe Pinsel umgekehrt, für Kleidung, die zu weit absteht.",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "Glätten",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Malen auf dem Modell glättet die Oberfläche — Beulen, die die Kleidung\nmitbringt, oder ein unsauberer Zug. Wie Relax in 3ds Max schrumpft es: Kurven flachen ab, und der Stoff kann zum Körper hin einsinken.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "Wie schnell die Oberfläche beim Malen glatt wird. Niedrig ist sanft und gut\nzu steuern; hoch glättet fast sofort.\n\nAn einer offenen Kante wie einem Saum zieht das Glätten die Kante leicht nach innen.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Überbrücken",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Male quer über eine Vertiefung — die Falte zwischen den Backen, eine Kerbe —,\num den Stoff gerade darüber zu spannen, statt ihn dem Körper hinein folgen zu\nlassen. Es hebt nur an und lässt gerundete Stellen in ihrer Form.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "Wie schnell sich der Stoff beim Malen über die Vertiefung hebt. Niedrig ist\nsanft und gut zu steuern; hoch schließt die Lücke fast sofort.",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "Zieh auf dem Modell, um zu malen. Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt.",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Schalter",
+    "message": "Studio",
     "description": ""
   },
   "Tab.Settings": {

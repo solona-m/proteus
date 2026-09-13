@@ -2127,6 +2127,30 @@
     "message": "El mismo pincel al revés, para ropa que queda demasiado separada del cuerpo.",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "Suavizar",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Pinta sobre el modelo para suavizar la superficie — bultos que traía la\nprenda o un tirón que quedó irregular. Como el relax de 3ds Max, encoge: las curvas se aplanan y la tela puede hundirse hacia el cuerpo.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "Qué tan rápido se suaviza la superficie mientras pintas. Bajo es suave y fácil\nde controlar; alto suaviza casi al instante.\n\nCerca de un borde abierto, como un dobladillo, suavizar mete el borde un poco hacia dentro.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Puente",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Pinta a través de un hueco — la hendidura entre los glúteos, un pliegue —\npara tensar la tela recta por encima en lugar de seguir el cuerpo hacia dentro.\nSolo levanta, y deja a las zonas redondeadas su propia forma.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "Qué tan rápido sube la tela para cubrir el hueco mientras pintas. Bajo es suave\ny fácil de controlar; alto cierra la separación casi al instante.",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "Arrastra sobre el modelo para pintar. Arrastra desde el fondo para girarlo, mayús-arrastrar para moverlo, rueda para acercar.",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Interruptores",
+    "message": "Estudio",
     "description": ""
   },
   "Tab.Settings": {

@@ -2127,6 +2127,30 @@
     "message": "같은 봇을 반대로. 몸에서 너무 뜨는 옷에 생니다.",
     "description": ""
   },
+  "Parts.Tool.Relax": {
+    "message": "다듬기",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "모델 위에 칠하면 표면이 매끄러워집니다 — 옷에 원래 있던 울통불통함이나\n거칠게 당겨진 부분에. 3ds Max의 릴랙스처럼 수축합니다: 곡면이 평평해지고 천이 몸 쪽으로 가라앉을 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "칠하는 동안 표면이 매끄러워지는 속도. 낮으면 부드럽고 조절하기 쉽고,\n높으면 거의 즉시 매끄러워집니다.\n\n밑단 같은 열린 가장자리 근처에서는 가장자리가 조금 안쪽으로 끌려옵니다.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "다리 놓기",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "움푸한 곳(엉덩이 골, 주름)을 가로질러 칠하면 천이 몸을 따라\n들어가지 않고 곳게 걸쳐집니다. 들어 올리기만 하며, 둥근 부분의\n모양은 그대로 둡니다.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "칠하는 동안 천이 움푸한 곳을 걸쳐 올라가는 속도. 낮으면 부드럽고\n조절하기 쉽고, 높으면 거의 즉시 틈이 메워집니다.",
+    "description": ""
+  },
   "Parts.Brush.Help": {
     "message": "모델 위에서 드래그하면 칠합니다. 배경에서 드래그하면 회전, Shift+드래그는 이동, 스크롤은 확대입니다.",
     "description": ""
@@ -2588,7 +2612,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "스위치",
+    "message": "스튜디오",
     "description": ""
   },
   "Tab.Settings": {
