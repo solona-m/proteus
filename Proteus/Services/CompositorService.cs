@@ -312,6 +312,10 @@ public class CompositorService : IDisposable
     /// </summary>
     private volatile string? _shellConfirmedDrawnKey;
 
+    /// <summary>The shell the "redraw to see it" chat notice last went out for — see
+    /// <see cref="SchedulePostRedrawShellCheck"/>.</summary>
+    private volatile string? _redrawWithheldNoticeKey;
+
     /// <summary>Content identity of a shell probe — the published material and model paths. Two probes
     /// with the same key describe the same shell on the character, however many times it was rebuilt.</summary>
     private static string ShellProbeKey(ShellDrawnProbe p)
@@ -7095,6 +7099,10 @@ public class CompositorService : IDisposable
             // these describing a composite it never published. They outlive the run — _appendHostModelPaths
             // is written THROUGH TO CONFIG — so a stale one is not self-correcting the way a redraw flag is.
             bool nextNeedFullRedraw = false;
+            // The narrower half of nextNeedFullRedraw that is about the SHELL: its model changed, or a forced
+            // run is redrawing to unstick it. Only then can auto redraw being off explain shell materials missing
+            // from the character — see SchedulePostRedrawShellCheck's reloadWithheld.
+            bool shellNeedsReload = false;
             bool nextSecondSkinActive = false;
             HashSet<string>? nextShellHostPaths = null;
             HashSet<string>? nextAppendHosts = null;
@@ -7480,6 +7488,7 @@ public class CompositorService : IDisposable
                             bool unstickShell = force && nothingChanged && !confirmedDrawn;
                             nextNeedFullRedraw = shells.ModelChanged || shapesChanged || hostsChanged
                                               || unstickShell;
+                            shellNeedsReload = nextNeedFullRedraw;
                             if (unstickShell)
                                 log.Debug("[Proteus] second skin unchanged on a forced composite and not yet "
                                         + "confirmed drawn — redrawing anyway, since an in-place reload "
@@ -7720,7 +7729,9 @@ public class CompositorService : IDisposable
 
             // And one step further out than that check can see: winning the path is not the same as the game
             // having drawn what is behind it. Fires its own delayed task — the redraw is still in flight here.
-            SchedulePostRedrawShellCheck();
+            // Withheld only when the shell NEEDED the reload. With auto redraw off and a shell that did not
+            // change, missing materials are a real failure a redraw would not fix, and belong to the warning.
+            SchedulePostRedrawShellCheck(reloadWithheld: !config.AutoRedraw && shellNeedsReload);
 
             LastResult = new CompositorResult
             {
@@ -10009,6 +10020,27 @@ public class CompositorService : IDisposable
     // what was composited. It converges: the re-composite records the settled body type as
     // _lastCompositedBodyType, so the check that follows it finds no change and stops.
     /// <summary>
+    /// Whether a shell material was published for this host model: same item folder
+    /// (<c>chara/accessory/a0095/</c>) and the model's slot in the material's name
+    /// (<c>…_wrs.mdl</c> ↔ <c>mt_…_wrs_b.mtrl</c>). The race code is ignored on purpose — a carrier's EQDP
+    /// edit can load a model under a different code than its materials are named for.
+    /// </summary>
+    internal static bool SameShellHost(string materialPath, string modelPath)
+    {
+        int mat = materialPath.IndexOf("/material/", StringComparison.OrdinalIgnoreCase);
+        int mdl = modelPath.IndexOf("/model/", StringComparison.OrdinalIgnoreCase);
+        if (mat <= 0 || mdl <= 0 || mat != mdl
+            || string.Compare(materialPath, 0, modelPath, 0, mat, StringComparison.OrdinalIgnoreCase) != 0)
+            return false;
+
+        var stem = Path.GetFileNameWithoutExtension(modelPath);
+        int us = stem.LastIndexOf('_');
+        if (us < 0) return false;
+        var slotTag = stem[us..] + "_";                                    // "_wrs_"
+        return Path.GetFileName(materialPath).Contains(slotTag, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// After the redraw, ask the CHARACTER whether the second skin is actually being drawn.
     ///
     /// The last link in a chain this session has been walking outwards one step at a time. The composite
@@ -10024,7 +10056,14 @@ public class CompositorService : IDisposable
     /// Sampled twice, because a full redraw is not instant and a single early read would call a healthy
     /// shell missing — the same discipline every other check here settled on.
     /// </summary>
-    private void SchedulePostRedrawShellCheck()
+    /// <param name="reloadWithheld">
+    /// Auto redraw is off, so this composite published without reloading the character. A changed shell
+    /// MODEL then cannot be on the character yet — the game keeps drawing the host's previous model, whose
+    /// materials are the old shell's — and that is the setting working as documented, not a failure. The
+    /// accessory warning used to fire on exactly this and send people to re-equip a ring that was fine.
+    /// Set only when the shell NEEDED that reload; any other miss is a real failure and gets the warning.
+    /// </param>
+    private void SchedulePostRedrawShellCheck(bool reloadWithheld)
     {
         var expected = _shellDrawnCheck;
         if (expected == null || expected.Materials.Count == 0) return;
@@ -10034,6 +10073,8 @@ public class CompositorService : IDisposable
             try
             {
                 List<string> missing = [];
+                // Materials whose own host was not drawn on the last read — not judged, see the anchor below.
+                List<string> hostGone = [];
                 bool hostEverDrawn = false;
                 HashSet<string>? hostMaterials = null;
                 for (int attempt = 0; attempt < 3; attempt++)
@@ -10059,10 +10100,24 @@ public class CompositorService : IDisposable
                     // object, a missing material means "not loaded YET", and warning on it would tell someone
                     // to re-equip an accessory that was about to work. Only once the host is drawn does its
                     // absence mean our mesh did not load.
+                    //
+                    // PER HOST. A shell spread over several hosts used to be anchored on ANY of them and then
+                    // judged on EVERY material — so taking the bracelet off while the next composite was still
+                    // building left the ring drawn, the bracelet gone, and the bracelet's materials reported
+                    // "never appeared" against a host that was no longer on the character at all. A material
+                    // is judged only while its own host is drawn; one whose host cannot be told from its path
+                    // is judged on the whole shell, as before.
                     if (!expected.Models.Any(models.Contains)) continue;
                     hostEverDrawn = true;
 
-                    missing = expected.Materials.Where(p => !materials.Contains(p)).ToList();
+                    bool OwnHostDrawn(string mtrl)
+                    {
+                        var own = expected.Models.Where(m => SameShellHost(mtrl, m)).ToList();
+                        return own.Count == 0 || own.Any(models.Contains);
+                    }
+                    hostGone = expected.Materials.Where(p => !OwnHostDrawn(p)).ToList();
+                    missing  = expected.Materials.Where(p => OwnHostDrawn(p) && !materials.Contains(p)).ToList();
+                    if (missing.Count == 0 && hostGone.Count > 0) continue;   // not a verdict either way yet
                     if (missing.Count == 0)
                     {
                         // The one place this is set. Everything below is a failure, an inconclusive read or
@@ -10095,6 +10150,17 @@ public class CompositorService : IDisposable
                     log.Information("[Proteus] second skin drawn check inconclusive — the host accessory was not back "
                             + "in the draw object within the sampling window, so whether our mesh loaded is "
                             + "unknown (not a failure)");
+                    return;
+                }
+
+                // Everything whose host is drawn loaded; the rest rides a host that left the character after
+                // the build — an accessory taken off, or not back yet. Not a failure, and the composite that
+                // change triggers checks its own shell.
+                if (missing.Count == 0)
+                {
+                    log.Information("[Proteus] second skin drawn check inconclusive — {0} shell material(s) ride a "
+                                  + "host that is not drawn right now ({1}); everything on a drawn host loaded",
+                        hostGone.Count, string.Join(", ", hostGone));
                     return;
                 }
 
@@ -10133,6 +10199,27 @@ public class CompositorService : IDisposable
                 // A failure makes the next success a transition, so print its paths in full when it comes.
                 _lastDrawnMaterials = null;
                 _shellConfirmedDrawnKey = null;
+
+                if (reloadWithheld)
+                {
+                    log.Information("[Proteus] second skin not drawn yet — {0} of {1} shell material(s) are not on "
+                                  + "the character ({2}), but auto redraw is off, so the character was not reloaded "
+                                  + "and is still drawing the previous shell. Expected until something redraws it",
+                        missing.Count, expected.Materials.Count, string.Join(", ", missing));
+
+                    // Once per shell: every composite re-runs this, and while auto redraw stays off a user
+                    // making several edits in a row would otherwise be told the same thing after each one.
+                    var probeKey = ShellProbeKey(expected);
+                    if (string.Equals(_redrawWithheldNoticeKey, probeKey, StringComparison.Ordinal)) return;
+                    _redrawWithheldNoticeKey = probeKey;
+
+                    var needsRedraw = Loc.Localize("Chat.ShellNeedsRedraw",
+                        "[Proteus] Your second skin changed, but auto redraw is off, so your character is still "
+                        + "wearing the previous version. Zone or use Penumbra's Redraw button to see it.");
+                    _ = Plugin.Framework.RunOnFrameworkThread(
+                        () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(needsRedraw, 17).Build()));
+                    return;
+                }
 
                 log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
                           + "shell material(s) never appeared on the character: {2}. The host accessory it "

@@ -159,6 +159,10 @@
     "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
     "description": ""
   },
+  "Chat.ShellNeedsRedraw": {
+    "message": "[Proteus] 第二层皮肤已更改，但自动重绘已关闭，所以角色仍穿着之前的版本。切换区域或使用 Penumbra 的 Redraw 按钮即可看到。",
+    "description": ""
+  },
   "Chat.UnclaimedRedirects.Fmt": {
     "message": "[Proteus] Proteus 发布的文件中有 {0} 个没有到达游戏——它们完全解析不到任何内容，通常意味着“Proteus”模组在你当前的 Penumbra 合集中被禁用了。请检查它是否已在那里启用。",
     "description": ""

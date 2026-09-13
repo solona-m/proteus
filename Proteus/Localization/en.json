@@ -159,6 +159,10 @@
     "message": "[Proteus] Your second skin was built but the game isn't drawing it. The accessory it rides on is equipped, yet the character isn't loading Proteus' version. Try unequipping and re-equipping that accessory, or pick a different one.",
     "description": "Appears in an in-game chat notice from Proteus."
   },
+  "Chat.ShellNeedsRedraw": {
+    "message": "[Proteus] Your second skin changed, but auto redraw is off, so your character is still wearing the previous version. Zone or use Penumbra's Redraw button to see it.",
+    "description": "Appears in an in-game chat notice from Proteus. \"Auto redraw\" is the checkbox Settings.General.AutoRedraw.Label; \"Redraw\" is a button in Penumbra - use the name Penumbra shows in your language."
+  },
   "Chat.UnclaimedRedirects.Fmt": {
     "message": "[Proteus] {0} of the files Proteus publishes aren't reaching the game — they resolve to nothing at all, which usually means the \"Proteus\" mod is disabled in your current Penumbra collection. Check it is enabled there.",
     "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
