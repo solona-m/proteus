@@ -4245,6 +4245,9 @@ public sealed class SecondSkinService
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"bodies={sources.Count}");
+            // The folder is never cleaned, so a base.mdl from an earlier build can sit beside a build that
+            // had none. This line is what says whether the one there belongs to this dump.
+            sb.AppendLine($"base={(baseModel != null ? "yes" : "no")}");
             for (int i = 0; i < sources.Count; i++)
             {
                 var sp = sources[i];

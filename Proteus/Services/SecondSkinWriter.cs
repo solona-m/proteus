@@ -2114,6 +2114,10 @@ public static class SecondSkinWriter
                 {
                     int stride = outStrides[pw2.Stream];
                     var movedV = new bool[vc];
+                    // Index ranges inserted ON the join after movedV was sized: the lip's mirror split and
+                    // the rim stitch. The graft appends vertices too, but those are the cap's own surface,
+                    // so a range is recorded only where the join is what grew.
+                    var joinAdded = new List<(int From, int To)>();
                     var weldPos = new Vec3[vc];
                     var weldNrm = new Vec3[vc];
                     var weldWgt = new (string Bone, float W)[vc][];
@@ -2450,9 +2454,11 @@ public static class SecondSkinWriter
                         // them meet this shell. The (mesh, source) key exists for the graft's own
                         // read-back, not to partition the join.
                         var rimPts = weldRimPos.Values.ToList();
+                        int preSplit = vc;
                         int mirrored = SplitCapRim(rimPts, decl, ref outStreams, outStrides,
                                                    ref vc, keptPerSub, ref used,
                                                    out int onVert2, out int offEdge2);
+                        joinAdded.Add((preSplit, vc));
                         diag?.Invoke($"authored cap: split the SHELL's lip at {mirrored} of "
                                    + $"{rimPts.Count} cap rim vertex/vertices — {onVert2} snapped onto, "
                                    + $"{offEdge2} off the boundary");
@@ -2756,8 +2762,10 @@ public static class SecondSkinWriter
                             // StitchBoundaryAt. Fed both runs' vertices, so each is split at the other's.
                             var rimPts2 = new List<Vec3>(capRimLandings);
                             rimPts2.AddRange(weldRimPos.Values);
+                            int preStitch = vc;
                             int stitched = StitchBoundaryAt(rimPts2, decl, ref outStreams, outStrides,
                                                             ref vc, keptPerSub, ref used);
+                            joinAdded.Add((preStitch, vc));
                             diag?.Invoke($"authored cap: stitched the merged rim - {stitched} vertex/vertices "
                                        + $"inserted and {StitchShared} split point(s) reused a vertex the mesh "
                                        + $"already had, so the two runs share edges ({rimPts2.Count} positions)");
@@ -3408,6 +3416,13 @@ public static class SecondSkinWriter
                                 }
                             }
 
+                        // ON THE JOIN: a vertex the weld moved, or one the lip split or rim stitch inserted
+                        // along it. The cap's own interior is not on it, whatever its index.
+                        var onJoin = new bool[vc];
+                        Array.Copy(movedV, onJoin, Math.Min(movedV.Length, vc));
+                        foreach (var (from, to) in joinAdded)
+                            for (int i = from; i < to && i < vc; i++) onJoin[i] = true;
+
                         var lift = new float[vc];
                         foreach (var t in bodySolid)
                             foreach (var (bp, bn) in new[] { (t.A, t.Na), (t.B, t.Nb), (t.C, t.Nc) })
@@ -3432,9 +3447,13 @@ public static class SecondSkinWriter
                                     if (fn.X * n2.X + fn.Y * n2.Y + fn.Z * n2.Z < 0)
                                         fn = new Vec3(-fn.X, -fn.Y, -fn.Z);
 
-                                    // How far the triangle's plane stands above this body vertex.
+                                    // How far the triangle's plane stands above this body vertex. A face
+                                    // on the join keeps the absolute floor — see WeldedSkinClearance.
                                     float h = (a.X - bp.X) * fn.X + (a.Y - bp.Y) * fn.Y + (a.Z - bp.Z) * fn.Z;
-                                    if (h >= minClearance || h < -MaxSkinLift) continue;
+                                    float floor = onJoin[ia] || onJoin[ib] || onJoin[ic]
+                                        ? MathF.Max(minClearance, WeldedSkinClearance)
+                                        : minClearance;
+                                    if (h >= floor || h < -MaxSkinLift) continue;
 
                                     // Only if the body vertex is actually UNDER this triangle: the plane
                                     // of a triangle elsewhere on the foot says nothing about this spot.
@@ -3452,28 +3471,47 @@ public static class SecondSkinWriter
                                     if (!inside) continue;
 
                                     // Lift the whole face — one corner is not what the skin came through.
-                                    float need = MathF.Min(minClearance - h, MaxSkinLift);
+                                    float need = MathF.Min(floor - h, MaxSkinLift);
                                     lift[ia] = MathF.Max(lift[ia], need);
                                     lift[ib] = MathF.Max(lift[ib], need);
                                     lift[ic] = MathF.Max(lift[ic], need);
                                 }
                             }
 
-                        int raised = 0;
-                        float worstLift2 = 0f;
+                        // ONE LIFT PER POSITION, along one direction. The join is full of coincident vertices
+                        // that were never merged — the crack closes and the UV seam each leave a pair on one
+                        // point — and lifting each by its own faces' need, along its own normal, pulls the
+                        // pair apart and reopens exactly the crack those passes closed. Same reason the relax
+                        // above welds by position before it moves anything.
+                        var group = new Dictionary<(int, int, int), (float Lift, Vec3 Dir)>();
+                        var rnOf = new Vec3[vc];
                         for (int i = 0; i < vc; i++)
                         {
-                            if (!used[i] || lift[i] <= 1e-6f) continue;
+                            if (!used[i]) continue;
                             ReadTyped(outStreams[ne10.Stream], i * outStrides[ne10.Stream] + ne10.Offset,
                                       ne10.Type, tmpR);
                             float rx = tmpR[0], ry = tmpR[1], rz = tmpR[2];
                             if (ne10.Type == 8) { rx = rx * 2 - 1; ry = ry * 2 - 1; rz = rz * 2 - 1; }
-                            var rn = NormalizeOr(new Vec3(rx, ry, rz), default);
-                            if (rn is { X: 0, Y: 0, Z: 0 }) continue;
+                            rnOf[i] = NormalizeOr(new Vec3(rx, ry, rz), default);
+                            var key = QuantPos(shellPos[i].X, shellPos[i].Y, shellPos[i].Z);
+                            var g = group.GetValueOrDefault(key);
+                            group[key] = (MathF.Max(g.Lift, lift[i]),
+                                          new Vec3(g.Dir.X + rnOf[i].X, g.Dir.Y + rnOf[i].Y, g.Dir.Z + rnOf[i].Z));
+                        }
+
+                        int raised = 0;
+                        float worstLift2 = 0f;
+                        for (int i = 0; i < vc; i++)
+                        {
+                            if (!used[i]) continue;
                             var sp = shellPos[i];
+                            var (gl, gd) = group[QuantPos(sp.X, sp.Y, sp.Z)];
+                            if (gl <= 1e-6f) continue;
+                            var rn = NormalizeOr(gd, rnOf[i]);
+                            if (rn is { X: 0, Y: 0, Z: 0 }) continue;
                             WriteXYZ(outStreams[pw2.Stream], i * outStrides[pw2.Stream] + pw2.Offset, pw2.Type,
-                                     sp.X + rn.X * lift[i], sp.Y + rn.Y * lift[i], sp.Z + rn.Z * lift[i]);
-                            worstLift2 = MathF.Max(worstLift2, lift[i]);
+                                     sp.X + rn.X * gl, sp.Y + rn.Y * gl, sp.Z + rn.Z * gl);
+                            worstLift2 = MathF.Max(worstLift2, gl);
                             raised++;
                         }
                         if (raised > 0)
@@ -13773,6 +13811,19 @@ public static class SecondSkinWriter
     /// "needed" lifting, and the rescue would have put the whole region back where the push used to be.
     /// </summary>
     private const float MinSkinClearanceOfPush = 0.6f;
+
+    /// <summary>
+    /// The floor for a face with a corner the weld dragged onto the cap's rim: 0.6 mm, the value the whole
+    /// toe region had while the push was 1 mm, and the configuration that held in game.
+    /// <para/>
+    /// Those faces are not a pushed copy of the skin. A lip vertex travels up to 17 mm to reach the rim, so
+    /// its triangles span 18–25 mm (against 3–9 mm everywhere else on the foot) and run from toe-bone
+    /// skinning on the rim back to foot-bone skinning behind it — flat, straight across the knuckle.
+    /// Measured on the game's own shell with the push at 0.05 mm: every body vertex through the stocking,
+    /// up to 0.26 mm, was under one of them, and the fractional floor (0.03 mm) is nothing once the toes
+    /// bend under a triangle that cannot.
+    /// </summary>
+    private const float WeldedSkinClearance = 0.0006f;
 
     /// <summary>Most a vertex may be lifted to reach that clearance. Past this it is not a straggler and
     /// moving it would distort the surface rather than repair it.</summary>
